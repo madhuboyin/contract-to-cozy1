@@ -11,7 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
 import { ToolTrustBanner } from '@/components/tools/ToolTrustBanner';
 import { ToolMethodologyAccordion } from '@/components/tools/ToolMethodologyAccordion';
-import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  BottomSafeAreaReserve,
+  MobileFilterStack,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ResultHeroCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 function RiskPremiumOptimizerContent() {
   const router = useRouter();
@@ -52,6 +59,8 @@ function RiskPremiumOptimizerContent() {
     }
   }, [propertyIdFromUrl, selectedPropertyId]);
 
+  const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -61,59 +70,67 @@ function RiskPremiumOptimizerContent() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
-      {propertyIdFromUrl && (
-        <Button
-          variant="link"
-          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-          onClick={() => router.back()}
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-        </Button>
-      )}
-
-      <MobilePageIntro
-        title="Risk-to-Premium Optimizer"
-        subtitle="Lower premium pressure without increasing risk."
-        action={
-          <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700">
-            <ShieldAlert className="h-5 w-5" />
-          </div>
-        }
-      />
-
-      <ToolTrustBanner
-        tone="teal"
-        dataSources={[
-          'Insurance policy',
-          'Risk signals',
-          'Inventory exposure',
-          'Claims history',
-          'Deductible data',
-        ]}
-        calculationMethod="Identifies your top premium drivers by cross-referencing your policy data with property risk signals. Rankings are deterministic - not influenced by any insurer or carrier."
-        disclaimer="Not a carrier recommendation. For strategic planning only."
-        learnMoreHref="#methodology"
-      />
-
-      {properties.length > 0 && (
-        <MobileFilterSurface className="border border-slate-200/80 bg-white">
-          <Label className="text-sm font-medium text-gray-700 mb-2 block">Select Property</Label>
-          <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-            <SelectTrigger className="w-full max-w-md">
-              <SelectValue placeholder="Choose a property" />
-            </SelectTrigger>
-            <SelectContent>
-              {properties.map((property) => (
-                <SelectItem key={property.id} value={property.id}>
-                  {property.name || property.address}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </MobileFilterSurface>
-      )}
-
+    <MobileToolWorkspace
+      intro={
+        <div className="space-y-3">
+          {propertyIdFromUrl ? (
+            <Button
+              variant="link"
+              className="h-auto p-0 text-sm text-muted-foreground"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" /> Back
+            </Button>
+          ) : null}
+          <MobilePageIntro
+            title="Risk-to-Premium Optimizer"
+            subtitle="Lower premium pressure without increasing risk."
+            action={
+              <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700">
+                <ShieldAlert className="h-5 w-5" />
+              </div>
+            }
+          />
+        </div>
+      }
+      summary={
+        <ResultHeroCard
+          eyebrow="Premium Strategy"
+          title={selectedProperty ? selectedProperty.name || selectedProperty.address : 'Select a property'}
+          value="Risk-weighted levers"
+          status={<StatusChip tone="info">Explainable</StatusChip>}
+          summary="Prioritize mitigation actions that may reduce premium pressure with controlled risk."
+          highlights={[
+            'Carrier-independent ranking',
+            'Driver and mitigation transparency',
+            'Conservative savings ranges',
+          ]}
+        />
+      }
+      filters={
+        properties.length > 0 ? (
+          <MobileFilterStack
+            primaryFilters={
+              <div>
+                <Label className="mb-2 block text-sm font-medium text-gray-700">Select Property</Label>
+                <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="Choose a property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {properties.map((property) => (
+                      <SelectItem key={property.id} value={property.id}>
+                        {property.name || property.address}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            }
+          />
+        ) : undefined
+      }
+    >
       {selectedPropertyId ? (
         <RiskPremiumOptimizerPanel propertyId={selectedPropertyId} />
       ) : (
@@ -122,58 +139,80 @@ function RiskPremiumOptimizerContent() {
         </div>
       )}
 
-      <ToolMethodologyAccordion
-        anchorId="methodology"
-        whatItDoes="Identifies your top premium cost drivers and ranks mitigation actions that reduce premium pressure without increasing your risk exposure."
-        steps={[
-          {
-            number: 1,
-            title: 'Read your policy data',
-            description: 'We pull your premium, deductible, and coverage details from your saved insurance records.',
-          },
-          {
-            number: 2,
-            title: 'Map your risk signals',
-            description: "We cross-reference your property's risk score, claim history, and high-exposure inventory items.",
-          },
-          {
-            number: 3,
-            title: 'Identify premium drivers',
-            description: 'We rank the factors contributing most to your current premium posture - from highest to lowest impact.',
-          },
-          {
-            number: 4,
-            title: 'Generate mitigation actions',
-            description: 'We produce ranked recommendations that reduce your risk exposure and may lower premium pressure over time.',
-          },
-          {
-            number: 5,
-            title: 'Estimate savings range',
-            description: 'We provide a conservative savings estimate based on typical outcomes - not guaranteed figures.',
-          },
-        ]}
-        columns={[
-          {
-            heading: "Why it's independent",
-            items: [
-              'No insurer or carrier influences results',
-              'Deterministic logic - no black-box scoring',
-              'Based entirely on your own property data',
-              'Every driver is explained and traceable',
-            ],
-          },
-          {
-            heading: 'When to use it',
-            items: [
-              'Before your annual policy renewal',
-              'After a claim or coverage change',
-              'When your premium increases unexpectedly',
-              'When planning home improvements',
-            ],
-          },
-        ]}
-      />
-    </div>
+      <details className="rounded-2xl border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+          Trust & methodology
+        </summary>
+        <div className="mt-4 space-y-4">
+          <ToolTrustBanner
+            tone="teal"
+            dataSources={[
+              'Insurance policy',
+              'Risk signals',
+              'Inventory exposure',
+              'Claims history',
+              'Deductible data',
+            ]}
+            calculationMethod="Identifies your top premium drivers by cross-referencing your policy data with property risk signals. Rankings are deterministic - not influenced by any insurer or carrier."
+            disclaimer="Not a carrier recommendation. For strategic planning only."
+            learnMoreHref="#methodology"
+          />
+
+          <ToolMethodologyAccordion
+            anchorId="methodology"
+            whatItDoes="Identifies your top premium cost drivers and ranks mitigation actions that reduce premium pressure without increasing your risk exposure."
+            steps={[
+              {
+                number: 1,
+                title: 'Read your policy data',
+                description: 'We pull your premium, deductible, and coverage details from your saved insurance records.',
+              },
+              {
+                number: 2,
+                title: 'Map your risk signals',
+                description: "We cross-reference your property's risk score, claim history, and high-exposure inventory items.",
+              },
+              {
+                number: 3,
+                title: 'Identify premium drivers',
+                description: 'We rank the factors contributing most to your current premium posture - from highest to lowest impact.',
+              },
+              {
+                number: 4,
+                title: 'Generate mitigation actions',
+                description: 'We produce ranked recommendations that reduce your risk exposure and may lower premium pressure over time.',
+              },
+              {
+                number: 5,
+                title: 'Estimate savings range',
+                description: 'We provide a conservative savings estimate based on typical outcomes - not guaranteed figures.',
+              },
+            ]}
+            columns={[
+              {
+                heading: "Why it's independent",
+                items: [
+                  'No insurer or carrier influences results',
+                  'Deterministic logic - no black-box scoring',
+                  'Based entirely on your own property data',
+                  'Every driver is explained and traceable',
+                ],
+              },
+              {
+                heading: 'When to use it',
+                items: [
+                  'Before your annual policy renewal',
+                  'After a claim or coverage change',
+                  'When your premium increases unexpectedly',
+                  'When planning home improvements',
+                ],
+              },
+            ]}
+          />
+        </div>
+      </details>
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobileToolWorkspace>
   );
 }
 

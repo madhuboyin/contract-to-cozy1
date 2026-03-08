@@ -9,7 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
-import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  BottomSafeAreaReserve,
+  MobileFilterStack,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ResultHeroCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 function HomeSavingsContent() {
   const router = useRouter();
@@ -50,6 +57,8 @@ function HomeSavingsContent() {
     }
   }, [propertyIdFromUrl, selectedPropertyId]);
 
+  const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -59,45 +68,67 @@ function HomeSavingsContent() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
-      {propertyIdFromUrl && (
-        <Button
-          variant="link"
-          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-          onClick={() => router.back()}
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-        </Button>
-      )}
-
-      <MobilePageIntro
-        title="Home Savings Check"
-        subtitle="Find simple ways to lower recurring home bills."
-        action={
-          <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700">
-            <PiggyBank className="h-5 w-5" />
-          </div>
-        }
-      />
-
-      {properties.length > 0 && (
-        <MobileFilterSurface className="border border-slate-200/80 bg-white">
-          <Label className="text-sm font-medium text-gray-700 mb-2 block">Select Property</Label>
-          <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-            <SelectTrigger className="w-full max-w-md">
-              <SelectValue placeholder="Choose a property" />
-            </SelectTrigger>
-            <SelectContent>
-              {properties.map((property) => (
-                <SelectItem key={property.id} value={property.id}>
-                  {property.name || property.address}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </MobileFilterSurface>
-      )}
-
+    <MobileToolWorkspace
+      intro={
+        <div className="space-y-3">
+          {propertyIdFromUrl ? (
+            <Button
+              variant="link"
+              className="h-auto p-0 text-sm text-muted-foreground"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" /> Back
+            </Button>
+          ) : null}
+          <MobilePageIntro
+            title="Home Savings Check"
+            subtitle="Find simple ways to reduce recurring home bills."
+            action={
+              <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700">
+                <PiggyBank className="h-5 w-5" />
+              </div>
+            }
+          />
+        </div>
+      }
+      summary={
+        <ResultHeroCard
+          eyebrow="Bill Optimization"
+          title={selectedProperty ? selectedProperty.name || selectedProperty.address : 'Select a property'}
+          value="Savings opportunities"
+          status={<StatusChip tone="good">Actionable</StatusChip>}
+          summary="Compare current plan costs against potential lower-cost options across key home categories."
+          highlights={[
+            'Insurance, warranty, internet, utilities',
+            'Category-level plan capture',
+            'Track follow-up status',
+          ]}
+        />
+      }
+      filters={
+        properties.length > 0 ? (
+          <MobileFilterStack
+            primaryFilters={
+              <div>
+                <Label className="mb-2 block text-sm font-medium text-gray-700">Select Property</Label>
+                <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="Choose a property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {properties.map((property) => (
+                      <SelectItem key={property.id} value={property.id}>
+                        {property.name || property.address}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            }
+          />
+        ) : undefined
+      }
+    >
       {selectedPropertyId ? (
         <HomeSavingsCheckPanel propertyId={selectedPropertyId} />
       ) : (
@@ -105,7 +136,8 @@ function HomeSavingsContent() {
           Select a property to run Home Savings Check.
         </div>
       )}
-    </div>
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobileToolWorkspace>
   );
 }
 

@@ -13,6 +13,13 @@ import {
 import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import { InventoryItem } from '@/types';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 type CoverageIntelligencePanelProps = {
   propertyId: string;
@@ -26,12 +33,6 @@ const EMPTY_OVERRIDES: CoverageAnalysisOverrides = {
   cashBufferUsd: undefined,
   riskTolerance: 'MEDIUM',
 };
-
-function verdictClasses(verdict?: CoverageAnalysisDTO['overallVerdict']) {
-  if (verdict === 'WORTH_IT') return 'bg-emerald-100 text-emerald-700';
-  if (verdict === 'NOT_WORTH_IT') return 'bg-rose-100 text-rose-700';
-  return 'bg-amber-100 text-amber-700';
-}
 
 function impactClasses(impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL') {
   if (impact === 'POSITIVE') return 'bg-emerald-50 text-emerald-700';
@@ -185,11 +186,11 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
     }
   };
 
-  const statusTone = useMemo(() => {
-    if (!analysis) return 'bg-gray-100 text-gray-700';
-    if (analysis.status === 'STALE') return 'bg-amber-100 text-amber-700';
-    if (analysis.status === 'ERROR') return 'bg-rose-100 text-rose-700';
-    return 'bg-emerald-100 text-emerald-700';
+  const statusChipTone = useMemo<'good' | 'elevated' | 'danger' | 'info'>(() => {
+    if (!analysis) return 'info';
+    if (analysis.status === 'STALE') return 'elevated';
+    if (analysis.status === 'ERROR') return 'danger';
+    return 'good';
   }, [analysis]);
 
   const selectedItem = useMemo(() => {
@@ -213,19 +214,24 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-black/10 bg-white p-5">
-        <h4 className="text-base font-semibold text-gray-900">Get coverage for any inventory item</h4>
-        <p className="text-sm text-gray-600 mt-1">
-          Select an item to run a dedicated item-level coverage assessment. Known item details will be pre-filled.
-        </p>
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
 
-        {itemsError && <div className="mt-3 text-sm text-rose-700">{itemsError}</div>}
-
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+      <ScenarioInputCard
+        title="Scenario Input"
+        subtitle="Select an inventory item for item-level coverage and run a deterministic coverage analysis."
+        badge={<StatusChip tone="info">Trust-first</StatusChip>}
+      >
+        {itemsError ? <div className="text-sm text-rose-700">{itemsError}</div> : null}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
           <label className="text-xs text-gray-600">
             Inventory item
             <select
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
               value={selectedItemId}
               onChange={(e) => setSelectedItemId(e.target.value)}
               disabled={itemsLoading || items.length === 0}
@@ -239,7 +245,6 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
               ))}
             </select>
           </label>
-
           <Button
             type="button"
             disabled={!selectedItemId}
@@ -252,106 +257,96 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
             Get coverage
           </Button>
         </div>
-
-        {selectedItem && (
-          <div className="mt-3 text-xs text-gray-600">
-            {selectedItem.category}
-            {selectedItem.room?.name ? ` • ${selectedItem.room.name}` : ' • Unassigned room'}
-            {selectedItemHasGap ? ' • Coverage gap detected' : ' • Has active coverage links'}
-          </div>
-        )}
-      </section>
-
-      <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
-        Educational decision support only. This assessment does not recommend specific carriers or plans.
-      </div>
-
-      {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+        {selectedItem ? (
+          <ReadOnlySummaryBlock
+            items={[
+              { label: 'Category', value: selectedItem.category },
+              { label: 'Room', value: selectedItem.room?.name ?? 'Unassigned room' },
+              {
+                label: 'Coverage links',
+                value: selectedItemHasGap ? 'Gap detected' : 'Active links present',
+                emphasize: selectedItemHasGap,
+              },
+            ]}
+            columns={2}
+          />
+        ) : null}
+      </ScenarioInputCard>
 
       {!hasAnalysis && (
-        <div className="rounded-2xl border border-black/10 bg-white p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">No analysis yet</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Run Coverage Intelligence to evaluate insurance and warranty value for this property.
-              </p>
-            </div>
-            <ShieldCheck className="h-6 w-6 text-teal-600" />
-          </div>
-
-          <div className="mt-5">
-            <Button onClick={runNow} disabled={running}>
-              {running ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Running…
-                </>
-              ) : (
-                'Run analysis'
-              )}
-            </Button>
-          </div>
-        </div>
+        <ScenarioInputCard
+          title="No analysis yet"
+          subtitle="Run Coverage Intelligence to evaluate insurance and warranty value for this property."
+          badge={<ShieldCheck className="h-5 w-5 text-teal-600" />}
+          actions={
+            <ActionPriorityRow
+              primaryAction={
+                <Button onClick={runNow} disabled={running}>
+                  {running ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Running…
+                    </>
+                  ) : (
+                    'Run analysis'
+                  )}
+                </Button>
+              }
+            />
+          }
+        >
+          <p className="text-sm text-slate-600">
+            Educational decision support only. This assessment does not recommend specific carriers or plans.
+          </p>
+        </ScenarioInputCard>
       )}
 
       {analysis && (
         <>
-          <div className="rounded-2xl border border-black/10 bg-white p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold text-gray-900">Coverage Intelligence</h3>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusTone}`}>
-                    {analysis.status}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-gray-600">{analysis.summary || 'No summary available.'}</p>
-              </div>
+          <ResultHeroCard
+            eyebrow="Coverage Result"
+            title="Coverage Intelligence"
+            value={analysis.overallVerdict.replace('_', ' ')}
+            status={<StatusChip tone={statusChipTone}>{analysis.status}</StatusChip>}
+            summary={analysis.summary || 'No summary available.'}
+            highlights={[
+              `Confidence: ${analysis.confidence}`,
+              `Insurance verdict: ${analysis.insuranceVerdict.replace('_', ' ')}`,
+              `Warranty verdict: ${analysis.warrantyVerdict.replace('_', ' ')}`,
+            ]}
+            actions={
+              <ActionPriorityRow
+                primaryAction={
+                  <Button onClick={runNow} disabled={running} variant="outline">
+                    {running ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Re-running…
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Re-run analysis
+                      </>
+                    )}
+                  </Button>
+                }
+                secondaryActions={<Button onClick={fetchStatus} variant="ghost">Refresh</Button>}
+              />
+            }
+          />
 
-              <div className="flex flex-wrap gap-2">
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${verdictClasses(analysis.overallVerdict)}`}>
-                  Overall: {analysis.overallVerdict.replace('_', ' ')}
-                </span>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${verdictClasses(analysis.insuranceVerdict)}`}>
-                  Insurance: {analysis.insuranceVerdict.replace('_', ' ')}
-                </span>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${verdictClasses(analysis.warrantyVerdict)}`}>
-                  Warranty: {analysis.warrantyVerdict.replace('_', ' ')}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-600">
-              <span>Confidence: {analysis.confidence}</span>
-              <span>Impact: {analysis.impactLevel ?? '—'}</span>
-              <span>Computed: {compactDate(analysis.computedAt)}</span>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button onClick={runNow} disabled={running} variant="outline">
-                {running ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Re-running…
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Re-run
-                  </>
-                )}
-              </Button>
-              <Button onClick={fetchStatus} variant="ghost">
-                Refresh
-              </Button>
-            </div>
-          </div>
+          <ReadOnlySummaryBlock
+            columns={2}
+            items={[
+              { label: 'Overall verdict', value: analysis.overallVerdict.replace('_', ' '), emphasize: true },
+              { label: 'Impact level', value: analysis.impactLevel ?? '—' },
+              { label: 'Insurance verdict', value: analysis.insuranceVerdict.replace('_', ' ') },
+              { label: 'Warranty verdict', value: analysis.warrantyVerdict.replace('_', ' ') },
+              { label: 'Computed', value: compactDate(analysis.computedAt) },
+              { label: 'Guidance', value: 'Educational only; not carrier advice.' },
+            ]}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <section className="rounded-2xl border border-black/10 bg-white p-5">
@@ -451,16 +446,12 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
             </div>
           </section>
 
-          <section className="rounded-2xl border border-black/10 bg-white p-5">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-600" />
-              <h4 className="text-base font-semibold text-gray-900">Simulation (optional)</h4>
-            </div>
-            <p className="text-sm text-gray-600 mt-1">
-              Try alternate premiums, deductible, warranty cost, and risk tolerance.
-            </p>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <ScenarioInputCard
+            title="Simulation (optional)"
+            subtitle="Try alternate premiums, deductible, warranty cost, and risk tolerance."
+            badge={<Sparkles className="h-4 w-4 text-purple-600" />}
+          >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               <label className="text-xs text-gray-600">
                 Annual premium (USD)
                 <input
@@ -560,7 +551,7 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
               </label>
             </div>
 
-            <label className="mt-3 inline-flex items-center gap-2 text-sm text-gray-700">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
                 checked={saveScenario}
@@ -569,19 +560,26 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
               Save this simulation scenario
             </label>
 
-            <div className="mt-4">
-              <Button onClick={runSimulation} disabled={simulating} variant="outline">
-                {simulating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Simulating…
-                  </>
-                ) : (
-                  'Simulate'
-                )}
-              </Button>
-            </div>
-          </section>
+            <ActionPriorityRow
+              primaryAction={
+                <Button onClick={runSimulation} disabled={simulating}>
+                  {simulating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Simulating…
+                    </>
+                  ) : (
+                    'Simulate scenario'
+                  )}
+                </Button>
+              }
+              secondaryActions={
+                <Button onClick={fetchStatus} disabled={simulating} variant="outline">
+                  Refresh
+                </Button>
+              }
+            />
+          </ScenarioInputCard>
 
           {analysis.nextSteps && analysis.nextSteps.length > 0 && (
             <section className="rounded-2xl border border-black/10 bg-white p-5">

@@ -66,6 +66,17 @@ import { cn } from "@/lib/utils";
 import InventoryItemDrawer from '../../../components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms } from '../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  MobileFilterStack,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from "@/components/mobile/dashboard/MobilePrimitives";
 
 // ---------------------------------------------------------------------------
 // Badge helpers
@@ -200,6 +211,25 @@ function getHealthScore(item: StatusBoardItemDTO): number {
   if (item.condition === "ACTION_NEEDED") return 35;
   if (item.condition === "MONITOR") return 68;
   return 92;
+}
+
+function getConditionTone(condition: StatusBoardCondition): "good" | "elevated" | "danger" {
+  if (condition === "ACTION_NEEDED") return "danger";
+  if (condition === "MONITOR") return "elevated";
+  return "good";
+}
+
+function getRecommendationTone(recommendation: StatusBoardRecommendation): "info" | "elevated" | "danger" {
+  if (recommendation === "REPLACE_SOON") return "danger";
+  if (recommendation === "REPAIR") return "elevated";
+  return "info";
+}
+
+function getWarrantyTone(status: WarrantyBadge): "good" | "elevated" | "danger" | "info" {
+  if (status === "active") return "good";
+  if (status === "expiring_soon") return "elevated";
+  if (status === "expired") return "danger";
+  return "info";
 }
 
 // ---------------------------------------------------------------------------
@@ -835,9 +865,410 @@ export default function StatusBoardClient() {
       </Fragment>
     ));
 
+  const renderMobileItems = (itemList: StatusBoardItemDTO[]) =>
+    itemList.map((item) => {
+      const topReason = item.computedReasons[0];
+      const canShowMaintenance = Boolean(item.deepLinks.maintenance && item.pendingMaintenance > 0);
+      const canShowReplaceRepair = Boolean(item.recommendation === "REPLACE_SOON" && item.deepLinks.replaceRepair);
+      const canViewInventoryItem = Boolean(item.inventoryItemId);
+
+      return (
+        <ScenarioInputCard
+          key={item.id}
+          title={formatDisplayName(item.displayName)}
+          subtitle={`${item.category}${item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}`}
+          badge={<StatusChip tone={getConditionTone(item.condition)}>{CONDITION_LABELS[item.condition]}</StatusChip>}
+        >
+          <ReadOnlySummaryBlock
+            columns={2}
+            items={[
+              {
+                label: "Recommendation",
+                value: (
+                  <StatusChip tone={getRecommendationTone(item.recommendation)}>
+                    {RECOMMENDATION_LABELS[item.recommendation]}
+                  </StatusChip>
+                ),
+              },
+              {
+                label: "Warranty",
+                value: <StatusChip tone={getWarrantyTone(item.warrantyStatus)}>{WARRANTY_LABELS[item.warrantyStatus]}</StatusChip>,
+              },
+              { label: "Room", value: item.room?.name ?? "No Room" },
+              { label: "Pending Tasks", value: item.pendingMaintenance },
+            ]}
+          />
+
+          {topReason ? (
+            <ReadOnlySummaryBlock
+              items={[
+                {
+                  label: "Top Reason",
+                  value: getReasonDisplayText(item, topReason),
+                  hint: item.needsInstallDateForPrediction ? "Add install date for accurate predictions." : undefined,
+                },
+              ]}
+            />
+          ) : null}
+
+          <ActionPriorityRow
+            primaryAction={
+              canShowReplaceRepair ? (
+                <Link href={item.deepLinks.replaceRepair!}>
+                  <Button className="w-full bg-teal-600 hover:bg-teal-700">Replace or Repair</Button>
+                </Link>
+              ) : canViewInventoryItem ? (
+                <Button
+                  className="w-full bg-teal-600 hover:bg-teal-700"
+                  disabled={drawerLoading === item.id}
+                  onClick={() => handleViewItem(item)}
+                >
+                  {drawerLoading === item.id ? "Loading..." : "View Item"}
+                </Button>
+              ) : canShowMaintenance ? (
+                <Link href={item.deepLinks.maintenance!}>
+                  <Button className="w-full bg-teal-600 hover:bg-teal-700">Open Maintenance</Button>
+                </Link>
+              ) : undefined
+            }
+            secondaryActions={
+              <>
+                {item.deepLinks.viewRoom ? (
+                  <Link href={item.deepLinks.viewRoom}>
+                    <Button size="sm" variant="outline">Room</Button>
+                  </Link>
+                ) : null}
+                {item.deepLinks.warranty ? (
+                  <Link href={item.deepLinks.warranty}>
+                    <Button size="sm" variant="outline">Warranty</Button>
+                  </Link>
+                ) : null}
+                {canShowMaintenance ? (
+                  <Link href={item.deepLinks.maintenance!}>
+                    <Button size="sm" variant="outline">Maintenance</Button>
+                  </Link>
+                ) : null}
+                {item.deepLinks.riskAssessment ? (
+                  <Link href={item.deepLinks.riskAssessment}>
+                    <Button size="sm" variant="outline">Risk</Button>
+                  </Link>
+                ) : null}
+                <Button size="sm" variant={item.isPinned ? "default" : "outline"} onClick={() => handleTogglePin(item)}>
+                  {item.isPinned ? "Pinned" : "Pin"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleToggleHide(item)}>
+                  {item.isHidden ? "Show" : "Hide"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleExpand(item)}>
+                  {expandedId === item.id ? "Close Adjustments" : "Adjust Status"}
+                </Button>
+              </>
+            }
+          />
+
+          {expandedId === item.id ? (
+            <div className="space-y-3 rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Condition</label>
+                  <Select value={overrideCondition} onValueChange={setOverrideCondition}>
+                    <SelectTrigger className="h-9 bg-white">
+                      <SelectValue placeholder="Use computed" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="clear">Use computed</SelectItem>
+                      <SelectItem value="GOOD">Good</SelectItem>
+                      <SelectItem value="MONITOR">Monitor</SelectItem>
+                      <SelectItem value="ACTION_NEEDED">Action Needed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Recommendation</label>
+                  <Select value={overrideRecommendation} onValueChange={setOverrideRecommendation}>
+                    <SelectTrigger className="h-9 bg-white">
+                      <SelectValue placeholder="Use computed" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="clear">Use computed</SelectItem>
+                      <SelectItem value="OK">OK</SelectItem>
+                      <SelectItem value="REPAIR">Repair</SelectItem>
+                      <SelectItem value="REPLACE_SOON">Replace Soon</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Notes</label>
+                  <Textarea
+                    value={overrideNotes}
+                    onChange={(e) => setOverrideNotes(e.target.value)}
+                    placeholder="Optional notes..."
+                    className="min-h-[68px] bg-white text-sm"
+                  />
+                </div>
+              </div>
+              <Button
+                className="w-full bg-teal-600 hover:bg-teal-700"
+                onClick={() => handleSaveOverride(item.id)}
+                disabled={patchMutation.isPending}
+              >
+                {patchMutation.isPending ? "Saving..." : "Save Override"}
+              </Button>
+            </div>
+          ) : null}
+        </ScenarioInputCard>
+      );
+    });
+
   return (
     <TooltipProvider delayDuration={120}>
-      <div className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <div className="lg:hidden">
+        <MobileToolWorkspace
+          intro={
+            <MobilePageIntro
+              title="Home Status Board"
+              subtitle="Track item condition, priority actions, and health signals."
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={recomputeMutation.isPending}
+                  onClick={() => recomputeMutation.mutate()}
+                >
+                  <RefreshCw className={cn("mr-1 h-3.5 w-3.5", recomputeMutation.isPending && "animate-spin")} />
+                  {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
+                </Button>
+              }
+            />
+          }
+          summary={
+            summary ? (
+              <ResultHeroCard
+                eyebrow="System Snapshot"
+                title="Condition Overview"
+                value={`${summary.total} items`}
+                status={
+                  <StatusChip tone={summary.actionNeeded > 0 ? "danger" : "good"}>
+                    {summary.actionNeeded > 0 ? `${summary.actionNeeded} action needed` : "All stable"}
+                  </StatusChip>
+                }
+                summary="Use filters to focus on items that need attention."
+                highlights={[
+                  `${summary.good} good`,
+                  `${summary.monitor} monitor`,
+                  `${summary.actionNeeded} action needed`,
+                ]}
+              />
+            ) : undefined
+          }
+          filters={
+            <MobileFilterStack
+              search={
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search items..."
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
+                    className="h-9 bg-white pl-9"
+                  />
+                </div>
+              }
+              primaryFilters={
+                <>
+                  <Select
+                    value={conditionFilter}
+                    onValueChange={(v) => {
+                      setConditionFilter(v);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 bg-white">
+                      <SelectValue placeholder="Condition" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Conditions</SelectItem>
+                      <SelectItem value="ACTION_NEEDED">Action Needed</SelectItem>
+                      <SelectItem value="MONITOR">Monitor</SelectItem>
+                      <SelectItem value="GOOD">Good</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={categoryFilter}
+                    onValueChange={(v) => {
+                      setCategoryFilter(v);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 bg-white">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              }
+              secondaryLabel="Advanced filters"
+              secondaryFilters={
+                <>
+                  <Select value={groupBy} onValueChange={setGroupBy}>
+                    <SelectTrigger className="h-9 bg-white">
+                      <SelectValue placeholder="Group by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Grouping</SelectItem>
+                      <SelectItem value="condition">By Condition</SelectItem>
+                      <SelectItem value="category">By Category</SelectItem>
+                      <SelectItem value="room">By Room</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant={pinnedOnly ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setPinnedOnly(!pinnedOnly);
+                        setPage(1);
+                      }}
+                    >
+                      <Pin className="mr-1 h-3.5 w-3.5" />
+                      Pinned only
+                    </Button>
+                    <Button
+                      variant={includeHidden ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setIncludeHidden(!includeHidden);
+                        setPage(1);
+                      }}
+                    >
+                      <EyeOff className="mr-1 h-3.5 w-3.5" />
+                      Include hidden
+                    </Button>
+                  </div>
+                </>
+              }
+              chips={
+                summary ? (
+                  <>
+                    {[
+                      { label: "All", value: "all", count: summary.total, tone: "info" as const },
+                      { label: "Action", value: "ACTION_NEEDED", count: summary.actionNeeded, tone: "danger" as const },
+                      { label: "Monitor", value: "MONITOR", count: summary.monitor, tone: "elevated" as const },
+                      { label: "Good", value: "GOOD", count: summary.good, tone: "good" as const },
+                    ].map((chip) => (
+                      <button
+                        key={chip.value}
+                        type="button"
+                        onClick={() => {
+                          setConditionFilter(chip.value);
+                          setPage(1);
+                        }}
+                      >
+                        <StatusChip
+                          tone={chip.tone}
+                          className={conditionFilter === chip.value ? "ring-2 ring-current ring-offset-1" : ""}
+                        >
+                          {chip.label} {chip.count}
+                        </StatusChip>
+                      </button>
+                    ))}
+                  </>
+                ) : undefined
+              }
+              actions={
+                conditionFilter !== "all" || categoryFilter !== "all" || groupBy !== "none" || pinnedOnly || includeHidden || Boolean(search) ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setConditionFilter("all");
+                      setCategoryFilter("all");
+                      setGroupBy("none");
+                      setPinnedOnly(false);
+                      setIncludeHidden(false);
+                      setSearch("");
+                      setPage(1);
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
+            />
+          }
+        >
+          {isLoading ? (
+            <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
+              Loading status board...
+            </div>
+          ) : error ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              Failed to load status board
+            </div>
+          ) : items.length === 0 ? (
+            <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
+              No items found. Add inventory items or home systems to see them here.
+            </div>
+          ) : groups && groupBy !== "none" ? (
+            <div className="space-y-4">
+              {Object.entries(groups).map(([groupName, groupItems]) => (
+                <div key={groupName} className="space-y-3">
+                  <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2">
+                    <p className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">{groupName}</p>
+                    <StatusChip tone="info">{groupItems.length}</StatusChip>
+                  </div>
+                  <div className="space-y-3">{renderMobileItems(groupItems)}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">{renderMobileItems(items)}</div>
+          )}
+
+          {pagination && pagination.totalPages > 1 ? (
+            <ActionPriorityRow
+              primaryAction={
+                <div className="w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2 text-center text-sm text-[hsl(var(--mobile-text-secondary))]">
+                  Page {pagination.page} of {pagination.totalPages} ({pagination.total} items)
+                </div>
+              }
+              secondaryActions={
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= pagination.totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </>
+              }
+            />
+          ) : null}
+          <BottomSafeAreaReserve size="chatAware" />
+        </MobileToolWorkspace>
+      </div>
+
+      <div className="hidden lg:block pb-6">
       <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
         <div className="relative z-10 space-y-3">
         {/* Header */}

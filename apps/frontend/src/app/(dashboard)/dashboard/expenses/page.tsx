@@ -7,16 +7,22 @@ import { format, parseISO } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTrigger, DialogFooter, DialogHeader } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Expense, CreateExpenseInput, UpdateExpenseInput, Property, ExpenseCategory, APIError, APIResponse } from '@/types';
+import { Expense, CreateExpenseInput, UpdateExpenseInput, Property, ExpenseCategory, APIResponse } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { cn } from '@/lib/utils';
 import DateField from '@/components/shared/DateField';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  EmptyStateCard,
+  MobileCard,
+  MobileFilterStack,
+  MobilePageIntro,
+  ReadOnlySummaryBlock,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 // Helper for Expense Category mapping (for display)
 const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
@@ -306,7 +312,44 @@ export default function ExpensesPage() {
         }
       />
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="space-y-3 md:hidden">
+        <ReadOnlySummaryBlock
+          title="Spend Snapshot"
+          columns={2}
+          items={[
+            { label: 'Total spent', value: isLoading ? '...' : `$${totalSpent.toFixed(2)}`, emphasize: true },
+            { label: 'Records', value: sortedExpenses.length },
+            {
+              label: 'Filter scope',
+              value: filterPropertyId === SELECT_ALL_VALUE ? 'All properties' : 'Single property',
+            },
+            { label: 'Latest activity', value: sortedExpenses[0] ? format(parseISO(sortedExpenses[0].transactionDate), 'MMM dd') : 'N/A' },
+          ]}
+        />
+
+        <MobileFilterStack
+          primaryFilters={
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Property filter</p>
+              <Select value={filterPropertyId} onValueChange={setFilterPropertyId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Filter by Property" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_ALL_VALUE}>All Expenses</SelectItem>
+                  {properties.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} ({p.zipCode})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          }
+        />
+      </div>
+
+      <div className="hidden grid-cols-1 gap-6 md:grid md:grid-cols-3">
         <Card className="md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-1">
@@ -315,16 +358,15 @@ export default function ExpensesPage() {
             <p className="text-xs text-muted-foreground">Applies to list below</p>
           </CardHeader>
           <CardContent>
-             <Select 
-                value={filterPropertyId} 
+             <Select
+                value={filterPropertyId}
                 onValueChange={setFilterPropertyId}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Filter by Property" />
                 </SelectTrigger>
                 <SelectContent>
-                    {/* FIX: Use SELECT_ALL_VALUE instead of "" */}
-                    <SelectItem value={SELECT_ALL_VALUE}>All Expenses</SelectItem> 
+                    <SelectItem value={SELECT_ALL_VALUE}>All Expenses</SelectItem>
                     {properties.map(p => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name} ({p.zipCode})
@@ -361,57 +403,110 @@ export default function ExpensesPage() {
 
       {/* FIX: Check if NOT loading AND length is 0 */}
       {!isLoading && sortedExpenses.length === 0 && (
-        <Card className="text-center py-10">
-          <DollarSign className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <CardTitle>No Expenses Found</CardTitle>
-          <CardDescription>Click &quot;Add Expense&quot; to create your first record.</CardDescription>
-        </Card>
+        <>
+          <div className="md:hidden">
+            <EmptyStateCard
+              title="No expenses yet"
+              description='Tap "Add Expense" to record your first cost.'
+            />
+          </div>
+          <Card className="hidden py-10 text-center md:block">
+            <DollarSign className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+            <CardTitle>No Expenses Found</CardTitle>
+            <CardDescription>Click &quot;Add Expense&quot; to create your first record.</CardDescription>
+          </Card>
+        </>
       )}
 
       {!isLoading && sortedExpenses.length > 0 && (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Property</th>
-                  <th className="relative px-6 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {sortedExpenses.map(expense => (
-                  <tr key={expense.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+        <>
+          <div className="space-y-2 md:hidden">
+            {sortedExpenses.map((expense) => (
+              <MobileCard key={expense.id} variant="compact" className="space-y-3 border-slate-200/80 bg-white">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{expense.description}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
                       {format(parseISO(expense.transactionDate), 'MMM dd, yyyy')}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 truncate max-w-xs">{expense.description}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {EXPENSE_CATEGORY_LABELS[expense.category]}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-right text-indigo-700">
-                      ${expense.amount.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
-                      {getPropertyDisplay(expense.propertyId)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" onClick={() => openEditModal(expense)}>
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => handleDelete(expense.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </p>
+                  </div>
+                  <StatusChip tone="info">${expense.amount.toFixed(2)}</StatusChip>
+                </div>
+
+                <ReadOnlySummaryBlock
+                  className="border-slate-200 bg-slate-50"
+                  items={[
+                    { label: 'Category', value: EXPENSE_CATEGORY_LABELS[expense.category] },
+                    { label: 'Property', value: getPropertyDisplay(expense.propertyId) },
+                  ]}
+                />
+
+                <ActionPriorityRow
+                  primaryAction={
+                    <Button className="w-full min-h-[40px]" onClick={() => openEditModal(expense)}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit Expense
+                    </Button>
+                  }
+                  secondaryActions={
+                    <Button
+                      variant="outline"
+                      className="min-h-[40px] border-red-200 text-red-700 hover:bg-red-50"
+                      onClick={() => handleDelete(expense.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </Button>
+                  }
+                />
+              </MobileCard>
+            ))}
           </div>
-        </Card>
+
+          <Card className="hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Property</th>
+                    <th className="relative px-6 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {sortedExpenses.map(expense => (
+                    <tr key={expense.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {format(parseISO(expense.transactionDate), 'MMM dd, yyyy')}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 truncate max-w-xs">{expense.description}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {EXPENSE_CATEGORY_LABELS[expense.category]}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-right text-indigo-700">
+                        ${expense.amount.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
+                        {getPropertyDisplay(expense.propertyId)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" onClick={() => openEditModal(expense)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => handleDelete(expense.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
     </div>
   );

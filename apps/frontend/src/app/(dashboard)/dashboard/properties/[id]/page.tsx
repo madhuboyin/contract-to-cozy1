@@ -52,12 +52,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  MetricRow,
+  CompactEntityRow,
+  ExpandableSummaryCard,
   MobileCard,
   MobileFilterSurface,
   MobilePageIntro,
-  MobileSection,
   MobileSectionHeader,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
@@ -301,75 +303,80 @@ const PropertyOverview = ({ property }: { property: Property }) => {
   const coolingTypeLabel = property.coolingType ? property.coolingType.replace(/_/g, " ") : "Not specified";
   const waterHeaterTypeLabel = property.waterHeaterType ? property.waterHeaterType.replace(/_/g, " ") : "Not specified";
   const roofTypeLabel = property.roofType ? property.roofType.replace(/_/g, " ") : "Not specified";
+  const trackedSystems = [property.hvacInstallYear, property.waterHeaterInstallYear, property.roofReplacementYear].filter(Boolean).length;
 
   return (
     <div className="space-y-3">
       <div className="md:hidden space-y-3">
-        <MobileSection>
-          <MobileSectionHeader title="Home Snapshot" subtitle="Core property details at a glance" />
-          <MobileCard className="space-y-2.5 border-slate-200/80 bg-white">
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Address</p>
-              <p className="text-sm font-medium text-slate-900">{property.address}</p>
-              <p className="text-xs text-slate-600">
-                {property.city}, {property.state} {property.zipCode}
-              </p>
-            </div>
-            <div className="space-y-1 border-t border-slate-100 pt-2">
-              <MetricRow label="Year Built" value={property.yearBuilt || "N/A"} />
-              <MetricRow
-                label="Property Size"
-                value={property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "N/A"}
-              />
-              <MetricRow label="Type" value={propertyTypeLabel} />
-              {property.bedrooms ? <MetricRow label="Bedrooms" value={property.bedrooms} /> : null}
-              {property.bathrooms ? <MetricRow label="Bathrooms" value={property.bathrooms} /> : null}
-            </div>
-          </MobileCard>
-        </MobileSection>
+        <ResultHeroCard
+          eyebrow="Property Overview"
+          title={property.name || property.address}
+          value={`${property.city}, ${property.state}`}
+          status={
+            property.isPrimary ? (
+              <StatusChip tone="good">Primary</StatusChip>
+            ) : (
+              <StatusChip tone="info">{propertyTypeLabel}</StatusChip>
+            )
+          }
+          summary={`${property.address}, ${property.city}, ${property.state} ${property.zipCode}`}
+          highlights={[
+            property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "",
+            property.yearBuilt ? `Built ${property.yearBuilt}` : "",
+            property.bedrooms ? `${property.bedrooms} bedrooms` : "",
+            property.bathrooms ? `${property.bathrooms} bathrooms` : "",
+          ].filter(Boolean)}
+        />
 
-        <MobileSection>
-          <MobileSectionHeader title="Systems" subtitle="Critical systems for risk and maintenance planning" />
-          <MobileCard className="space-y-2 border-slate-200/80 bg-white">
-            <MetricRow label="Heating" value={heatingTypeLabel} />
-            <MetricRow label="Cooling" value={coolingTypeLabel} />
-            <MetricRow label="Water Heater" value={waterHeaterTypeLabel} />
-            <MetricRow label="Roof" value={roofTypeLabel} />
-            {property.hvacInstallYear ? (
-              <MetricRow label="HVAC Install Year" value={property.hvacInstallYear} />
-            ) : null}
-            {property.waterHeaterInstallYear ? (
-              <MetricRow label="Water Heater Install Year" value={property.waterHeaterInstallYear} />
-            ) : null}
-            {property.roofReplacementYear ? (
-              <MetricRow label="Roof Replacement Year" value={property.roofReplacementYear} />
-            ) : null}
-          </MobileCard>
-        </MobileSection>
+        <ReadOnlySummaryBlock
+          title="Snapshot"
+          columns={2}
+          items={[
+            { label: "Type", value: propertyTypeLabel, emphasize: true },
+            { label: "Year Built", value: property.yearBuilt || "N/A" },
+            { label: "Property Size", value: property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "N/A" },
+            { label: "Occupancy", value: `${property.bedrooms || "N/A"} bd · ${property.bathrooms || "N/A"} ba` },
+          ]}
+        />
+
+        <ExpandableSummaryCard
+          title="Systems"
+          summary={`${heatingTypeLabel} · ${coolingTypeLabel}`}
+          metric={`${trackedSystems} tracked`}
+          defaultOpen={false}
+        >
+          <ReadOnlySummaryBlock
+            className="border-slate-200 bg-white"
+            items={[
+              { label: "Heating", value: heatingTypeLabel },
+              { label: "Cooling", value: coolingTypeLabel },
+              { label: "Water Heater", value: waterHeaterTypeLabel },
+              { label: "Roof", value: roofTypeLabel },
+              { label: "HVAC Install Year", value: property.hvacInstallYear || "N/A" },
+              { label: "Water Heater Install Year", value: property.waterHeaterInstallYear || "N/A" },
+              { label: "Roof Replacement Year", value: property.roofReplacementYear || "N/A" },
+            ]}
+          />
+        </ExpandableSummaryCard>
 
         {property.homeAssets && property.homeAssets.length > 0 ? (
-          <MobileSection>
-            <MobileSectionHeader
-              title="Major Appliances"
-              subtitle={`${property.homeAssets.length} tracked asset${property.homeAssets.length === 1 ? "" : "s"}`}
-            />
-            <MobileCard className="space-y-2.5 border-slate-200/80 bg-white">
+          <ExpandableSummaryCard
+            title="Major Appliances"
+            summary={`${property.homeAssets.length} tracked asset${property.homeAssets.length === 1 ? "" : "s"}`}
+            metric={`${property.homeAssets.length} items`}
+            defaultOpen={false}
+          >
+            <div className="space-y-2">
               {property.homeAssets.slice(0, 6).map((asset: any, index: number) => (
-                <div
-                  key={index}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
-                >
-                  <p className="text-xs uppercase tracking-wide text-slate-500">
-                    {asset.assetType.replace(/_/g, " ")}
-                  </p>
-                  <p className="mt-0.5 text-sm font-medium text-slate-900">Installed: {asset.installationYear}</p>
-                  <p className="text-xs text-slate-600">
-                    Age: {new Date().getFullYear() - asset.installationYear} years
-                  </p>
-                </div>
+                <CompactEntityRow
+                  key={`${asset.assetType}-${index}`}
+                  title={asset.assetType.replace(/_/g, " ")}
+                  subtitle={`Installed ${asset.installationYear}`}
+                  meta={`Age ${new Date().getFullYear() - asset.installationYear} yrs`}
+                />
               ))}
-            </MobileCard>
-          </MobileSection>
+            </div>
+          </ExpandableSummaryCard>
         ) : null}
       </div>
 

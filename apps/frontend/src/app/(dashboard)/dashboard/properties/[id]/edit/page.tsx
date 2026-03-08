@@ -39,7 +39,12 @@ import {
   PROPERTY_SECTION_ORDER,
   type PropertySectionId,
 } from "@/components/property/propertyEditPriority";
-import { MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
+import {
+  MobileFilterStack,
+  MobilePageIntro,
+  ReadOnlySummaryBlock,
+  StatusChip,
+} from "@/components/mobile/dashboard/MobilePrimitives";
 
 
 // --- Appliance Constants and Schemas ---
@@ -774,6 +779,14 @@ export default function EditPropertyPage() {
     }
   }, [startSectionId]);
 
+  const mobileSectionLinks: Array<{ id: PropertySectionId; label: string }> = [
+    { id: "basics", label: "Basics" },
+    { id: "systems", label: "Systems" },
+    { id: "safety", label: "Safety" },
+    { id: "occupancy", label: "Occupancy" },
+    { id: "appliances", label: "Appliances" },
+  ];
+
   const isRecommended = (fieldKey: string) => recommendedFieldKeys.has(fieldKey);
   const CHECKBOX_META = {
     hasSmokeDetectors: {
@@ -931,6 +944,68 @@ export default function EditPropertyPage() {
           )}
         </div>
 
+        <div className="mb-4 space-y-3 md:hidden">
+          <ReadOnlySummaryBlock
+            title="Edit Snapshot"
+            columns={2}
+            items={[
+              {
+                label: "Completion",
+                value: `${confidenceScore}%`,
+                emphasize: true,
+              },
+              {
+                label: "Done",
+                value: `${priorityState.completionCount} / ${priorityState.completionTotal}`,
+              },
+              {
+                label: "Next field",
+                value: nextBestStepText ?? "Review all sections",
+              },
+              {
+                label: "Status",
+                value: confidenceScore === 100 ? "Complete" : "In progress",
+              },
+            ]}
+          />
+
+          <MobileFilterStack
+            primaryFilters={
+              <div className="flex flex-wrap gap-2">
+                {mobileSectionLinks.map((section) => (
+                  <a
+                    key={section.id}
+                    href={`#${section.id}`}
+                    className={cn(
+                      "inline-flex min-h-[36px] items-center rounded-full border px-3 py-1.5 text-xs font-medium",
+                      activeSectionId === section.id
+                        ? "border-teal-300 bg-teal-50 text-teal-800"
+                        : "border-slate-200 bg-white text-slate-700"
+                    )}
+                  >
+                    {section.label}
+                  </a>
+                ))}
+              </div>
+            }
+            secondaryLabel="Recommended next fields"
+            secondaryFilters={
+              <div className="space-y-2">
+                {priorityState.missingFields.slice(0, 4).map((field) => (
+                  <div key={field.key} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs font-medium text-slate-700">{field.label}</p>
+                    {field.key === startField?.key ? (
+                      <StatusChip tone="needsAction">Start here</StatusChip>
+                    ) : (
+                      <StatusChip tone="elevated">Recommended</StatusChip>
+                    )}
+                  </div>
+                ))}
+              </div>
+            }
+          />
+        </div>
+
         <OnboardingReturnBanner />
       
         {hasErrors && (
@@ -950,7 +1025,7 @@ export default function EditPropertyPage() {
         )}
       
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pb-24 md:pb-8">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-24 md:space-y-6 md:pb-8">
             <PropertyEditSection
               id="basics"
               title="Basics"

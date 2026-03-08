@@ -7,7 +7,16 @@ import { useQuery } from '@tanstack/react-query';
 
 import TimelineClient from './TimelineClient';
 import { listHomeEvents } from './homeEventsApi';
-import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import { formatEnumLabel } from '@/lib/utils/formatters';
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  MobileFilterStack,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ResultHeroCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -325,157 +334,211 @@ export default function Page() {
     },
   });
 
+  const replayProgress = replayOn ? `${Math.min(replayIndex, events.length)}/${events.length}` : null;
+  const hasCustomLimit = limit !== 80;
+  const hasFiltersApplied = Boolean(type) || hasCustomLimit || mode === 'VISUAL' || replayOn;
+  const typeLabel = type ? formatEnumLabel(type) : 'All event types';
+
   return (
-    <div className="space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
-      <MobilePageIntro
-        title="Home Timeline"
-        subtitle="Your home's story — purchases, repairs, claims, improvements, and key documents."
-      />
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-md border p-1">
-          <button
-            className={clsx(
-              'px-3 py-1.5 text-sm rounded-md',
-              mode === 'LIST' ? 'bg-muted' : 'hover:bg-muted/50'
-            )}
-            onClick={() => setMode('LIST')}
-          >
-            List
-          </button>
-          <button
-            className={clsx(
-              'px-3 py-1.5 text-sm rounded-md',
-              mode === 'VISUAL' ? 'bg-muted' : 'hover:bg-muted/50'
-            )}
-            onClick={() => setMode('VISUAL')}
-          >
-            Visual
-          </button>
-        </div>
-
-        <button
-          className="rounded-md border px-3 py-2 text-sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          {isFetching ? 'Refreshing…' : 'Refresh'}
-        </button>
-      </div>
-
-      {/* Replay controls (visual only) */}
-      {mode === 'VISUAL' ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-2 rounded-md border px-2 py-1">
-            <label className="text-xs text-muted-foreground">Replay</label>
-            <button
-              className={clsx(
-                'px-2 py-1 text-xs rounded-md',
-                replayOn ? 'bg-muted' : 'hover:bg-muted/50'
-              )}
-              onClick={() => {
-                const next = !replayOn;
-                setReplayOn(next);
-                if (!next) {
-                  resetReplay();
-                } else {
-                  // start replay; show first item shortly
-                  setReplayIndex(1);
-                  setReplayRunning(true);
-                }
-              }}
-            >
-              {replayOn ? 'On' : 'Off'}
-            </button>
-          </div>
-
-          {replayOn ? (
-            <>
+    <MobileToolWorkspace
+      intro={
+        <MobilePageIntro
+          title="Home Timeline"
+          subtitle="Your home's story of repairs, claims, improvements, and key documents."
+        />
+      }
+      summary={
+        <ResultHeroCard
+          eyebrow="Property History"
+          title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}
+          value={`${events.length} events`}
+          status={<StatusChip tone={isFetching ? 'info' : 'good'}>{isFetching ? 'Refreshing' : 'Synced'}</StatusChip>}
+          summary={
+            replayOn
+              ? `Replay ${replayRunning ? 'running' : 'paused'}${replayProgress ? ` • ${replayProgress}` : ''}`
+              : 'Replay is off'
+          }
+          highlights={[
+            typeLabel,
+            `Mode: ${mode === 'VISUAL' ? 'Visual replay' : 'List view'}`,
+            hasCustomLimit ? `Showing up to ${limit} events` : 'Showing default event volume',
+          ]}
+        />
+      }
+      filters={
+        <MobileFilterStack
+          search={
+            <div className="flex items-center gap-2">
+              <div className="inline-flex min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-1">
+                <button
+                  className={clsx(
+                    'rounded-md px-3 py-1.5 text-sm',
+                    mode === 'LIST'
+                      ? 'bg-white font-medium text-[hsl(var(--mobile-text-primary))]'
+                      : 'text-[hsl(var(--mobile-text-secondary))]'
+                  )}
+                  onClick={() => setMode('LIST')}
+                >
+                  List
+                </button>
+                <button
+                  className={clsx(
+                    'rounded-md px-3 py-1.5 text-sm',
+                    mode === 'VISUAL'
+                      ? 'bg-white font-medium text-[hsl(var(--mobile-text-primary))]'
+                      : 'text-[hsl(var(--mobile-text-secondary))]'
+                  )}
+                  onClick={() => setMode('VISUAL')}
+                >
+                  Visual
+                </button>
+              </div>
               <button
-                className="rounded-md border px-3 py-2 text-sm"
-                onClick={() => setReplayRunning((v) => !v)}
+                type="button"
+                className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+                onClick={() => refetch()}
+                disabled={isFetching}
               >
-                {replayRunning ? 'Pause' : 'Resume'}
+                {isFetching ? 'Refreshing…' : 'Refresh'}
               </button>
+            </div>
+          }
+          primaryFilters={
+            <>
+              <select
+                className="min-h-[40px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+              >
+                <option value="">All event types</option>
+                <option value="PURCHASE">Purchase</option>
+                <option value="REPAIR">Repair</option>
+                <option value="MAINTENANCE">Maintenance</option>
+                <option value="IMPROVEMENT">Improvement</option>
+                <option value="CLAIM">Claim</option>
+                <option value="INSPECTION">Inspection</option>
+                <option value="DOCUMENT">Document</option>
+                <option value="VALUE_UPDATE">Value update</option>
+                <option value="MILESTONE">Milestone</option>
+                <option value="NOTE">Note</option>
+                <option value="OTHER">Other</option>
+              </select>
+              <div className="flex items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2">
+                <span className="text-sm text-[hsl(var(--mobile-text-secondary))]">Limit</span>
+                <input
+                  className="w-20 rounded-md border border-[hsl(var(--mobile-border-subtle))] px-2 py-1.5 text-sm"
+                  type="number"
+                  min={10}
+                  max={200}
+                  value={limit}
+                  onChange={(e) => setLimit(Number(e.target.value))}
+                />
+              </div>
+            </>
+          }
+          secondaryLabel="Replay controls"
+          secondaryFilters={
+            mode === 'VISUAL' ? (
+              <>
+                <button
+                  type="button"
+                  className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-left text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+                  onClick={() => {
+                    const next = !replayOn;
+                    setReplayOn(next);
+                    if (!next) {
+                      resetReplay();
+                    } else {
+                      setReplayIndex(1);
+                      setReplayRunning(true);
+                    }
+                  }}
+                >
+                  Replay: {replayOn ? 'On' : 'Off'}
+                </button>
 
+                {replayOn ? (
+                  <ActionPriorityRow
+                    primaryAction={
+                      <button
+                        type="button"
+                        className="min-h-[40px] rounded-lg bg-[hsl(var(--mobile-brand-strong))] px-3 text-sm font-semibold text-white"
+                        onClick={() => setReplayRunning((v) => !v)}
+                      >
+                        {replayRunning ? 'Pause Replay' : 'Resume Replay'}
+                      </button>
+                    }
+                    secondaryActions={
+                      <>
+                        <button
+                          type="button"
+                          className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+                          onClick={() => {
+                            setReplayIndex(1);
+                            setReplayRunning(true);
+                          }}
+                        >
+                          Restart
+                        </button>
+                        <select
+                          className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm"
+                          value={replaySpeedMs}
+                          onChange={(e) => setReplaySpeedMs(Number(e.target.value))}
+                          title="Replay speed"
+                        >
+                          <option value={950}>Slow</option>
+                          <option value={650}>Calm</option>
+                          <option value={380}>Fast</option>
+                        </select>
+                      </>
+                    }
+                  />
+                ) : null}
+              </>
+            ) : undefined
+          }
+          chips={
+            <>
+              <StatusChip tone={type ? 'protected' : 'info'}>{typeLabel}</StatusChip>
+              <StatusChip tone={hasCustomLimit ? 'elevated' : 'info'}>Limit {limit}</StatusChip>
+              <StatusChip tone={mode === 'VISUAL' ? 'protected' : 'good'}>
+                {mode === 'VISUAL' ? 'Visual mode' : 'List mode'}
+              </StatusChip>
+              {replayOn ? <StatusChip tone={replayRunning ? 'protected' : 'elevated'}>Replay active</StatusChip> : null}
+            </>
+          }
+          actions={
+            hasFiltersApplied ? (
               <button
-                className="rounded-md border px-3 py-2 text-sm"
+                type="button"
+                className="min-h-[40px] rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
                 onClick={() => {
-                  setReplayIndex(1);
-                  setReplayRunning(true);
+                  setType('');
+                  setLimit(80);
+                  setMode('LIST');
+                  setReplayOn(false);
+                  resetReplay();
                 }}
               >
-                Restart
+                Reset view
               </button>
-
-              <select
-                className="rounded-md border px-2 py-2 text-sm"
-                value={replaySpeedMs}
-                onChange={(e) => setReplaySpeedMs(Number(e.target.value))}
-                title="Replay speed"
-              >
-                <option value={950}>Slow</option>
-                <option value={650}>Calm</option>
-                <option value={380}>Fast</option>
-              </select>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Filters (shared) */}
-      <MobileFilterSurface className="flex flex-wrap items-center gap-2 p-3">
-        <div className="text-sm text-muted-foreground">Filter:</div>
-
-        <select
-          className="rounded-md border px-2 py-2 text-sm"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-        >
-          <option value="">All</option>
-          <option value="PURCHASE">Purchase</option>
-          <option value="REPAIR">Repair</option>
-          <option value="MAINTENANCE">Maintenance</option>
-          <option value="IMPROVEMENT">Improvement</option>
-          <option value="CLAIM">Claim</option>
-          <option value="INSPECTION">Inspection</option>
-          <option value="DOCUMENT">Document</option>
-          <option value="VALUE_UPDATE">Value</option>
-          <option value="MILESTONE">Milestone</option>
-          <option value="NOTE">Note</option>
-          <option value="OTHER">Other</option>
-        </select>
-
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Limit</span>
-          <input
-            className="w-24 rounded-md border px-2 py-2 text-sm"
-            type="number"
-            min={10}
-            max={200}
-            value={limit}
-            onChange={(e) => setLimit(Number(e.target.value))}
-          />
-        </div>
-
-        <div className="ml-auto text-xs text-muted-foreground">
-          {isFetching ? 'Updating…' : `${events.length} event(s)`}
-        </div>
-      </MobileFilterSurface>
-
-      {/* Body */}
+            ) : undefined
+          }
+        />
+      }
+    >
       {isLoading ? (
-        <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading timeline…</div>
+        <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
+          Loading timeline…
+        </div>
       ) : error ? (
-        <div className="rounded-lg border p-4 text-sm">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           Failed to load timeline.
-          <div className="mt-2 text-xs text-muted-foreground">
-            {(error as any)?.message ?? 'Unknown error'}
-          </div>
+          <div className="mt-2 text-xs text-rose-600">{(error as any)?.message ?? 'Unknown error'}</div>
         </div>
       ) : events.length === 0 ? (
-        <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-          No timeline events yet. Create an item, add an expense, upload a document, or open a claim — and your story will appear here.
+        <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
+          No timeline events yet. Add expenses, documents, claims, or maintenance events to build your home story.
         </div>
       ) : mode === 'LIST' ? (
         <TimelineClient
@@ -498,6 +561,7 @@ export default function Page() {
           replaySpeedMs={replaySpeedMs}
         />
       )}
-    </div>
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobileToolWorkspace>
   );
 }

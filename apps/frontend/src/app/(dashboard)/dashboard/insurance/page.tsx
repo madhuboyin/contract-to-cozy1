@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, ExternalLink, Upload, AlertCircle, CalendarDays } from 'lucide-react';
+import { FileText, Plus, Loader2, Shield, Trash2, Edit, X, Upload, CalendarDays } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import { api } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +38,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  EmptyStateCard,
+  MobileCard,
+  MobilePageIntro,
+  ReadOnlySummaryBlock,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
@@ -574,6 +581,12 @@ export default function InsurancePage() {
         return dateA - dateB;
     });
   }, [policies]);
+
+  const expiredPolicyCount = useMemo(
+    () => sortedPolicies.filter((policy) => isPast(parseISO(policy.expiryDate))).length,
+    [sortedPolicies]
+  );
+  const activePolicyCount = sortedPolicies.length - expiredPolicyCount;
   
   const getPropertyInfo = useCallback((propertyId: string | null) => {
       if (!propertyId) return 'General';
@@ -615,97 +628,97 @@ export default function InsurancePage() {
       )}
 
       {!isLoading && sortedPolicies.length === 0 && (
-        <Card className="text-center py-10">
-          <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <CardTitle>No Policies Found</CardTitle>
-          <CardDescription>Click &quot;Add Policy&quot; to create your first policy record.</CardDescription>
-        </Card>
+        <>
+          <div className="md:hidden">
+            <EmptyStateCard
+              title="No policies found"
+              description='Tap "Add Policy" to create your first insurance record.'
+            />
+          </div>
+          <Card className="hidden py-10 text-center md:block">
+            <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+            <CardTitle>No Policies Found</CardTitle>
+            <CardDescription>Click &quot;Add Policy&quot; to create your first policy record.</CardDescription>
+          </Card>
+        </>
       )}
 
       {!isLoading && sortedPolicies.length > 0 && (
         <>
-          <div className="grid gap-4 md:hidden">
-            {sortedPolicies.map(policy => {
+          <div className="space-y-3 md:hidden">
+            <ReadOnlySummaryBlock
+              title="Coverage Snapshot"
+              columns={2}
+              items={[
+                { label: 'Policies', value: sortedPolicies.length, emphasize: true },
+                { label: 'Active', value: activePolicyCount },
+                { label: 'Expired', value: expiredPolicyCount },
+                {
+                  label: 'Nearest renewal',
+                  value: sortedPolicies[0] ? format(parseISO(sortedPolicies[0].expiryDate), 'MMM dd, yyyy') : 'N/A',
+                },
+              ]}
+            />
+
+            {sortedPolicies.map((policy) => {
               const expired = isPast(parseISO(policy.expiryDate));
-              const statusClass = expired ? 'text-red-600' : 'text-green-600';
 
               return (
-                <Card key={policy.id} className={expired ? 'border-red-200' : undefined}>
-                  <CardContent className="space-y-4 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">{policy.carrierName}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {format(parseISO(policy.startDate), 'MMM dd, yyyy')}
-                        </div>
-                      </div>
-                      <span
-                        className={cn(
-                          "text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap",
-                          expired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                        )}
-                      >
-                        {expired ? 'Expired' : 'Active'}
-                      </span>
+                <MobileCard key={policy.id} variant="compact" className={cn('space-y-3 bg-white', expired && 'border-red-200')}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{policy.carrierName}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Started {format(parseISO(policy.startDate), 'MMM dd, yyyy')}
+                      </p>
                     </div>
-                    <div className="grid gap-3 text-sm text-muted-foreground">
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Policy #</span>
-                        <span>{policy.policyNumber || 'N/A'}</span>
-                      </div>
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Coverage Type</span>
-                        <span className="text-foreground">{policy.coverageType || 'N/A'}</span>
-                      </div>
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Property</span>
-                        <span className="text-foreground">{getPropertyInfo(policy.propertyId)}</span>
-                      </div>
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Premium</span>
-                        <span className="text-foreground">${policy.premiumAmount.toFixed(2)}</span>
-                      </div>
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Expires</span>
-                        <span className={statusClass}>
-                          {format(parseISO(policy.expiryDate), 'MMM dd, yyyy')}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-500 hover:text-green-600"
-                        onClick={() => openUploadModal(policy.id)}
-                        title="Upload Document"
-                      >
-                        <Upload className="w-4 h-4" />
+                    <StatusChip tone={expired ? 'danger' : 'good'}>{expired ? 'Expired' : 'Active'}</StatusChip>
+                  </div>
+
+                  <ReadOnlySummaryBlock
+                    className="border-slate-200 bg-slate-50"
+                    items={[
+                      { label: 'Policy #', value: policy.policyNumber || 'N/A' },
+                      { label: 'Coverage', value: policy.coverageType || 'N/A' },
+                      { label: 'Property', value: getPropertyInfo(policy.propertyId) },
+                      { label: 'Premium', value: `$${policy.premiumAmount.toFixed(2)}` },
+                      { label: 'Expires', value: format(parseISO(policy.expiryDate), 'MMM dd, yyyy') },
+                    ]}
+                  />
+
+                  <ActionPriorityRow
+                    primaryAction={
+                      <Button className="w-full min-h-[40px]" onClick={() => openAddEditModal(policy)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit Policy
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-500 hover:text-blue-600"
-                        onClick={() => openAddEditModal(policy)}
-                        title="Edit Policy"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-500 hover:text-red-600"
-                        onClick={() => handleDelete(policy.id)}
-                        title="Delete Policy"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    }
+                    secondaryActions={
+                      <>
+                        <Button
+                          variant="outline"
+                          className="min-h-[40px]"
+                          onClick={() => openUploadModal(policy.id)}
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload Doc
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="min-h-[40px] border-red-200 text-red-700 hover:bg-red-50"
+                          onClick={() => handleDelete(policy.id)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </Button>
+                      </>
+                    }
+                  />
+                </MobileCard>
               );
             })}
           </div>
+
           <div className="hidden rounded-md border bg-white overflow-x-auto md:block">
             <Table className="w-full table-auto">
             <TableHeader>

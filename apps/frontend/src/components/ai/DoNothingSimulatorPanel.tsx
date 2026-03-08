@@ -23,6 +23,13 @@ import {
   updateDoNothingScenario,
 } from '@/lib/api/doNothingSimulatorApi';
 import { Button } from '@/components/ui/button';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 const HORIZON_OPTIONS = [6, 12, 24, 36] as const;
 type Horizon = (typeof HORIZON_OPTIONS)[number];
@@ -73,24 +80,24 @@ function parseNonNegativeNumber(value: string): number | undefined {
   return parsed;
 }
 
-function runStatusTone(status?: DoNothingRunDTO['status']): string {
-  if (status === 'READY') return 'bg-emerald-100 text-emerald-700';
-  if (status === 'STALE') return 'bg-amber-100 text-amber-700';
-  if (status === 'ERROR') return 'bg-rose-100 text-rose-700';
-  return 'bg-gray-100 text-gray-700';
+function runStatusChipTone(status?: DoNothingRunDTO['status']): 'good' | 'elevated' | 'danger' | 'info' {
+  if (status === 'READY') return 'good';
+  if (status === 'STALE') return 'elevated';
+  if (status === 'ERROR') return 'danger';
+  return 'info';
+}
+
+function likelihoodChipTone(value?: DoNothingRunDTO['incidentLikelihood']): 'good' | 'elevated' | 'danger' | 'info' {
+  if (value === 'HIGH') return 'danger';
+  if (value === 'MEDIUM') return 'elevated';
+  if (value === 'LOW') return 'good';
+  return 'info';
 }
 
 function severityTone(value: 'LOW' | 'MEDIUM' | 'HIGH'): string {
   if (value === 'HIGH') return 'bg-rose-100 text-rose-700';
   if (value === 'MEDIUM') return 'bg-amber-100 text-amber-700';
   return 'bg-emerald-100 text-emerald-700';
-}
-
-function likelihoodTone(value?: DoNothingRunDTO['incidentLikelihood']): string {
-  if (value === 'HIGH') return 'bg-rose-100 text-rose-700';
-  if (value === 'MEDIUM') return 'bg-amber-100 text-amber-700';
-  if (value === 'LOW') return 'bg-emerald-100 text-emerald-700';
-  return 'bg-gray-100 text-gray-700';
 }
 
 function decisionImpactTone(impact: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL') {
@@ -354,8 +361,12 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
         </div>
       )}
 
-      <section className="rounded-2xl border border-black/10 bg-white p-5 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <ScenarioInputCard
+        title="Scenario Input"
+        subtitle="Configure horizon, risk posture, and assumptions to model the cost of inaction."
+        badge={<StatusChip tone="elevated">Scenario model</StatusChip>}
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label className="text-xs text-gray-600">
             Scenario
             <select
@@ -479,36 +490,39 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={handleRunSimulation} disabled={running}>
-            {running ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Running…
-              </>
-            ) : (
-              'Run simulation'
-            )}
-          </Button>
-
-          <Button type="button" variant="ghost" onClick={handleRefreshRun} disabled={running}>
-            <RefreshCw className="mr-2 h-4 w-4" /> Refresh
-          </Button>
-
-          <Button type="button" variant="secondary" onClick={handleSaveScenario} disabled={savingScenario}>
-            {savingScenario ? 'Saving…' : selectedScenario ? 'Update scenario' : 'Save scenario'}
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleDeleteScenario}
-            disabled={!selectedScenario || deletingScenario}
-          >
-            {deletingScenario ? 'Deleting…' : 'Delete scenario'}
-          </Button>
-        </div>
-      </section>
+        <ActionPriorityRow
+          primaryAction={
+            <Button type="button" onClick={handleRunSimulation} disabled={running}>
+              {running ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Running…
+                </>
+              ) : (
+                'Run simulation'
+              )}
+            </Button>
+          }
+          secondaryActions={
+            <>
+              <Button type="button" variant="ghost" onClick={handleRefreshRun} disabled={running}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+              </Button>
+              <Button type="button" variant="secondary" onClick={handleSaveScenario} disabled={savingScenario}>
+                {savingScenario ? 'Saving…' : selectedScenario ? 'Update scenario' : 'Save scenario'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDeleteScenario}
+                disabled={!selectedScenario || deletingScenario}
+              >
+                {deletingScenario ? 'Deleting…' : 'Delete scenario'}
+              </Button>
+            </>
+          }
+        />
+      </ScenarioInputCard>
 
       {!hasRun || !run ? (
         <section className="rounded-2xl border border-black/10 bg-white p-6">
@@ -520,48 +534,40 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
         </section>
       ) : (
         <div className="space-y-4">
-          <section className="rounded-2xl border border-black/10 bg-white p-5">
-            <div className="flex flex-wrap items-center gap-2 justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-teal-700" />
-                <h4 className="text-lg font-semibold text-gray-900">Do-Nothing Simulator</h4>
-              </div>
+          <ResultHeroCard
+            eyebrow="Simulation Result"
+            title="Do-Nothing Simulator"
+            value={`${run.horizonMonths} months`}
+            status={<StatusChip tone={runStatusChipTone(run.status)}>{run.status}</StatusChip>}
+            summary={run.summary || 'Simulation completed.'}
+            highlights={[
+              `Incident likelihood: ${run.incidentLikelihood ?? 'N/A'}`,
+              `Cost impact: ${moneyFromCents(run.expectedCostDeltaCentsMin)} - ${moneyFromCents(run.expectedCostDeltaCentsMax)}`,
+              `Computed: ${formatDate(run.computedAt)}`,
+            ]}
+            actions={
+              <ActionPriorityRow
+                secondaryActions={
+                  <StatusChip tone={likelihoodChipTone(run.incidentLikelihood)}>
+                    Incident {run.incidentLikelihood ?? 'N/A'}
+                  </StatusChip>
+                }
+              />
+            }
+          />
 
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${runStatusTone(run.status)}`}>
-                  {run.status}
-                </span>
-                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${likelihoodTone(run.incidentLikelihood)}`}>
-                  Incident {run.incidentLikelihood ?? 'N/A'}
-                </span>
-              </div>
-            </div>
-
-            <p className="mt-3 text-sm text-gray-700">{run.summary || 'Simulation completed.'}</p>
-
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3">
-                <div className="text-xs text-gray-500">Horizon</div>
-                <div className="text-base font-semibold text-gray-900">{run.horizonMonths} months</div>
-              </div>
-              <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3">
-                <div className="text-xs text-gray-500">Risk delta</div>
-                <div className="text-base font-semibold text-gray-900">
-                  {run.riskScoreDelta === null || run.riskScoreDelta === undefined ? '—' : `+${run.riskScoreDelta}`}
-                </div>
-              </div>
-              <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3">
-                <div className="text-xs text-gray-500">Cost impact (min)</div>
-                <div className="text-base font-semibold text-gray-900">{moneyFromCents(run.expectedCostDeltaCentsMin)}</div>
-              </div>
-              <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3">
-                <div className="text-xs text-gray-500">Cost impact (max)</div>
-                <div className="text-base font-semibold text-gray-900">{moneyFromCents(run.expectedCostDeltaCentsMax)}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 text-xs text-gray-500">Computed {formatDate(run.computedAt)}</div>
-          </section>
+          <ReadOnlySummaryBlock
+            columns={2}
+            items={[
+              { label: 'Horizon', value: `${run.horizonMonths} months`, emphasize: true },
+              {
+                label: 'Risk delta',
+                value: run.riskScoreDelta === null || run.riskScoreDelta === undefined ? '—' : `+${run.riskScoreDelta}`,
+              },
+              { label: 'Cost impact (min)', value: moneyFromCents(run.expectedCostDeltaCentsMin) },
+              { label: 'Cost impact (max)', value: moneyFromCents(run.expectedCostDeltaCentsMax) },
+            ]}
+          />
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
             <h4 className="text-base font-semibold text-gray-900">Top risk drivers</h4>

@@ -17,6 +17,13 @@ import {
   setHomeSavingsOpportunityStatus,
   upsertHomeSavingsAccount,
 } from '@/lib/api/homeSavingsApi';
+import {
+  ActionPriorityRow,
+  CompactEntityRow,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 type HomeSavingsCheckPanelProps = {
   propertyId: string;
@@ -66,10 +73,10 @@ function parseAmount(value: string): number | undefined {
   return numeric;
 }
 
-function statusTone(status: HomeSavingsSummaryCategoryDTO['status']): string {
-  if (status === 'FOUND_SAVINGS') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-  if (status === 'CONNECTED') return 'bg-sky-100 text-sky-700 border-sky-200';
-  return 'bg-gray-100 text-gray-700 border-gray-200';
+function categoryStatusChipTone(status: HomeSavingsSummaryCategoryDTO['status']): 'good' | 'info' | 'elevated' {
+  if (status === 'FOUND_SAVINGS') return 'good';
+  if (status === 'CONNECTED') return 'info';
+  return 'elevated';
 }
 
 function opportunityStatusTone(status: HomeSavingsOpportunityStatus): string {
@@ -305,12 +312,12 @@ export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPa
     );
   }
 
+  const potentialMonthlySavings = summary?.potentialMonthlySavings ?? null;
+  const potentialAnnualSavings = summary?.potentialAnnualSavings ?? null;
+  const hasSavings = Number(potentialMonthlySavings ?? 0) > 0;
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
-        You may be paying more than necessary. Home Savings Check uses your current plan details to estimate simple savings opportunities.
-      </div>
-
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5" />
@@ -318,28 +325,38 @@ export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPa
         </div>
       )}
 
-      <section className="rounded-2xl border border-black/10 bg-white p-5 space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">You could save up to {money(summary?.potentialMonthlySavings)}/month</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              That is about {money(summary?.potentialAnnualSavings)}/year across active categories.
-            </p>
-          </div>
-          <Button variant="outline" onClick={runAllComparisons} disabled={runningAll}>
-            {runningAll ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" /> Run all checks
-              </>
-            )}
-          </Button>
-        </div>
+      <ResultHeroCard
+        eyebrow="Savings Snapshot"
+        title="Home Savings Check"
+        value={`${money(potentialMonthlySavings)}/month`}
+        status={<StatusChip tone={hasSavings ? 'good' : 'info'}>{hasSavings ? 'Savings found' : 'No major flags'}</StatusChip>}
+        summary={`About ${money(potentialAnnualSavings)}/year across active categories.`}
+        highlights={[
+          'Insurance, warranty, internet, and utility checks',
+          'Plan-aware savings suggestions',
+          'Track actions per opportunity',
+        ]}
+        actions={
+          <ActionPriorityRow
+            primaryAction={
+              <Button variant="outline" onClick={runAllComparisons} disabled={runningAll}>
+                {runningAll ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" /> Run all checks
+                  </>
+                )}
+              </Button>
+            }
+          />
+        }
+      />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <ScenarioInputCard title="Scenario Input" subtitle="Choose a category and update current plan details before running checks.">
+        <div className="space-y-2">
           {summary?.categories.map((entry) => {
             const selected = selectedCategory === entry.category.key;
             return (
@@ -347,36 +364,33 @@ export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPa
                 key={entry.category.key}
                 type="button"
                 onClick={() => setSelectedCategory(entry.category.key)}
-                className={`rounded-xl border p-3 text-left transition ${
-                  selected ? 'border-teal-500 bg-teal-50' : 'border-black/10 bg-white hover:border-teal-300'
+                className={`block w-full rounded-xl transition ${
+                  selected ? 'ring-2 ring-teal-400 ring-offset-1' : ''
                 }`}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-semibold text-gray-900">{entry.category.label}</div>
-                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusTone(entry.status)}`}>
-                    {entry.status === 'NOT_SET_UP'
-                      ? 'Not set up'
-                      : entry.status === 'FOUND_SAVINGS'
-                      ? 'Found savings'
-                      : 'Connected'}
-                  </span>
-                </div>
-
-                <div className="mt-2 text-xs text-gray-600 space-y-1">
-                  <div className="truncate">
-                    {entry.account?.providerName
+                <CompactEntityRow
+                  title={entry.category.label}
+                  subtitle={
+                    entry.account?.providerName
                       ? `${entry.account.providerName} · ${money(entry.account.monthlyAmount)}/mo`
-                      : 'Current plan not added'}
-                  </div>
-                  <div className="line-clamp-2 text-gray-700">
-                    {entry.topOpportunity?.headline || 'No major savings flag right now'}
-                  </div>
-                </div>
+                      : 'Current plan not added'
+                  }
+                  meta={entry.topOpportunity?.headline || 'No major savings flag right now'}
+                  status={
+                    <StatusChip tone={categoryStatusChipTone(entry.status)}>
+                      {entry.status === 'NOT_SET_UP'
+                        ? 'Not set up'
+                        : entry.status === 'FOUND_SAVINGS'
+                        ? 'Found savings'
+                        : 'Connected'}
+                    </StatusChip>
+                  }
+                />
               </button>
             );
           })}
         </div>
-      </section>
+      </ScenarioInputCard>
 
       {selectedCategory && (
         <section className="rounded-2xl border border-black/10 bg-white p-5">

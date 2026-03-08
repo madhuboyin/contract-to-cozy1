@@ -7,7 +7,13 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { Property } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  CompactEntityRow,
+  MobileCard,
+  MobilePageIntro,
+  ReadOnlySummaryBlock,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   SINGLE_FAMILY: 'Single Family',
@@ -156,15 +162,142 @@ export default function PropertiesPage() {
       />
 
       {navTargetLabel && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          Select a property to continue to <span className="font-semibold">{navTargetLabel}</span>.
-        </div>
+        <MobileCard className="border-blue-200 bg-blue-50 p-3">
+          <p className="text-sm text-blue-800">
+            Select a property to continue to <span className="font-semibold">{navTargetLabel}</span>.
+          </p>
+        </MobileCard>
       )}
 
-      {/* Grid */}
-      <div>
+      <div className="md:hidden">
         {properties.length === 0 ? (
-          /* Empty state */
+          <MobileCard className="border-dashed border-slate-300 bg-white py-10 text-center">
+            <svg className="mx-auto h-10 w-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            <h3 className="mt-3 text-sm font-semibold text-slate-900">No properties yet</h3>
+            <p className="mt-1 text-sm text-slate-600">Add your first property to get started.</p>
+            <div className="mt-5">
+              <Link
+                href="/dashboard/properties/new"
+                className="inline-flex min-h-[44px] items-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Property
+              </Link>
+            </div>
+          </MobileCard>
+        ) : (
+          <div className="space-y-3">
+            <ReadOnlySummaryBlock
+              title="Portfolio Snapshot"
+              columns={2}
+              items={[
+                { label: 'Properties', value: `${properties.length} / ${MAX_PROPERTIES}`, emphasize: true },
+                { label: 'Primary homes', value: properties.filter((property) => property.isPrimary).length },
+                { label: 'With profile name', value: properties.filter((property) => Boolean(property.name)).length },
+                { label: 'Can add more', value: canAddMore ? 'Yes' : 'Limit reached' },
+              ]}
+            />
+
+            <MobileCard variant="compact" className="space-y-2 border-slate-200/80 bg-white p-2.5">
+              {properties.map((property) => {
+                const isMenuOpen = menuOpenId === property.id;
+                const isDeleting = deleting === property.id;
+                const typeLabel = property.propertyType ? PROPERTY_TYPE_LABELS[property.propertyType] : null;
+                const metadata = [
+                  property.bedrooms != null ? `${property.bedrooms} bd` : null,
+                  property.bathrooms != null ? `${property.bathrooms} ba` : null,
+                  property.yearBuilt != null ? `Built ${property.yearBuilt}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+
+                return (
+                  <div key={property.id} className="relative">
+                    <CompactEntityRow
+                      title={property.name || property.address}
+                      subtitle={
+                        property.name
+                          ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}`
+                          : `${property.city}, ${property.state} ${property.zipCode}`
+                      }
+                      meta={metadata || undefined}
+                      href={resolvePropertyHref(property.id)}
+                      className="pr-12"
+                      status={
+                        property.isPrimary ? (
+                          <StatusChip tone="good">Primary</StatusChip>
+                        ) : typeLabel ? (
+                          <StatusChip tone="info">{typeLabel}</StatusChip>
+                        ) : undefined
+                      }
+                    />
+
+                    <div className="absolute right-2 top-2.5" ref={isMenuOpen ? menuRef : undefined}>
+                      <button
+                        aria-label="More options"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(isMenuOpen ? null : property.id);
+                        }}
+                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                        </svg>
+                      </button>
+
+                      {isMenuOpen && (
+                        <div className="absolute right-0 top-9 z-20 w-36 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                          <Link
+                            href={`/dashboard/properties/${property.id}/edit`}
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                            onClick={() => setMenuOpenId(null)}
+                          >
+                            <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit
+                          </Link>
+                          <button
+                            onClick={() => handleDelete(property.id, property.name || property.address)}
+                            disabled={isDeleting}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            {isDeleting ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </MobileCard>
+
+            {canAddMore ? (
+              <Link href="/dashboard/properties/new" className="no-brand-style block">
+                <CompactEntityRow
+                  title="Add a property"
+                  subtitle="Connect another home or service location"
+                  meta="Takes about a minute"
+                />
+              </Link>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden md:block">
+        {properties.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
             <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}

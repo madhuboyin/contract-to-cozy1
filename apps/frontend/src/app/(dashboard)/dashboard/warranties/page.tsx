@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Wrench, Trash2, Edit, Upload, ExternalLink, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays } from 'lucide-react';
+import { FileText, Plus, Loader2, Trash2, Edit, Upload, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -41,7 +41,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  EmptyStateCard,
+  MobileCard,
+  MobilePageIntro,
+  ReadOnlySummaryBlock,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 /**
  * Infer appliance type from InventoryItem for HomeAsset compatibility
@@ -937,6 +944,12 @@ export default function WarrantiesPage() {
         return dateA - dateB;
     });
   }, [warranties]);
+
+  const expiredWarrantyCount = useMemo(
+    () => sortedWarranties.filter((warranty) => isPast(parseISO(warranty.expiryDate))).length,
+    [sortedWarranties]
+  );
+  const activeWarrantyCount = sortedWarranties.length - expiredWarrantyCount;
   
   // UPDATED: Get Property Info to handle asset-based linkage
   const getPropertyInfo = useCallback((warranty: Warranty): string => {
@@ -1056,101 +1069,97 @@ const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
       )}
 
       {!isLoading && sortedWarranties.length === 0 && (
-        <Card className="text-center py-10">
-          <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <CardTitle>No Warranties Found</CardTitle>
-          <CardDescription>Click &quot;Add Warranty&quot; to create your first record.</CardDescription>
-        </Card>
+        <>
+          <div className="md:hidden">
+            <EmptyStateCard
+              title="No warranties found"
+              description='Tap "Add Warranty" to create your first coverage record.'
+            />
+          </div>
+          <Card className="hidden py-10 text-center md:block">
+            <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+            <CardTitle>No Warranties Found</CardTitle>
+            <CardDescription>Click &quot;Add Warranty&quot; to create your first record.</CardDescription>
+          </Card>
+        </>
       )}
 
       {!isLoading && sortedWarranties.length > 0 && (
         <>
-          <div className="grid gap-4 md:hidden">
-            {sortedWarranties.map(warranty => {
+          <div className="space-y-3 md:hidden">
+            <ReadOnlySummaryBlock
+              title="Warranty Snapshot"
+              columns={2}
+              items={[
+                { label: 'Warranties', value: sortedWarranties.length, emphasize: true },
+                { label: 'Active', value: activeWarrantyCount },
+                { label: 'Expired', value: expiredWarrantyCount },
+                {
+                  label: 'Nearest expiry',
+                  value: sortedWarranties[0] ? format(parseISO(sortedWarranties[0].expiryDate), 'MMM dd, yyyy') : 'N/A',
+                },
+              ]}
+            />
+
+            {sortedWarranties.map((warranty) => {
               const expired = isPast(parseISO(warranty.expiryDate));
-              const statusClass = expired ? 'text-red-600' : 'text-green-600';
 
               return (
-                <Card key={warranty.id} className={expired ? 'border-red-200' : undefined}>
-                  <CardContent className="space-y-4 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">{warranty.providerName}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {format(parseISO(warranty.startDate), 'MMM dd, yyyy')}
-                        </div>
-                      </div>
-                      <span
-                        className={cn(
-                          "text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap",
-                          expired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                        )}
-                      >
-                        {expired ? 'Expired' : 'Active'}
-                      </span>
+                <MobileCard key={warranty.id} variant="compact" className={cn('space-y-3 bg-white', expired && 'border-red-200')}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{warranty.providerName}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Started {format(parseISO(warranty.startDate), 'MMM dd, yyyy')}
+                      </p>
                     </div>
-                    <div className="grid gap-3 text-sm text-muted-foreground">
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Category</span>
-                        <span className="font-semibold text-foreground">
-                          {WARRANTY_CATEGORIES[warranty.category] || warranty.category}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Policy #</span>
-                        <span>{warranty.policyNumber || 'N/A'}</span>
-                      </div>
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Property</span>
-                        <span className="text-foreground">{getPropertyInfo(warranty)}</span>
-                      </div>
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Asset</span>
-                        <span>{getAssetInfo(warranty)}</span>
-                      </div>
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Expires</span>
-                        <span className={statusClass}>
-                          {format(parseISO(warranty.expiryDate), 'MMM dd, yyyy')}
-                        </span>
-                      </div>
-                      {warranty.coverageDetails && (
-                        <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-                          {warranty.coverageDetails}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-500 hover:text-blue-600"
-                        onClick={() => openUploadModal(warranty.id)}
-                        title="Upload Document"
-                      >
-                        <Upload className="w-4 h-4" />
+                    <StatusChip tone={expired ? 'danger' : 'good'}>{expired ? 'Expired' : 'Active'}</StatusChip>
+                  </div>
+
+                  <ReadOnlySummaryBlock
+                    className="border-slate-200 bg-slate-50"
+                    items={[
+                      {
+                        label: 'Category',
+                        value: WARRANTY_CATEGORIES[warranty.category] || warranty.category,
+                      },
+                      { label: 'Policy #', value: warranty.policyNumber || 'N/A' },
+                      { label: 'Property', value: getPropertyInfo(warranty) },
+                      { label: 'Asset', value: getAssetInfo(warranty) },
+                      { label: 'Expires', value: format(parseISO(warranty.expiryDate), 'MMM dd, yyyy') },
+                      { label: 'Coverage', value: warranty.coverageDetails || 'No details provided' },
+                    ]}
+                  />
+
+                  <ActionPriorityRow
+                    primaryAction={
+                      <Button className="w-full min-h-[40px]" onClick={() => openAddEditModal(warranty)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit Warranty
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-500 hover:text-blue-600"
-                        onClick={() => openAddEditModal(warranty)}
-                        title="Edit Warranty"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-500 hover:text-red-600"
-                        onClick={() => handleDelete(warranty.id)}
-                        title="Delete Warranty"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    }
+                    secondaryActions={
+                      <>
+                        <Button
+                          variant="outline"
+                          className="min-h-[40px]"
+                          onClick={() => openUploadModal(warranty.id)}
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload Doc
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="min-h-[40px] border-red-200 text-red-700 hover:bg-red-50"
+                          onClick={() => handleDelete(warranty.id)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </Button>
+                      </>
+                    }
+                  />
+                </MobileCard>
               );
             })}
           </div>

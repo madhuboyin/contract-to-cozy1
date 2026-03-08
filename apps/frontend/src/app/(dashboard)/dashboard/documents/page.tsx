@@ -16,9 +16,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  EmptyStateCard,
+  MobileCard,
+  MobileFilterStack,
+  MobilePageIntro,
+  ReadOnlySummaryBlock,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
@@ -586,6 +593,11 @@ export default function DocumentsPage() {
     return list.sort((a, b) => parseISO(b.createdAt).getTime() - parseISO(a.createdAt).getTime());
   }, [documents, filterType, filterParentType]);
 
+  const aiAnalyzedCount = useMemo(
+    () => filteredDocuments.filter((doc) => Boolean((doc as any).confidence)).length,
+    [filteredDocuments]
+  );
+
   const handleUploadSuccess = () => {
       setIsUploadModalOpen(false);
       fetchDependencies();
@@ -613,39 +625,89 @@ export default function DocumentsPage() {
         }
       />
 
-      <Card>
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className='flex items-center gap-2'>
-                <Filter className='w-4 h-4 text-gray-500'/>
+      <div className="space-y-3 md:hidden">
+        <ReadOnlySummaryBlock
+          title="Vault Snapshot"
+          columns={2}
+          items={[
+            { label: 'Documents', value: filteredDocuments.length, emphasize: true },
+            { label: 'AI analyzed', value: aiAnalyzedCount },
+            { label: 'Type filter', value: filterType === 'ALL' ? 'All types' : filterType.replace(/_/g, ' ') },
+            { label: 'Entity filter', value: filterParentType === 'ALL' ? 'All entities' : filterParentType },
+          ]}
+        />
+        <MobileFilterStack
+          primaryFilters={
+            <div className="space-y-2">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Document type</p>
                 <Select value={filterType} onValueChange={setFilterType}>
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Filter by Document Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="ALL">All Types</SelectItem>
-                        {DOCUMENT_TYPES.map(dt => (
-                            <SelectItem key={dt} value={dt}>
-                                {dt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filter by Document Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Types</SelectItem>
+                    {DOCUMENT_TYPES.map(dt => (
+                      <SelectItem key={dt} value={dt}>
+                        {dt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
-            </div>
-            <div className='flex items-center gap-2 md:col-span-2'>
-                 <Filter className='w-4 h-4 text-gray-500'/>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Associated entity</p>
                 <Select value={filterParentType} onValueChange={setFilterParentType}>
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Filter by Parent Entity" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="ALL">All Entities</SelectItem>
-                        <SelectItem value="Warranty">Warranties</SelectItem>
-                        <SelectItem value="Policy">Insurance Policies</SelectItem>
-                        <SelectItem value="Property">Properties</SelectItem>
-                        <SelectItem value="Unattached">Unattached</SelectItem>
-                    </SelectContent>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filter by Parent Entity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Entities</SelectItem>
+                    <SelectItem value="Warranty">Warranties</SelectItem>
+                    <SelectItem value="Policy">Insurance Policies</SelectItem>
+                    <SelectItem value="Property">Properties</SelectItem>
+                    <SelectItem value="Unattached">Unattached</SelectItem>
+                  </SelectContent>
                 </Select>
+              </div>
             </div>
+          }
+        />
+      </div>
+
+      <Card className="hidden md:block">
+        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className='flex items-center gap-2'>
+            <Filter className='w-4 h-4 text-gray-500'/>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filter by Document Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Types</SelectItem>
+                {DOCUMENT_TYPES.map(dt => (
+                  <SelectItem key={dt} value={dt}>
+                    {dt.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className='flex items-center gap-2 md:col-span-2'>
+            <Filter className='w-4 h-4 text-gray-500'/>
+            <Select value={filterParentType} onValueChange={setFilterParentType}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filter by Parent Entity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Entities</SelectItem>
+                <SelectItem value="Warranty">Warranties</SelectItem>
+                <SelectItem value="Policy">Insurance Policies</SelectItem>
+                <SelectItem value="Property">Properties</SelectItem>
+                <SelectItem value="Unattached">Unattached</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -657,71 +719,132 @@ export default function DocumentsPage() {
       )}
 
       {!isLoading && filteredDocuments.length === 0 && (
-        <Card className="text-center py-10">
-          <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <CardTitle>No Documents Found</CardTitle>
-          <CardDescription>Click &quot;Upload New Document&quot; to add your first file.</CardDescription>
-        </Card>
+        <>
+          <div className="md:hidden">
+            <EmptyStateCard
+              title="No documents found"
+              description='Tap "Upload New Document" to add your first file.'
+            />
+          </div>
+          <Card className="hidden py-10 text-center md:block">
+            <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+            <CardTitle>No Documents Found</CardTitle>
+            <CardDescription>Click &quot;Upload New Document&quot; to add your first file.</CardDescription>
+          </Card>
+        </>
       )}
 
       {!isLoading && filteredDocuments.length > 0 && (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">AI Analysis</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Associated With</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded</th>
-                  <th className="relative px-6 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredDocuments.map(doc => (
-                  <tr key={doc.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 truncate max-w-xs">{doc.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+        <>
+          <div className="space-y-2 md:hidden">
+            {filteredDocuments.map((doc) => {
+              const confidence = (doc as any).confidence as number | undefined;
+              return (
+                <MobileCard key={doc.id} variant="compact" className="space-y-3 border-slate-200/80 bg-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{doc.name}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{format(parseISO(doc.createdAt), 'MMM dd, yyyy')}</p>
+                    </div>
+                    <StatusChip tone="info">
                       {doc.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </td>
-                    <td className="px-6 py-4 text-sm hidden md:table-cell">
-                      {(doc as any).confidence ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                          <Sparkles className="w-3 h-3" />
-                          {Math.round((doc as any).confidence * 100)}%
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-xs">Manual</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 hidden sm:table-cell">
-                        {getParentEntityDisplay(doc)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                       {format(parseISO(doc.createdAt), 'MMM dd, yyyy')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" asChild>
-                         <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="w-4 h-4" />
-                         </a>
+                    </StatusChip>
+                  </div>
+
+                  <ReadOnlySummaryBlock
+                    className="border-slate-200 bg-slate-50"
+                    items={[
+                      { label: 'Associated with', value: getParentEntityDisplay(doc) },
+                      {
+                        label: 'AI analysis',
+                        value: confidence ? `${Math.round(confidence * 100)}% confidence` : 'Manual upload',
+                      },
+                    ]}
+                  />
+
+                  <ActionPriorityRow
+                    primaryAction={
+                      <Button asChild className="w-full min-h-[40px]">
+                        <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Open Document
+                        </a>
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700" 
+                    }
+                    secondaryActions={
+                      <Button
+                        variant="outline"
+                        className="min-h-[40px] border-red-200 text-red-700 hover:bg-red-50"
                         onClick={() => handleDelete(doc.id)}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
                       </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    }
+                  />
+                </MobileCard>
+              );
+            })}
           </div>
-        </Card>
+
+          <Card className="hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">AI Analysis</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Associated With</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded</th>
+                    <th className="relative px-6 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredDocuments.map(doc => (
+                    <tr key={doc.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900 truncate max-w-xs">{doc.name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {doc.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </td>
+                      <td className="px-6 py-4 text-sm hidden md:table-cell">
+                        {(doc as any).confidence ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                            <Sparkles className="w-3 h-3" />
+                            {Math.round((doc as any).confidence * 100)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">Manual</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500 hidden sm:table-cell">
+                          {getParentEntityDisplay(doc)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                         {format(parseISO(doc.createdAt), 'MMM dd, yyyy')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" asChild>
+                           <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="w-4 h-4" />
+                           </a>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => handleDelete(doc.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
 
       {/* Upload Dialog with Tabs */}

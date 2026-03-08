@@ -6,7 +6,14 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  MobileCard,
+  MobilePageIntro,
+  ReadOnlySummaryBlock,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
@@ -289,9 +296,7 @@ export default function NewPropertyPage() {
   );
 
   const BasicAddressFields = (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3">Property Basics (Required)</h2>
-      
+    <div className="space-y-5">
       <div>
         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
           Property Name <span className="text-gray-500 font-normal">(optional)</span>
@@ -487,136 +492,172 @@ export default function NewPropertyPage() {
     </div>
   );
 
+  const requiredProgress = [
+    Boolean(formData.address.trim()),
+    Boolean(formData.city.trim()),
+    Boolean(formData.state.trim()),
+    Boolean(formData.zipCode.trim()),
+    Boolean(formData.propertyType),
+    Boolean(formData.yearBuilt),
+  ];
+  const completedRequired = requiredProgress.filter(Boolean).length;
+
+  const optionalSignalCount = [
+    formData.propertySize,
+    formData.heatingType,
+    formData.coolingType,
+    formData.waterHeaterType,
+    formData.roofType,
+    formData.occupantsCount,
+    formData.ownershipType,
+    formData.hvacInstallYear,
+    formData.waterHeaterInstallYear,
+    formData.roofReplacementYear,
+  ].filter(Boolean).length + majorAppliances.filter((asset) => asset.type && asset.installYear).length;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
       <MobilePageIntro
         title="Add New Property"
         subtitle="Tell us about your property to unlock personalized insights, scores, and planning tools."
-        className="mb-6"
+        className="mb-4"
       />
 
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          {error}
-        </div>
+        <MobileCard className="mb-4 border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-800">{error}</p>
+        </MobileCard>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          {BasicAddressFields}
-        </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <ReadOnlySummaryBlock
+          title="Setup Summary"
+          columns={2}
+          items={[
+            {
+              label: 'Required fields',
+              value: `${completedRequired} / ${requiredProgress.length}`,
+              emphasize: true,
+            },
+            {
+              label: 'Advanced signals',
+              value: optionalSignalCount,
+            },
+            {
+              label: 'Appliances added',
+              value: majorAppliances.filter((asset) => asset.type && asset.installYear).length,
+            },
+            {
+              label: 'Primary residence',
+              value: formData.isPrimary ? 'Yes' : 'No',
+            },
+          ]}
+        />
 
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full px-6 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
-          >
-            <div className="flex items-center space-x-2">
-              <span className="text-lg font-semibold text-gray-900">Advanced Property Details</span>
-              <span className="text-sm text-gray-500 font-normal">(Optional)</span>
-            </div>
-            {showAdvanced ? <ChevronUp className="w-5 h-5 text-gray-600" /> : <ChevronDown className="w-5 h-5 text-gray-600" />}
-          </button>
-
-          {showAdvanced && (
-            <div className="p-6 space-y-8 bg-white border-t border-gray-200">
-              
-              {/* === Synchronized Section 1: Risk & System Details === */}
-              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3">Risk & System Details</h3>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                
-                {/* Property Size */}
-                <div>
-                  <label htmlFor="propertySize" className="block text-sm font-medium text-gray-700 mb-2">Square Footage (sqft)</label>
-                  <input type="number" id="propertySize" name="propertySize" value={formData.propertySize} onChange={handleChange} placeholder="e.g., 2500" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                
-                {/* HVAC Install Year */}
-                <div>
-                  <label htmlFor="hvacInstallYear" className="block text-sm font-medium text-gray-700 mb-2">HVAC Install Year</label>
-                  <input type="text" id="hvacInstallYear" name="hvacInstallYear" value={formData.hvacInstallYear} onChange={handleChange} placeholder="e.g., 2018" pattern="\d{4}" maxLength={4} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                
-                {/* Water Heater Install Year */}
-                <div>
-                  <label htmlFor="waterHeaterInstallYear" className="block text-sm font-medium text-gray-700 mb-2">Water Heater Install Year</label>
-                  <input type="text" id="waterHeaterInstallYear" name="waterHeaterInstallYear" value={formData.waterHeaterInstallYear} onChange={handleChange} placeholder="e.g., 2020" pattern="\d{4}" maxLength={4} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                
-                {/* Roof Replacement Year */}
-                <div>
-                  <label htmlFor="roofReplacementYear" className="block text-sm font-medium text-gray-700 mb-2">Roof Replacement Year</label>
-                  <input type="text" id="roofReplacementYear" name="roofReplacementYear" value={formData.roofReplacementYear} onChange={handleChange} placeholder="e.g., 2010" pattern="\d{4}" maxLength={4} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-
-                {/* Heating Type */}
-                <SelectInput label="Heating Type" name="heatingType" value={formData.heatingType} options={HEATING_OPTIONS} />
-                
-                {/* Cooling Type */}
-                <SelectInput label="Cooling Type" name="coolingType" value={formData.coolingType} options={COOLING_OPTIONS} />
-
-                {/* Roof Type */}
-                <SelectInput label="Roof Type" name="roofType" value={formData.roofType} options={ROOF_OPTIONS} />
-                
-                {/* Water Heater Type */}
-                <SelectInput label="Water Heater Type" name="waterHeaterType" value={formData.waterHeaterType} options={WATER_HEATER_OPTIONS} />
-              </div>
-              
-              {/* === Synchronized Section 2: Safety & Usage === */}
-              <div className="border-t border-gray-200 pt-6 space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3">Safety & Usage</h3>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {/* Ownership Type */}
-                <SelectInput label="Ownership Status" name="ownershipType" value={formData.ownershipType} options={OWNERSHIP_OPTIONS} />
-                
-                {/* Occupants Count */}
-                <div>
-                  <label htmlFor="occupantsCount" className="block text-sm font-medium text-gray-700 mb-2">Number of Occupants</label>
-                  <input type="number" id="occupantsCount" name="occupantsCount" value={formData.occupantsCount} onChange={handleChange} placeholder="e.g., 4" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 border-t border-gray-200 pt-6">
-                <BooleanInput label="Has Smoke Detectors" name="hasSmokeDetectors" checked={formData.hasSmokeDetectors} />
-                <BooleanInput label="Has CO Detectors" name="hasCoDetectors" checked={formData.hasCoDetectors} />
-                <BooleanInput label="Has Security System" name="hasSecuritySystem" checked={formData.hasSecuritySystem} />
-                <BooleanInput label="Has Fire Extinguisher" name="hasFireExtinguisher" checked={formData.hasFireExtinguisher} />
-                <BooleanInput label="Has Irrigation System" name="hasIrrigation" checked={formData.hasIrrigation} />
-                <BooleanInput label="Has Drainage Issues" name="hasDrainageIssues" checked={formData.hasDrainageIssues} />
-              </div>
-
-              {/* FIXED: Replaced JSON Textarea with Structured Input List */}
-              {ApplianceInputList}
-              
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end bg-white rounded-lg shadow-md p-6">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting ? 'Creating Property...' : 'Create Property'}
-          </button>
-        </div>
-      </form>
-
-      {/* Skip button OUTSIDE form with bold styling for visibility */}
-      <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center">
-        <button
-          type="button"
-          onClick={handleSkipNow}
-          className="px-6 py-3 text-base font-bold text-gray-800 bg-yellow-200 hover:bg-yellow-300 rounded-lg transition-colors border-2 border-yellow-400"
+        <ScenarioInputCard
+          title="Property Basics"
+          subtitle="Required fields to create your property profile."
+          badge={<StatusChip tone="needsAction">Required</StatusChip>}
         >
-          ⏭️ Skip for Now (Click Me!)
-        </button>
-        <p className="mt-2 text-xs text-gray-600">Check browser console after clicking</p>
-      </div>
+          {BasicAddressFields}
+        </ScenarioInputCard>
+
+        <ScenarioInputCard
+          title="Advanced Property Details"
+          subtitle="Optional details that improve score accuracy and recommendations."
+          badge={<StatusChip tone="info">Optional</StatusChip>}
+          actions={
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex min-h-[40px] w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              <span>{showAdvanced ? 'Hide advanced details' : 'Show advanced details'}</span>
+              {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          }
+        >
+          {showAdvanced ? (
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-gray-900">Risk & System Details</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <label htmlFor="propertySize" className="mb-2 block text-sm font-medium text-gray-700">Square Footage (sqft)</label>
+                    <input type="number" id="propertySize" name="propertySize" value={formData.propertySize} onChange={handleChange} placeholder="e.g., 2500" className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label htmlFor="hvacInstallYear" className="mb-2 block text-sm font-medium text-gray-700">HVAC Install Year</label>
+                    <input type="text" id="hvacInstallYear" name="hvacInstallYear" value={formData.hvacInstallYear} onChange={handleChange} placeholder="e.g., 2018" pattern="\d{4}" maxLength={4} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label htmlFor="waterHeaterInstallYear" className="mb-2 block text-sm font-medium text-gray-700">Water Heater Install Year</label>
+                    <input type="text" id="waterHeaterInstallYear" name="waterHeaterInstallYear" value={formData.waterHeaterInstallYear} onChange={handleChange} placeholder="e.g., 2020" pattern="\d{4}" maxLength={4} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label htmlFor="roofReplacementYear" className="mb-2 block text-sm font-medium text-gray-700">Roof Replacement Year</label>
+                    <input type="text" id="roofReplacementYear" name="roofReplacementYear" value={formData.roofReplacementYear} onChange={handleChange} placeholder="e.g., 2010" pattern="\d{4}" maxLength={4} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <SelectInput label="Heating Type" name="heatingType" value={formData.heatingType} options={HEATING_OPTIONS} />
+                  <SelectInput label="Cooling Type" name="coolingType" value={formData.coolingType} options={COOLING_OPTIONS} />
+                  <SelectInput label="Roof Type" name="roofType" value={formData.roofType} options={ROOF_OPTIONS} />
+                  <SelectInput label="Water Heater Type" name="waterHeaterType" value={formData.waterHeaterType} options={WATER_HEATER_OPTIONS} />
+                </div>
+              </div>
+
+              <div className="space-y-4 border-t border-gray-200 pt-5">
+                <h3 className="text-sm font-semibold text-gray-900">Safety & Usage</h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <SelectInput label="Ownership Status" name="ownershipType" value={formData.ownershipType} options={OWNERSHIP_OPTIONS} />
+                  <div>
+                    <label htmlFor="occupantsCount" className="mb-2 block text-sm font-medium text-gray-700">Number of Occupants</label>
+                    <input type="number" id="occupantsCount" name="occupantsCount" value={formData.occupantsCount} onChange={handleChange} placeholder="e.g., 4" className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 border-t border-gray-200 pt-5 sm:grid-cols-2 lg:grid-cols-3">
+                  <BooleanInput label="Has Smoke Detectors" name="hasSmokeDetectors" checked={formData.hasSmokeDetectors} />
+                  <BooleanInput label="Has CO Detectors" name="hasCoDetectors" checked={formData.hasCoDetectors} />
+                  <BooleanInput label="Has Security System" name="hasSecuritySystem" checked={formData.hasSecuritySystem} />
+                  <BooleanInput label="Has Fire Extinguisher" name="hasFireExtinguisher" checked={formData.hasFireExtinguisher} />
+                  <BooleanInput label="Has Irrigation System" name="hasIrrigation" checked={formData.hasIrrigation} />
+                  <BooleanInput label="Has Drainage Issues" name="hasDrainageIssues" checked={formData.hasDrainageIssues} />
+                </div>
+              </div>
+
+              {ApplianceInputList}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">
+              Keep this collapsed for a fast setup, or expand to include systems, safety, and appliance details.
+            </p>
+          )}
+        </ScenarioInputCard>
+
+        <MobileCard className="border-slate-200/80 bg-white p-4">
+          <ActionPriorityRow
+            primaryAction={
+              <button
+                type="submit"
+                disabled={submitting}
+                className="min-h-[44px] w-full rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting ? 'Creating Property...' : 'Create Property'}
+              </button>
+            }
+            secondaryActions={
+              <button
+                type="button"
+                onClick={handleSkipNow}
+                className="min-h-[40px] rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-900 transition-colors hover:bg-yellow-100"
+              >
+                Skip for now
+              </button>
+            }
+          />
+          <p className="mt-2 text-xs text-slate-500">You can complete advanced fields later from Edit Property.</p>
+        </MobileCard>
+      </form>
     </div>
   );
 }

@@ -11,7 +11,16 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/bookings/StatusBadge';
 import { BookingTimeline } from '@/components/bookings/BookingTimeline';
 import { formatEnumLabel } from '@/lib/utils/formatters';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 const formatDate = (dateString: string | null) => {
   if (!dateString) return 'Not scheduled';
@@ -43,6 +52,14 @@ const formatDateTime = (dateString: string | null) => {
     hour: 'numeric',
     minute: '2-digit',
   });
+};
+
+const getBookingTone = (status: Booking['status']) => {
+  if (status === 'COMPLETED') return 'good';
+  if (status === 'CANCELLED') return 'danger';
+  if (status === 'DRAFT') return 'elevated';
+  if (status === 'DISPUTED') return 'danger';
+  return 'info';
 };
 
 export default function BookingDetailsPage() {
@@ -87,207 +104,197 @@ export default function BookingDetailsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="flex items-center justify-center py-12">
-            <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-brand-primary" />
-          </div>
+      <MobileToolWorkspace
+        intro={<MobilePageIntro title="Booking Details" subtitle="Loading booking details..." />}
+      >
+        <div className="flex items-center justify-center rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white py-12">
+          <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-brand-primary" />
         </div>
-      </div>
+      </MobileToolWorkspace>
     );
   }
 
   if (!booking) {
     const isRequestFailure = errorState?.kind === 'REQUEST_FAILED';
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="py-12 text-center">
-            <p className="text-gray-600">
-              {isRequestFailure ? 'Unable to load booking details right now.' : 'Booking not found'}
-            </p>
-            {isRequestFailure && errorState?.message && <p className="mt-2 text-sm text-gray-500">{errorState.message}</p>}
-            <div className="mt-4 flex items-center justify-center gap-3">
-              {isRequestFailure && (
-                <Button onClick={fetchBooking} variant="default">
+      <MobileToolWorkspace
+        intro={<MobilePageIntro title="Booking Details" subtitle="Unable to load this booking." />}
+      >
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
+          <p className="text-sm text-rose-700">
+            {isRequestFailure ? 'Unable to load booking details right now.' : 'Booking not found'}
+          </p>
+          {isRequestFailure && errorState?.message ? (
+            <p className="mt-1 text-xs text-rose-600">{errorState.message}</p>
+          ) : null}
+          <ActionPriorityRow
+            className="mt-3"
+            primaryAction={
+              isRequestFailure ? (
+                <Button onClick={fetchBooking} className="w-full">
                   Retry
                 </Button>
-              )}
+              ) : undefined
+            }
+            secondaryActions={
               <Button
                 onClick={() => router.push('/dashboard/bookings')}
                 variant={isRequestFailure ? 'outline' : 'default'}
               >
                 Back to bookings
               </Button>
-            </div>
-          </div>
+            }
+          />
         </div>
-      </div>
+        <BottomSafeAreaReserve size="chatAware" />
+      </MobileToolWorkspace>
     );
   }
 
+  const displayPrice = Number(booking.finalPrice || booking.estimatedPrice || 0);
+  const statusLabel = formatEnumLabel(booking.status);
+  const statusTone = getBookingTone(booking.status);
+  const scheduledDateLabel = formatDate(booking.scheduledDate);
+  const scheduledTimeLabel = formatTime(booking.scheduledDate) || 'Time TBD';
+
   return (
-    <div className="min-h-screen bg-gray-50 py-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:py-8 lg:pb-8">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <button
-          onClick={() => router.back()}
-          className="mb-6 flex min-h-[44px] items-center text-sm text-gray-600 transition-colors hover:text-gray-900"
-        >
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Back to bookings
-        </button>
-
-        <MobilePageIntro
-          title="Booking Details"
-          subtitle="View full service, provider, status, and pricing details."
-          className="mb-4"
+    <MobileToolWorkspace
+      intro={
+        <div className="space-y-3">
+          <button
+            onClick={() => router.back()}
+            className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Back to bookings
+          </button>
+          <MobilePageIntro
+            title="Booking Details"
+            subtitle="Service, provider, and pricing details in a compact view."
+          />
+        </div>
+      }
+      summary={
+        <ResultHeroCard
+          eyebrow={booking.bookingNumber}
+          title={booking.service.name}
+          value={`$${displayPrice.toFixed(2)}`}
+          status={<StatusChip tone={statusTone}>{statusLabel}</StatusChip>}
+          summary={`${booking.provider.businessName} • ${scheduledDateLabel}`}
+          highlights={[
+            `${formatEnumLabel(booking.category)} service`,
+            `Scheduled at ${scheduledTimeLabel}`,
+            booking.finalPrice ? 'Final price posted' : 'Estimated price shown',
+          ]}
         />
+      }
+    >
+      <ScenarioInputCard
+        title="Service Summary"
+        subtitle="Core booking details and timeline."
+        badge={<StatusBadge status={booking.status} />}
+      >
+        <ReadOnlySummaryBlock
+          columns={2}
+          items={[
+            { label: 'Service', value: booking.service.name, emphasize: true },
+            { label: 'Category', value: formatEnumLabel(booking.category) },
+            { label: 'Date', value: scheduledDateLabel },
+            { label: 'Time', value: scheduledTimeLabel },
+          ]}
+        />
+      </ScenarioInputCard>
 
-        <div className="mb-6 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 p-4 text-white shadow-md">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-teal-200">{booking.bookingNumber}</p>
-              <h1 className="text-lg font-bold">{booking.service.name}</h1>
-              <p className="text-sm text-teal-200">{booking.provider.businessName}</p>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <StatusBadge status={booking.status} className="border-white/30 bg-white/20 text-white" />
-              <div className="text-right">
-                <p className="text-xl font-bold">${Number(booking.finalPrice || booking.estimatedPrice || 0).toFixed(2)}</p>
-                <p className="text-xs text-teal-200">
-                  {booking.scheduledDate
-                    ? new Date(booking.scheduledDate).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : 'Date TBD'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+      <ScenarioInputCard title="Provider & Property" subtitle="Who is performing this work and where.">
+        <ReadOnlySummaryBlock
+          title="Provider"
+          columns={2}
+          items={[
+            { label: 'Business', value: booking.provider.businessName, emphasize: true },
+            { label: 'Contact', value: `${booking.provider.firstName} ${booking.provider.lastName}` },
+            { label: 'Email', value: booking.provider.email || 'Unavailable' },
+            { label: 'Phone', value: booking.provider.phone || 'Unavailable' },
+          ]}
+        />
+        <ReadOnlySummaryBlock
+          title="Property"
+          columns={2}
+          items={[
+            { label: 'Name', value: booking.property.name || 'Primary property', emphasize: true },
+            { label: 'Address', value: booking.property.address },
+            { label: 'City/State', value: `${booking.property.city}, ${booking.property.state}` },
+            { label: 'ZIP', value: booking.property.zipCode },
+          ]}
+        />
+      </ScenarioInputCard>
 
-        <div className="animate-fade-in-up grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
-          <div className="order-1 space-y-4 sm:space-y-6 lg:col-span-2">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-400">Service Information</h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="mb-1 text-sm text-gray-500">Service</p>
-                  <p className="text-base font-medium text-gray-900">{booking.service.name}</p>
-                </div>
-                <div>
-                  <p className="mb-1 text-sm text-gray-500">Category</p>
-                  <p className="text-base text-gray-900">{formatEnumLabel(booking.category)}</p>
-                </div>
-                <div>
-                  <p className="mb-1 text-sm text-gray-500">Scheduled Date & Time</p>
-                  <p className="text-base font-medium text-gray-900">{formatDate(booking.scheduledDate)}</p>
-                  <p className="text-sm text-gray-600">{formatTime(booking.scheduledDate)}</p>
-                </div>
-              </div>
-            </div>
+      <ScenarioInputCard title="Pricing" subtitle="Booking amount breakdown.">
+        <ReadOnlySummaryBlock
+          columns={2}
+          items={[
+            {
+              label: 'Estimated Price',
+              value: `$${Number(booking.estimatedPrice || 0).toFixed(2)}`,
+              emphasize: true,
+            },
+            {
+              label: 'Final Price',
+              value: booking.finalPrice ? `$${Number(booking.finalPrice).toFixed(2)}` : 'Not set',
+            },
+            {
+              label: 'Deposit Paid',
+              value: booking.depositAmount ? `$${Number(booking.depositAmount).toFixed(2)}` : 'None',
+            },
+            { label: 'Status', value: statusLabel },
+          ]}
+        />
+      </ScenarioInputCard>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-400">Provider</h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-base font-medium text-gray-900">{booking.provider.businessName}</p>
-                  <p className="text-sm text-gray-600">
-                    {booking.provider.firstName} {booking.provider.lastName}
-                  </p>
-                </div>
-                {booking.provider.email && (
-                  <div>
-                    <p className="mb-1 text-sm text-gray-500">Email</p>
-                    <p className="text-sm text-gray-900">{booking.provider.email}</p>
-                  </div>
-                )}
-                {booking.provider.phone && (
-                  <div>
-                    <p className="mb-1 text-sm text-gray-500">Phone</p>
-                    <p className="text-sm text-gray-900">{booking.provider.phone}</p>
-                  </div>
-                )}
-              </div>
-            </div>
+      {(booking.description || booking.specialRequests) && (
+        <ScenarioInputCard title="Additional Details" subtitle="Service notes and requests.">
+          {booking.description ? (
+            <ReadOnlySummaryBlock
+              items={[{ label: 'Description', value: booking.description }]}
+            />
+          ) : null}
+          {booking.specialRequests ? (
+            <ReadOnlySummaryBlock
+              items={[{ label: 'Special Requests', value: booking.specialRequests }]}
+            />
+          ) : null}
+        </ScenarioInputCard>
+      )}
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-400">Property</h2>
-              <div className="space-y-2">
-                {booking.property.name && <p className="text-base font-medium text-gray-900">{booking.property.name}</p>}
-                <p className="text-sm text-gray-900">{booking.property.address}</p>
-                <p className="text-sm text-gray-600">
-                  {booking.property.city}, {booking.property.state} {booking.property.zipCode}
-                </p>
-              </div>
-            </div>
+      {booking.timeline && booking.timeline.length > 0 ? (
+        <ScenarioInputCard title="Booking Timeline" subtitle="Progress updates from request to completion.">
+          <BookingTimeline currentStatus={booking.status} timeline={booking.timeline} />
+        </ScenarioInputCard>
+      ) : null}
 
-            {(booking.description || booking.specialRequests) && (
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-400">Additional Details</h2>
-                <div className="space-y-4">
-                  {booking.description && (
-                    <div>
-                      <p className="mb-1 text-sm text-gray-500">Description</p>
-                      <p className="text-sm text-gray-900">{booking.description}</p>
-                    </div>
-                  )}
-                  {booking.specialRequests && (
-                    <div>
-                      <p className="mb-1 text-sm text-gray-500">Special Requests</p>
-                      <p className="text-sm text-gray-900">{booking.specialRequests}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+      {booking.cancelledAt ? (
+        <ScenarioInputCard
+          title="Cancellation"
+          subtitle="This booking was cancelled."
+          className="border-rose-200/80 bg-rose-50/70"
+        >
+          <ReadOnlySummaryBlock
+            className="border-rose-200/90 bg-white"
+            items={[
+              { label: 'Cancelled At', value: formatDateTime(booking.cancelledAt), emphasize: true },
+              { label: 'Reason', value: booking.cancellationReason || 'No reason provided' },
+            ]}
+          />
+        </ScenarioInputCard>
+      ) : null}
 
-          <div className="order-2 space-y-4 sm:space-y-6">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-400">Pricing</h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="mb-1 text-sm text-gray-500">Estimated Price</p>
-                  <p className="text-xl font-bold text-gray-900 sm:text-2xl">
-                    ${Number(booking.estimatedPrice || 0).toFixed(2)}
-                  </p>
-                </div>
-                {booking.finalPrice && (
-                  <div className="border-t border-gray-200 pt-4">
-                    <p className="mb-1 text-sm text-gray-500">Final Price</p>
-                    <p className="text-xl font-bold text-green-600 sm:text-2xl">
-                      ${Number(booking.finalPrice || 0).toFixed(2)}
-                    </p>
-                  </div>
-                )}
-                {booking.depositAmount && (
-                  <div>
-                    <p className="mb-1 text-sm text-gray-500">Deposit Paid</p>
-                    <p className="text-base font-medium text-gray-900">
-                      ${Number(booking.depositAmount || 0).toFixed(2)}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {booking.timeline && booking.timeline.length > 0 && (
-              <BookingTimeline currentStatus={booking.status} timeline={booking.timeline} />
-            )}
-
-            {booking.cancelledAt && (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
-                <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-red-500">Cancelled</h2>
-                <p className="mb-3 text-sm text-red-700">{formatDateTime(booking.cancelledAt)}</p>
-                {booking.cancellationReason && <p className="text-sm text-red-800">{booking.cancellationReason}</p>}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+      <ActionPriorityRow
+        primaryAction={
+          <Button className="w-full" onClick={() => router.push('/dashboard/bookings')}>
+            Back to bookings
+          </Button>
+        }
+      />
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobileToolWorkspace>
   );
 }

@@ -18,3 +18,14 @@ export const PRIORITY_CHIP = {
   low:    'bg-green-100 text-green-800 border-green-200',
 } as const;
 export type PriorityLevel = keyof typeof PRIORITY_CHIP;
+
+export const STATUS_CHIP = {
+  good: SEVERITY_CHIP.good,
+  elevated: SEVERITY_CHIP.elevated,
+  danger: SEVERITY_CHIP.critical,
+  protected: 'bg-teal-100 text-teal-800 border-teal-200',
+  needsAction: SEVERITY_CHIP.high,
+  info: SEVERITY_CHIP.neutral,
+} as const;
+
+export type StatusChipLevel = keyof typeof STATUS_CHIP;

@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { STATUS_CHIP, type StatusChipLevel } from '@/lib/utils/chipTokens';
 import {
   MOBILE_CARD_RADIUS,
   MOBILE_LAYOUT_TOKENS,
@@ -26,7 +27,7 @@ export function MobilePageContainer({
         'mx-auto w-full',
         MOBILE_LAYOUT_TOKENS.containerMaxWidth,
         MOBILE_LAYOUT_TOKENS.containerPaddingX,
-        'pb-24',
+        'pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8',
         className
       )}
     >
@@ -137,37 +138,26 @@ export function IconBadge({
   return <span className={cn(iconBadgeVariants({ tone }), className)}>{children}</span>;
 }
 
-const chipVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-1',
-  {
-    variants: {
-      tone: {
-        good: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-        elevated: 'border-amber-200 bg-amber-50 text-amber-700',
-        danger: 'border-rose-200 bg-rose-50 text-rose-700',
-        protected: 'border-teal-200 bg-teal-50 text-teal-700',
-        needsAction:
-          'border-[hsl(var(--mobile-brand-border))] bg-[hsl(var(--mobile-brand-soft))] text-[hsl(var(--mobile-brand-strong))]',
-        info: 'border-slate-200 bg-slate-50 text-slate-700',
-      },
-    },
-    defaultVariants: {
-      tone: 'info',
-    },
-  }
-);
+export type StatusChipTone = StatusChipLevel;
 
 export function StatusChip({
   tone,
   children,
   className,
 }: {
-  tone: 'good' | 'elevated' | 'danger' | 'protected' | 'needsAction' | 'info';
+  tone: StatusChipTone;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <span className={cn(chipVariants({ tone }), MOBILE_TYPE_TOKENS.chip, className)}>
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border px-2.5 py-1',
+        STATUS_CHIP[tone],
+        MOBILE_TYPE_TOKENS.chip,
+        className
+      )}
+    >
       {children}
     </span>
   );
@@ -555,6 +545,368 @@ export function MobilePageIntro({
   );
 }
 
+export function MobileToolWorkspace({
+  intro,
+  summary,
+  filters,
+  children,
+  footer,
+  className,
+}: {
+  intro?: React.ReactNode;
+  summary?: React.ReactNode;
+  filters?: React.ReactNode;
+  children?: React.ReactNode;
+  footer?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <MobilePageContainer className={cn('space-y-4', className)}>
+      {intro}
+      {summary}
+      {filters}
+      {children ? <div className="space-y-4">{children}</div> : null}
+      {footer}
+    </MobilePageContainer>
+  );
+}
+
+export function ScenarioInputCard({
+  title,
+  subtitle,
+  badge,
+  children,
+  actions,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+  actions?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <MobileCard className={cn('space-y-3.5', className)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>{title}</h3>
+          {subtitle ? (
+            <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+        {badge ? <div className="shrink-0">{badge}</div> : null}
+      </div>
+      <div className="space-y-3">{children}</div>
+      {actions ? <div className="border-t border-[hsl(var(--mobile-border-subtle))] pt-3">{actions}</div> : null}
+    </MobileCard>
+  );
+}
+
+export function ResultHeroCard({
+  eyebrow,
+  title,
+  value,
+  status,
+  summary,
+  highlights,
+  actions,
+  className,
+}: {
+  eyebrow?: string;
+  title: string;
+  value: React.ReactNode;
+  status?: React.ReactNode;
+  summary?: string;
+  highlights?: string[];
+  actions?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <MobileCard
+      variant="hero"
+      className={cn('bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]', className)}
+    >
+      {eyebrow ? (
+        <p className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+          {eyebrow}
+        </p>
+      ) : null}
+      <h2 className="mb-0 text-[1.3rem] leading-[1.2] font-semibold tracking-tight text-[hsl(var(--mobile-text-primary))]">
+        {title}
+      </h2>
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.heroMetric)}>{value}</p>
+        {status ? <div className="shrink-0">{status}</div> : null}
+      </div>
+      {summary ? (
+        <p className={cn('mb-0 mt-3 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>{summary}</p>
+      ) : null}
+      {highlights && highlights.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {highlights.slice(0, 3).map((highlight) => (
+            <div key={highlight} className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--mobile-brand-strong))]" />
+              <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>{highlight}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {actions ? <div className="mt-4">{actions}</div> : null}
+    </MobileCard>
+  );
+}
+
+type CompactEntityRowProps = {
+  title: string;
+  subtitle?: string;
+  meta?: React.ReactNode;
+  leading?: React.ReactNode;
+  trailing?: React.ReactNode;
+  status?: React.ReactNode;
+  href?: string;
+  className?: string;
+};
+
+export function CompactEntityRow({
+  title,
+  subtitle,
+  meta,
+  leading,
+  trailing,
+  status,
+  href,
+  className,
+}: CompactEntityRowProps) {
+  const content = (
+    <div
+      className={cn(
+        'flex min-h-[44px] items-center gap-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2.5',
+        className
+      )}
+    >
+      {leading ? <div className="shrink-0">{leading}</div> : null}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <p className={cn('mb-0 truncate text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>{title}</p>
+          {status ? <div className="shrink-0">{status}</div> : null}
+        </div>
+        {(subtitle || meta) ? (
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            {subtitle ? (
+              <p className={cn('mb-0 truncate text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                {subtitle}
+              </p>
+            ) : null}
+            {meta ? <span className={cn('text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>{meta}</span> : null}
+          </div>
+        ) : null}
+      </div>
+      {trailing ? <div className="shrink-0">{trailing}</div> : null}
+      {href ? <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" /> : null}
+    </div>
+  );
+
+  if (!href) return content;
+  return (
+    <Link href={href} className="no-brand-style block">
+      {content}
+    </Link>
+  );
+}
+
+export function MobileFilterStack({
+  search,
+  primaryFilters,
+  secondaryFilters,
+  chips,
+  actions,
+  secondaryLabel = 'More filters',
+  secondaryCollapsedByDefault = true,
+  className,
+}: {
+  search?: React.ReactNode;
+  primaryFilters?: React.ReactNode;
+  secondaryFilters?: React.ReactNode;
+  chips?: React.ReactNode;
+  actions?: React.ReactNode;
+  secondaryLabel?: string;
+  secondaryCollapsedByDefault?: boolean;
+  className?: string;
+}) {
+  const [secondaryOpen, setSecondaryOpen] = React.useState(!secondaryCollapsedByDefault);
+
+  return (
+    <MobileFilterSurface className={cn('space-y-3', className)}>
+      {search ? <div>{search}</div> : null}
+      {primaryFilters ? <div className="grid gap-2">{primaryFilters}</div> : null}
+      {secondaryFilters ? (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setSecondaryOpen((current) => !current)}
+            className="flex min-h-[40px] w-full items-center justify-between rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 text-left text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+          >
+            <span>{secondaryLabel}</span>
+            <ChevronDown
+              className={cn(
+                'h-4 w-4 text-[hsl(var(--mobile-text-muted))] transition-transform duration-200',
+                secondaryOpen && 'rotate-180'
+              )}
+            />
+          </button>
+          {secondaryOpen ? <div className="grid gap-2">{secondaryFilters}</div> : null}
+        </div>
+      ) : null}
+      {chips ? <MobileHorizontalScroller className="-mx-1 px-1">{chips}</MobileHorizontalScroller> : null}
+      {actions ? <MobileActionRow>{actions}</MobileActionRow> : null}
+    </MobileFilterSurface>
+  );
+}
+
+export function ActionPriorityRow({
+  primaryAction,
+  secondaryActions,
+  className,
+}: {
+  primaryAction?: React.ReactNode;
+  secondaryActions?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn('space-y-2.5', className)}>
+      {primaryAction ? <div className="w-full [&>*]:w-full">{primaryAction}</div> : null}
+      {secondaryActions ? <MobileActionRow>{secondaryActions}</MobileActionRow> : null}
+    </div>
+  );
+}
+
+export type ReadOnlySummaryItem = {
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  emphasize?: boolean;
+};
+
+export function ReadOnlySummaryBlock({
+  title,
+  items,
+  columns = 1,
+  className,
+}: {
+  title?: string;
+  items: ReadOnlySummaryItem[];
+  columns?: 1 | 2;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3.5',
+        className
+      )}
+    >
+      {title ? (
+        <p className={cn('mb-2.5 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>{title}</p>
+      ) : null}
+      <div className={cn('grid gap-3', columns === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-1')}>
+        {items.map((item) => (
+          <div key={item.label} className="min-w-0">
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>{item.label}</p>
+            <p
+              className={cn(
+                'mb-0 mt-0.5 truncate text-[hsl(var(--mobile-text-primary))]',
+                item.emphasize ? 'text-sm font-semibold' : MOBILE_TYPE_TOKENS.body
+              )}
+            >
+              {item.value}
+            </p>
+            {item.hint ? (
+              <p className={cn('mb-0 mt-0.5 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                {item.hint}
+              </p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export type TableToCardField<Row> = {
+  key: string;
+  label: string;
+  value: (row: Row) => React.ReactNode;
+  emphasize?: boolean;
+};
+
+export function TableToCardAdapter<Row>({
+  rows,
+  fields,
+  getRowId,
+  getTitle,
+  getSubtitle,
+  getActions,
+  emptyState,
+  className,
+  cardClassName,
+}: {
+  rows: Row[];
+  fields: TableToCardField<Row>[];
+  getRowId: (row: Row, index: number) => React.Key;
+  getTitle?: (row: Row) => React.ReactNode;
+  getSubtitle?: (row: Row) => React.ReactNode;
+  getActions?: (row: Row) => React.ReactNode;
+  emptyState?: React.ReactNode;
+  className?: string;
+  cardClassName?: string;
+}) {
+  if (rows.length === 0) return emptyState ? <>{emptyState}</> : null;
+
+  return (
+    <div className={cn('space-y-3', className)}>
+      {rows.map((row, index) => (
+        <MobileCard key={getRowId(row, index)} variant="compact" className={cn('space-y-3', cardClassName)}>
+          {getTitle || getSubtitle || getActions ? (
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                {getTitle ? (
+                  <p className={cn('mb-0 truncate text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>
+                    {getTitle(row)}
+                  </p>
+                ) : null}
+                {getSubtitle ? (
+                  <p className={cn('mb-0 mt-0.5 truncate text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
+                    {getSubtitle(row)}
+                  </p>
+                ) : null}
+              </div>
+              {getActions ? <div className="shrink-0">{getActions(row)}</div> : null}
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            {fields.map((field) => (
+              <div key={field.key} className="flex items-start justify-between gap-3">
+                <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>{field.label}</p>
+                <p
+                  className={cn(
+                    'mb-0 text-right text-[hsl(var(--mobile-text-primary))]',
+                    field.emphasize ? 'text-sm font-semibold' : MOBILE_TYPE_TOKENS.body
+                  )}
+                >
+                  {field.value(row)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </MobileCard>
+      ))}
+    </div>
+  );
+}
+
 export function MobileFilterSurface({
   children,
   className,
@@ -618,12 +970,28 @@ export function MobileKpiTile({
   );
 }
 
+const bottomSafeAreaReserveVariants = {
+  compact: 'h-[calc(5.5rem+env(safe-area-inset-bottom))]',
+  chatAware: 'h-[calc(8rem+env(safe-area-inset-bottom))]',
+  floatingAction: 'h-[calc(10rem+env(safe-area-inset-bottom))]',
+} as const;
+
+export function BottomSafeAreaReserve({
+  size = 'chatAware',
+  className,
+}: {
+  size?: keyof typeof bottomSafeAreaReserveVariants;
+  className?: string;
+}) {
+  return <div className={cn(bottomSafeAreaReserveVariants[size], className)} aria-hidden="true" />;
+}
+
 export function BottomSafeAreaGuard({
   className,
 }: {
   className?: string;
 }) {
-  return <div className={cn('h-[calc(5.5rem+env(safe-area-inset-bottom))]', className)} aria-hidden="true" />;
+  return <BottomSafeAreaReserve size="chatAware" className={className} />;
 }
 
 export function MobileHorizontalScroller({

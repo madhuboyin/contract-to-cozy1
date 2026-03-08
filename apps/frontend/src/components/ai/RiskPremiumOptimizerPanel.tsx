@@ -11,6 +11,13 @@ import {
   updateRiskMitigationPlanItem,
 } from '@/lib/api/riskPremiumOptimizerApi';
 import { Button } from '@/components/ui/button';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 type RiskPremiumOptimizerPanelProps = {
   propertyId: string;
@@ -51,11 +58,11 @@ function compactDate(value?: string) {
   return date.toLocaleString();
 }
 
-function statusTone(status?: RiskPremiumOptimizationDTO['status']) {
-  if (status === 'READY') return 'bg-emerald-100 text-emerald-700';
-  if (status === 'STALE') return 'bg-amber-100 text-amber-700';
-  if (status === 'ERROR') return 'bg-rose-100 text-rose-700';
-  return 'bg-gray-100 text-gray-700';
+function statusChipTone(status?: RiskPremiumOptimizationDTO['status']): 'good' | 'elevated' | 'danger' | 'info' {
+  if (status === 'READY') return 'good';
+  if (status === 'STALE') return 'elevated';
+  if (status === 'ERROR') return 'danger';
+  return 'info';
 }
 
 function priorityTone(priority: 'LOW' | 'MEDIUM' | 'HIGH') {
@@ -206,13 +213,12 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
         </div>
       )}
 
-      <section className="rounded-2xl border border-black/10 bg-white p-5">
-        <h4 className="text-base font-semibold text-gray-900">Run optimizer</h4>
-        <p className="text-sm text-gray-600 mt-1">
-          Compare mitigation actions and policy levers with your current premium posture.
-        </p>
-
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <ScenarioInputCard
+        title="Scenario Input"
+        subtitle="Compare mitigation actions and policy levers with your current premium posture."
+        badge={<StatusChip tone="info">Deterministic</StatusChip>}
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs text-gray-600">
             Annual premium (USD)
             <input
@@ -265,7 +271,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           </label>
         </div>
 
-        <label className="mt-3 inline-flex items-center gap-2 text-sm text-gray-700">
+        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
             checked={inputs.assumeBundled}
@@ -274,22 +280,22 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
           Assume bundled-discount posture in scenario
         </label>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button onClick={runNow} disabled={running}>
-            {running ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Running…
-              </>
-            ) : (
-              'Run optimizer'
-            )}
-          </Button>
-          <Button variant="ghost" onClick={fetchStatus}>
-            Refresh
-          </Button>
-        </div>
-      </section>
+        <ActionPriorityRow
+          primaryAction={
+            <Button onClick={runNow} disabled={running}>
+              {running ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Running…
+                </>
+              ) : (
+                'Run optimizer'
+              )}
+            </Button>
+          }
+          secondaryActions={<Button variant="ghost" onClick={fetchStatus}>Refresh</Button>}
+        />
+      </ScenarioInputCard>
 
       {!hasAnalysis && (
         <section className="rounded-2xl border border-black/10 bg-white p-6">
@@ -313,56 +319,47 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
             </div>
           )}
 
-          <section className="rounded-2xl border border-black/10 bg-white p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold text-gray-900">Risk-to-Premium Optimizer</h3>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusTone(analysis.status)}`}>
-                    {analysis.status}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-gray-600">
-                  {analysis.summary || 'No summary available yet.'}
-                </p>
-              </div>
+          <ResultHeroCard
+            eyebrow="Optimizer Result"
+            title="Risk-to-Premium Optimizer"
+            value={savingsLabel}
+            status={<StatusChip tone={statusChipTone(analysis.status)}>{analysis.status}</StatusChip>}
+            summary={analysis.summary || 'No summary available yet.'}
+            highlights={[
+              `Confidence: ${analysis.confidence}`,
+              `Annual premium input: ${money(analysis.inputs.annualPremium)}`,
+              `Computed: ${compactDate(analysis.computedAt)}`,
+            ]}
+            actions={
+              <ActionPriorityRow
+                primaryAction={
+                  <Button variant="outline" onClick={runNow} disabled={running}>
+                    {running ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Re-running…
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Re-run
+                      </>
+                    )}
+                  </Button>
+                }
+              />
+            }
+          />
 
-              <Button variant="outline" onClick={runNow} disabled={running}>
-                {running ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Re-running…
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Re-run
-                  </>
-                )}
-              </Button>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Estimated savings range</div>
-                <div className="text-lg font-semibold text-gray-900">{savingsLabel}</div>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Confidence</div>
-                <div className="text-lg font-semibold text-gray-900">{analysis.confidence}</div>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Annual premium input</div>
-                <div className="text-lg font-semibold text-gray-900">
-                  {money(analysis.inputs.annualPremium)}
-                </div>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <div className="text-xs text-gray-500">Computed</div>
-                <div className="text-sm font-semibold text-gray-900">{compactDate(analysis.computedAt)}</div>
-              </div>
-            </div>
-          </section>
+          <ReadOnlySummaryBlock
+            columns={2}
+            items={[
+              { label: 'Estimated savings range', value: savingsLabel, emphasize: true },
+              { label: 'Confidence', value: analysis.confidence },
+              { label: 'Annual premium input', value: money(analysis.inputs.annualPremium) },
+              { label: 'Computed', value: compactDate(analysis.computedAt) },
+            ]}
+          />
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
             <h4 className="text-base font-semibold text-gray-900">Premium drivers</h4>
