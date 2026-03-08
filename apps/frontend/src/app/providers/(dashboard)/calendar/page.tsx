@@ -5,6 +5,16 @@ import { addMonths, endOfMonth, format, getDate, getDay, isSameDay, isSameMonth,
 import { ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
 import DateField from '@/components/shared/DateField';
 import { cn } from '@/lib/utils';
+import {
+  BottomSafeAreaReserve,
+  MobileCard,
+  MobilePageIntro,
+  MobileSection,
+  MobileSectionHeader,
+  MobileToolWorkspace,
+  ResultHeroCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 
@@ -44,21 +54,34 @@ export default function ProviderCalendarPage() {
     });
   }, [viewMonth]);
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Calendar & Availability</h1>
-        <p className="mt-2 text-gray-600">Set your working hours and manage blocked dates</p>
-      </div>
+  const enabledDays = DAY_KEYS.filter((day) => workingHours[day].enabled).length;
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm lg:col-span-2">
+  return (
+    <MobileToolWorkspace
+      intro={<MobilePageIntro title="Calendar & Availability" subtitle="Keep your schedule clear and bookable on mobile." />}
+      summary={
+        <ResultHeroCard
+          eyebrow="Availability"
+          title={format(selectedDate, 'EEEE, MMM d')}
+          value={`${enabledDays}/7`}
+          status={<StatusChip tone={enabledDays >= 5 ? 'good' : 'elevated'}>{enabledDays >= 5 ? 'Open week' : 'Limited week'}</StatusChip>}
+          summary="Configured working days this week."
+          highlights={[
+            `${bookedDays.length} booked dates this month`,
+            `${blockedDays.length} blocked dates set`,
+            `Viewing ${format(viewMonth, 'MMMM yyyy')}`,
+          ]}
+        />
+      }
+    >
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <MobileCard variant="compact" className="space-y-4 lg:col-span-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">{format(viewMonth, 'MMMM yyyy')}</h2>
+            <h2 className="text-base font-semibold text-slate-900">{format(viewMonth, 'MMMM yyyy')}</h2>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-[#0D9488] hover:bg-[#F0FDFA] hover:text-[#0D9488]"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-brand-primary hover:bg-brand-primary/5 hover:text-brand-primary"
                 onClick={() => setViewMonth((prev) => startOfMonth(subMonths(prev, 1)))}
                 aria-label="Previous month"
               >
@@ -66,7 +89,7 @@ export default function ProviderCalendarPage() {
               </button>
               <button
                 type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-[#0D9488] hover:bg-[#F0FDFA] hover:text-[#0D9488]"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-brand-primary hover:bg-brand-primary/5 hover:text-brand-primary"
                 onClick={() => setViewMonth((prev) => startOfMonth(addMonths(prev, 1)))}
                 aria-label="Next month"
               >
@@ -88,9 +111,9 @@ export default function ProviderCalendarPage() {
             }}
           />
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1.5">
             {WEEKDAY_LABELS.map((day) => (
-              <div key={day} className="py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <div key={day} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 {day}
               </div>
             ))}
@@ -110,134 +133,130 @@ export default function ProviderCalendarPage() {
                   className={cn(
                     'aspect-square rounded-lg border p-1.5 text-center transition-colors',
                     cell.isCurrentMonth
-                      ? 'border-gray-200 bg-white text-gray-800 hover:border-[#0D9488]/40 hover:bg-[#F0FDFA]'
-                      : 'border-transparent bg-gray-50 text-gray-300',
-                    isSelected && 'border-[#0D9488] bg-[#F0FDFA] text-[#0F766E]',
-                    isToday && 'ring-1 ring-[#0D9488]/50'
+                      ? 'border-slate-200 bg-white text-slate-800 hover:border-brand-primary/40 hover:bg-brand-primary/5'
+                      : 'border-transparent bg-slate-50 text-slate-300',
+                    isSelected && 'border-brand-primary bg-brand-primary/5 text-brand-primary',
+                    isToday && 'ring-1 ring-brand-primary/50'
                   )}
                 >
                   <div className="text-sm font-medium">{dayNumber}</div>
-                  {hasBooking && <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-[#0D9488]" />}
-                  {isBlocked && <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-red-500" />}
+                  {hasBooking ? <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-brand-primary" /> : null}
+                  {isBlocked ? <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-rose-500" /> : null}
                 </button>
               );
             })}
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-5 text-xs text-gray-600">
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#0D9488]" />
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-brand-primary" />
               Has booking
             </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
               Blocked
             </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full ring-1 ring-[#0D9488]/50" />
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full ring-1 ring-brand-primary/50" />
               Today
             </div>
           </div>
 
-          <div className="text-center">
-            <button
-              type="button"
-              className="inline-flex h-[40px] items-center rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 transition-colors hover:border-[#0D9488] hover:bg-[#F0FDFA] hover:text-[#0F766E]"
-            >
-              Block selected date
-            </button>
-          </div>
-        </div>
+          <button
+            type="button"
+            className="inline-flex min-h-[40px] items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Block selected date
+          </button>
+        </MobileCard>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Working Hours</h2>
-          <div className="space-y-4">
-            {DAY_KEYS.map((dayKey) => {
-              const hours = workingHours[dayKey];
-              const label = dayKey.slice(0, 3).toUpperCase();
+        <MobileCard variant="compact" className="space-y-3">
+          <h2 className="text-base font-semibold text-slate-900">Working Hours</h2>
+          {DAY_KEYS.map((dayKey) => {
+            const hours = workingHours[dayKey];
+            const label = dayKey.slice(0, 3).toUpperCase();
 
-              return (
-                <div key={dayKey} className="space-y-2 rounded-lg border border-gray-100 p-3">
-                  <div className="flex items-center justify-between">
-                    <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-800">
-                      <input
-                        type="checkbox"
-                        checked={hours.enabled}
-                        onChange={(e) =>
-                          setWorkingHours((prev) => ({
-                            ...prev,
-                            [dayKey]: { ...prev[dayKey], enabled: e.target.checked },
-                          }))
-                        }
-                        className="h-4 w-4 rounded border-gray-300 text-[#0D9488] focus:ring-[#0D9488]"
-                      />
-                      {label}
-                    </label>
-                    {!hours.enabled && <span className="text-xs text-gray-400">Unavailable</span>}
-                  </div>
-
-                  {hours.enabled && (
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                      <input
-                        type="time"
-                        value={hours.start}
-                        onChange={(e) =>
-                          setWorkingHours((prev) => ({
-                            ...prev,
-                            [dayKey]: { ...prev[dayKey], start: e.target.value },
-                          }))
-                        }
-                        className="h-[40px] w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] transition-[border-color,box-shadow] focus:border-[#0D9488] focus:outline-none focus:ring-[3px] focus:ring-[#0D9488]/10"
-                      />
-                      <Clock3 className="h-4 w-4 text-gray-400" />
-                      <input
-                        type="time"
-                        value={hours.end}
-                        onChange={(e) =>
-                          setWorkingHours((prev) => ({
-                            ...prev,
-                            [dayKey]: { ...prev[dayKey], end: e.target.value },
-                          }))
-                        }
-                        className="h-[40px] w-full rounded-md border border-[#E5E7EB] bg-white px-3 text-sm text-[#111827] transition-[border-color,box-shadow] focus:border-[#0D9488] focus:outline-none focus:ring-[3px] focus:ring-[#0D9488]/10"
-                      />
-                    </div>
-                  )}
+            return (
+              <div key={dayKey} className="space-y-2 rounded-lg border border-slate-200 p-3">
+                <div className="flex items-center justify-between">
+                  <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={hours.enabled}
+                      onChange={(e) =>
+                        setWorkingHours((prev) => ({
+                          ...prev,
+                          [dayKey]: { ...prev[dayKey], enabled: e.target.checked },
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
+                    />
+                    {label}
+                  </label>
+                  {!hours.enabled ? <span className="text-xs text-slate-400">Unavailable</span> : null}
                 </div>
-              );
-            })}
-          </div>
 
-          <div className="mt-5">
-            <button
-              type="button"
-              className="inline-flex h-[40px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90"
-            >
-              Save working hours
-            </button>
-          </div>
-        </div>
+                {hours.enabled ? (
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    <input
+                      type="time"
+                      value={hours.start}
+                      onChange={(e) =>
+                        setWorkingHours((prev) => ({
+                          ...prev,
+                          [dayKey]: { ...prev[dayKey], start: e.target.value },
+                        }))
+                      }
+                      className="h-[40px] w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-primary focus:outline-none focus:ring-[3px] focus:ring-brand-primary/10"
+                    />
+                    <Clock3 className="h-4 w-4 text-slate-400" />
+                    <input
+                      type="time"
+                      value={hours.end}
+                      onChange={(e) =>
+                        setWorkingHours((prev) => ({
+                          ...prev,
+                          [dayKey]: { ...prev[dayKey], end: e.target.value },
+                        }))
+                      }
+                      className="h-[40px] w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-primary focus:outline-none focus:ring-[3px] focus:ring-brand-primary/10"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+
+          <button
+            type="button"
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90"
+          >
+            Save working hours
+          </button>
+        </MobileCard>
       </div>
 
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Upcoming Bookings</h2>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
+      <MobileSection>
+        <MobileSectionHeader title="Upcoming Bookings" subtitle="Quick preview of upcoming appointments." />
+        <MobileCard variant="compact" className="space-y-2.5">
+          <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
             <div>
-              <p className="text-sm font-medium text-gray-900">Home Inspection</p>
-              <p className="text-xs text-gray-500">Nov 12, 2025 at 2:00 PM</p>
+              <p className="mb-0 text-sm font-medium text-slate-900">Home Inspection</p>
+              <p className="mb-0 text-xs text-slate-500">Nov 12, 2025 at 2:00 PM</p>
             </div>
-            <span className="text-sm font-medium text-[#0F766E]">View Details →</span>
+            <span className="text-xs font-semibold text-brand-primary">View details</span>
           </div>
-          <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
+          <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
             <div>
-              <p className="text-sm font-medium text-gray-900">Minor Repairs</p>
-              <p className="text-xs text-gray-500">Nov 15, 2025 at 10:00 AM</p>
+              <p className="mb-0 text-sm font-medium text-slate-900">Minor Repairs</p>
+              <p className="mb-0 text-xs text-slate-500">Nov 15, 2025 at 10:00 AM</p>
             </div>
-            <span className="text-sm font-medium text-[#0F766E]">View Details →</span>
+            <span className="text-xs font-semibold text-brand-primary">View details</span>
           </div>
-        </div>
-      </div>
-    </div>
+        </MobileCard>
+      </MobileSection>
+
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobileToolWorkspace>
   );
 }

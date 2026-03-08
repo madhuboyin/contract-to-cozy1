@@ -5,6 +5,13 @@ import { DollarSign, TrendingUp, Calendar, PieChart, Lightbulb, Loader2, Chevron
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface MonthlyForecast {
   month: string;
@@ -71,23 +78,37 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-        <span className="ml-3 text-gray-600">Generating budget forecast...</span>
-      </div>
+      <ScenarioInputCard
+        title="Generating budget forecast"
+        subtitle="Building a 12-month projection from your property profile."
+        badge={<StatusChip tone="info">In progress</StatusChip>}
+      >
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+          <span>Crunching monthly and category-level costs.</span>
+        </div>
+      </ScenarioInputCard>
     );
   }
 
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50">
-        <CardContent className="p-6">
-          <p className="text-red-800">{error}</p>
-          <Button onClick={loadForecast} variant="outline" className="mt-4">
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
+      <ScenarioInputCard
+        title="Unable to load forecast"
+        subtitle={error}
+        badge={<StatusChip tone="danger">Error</StatusChip>}
+        actions={
+          <ActionPriorityRow
+            primaryAction={
+              <Button onClick={loadForecast}>
+                Retry
+              </Button>
+            }
+          />
+        }
+      >
+        <p className="text-sm text-red-700">Try again to refresh the projection data.</p>
+      </ScenarioInputCard>
     );
   }
 
@@ -101,6 +122,24 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
 
   return (
     <div className="space-y-6">
+      <ResultHeroCard
+        title="Annual Maintenance Budget"
+        value={`$${forecast.totalAnnualCost.toLocaleString()}`}
+        status={<StatusChip tone="info">{forecast.confidenceLevel}% confidence</StatusChip>}
+        summary="Projected routine, preventive, and unexpected maintenance spend over the next 12 months."
+      />
+
+      <ReadOnlySummaryBlock
+        title="Forecast Snapshot"
+        columns={2}
+        items={[
+          { label: 'Monthly average', value: `$${forecast.monthlyAverage.toLocaleString()}`, emphasize: true },
+          { label: 'Property age', value: `${forecast.propertyAge} years` },
+          { label: 'Address', value: forecast.propertyAddress || 'Property', hint: 'Forecast scope' },
+          { label: 'Generated', value: forecast.generatedAt ? new Date(forecast.generatedAt).toLocaleDateString() : 'Unknown' },
+        ]}
+      />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="border-blue-200 bg-blue-50">

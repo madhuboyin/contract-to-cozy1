@@ -18,6 +18,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface ApplianceRecommendation {
   brand: string;
@@ -113,42 +120,67 @@ export default function ApplianceOracle({ propertyId }: ApplianceOracleProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-        <span className="ml-3 text-gray-600">AI analyzing your appliances...</span>
-      </div>
+      <ScenarioInputCard
+        title="Analyzing appliances"
+        subtitle="Scanning age, failure probability, and replacement economics."
+        badge={<StatusChip tone="info">In progress</StatusChip>}
+      >
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+          <span>Building predictive maintenance view.</span>
+        </div>
+      </ScenarioInputCard>
     );
   }
 
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50">
-        <CardContent className="p-6">
-          <p className="text-red-800">{error}</p>
-          <Button onClick={loadOracleReport} variant="outline" className="mt-4">
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
+      <ScenarioInputCard
+        title="Unable to load appliance predictions"
+        subtitle={error}
+        badge={<StatusChip tone="danger">Error</StatusChip>}
+        actions={<ActionPriorityRow primaryAction={<Button onClick={loadOracleReport}>Retry</Button>} />}
+      >
+        <p className="text-sm text-red-700">Retry to fetch the latest appliance analysis.</p>
+      </ScenarioInputCard>
     );
   }
 
   if (!report || report.predictions.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-12 text-center">
-          <Sparkles className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Appliance Data</h3>
-          <p className="text-gray-600">
-            Add appliance information to your property to get AI-powered replacement predictions.
-          </p>
-        </CardContent>
-      </Card>
+      <ScenarioInputCard
+        title="No Appliance Data"
+        subtitle="Add appliance details to unlock AI replacement predictions."
+        badge={<StatusChip tone="info">Data needed</StatusChip>}
+      >
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <Sparkles className="w-5 h-5 text-gray-400" />
+          <span>No tracked appliances found for this property yet.</span>
+        </div>
+      </ScenarioInputCard>
     );
   }
 
   return (
     <div className="space-y-6">
+      <ResultHeroCard
+        title="Appliance Risk Overview"
+        value={report.totalAppliances}
+        status={<StatusChip tone={report.criticalCount > 0 ? 'danger' : report.highRiskCount > 0 ? 'elevated' : 'good'}>{report.criticalCount} critical</StatusChip>}
+        summary="Failure-risk forecasting and replacement guidance across tracked appliances."
+      />
+
+      <ReadOnlySummaryBlock
+        title="Portfolio Snapshot"
+        columns={2}
+        items={[
+          { label: 'High risk', value: report.highRiskCount, emphasize: true },
+          { label: 'Critical risk', value: report.criticalCount },
+          { label: 'Estimated total cost', value: `$${report.estimatedTotalCost.toLocaleString()}` },
+          { label: 'Generated', value: new Date(report.generatedAt).toLocaleDateString() },
+        ]}
+      />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>

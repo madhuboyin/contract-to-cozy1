@@ -1,19 +1,26 @@
 // apps/frontend/src/app/(dashboard)/dashboard/seasonal/settings/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Save, MapPin, Bell, CheckCircle, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCircle2, MapPin, Save } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useClimateInfo, useUpdateClimateSettings } from '@/lib/hooks/useSeasonalChecklists';
 import { ClimateRegion, NotificationTiming } from '@/types/seasonal.types';
 import { getClimateRegionName, getClimateRegionIcon } from '@/lib/utils/seasonHelpers';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  EmptyStateCard,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
+
 export default function SeasonalSettingsPage() {
   const router = useRouter();
-  // FIX: Get propertyId from URL params first (for page reload), then fall back to context
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
   const propertyId = searchParams.get('propertyId') || selectedPropertyId;
@@ -31,23 +38,19 @@ export default function SeasonalSettingsPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (climateData?.data) {
-      // Load existing settings
-      setFormData({
-        climateRegion: climateData.data.climateRegion,
-        notificationTiming: 'STANDARD', // Would come from climate settings API
-        notificationEnabled: true,
-        autoGenerateChecklists: true,
-      });
-    }
+    if (!climateData?.data) return;
+    setFormData({
+      climateRegion: climateData.data.climateRegion,
+      notificationTiming: 'STANDARD',
+      notificationEnabled: true,
+      autoGenerateChecklists: true,
+    });
   }, [climateData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!propertyId) {
-      return;
-    }
+    if (!propertyId) return;
 
     try {
       await updateSettingsMutation.mutateAsync({
@@ -56,28 +59,34 @@ export default function SeasonalSettingsPage() {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      // Error already handled by mutation
+    } catch {
+      // mutation handles error state
     }
   };
 
-  // FIX: Handle no property selected
   if (!propertyId) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-          <p className="text-yellow-800 font-medium">Please select a property to view settings</p>
-          <p className="text-yellow-600 text-sm mt-2">Go to the main dashboard and select a property</p>
-        </div>
-      </div>
+      <MobileToolWorkspace
+        intro={<MobilePageIntro title="Seasonal Settings" subtitle="Customize climate defaults and reminders." />}
+      >
+        <EmptyStateCard
+          title="Select a property"
+          description="Choose a property from dashboard to configure seasonal settings."
+        />
+      </MobileToolWorkspace>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-      </div>
+      <MobileToolWorkspace
+        intro={<MobilePageIntro title="Seasonal Settings" subtitle="Loading current climate profile." />}
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white py-10 text-center">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-b-2 border-brand-primary" />
+          <p className="mt-3 text-sm text-muted-foreground">Loading settings...</p>
+        </div>
+      </MobileToolWorkspace>
     );
   }
 
@@ -85,129 +94,121 @@ export default function SeasonalSettingsPage() {
   const isAutoDetected = climateData?.data?.climateRegionSource === 'AUTO_DETECTED';
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <Button 
-          variant="link" 
-          className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-          onClick={() => router.back()}
-      >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-      </Button>
-      <div className="mb-6">
+    <MobileToolWorkspace
+      intro={
         <MobilePageIntro
           title="Seasonal Settings"
-          subtitle="Customize climate region and how seasonal reminders are delivered."
+          subtitle="Tune climate region and reminder behavior for this property."
+          action={
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
+          }
         />
-      </div>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <ScenarioInputCard
+          title="Climate Zone"
+          subtitle="Use the right climate profile so tasks and timing stay relevant."
+          badge={<MapPin className="h-4 w-4 text-brand-primary" />}
+        >
+          {isAutoDetected && climateData?.data ? (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-800">
+              Auto-detected: <span className="font-semibold">{getClimateRegionName(climateData.data.climateRegion)}</span> based on property location.
+            </div>
+          ) : null}
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Climate Zone Section */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <MapPin className="w-5 h-5 text-green-600" />
-            <h2 className="text-xl font-semibold text-gray-900">Climate Zone</h2>
+          <div className="space-y-2">
+            {climateRegions.map((region) => {
+              const selected = formData.climateRegion === region;
+              return (
+                <label
+                  key={region}
+                  className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+                    selected ? 'border-brand-primary bg-brand-primary/5' : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="climateRegion"
+                    value={region}
+                    checked={selected}
+                    onChange={(e) => setFormData({ ...formData, climateRegion: e.target.value as ClimateRegion })}
+                    className="h-4 w-4 text-brand-primary"
+                  />
+                  <span className="text-xl leading-none">{getClimateRegionIcon(region)}</span>
+                  <span className="text-sm font-medium text-slate-900">{getClimateRegionName(region)}</span>
+                </label>
+              );
+            })}
+          </div>
+        </ScenarioInputCard>
+
+        <ScenarioInputCard
+          title="Notification Settings"
+          subtitle="Control when reminders and seasonal checklist nudges are delivered."
+          badge={<Bell className="h-4 w-4 text-brand-primary" />}
+        >
+          <div className="space-y-2.5">
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <div>
+                <p className="mb-0 text-sm font-medium text-slate-900">Enable notifications</p>
+                <p className="mb-0 text-xs text-slate-500">Receive seasonal reminders and due-task alerts.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={formData.notificationEnabled}
+                onChange={(e) => setFormData({ ...formData, notificationEnabled: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300 text-brand-primary"
+              />
+            </label>
+
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <div>
+                <p className="mb-0 text-sm font-medium text-slate-900">Auto-generate checklists</p>
+                <p className="mb-0 text-xs text-slate-500">Create each season&apos;s checklist automatically.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={formData.autoGenerateChecklists}
+                onChange={(e) => setFormData({ ...formData, autoGenerateChecklists: e.target.checked })}
+                className="h-4 w-4 rounded border-slate-300 text-brand-primary"
+              />
+            </label>
           </div>
 
-          {isAutoDetected && climateData?.data && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm text-blue-800">
-                <strong>Auto-detected:</strong> {getClimateRegionName(climateData.data.climateRegion)} 
-                {' '}based on your property location. You can override this below.
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {climateRegions.map((region) => (
-              <label
-                key={region}
-                className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${
-                  formData.climateRegion === region
-                    ? 'border-green-600 bg-green-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
+          <ActionPriorityRow
+            primaryAction={
+              <button
+                type="submit"
+                disabled={updateSettingsMutation.isPending}
+                className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
               >
-                <input
-                  type="radio"
-                  name="climateRegion"
-                  value={region}
-                  checked={formData.climateRegion === region}
-                  onChange={(e) => setFormData({ ...formData, climateRegion: e.target.value as ClimateRegion })}
-                  className="w-4 h-4 text-green-600"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-2xl">{getClimateRegionIcon(region)}</span>
-                    <span className="font-medium text-gray-900">{getClimateRegionName(region)}</span>
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Notification Settings */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center space-x-2 mb-4">
-            <Bell className="w-5 h-5 text-green-600" />
-            <h2 className="text-xl font-semibold text-gray-900">Notification Settings</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-gray-900">Enable Notifications</h3>
-                <p className="text-sm text-gray-500">Receive alerts for seasonal maintenance tasks</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.notificationEnabled}
-                  onChange={(e) => setFormData({ ...formData, notificationEnabled: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-              </label>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-gray-900">Auto-generate Checklists</h3>
-                <p className="text-sm text-gray-500">Automatically create seasonal checklists</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.autoGenerateChecklists}
-                  onChange={(e) => setFormData({ ...formData, autoGenerateChecklists: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Submit Button */}
-        <div className="flex items-center justify-between">
-          <div>
-            {saved && (
-              <div className="flex items-center space-x-2 text-green-600">
-                <CheckCircle className="w-5 h-5" />
-                <span className="text-sm font-medium">Settings saved successfully!</span>
-              </div>
-            )}
-          </div>
-          <button
-            type="submit"
-            disabled={updateSettingsMutation.isPending}
-            className="flex items-center space-x-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Save className="w-4 h-4" />
-            <span>{updateSettingsMutation.isPending ? 'Saving...' : 'Save Settings'}</span>
-          </button>
-        </div>
+                <Save className="h-4 w-4" />
+                {updateSettingsMutation.isPending ? 'Saving...' : 'Save settings'}
+              </button>
+            }
+            secondaryActions={
+              saved ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Saved
+                </span>
+              ) : (
+                <StatusChip tone="info">Changes apply immediately</StatusChip>
+              )
+            }
+          />
+        </ScenarioInputCard>
       </form>
-    </div>
+
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobileToolWorkspace>
   );
 }

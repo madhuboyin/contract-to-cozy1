@@ -16,6 +16,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface AppreciationDataPoint {
   date: string;
@@ -115,51 +122,56 @@ export default function PropertyAppreciationTracker({ propertyId }: PropertyAppr
 
   if (loading && !report) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-green-600" />
-        <span className="ml-3 text-gray-600">Analyzing property appreciation...</span>
-      </div>
+      <ScenarioInputCard
+        title="Analyzing appreciation"
+        subtitle="Calculating historical and projected value movement."
+        badge={<StatusChip tone="info">In progress</StatusChip>}
+      >
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+          <span>Compiling market trend and purchase-price signals.</span>
+        </div>
+      </ScenarioInputCard>
     );
   }
 
   if (error && !report) {
     return (
-      <Card className="border-red-200 bg-red-50">
-        <CardContent className="p-6">
-          <p className="text-red-800">{error}</p>
-          <Button onClick={() => setShowInputForm(true)} variant="outline" className="mt-4">
-            Try Again
-          </Button>
-        </CardContent>
-      </Card>
+      <ScenarioInputCard
+        title="Unable to load appreciation data"
+        subtitle={error}
+        badge={<StatusChip tone="danger">Error</StatusChip>}
+        actions={<ActionPriorityRow primaryAction={<Button onClick={() => setShowInputForm(true)}>Try Again</Button>} />}
+      >
+        <p className="text-sm text-red-700">Update inputs and rerun the analysis.</p>
+      </ScenarioInputCard>
     );
   }
 
   if (!report && !showInputForm) {
     return (
-      <Card>
-        <CardContent className="p-8 text-center">
-          <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Track Your Property Value</h3>
-          <p className="text-gray-600 mb-4">
-            Enter your purchase information to see AI-powered appreciation analysis
-          </p>
-          <Button onClick={() => setShowInputForm(true)}>
-            Get Started
-          </Button>
-        </CardContent>
-      </Card>
+      <ScenarioInputCard
+        title="Track Your Property Value"
+        subtitle="Enter purchase info to generate AI-powered appreciation analysis."
+        badge={<StatusChip tone="info">Setup</StatusChip>}
+        actions={<ActionPriorityRow primaryAction={<Button onClick={() => setShowInputForm(true)}>Get Started</Button>} />}
+      >
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <TrendingUp className="w-5 h-5 text-gray-400" />
+          <span>Use custom purchase data for a tighter estimate.</span>
+        </div>
+      </ScenarioInputCard>
     );
   }
 
   if (showInputForm && !report) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Property Purchase Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <ScenarioInputCard
+        title="Property Purchase Information"
+        subtitle="Provide purchase details to initialize value tracking."
+        badge={<StatusChip tone="info">Scenario input</StatusChip>}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="purchasePrice">Purchase Price *</Label>
               <Input
@@ -190,18 +202,21 @@ export default function PropertyAppreciationTracker({ propertyId }: PropertyAppr
               </div>
             )}
 
-            <div className="flex gap-2">
+          <ActionPriorityRow
+            primaryAction={
               <Button type="submit" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                 Analyze Appreciation
               </Button>
+            }
+            secondaryActions={
               <Button type="button" variant="outline" onClick={() => setShowInputForm(false)}>
                 Cancel
               </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            }
+          />
+        </form>
+      </ScenarioInputCard>
     );
   }
 
@@ -209,6 +224,24 @@ export default function PropertyAppreciationTracker({ propertyId }: PropertyAppr
 
   return (
     <div className="space-y-6">
+      <ResultHeroCard
+        title="Current Estimated Value"
+        value={formatCurrency(report.currentEstimatedValue)}
+        status={<StatusChip tone={report.annualAppreciationRate >= 4 ? 'good' : report.annualAppreciationRate >= 2 ? 'info' : 'elevated'}>{report.annualAppreciationRate.toFixed(2)}% annual</StatusChip>}
+        summary="Historical appreciation and projected value trajectory for this property."
+      />
+
+      <ReadOnlySummaryBlock
+        title="Value Snapshot"
+        columns={2}
+        items={[
+          { label: 'Total appreciation', value: formatCurrency(report.totalAppreciation), emphasize: true },
+          { label: 'Appreciation %', value: `${report.totalAppreciationPercent.toFixed(2)}%` },
+          { label: 'Purchase price', value: formatCurrency(report.purchasePrice) },
+          { label: 'Purchase date', value: new Date(report.purchaseDate).toLocaleDateString() },
+        ]}
+      />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="border-green-200 bg-green-50">

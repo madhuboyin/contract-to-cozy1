@@ -17,6 +17,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface ModificationRecommendation {
   title: string;
@@ -125,61 +132,81 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
 
   if (!report) {
     return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>What are your home improvement goals?</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {NEED_OPTIONS.map(option => (
-                <div key={option.id} className="flex items-center space-x-3">
-                  <Checkbox
-                    id={option.id}
-                    checked={selectedNeeds.includes(option.id)}
-                    onCheckedChange={() => toggleNeed(option.id)}
-                  />
-                  <Label 
-                    htmlFor={option.id} 
-                    className="text-sm font-normal cursor-pointer"
-                  >
-                    {option.label}
-                  </Label>
-                </div>
-              ))}
+      <ScenarioInputCard
+        title="Home Improvement Goals"
+        subtitle="Choose goals to generate a prioritized modification plan."
+        badge={<StatusChip tone="info">Scenario input</StatusChip>}
+        actions={
+          <ActionPriorityRow
+            primaryAction={
+              <Button
+                onClick={generateReport}
+                disabled={loading || selectedNeeds.length === 0}
+                className="w-full"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating Recommendations...
+                  </>
+                ) : (
+                  <>
+                    <Lightbulb className="w-4 h-4 mr-2" />
+                    Get AI Recommendations
+                  </>
+                )}
+              </Button>
+            }
+          />
+        }
+      >
+        <div className="space-y-3">
+          {NEED_OPTIONS.map(option => (
+            <div key={option.id} className="flex items-center space-x-3">
+              <Checkbox
+                id={option.id}
+                checked={selectedNeeds.includes(option.id)}
+                onCheckedChange={() => toggleNeed(option.id)}
+              />
+              <Label
+                htmlFor={option.id}
+                className="text-sm font-normal cursor-pointer"
+              >
+                {option.label}
+              </Label>
             </div>
+          ))}
+        </div>
 
-            {error && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
-                {error}
-              </div>
-            )}
-
-            <Button 
-              onClick={generateReport} 
-              disabled={loading || selectedNeeds.length === 0}
-              className="mt-6 w-full"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating Recommendations...
-                </>
-              ) : (
-                <>
-                  <Lightbulb className="w-4 h-4 mr-2" />
-                  Get AI Recommendations
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+        {error && (
+          <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {error}
+          </div>
+        )}
+      </ScenarioInputCard>
     );
   }
 
   return (
     <div className="space-y-6">
+      <ResultHeroCard
+        title="Modification Plan"
+        value={`${report.recommendations.length} projects`}
+        status={<StatusChip tone="info">{report.averageROI}% avg ROI</StatusChip>}
+        summary="AI-ranked upgrades based on your goals, timeline, and property profile."
+      />
+
+      <ReadOnlySummaryBlock
+        title="Plan Snapshot"
+        columns={2}
+        items={[
+          { label: 'Estimated total cost', value: `$${report.totalEstimatedCost.toLocaleString()}`, emphasize: true },
+          { label: 'Quick wins', value: report.quickWins.length },
+          { label: 'Long-term projects', value: report.longTermProjects.length },
+          { label: 'Generated', value: new Date(report.generatedAt).toLocaleDateString() },
+        ]}
+      />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="border-blue-200 bg-blue-50">

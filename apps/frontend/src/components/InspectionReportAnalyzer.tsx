@@ -27,6 +27,12 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import {
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface InspectionIssue {
   id: string;
@@ -99,19 +105,12 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
 
   const handleUpload = async () => {
     if (!file) return;
-    console.log('🔍 propertyId received:', propertyId); // ADD
-    console.log('🔍 file:', file); // ADD
     setUploading(true);
     setError(null);
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('propertyId', propertyId);
-    
-    console.log('🔍 FormData contents:'); // ADD
-    for (const pair of formData.entries()) { // ADD
-      console.log(pair[0], ':', pair[1]); // ADD
-    } // ADD
 
     try {
       const response = await api.uploadInspectionReport(formData);
@@ -165,19 +164,12 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
   // Upload View
   if (!report) {
     return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-6 h-6 text-indigo-600" />
-              Upload Inspection Report
-            </CardTitle>
-            <p className="text-sm text-gray-600 mt-2">
-              Upload your home inspection PDF and get AI-powered analysis with severity scoring,
-              cost estimates, and negotiation guidance.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <ScenarioInputCard
+        title="Upload Inspection Report"
+        subtitle="Upload a PDF to extract issues, estimate repairs, and generate negotiation guidance."
+        badge={<StatusChip tone="info">Scenario input</StatusChip>}
+      >
+        <div className="space-y-4">
             {/* Upload Area */}
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-8">
               <div className="flex flex-col items-center justify-center">
@@ -261,9 +253,8 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
                 <li>✓ Future maintenance calendar</li>
               </ul>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+        </div>
+      </ScenarioInputCard>
     );
   }
 
@@ -272,6 +263,24 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
     <>
     <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     <div className="space-y-6">
+      <ResultHeroCard
+        title="Inspection Analysis Complete"
+        value={report.overallScore}
+        status={<StatusChip tone={report.overallCondition === 'EXCELLENT' || report.overallCondition === 'GOOD' ? 'good' : report.overallCondition === 'FAIR' ? 'elevated' : 'danger'}>{report.overallCondition}</StatusChip>}
+        summary={`${report.totalIssuesFound} issues found with ${report.criticalIssues} critical risk items.`}
+      />
+
+      <ReadOnlySummaryBlock
+        title="Inspection Snapshot"
+        columns={2}
+        items={[
+          { label: 'Total repair cost', value: `$${report.totalRepairCost.toLocaleString()}`, emphasize: true },
+          { label: 'Critical repair cost', value: `$${report.criticalRepairCost.toLocaleString()}` },
+          { label: 'Suggested credit', value: `$${report.suggestedCredit.toLocaleString()}` },
+          { label: 'Analyzed', value: new Date(report.createdAt).toLocaleDateString() },
+        ]}
+      />
+
       {/* Header Card */}
       <Card className={getConditionColor(report.overallCondition)}>
         <CardContent className="pt-6">

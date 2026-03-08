@@ -13,10 +13,12 @@ import { formatEnumLabel } from '@/lib/utils/formatters';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/bookings/StatusBadge';
 import {
+  BottomSafeAreaReserve,
   MobileFilterSurface,
   MobileKpiStrip,
   MobileKpiTile,
   MobilePageIntro,
+  MobileToolWorkspace,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface EditFormData {
@@ -362,22 +364,26 @@ export default function HomeownerBookingsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <MobilePageIntro
-        title="My Bookings"
-        subtitle="View and manage your upcoming and past service bookings."
-      />
+    <>
+      <MobileToolWorkspace
+        intro={(
+          <MobilePageIntro
+            title="My Bookings"
+            subtitle="View and manage your upcoming and past service bookings."
+          />
+        )}
+        summary={(
+          <MobileKpiStrip className="sm:grid-cols-4">
+            <MobileKpiTile label="Active" value={bookingSummary.active} hint="Open bookings" tone={bookingSummary.active > 0 ? 'warning' : 'neutral'} />
+            <MobileKpiTile label="Soon" value={bookingSummary.soon} hint="Within 7 days" tone={bookingSummary.soon > 0 ? 'danger' : 'neutral'} />
+            <MobileKpiTile label="Completed" value={bookingSummary.completed} hint="Closed successfully" tone={bookingSummary.completed > 0 ? 'positive' : 'neutral'} />
+            <MobileKpiTile label="Cancelled" value={bookingSummary.cancelled} hint="No longer active" />
+          </MobileKpiStrip>
+        )}
+      >
+        {success && <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800">{success}</div>}
 
-      {success && <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800">{success}</div>}
-
-      {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">{error}</div>}
-
-      <MobileKpiStrip className="sm:grid-cols-4">
-        <MobileKpiTile label="Active" value={bookingSummary.active} hint="Open bookings" tone={bookingSummary.active > 0 ? 'warning' : 'neutral'} />
-        <MobileKpiTile label="Soon" value={bookingSummary.soon} hint="Within 7 days" tone={bookingSummary.soon > 0 ? 'danger' : 'neutral'} />
-        <MobileKpiTile label="Completed" value={bookingSummary.completed} hint="Closed successfully" tone={bookingSummary.completed > 0 ? 'positive' : 'neutral'} />
-        <MobileKpiTile label="Cancelled" value={bookingSummary.cancelled} hint="No longer active" />
-      </MobileKpiStrip>
+        {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">{error}</div>}
 
       <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-2 bg-white/90 px-2 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-white/70 md:static md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
         <MobileFilterSurface className="space-y-2 border border-slate-200/80 bg-white p-2.5">
@@ -568,6 +574,9 @@ export default function HomeownerBookingsPage() {
         </div>
       )}
 
+        <BottomSafeAreaReserve size="chatAware" />
+      </MobileToolWorkspace>
+
       {showEditModal && editingBooking && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-2 sm:items-center sm:p-4">
           <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white sm:max-h-[90vh]">
@@ -713,6 +722,6 @@ export default function HomeownerBookingsPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -16,6 +16,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface ClimateRisk {
   category: string;
@@ -102,23 +109,33 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-        <span className="ml-3 text-gray-600">Analyzing climate risks...</span>
-      </div>
+      <ScenarioInputCard
+        title="Analyzing climate risks"
+        subtitle="Running hazard and trend models for this location."
+        badge={<StatusChip tone="info">In progress</StatusChip>}
+      >
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+          <span>Assessing category-level climate exposure.</span>
+        </div>
+      </ScenarioInputCard>
     );
   }
 
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50">
-        <CardContent className="p-6">
-          <p className="text-red-800">{error}</p>
-          <Button onClick={loadReport} variant="outline" className="mt-4">
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
+      <ScenarioInputCard
+        title="Unable to load climate risk report"
+        subtitle={error}
+        badge={<StatusChip tone="danger">Error</StatusChip>}
+        actions={
+          <ActionPriorityRow
+            primaryAction={<Button onClick={loadReport}>Retry</Button>}
+          />
+        }
+      >
+        <p className="text-sm text-red-700">Retry to fetch the latest climate analysis.</p>
+      </ScenarioInputCard>
     );
   }
 
@@ -128,6 +145,24 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
 
   return (
     <div className="space-y-6">
+      <ResultHeroCard
+        title="Overall Climate Risk"
+        value={report.overallRiskScore}
+        status={<StatusChip tone={report.overallRiskLevel === 'LOW' ? 'good' : report.overallRiskLevel === 'MODERATE' ? 'elevated' : 'danger'}>{report.overallRiskLevel}</StatusChip>}
+        summary={`${report.location.city}, ${report.location.state} climate risk posture and mitigation priorities.`}
+      />
+
+      <ReadOnlySummaryBlock
+        title="Location Snapshot"
+        columns={2}
+        items={[
+          { label: 'City', value: report.location.city, emphasize: true },
+          { label: 'State', value: report.location.state },
+          { label: 'ZIP', value: report.location.zipCode || 'Unknown' },
+          { label: 'Generated', value: new Date(report.generatedAt).toLocaleDateString() },
+        ]}
+      />
+
       {/* Summary Card */}
       <Card className={`border-2 ${getRiskColor(report.overallRiskLevel)}`}>
         <CardHeader>

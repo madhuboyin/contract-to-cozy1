@@ -3,52 +3,49 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useNotifications } from '@/lib/notifications/NotificationContext';
-import { Badge } from '@/components/ui/badge';
 import { Circle, RotateCcw } from 'lucide-react';
+import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { api } from '@/lib/api/client';
 import { Notification } from '@/lib/notifications/NotificationContext';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  EmptyStateCard,
+  MobileCard,
+  MobileKpiStrip,
+  MobileKpiTile,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
-const SOURCE_BADGE_META: Record<string, { emoji: string; label: string }> = {
-  SCHEDULED: { emoji: '⏱', label: 'Scheduled' },
-  INTELLIGENCE: { emoji: '📊', label: 'Intelligence' },
-  COVERAGE: { emoji: '📄', label: 'Coverage' },
-  MANUAL: { emoji: '👤', label: 'Manual' },
-  SENSOR: { emoji: '🔔', label: 'Sensor' },
-  DOCUMENT: { emoji: '🧾', label: 'Document' },
-  EXTERNAL: { emoji: '🌎', label: 'External' },
+const SOURCE_BADGE_META: Record<string, { label: string }> = {
+  SCHEDULED: { label: 'Scheduled' },
+  INTELLIGENCE: { label: 'Intelligence' },
+  COVERAGE: { label: 'Coverage' },
+  MANUAL: { label: 'Manual' },
+  SENSOR: { label: 'Sensor' },
+  DOCUMENT: { label: 'Document' },
+  EXTERNAL: { label: 'External' },
 };
 
-function renderSignalBadge(n: Notification  ) {
-  const st = n?.signalSource?.sourceType;
-  if (!st) return null;
+function renderSignalBadge(n: Notification) {
+  const sourceType = n?.signalSource?.sourceType;
+  if (!sourceType) return null;
 
-  const meta = SOURCE_BADGE_META[st] ?? { emoji: '🏷️', label: st };
-  const title = n?.signalSource?.summary
-    ? `${meta.label}: ${n.signalSource.summary}`
-    : meta.label;
+  const meta = SOURCE_BADGE_META[sourceType] ?? { label: sourceType };
+  const title = n?.signalSource?.summary ? `${meta.label}: ${n.signalSource.summary}` : meta.label;
 
   return (
-    <Badge
-      variant="secondary"
-      className="text-[10px] px-1.5 py-0 h-4 uppercase tracking-wider"
-      title={title}
-    >
-      <span className="mr-1">{meta.emoji}</span>
-      {meta.label}
-    </Badge>
+    <StatusChip tone="info" className="text-[10px] uppercase tracking-wide" >
+      <span title={title}>{meta.label}</span>
+    </StatusChip>
   );
 }
-export default function NotificationsPage() {
-  const {
-    notifications,
-    markRead,
-    markAllRead,
-    refresh 
-  } = useNotifications();
 
-  // Sort: Unread items (isRead === false) go to the top
+export default function NotificationsPage() {
+  const { notifications, markRead, markAllRead, refresh } = useNotifications();
+
   const sortedNotifications = [...notifications].sort((a, b) => {
     if (a.isRead === b.isRead) {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -56,11 +53,12 @@ export default function NotificationsPage() {
     return a.isRead ? 1 : -1;
   });
 
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
   const handleToggleUnread = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
     try {
-      // Calls the persistent PATCH endpoint in the backend
       await api.markNotificationAsUnread(id);
       await refresh();
     } catch (err) {
@@ -69,113 +67,129 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+    <MobileToolWorkspace
+      intro={
         <MobilePageIntro
           title="Notifications"
-          subtitle="Unread updates appear first and stay synced across sessions."
-          className="w-full"
+          subtitle="Unread updates are prioritized and sync across sessions."
+          action={
+            unreadCount > 0 ? (
+              <button
+                type="button"
+                onClick={markAllRead}
+                className="inline-flex min-h-[40px] items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Mark all read
+              </button>
+            ) : undefined
+          }
         />
-
-        {notifications.some(n => !n.isRead) && (
-          <button
-            onClick={markAllRead}
-            className="text-sm font-medium text-primary hover:underline transition-all"
-          >
-            Mark all as read
-          </button>
-        )}
-      </div>
-
-      {/* Empty State */}
-      {notifications.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg bg-background">
-          <p className="text-muted-foreground">No notifications yet</p>
-        </div>
-      )}
-
-      {/* Notification List */}
-      <div className="space-y-3">
-        {sortedNotifications.map((n) => {
-          const innerContent = (
-            <div
-              className={`relative flex items-start gap-4 rounded-lg border p-4 transition-all hover:shadow-sm ${
-                n.isRead 
-                  ? 'bg-background border-border/50 opacity-80' 
-                  : 'bg-muted/30 border-primary/20 shadow-sm'
-              }`}
-            >
-              {/* Unread Indicator Dot */}
-              {!n.isRead && (
-                <div className="mt-1.5">
-                  <Circle className="h-2.5 w-2.5 fill-primary text-primary" />
-                </div>
-              )}
-
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className={`text-sm leading-none ${n.isRead ? 'font-medium text-muted-foreground' : 'font-bold text-foreground'}`}>
-                    {n.title}
+      }
+      summary={
+        <MobileKpiStrip>
+          <MobileKpiTile label="Unread" value={unreadCount} hint="Needs review" tone={unreadCount > 0 ? 'warning' : 'neutral'} />
+          <MobileKpiTile label="Total" value={notifications.length} hint="All notifications" />
+        </MobileKpiStrip>
+      }
+    >
+      {notifications.length === 0 ? (
+        <EmptyStateCard title="No notifications yet" description="You will see intelligence, booking, and account alerts here." />
+      ) : (
+        <div className="space-y-2.5">
+          {sortedNotifications.map((notification) => {
+            const innerContent = (
+              <MobileCard
+                variant="compact"
+                className={`space-y-2.5 transition-all ${
+                  notification.isRead ? 'border-slate-200 bg-white/70' : 'border-brand-primary/25 bg-brand-primary/[0.04]'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex items-start gap-2">
+                    {!notification.isRead ? <Circle className="mt-1 h-2.5 w-2.5 shrink-0 fill-brand-primary text-brand-primary" /> : null}
+                    <div className="min-w-0">
+                      <p className={`mb-0 truncate text-sm ${notification.isRead ? 'font-medium text-slate-700' : 'font-semibold text-slate-900'}`}>
+                        {notification.title}
+                      </p>
+                      <p className={`mb-0 mt-1 text-sm ${notification.isRead ? 'text-slate-500' : 'text-slate-600'}`}>
+                        {notification.message}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 min-h-[24px]">
-                    {renderSignalBadge(n)}
-                    {!n.isRead ? (
-                      <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 uppercase tracking-wider">
-                        New
-                      </Badge>
-                    ) : (
-                      /* Reset Button - Decoupled from main Link click area */
-                      <button
-                        onClick={(e) => handleToggleUnread(e, n.id)}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors py-1 px-2 hover:bg-muted rounded-md border border-transparent hover:border-border"
-                        title="Mark as unread"
-                      >
-                        <RotateCcw className="h-3 w-3" />
-                        <span>Reset</span>
-                      </button>
-                    )}
+
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {renderSignalBadge(notification)}
+                    {!notification.isRead ? <StatusChip tone="needsAction">New</StatusChip> : null}
                   </div>
                 </div>
-                <p className={`text-sm ${n.isRead ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
-                  {n.message}
-                </p>
-                <div className="text-[11px] text-muted-foreground/60 pt-1">
-                  {new Date(n.createdAt).toLocaleString([], { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
-                </div>
-              </div>
-            </div>
-          );
 
-          return (
-            <div key={n.id} className="block group">
-              {n.actionUrl ? (
-                <Link 
-                  href={
-                    (n.actionUrl.startsWith('/') && !n.actionUrl.startsWith('/dashboard')) 
-                      ? `/dashboard${n.actionUrl}` 
-                      : n.actionUrl
+                <ActionPriorityRow
+                  secondaryActions={
+                    <>
+                      <span className="text-[11px] text-slate-500">
+                        {new Date(notification.createdAt).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                      {notification.isRead ? (
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleUnread(e, notification.id)}
+                          className="inline-flex min-h-[32px] items-center gap-1 rounded-md border border-transparent px-2 text-[11px] font-medium text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-brand-primary"
+                          title="Mark as unread"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Reset
+                        </button>
+                      ) : null}
+                    </>
                   }
+                />
+              </MobileCard>
+            );
+
+            if (notification.actionUrl) {
+              const href =
+                notification.actionUrl.startsWith('/') && !notification.actionUrl.startsWith('/dashboard')
+                  ? `/dashboard${notification.actionUrl}`
+                  : notification.actionUrl;
+
+              return (
+                <Link
+                  key={notification.id}
+                  href={href}
                   onClick={() => {
-                    if (!n.isRead) markRead(n.id);
+                    if (!notification.isRead) {
+                      markRead(notification.id);
+                    }
                   }}
+                  className="no-brand-style block"
                 >
                   {innerContent}
                 </Link>
-              ) : (
-                <div onClick={() => { if (!n.isRead) markRead(n.id); }}>
-                  {innerContent}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+              );
+            }
+
+            return (
+              <div
+                key={notification.id}
+                onClick={() => {
+                  if (!notification.isRead) {
+                    markRead(notification.id);
+                  }
+                }}
+              >
+                {innerContent}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobileToolWorkspace>
   );
 }

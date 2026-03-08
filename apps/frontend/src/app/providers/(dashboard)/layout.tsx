@@ -2,9 +2,10 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function ProviderDashboardLayout({
@@ -15,23 +16,41 @@ export default function ProviderDashboardLayout({
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/providers/login');
     } else if (!loading && user && user.role !== 'PROVIDER') {
-      // Non-providers shouldn't be here
       router.push('/dashboard');
     }
   }, [user, loading, router]);
 
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+    setIsAccountMenuOpen(false);
+  }, [pathname]);
+
+  const navigation = useMemo(
+    () => [
+      { name: 'Dashboard', href: '/providers/dashboard', icon: '📊' },
+      { name: 'Bookings', href: '/providers/bookings', icon: '📅' },
+      { name: 'Services', href: '/providers/services', icon: '🔧' },
+      { name: 'Calendar', href: '/providers/calendar', icon: '🗓️' },
+      { name: 'Portfolio', href: '/providers/portfolio', icon: '📸' },
+      { name: 'Profile', href: '/providers/profile', icon: '⚙️' },
+    ],
+    []
+  );
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-brand-primary" />
+          <p className="mt-3 text-sm text-slate-600">Loading provider portal...</p>
         </div>
       </div>
     );
@@ -41,154 +60,104 @@ export default function ProviderDashboardLayout({
     return null;
   }
 
-  const navigation = [
-    { name: 'Dashboard', href: '/providers/dashboard', icon: '📊' },
-    { name: 'Bookings', href: '/providers/bookings', icon: '📅' },
-    { name: 'Services', href: '/providers/services', icon: '🔧' },
-    { name: 'Calendar', href: '/providers/calendar', icon: '🗓️' },
-    { name: 'Portfolio', href: '/providers/portfolio', icon: '📸' },
-    { name: 'Profile', href: '/providers/profile', icon: '⚙️' },
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation Bar */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              {/* Logo */}
-              <div className="flex-shrink-0 flex items-center">
-                <Link href="/providers/dashboard" className="text-xl font-bold text-blue-600">
-                  Contract to Cozy
-                </Link>
-                <span className="ml-3 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
-                  Provider Portal
-                </span>
-              </div>
-
-              {/* Desktop Navigation */}
-              <div className="hidden md:ml-6 md:flex md:space-x-8">
-                {navigation.map((item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`${
-                      pathname === item.href || pathname?.startsWith(item.href + '/')
-                        ? 'border-blue-500 text-gray-900'
-                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                    } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors`}
-                  >
-                    <span className="mr-2">{item.icon}</span>
-                    {item.name}
-                  </Link>
-                ))}
-              </div>
+    <div className="min-h-screen bg-slate-50">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <Link href="/providers/dashboard" className="text-base font-semibold text-slate-900 hover:text-brand-primary">
+                Contract to Cozy
+              </Link>
+              <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Provider Portal</p>
             </div>
 
-            {/* Right side - User menu */}
-            <div className="flex items-center">
-              {/* Notifications */}
-              <button className="p-2 text-gray-400 hover:text-gray-500 relative">
-                <span className="sr-only">View notifications</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                {/* Notification badge */}
-                <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white"></span>
-              </button>
-
-              {/* User dropdown */}
-              <div className="ml-3 relative">
+            <div className="flex items-center gap-2">
+              <div className="relative">
                 <button
-                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  className="flex items-center max-w-xs text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  type="button"
+                  onClick={() => setIsAccountMenuOpen((open) => !open)}
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 pr-3 text-sm text-slate-700 hover:bg-slate-50"
                 >
-                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-primary text-xs font-semibold text-white">
                     {user.firstName?.charAt(0) || 'P'}
-                  </div>
-                  <span className="ml-2 text-sm font-medium text-gray-700 hidden sm:block">
-                    {user.firstName} {user.lastName}
                   </span>
-                  <svg className="ml-2 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <span className="hidden sm:inline">{user.firstName}</span>
                 </button>
 
-                {/* Dropdown menu */}
-                {isMobileMenuOpen && (
-                  <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-                    <div className="py-1">
-                      <Link
-                        href="/providers/profile"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        Your Profile
-                      </Link>
-                      <Link
-                        href="/providers/settings"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        Settings
-                      </Link>
-                      <button
-                        onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          logout();
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        Sign out
-                      </button>
-                    </div>
+                {isAccountMenuOpen ? (
+                  <div className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+                    <Link href="/providers/profile" className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                      Profile
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAccountMenuOpen(false);
+                        logout();
+                      }}
+                      className="mt-1 block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      Sign out
+                    </button>
                   </div>
-                )}
+                ) : null}
               </div>
 
-              {/* Mobile menu button */}
               <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="md:hidden ml-2 inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                type="button"
+                onClick={() => setIsMobileNavOpen((open) => !open)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 md:hidden"
+                aria-label="Toggle provider navigation"
               >
-                <span className="sr-only">Open menu</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
+                {isMobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Mobile Navigation Menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200">
-            <div className="pt-2 pb-3 space-y-1">
-              {navigation.map((item) => (
+          <nav className="mt-3 hidden items-center gap-2 overflow-x-auto pb-1 md:flex">
+            {navigation.map((item) => {
+              const active = pathname === item.href || pathname?.startsWith(item.href + '/');
+              return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`${
-                    pathname === item.href || pathname?.startsWith(item.href + '/')
-                      ? 'bg-blue-50 border-blue-500 text-blue-700'
-                      : 'border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800'
-                  } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
+                    active ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
                 >
-                  <span className="mr-2">{item.icon}</span>
-                  {item.name}
+                  <span>{item.icon}</span>
+                  <span>{item.name}</span>
                 </Link>
-              ))}
+              );
+            })}
+          </nav>
+        </div>
+
+        {isMobileNavOpen ? (
+          <div className="border-t border-slate-200 bg-white px-4 py-3 md:hidden">
+            <div className="grid grid-cols-2 gap-2">
+              {navigation.map((item) => {
+                const active = pathname === item.href || pathname?.startsWith(item.href + '/');
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`inline-flex min-h-[40px] items-center gap-2 rounded-lg px-3 text-sm font-medium ${
+                      active ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <span>{item.icon}</span>
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
-        )}
-      </nav>
+        ) : null}
+      </header>
 
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {children}
-      </main>
+      <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">{children}</main>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 // apps/frontend/src/app/(dashboard)/dashboard/seasonal/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, ChevronDown, ChevronRight, CheckCircle, Clock, Settings, ChevronLeft, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Calendar, ChevronDown, ChevronRight, Clock, Settings } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import { SeasonalChecklistModal } from '@/components/seasonal/SeasonalChecklistModal';
 import {
@@ -17,55 +18,75 @@ import {
 } from '@/lib/utils/seasonHelpers';
 import { SeasonalChecklist } from '@/types/seasonal.types';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  EmptyStateCard,
+  MobileCard,
+  MobileFilterSurface,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
+
+const TABS = [
+  { key: 'current', label: 'Current season' },
+  { key: 'all', label: 'All seasons' },
+  { key: 'completed', label: 'Completed' },
+] as const;
 
 export default function SeasonalMaintenancePage() {
   const router = useRouter();
   const [selectedChecklistId, setSelectedChecklistId] = useState<string | null>(null);
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<'current' | 'all' | 'completed'>('current');
+  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['key']>('current');
 
-  // FIX: Get propertyId from URL params first (for page reload), then fall back to context
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
   const propertyId = searchParams.get('propertyId') || selectedPropertyId;
   const from = searchParams.get('from');
-  // Only show back link if entered from a valid parent page (not returning from maintenance)
-  const getBackLink = () => {
-    if (from === 'dashboard') {
-      return {
-        href: `/dashboard${propertyId ? `?propertyId=${propertyId}` : ''}`,
-        label: 'Back to Dashboard'
-      };
-    }
-    // Don't show back link when returning from maintenance or no 'from' param
-    return null;
-  };
 
-  const backLink = getBackLink();
+  const backLink =
+    from === 'dashboard'
+      ? {
+          href: `/dashboard${propertyId ? `?propertyId=${propertyId}` : ''}`,
+          label: 'Back to dashboard',
+        }
+      : null;
 
   const { data: climateInfo } = useClimateInfo(propertyId!);
   const { data: checklistsData, isLoading } = useSeasonalChecklists(propertyId!);
 
-  // FIX: Handle no property selected
   if (!propertyId) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-          <p className="text-yellow-800 font-medium">Please select a property to view seasonal maintenance</p>
-          <p className="text-yellow-600 text-sm mt-2">Go to the main dashboard and select a property</p>
-        </div>
-      </div>
+      <MobileToolWorkspace
+        intro={
+          <MobilePageIntro
+            title="Seasonal Maintenance"
+            subtitle="Track recurring home tasks by season and climate."
+          />
+        }
+      >
+        <EmptyStateCard
+          title="Select a property"
+          description="Choose a property from dashboard first to view seasonal maintenance checklists."
+        />
+      </MobileToolWorkspace>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-      </div>
+      <MobileToolWorkspace
+        intro={<MobilePageIntro title="Seasonal Maintenance" subtitle="Loading your seasonal checklist data." />}
+      >
+        <MobileCard variant="compact" className="py-10 text-center">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-b-2 border-brand-primary" />
+          <p className="mt-3 text-sm text-muted-foreground">Loading checklists...</p>
+        </MobileCard>
+      </MobileToolWorkspace>
     );
   }
 
@@ -73,18 +94,16 @@ export default function SeasonalMaintenancePage() {
   const currentSeason = climateInfo?.currentSeason;
   const currentYear = new Date().getFullYear();
 
-  // Filter checklists based on active tab
-  const filteredChecklists = checklists.filter((checklist: SeasonalChecklist) => {
+  const filteredChecklists = checklists.filter((checklist) => {
     if (activeTab === 'current') {
       return checklist.season === currentSeason && checklist.year === currentYear;
     }
     if (activeTab === 'completed') {
       return checklist.status === 'COMPLETED';
     }
-    return true; // 'all' tab
+    return true;
   });
 
-  // Group checklists by season and year
   const groupedChecklists = filteredChecklists.reduce<Record<string, SeasonalChecklist[]>>((acc, checklist) => {
     const key = `${checklist.season}-${checklist.year}`;
     if (!acc[key]) {
@@ -95,13 +114,13 @@ export default function SeasonalMaintenancePage() {
   }, {});
 
   const toggleSeason = (seasonKey: string) => {
-    const newExpanded = new Set(expandedSeasons);
-    if (newExpanded.has(seasonKey)) {
-      newExpanded.delete(seasonKey);
+    const nextExpanded = new Set(expandedSeasons);
+    if (nextExpanded.has(seasonKey)) {
+      nextExpanded.delete(seasonKey);
     } else {
-      newExpanded.add(seasonKey);
+      nextExpanded.add(seasonKey);
     }
-    setExpandedSeasons(newExpanded);
+    setExpandedSeasons(nextExpanded);
   };
 
   const formatSeasonYearLabel = (checklist: SeasonalChecklist): string => {
@@ -119,203 +138,165 @@ export default function SeasonalMaintenancePage() {
     return String(checklist.year);
   };
 
+  const totalTasks = checklists.reduce((sum, list) => sum + list.totalTasks, 0);
+  const completedTasks = checklists.reduce((sum, list) => sum + list.tasksCompleted, 0);
+  const completionPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      {backLink && (
-        <Link 
-          href={backLink.href}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 group"
-        >
-          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-          {backLink.label}
-        </Link>
-      )}
-    {/* Page Content */}
-      <div className="mb-6">
-        <MobilePageIntro
-          title="Seasonal Maintenance"
-          subtitle="Stay on top of climate-specific home maintenance tasks."
-          action={(
-            <button
-              onClick={() => router.push(`/dashboard/seasonal/settings?propertyId=${propertyId}`)}
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
-            >
-              <Settings className="h-4 w-4" />
-              <span>Settings</span>
-            </button>
-          )}
-        />
-      </div>
-
-      {/* Climate Info Banner */}
-      {climateInfo?.data && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 sm:p-6 mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">
-                Current Season: {currentSeason}
-              </h3>
-              <p className="text-sm text-gray-600">
-                Climate Region: {climateInfo.data.climateRegion}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Next Season</p>
-              <p className="font-medium text-gray-900">{climateInfo.data.nextSeason}</p>
-              <p className="text-xs text-gray-500">
-                {climateInfo.data.daysUntilNextSeason} days away
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 mb-6">
-        <button
-          onClick={() => setActiveTab('current')}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-            activeTab === 'current'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Current Season
-        </button>
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-            activeTab === 'all'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          All Seasons
-        </button>
-        <button
-          onClick={() => setActiveTab('completed')}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-            activeTab === 'completed'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Completed
-        </button>
-      </div>
-
-      {/* Checklists */}
-      <div className="space-y-4">
-        {Object.keys(groupedChecklists).length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-lg p-12 text-center">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No checklists yet</h3>
-            <p className="text-gray-600">
-              Seasonal checklists will be generated automatically as seasons change
-            </p>
-          </div>
-        ) : (
-          Object.entries(groupedChecklists).map(([seasonKey, seasonChecklists]: [string, any]) => {
-            const isExpanded = expandedSeasons.has(seasonKey);
-            const firstChecklist = seasonChecklists[0];
-            const season = firstChecklist.season;
-            const colors = getSeasonColors(season);
-
-            return (
-              <div
-                key={seasonKey}
-                className={`bg-white border-2 rounded-lg overflow-hidden ${colors.borderColor}`}
+    <MobileToolWorkspace
+      intro={
+        <div className="space-y-3">
+          {backLink ? (
+            <Link href={backLink.href} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-4 w-4" />
+              {backLink.label}
+            </Link>
+          ) : null}
+          <MobilePageIntro
+            title="Seasonal Maintenance"
+            subtitle="Stay on top of climate-specific tasks with cleaner seasonal checklists."
+            action={
+              <button
+                onClick={() => router.push(`/dashboard/seasonal/settings?propertyId=${propertyId}`)}
+                className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50"
               >
-                {/* Season Header */}
+                <Settings className="h-4 w-4" />
+                Settings
+              </button>
+            }
+          />
+        </div>
+      }
+      summary={
+        climateInfo?.data ? (
+          <ResultHeroCard
+            eyebrow="Climate profile"
+            title={`${currentSeason || 'Current'} maintenance focus`}
+            value={`${completionPercent}%`}
+            status={<StatusChip tone={completionPercent >= 75 ? 'good' : completionPercent >= 40 ? 'elevated' : 'needsAction'}>{completionPercent >= 75 ? 'On track' : 'Needs attention'}</StatusChip>}
+            summary={`Region: ${climateInfo.data.climateRegion}. Next season: ${climateInfo.data.nextSeason}.`}
+            highlights={[
+              `${completedTasks} of ${totalTasks} tasks completed`,
+              `${climateInfo.data.daysUntilNextSeason} days until ${climateInfo.data.nextSeason}`,
+              `${Object.keys(groupedChecklists).length} seasonal checklist groups available`,
+            ]}
+          />
+        ) : undefined
+      }
+      filters={
+        <MobileFilterSurface className="space-y-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">View</p>
+          <div className="inline-flex w-full gap-1 rounded-xl bg-slate-100 p-1">
+            {TABS.map((tab) => {
+              const active = tab.key === activeTab;
+              return (
                 <button
-                  onClick={() => toggleSeason(seasonKey)}
-                  className={`w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors ${colors.bgColor}`}
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`min-h-[36px] flex-1 rounded-lg px-2.5 text-xs font-semibold transition-colors ${
+                    active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 >
-                  <div className="flex items-center space-x-4">
-                    <span className="text-4xl">{getSeasonIcon(season)}</span>
-                    <div className="text-left">
-                      <h3 className={`text-xl font-bold ${colors.textColor}`}>
-                        {getSeasonName(season)} {formatSeasonYearLabel(firstChecklist)}
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {firstChecklist.totalTasks} tasks • {firstChecklist.tasksCompleted} completed
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {getCompletionPercentage(firstChecklist.tasksCompleted, firstChecklist.totalTasks)}%
-                      </div>
-                      <div className="text-xs text-gray-500">Complete</div>
-                    </div>
-                    {isExpanded ? (
-                      <ChevronDown className="w-6 h-6 text-gray-400" />
-                    ) : (
-                      <ChevronRight className="w-6 h-6 text-gray-400" />
-                    )}
-                  </div>
+                  {tab.label}
                 </button>
+              );
+            })}
+          </div>
+        </MobileFilterSurface>
+      }
+    >
+      {Object.keys(groupedChecklists).length === 0 ? (
+        <EmptyStateCard
+          title="No seasonal checklists"
+          description="Checklists are generated automatically as seasons progress for your property."
+        />
+      ) : (
+        Object.entries(groupedChecklists).map(([seasonKey, seasonChecklists]) => {
+          const isExpanded = expandedSeasons.has(seasonKey);
+          const firstChecklist = seasonChecklists[0];
+          const season = firstChecklist.season;
+          const colors = getSeasonColors(season);
 
-                {/* Checklist Details */}
-                {isExpanded && (
-                  <div className="p-6 border-t border-gray-200">
-                    {seasonChecklists.map((checklist: SeasonalChecklist) => (
-                      <div key={checklist.id} className="mb-4 last:mb-0">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                              checklist.status === 'COMPLETED'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {checklist.status}
-                            </span>
-                          </div>
-                            <button
-                              onClick={() => {
-                                setSelectedChecklistId(checklist.id);
-                              }}
-                              className="text-sm text-green-600 hover:text-green-700 font-medium"
-                            >
-                              View Details →
-                            </button>
-                        </div>
-                        
-                        {/* Progress Bar */}
-                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                          <div
-                            className={`h-2 rounded-full transition-all ${getProgressBarColor(getCompletionPercentage(checklist.tasksCompleted, checklist.totalTasks))}`}
-                            style={{ width: `${getCompletionPercentage(checklist.tasksCompleted, checklist.totalTasks)}%` }}
-                          />
-                        </div>
+          return (
+            <MobileCard key={seasonKey} variant="compact" className={`overflow-hidden border ${colors.borderColor}`}>
+              <button
+                type="button"
+                onClick={() => toggleSeason(seasonKey)}
+                className={`-m-3.5 mb-0 flex w-[calc(100%+1.75rem)] items-center justify-between gap-3 px-4 py-3.5 text-left ${colors.bgColor}`}
+              >
+                <div className="min-w-0">
+                  <p className="mb-0 text-lg">{getSeasonIcon(season)}</p>
+                  <p className={`mb-0 mt-1 text-sm font-semibold ${colors.textColor}`}>
+                    {getSeasonName(season)} {formatSeasonYearLabel(firstChecklist)}
+                  </p>
+                  <p className="mb-0 mt-0.5 text-xs text-slate-600">
+                    {firstChecklist.tasksCompleted}/{firstChecklist.totalTasks} tasks completed
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="mb-0 text-base font-semibold text-slate-900">
+                    {getCompletionPercentage(firstChecklist.tasksCompleted, firstChecklist.totalTasks)}%
+                  </p>
+                  <div className="mt-1 text-slate-500">{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</div>
+                </div>
+              </button>
 
-                        <div className="flex items-center justify-between text-sm text-gray-600">
-                          <span>
-                            {checklist.tasksCompleted} of {checklist.totalTasks} tasks complete
-                          </span>
-                          <span className="flex items-center">
-                            <Clock className="w-4 h-4 mr-1" />
+              {isExpanded ? (
+                <div className="space-y-3 pt-3">
+                  {seasonChecklists.map((checklist) => {
+                    const percent = getCompletionPercentage(checklist.tasksCompleted, checklist.totalTasks);
+                    return (
+                      <MobileCard key={checklist.id} variant="compact" className="space-y-3 border-slate-200 bg-slate-50/50">
+                        <div className="flex items-center justify-between gap-2">
+                          <StatusChip tone={checklist.status === 'COMPLETED' ? 'good' : 'needsAction'}>{checklist.status}</StatusChip>
+                          <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                            <Clock className="h-3.5 w-3.5" />
                             {checklist.daysRemaining !== undefined ? formatDaysRemaining(checklist.daysRemaining) : 'N/A'}
                           </span>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
 
-      {/* Modal */}
-      {selectedChecklistId && (
-        <SeasonalChecklistModal
-          checklistId={selectedChecklistId}
-          onClose={() => setSelectedChecklistId(null)}
-        />
+                        <ReadOnlySummaryBlock
+                          items={[
+                            { label: 'Progress', value: `${checklist.tasksCompleted} / ${checklist.totalTasks}`, emphasize: true },
+                            { label: 'Completion', value: `${percent}%` },
+                          ]}
+                          columns={2}
+                        />
+
+                        <div className="h-2 rounded-full bg-slate-200">
+                          <div
+                            className={`h-2 rounded-full transition-all ${getProgressBarColor(percent)}`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+
+                        <ActionPriorityRow
+                          primaryAction={
+                            <button
+                              type="button"
+                              onClick={() => setSelectedChecklistId(checklist.id)}
+                              className="min-h-[40px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
+                            >
+                              View checklist details
+                            </button>
+                          }
+                        />
+                      </MobileCard>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </MobileCard>
+          );
+        })
       )}
-    </div>
+
+      <BottomSafeAreaReserve size="chatAware" />
+
+      {selectedChecklistId ? (
+        <SeasonalChecklistModal checklistId={selectedChecklistId} onClose={() => setSelectedChecklistId(null)} />
+      ) : null}
+    </MobileToolWorkspace>
   );
 }

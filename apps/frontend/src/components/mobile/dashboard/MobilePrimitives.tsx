@@ -266,7 +266,7 @@ type QuickActionTileProps = {
   artworkAlt?: string;
   href: string;
   tone?: 'neutral' | 'brand';
-  badgeLabel?: string;
+  badgeLabel?: string | null;
   variant?: 'default' | 'compact';
 };
 

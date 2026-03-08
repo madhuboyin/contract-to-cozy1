@@ -26,6 +26,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface MovingTask {
   id: string;
@@ -310,12 +317,16 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
   // Show loading state while checking for saved plan
   if (initialLoading) {
     return (
-      <Card>
-        <CardContent className="p-12 flex flex-col items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-green-600 mb-4" />
-          <p className="text-gray-600">Loading your moving plan...</p>
-        </CardContent>
-      </Card>
+      <ScenarioInputCard
+        title="Loading your moving plan"
+        subtitle="Checking for saved timeline and completion progress."
+        badge={<StatusChip tone="info">In progress</StatusChip>}
+      >
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+          <span>Syncing plan and task state.</span>
+        </div>
+      </ScenarioInputCard>
     );
   }
 
@@ -326,6 +337,24 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
 
     return (
       <div className="space-y-6">
+        <ResultHeroCard
+          title="Moving Plan Progress"
+          value={`${Math.round(overallProgress)}%`}
+          status={<StatusChip tone={overallProgress >= 75 ? 'good' : overallProgress >= 40 ? 'elevated' : 'info'}>{completedCount}/{totalTasks} tasks</StatusChip>}
+          summary={`${propertyAddress} • ${plan.daysUntilMove} days until closing.`}
+        />
+
+        <ReadOnlySummaryBlock
+          title="Plan Snapshot"
+          columns={2}
+          items={[
+            { label: 'Closing date', value: new Date(plan.closingDate).toLocaleDateString(), emphasize: true },
+            { label: 'Estimated move cost', value: `$${plan.costEstimates.total.toLocaleString()}` },
+            { label: 'Utility setup tasks', value: plan.utilitySetup.length },
+            { label: 'Generated', value: new Date(plan.generatedAt).toLocaleDateString() },
+          ]}
+        />
+
         {/* Header with Save Status */}
         <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
           <CardContent className="p-6">
@@ -605,15 +634,12 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
 
   // Input form
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Generate Your Personalized Moving Plan</CardTitle>
-        <p className="text-sm text-gray-600">
-          Tell us about your move and we&apos;ll create a comprehensive AI-powered plan
-        </p>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <ScenarioInputCard
+      title="Generate Your Personalized Moving Plan"
+      subtitle="Tell us about your move and we'll create a full AI timeline."
+      badge={<StatusChip tone="info">Scenario input</StatusChip>}
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -736,21 +762,24 @@ export default function MovingConcierge({ propertyId, propertyAddress, squareFoo
             </div>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full" size="lg">
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Generating Your Moving Plan...
-              </>
-            ) : (
-              <>
-                <Truck className="w-4 h-4 mr-2" />
-                Generate AI Moving Plan
-              </>
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        <ActionPriorityRow
+          primaryAction={
+            <Button type="submit" disabled={loading} className="w-full" size="lg">
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating Your Moving Plan...
+                </>
+              ) : (
+                <>
+                  <Truck className="w-4 h-4 mr-2" />
+                  Generate AI Moving Plan
+                </>
+              )}
+            </Button>
+          }
+        />
+      </form>
+    </ScenarioInputCard>
   );
 }

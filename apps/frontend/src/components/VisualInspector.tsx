@@ -19,6 +19,13 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface DetectedIssue {
   title: string;
@@ -184,6 +191,24 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
   if (report) {
     return (
       <div className="space-y-6">
+        <ResultHeroCard
+          title="Property Condition Report"
+          value={`${report.overallScore}`}
+          status={<StatusChip tone={report.overallCondition === 'EXCELLENT' || report.overallCondition === 'GOOD' ? 'good' : report.overallCondition === 'FAIR' ? 'elevated' : 'danger'}>{report.overallCondition}</StatusChip>}
+          summary="AI-detected issues, severity ranking, and estimated repair exposure."
+        />
+
+        <ReadOnlySummaryBlock
+          title="Inspection Snapshot"
+          columns={2}
+          items={[
+            { label: 'Total issues', value: report.summary.totalIssues, emphasize: true },
+            { label: 'Critical issues', value: report.summary.criticalIssues },
+            { label: 'High priority', value: report.summary.highPriorityIssues },
+            { label: 'Estimated repair cost', value: `$${report.summary.estimatedRepairCost.toLocaleString()}` },
+          ]}
+        />
+
         {/* Overall Summary Card */}
         <Card className={`border-2 ${getConditionColor(report.overallCondition)}`}>
           <CardContent className="p-6">
@@ -432,14 +457,35 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Upload Property Images</CardTitle>
-          <p className="text-sm text-gray-600">
-            Upload photos of different rooms and areas. AI will analyze each image for issues.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <ScenarioInputCard
+        title="Upload Property Images"
+        subtitle="Upload room photos so AI can detect condition risks."
+        badge={<StatusChip tone="info">Scenario input</StatusChip>}
+        actions={
+          <ActionPriorityRow
+            primaryAction={
+              <Button
+                onClick={handleAnalyze}
+                disabled={loading || images.length === 0}
+                className="w-full"
+                size="lg"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Analyzing Images... This may take a minute
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-4 h-4 mr-2" />
+                    Analyze Property ({images.length} images)
+                  </>
+                )}
+              </Button>
+            }
+          />
+        }
+      >
           {/* Upload Area */}
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
             <div className="flex flex-col items-center justify-center">
@@ -509,31 +555,10 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
               <p className="text-red-800 text-sm">{error}</p>
             </div>
           )}
-
-          <Button 
-            onClick={handleAnalyze} 
-            disabled={loading || images.length === 0}
-            className="w-full"
-            size="lg"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Analyzing Images... This may take a minute
-              </>
-            ) : (
-              <>
-                <Camera className="w-4 h-4 mr-2" />
-                Analyze Property ({images.length} images)
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+      </ScenarioInputCard>
 
       {/* Info Card */}
-      <Card className="bg-blue-50 border-blue-200">
-        <CardContent className="p-4">
+      <ScenarioInputCard title="Capture Tips" subtitle="Improve detection quality with clearer context photos.">
           <h4 className="font-semibold text-blue-900 mb-2">Tips for Best Results:</h4>
           <ul className="space-y-1 text-sm text-blue-800">
             <li>• Take clear, well-lit photos</li>
@@ -542,8 +567,7 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
             <li>• Document exterior, roof, foundation if accessible</li>
             <li>• Label each image with the correct room type</li>
           </ul>
-        </CardContent>
-      </Card>
+      </ScenarioInputCard>
     </div>
   );
 }

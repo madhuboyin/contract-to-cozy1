@@ -1,20 +1,31 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  EmptyStateCard,
+  MobileCard,
+  MobileKpiStrip,
+  MobileKpiTile,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ReadOnlySummaryBlock,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
-// Fix: Update Service interface to match API response (allow null values)
 interface Service {
   id: string;
   category: string;
-  inspectionType?: string | null;  // Changed: Added null
-  handymanType?: string | null;    // Changed: Added null
+  inspectionType?: string | null;
+  handymanType?: string | null;
   name: string;
   description: string;
   basePrice: string;
   priceUnit: string;
-  minimumCharge?: string | null;   // Changed: Added null
-  estimatedDuration?: number | null; // Changed: Added null
+  minimumCharge?: string | null;
+  estimatedDuration?: number | null;
   isActive: boolean;
 }
 
@@ -52,16 +63,21 @@ export default function ProviderServicesPage() {
     isActive: true,
   });
 
-  // Fetch services on load
   useEffect(() => {
     fetchServices();
   }, []);
+
+  const counts = useMemo(() => {
+    const active = services.filter((service) => service.isActive).length;
+    const inspection = services.filter((service) => service.category === 'INSPECTION').length;
+    const handyman = services.filter((service) => service.category === 'HANDYMAN').length;
+    return { active, inspection, handyman };
+  }, [services]);
 
   const fetchServices = async () => {
     try {
       setLoading(true);
       const response = await api.getMyServices();
-      
       if (response.success) {
         setServices(response.data);
       }
@@ -77,8 +93,8 @@ export default function ProviderServicesPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
-    
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
     }));
@@ -86,7 +102,7 @@ export default function ProviderServicesPage() {
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const category = e.target.value;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       category,
       inspectionType: category === 'INSPECTION' ? '' : undefined,
@@ -135,7 +151,6 @@ export default function ProviderServicesPage() {
     try {
       setSaving(true);
 
-      // Prepare data for API
       const serviceData = {
         category: formData.category,
         ...(formData.category === 'INSPECTION' && formData.inspectionType && {
@@ -158,9 +173,8 @@ export default function ProviderServicesPage() {
       };
 
       if (editingService) {
-        // UPDATE existing service
         const response = await api.updateService(editingService.id, serviceData);
-        
+
         if (response.success) {
           setSuccess('Service updated successfully!');
           setShowEditModal(false);
@@ -170,9 +184,8 @@ export default function ProviderServicesPage() {
           setTimeout(() => setSuccess(null), 3000);
         }
       } else {
-        // CREATE new service
         const response = await api.createService(serviceData);
-        
+
         if (response.success) {
           setSuccess('Service added successfully!');
           setShowAddModal(false);
@@ -208,7 +221,6 @@ export default function ProviderServicesPage() {
     resetForm();
   };
 
-  // Edit handler
   const handleEdit = (service: Service) => {
     setEditingService(service);
     setFormData({
@@ -226,7 +238,6 @@ export default function ProviderServicesPage() {
     setShowEditModal(true);
   };
 
-  // Delete handlers
   const handleDeleteClick = (service: Service) => {
     setDeletingService(service);
     setShowDeleteConfirm(true);
@@ -238,10 +249,9 @@ export default function ProviderServicesPage() {
     try {
       setSaving(true);
       const response = await api.deleteService(deletingService.id);
-      
+
       if (response.success) {
-        // Remove from local state
-        setServices(prev => prev.filter(s => s.id !== deletingService.id));
+        setServices((prev) => prev.filter((service) => service.id !== deletingService.id));
         setSuccess('Service deleted successfully!');
         setTimeout(() => setSuccess(null), 3000);
       }
@@ -266,14 +276,13 @@ export default function ProviderServicesPage() {
       await api.updateService(serviceId, {
         isActive: !currentStatus,
       });
-      
-      // Update local state
-      setServices(prev =>
-        prev.map(service =>
+
+      setServices((prev) =>
+        prev.map((service) =>
           service.id === serviceId ? { ...service, isActive: !currentStatus } : service
         )
       );
-      
+
       setSuccess(`Service ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
@@ -284,193 +293,187 @@ export default function ProviderServicesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Success/Error Messages */}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
-          {success}
-        </div>
-      )}
-      
-      {error && !showAddModal && !showEditModal && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
+    <>
+      <MobileToolWorkspace
+        intro={
+          <MobilePageIntro
+            title="Services"
+            subtitle="Manage service catalog, pricing, and availability."
+            action={
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+              >
+                + Add service
+              </button>
+            }
+          />
+        }
+        summary={
+          <MobileKpiStrip className="sm:grid-cols-3">
+            <MobileKpiTile label="Active" value={counts.active} hint="Visible to homeowners" tone={counts.active > 0 ? 'positive' : 'neutral'} />
+            <MobileKpiTile label="Inspection" value={counts.inspection} hint="Inspection services" />
+            <MobileKpiTile label="Handyman" value={counts.handyman} hint="Handyman services" />
+          </MobileKpiStrip>
+        }
+      >
+        {success ? (
+          <MobileCard variant="compact" className="border-emerald-200 bg-emerald-50 text-emerald-800">
+            {success}
+          </MobileCard>
+        ) : null}
 
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Services</h1>
-          <p className="mt-2 text-gray-600">Manage the services you offer to homeowners</p>
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          + Add Service
-        </button>
-      </div>
+        {error && !showAddModal && !showEditModal ? (
+          <MobileCard variant="compact" className="border-rose-200 bg-rose-50 text-rose-800">
+            {error}
+          </MobileCard>
+        ) : null}
 
-      {/* Loading State */}
-      {loading && (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading services...</p>
-        </div>
-      )}
-
-      {/* Services Grid */}
-      {!loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {services.length === 0 ? (
-            <div className="col-span-2 text-center py-12 bg-gray-50 rounded-lg">
-              <p className="text-gray-600">No services added yet. Click &quot;Add Service&quot; to get started!</p>
-            </div>
-          ) : (
-            services.map(service => (
-              <div key={service.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                {/* Service Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900">{service.name}</h3>
-                    <span className="inline-block mt-1 px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded">
-                      {service.category}
-                    </span>
+        {loading ? (
+          <MobileCard variant="compact" className="py-10 text-center">
+            <div className="mx-auto h-9 w-9 animate-spin rounded-full border-b-2 border-brand-primary" />
+            <p className="mt-3 text-sm text-muted-foreground">Loading services...</p>
+          </MobileCard>
+        ) : services.length === 0 ? (
+          <EmptyStateCard
+            title="No services added yet"
+            description="Add your first service to start receiving homeowner booking requests."
+            action={
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+              >
+                Add service
+              </button>
+            }
+          />
+        ) : (
+          <div className="space-y-3">
+            {services.map((service) => (
+              <MobileCard key={service.id} variant="compact" className="space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="mb-0 truncate text-sm font-semibold text-slate-900">{service.name}</p>
+                    <p className="mb-0 mt-1 text-xs text-slate-600 line-clamp-2">{service.description}</p>
                   </div>
-                  <span
-                    className={`px-3 py-1 text-xs font-medium rounded-full ${
-                      service.isActive
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {service.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                  <StatusChip tone={service.isActive ? 'good' : 'info'}>{service.isActive ? 'Active' : 'Inactive'}</StatusChip>
                 </div>
 
-                {/* Service Details */}
-                <p className="text-gray-600 text-sm mb-4 line-clamp-2">{service.description}</p>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Base Price:</span>
-                    <span className="font-semibold text-gray-900">
-                      ${service.basePrice} {service.priceUnit}
-                    </span>
-                  </div>
-                  
-                  {service.minimumCharge && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Minimum Charge:</span>
-                      <span className="font-semibold text-gray-900">${service.minimumCharge}</span>
-                    </div>
-                  )}
-
-                  {service.estimatedDuration && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Duration:</span>
-                      <span className="font-semibold text-gray-900">{service.estimatedDuration} min</span>
-                    </div>
-                  )}
+                <div className="flex items-center gap-1.5">
+                  <StatusChip tone="info">{service.category}</StatusChip>
+                  {service.inspectionType ? <StatusChip tone="protected">{service.inspectionType}</StatusChip> : null}
+                  {service.handymanType ? <StatusChip tone="protected">{service.handymanType}</StatusChip> : null}
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => toggleServiceStatus(service.id, service.isActive)}
-                    className={`text-sm font-medium ${
-                      service.isActive
-                        ? 'text-gray-600 hover:text-gray-700'
-                        : 'text-green-600 hover:text-green-700'
-                    }`}
-                  >
-                    {service.isActive ? 'Deactivate' : 'Activate'}
-                  </button>
-                  <button
-                    onClick={() => handleEdit(service)}
-                    className="text-sm text-gray-600 hover:text-gray-700 font-medium"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteClick(service)}
-                    className="text-sm text-red-600 hover:text-red-700 font-medium"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+                <ReadOnlySummaryBlock
+                  items={[
+                    {
+                      label: 'Base price',
+                      value: `$${service.basePrice} ${service.priceUnit}`,
+                      emphasize: true,
+                    },
+                    {
+                      label: 'Minimum charge',
+                      value: service.minimumCharge ? `$${service.minimumCharge}` : 'N/A',
+                    },
+                    {
+                      label: 'Estimated duration',
+                      value: service.estimatedDuration ? `${service.estimatedDuration} min` : 'N/A',
+                    },
+                  ]}
+                />
 
-      {/* Add/Edit Service Modal */}
-      {(showAddModal || showEditModal) && (
+                <ActionPriorityRow
+                  primaryAction={
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(service)}
+                      className="min-h-[40px] w-full rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
+                    >
+                      Edit service
+                    </button>
+                  }
+                  secondaryActions={
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => toggleServiceStatus(service.id, service.isActive)}
+                        className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        {service.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClick(service)}
+                        className="inline-flex min-h-[36px] items-center rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  }
+                />
+              </MobileCard>
+            ))}
+          </div>
+        )}
+
+        <BottomSafeAreaReserve size="chatAware" />
+      </MobileToolWorkspace>
+
+      {(showAddModal || showEditModal) ? (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-              onClick={handleCloseModal}
-            />
+          <div className="flex min-h-screen items-center justify-center p-3 sm:p-4">
+            <div className="fixed inset-0 bg-black/50" onClick={handleCloseModal} />
 
-            {/* Modal */}
-            <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              {/* Header */}
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-gray-900">
+            <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
+              <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-slate-900">
                     {editingService ? 'Edit Service' : 'Add New Service'}
                   </h2>
                   <button
+                    type="button"
                     onClick={handleCloseModal}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                    aria-label="Close modal"
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
               </div>
 
-              {/* Form */}
-              <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
-                {/* Error Message */}
-                {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+              <form onSubmit={handleSubmit} className="space-y-5 px-5 py-4">
+                {error ? (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">
                     {error}
                   </div>
-                )}
+                ) : null}
 
-                {/* Service Category */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Service Category *
-                  </label>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Service Category *</label>
                   <select
                     name="category"
                     value={formData.category}
                     onChange={handleCategoryChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                   >
                     <option value="INSPECTION">Inspection</option>
                     <option value="HANDYMAN">Handyman</option>
                   </select>
                 </div>
 
-                {/* Inspection Type */}
-                {formData.category === 'INSPECTION' && (
+                {formData.category === 'INSPECTION' ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Inspection Type *
-                    </label>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Inspection Type *</label>
                     <select
                       name="inspectionType"
                       value={formData.inspectionType || ''}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     >
                       <option value="">Select type...</option>
                       <option value="HOME_INSPECTION">Home Inspection</option>
@@ -481,19 +484,16 @@ export default function ProviderServicesPage() {
                       <option value="SEPTIC_INSPECTION">Septic Inspection</option>
                     </select>
                   </div>
-                )}
+                ) : null}
 
-                {/* Handyman Type */}
-                {formData.category === 'HANDYMAN' && (
+                {formData.category === 'HANDYMAN' ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Handyman Type *
-                    </label>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Handyman Type *</label>
                     <select
                       name="handymanType"
                       value={formData.handymanType || ''}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     >
                       <option value="">Select type...</option>
                       <option value="MINOR_REPAIRS">Minor Repairs</option>
@@ -506,47 +506,36 @@ export default function ProviderServicesPage() {
                       <option value="CARPENTRY">Carpentry</option>
                     </select>
                   </div>
-                )}
+                ) : null}
 
-                {/* Service Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Service Name *
-                  </label>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Service Name *</label>
                   <input
                     type="text"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="e.g., Complete Home Inspection"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                   />
                 </div>
 
-                {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description *
-                  </label>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Description *</label>
                   <textarea
                     name="description"
                     value={formData.description}
                     onChange={handleInputChange}
                     rows={4}
                     placeholder="Describe what's included in this service..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Minimum 10 characters
-                  </p>
+                  <p className="mt-1 text-xs text-slate-500">Minimum 10 characters</p>
                 </div>
 
-                {/* Pricing */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Base Price * ($)
-                    </label>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Base Price * ($)</label>
                     <input
                       type="number"
                       name="basePrice"
@@ -555,19 +544,17 @@ export default function ProviderServicesPage() {
                       step="0.01"
                       min="0"
                       placeholder="0.00"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Price Unit *
-                    </label>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Price Unit *</label>
                     <select
                       name="priceUnit"
                       value={formData.priceUnit}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     >
                       <option value="flat rate">Flat Rate</option>
                       <option value="per hour">Per Hour</option>
@@ -576,12 +563,9 @@ export default function ProviderServicesPage() {
                   </div>
                 </div>
 
-                {/* Optional Fields */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Minimum Charge ($)
-                    </label>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Minimum Charge ($)</label>
                     <input
                       type="number"
                       name="minimumCharge"
@@ -590,14 +574,12 @@ export default function ProviderServicesPage() {
                       step="0.01"
                       min="0"
                       placeholder="Optional"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Estimated Duration (minutes)
-                    </label>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Estimated Duration (minutes)</label>
                     <input
                       type="number"
                       name="estimatedDuration"
@@ -605,68 +587,52 @@ export default function ProviderServicesPage() {
                       onChange={handleInputChange}
                       min="0"
                       placeholder="Optional"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
                     />
                   </div>
                 </div>
 
-                {/* Active Status */}
-                <div className="flex items-center">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
                     name="isActive"
                     checked={formData.isActive}
                     onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 rounded border-slate-300 text-brand-primary"
                   />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Service is active and available to homeowners
-                  </label>
-                </div>
+                  Service is active and visible to homeowners
+                </label>
 
-                {/* Submit Buttons */}
-                <div className="flex space-x-3 pt-4">
+                <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
                     type="button"
                     onClick={handleCloseModal}
-                    className="flex-1 py-3 px-4 bg-white border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-colors"
+                    className="min-h-[42px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={saving}
-                    className="flex-1 py-3 px-4 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="min-h-[42px] rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
                   >
-                    {saving ? 'Saving...' : (editingService ? 'Update Service' : 'Add Service')}
+                    {saving ? 'Saving...' : editingService ? 'Update service' : 'Add service'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && deletingService && (
+      {showDeleteConfirm && deletingService ? (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-screen items-center justify-center p-4">
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-              onClick={handleDeleteCancel}
-            />
+            <div className="fixed inset-0 bg-black/50" onClick={handleDeleteCancel} />
 
-            {/* Modal */}
-            <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-              {/* Icon */}
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-                <svg
-                  className="h-6 w-6 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+            <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-rose-100">
+                <svg className="h-5 w-5 text-rose-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -676,30 +642,27 @@ export default function ProviderServicesPage() {
                 </svg>
               </div>
 
-              {/* Content */}
               <div className="mt-3 text-center">
-                <h3 className="text-lg font-medium text-gray-900">Delete Service</h3>
-                <div className="mt-2">
-                  <p className="text-sm text-gray-500">
-                    Are you sure you want to delete <strong>&quot;{deletingService.name}&quot;</strong>? 
-                    This action cannot be undone.
-                  </p>
-                </div>
+                <h3 className="text-base font-semibold text-slate-900">Delete Service</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Delete <strong>&quot;{deletingService.name}&quot;</strong>? This action cannot be undone.
+                </p>
               </div>
 
-              {/* Actions */}
-              <div className="mt-5 flex space-x-3">
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
+                  type="button"
                   onClick={handleDeleteCancel}
                   disabled={saving}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleDeleteConfirm}
                   disabled={saving}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  className="min-h-[40px] rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
                 >
                   {saving ? 'Deleting...' : 'Delete'}
                 </button>
@@ -707,7 +670,7 @@ export default function ProviderServicesPage() {
             </div>
           </div>
         </div>
-      )}
-    </div>
+      ) : null}
+    </>
   );
 }

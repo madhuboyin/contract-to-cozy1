@@ -20,6 +20,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { api } from '@/lib/api/client';
+import {
+  ActionPriorityRow,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface EnergyRecommendation {
   title: string;
@@ -183,6 +190,24 @@ export default function EnergyAuditor({ propertyId, squareFootage: propSquareFoo
   if (report) {
     return (
       <div className="space-y-6">
+        <ResultHeroCard
+          title="Energy Efficiency Score"
+          value={`${report.grade} (${report.score}/100)`}
+          status={<StatusChip tone={report.grade === 'A' || report.grade === 'B' ? 'good' : report.grade === 'C' ? 'elevated' : 'danger'}>{report.grade} grade</StatusChip>}
+          summary="AI audit of usage, benchmark comparison, and prioritized savings opportunities."
+        />
+
+        <ReadOnlySummaryBlock
+          title="Audit Snapshot"
+          columns={2}
+          items={[
+            { label: 'Annual usage', value: `${report.annualUsage.totalKWh.toLocaleString()} kWh`, emphasize: true },
+            { label: 'Annual cost', value: `$${report.annualUsage.totalCost.toLocaleString()}` },
+            { label: 'Potential savings', value: `$${report.potentialSavings.annualCostSavings.toLocaleString()}` },
+            { label: 'CO2 footprint', value: `${(report.carbonFootprint.annualCO2Pounds / 1000).toFixed(1)}k lbs/year` },
+          ]}
+        />
+
         {/* Header Score Card */}
         <Card className={`border-2 ${getGradeColor(report.grade)}`}>
           <CardContent className="p-6">
@@ -424,15 +449,12 @@ export default function EnergyAuditor({ propertyId, squareFootage: propSquareFoo
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Energy Usage Information</CardTitle>
-        <p className="text-sm text-gray-600">
-          Provide your energy usage details. Optionally upload 2-3 sample bills for better accuracy.
-        </p>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <ScenarioInputCard
+      title="Energy Usage Information"
+      subtitle="Provide usage details. Uploading 2-3 sample bills improves seasonal accuracy."
+      badge={<StatusChip tone="info">Scenario input</StatusChip>}
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Usage */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -627,21 +649,24 @@ export default function EnergyAuditor({ propertyId, squareFootage: propSquareFoo
             </div>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Generating Energy Audit...
-              </>
-            ) : (
-              <>
-                <Lightbulb className="w-4 h-4 mr-2" />
-                Generate Energy Audit
-              </>
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        <ActionPriorityRow
+          primaryAction={
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating Energy Audit...
+                </>
+              ) : (
+                <>
+                  <Lightbulb className="w-4 h-4 mr-2" />
+                  Generate Energy Audit
+                </>
+              )}
+            </Button>
+          }
+        />
+      </form>
+    </ScenarioInputCard>
   );
 }

@@ -23,6 +23,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api/client';
+import {
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface TaxBillData {
   parcelId?: string;
@@ -193,6 +198,24 @@ export default function TaxAppealAssistant({ propertyId }: TaxAppealAssistantPro
 
     return (
       <div className="space-y-6">
+        <ResultHeroCard
+          title="Appeal Analysis Complete"
+          value={appealOpportunity.appealProbability}
+          status={<StatusChip tone={appealOpportunity.appealProbability === 'HIGH' ? 'good' : appealOpportunity.appealProbability === 'MEDIUM' ? 'elevated' : appealOpportunity.appealProbability === 'LOW' ? 'info' : 'danger'}>{appealOpportunity.confidenceScore}% confidence</StatusChip>}
+          summary="Assessed value vs market value analysis with estimated savings opportunity."
+        />
+
+        <ReadOnlySummaryBlock
+          title="Appeal Snapshot"
+          columns={2}
+          items={[
+            { label: 'Overassessment', value: `$${appealOpportunity.findings.overassessment.toLocaleString()}`, emphasize: true },
+            { label: 'Overassessment %', value: `${appealOpportunity.findings.overassessmentPercent.toFixed(1)}%` },
+            { label: 'Annual savings', value: `$${appealOpportunity.estimatedSavings.annualTaxSavings.toLocaleString()}` },
+            { label: '3-year savings', value: `$${appealOpportunity.estimatedSavings.totalSavingsOver3Years.toLocaleString()}` },
+          ]}
+        />
+
         {/* Summary Card */}
         <Card className={`border-2 ${getProbabilityColor(appealOpportunity.appealProbability)}`}>
           <CardContent className="p-6">

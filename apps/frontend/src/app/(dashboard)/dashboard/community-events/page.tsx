@@ -3,40 +3,53 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, Trash2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Calendar, ExternalLink, Trash2 } from 'lucide-react';
 
 import { api } from '@/lib/api/client';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { Button } from '@/components/ui/button';
-import { MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  BottomSafeAreaReserve,
+  CompactEntityRow,
+  EmptyStateCard,
+  MobileCard,
+  MobileFilterSurface,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
-/* ----------------------------- helpers ----------------------------- */
+type CommunityTab = 'events' | 'trash' | 'alerts';
 
-function EmptyState({
-  title,
-  description,
+function TabButton({
+  label,
+  icon,
+  active,
+  onClick,
 }: {
-  title: string;
-  description: string;
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div className="text-center py-12">
-      <p className="font-medium text-gray-800">{title}</p>
-      <p className="text-sm text-muted-foreground mt-2">{description}</p>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors ${
+        active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
-
-/* ----------------------------- page ----------------------------- */
 
 export default function CommunityPage() {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const propertyId = selectedPropertyId;
   const [isResolvingProperty, setIsResolvingProperty] = useState(!selectedPropertyId);
-
-  const [tab, setTab] = useState<'events' | 'trash' | 'alerts'>('events');
+  const [tab, setTab] = useState<CommunityTab>('events');
 
   useEffect(() => {
     let isActive = true;
@@ -52,9 +65,7 @@ export default function CommunityPage() {
       try {
         const propertiesRes = await api.getProperties();
         const properties = propertiesRes.success ? propertiesRes.data.properties || [] : [];
-
         if (!isActive) return;
-
         if (properties.length > 0) {
           setSelectedPropertyId(properties[0].id);
         }
@@ -74,7 +85,6 @@ export default function CommunityPage() {
     };
   }, [selectedPropertyId, setSelectedPropertyId]);
 
-  // Fetch property to get city and state for trash/alerts
   const { data: property } = useQuery({
     queryKey: ['property', propertyId],
     queryFn: async () => {
@@ -85,18 +95,11 @@ export default function CommunityPage() {
     enabled: !!propertyId,
   });
 
-  const city = property?.city;
-  const state = property?.state;
-
-  /* ---------------- Events ---------------- */
-
   const eventsQuery = useQuery({
     queryKey: ['community-events', propertyId],
     queryFn: () => api.getCommunityEvents(propertyId!, { limit: 20 }),
     enabled: !!propertyId && tab === 'events',
   });
-
-  /* ---------------- Trash ---------------- */
 
   const trashQuery = useQuery({
     queryKey: ['community-trash', propertyId],
@@ -104,198 +107,171 @@ export default function CommunityPage() {
     enabled: !!propertyId && tab === 'trash',
   });
 
-  /* ---------------- Alerts ---------------- */
-
   const alertsQuery = useQuery({
     queryKey: ['community-alerts', propertyId],
     queryFn: () => api.getCommunityAlerts(propertyId!),
     enabled: !!propertyId && tab === 'alerts',
   });
 
-  /* ---------------- guards ---------------- */
-
   if (isResolvingProperty && !propertyId) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Community</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Loading community data...</p>
-        </CardContent>
-      </Card>
+      <MobileToolWorkspace
+        intro={<MobilePageIntro title="Community" subtitle="Loading local services and events for your selected home." />}
+      >
+        <MobileCard variant="compact" className="py-10 text-center">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-b-2 border-brand-primary" />
+          <p className="mt-3 text-sm text-muted-foreground">Loading community data...</p>
+        </MobileCard>
+      </MobileToolWorkspace>
     );
   }
 
   if (!propertyId) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Community</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EmptyState
-            title="Select a property"
-            description="Choose a property to view community events, trash schedules, and alerts."
-          />
-        </CardContent>
-      </Card>
+      <MobileToolWorkspace
+        intro={<MobilePageIntro title="Community" subtitle="Events, city services, and municipal alerts." />}
+      >
+        <EmptyStateCard
+          title="Select a property"
+          description="Choose a property to view community events, trash schedules, and city alerts."
+        />
+      </MobileToolWorkspace>
     );
   }
 
-  /* ---------------- UI ---------------- */
+  const locationLabel = [property?.city, property?.state].filter(Boolean).join(', ') || 'Selected property area';
 
   return (
-    <div className="space-y-6 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <MobilePageIntro
-        title="Community"
-        subtitle="Local events, city services, and municipal alerts for your selected property."
-      />
-
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'events' | 'trash' | 'alerts')}>
-        <TabsList>
-          <TabsTrigger value="events">
-            <Calendar className="w-4 h-4 mr-2" />
-            Events
-          </TabsTrigger>
-          <TabsTrigger value="trash">
-            <Trash2 className="w-4 h-4 mr-2" />
-            Trash & Recycling
-          </TabsTrigger>
-          <TabsTrigger value="alerts">
-            <AlertTriangle className="w-4 h-4 mr-2" />
-            Alerts & Notifications
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ================= EVENTS ================= */}
-
-        <TabsContent value="events">
-          <Card>
-            <CardContent className="pt-6">
-              {eventsQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading events…</p>
-              ) : eventsQuery.isError ? (
-                <EmptyState
-                  title="Unable to load events"
-                  description="Please try again later."
-                />
-              ) : !eventsQuery.data?.success || (eventsQuery.data.data?.events?.length ?? 0) === 0 ? (
-                <EmptyState
-                  title="No upcoming events"
-                  description="There are no upcoming events near this property."
-                />
-              ) : (
-                <div className="space-y-4">
-                  {eventsQuery.data.data.events.map((ev) => (
-                    <div
-                      key={ev.id}
-                      className="flex justify-between items-start border-b pb-3"
+    <MobileToolWorkspace
+      intro={<MobilePageIntro title="Community" subtitle="Local events, city services, and municipal alerts." />}
+      summary={
+        <MobileCard variant="compact" className="flex items-center justify-between gap-3">
+          <div>
+            <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500">Coverage area</p>
+            <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">{locationLabel}</p>
+          </div>
+          <StatusChip tone="info">Live feed</StatusChip>
+        </MobileCard>
+      }
+      filters={
+        <MobileFilterSurface className="space-y-2.5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">Sections</p>
+          <div className="inline-flex w-full gap-1 rounded-xl bg-slate-100 p-1">
+            <TabButton label="Events" icon={<Calendar className="h-3.5 w-3.5" />} active={tab === 'events'} onClick={() => setTab('events')} />
+            <TabButton label="Trash" icon={<Trash2 className="h-3.5 w-3.5" />} active={tab === 'trash'} onClick={() => setTab('trash')} />
+            <TabButton label="Alerts" icon={<AlertTriangle className="h-3.5 w-3.5" />} active={tab === 'alerts'} onClick={() => setTab('alerts')} />
+          </div>
+        </MobileFilterSurface>
+      }
+    >
+      {tab === 'events' ? (
+        eventsQuery.isLoading ? (
+          <MobileCard variant="compact" className="py-8 text-center text-sm text-muted-foreground">
+            Loading events...
+          </MobileCard>
+        ) : eventsQuery.isError ? (
+          <EmptyStateCard title="Unable to load events" description="Please try again in a moment." />
+        ) : !eventsQuery.data?.success || (eventsQuery.data.data?.events?.length ?? 0) === 0 ? (
+          <EmptyStateCard title="No upcoming events" description="No nearby events are available for this property right now." />
+        ) : (
+          <div className="space-y-2.5">
+            {eventsQuery.data.data.events.map((ev) => (
+              <CompactEntityRow
+                key={ev.id}
+                title={ev.title}
+                subtitle={new Date(ev.startTime).toLocaleString()}
+                meta={
+                  ev.externalUrl ? (
+                    <a
+                      href={ev.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-primary hover:underline"
                     >
-                      <div>
-                        <p className="font-medium">{ev.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(ev.startTime).toLocaleString()}
-                        </p>
-                      </div>
-                      <Button size="sm" variant="link" asChild>
-                        <a
-                          href={ev.externalUrl ?? undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          View
-                        </a>
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                      Source
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : undefined
+                }
+                status={<StatusChip tone="info">Event</StatusChip>}
+              />
+            ))}
+          </div>
+        )
+      ) : null}
 
-        {/* ================= TRASH ================= */}
-
-        <TabsContent value="trash">
-          <Card>
-            <CardContent className="pt-6">
-              {trashQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">
-                  Loading trash & recycling info…
-                </p>
-              ) : !trashQuery.data?.success || (trashQuery.data.data?.items?.length ?? 0) === 0 ? (
-                <EmptyState
-                  title="Trash schedule not available yet"
-                  description="This city does not provide a public trash or recycling feed yet."
-                />
-              ) : (
-                <div className="space-y-4">
-                  {trashQuery.data.data.items.map((item: { title: string; description?: string; url?: string }, idx: number) => (
-                    <div key={idx}>
-                      <p className="font-medium">{item.title}</p>
-                      {item.description && (
-                        <p className="text-sm text-muted-foreground">
-                          {item.description}
-                        </p>
-                      )}
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        className="text-sm text-blue-600"
-                      >
-                        View source →
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ================= ALERTS ================= */}
-
-        <TabsContent value="alerts">
-          <Card>
-            <CardContent className="pt-6">
-              {alertsQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">
-                  Loading city alerts…
-                </p>
-              ) : !alertsQuery.data?.success || (alertsQuery.data.data?.items?.length ?? 0) === 0 ? (
-                <EmptyState
-                  title="No active alerts"
-                  description="There are no current municipal alerts for this area."
-                />
-              ) : (
-                <div className="space-y-4">
-                  {alertsQuery.data.data.items.map((item: { title: string; description?: string; url?: string }, idx: number) => (
-                    <div
-                      key={idx}
-                      className="border-l-4 border-yellow-400 pl-3"
+      {tab === 'trash' ? (
+        trashQuery.isLoading ? (
+          <MobileCard variant="compact" className="py-8 text-center text-sm text-muted-foreground">
+            Loading trash and recycling details...
+          </MobileCard>
+        ) : !trashQuery.data?.success || (trashQuery.data.data?.items?.length ?? 0) === 0 ? (
+          <EmptyStateCard
+            title="No trash feed available"
+            description="This city does not currently provide a public trash/recycling feed."
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {trashQuery.data.data.items.map((item: { title: string; description?: string; url?: string }, idx: number) => (
+              <CompactEntityRow
+                key={`${item.title}-${idx}`}
+                title={item.title}
+                subtitle={item.description}
+                meta={
+                  item.url ? (
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-primary hover:underline"
                     >
-                      <p className="font-medium">{item.title}</p>
-                      {item.description && (
-                        <p className="text-sm text-muted-foreground">
-                          {item.description}
-                        </p>
-                      )}
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        className="text-sm text-blue-600"
-                      >
-                        Official notice →
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+                      View source
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : undefined
+                }
+                status={<StatusChip tone="protected">City service</StatusChip>}
+              />
+            ))}
+          </div>
+        )
+      ) : null}
+
+      {tab === 'alerts' ? (
+        alertsQuery.isLoading ? (
+          <MobileCard variant="compact" className="py-8 text-center text-sm text-muted-foreground">
+            Loading city alerts...
+          </MobileCard>
+        ) : !alertsQuery.data?.success || (alertsQuery.data.data?.items?.length ?? 0) === 0 ? (
+          <EmptyStateCard title="No active alerts" description="No current municipal alerts are active for this area." />
+        ) : (
+          <div className="space-y-2.5">
+            {alertsQuery.data.data.items.map((item: { title: string; description?: string; url?: string }, idx: number) => (
+              <CompactEntityRow
+                key={`${item.title}-${idx}`}
+                title={item.title}
+                subtitle={item.description}
+                meta={
+                  item.url ? (
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-primary hover:underline"
+                    >
+                      Official notice
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : undefined
+                }
+                status={<StatusChip tone="needsAction">Alert</StatusChip>}
+              />
+            ))}
+          </div>
+        )
+      ) : null}
+
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobileToolWorkspace>
   );
 }
