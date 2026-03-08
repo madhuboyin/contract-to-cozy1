@@ -28,6 +28,8 @@ import { Button } from '@/components/ui/button';
 import { InventoryItem } from '@/types';
 import {
   ActionPriorityRow,
+  MobileKpiStrip,
+  MobileKpiTile,
   ReadOnlySummaryBlock,
   ResultHeroCard,
   ScenarioInputCard,
@@ -113,6 +115,22 @@ function getTraceIcon(label?: string | null) {
   if (normalized.includes('repair')) return Wrench;
   if (normalized.includes('cost') || normalized.includes('impact')) return DollarSign;
   return Shield;
+}
+
+function severityPillClasses(severity?: 'LOW' | 'MEDIUM' | 'HIGH') {
+  if (severity === 'HIGH') return 'border-rose-200 bg-rose-50 text-rose-700';
+  if (severity === 'MEDIUM') return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-slate-200 bg-slate-100 text-slate-700';
+}
+
+function verdictHeroClass(verdict?: CoverageAnalysisDTO['overallVerdict']) {
+  if (verdict === 'NOT_WORTH_IT') {
+    return 'border-rose-200/90 bg-[linear-gradient(145deg,#fffaf9,#ffeef0)]';
+  }
+  if (verdict === 'WORTH_IT') {
+    return 'border-emerald-200/90 bg-[linear-gradient(145deg,#ffffff,#ecfdf5)]';
+  }
+  return 'border-amber-200/90 bg-[linear-gradient(145deg,#ffffff,#fffbeb)]';
 }
 
 export default function CoverageIntelligencePanel({ propertyId }: CoverageIntelligencePanelProps) {
@@ -255,7 +273,7 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 lg:space-y-5">
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5" />
@@ -264,12 +282,12 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
       )}
 
       <ScenarioInputCard
-        title="Scenario Input"
-        subtitle="Select an inventory item for item-level coverage and run a deterministic coverage analysis."
+        title="Coverage inputs"
+        subtitle="Choose an item to evaluate and run a deterministic insurance and warranty analysis."
         badge={<StatusChip tone="info">Trust-first</StatusChip>}
       >
         {itemsError ? <div className="text-sm text-rose-700">{itemsError}</div> : null}
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_160px] md:items-end">
           <label className="text-xs text-gray-600">
             Inventory item
             <select
@@ -356,6 +374,7 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
               `Insurance verdict: ${humanizeEnum(analysis.insuranceVerdict)}`,
               `Warranty verdict: ${humanizeEnum(analysis.warrantyVerdict)}`,
             ]}
+            className={verdictHeroClass(analysis.overallVerdict)}
             actions={
               <ActionPriorityRow
                 primaryAction={
@@ -378,6 +397,33 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
             }
           />
 
+          <MobileKpiStrip className="grid-cols-2 lg:grid-cols-4">
+            <MobileKpiTile
+              label="Expected repair risk"
+              value={money(analysis.warranty.expectedAnnualRepairRiskUsd)}
+              tone="warning"
+            />
+            <MobileKpiTile
+              label="Warranty annual cost"
+              value={money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}
+              tone="neutral"
+            />
+            <MobileKpiTile
+              label="Net impact"
+              value={money(analysis.warranty.expectedNetImpactUsd)}
+              tone={(analysis.warranty.expectedNetImpactUsd ?? 0) >= 0 ? 'positive' : 'danger'}
+            />
+            <MobileKpiTile
+              label="Break-even"
+              value={
+                analysis.warranty.breakEvenMonths === null || analysis.warranty.breakEvenMonths === undefined
+                  ? '—'
+                  : `${analysis.warranty.breakEvenMonths} mo`
+              }
+              tone="neutral"
+            />
+          </MobileKpiStrip>
+
           <ReadOnlySummaryBlock
             columns={2}
             items={[
@@ -390,83 +436,98 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
             ]}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <section className="rounded-2xl border border-black/10 bg-white p-5">
-              <h4 className="text-base font-semibold text-gray-900">Insurance findings</h4>
+          <section className="rounded-2xl border border-black/10 bg-white p-5">
+            <h4 className="text-base font-semibold text-gray-900">Insurance findings</h4>
 
-              <div className="mt-3 text-sm text-gray-600 space-y-1">
-                <div>Annual premium: {money(analysis.insurance.inputsUsed.annualPremiumUsd)}</div>
-                <div>Deductible: {money(analysis.insurance.inputsUsed.deductibleUsd)}</div>
-                <div>Cash buffer: {money(analysis.insurance.inputsUsed.cashBufferUsd)}</div>
+            <div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <div className="text-xs text-gray-500">Annual premium</div>
+                <div className="mt-1 text-base font-semibold text-gray-900">
+                  {money(analysis.insurance.inputsUsed.annualPremiumUsd)}
+                </div>
               </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <div className="text-xs text-gray-500">Deductible</div>
+                <div className="mt-1 text-base font-semibold text-gray-900">
+                  {money(analysis.insurance.inputsUsed.deductibleUsd)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <div className="text-xs text-gray-500">Cash buffer</div>
+                <div className="mt-1 text-base font-semibold text-gray-900">
+                  {money(analysis.insurance.inputsUsed.cashBufferUsd)}
+                </div>
+              </div>
+            </div>
 
-              <div className="mt-4">
-                <div className="text-sm font-medium text-gray-900 mb-2">Flags</div>
-                <div className="space-y-2">
-                  {analysis.insurance.flags.length === 0 && (
-                    <div className="text-sm text-gray-500">No critical flags detected.</div>
-                  )}
-                  {analysis.insurance.flags.map((flag) => (
-                    <div key={flag.code} className="rounded-xl border border-gray-200 p-3 text-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-gray-900">{flag.label}</span>
-                        <span className="text-xs text-gray-500">{flag.severity}</span>
-                      </div>
+            <div className="mt-4">
+              <div className="mb-2 text-sm font-medium text-gray-900">Flags</div>
+              <div className="space-y-2">
+                {analysis.insurance.flags.length === 0 && (
+                  <div className="text-sm text-gray-500">No critical flags detected.</div>
+                )}
+                {analysis.insurance.flags.map((flag) => (
+                  <div key={flag.code} className="rounded-xl border border-gray-200 p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-gray-900">{flag.label}</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-xs ${severityPillClasses(flag.severity)}`}>
+                        {humanizeEnum(flag.severity)}
+                      </span>
                     </div>
-                  ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="mb-2 text-sm font-medium text-gray-900">Considered add-ons</div>
+              <div className="space-y-2">
+                {analysis.insurance.recommendedAddOns.length === 0 && (
+                  <div className="text-sm text-gray-500">No add-on prompts from current signals.</div>
+                )}
+                {analysis.insurance.recommendedAddOns.map((addOn) => (
+                  <div key={addOn.code} className="rounded-xl border border-gray-200 p-3">
+                    <div className="text-sm font-medium text-gray-900">{addOn.label}</div>
+                    <div className="mt-1 text-xs text-gray-600">{addOn.why}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-black/10 bg-white p-5">
+            <h4 className="text-base font-semibold text-gray-900">Warranty economics</h4>
+            <div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+              <div className="rounded-xl bg-gray-50 p-3 border border-gray-200">
+                <div className="text-xs text-gray-500">Expected annual repair risk</div>
+                <div className="mt-1 text-base font-semibold text-gray-900">
+                  {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
                 </div>
               </div>
 
-              <div className="mt-4">
-                <div className="text-sm font-medium text-gray-900 mb-2">Considered add-ons</div>
-                <div className="space-y-2">
-                  {analysis.insurance.recommendedAddOns.length === 0 && (
-                    <div className="text-sm text-gray-500">No add-on prompts from current signals.</div>
-                  )}
-                  {analysis.insurance.recommendedAddOns.map((addOn) => (
-                    <div key={addOn.code} className="rounded-xl border border-gray-200 p-3">
-                      <div className="text-sm font-medium text-gray-900">{addOn.label}</div>
-                      <div className="text-xs text-gray-600 mt-1">{addOn.why}</div>
-                    </div>
-                  ))}
+              <div className="rounded-xl bg-gray-50 p-3 border border-gray-200">
+                <div className="text-xs text-gray-500">Expected net impact</div>
+                <div className="mt-1 text-base font-semibold text-gray-900">
+                  {money(analysis.warranty.expectedNetImpactUsd)}
                 </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-black/10 bg-white p-5">
-              <h4 className="text-base font-semibold text-gray-900">Warranty economics</h4>
-              <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
-                <div className="rounded-xl bg-gray-50 p-3 border border-gray-200">
-                  <div className="text-xs text-gray-500">Expected annual repair risk</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-gray-50 p-3 border border-gray-200">
-                  <div className="text-xs text-gray-500">Expected net impact</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {money(analysis.warranty.expectedNetImpactUsd)}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Positive means projected repair risk exceeds warranty costs.
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-gray-50 p-3 border border-gray-200">
-                  <div className="text-xs text-gray-500">Break-even months</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {analysis.warranty.breakEvenMonths ?? '—'}
-                  </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Positive means projected repair risk exceeds warranty costs.
                 </div>
               </div>
 
-              <div className="mt-4 text-sm text-gray-600">
-                <div>Warranty annual cost: {money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}</div>
-                <div>Warranty service fee: {money(analysis.warranty.inputsUsed.warrantyServiceFeeUsd)}</div>
+              <div className="rounded-xl bg-gray-50 p-3 border border-gray-200">
+                <div className="text-xs text-gray-500">Break-even months</div>
+                <div className="mt-1 text-base font-semibold text-gray-900">
+                  {analysis.warranty.breakEvenMonths ?? '—'}
+                </div>
               </div>
-            </section>
-          </div>
+            </div>
+
+            <div className="mt-4 text-sm text-gray-600">
+              <div>Warranty annual cost: {money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}</div>
+              <div>Warranty service fee: {money(analysis.warranty.inputsUsed.warrantyServiceFeeUsd)}</div>
+            </div>
+          </section>
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -517,8 +578,8 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
           </section>
 
           <ScenarioInputCard
-            title="Simulation (optional)"
-            subtitle="Try alternate premiums, deductible, warranty cost, and risk tolerance."
+            title="Try your scenario"
+            subtitle="Adjust premiums, deductible, warranty cost, and risk tolerance to compare outcomes."
             badge={<Sparkles className="h-4 w-4 text-purple-600" />}
           >
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">

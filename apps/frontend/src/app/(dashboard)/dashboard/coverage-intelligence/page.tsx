@@ -71,7 +71,7 @@ function CoverageIntelligenceContent() {
 
   return (
     <MobileToolWorkspace
-      className="max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8"
+      className="max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8"
       intro={
         <div className="space-y-3">
           {propertyIdFromUrl ? (
@@ -118,18 +118,20 @@ function CoverageIntelligenceContent() {
         ) : undefined
       }
       summary={
-        <ResultHeroCard
-          eyebrow="Coverage Decision Support"
-          title="Coverage Intelligence"
-          value="Gap & overlap scan"
-          status={<StatusChip tone="info">Deterministic</StatusChip>}
-          summary="Find expiring protections, uninsured systems, and redundant coverage."
-          highlights={[
-            'Warranty + policy cross-check',
-            'Priority-ranked exposure insights',
-            'Actionable what-if simulation',
-          ]}
-        />
+        <div className="lg:hidden">
+          <ResultHeroCard
+            eyebrow="Coverage Decision Support"
+            title="Coverage Intelligence"
+            value="Gap & overlap scan"
+            status={<StatusChip tone="info">Deterministic</StatusChip>}
+            summary="Find expiring protections, uninsured systems, and redundant coverage."
+            highlights={[
+              'Warranty + policy cross-check',
+              'Priority-ranked exposure insights',
+              'Actionable what-if simulation',
+            ]}
+          />
+        </div>
       }
     >
       {selectedPropertyId ? (
