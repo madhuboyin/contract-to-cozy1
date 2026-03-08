@@ -15,7 +15,7 @@ import {
   BottomSafeAreaReserve,
   MobileFilterStack,
   MobilePageIntro,
-  ResponsiveToolWorkspace,
+  MobileToolWorkspace,
   ResultHeroCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
@@ -70,7 +70,8 @@ function CoverageIntelligenceContent() {
   }
 
   return (
-    <ResponsiveToolWorkspace
+    <MobileToolWorkspace
+      className="max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8"
       intro={
         <div className="space-y-3">
           {propertyIdFromUrl ? (
@@ -92,20 +93,6 @@ function CoverageIntelligenceContent() {
             }
           />
         </div>
-      }
-      summary={
-        <ResultHeroCard
-          eyebrow="Coverage Decision Support"
-          title={selectedProperty ? selectedProperty.name || selectedProperty.address : 'Select a property'}
-          value="Gap & overlap scan"
-          status={<StatusChip tone="info">Deterministic</StatusChip>}
-          summary="Find expiring protections, uninsured systems, and redundant coverage."
-          highlights={[
-            'Warranty + policy cross-check',
-            'Priority-ranked exposure insights',
-            'Actionable what-if simulation',
-          ]}
-        />
       }
       filters={
         properties.length > 0 ? (
@@ -129,6 +116,20 @@ function CoverageIntelligenceContent() {
             }
           />
         ) : undefined
+      }
+      summary={
+        <ResultHeroCard
+          eyebrow="Coverage Decision Support"
+          title={selectedProperty ? selectedProperty.name || selectedProperty.address : 'Select a property'}
+          value="Gap & overlap scan"
+          status={<StatusChip tone="info">Deterministic</StatusChip>}
+          summary="Find expiring protections, uninsured systems, and redundant coverage."
+          highlights={[
+            'Warranty + policy cross-check',
+            'Priority-ranked exposure insights',
+            'Actionable what-if simulation',
+          ]}
+        />
       }
     >
       {selectedPropertyId ? (
@@ -211,7 +212,7 @@ function CoverageIntelligenceContent() {
         </div>
       </details>
       <BottomSafeAreaReserve size="chatAware" />
-    </ResponsiveToolWorkspace>
+    </MobileToolWorkspace>
   );
 }
 
