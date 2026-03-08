@@ -21,7 +21,17 @@ import { SEVERITY_CHIP } from "@/lib/utils/chipTokens";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
-import { MobilePageContainer, MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
+import {
+    ActionPriorityRow,
+    BottomSafeAreaReserve,
+    CompactEntityRow,
+    MobilePageIntro,
+    MobileToolWorkspace,
+    ReadOnlySummaryBlock,
+    ResultHeroCard,
+    ScenarioInputCard,
+    StatusChip,
+} from "@/components/mobile/dashboard/MobilePrimitives";
 
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
@@ -42,6 +52,12 @@ const getRiskDetails = (score: number) => {
     if (score >= 40) return { level: "ELEVATED", color: "text-orange-500", progressClass: "bg-orange-500", badgeVariant: "destructive" };
     return { level: "HIGH", color: "text-red-500", progressClass: "bg-red-500", badgeVariant: "destructive" };
 };
+
+function riskTone(level: string): "good" | "elevated" | "danger" {
+    if (level === "LOW") return "good";
+    if (level === "MODERATE") return "elevated";
+    return "danger";
+}
 
 function toNumber(value: unknown): number | null {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -1040,26 +1056,116 @@ export default function RiskAssessmentPage() {
 
     return (
         <DashboardShell>
-            <div className="md:hidden mb-4 space-y-2">
-                <Button
-                    variant="ghost"
-                    className="min-h-[44px] px-0 text-sm text-muted-foreground"
-                    onClick={() => router.back()}
+            <div className="md:hidden">
+                <MobileToolWorkspace
+                    intro={
+                        <div className="space-y-2">
+                            <Button
+                                variant="ghost"
+                                className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground"
+                                onClick={() => router.back()}
+                            >
+                                <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                            </Button>
+                            <MobilePageIntro
+                                eyebrow="Property Score"
+                                title="Property Risk Report"
+                                subtitle="Risk exposure, trend movement, and weekly change drivers."
+                                action={
+                                    <div className="rounded-xl border border-orange-200 bg-orange-50 p-2.5 text-orange-700">
+                                        <Zap className="h-5 w-5" />
+                                    </div>
+                                }
+                            />
+                        </div>
+                    }
+                    summary={
+                        <ResultHeroCard
+                            title="Risk Score"
+                            value={isCalculating || isQueued ? "..." : `${score}/100`}
+                            status={<StatusChip tone={riskTone(level)}>{isQueued ? "Queued" : isCalculating ? "Calculating" : level}</StatusChip>}
+                            summary="Projected 5-year exposure and weekly risk movement in one view."
+                            actions={
+                                <ActionPriorityRow
+                                    primaryAction={
+                                        <Button
+                                            variant="default"
+                                            onClick={() => riskQuery.refetch()}
+                                            disabled={riskQuery.isFetching || isCalculating}
+                                        >
+                                            {isQueued ? "Check status" : "Generate new report"}
+                                        </Button>
+                                    }
+                                    secondaryActions={
+                                        <Button
+                                            variant={isPremium ? "outline" : "secondary"}
+                                            onClick={handleDownloadPdf}
+                                            disabled={isCalculating || isQueued}
+                                        >
+                                            <Download className="h-4 w-4 mr-2" />
+                                            {isPremium ? "Download PDF" : "Upgrade for PDF"}
+                                        </Button>
+                                    }
+                                />
+                            }
+                        />
+                    }
+                    footer={<BottomSafeAreaReserve size="chatAware" />}
                 >
-                    <ArrowLeft className="h-4 w-4 mr-1" /> Back
-                </Button>
-                <MobilePageContainer className="px-0">
-                    <MobilePageIntro
-                        eyebrow="Property Score"
-                        title="Property Risk Report"
-                        subtitle="Risk exposure, trend movement, and weekly change drivers."
-                        action={
-                            <div className="rounded-xl border border-orange-200 bg-orange-50 p-2.5 text-orange-700">
-                                <Zap className="h-5 w-5" />
-                            </div>
-                        }
+                    <ReadOnlySummaryBlock
+                        title="Snapshot"
+                        items={[
+                            { label: "5-year exposure", value: formattedExposure, emphasize: true },
+                            { label: "Week delta", value: <ScoreDeltaIndicator delta={riskSeries?.deltaFromPreviousWeek} /> },
+                            { label: "Risk gauge", value: `${riskProgressValue}/100` },
+                            { label: "Status", value: isQueued ? "Queued" : isCalculating ? "Calculating" : "Calculated" },
+                        ]}
+                        columns={2}
                     />
-                </MobilePageContainer>
+
+                    <ScenarioInputCard
+                        title="Risk Trend"
+                        subtitle="Weekly risk snapshots."
+                        actions={
+                            <ActionPriorityRow
+                                secondaryActions={
+                                    <>
+                                        <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                                            6 Months
+                                        </Button>
+                                        <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                                            1 Year
+                                        </Button>
+                                    </>
+                                }
+                            />
+                        }
+                    >
+                        <ScoreTrendChart points={riskTrend} ariaLabel="Property risk score trend" />
+                    </ScenarioInputCard>
+
+                    <ScenarioInputCard title="Changes Impacting Score" subtitle="Key weekly drivers behind risk movement.">
+                        <div className="space-y-2">
+                            {riskChanges.map((change, idx) => (
+                                <CompactEntityRow
+                                    key={`${change.title}-${idx}`}
+                                    title={change.title}
+                                    subtitle={change.detail}
+                                    status={
+                                        <StatusChip tone={change.impact === "positive" ? "good" : change.impact === "negative" ? "danger" : "info"}>
+                                            {change.impact === "positive" ? "Positive" : change.impact === "negative" ? "Negative" : "Neutral"}
+                                        </StatusChip>
+                                    }
+                                />
+                            ))}
+                        </div>
+                    </ScenarioInputCard>
+
+                    <details className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <summary className="cursor-pointer text-sm font-semibold text-slate-800">Detailed matrix and categories</summary>
+                        <div className="mt-3">{renderDetailedSections()}</div>
+                    </details>
+                </MobileToolWorkspace>
             </div>
 
             <PageHeader className="hidden md:block">
@@ -1075,6 +1181,7 @@ export default function RiskAssessmentPage() {
                 </PageHeaderHeading>
             </PageHeader>
 
+            <div className="hidden md:block">
             {/* --- Risk Summary Banner --- */}
             <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                 <Card className="sm:col-span-1 border-2 border-primary/50">
@@ -1249,6 +1356,7 @@ export default function RiskAssessmentPage() {
 
                 {/* --- Detailed Section Content --- */}
                 {renderDetailedSections()}
+            </div>
             </div>
 
             {/* 🔑 NEW: Modal for creating maintenance tasks */}

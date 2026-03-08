@@ -13,13 +13,16 @@ import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventor
 import { getInventoryItem, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  CompactEntityRow,
   EmptyStateCard,
-  MobileActionRow,
-  MobileCard,
-  MobileKpiStrip,
-  MobileKpiTile,
-  MobilePageContainer,
+  MobileFilterStack,
   MobilePageIntro,
+  MobileToolWorkspace,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
 export default function CoverageClient({ propertyId }: { propertyId: string }) {
@@ -102,127 +105,125 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
   }
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}/inventory`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to inventory
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Inventory"
-        title="Coverage"
-        subtitle="Review high-value items missing warranty or insurance coverage."
-      />
-
-      <MobileActionRow className="rounded-2xl border border-black/10 bg-white p-1.5 w-fit">
-        <Link
-          href={`/dashboard/properties/${propertyId}/inventory`}
-          className="rounded-xl px-3 py-2 text-sm font-medium text-black/60 hover:text-black"
-        >
-          Items
-        </Link>
-        <div className="rounded-xl border border-black/10 bg-black px-3 py-2 text-sm font-medium text-white">
-          Coverage
+    <MobileToolWorkspace
+      intro={
+        <div className="space-y-2">
+          <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+            <Link href={`/dashboard/properties/${propertyId}/inventory`}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to inventory
+            </Link>
+          </Button>
+          <MobilePageIntro
+            eyebrow="Inventory"
+            title="Coverage"
+            subtitle="Review high-value items missing warranty or insurance coverage."
+          />
         </div>
-      </MobileActionRow>
-
+      }
+      summary={
+        <ResultHeroCard
+          title="Coverage Gaps"
+          value={counts.total || 0}
+          status={<StatusChip tone={(counts.total || 0) > 0 ? 'elevated' : 'good'}>{(counts.NO_COVERAGE || 0) > 0 ? 'Needs action' : 'Stable'}</StatusChip>}
+          summary={`${counts.NO_COVERAGE || 0} uncovered • ${
+            (counts.WARRANTY_ONLY || 0) +
+            (counts.INSURANCE_ONLY || 0) +
+            (counts.EXPIRED_WARRANTY || 0) +
+            (counts.EXPIRED_INSURANCE || 0)
+          } partial / expired`}
+        />
+      }
+      filters={
+        <MobileFilterStack
+          primaryFilters={
+            <>
+              <Link
+                href={`/dashboard/properties/${propertyId}/inventory`}
+                className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm font-medium text-black/70 hover:text-black"
+              >
+                Items
+              </Link>
+              <div className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-medium text-white">
+                Coverage
+              </div>
+            </>
+          }
+        />
+      }
+      footer={<BottomSafeAreaReserve size="chatAware" />}
+    >
       {loading ? (
-        <MobileCard variant="compact" className="text-sm text-slate-600">
-          Loading coverage summary...
-        </MobileCard>
+        <ScenarioInputCard title="Loading" subtitle="Loading coverage summary..." badge={<StatusChip tone="info">Please wait</StatusChip>}>
+          <p className="text-sm text-slate-600">Coverage analysis is syncing.</p>
+        </ScenarioInputCard>
       ) : err ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>
+      ) : gaps.length === 0 ? (
+        <EmptyStateCard
+          title="No high-value coverage gaps"
+          description="All tracked high-value items currently have coverage or no gaps were detected."
+        />
       ) : (
-        <>
-          <MobileKpiStrip>
-            <MobileKpiTile label="Total gaps" value={counts.total || 0} tone={(counts.total || 0) > 0 ? 'warning' : 'neutral'} />
-            <MobileKpiTile
-              label="Uncovered"
-              value={counts.NO_COVERAGE || 0}
-              tone={(counts.NO_COVERAGE || 0) > 0 ? 'danger' : 'neutral'}
-            />
-            <MobileKpiTile
-              label="Partial / expired"
-              value={
-                (counts.WARRANTY_ONLY || 0) +
-                (counts.INSURANCE_ONLY || 0) +
-                (counts.EXPIRED_WARRANTY || 0) +
-                (counts.EXPIRED_INSURANCE || 0)
-              }
-              tone="warning"
-            />
-          </MobileKpiStrip>
-
-          {gaps.length === 0 ? (
-            <EmptyStateCard
-              title="No high-value coverage gaps"
-              description="All tracked high-value items currently have coverage or no gaps were detected."
-            />
-          ) : (
-            <div className="grid gap-3">
-              {gaps.map((gap: any) => (
-                <MobileCard key={gap.inventoryItemId} variant="compact" className="space-y-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      {gap.itemName}
-                      {gap.roomName ? <span className="text-xs font-normal text-slate-500"> • {gap.roomName}</span> : null}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">{gap.reasons?.join('. ') || 'Coverage gap detected'}</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      Exposure: ${Math.round((gap.exposureCents || 0) / 100)} {gap.currency || 'USD'} • {gap.gapType}
-                    </p>
-                  </div>
-
-                  <MobileActionRow>
-                    <Link
-                      href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/replace-repair`}
-                      className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
-                    >
-                      Replace/Repair
-                    </Link>
-
+        <ScenarioInputCard title="Priority Items" subtitle="Resolve uncovered or partially covered inventory first.">
+          <div className="space-y-3">
+            {gaps.map((gap: any) => (
+              <div key={gap.inventoryItemId} className="space-y-2.5 rounded-xl border border-black/10 p-2.5">
+                <CompactEntityRow
+                  title={gap.itemName}
+                  subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
+                  meta={gap.roomName ? `${gap.roomName} • ${gap.gapType}` : gap.gapType}
+                  status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gap.gapType}</StatusChip>}
+                />
+                <ActionPriorityRow
+                  primaryAction={
                     <Link
                       href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`}
-                      className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                      className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm text-white hover:bg-black/90"
                     >
                       Get coverage
                     </Link>
-
-                    <button
-                      onClick={() => handleViewItem(gap.inventoryItemId)}
-                      disabled={openingItemId === gap.inventoryItemId}
-                      className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5 disabled:opacity-60"
-                    >
-                      {openingItemId === gap.inventoryItemId ? 'Opening...' : 'View'}
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setSelected(gap);
-                        setQuoteOpen(true);
-                      }}
-                      className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
-                    >
-                      Quotes
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setSelected(gap);
-                        setCoveredOpen(true);
-                      }}
-                      className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
-                    >
-                      Info
-                    </button>
-                  </MobileActionRow>
-                </MobileCard>
-              ))}
-            </div>
-          )}
-        </>
+                  }
+                  secondaryActions={
+                    <>
+                      <Link
+                        href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/replace-repair`}
+                        className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                      >
+                        Replace/Repair
+                      </Link>
+                      <button
+                        onClick={() => handleViewItem(gap.inventoryItemId)}
+                        disabled={openingItemId === gap.inventoryItemId}
+                        className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5 disabled:opacity-60"
+                      >
+                        {openingItemId === gap.inventoryItemId ? 'Opening...' : 'View'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelected(gap);
+                          setQuoteOpen(true);
+                        }}
+                        className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                      >
+                        Quotes
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelected(gap);
+                          setCoveredOpen(true);
+                        }}
+                        className="min-h-[40px] rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                      >
+                        Info
+                      </button>
+                    </>
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        </ScenarioInputCard>
       )}
 
       <InsuranceQuoteModal
@@ -264,6 +265,6 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
           await refreshCoverageOnly();
         }}
       />
-    </MobilePageContainer>
+    </MobileToolWorkspace>
   );
 }

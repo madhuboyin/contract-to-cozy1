@@ -17,6 +17,15 @@ import {
   listInventoryRooms,
   updateInventoryRoom,
 } from '../../../../inventory/inventoryApi';
+import {
+  BottomSafeAreaReserve,
+  MobilePageContainer,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
 
 type InventoryRoomWithType = InventoryRoom & {
   type?: string | null;
@@ -134,37 +143,60 @@ export default function RoomsClient() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <ManageRoomsHeader
-        propertyId={propertyId}
-        roomsCount={roomsWithCounts.length}
-        totalItems={totalItems}
-      />
+    <MobileToolWorkspace
+      intro={
+        <MobilePageIntro
+          eyebrow="Inventory"
+          title="Manage Rooms"
+          subtitle="Organize rooms and keep item tracking clean."
+        />
+      }
+      summary={
+        <ResultHeroCard
+          title="Room Inventory"
+          value={`${roomsWithCounts.length} room${roomsWithCounts.length === 1 ? '' : 's'}`}
+          status={<StatusChip tone={roomsWithCounts.length > 0 ? 'good' : 'info'}>{totalItems} item{totalItems === 1 ? '' : 's'}</StatusChip>}
+          summary="Add, rename, and remove rooms without leaving inventory flow."
+        />
+      }
+      footer={<BottomSafeAreaReserve size="chatAware" />}
+    >
+      <div className="hidden md:block">
+        <ManageRoomsHeader
+          propertyId={propertyId}
+          roomsCount={roomsWithCounts.length}
+          totalItems={totalItems}
+        />
+      </div>
 
       {error && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <AddRoomForm
-        roomType={roomType}
-        customLabel={customLabel}
-        isAdding={isAdding}
-        onRoomTypeChange={(value) => {
-          if (!isManageRoomType(value)) return;
-          setRoomType(value);
-        }}
-        onCustomLabelChange={setCustomLabel}
-        onAddRoom={() => void handleAddRoom()}
-      />
+      <ScenarioInputCard title="Add Room" subtitle="Create a room before assigning inventory items.">
+        <AddRoomForm
+          roomType={roomType}
+          customLabel={customLabel}
+          isAdding={isAdding}
+          onRoomTypeChange={(value) => {
+            if (!isManageRoomType(value)) return;
+            setRoomType(value);
+          }}
+          onCustomLabelChange={setCustomLabel}
+          onAddRoom={() => void handleAddRoom()}
+        />
+      </ScenarioInputCard>
 
-      <RoomsList
-        propertyId={propertyId}
-        rooms={roomsWithCounts}
-        onRename={handleRename}
-        onDelete={handleDelete}
-      />
-    </div>
+      <ScenarioInputCard title="Rooms" subtitle="Tap a room to rename, review items, or delete when empty.">
+        <RoomsList
+          propertyId={propertyId}
+          rooms={roomsWithCounts}
+          onRename={handleRename}
+          onDelete={handleDelete}
+        />
+      </ScenarioInputCard>
+    </MobileToolWorkspace>
   );
 }

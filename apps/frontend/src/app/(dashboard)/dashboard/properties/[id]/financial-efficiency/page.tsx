@@ -18,7 +18,17 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import React, { useState } from "react";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
-import { MobilePageContainer, MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
+import {
+    ActionPriorityRow,
+    BottomSafeAreaReserve,
+    CompactEntityRow,
+    MobilePageIntro,
+    MobileToolWorkspace,
+    ReadOnlySummaryBlock,
+    ResultHeroCard,
+    ScenarioInputCard,
+    StatusChip,
+} from "@/components/mobile/dashboard/MobilePrimitives";
 
 
 // --- Types for Query Data ---
@@ -39,6 +49,12 @@ const getEfficiencyDetails = (score: number) => {
     if (score >= 70) return { level: "AVERAGE", color: "text-blue-500", progressClass: "bg-blue-500", badgeVariant: "secondary" as const, icon: BarChart };
     return { level: "LOW", color: "text-red-500", progressClass: "bg-red-500", badgeVariant: "destructive" as const, icon: DollarSign };
 };
+
+function efficiencyTone(level: string): "good" | "info" | "danger" {
+    if (level === "HIGH") return "good";
+    if (level === "AVERAGE") return "info";
+    return "danger";
+}
 
 function toNumber(value: unknown): number | null {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -511,26 +527,106 @@ export default function FinancialEfficiencyPage() {
 
     return (
         <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-            <div className="md:hidden mb-4 space-y-2">
-                <Button
-                    variant="ghost"
-                    className="min-h-[44px] px-0 text-sm text-muted-foreground"
-                    onClick={() => router.back()}
+            <div className="md:hidden">
+                <MobileToolWorkspace
+                    intro={
+                        <div className="space-y-2">
+                            <Button
+                                variant="ghost"
+                                className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground"
+                                onClick={() => router.back()}
+                            >
+                                <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                            </Button>
+                            <MobilePageIntro
+                                eyebrow="Property Score"
+                                title="Financial Efficiency Report"
+                                subtitle={`Cost efficiency benchmark for ${property?.name || "this property"}.`}
+                                action={
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-700">
+                                        <ScoreIcon className="h-5 w-5" />
+                                    </div>
+                                }
+                            />
+                        </div>
+                    }
+                    summary={
+                        <ResultHeroCard
+                            title="Efficiency Score"
+                            value={isZeroState ? "—" : `${score}/100`}
+                            status={<StatusChip tone={efficiencyTone(level)}>{isZeroState ? "Setup needed" : level}</StatusChip>}
+                            summary={isZeroState ? "Link costs to generate your first report." : "Compared to market benchmarks for your area and property profile."}
+                            actions={
+                                <ActionPriorityRow
+                                    primaryAction={
+                                        <Button
+                                            onClick={handleRecalculate}
+                                            disabled={isCalculating || isQueued}
+                                        >
+                                            <RotateCw className="h-4 w-4 mr-2" />
+                                            Generate report
+                                        </Button>
+                                    }
+                                />
+                            }
+                        />
+                    }
+                    footer={<BottomSafeAreaReserve size="chatAware" />}
                 >
-                    <ArrowLeft className="h-4 w-4 mr-1" /> Back
-                </Button>
-                <MobilePageContainer className="px-0">
-                    <MobilePageIntro
-                        eyebrow="Property Score"
-                        title="Financial Efficiency Report"
-                        subtitle={`Cost efficiency benchmark for ${property?.name || "this property"}.`}
-                        action={
-                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-700">
-                                <ScoreIcon className="h-5 w-5" />
-                            </div>
-                        }
+                    <ReadOnlySummaryBlock
+                        title="Snapshot"
+                        items={[
+                            { label: "Annual cost", value: formattedExposure, emphasize: true },
+                            { label: "Market average", value: formatCurrency(marketAverageTotal) },
+                            { label: "Week delta", value: <ScoreDeltaIndicator delta={financialSeries?.deltaFromPreviousWeek} /> },
+                            { label: "Status", value: isQueued ? "Queued" : isCalculating ? "Calculating" : "Calculated" },
+                        ]}
+                        columns={2}
                     />
-                </MobilePageContainer>
+
+                    <ScenarioInputCard
+                        title="Trend"
+                        subtitle="Weekly efficiency snapshots."
+                        actions={
+                            <ActionPriorityRow
+                                secondaryActions={
+                                    <>
+                                        <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                                            6 Months
+                                        </Button>
+                                        <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                                            1 Year
+                                        </Button>
+                                    </>
+                                }
+                            />
+                        }
+                    >
+                        <ScoreTrendChart points={financialTrend} ariaLabel="Financial efficiency score trend" />
+                    </ScenarioInputCard>
+
+                    <ScenarioInputCard title="Changes Impacting Score" subtitle="Top weekly factors moving efficiency.">
+                        <div className="space-y-2">
+                            {financialChanges.map((change, idx) => (
+                                <CompactEntityRow
+                                    key={`${change.title}-${idx}`}
+                                    title={change.title}
+                                    subtitle={change.detail}
+                                    status={
+                                        <StatusChip tone={change.impact === "positive" ? "good" : change.impact === "negative" ? "danger" : "info"}>
+                                            {change.impact === "positive" ? "Positive" : change.impact === "negative" ? "Negative" : "Neutral"}
+                                        </StatusChip>
+                                    }
+                                />
+                            ))}
+                        </div>
+                    </ScenarioInputCard>
+
+                    <details className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <summary className="cursor-pointer text-sm font-semibold text-slate-800">Detailed breakdown</summary>
+                        <div className="mt-3">{renderDetailedSections()}</div>
+                    </details>
+                </MobileToolWorkspace>
             </div>
 
             <PageHeader className="hidden md:block pt-4 pb-4 md:pt-8 md:pb-8">
@@ -546,6 +642,7 @@ export default function FinancialEfficiencyPage() {
                 </PageHeaderHeading>
             </PageHeader>
 
+            <div className="hidden md:block">
             {/* --- FES Summary Banner --- */}
             <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
                 
@@ -742,6 +839,7 @@ export default function FinancialEfficiencyPage() {
 
                 {/* --- Detailed Section Content --- */}
                 {renderDetailedSections()}
+            </div>
             </div>
             
         </DashboardShell>

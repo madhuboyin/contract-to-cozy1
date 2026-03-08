@@ -14,7 +14,17 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import { PropertyScoreSeries, PropertyScoreTrendPoint } from "@/types";
-import { MobilePageContainer, MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  CompactEntityRow,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from "@/components/mobile/dashboard/MobilePrimitives";
 
 const HIGH_PRIORITY_STATUSES = ["Needs Attention", "Needs Review", "Needs Inspection", "Missing Data"];
 
@@ -31,6 +41,13 @@ const getHealthDetails = (score: number) => {
   if (score >= 50) return { level: "Fair", color: "text-yellow-600", progressColor: "bg-yellow-500" };
   return { level: "Needs Attention", color: "text-red-600", progressColor: "bg-red-500" };
 };
+
+function healthTone(level: string): "good" | "info" | "elevated" | "danger" {
+  if (level === "Excellent") return "good";
+  if (level === "Good") return "info";
+  if (level === "Fair") return "elevated";
+  return "danger";
+}
 
 function asNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -180,22 +197,114 @@ export default function PropertyHealthDetailPage() {
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <div className="md:hidden mb-4 space-y-2">
-        <Button variant="ghost" className="min-h-[44px] px-0 text-sm text-muted-foreground" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-        </Button>
-        <MobilePageContainer className="px-0">
-          <MobilePageIntro
-            eyebrow="Property Score"
-            title="Property Health Report"
-            subtitle={`Track weekly health movement for ${property?.name || "this property"}.`}
-            action={
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
-                <Activity className="h-5 w-5" />
-              </div>
-            }
+      <div className="md:hidden">
+        <MobileToolWorkspace
+          intro={
+            <div className="space-y-2">
+              <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground" onClick={() => router.back()}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <MobilePageIntro
+                eyebrow="Property Score"
+                title="Property Health Report"
+                subtitle={`Track weekly health movement for ${property?.name || "this property"}.`}
+                action={
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
+                    <Activity className="h-5 w-5" />
+                  </div>
+                }
+              />
+            </div>
+          }
+          summary={
+            <ResultHeroCard
+              title="Health Score"
+              value={`${latestScore.toFixed(0)}/${scoreMax}`}
+              status={<StatusChip tone={healthTone(healthDetails.level)}>{healthDetails.level}</StatusChip>}
+              summary="Weekly score and insights condensed for quick triage."
+            />
+          }
+          footer={<BottomSafeAreaReserve size="chatAware" />}
+        >
+          <ReadOnlySummaryBlock
+            title="Snapshot"
+            items={[
+              { label: "Week delta", value: <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} /> },
+              { label: "Coverage", value: `${Math.round(percentage)}%`, emphasize: true },
+            ]}
+            columns={2}
           />
-        </MobilePageContainer>
+
+          <ScenarioInputCard
+            title="Current Health Focus"
+            subtitle="Top insights from the latest weekly health snapshot."
+            actions={
+              <ActionPriorityRow
+                primaryAction={
+                  <Button asChild>
+                    <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}>View maintenance actions</Link>
+                  </Button>
+                }
+              />
+            }
+          >
+            {latestInsights.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No insight details available yet for this property.</p>
+            ) : (
+              <div className="space-y-2">
+                {latestInsights.slice(0, 5).map((insight, idx) => {
+                  const needsAction = HIGH_PRIORITY_STATUSES.includes(String(insight.status || ""));
+                  return (
+                    <CompactEntityRow
+                      key={`${insight.factor || "insight"}-${idx}`}
+                      title={insight.factor || "Health insight"}
+                      subtitle={insight.status || "Status unavailable"}
+                      status={<StatusChip tone={needsAction ? "danger" : "good"}>{needsAction ? "Action needed" : "Stable"}</StatusChip>}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </ScenarioInputCard>
+
+          <ScenarioInputCard
+            title="Score Trend"
+            subtitle="Weekly snapshots for the last 6 months or 1 year."
+            actions={
+              <ActionPriorityRow
+                secondaryActions={
+                  <>
+                    <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                      6 Months
+                    </Button>
+                    <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                      1 Year
+                    </Button>
+                  </>
+                }
+              />
+            }
+          >
+            <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+          </ScenarioInputCard>
+
+          <ScenarioInputCard title="Changes Impacting Score" subtitle="What moved the score since the previous weekly snapshot.">
+            <div className="space-y-2">
+              {changes.map((change, idx) => (
+                <CompactEntityRow
+                  key={`${change.title}-${idx}`}
+                  title={change.title}
+                  subtitle={change.detail}
+                  status={
+                    <StatusChip tone={change.impact === "positive" ? "good" : change.impact === "negative" ? "danger" : "info"}>
+                      {change.impact === "positive" ? "Positive" : change.impact === "negative" ? "Negative" : "Neutral"}
+                    </StatusChip>
+                  }
+                />
+              ))}
+            </div>
+          </ScenarioInputCard>
+        </MobileToolWorkspace>
       </div>
 
       <PageHeader className="hidden md:block pt-4 pb-4 md:pt-8 md:pb-8">
@@ -210,7 +319,7 @@ export default function PropertyHealthDetailPage() {
         </p>
       </PageHeader>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="hidden md:grid gap-6 md:grid-cols-3">
         <Card className="md:col-span-1 border-2 border-primary/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium">Health Score</CardTitle>
@@ -262,7 +371,7 @@ export default function PropertyHealthDetailPage() {
         </Card>
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-3">
+      <div className="mt-8 hidden md:grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

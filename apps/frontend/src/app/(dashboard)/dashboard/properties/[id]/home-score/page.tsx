@@ -13,7 +13,17 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MobilePageContainer, MobilePageIntro } from "@/components/mobile/dashboard/MobilePrimitives";
+import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  CompactEntityRow,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from "@/components/mobile/dashboard/MobilePrimitives";
 import { api } from "@/lib/api/client";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import { HomeScoreComponent, HomeScoreReason } from "@/types";
@@ -66,6 +76,19 @@ function correctionBadgeClass(status: "SUBMITTED" | "APPLIED" | "REJECTED") {
   if (status === "APPLIED") return "bg-green-100 text-green-700 border-green-200";
   if (status === "REJECTED") return "bg-red-100 text-red-700 border-red-200";
   return "bg-blue-100 text-blue-700 border-blue-200";
+}
+
+function bandTone(band?: string): "good" | "info" | "elevated" | "danger" {
+  if (band === "EXCELLENT") return "good";
+  if (band === "GOOD") return "info";
+  if (band === "FAIR") return "elevated";
+  return "danger";
+}
+
+function impactTone(impact: HomeScoreReason["impact"]): "good" | "info" | "danger" {
+  if (impact === "POSITIVE") return "good";
+  if (impact === "NEGATIVE") return "danger";
+  return "info";
 }
 
 export default function HomeScoreReportPage() {
@@ -217,26 +240,167 @@ export default function HomeScoreReportPage() {
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
-      <div className="md:hidden mb-4 space-y-2">
-        <Button
-          variant="ghost"
-          className="min-h-[44px] px-0 text-sm text-muted-foreground"
-          onClick={() => router.back()}
+      <div className="md:hidden">
+        <MobileToolWorkspace
+          intro={
+            <div className="space-y-2">
+              <Button
+                variant="ghost"
+                className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground"
+                onClick={() => router.back()}
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <MobilePageIntro
+                eyebrow="Property Score"
+                title="HomeScore Report"
+                subtitle={`Trust-weighted health, risk, and financial posture for ${propertyQuery.data?.name || "this property"}.`}
+                action={
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-2.5 text-indigo-700">
+                    <Gauge className="h-5 w-5" />
+                  </div>
+                }
+              />
+            </div>
+          }
+          summary={
+            <ResultHeroCard
+              title="HomeScore"
+              value={`${score}/100`}
+              status={<StatusChip tone={bandTone(report.scoreBand)}>{bandLabel(report.scoreBand)}</StatusChip>}
+              summary="Composite trust-weighted score from health, risk, and financial factors."
+              actions={
+                <ActionPriorityRow
+                  primaryAction={
+                    <Button
+                      size="sm"
+                      disabled={refreshMutation.isPending}
+                      onClick={() => refreshMutation.mutate()}
+                    >
+                      {refreshMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                      )}
+                      Refresh report
+                    </Button>
+                  }
+                />
+              }
+            />
+          }
+          footer={<BottomSafeAreaReserve size="chatAware" />}
         >
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-        </Button>
-        <MobilePageContainer className="px-0">
-          <MobilePageIntro
-            eyebrow="Property Score"
-            title="HomeScore Report"
-            subtitle={`Trust-weighted health, risk, and financial posture for ${propertyQuery.data?.name || "this property"}.`}
-            action={
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-2.5 text-indigo-700">
-                <Gauge className="h-5 w-5" />
-              </div>
-            }
+          <ReadOnlySummaryBlock
+            title="Snapshot"
+            items={[
+              { label: "Confidence", value: report.confidence, emphasize: true },
+              { label: "Week delta", value: <ScoreDeltaIndicator delta={report.deltaFromPreviousWeek} /> },
+              { label: "Accuracy", value: `${report.uncertainty.accuracyScore}/100` },
+              { label: "Score range", value: `${report.uncertainty.scoreRangeLow}-${report.uncertainty.scoreRangeHigh}` },
+            ]}
+            columns={2}
           />
-        </MobilePageContainer>
+
+          <ScenarioInputCard title="Top Drivers" subtitle="Reasons the score is not higher right now.">
+            <div className="space-y-2">
+              {report.topReasonsScoreNotHigher.slice(0, 4).map((reason) => (
+                <CompactEntityRow
+                  key={reason.id}
+                  title={reason.title}
+                  subtitle={reason.detail}
+                  meta={`Confidence ${reason.confidence}`}
+                  status={<StatusChip tone={impactTone(reason.impact)}>{reason.impact.toLowerCase()}</StatusChip>}
+                  trailing={
+                    reason.actionHref ? (
+                      <Link href={withHomeScoreReturnContext(reason.actionHref) || "#"} className="text-xs text-primary hover:underline">
+                        Resolve
+                      </Link>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </div>
+          </ScenarioInputCard>
+
+          <ScenarioInputCard
+            title="Trend"
+            subtitle="Weekly HomeScore trend."
+            actions={
+              <ActionPriorityRow
+                secondaryActions={
+                  <>
+                    <Button size="sm" variant={weeks === 26 ? "default" : "outline"} onClick={() => setWeeks(26)}>
+                      6 Months
+                    </Button>
+                    <Button size="sm" variant={weeks === 52 ? "default" : "outline"} onClick={() => setWeeks(52)}>
+                      1 Year
+                    </Button>
+                  </>
+                }
+              />
+            }
+          >
+            <ScoreTrendChart points={trendPoints} ariaLabel="HomeScore trend" />
+          </ScenarioInputCard>
+
+          <ScenarioInputCard title="Corrections" subtitle="Submit and track field corrections without leaving this page.">
+            <div className="space-y-3">
+              <select
+                value={correctionFieldKey || fieldFacts[0]?.key || "general"}
+                onChange={(event) => setCorrectionFieldKey(event.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {fieldFacts.length > 0 ? (
+                  fieldFacts.map((fact) => (
+                    <option key={fact.id} value={fact.key}>
+                      {fact.label}
+                    </option>
+                  ))
+                ) : (
+                  <option value="general">General</option>
+                )}
+              </select>
+              <Input
+                placeholder="Proposed value (optional)"
+                value={correctionProposedValue}
+                onChange={(event) => setCorrectionProposedValue(event.target.value)}
+              />
+              <Textarea
+                placeholder="What should be corrected and why?"
+                value={correctionDetail}
+                onChange={(event) => setCorrectionDetail(event.target.value)}
+                className="min-h-[90px]"
+              />
+              <ActionPriorityRow
+                primaryAction={
+                  <Button
+                    size="sm"
+                    onClick={() => submitCorrectionMutation.mutate()}
+                    disabled={submitCorrectionMutation.isPending || correctionDetail.trim().length < 6}
+                  >
+                    {submitCorrectionMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                    Submit correction
+                  </Button>
+                }
+              />
+            </div>
+
+            {correctionHistory.length > 0 ? (
+              <div className="space-y-2">
+                {correctionHistory.slice(0, 3).map((entry) => (
+                  <CompactEntityRow
+                    key={entry.id}
+                    title={entry.title}
+                    subtitle={entry.detail}
+                    meta={new Date(entry.submittedAt).toLocaleDateString()}
+                    status={<StatusChip tone={entry.status === "APPLIED" ? "good" : entry.status === "REJECTED" ? "danger" : "info"}>{entry.status}</StatusChip>}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </ScenarioInputCard>
+        </MobileToolWorkspace>
       </div>
 
       <PageHeader className="hidden md:block pt-4 pb-4 md:pt-8 md:pb-8">
@@ -256,6 +420,7 @@ export default function HomeScoreReportPage() {
         </p>
       </PageHeader>
 
+      <div className="hidden md:block">
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1 border-2 border-primary/40">
           <CardHeader className="pb-2">
@@ -662,6 +827,7 @@ export default function HomeScoreReportPage() {
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
     </DashboardShell>
   );

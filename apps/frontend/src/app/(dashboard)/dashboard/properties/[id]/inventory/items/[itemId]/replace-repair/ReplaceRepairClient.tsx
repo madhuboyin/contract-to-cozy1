@@ -8,6 +8,17 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { InventoryItem } from '@/types';
 import {
+  ActionPriorityRow,
+  BottomSafeAreaReserve,
+  CompactEntityRow,
+  MobilePageIntro,
+  MobileToolWorkspace,
+  ReadOnlySummaryBlock,
+  ResultHeroCard,
+  ScenarioInputCard,
+  StatusChip,
+} from '@/components/mobile/dashboard/MobilePrimitives';
+import {
   getReplaceRepairAnalysis,
   ReplaceRepairAnalysisDTO,
   ReplaceRepairOverrides,
@@ -106,11 +117,11 @@ function mergeInputs(current: DollarInputs, prefill: Partial<DollarInputs>): Dol
   };
 }
 
-function verdictClasses(verdict?: ReplaceRepairAnalysisDTO['verdict']) {
-  if (verdict === 'REPAIR_ONLY') return 'bg-emerald-100 text-emerald-700';
-  if (verdict === 'REPAIR_AND_MONITOR') return 'bg-amber-100 text-amber-700';
-  if (verdict === 'REPLACE_SOON') return 'bg-orange-100 text-orange-700';
-  return 'bg-rose-100 text-rose-700';
+function verdictTone(verdict?: ReplaceRepairAnalysisDTO['verdict']): 'good' | 'info' | 'elevated' | 'danger' {
+  if (verdict === 'REPAIR_ONLY') return 'good';
+  if (verdict === 'REPAIR_AND_MONITOR') return 'info';
+  if (verdict === 'REPLACE_SOON') return 'elevated';
+  return 'danger';
 }
 
 function verdictLabel(verdict?: ReplaceRepairAnalysisDTO['verdict']) {
@@ -217,63 +228,78 @@ export default function ReplaceRepairClient() {
     }
   };
 
-  const statusTone = useMemo(() => {
-    if (!analysis) return 'bg-gray-100 text-gray-700';
-    if (analysis.status === 'STALE') return 'bg-amber-100 text-amber-700';
-    if (analysis.status === 'ERROR') return 'bg-rose-100 text-rose-700';
-    return 'bg-emerald-100 text-emerald-700';
+  const statusTone = useMemo<'good' | 'elevated' | 'danger' | 'info'>(() => {
+    if (!analysis) return 'info';
+    if (analysis.status === 'STALE') return 'elevated';
+    if (analysis.status === 'ERROR') return 'danger';
+    return 'good';
   }, [analysis]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-6">
-      <button
-        type="button"
-        onClick={() => router.back()}
-        className="inline-flex items-center gap-2 rounded-full border border-slate-300/70 bg-white/75 px-3 py-1.5 text-sm text-teal-700 shadow-sm transition-colors hover:bg-white hover:text-teal-800 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-teal-300 dark:hover:bg-slate-900"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </button>
-
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.15),transparent_38%),radial-gradient(circle_at_92%_10%,rgba(20,184,166,0.14),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.85))] p-4 shadow-[0_28px_60px_-42px_rgba(15,23,42,0.65)] dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_8%_8%,rgba(251,191,36,0.11),transparent_38%),radial-gradient(circle_at_92%_10%,rgba(20,184,166,0.11),transparent_36%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.8))]">
-        <div className="space-y-4">
-      <section className={`${GLASS_PANEL_CLASS} p-6`}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Replace or Repair</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Educational estimate to help decide whether to repair, replace soon, or replace now.
-            </p>
-            <div className="mt-2 text-sm text-gray-700">
-              <div>
-                Item: <span className="font-medium">{item?.name || 'Inventory Item'}</span>
-              </div>
-              <div>
-                Category: <span className="font-medium">{item?.category || '—'}</span>
-                {item?.room?.name ? ` • Room: ${item.room.name}` : ''}
-              </div>
-            </div>
-          </div>
-          <Wrench className="h-6 w-6 text-teal-600" />
+    <MobileToolWorkspace
+      intro={
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="inline-flex min-h-[44px] items-center gap-2 text-sm text-teal-700 hover:text-teal-800"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+          <MobilePageIntro
+            eyebrow="Inventory Decision"
+            title="Replace or Repair"
+            subtitle="Educational estimate to decide whether to repair, replace soon, or replace now."
+            action={<Wrench className="h-5 w-5 text-teal-600" />}
+          />
         </div>
-      </section>
-
-      <div className="rounded-2xl border border-sky-200/70 bg-gradient-to-r from-sky-50/95 to-cyan-50/90 p-4 text-sm text-sky-900 shadow-[0_12px_20px_-20px_rgba(14,116,144,0.7)] dark:border-sky-900/50 dark:from-sky-950/45 dark:to-cyan-950/35 dark:text-sky-200">
+      }
+      summary={
+        <ResultHeroCard
+          title={item?.name || 'Inventory Item'}
+          value={analysis ? verdictLabel(analysis.verdict) : 'No analysis'}
+          status={<StatusChip tone={analysis ? statusTone : 'info'}>{analysis ? analysis.status : 'Pending'}</StatusChip>}
+          summary={analysis?.summary || `${item?.category || 'Unknown category'}${item?.room?.name ? ` • ${item.room.name}` : ''}`}
+        />
+      }
+      footer={<BottomSafeAreaReserve size="chatAware" />}
+    >
+      <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
         Educational decision support only. This estimate does not guarantee outcomes or recommend specific vendors.
       </div>
 
-      {error && (
-        <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/35 dark:text-rose-200">
+      {error ? (
+        <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           <AlertCircle className="h-4 w-4 mt-0.5" />
           <span>{error}</span>
         </div>
-      )}
+      ) : null}
 
-      <section className={`${GLASS_PANEL_CLASS} p-5`}>
-        <h2 className="text-base font-semibold text-gray-900">Inputs</h2>
-        <p className="text-sm text-gray-600 mt-1">Optional overrides for your item-level scenario.</p>
-
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <ScenarioInputCard
+        title="Scenario Inputs"
+        subtitle="Optional overrides for item-level replace-or-repair modeling."
+        actions={
+          <ActionPriorityRow
+            primaryAction={
+              <Button onClick={runAnalysis} disabled={running || loading}>
+                {running ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Running…
+                  </>
+                ) : hasAnalysis ? (
+                  'Re-run analysis'
+                ) : (
+                  'Run analysis'
+                )}
+              </Button>
+            }
+            secondaryActions={<Button variant="ghost" onClick={fetchData} disabled={loading}>Refresh</Button>}
+          />
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <label className="text-xs text-gray-600">
             Estimated next repair cost ($)
             <input
@@ -364,134 +390,63 @@ export default function ReplaceRepairClient() {
             </select>
           </label>
         </div>
+      </ScenarioInputCard>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            onClick={runAnalysis}
-            disabled={running || loading}
-            className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm transition-all hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700"
-          >
-            {running ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Running…
-              </>
-            ) : hasAnalysis ? (
-              'Re-run analysis'
-            ) : (
-              'Run analysis'
-            )}
-          </Button>
-          <Button variant="ghost" onClick={fetchData} disabled={loading} className="hover:bg-white/70 dark:hover:bg-slate-900/60">
-            Refresh
-          </Button>
-        </div>
-      </section>
-
-      {loading && (
-        <div className={`${GLASS_PANEL_CLASS} flex items-center justify-center gap-3 p-8`}>
-          <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
-          <span className="text-sm text-gray-600">Loading analysis…</span>
-        </div>
-      )}
-
-      {!loading && !analysis && (
-        <div className={`${GLASS_PANEL_CLASS} p-6`}>
-          <h3 className="text-lg font-semibold text-gray-900">No analysis yet</h3>
-          <p className="text-sm text-gray-600 mt-1">Run Replace or Repair to generate your item decision support.</p>
-        </div>
-      )}
-
-      {!loading && analysis && (
+      {loading ? (
+        <ScenarioInputCard title="Loading analysis" subtitle="Fetching replace-or-repair analysis.">
+          <div className="flex items-center gap-3 text-sm text-gray-600">
+            <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
+            <span>Loading analysis…</span>
+          </div>
+        </ScenarioInputCard>
+      ) : !analysis ? (
+        <ScenarioInputCard title="No analysis yet" subtitle="Run Replace or Repair to generate decision support.">
+          <p className="text-sm text-muted-foreground">No prior run is stored for this item.</p>
+        </ScenarioInputCard>
+      ) : (
         <>
-          <section className={`${GLASS_PANEL_CLASS} p-5`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold text-gray-900">Decision result</h3>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusTone}`}>{analysis.status}</span>
-                </div>
-                <p className="text-sm text-gray-600 mt-1">{analysis.summary || 'No summary available.'}</p>
-                <p className="text-xs text-gray-500 mt-1">Computed: {compactDate(analysis.computedAt)}</p>
-              </div>
+          <ReadOnlySummaryBlock
+            title="Decision Summary"
+            items={[
+              { label: 'Age', value: analysis.ageYears !== undefined ? `${analysis.ageYears} year(s)` : '—' },
+              { label: 'Remaining years', value: analysis.remainingYears ?? '—' },
+              { label: 'Estimated next repair', value: money(analysis.estimatedNextRepairCostCents) },
+              { label: 'Estimated replacement', value: money(analysis.estimatedReplacementCostCents) },
+              { label: 'Expected annual repair risk', value: money(analysis.expectedAnnualRepairRiskCents) },
+              { label: 'Break-even months', value: analysis.breakEvenMonths ?? '—', emphasize: true },
+            ]}
+            columns={2}
+          />
 
-              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${verdictClasses(analysis.verdict)}`}>
-                {verdictLabel(analysis.verdict)}
-              </span>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-              <div className={BENTO_TILE_CLASS}>
-                <div className="text-xs text-gray-500">Age</div>
-                <div className="text-base font-semibold text-gray-900">
-                  {analysis.ageYears !== undefined ? `${analysis.ageYears} year(s)` : '—'}
-                </div>
-              </div>
-              <div className={BENTO_TILE_CLASS}>
-                <div className="text-xs text-gray-500">Remaining years</div>
-                <div className="text-base font-semibold text-gray-900">
-                  {analysis.remainingYears !== undefined ? analysis.remainingYears : '—'}
-                </div>
-              </div>
-              <div className={BENTO_TILE_CLASS}>
-                <div className="text-xs text-gray-500">Estimated next repair</div>
-                <div className="text-base font-semibold text-gray-900">{money(analysis.estimatedNextRepairCostCents)}</div>
-              </div>
-              <div className={BENTO_TILE_CLASS}>
-                <div className="text-xs text-gray-500">Estimated replacement</div>
-                <div className="text-base font-semibold text-gray-900">{money(analysis.estimatedReplacementCostCents)}</div>
-              </div>
-              <div className={BENTO_TILE_CLASS}>
-                <div className="text-xs text-gray-500">Expected annual repair risk</div>
-                <div className="text-base font-semibold text-gray-900">{money(analysis.expectedAnnualRepairRiskCents)}</div>
-              </div>
-              <div className={BENTO_TILE_CLASS}>
-                <div className="text-xs text-gray-500">Break-even months</div>
-                <div className="text-base font-semibold text-gray-900">{analysis.breakEvenMonths ?? '—'}</div>
-              </div>
-            </div>
-          </section>
-
-          {analysis.nextSteps && analysis.nextSteps.length > 0 && (
-            <section className={`${GLASS_PANEL_CLASS} p-5`}>
-              <h4 className="text-base font-semibold text-gray-900">Next steps</h4>
-              <div className="mt-3 space-y-2">
+          {analysis.nextSteps && analysis.nextSteps.length > 0 ? (
+            <ScenarioInputCard title="Next Steps" subtitle="Suggested follow-up actions.">
+              <div className="space-y-2">
                 {analysis.nextSteps.map((step, index) => (
-                  <div key={`${step.title}-${index}`} className={BENTO_TILE_CLASS}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-medium text-gray-900">{step.title}</div>
-                      {step.priority && <span className="text-xs text-gray-500">{step.priority}</span>}
-                    </div>
-                    {step.detail && <div className="text-xs text-gray-600 mt-1">{step.detail}</div>}
-                  </div>
+                  <CompactEntityRow
+                    key={`${step.title}-${index}`}
+                    title={step.title}
+                    subtitle={step.detail}
+                    meta={step.priority || undefined}
+                  />
                 ))}
               </div>
-            </section>
-          )}
+            </ScenarioInputCard>
+          ) : null}
 
-          <section className={`${GLASS_PANEL_CLASS} p-5`}>
-            <details open>
-              <summary className="cursor-pointer text-base font-semibold text-gray-900">Why this?</summary>
-              <div className="mt-3 space-y-2">
-                {analysis.decisionTrace.map((trace, index) => (
-                  <div
-                    key={`${trace.label}-${index}`}
-                    className="flex items-start justify-between gap-3 rounded-xl border border-white/70 bg-white/60 p-3 shadow-[0_10px_22px_-18px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/45"
-                  >
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{trace.label}</div>
-                      {trace.detail && <div className="text-xs text-gray-600 mt-1">{trace.detail}</div>}
-                    </div>
-                    <span className="rounded-full px-2 py-0.5 text-xs bg-gray-100 text-gray-700">{trace.impact}</span>
-                  </div>
-                ))}
-              </div>
-            </details>
-          </section>
+          <ScenarioInputCard title="Why this decision" subtitle="Trace of drivers that led to this verdict.">
+            <div className="space-y-2">
+              {analysis.decisionTrace.map((trace, index) => (
+                <CompactEntityRow
+                  key={`${trace.label}-${index}`}
+                  title={trace.label}
+                  subtitle={trace.detail}
+                  status={<StatusChip tone={trace.impact === 'POSITIVE' ? 'good' : trace.impact === 'NEGATIVE' ? 'danger' : 'info'}>{trace.impact}</StatusChip>}
+                />
+              ))}
+            </div>
+          </ScenarioInputCard>
         </>
       )}
-        </div>
-      </div>
-    </div>
+    </MobileToolWorkspace>
   );
 }
