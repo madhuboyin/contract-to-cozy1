@@ -57,6 +57,16 @@ function compactDate(value?: string) {
   return date.toLocaleString();
 }
 
+function humanizeEnum(value?: string | null) {
+  if (!value) return '—';
+  return value
+    .toLowerCase()
+    .split('_')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 function normalizeOverrides(overrides: CoverageAnalysisOverrides): CoverageAnalysisOverrides {
   const parsed: CoverageAnalysisOverrides = {
     riskTolerance: overrides.riskTolerance ?? 'MEDIUM',
@@ -306,13 +316,13 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
           <ResultHeroCard
             eyebrow="Coverage Result"
             title="Coverage Intelligence"
-            value={analysis.overallVerdict.replace('_', ' ')}
-            status={<StatusChip tone={statusChipTone}>{analysis.status}</StatusChip>}
+            value={humanizeEnum(analysis.overallVerdict)}
+            status={<StatusChip tone={statusChipTone}>{humanizeEnum(analysis.status)}</StatusChip>}
             summary={analysis.summary || 'No summary available.'}
             highlights={[
               `Confidence: ${analysis.confidence}`,
-              `Insurance verdict: ${analysis.insuranceVerdict.replace('_', ' ')}`,
-              `Warranty verdict: ${analysis.warrantyVerdict.replace('_', ' ')}`,
+              `Insurance verdict: ${humanizeEnum(analysis.insuranceVerdict)}`,
+              `Warranty verdict: ${humanizeEnum(analysis.warrantyVerdict)}`,
             ]}
             actions={
               <ActionPriorityRow
@@ -339,10 +349,10 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
           <ReadOnlySummaryBlock
             columns={2}
             items={[
-              { label: 'Overall verdict', value: analysis.overallVerdict.replace('_', ' '), emphasize: true },
-              { label: 'Impact level', value: analysis.impactLevel ?? '—' },
-              { label: 'Insurance verdict', value: analysis.insuranceVerdict.replace('_', ' ') },
-              { label: 'Warranty verdict', value: analysis.warrantyVerdict.replace('_', ' ') },
+              { label: 'Overall verdict', value: humanizeEnum(analysis.overallVerdict), emphasize: true },
+              { label: 'Impact level', value: humanizeEnum(analysis.impactLevel) },
+              { label: 'Insurance verdict', value: humanizeEnum(analysis.insuranceVerdict) },
+              { label: 'Warranty verdict', value: humanizeEnum(analysis.warrantyVerdict) },
               { label: 'Computed', value: compactDate(analysis.computedAt) },
               { label: 'Guidance', value: 'Educational only; not carrier advice.' },
             ]}
@@ -439,7 +449,7 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
                     {trace.detail && <div className="text-xs text-gray-600 mt-1">{trace.detail}</div>}
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-xs ${impactClasses(trace.impact)}`}>
-                    {trace.impact}
+                    {humanizeEnum(trace.impact)}
                   </span>
                 </div>
               ))}

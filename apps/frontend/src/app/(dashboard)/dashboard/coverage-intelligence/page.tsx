@@ -120,7 +120,7 @@ function CoverageIntelligenceContent() {
       summary={
         <ResultHeroCard
           eyebrow="Coverage Decision Support"
-          title={selectedProperty ? selectedProperty.name || selectedProperty.address : 'Select a property'}
+          title="Coverage Intelligence"
           value="Gap & overlap scan"
           status={<StatusChip tone="info">Deterministic</StatusChip>}
           summary="Find expiring protections, uninsured systems, and redundant coverage."
