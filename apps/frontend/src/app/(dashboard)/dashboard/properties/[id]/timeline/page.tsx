@@ -341,6 +341,7 @@ export default function Page() {
 
   return (
     <MobileToolWorkspace
+      className="space-y-6 lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <MobilePageIntro
           title="Home Timeline"

@@ -81,7 +81,7 @@ export default function HomeToolsPage() {
   })).filter((group) => group.items.length > 0);
 
   return (
-    <MobilePageContainer className="space-y-7 pt-2 pb-24">
+    <MobilePageContainer className="space-y-7 pt-2 pb-24 lg:max-w-7xl lg:px-8 lg:pb-10">
       <MobileSection>
         <MobileSectionHeader title="Home Tools" subtitle="Ownership planning tools for your property" />
       </MobileSection>

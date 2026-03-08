@@ -123,7 +123,7 @@ export default function SellerPrepPage() {
   if (isLoading) {
     return (
       <DashboardShell>
-        <MobilePageContainer className="space-y-4 py-6">
+        <MobilePageContainer className="space-y-4 py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
           <div className="h-10 w-48 rounded bg-gray-100 animate-pulse" />
           <div className="h-24 rounded-lg bg-gray-100 animate-pulse" />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -138,7 +138,7 @@ export default function SellerPrepPage() {
   if (error || !data) {
     return (
       <DashboardShell>
-        <MobilePageContainer className="py-6">
+        <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
           <MobileCard className="space-y-2.5">
             <div className="flex items-start gap-3">
               <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
@@ -166,7 +166,7 @@ export default function SellerPrepPage() {
 
   return (
     <DashboardShell className="max-w-7xl mx-auto gap-4">
-      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       {/* Intake Form Modal */}
       {propertyId && (
         <SellerPrepIntakeForm

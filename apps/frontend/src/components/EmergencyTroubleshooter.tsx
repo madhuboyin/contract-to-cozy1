@@ -101,7 +101,7 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
   };
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-8">
       <MobilePageIntro
         eyebrow="Emergency"
         title="Emergency Troubleshooter"
