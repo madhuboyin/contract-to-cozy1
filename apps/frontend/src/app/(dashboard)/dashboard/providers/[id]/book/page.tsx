@@ -365,48 +365,48 @@ export default function BookProviderPage() {
         </ScenarioInputCard>
 
         <ScenarioInputCard title="Schedule" subtitle="Pick a date and preferred service window.">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <DateField
-              id="scheduledDate"
-              label="Date *"
-              value={scheduledDate}
-              onChange={setScheduledDate}
-              min={getTomorrowDate()}
-              required
-              inputClassName="min-h-[44px]"
-            />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="min-w-0">
+              <DateField
+                id="scheduledDate"
+                label="Date *"
+                value={scheduledDate}
+                onChange={setScheduledDate}
+                min={getTomorrowDate()}
+                required
+                inputClassName="min-h-[44px]"
+              />
+            </div>
 
-            <div>
+            <div className="min-w-0">
               <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
                 <Clock3 className="h-4 w-4 text-[hsl(var(--mobile-text-muted))]" /> Start Time *
               </label>
-              <div className="relative">
+              <div className="relative min-w-0">
                 <input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="min-h-[44px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  className="min-h-[44px] min-w-0 w-full appearance-none rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
                   required
                   aria-label="Select start time"
                 />
-                <Clock3 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--mobile-text-muted))]" />
               </div>
               <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">Select a preferred start time.</p>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
                 <Clock3 className="h-4 w-4 text-[hsl(var(--mobile-text-muted))]" /> End Time (Optional)
               </label>
-              <div className="relative">
+              <div className="relative min-w-0">
                 <input
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="min-h-[44px] w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  className="min-h-[44px] min-w-0 w-full appearance-none rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
                   aria-label="Select optional end time"
                 />
-                <Clock3 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--mobile-text-muted))]" />
               </div>
               <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">Add an end time if you have a hard stop.</p>
             </div>
