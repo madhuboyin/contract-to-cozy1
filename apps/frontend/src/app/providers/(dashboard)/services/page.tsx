@@ -294,7 +294,7 @@ export default function ProviderServicesPage() {
 
   return (
     <>
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={
           <MobilePageIntro
             title="Services"

@@ -209,7 +209,7 @@ export default function BookProviderPage() {
 
   if (loading) {
     return (
-      <MobileToolWorkspace intro={<MobilePageIntro title="Book a Service" subtitle="Loading booking form..." />}>
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10" intro={<MobilePageIntro title="Book a Service" subtitle="Loading booking form..." />}>
         <div className="animate-pulse space-y-4 rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4">
           <div className="h-8 w-1/3 rounded bg-gray-200" />
           <div className="h-40 rounded bg-gray-200" />
@@ -220,7 +220,7 @@ export default function BookProviderPage() {
 
   if (!provider) {
     return (
-      <MobileToolWorkspace intro={<MobilePageIntro title="Book a Service" subtitle="Provider not found." />}>
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10" intro={<MobilePageIntro title="Book a Service" subtitle="Provider not found." />}>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
           <p className="text-sm text-rose-700">Provider not found</p>
           <button
@@ -245,7 +245,7 @@ export default function BookProviderPage() {
   const showDescriptionError = (descriptionTouched || hasAttemptedSubmit) && descriptionLength < 10;
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <div className="space-y-3">
           <button

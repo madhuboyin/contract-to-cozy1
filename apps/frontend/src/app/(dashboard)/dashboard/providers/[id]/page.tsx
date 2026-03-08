@@ -160,7 +160,7 @@ export default function ProviderDetailPage() {
 
   if (loading || favoritesQuery.isLoading) {
     return (
-      <MobileToolWorkspace intro={<MobilePageIntro title="Provider Profile" subtitle="Loading provider..." />}>
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10" intro={<MobilePageIntro title="Provider Profile" subtitle="Loading provider..." />}>
         <div className="flex items-center justify-center rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white py-12">
           <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
           <p className="ml-3 text-sm text-[hsl(var(--mobile-text-secondary))]">Loading provider...</p>
@@ -171,7 +171,7 @@ export default function ProviderDetailPage() {
 
   if (error || !provider) {
     return (
-      <MobileToolWorkspace intro={<MobilePageIntro title="Provider Profile" subtitle="Unable to load provider." />}>
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10" intro={<MobilePageIntro title="Provider Profile" subtitle="Unable to load provider." />}>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
           <p className="text-sm font-medium text-rose-700">Provider data could not be loaded.</p>
           <p className="mt-1 text-xs text-rose-600">{error || 'Please try again.'}</p>
@@ -207,7 +207,7 @@ export default function ProviderDetailPage() {
     .map((cat) => formatEnumLabel(cat));
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <div className="space-y-3">
           <button

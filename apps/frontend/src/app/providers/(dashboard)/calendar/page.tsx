@@ -57,7 +57,7 @@ export default function ProviderCalendarPage() {
   const enabledDays = DAY_KEYS.filter((day) => workingHours[day].enabled).length;
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={<MobilePageIntro title="Calendar & Availability" subtitle="Keep your schedule clear and bookable on mobile." />}
       summary={
         <ResultHeroCard

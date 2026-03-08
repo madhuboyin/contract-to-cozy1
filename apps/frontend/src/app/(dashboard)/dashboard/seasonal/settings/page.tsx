@@ -66,7 +66,7 @@ export default function SeasonalSettingsPage() {
 
   if (!propertyId) {
     return (
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={<MobilePageIntro title="Seasonal Settings" subtitle="Customize climate defaults and reminders." />}
       >
         <EmptyStateCard
@@ -79,7 +79,7 @@ export default function SeasonalSettingsPage() {
 
   if (isLoading) {
     return (
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={<MobilePageIntro title="Seasonal Settings" subtitle="Loading current climate profile." />}
       >
         <div className="rounded-2xl border border-slate-200 bg-white py-10 text-center">
@@ -94,7 +94,7 @@ export default function SeasonalSettingsPage() {
   const isAutoDetected = climateData?.data?.climateRegionSource === 'AUTO_DETECTED';
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <MobilePageIntro
           title="Seasonal Settings"

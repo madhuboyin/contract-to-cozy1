@@ -95,7 +95,7 @@ export default function ClaimDetailClient() {
 
   if (loading && !claim) {
     return (
-      <MobilePageContainer className="py-6">
+      <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
         <MobileCard variant="compact" className="text-sm text-slate-600">
           Loading claim...
         </MobileCard>
@@ -105,7 +105,7 @@ export default function ClaimDetailClient() {
 
   if (!claim) {
     return (
-      <MobilePageContainer className="py-6">
+      <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
         <EmptyStateCard
           title="Claim not found"
           description="This claim may have been removed or is unavailable."
@@ -127,7 +127,7 @@ export default function ClaimDetailClient() {
   const financial = insights?.financial;
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
         <Link href={`/dashboard/properties/${propertyId}/claims`}>
           <ArrowLeft className="h-4 w-4 mr-2" />

@@ -417,7 +417,7 @@ export default function ProvidersPage() {
   }
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={<MobilePageIntro title="Provider Search" subtitle="Find trusted local professionals by service and location." />}
       summary={
         <MobileKpiStrip className="sm:grid-cols-3">

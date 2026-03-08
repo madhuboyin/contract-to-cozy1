@@ -163,7 +163,7 @@ export default function ChecklistPage() {
 
   if (loading) {
     return (
-      <MobilePageContainer className="py-8">
+      <MobilePageContainer className="py-8 lg:max-w-7xl lg:px-8 lg:pb-10">
         <div className="flex h-full w-full items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
         </div>
@@ -173,7 +173,7 @@ export default function ChecklistPage() {
 
   if (error) {
     return (
-      <MobilePageContainer className="py-6">
+      <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
         <EmptyStateCard
           title="Oops, something went wrong."
           description={error}
@@ -192,7 +192,7 @@ export default function ChecklistPage() {
 
   if (!checklist) {
     return (
-      <MobilePageContainer className="py-6">
+      <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
         <EmptyStateCard
           title="No checklist found."
           description="Return to dashboard and try again."
@@ -217,7 +217,7 @@ export default function ChecklistPage() {
   const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       <Button asChild variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground">
         <Link href="/dashboard">
           <ArrowLeft className="mr-2 h-4 w-4" />

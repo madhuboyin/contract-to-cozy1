@@ -95,7 +95,7 @@ export default function DailySnapshotPage() {
 
   if (!propertyId) {
     return (
-      <MobilePageContainer className="space-y-7 py-3">
+      <MobilePageContainer className="space-y-7 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
         <EmptyStateCard
           title="Select a property"
           description="Daily Snapshot needs a selected property context."
@@ -118,7 +118,7 @@ export default function DailySnapshotPage() {
   const weather = snapshot?.payload?.weatherInsight;
 
   return (
-    <MobilePageContainer className="space-y-7 py-3">
+    <MobilePageContainer className="space-y-7 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
       <MobileSection>
         <Link href={`/dashboard?propertyId=${encodeURIComponent(propertyId)}`} className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard

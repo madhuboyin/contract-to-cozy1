@@ -105,7 +105,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
   }
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <div className="space-y-2">
           <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>

@@ -104,7 +104,7 @@ export default function BookingDetailsPage() {
 
   if (loading) {
     return (
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={<MobilePageIntro title="Booking Details" subtitle="Loading booking details..." />}
       >
         <div className="flex items-center justify-center rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white py-12">
@@ -117,7 +117,7 @@ export default function BookingDetailsPage() {
   if (!booking) {
     const isRequestFailure = errorState?.kind === 'REQUEST_FAILED';
     return (
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={<MobilePageIntro title="Booking Details" subtitle="Unable to load this booking." />}
       >
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
@@ -158,7 +158,7 @@ export default function BookingDetailsPage() {
   const scheduledTimeLabel = formatTime(booking.scheduledDate) || 'Time TBD';
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <div className="space-y-3">
           <button

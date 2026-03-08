@@ -130,7 +130,7 @@ export default function OnboardingClient() {
   if (statusQuery.isLoading) {
     return (
       <DashboardShell>
-        <MobilePageContainer className="py-6">
+        <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
           <div className="h-48 rounded-2xl bg-gray-100 animate-pulse" />
         </MobilePageContainer>
       </DashboardShell>
@@ -140,7 +140,7 @@ export default function OnboardingClient() {
   if (statusQuery.isError || !status) {
     return (
       <DashboardShell>
-        <MobilePageContainer className="py-6">
+        <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
           <MobileCard className="space-y-3">
             <p className="text-sm text-red-600">Failed to load onboarding status.</p>
             <Button onClick={() => statusQuery.refetch()}>Retry</Button>
@@ -153,7 +153,7 @@ export default function OnboardingClient() {
   if (status.status === 'COMPLETED' || status.setupScore === 100) {
     return (
       <DashboardShell>
-        <MobilePageContainer className="py-6">
+        <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
           <MobileCard className="space-y-4">
             <div className="flex items-center gap-2 text-green-700">
               <CheckCircle2 className="h-5 w-5" />
@@ -173,7 +173,7 @@ export default function OnboardingClient() {
 
   return (
     <DashboardShell className="gap-4">
-      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
         <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
           <Link href={`/dashboard/properties/${propertyId}`}>
             <ArrowLeft className="h-4 w-4 mr-2" />

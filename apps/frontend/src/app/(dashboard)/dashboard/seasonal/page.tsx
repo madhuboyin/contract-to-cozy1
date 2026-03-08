@@ -61,7 +61,7 @@ export default function SeasonalMaintenancePage() {
 
   if (!propertyId) {
     return (
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={
           <MobilePageIntro
             title="Seasonal Maintenance"
@@ -79,7 +79,7 @@ export default function SeasonalMaintenancePage() {
 
   if (isLoading) {
     return (
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={<MobilePageIntro title="Seasonal Maintenance" subtitle="Loading your seasonal checklist data." />}
       >
         <MobileCard variant="compact" className="py-10 text-center">
@@ -143,7 +143,7 @@ export default function SeasonalMaintenancePage() {
   const completionPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <div className="space-y-3">
           {backLink ? (

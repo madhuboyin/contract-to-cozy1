@@ -53,7 +53,7 @@ export default function RiskRadarPage() {
 
   if (!propertyId) {
     return (
-      <MobilePageContainer className="space-y-7 py-3">
+      <MobilePageContainer className="space-y-7 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
         <EmptyStateCard
           title="Select a property"
           description="Risk Radar requires a selected property."
@@ -73,7 +73,7 @@ export default function RiskRadarPage() {
   const report = riskQuery.data;
 
   return (
-    <MobilePageContainer className="space-y-7 py-3">
+    <MobilePageContainer className="space-y-7 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
       <MobileSection>
         <Link href={`/dashboard?propertyId=${encodeURIComponent(propertyId)}`} className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard

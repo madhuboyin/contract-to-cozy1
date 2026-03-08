@@ -71,7 +71,7 @@ export default function IncidentDetailClient() {
 
   if (loading && !incident) {
     return (
-      <MobilePageContainer className="py-6">
+      <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
         <MobileCard variant="compact" className="text-sm text-slate-600">
           Loading incident...
         </MobileCard>
@@ -80,7 +80,7 @@ export default function IncidentDetailClient() {
   }
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
         <Link href={`/dashboard/properties/${propertyId}?tab=incidents`}>
           <ArrowLeft className="h-4 w-4 mr-2" />

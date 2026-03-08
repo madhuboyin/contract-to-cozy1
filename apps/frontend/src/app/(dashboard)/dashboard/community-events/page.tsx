@@ -115,7 +115,7 @@ export default function CommunityPage() {
 
   if (isResolvingProperty && !propertyId) {
     return (
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={<MobilePageIntro title="Community" subtitle="Loading local services and events for your selected home." />}
       >
         <MobileCard variant="compact" className="py-10 text-center">
@@ -128,7 +128,7 @@ export default function CommunityPage() {
 
   if (!propertyId) {
     return (
-      <MobileToolWorkspace
+      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
         intro={<MobilePageIntro title="Community" subtitle="Events, city services, and municipal alerts." />}
       >
         <EmptyStateCard
@@ -142,7 +142,7 @@ export default function CommunityPage() {
   const locationLabel = [property?.city, property?.state].filter(Boolean).join(', ') || 'Selected property area';
 
   return (
-    <MobileToolWorkspace
+    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={<MobilePageIntro title="Community" subtitle="Local events, city services, and municipal alerts." />}
       summary={
         <MobileCard variant="compact" className="flex items-center justify-between gap-3">

@@ -85,7 +85,7 @@ export default function RecallAlertsClient() {
   }
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
         <Link href={`/dashboard/properties/${propertyId}`}>
           <ArrowLeft className="h-4 w-4 mr-2" />
