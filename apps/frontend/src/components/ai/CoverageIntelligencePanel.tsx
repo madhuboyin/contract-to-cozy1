@@ -2,7 +2,20 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Loader2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
+import {
+  AlertCircle,
+  ChevronDown,
+  DollarSign,
+  Hourglass,
+  Loader2,
+  RefreshCw,
+  Shield,
+  ShieldCheck,
+  Sparkles,
+  Tv,
+  Wrench,
+  Zap,
+} from 'lucide-react';
 import {
   CoverageAnalysisDTO,
   CoverageAnalysisOverrides,
@@ -33,12 +46,6 @@ const EMPTY_OVERRIDES: CoverageAnalysisOverrides = {
   cashBufferUsd: undefined,
   riskTolerance: 'MEDIUM',
 };
-
-function impactClasses(impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL') {
-  if (impact === 'POSITIVE') return 'bg-emerald-50 text-emerald-700';
-  if (impact === 'NEGATIVE') return 'bg-rose-50 text-rose-700';
-  return 'bg-gray-100 text-gray-700';
-}
 
 function money(value?: number | null) {
   if (value === null || value === undefined) return '—';
@@ -90,6 +97,22 @@ function normalizeOverrides(overrides: CoverageAnalysisOverrides): CoverageAnaly
   }
 
   return parsed;
+}
+
+function traceImpactPillClasses(impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL') {
+  if (impact === 'POSITIVE') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (impact === 'NEGATIVE') return 'border-rose-200 bg-rose-50 text-rose-700';
+  return 'border-slate-200 bg-slate-100 text-slate-700';
+}
+
+function getTraceIcon(label?: string | null) {
+  const normalized = (label || '').toLowerCase();
+  if (normalized.includes('profile')) return Tv;
+  if (normalized.includes('age') || normalized.includes('life')) return Hourglass;
+  if (normalized.includes('failure')) return Zap;
+  if (normalized.includes('repair')) return Wrench;
+  if (normalized.includes('cost') || normalized.includes('impact')) return DollarSign;
+  return Shield;
 }
 
 export default function CoverageIntelligencePanel({ propertyId }: CoverageIntelligencePanelProps) {
@@ -212,6 +235,15 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
     const query = searchParams.toString();
     return query ? `${pathname}?${query}` : pathname;
   }, [pathname, searchParams]);
+  const decisionTraceCounts = useMemo(() => {
+    const counts = { POSITIVE: 0, NEGATIVE: 0, NEUTRAL: 0 };
+    for (const trace of analysis?.decisionTrace ?? []) {
+      if (trace.impact === 'POSITIVE' || trace.impact === 'NEGATIVE' || trace.impact === 'NEUTRAL') {
+        counts[trace.impact] += 1;
+      }
+    }
+    return counts;
+  }, [analysis?.decisionTrace]);
 
   if (loading) {
     return (
@@ -437,20 +469,48 @@ export default function CoverageIntelligencePanel({ propertyId }: CoverageIntell
           </div>
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
-            <h4 className="text-base font-semibold text-gray-900">Decision trace</h4>
-            <div className="mt-3 space-y-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h4 className="text-base font-semibold text-gray-900">Decision trace</h4>
+                <p className="mt-1 text-xs text-slate-500">How the recommendation was reached, step by step</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {(['NEUTRAL', 'NEGATIVE', 'POSITIVE'] as const).map((impact) => (
+                  <span
+                    key={impact}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${traceImpactPillClasses(impact)}`}
+                  >
+                    {humanizeEnum(impact)} {decisionTraceCounts[impact]}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white">
               {analysis.decisionTrace.map((trace, index) => (
                 <div
                   key={`${trace.label}-${index}`}
-                  className="rounded-xl border border-gray-200 p-3 flex items-start justify-between gap-3"
+                  className={`flex items-center justify-between gap-3 px-4 py-3 ${
+                    index === analysis.decisionTrace.length - 1 ? '' : 'border-b border-slate-100'
+                  }`}
                 >
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">{trace.label}</div>
-                    {trace.detail && <div className="text-xs text-gray-600 mt-1">{trace.detail}</div>}
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                      {(() => {
+                        const TraceIcon = getTraceIcon(trace.label);
+                        return <TraceIcon className="h-3.5 w-3.5" />;
+                      })()}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900">{trace.label}</div>
+                      {trace.detail && <div className="mt-1 text-xs text-slate-500">{trace.detail}</div>}
+                    </div>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${impactClasses(trace.impact)}`}>
-                    {humanizeEnum(trace.impact)}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={`rounded-full border px-2.5 py-0.5 text-xs ${traceImpactPillClasses(trace.impact)}`}>
+                      {humanizeEnum(trace.impact)}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                  </div>
                 </div>
               ))}
             </div>
