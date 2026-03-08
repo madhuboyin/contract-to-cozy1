@@ -15,7 +15,7 @@ import {
   BottomSafeAreaReserve,
   MobileFilterStack,
   MobilePageIntro,
-  MobileToolWorkspace,
+  ResponsiveToolWorkspace,
   ResultHeroCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
@@ -70,7 +70,7 @@ function CoverageIntelligenceContent() {
   }
 
   return (
-    <MobileToolWorkspace
+    <ResponsiveToolWorkspace
       intro={
         <div className="space-y-3">
           {propertyIdFromUrl ? (
@@ -211,7 +211,7 @@ function CoverageIntelligenceContent() {
         </div>
       </details>
       <BottomSafeAreaReserve size="chatAware" />
-    </MobileToolWorkspace>
+    </ResponsiveToolWorkspace>
   );
 }
 

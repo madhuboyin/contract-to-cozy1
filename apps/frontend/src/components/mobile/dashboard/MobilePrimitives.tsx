@@ -545,6 +545,15 @@ export function MobilePageIntro({
   );
 }
 
+type ToolWorkspaceProps = {
+  intro?: React.ReactNode;
+  summary?: React.ReactNode;
+  filters?: React.ReactNode;
+  children?: React.ReactNode;
+  footer?: React.ReactNode;
+  className?: string;
+};
+
 export function MobileToolWorkspace({
   intro,
   summary,
@@ -552,14 +561,7 @@ export function MobileToolWorkspace({
   children,
   footer,
   className,
-}: {
-  intro?: React.ReactNode;
-  summary?: React.ReactNode;
-  filters?: React.ReactNode;
-  children?: React.ReactNode;
-  footer?: React.ReactNode;
-  className?: string;
-}) {
+}: ToolWorkspaceProps) {
   return (
     <MobilePageContainer className={cn('space-y-4', className)}>
       {intro}
@@ -567,6 +569,39 @@ export function MobileToolWorkspace({
       {filters}
       {children ? <div className="space-y-4">{children}</div> : null}
       {footer}
+    </MobilePageContainer>
+  );
+}
+
+export function ResponsiveToolWorkspace({
+  intro,
+  summary,
+  filters,
+  children,
+  footer,
+  className,
+}: ToolWorkspaceProps) {
+  return (
+    <MobilePageContainer className={cn('space-y-4 md:max-w-7xl md:px-6 lg:px-8', className)}>
+      <div className="space-y-4 md:hidden">
+        {intro}
+        {summary}
+        {filters}
+        {children ? <div className="space-y-4">{children}</div> : null}
+        {footer}
+      </div>
+
+      <div className="hidden md:grid md:grid-cols-[320px_minmax(0,1fr)] md:items-start md:gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-8">
+        <aside className="space-y-4 md:sticky md:top-6">
+          {intro}
+          {summary}
+          {filters}
+        </aside>
+        <main className="space-y-4">
+          {children ? <div className="space-y-4">{children}</div> : null}
+          {footer}
+        </main>
+      </div>
     </MobilePageContainer>
   );
 }
