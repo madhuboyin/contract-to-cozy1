@@ -435,7 +435,7 @@ export default function MaintenancePage() {
 
   if (isBusy) {
     return (
-      <MobilePageContainer className="space-y-4 py-6">
+      <MobilePageContainer className="space-y-4 py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mt-10" />
         <p className="text-center text-gray-500">Loading maintenance tasks...</p>
       </MobilePageContainer>
@@ -464,7 +464,7 @@ export default function MaintenancePage() {
   );
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       {backLink && (
         <Link href={backLink.href} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 group">
           <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />

@@ -286,7 +286,7 @@ export default function RoomShowcaseClient() {
     <>
       <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
 
-      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6">
+      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
         <div className="space-y-3 md:hidden">
           <button
             type="button"

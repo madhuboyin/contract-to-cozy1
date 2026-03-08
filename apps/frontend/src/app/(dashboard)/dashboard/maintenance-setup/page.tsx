@@ -95,7 +95,7 @@ export default function MaintenanceSetupPage() {
   if (isLoading) {
     return (
       <DashboardShell>
-        <MobilePageContainer className="py-6">
+        <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">
           <div className="flex justify-center items-center h-64">
                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
           </div>
@@ -108,7 +108,7 @@ export default function MaintenanceSetupPage() {
   if (properties.length === 0) {
       return (
           <DashboardShell>
-              <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+              <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
                 <MobilePageIntro
                   eyebrow="Maintenance"
                   title="Maintenance Setup"
@@ -136,7 +136,7 @@ export default function MaintenanceSetupPage() {
 
   return (
     <DashboardShell>
-      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
+      <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
         <MobilePageIntro
           eyebrow="Maintenance"
           title="Maintenance Setup"
