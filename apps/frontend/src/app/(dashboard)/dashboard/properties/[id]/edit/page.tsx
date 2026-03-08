@@ -55,6 +55,8 @@ const MAJOR_APPLIANCE_OPTIONS = [
     'MICROWAVE_HOOD',
     'WATER_SOFTENER',
 ];
+const MAX_PROPERTY_PHOTO_SIZE_MB = 10;
+const ALLOWED_PROPERTY_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 const APPLIANCE_DISPLAY_LABELS: Record<string, string> = {
   DISHWASHER: 'Dishwasher',
@@ -418,6 +420,10 @@ export default function EditPropertyPage() {
   const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
   
   const hasResetForm = React.useRef(false);
+  const propertyPhotoInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [propertyPhotoFile, setPropertyPhotoFile] = React.useState<File | null>(null);
+  const [propertyPhotoPreviewUrl, setPropertyPhotoPreviewUrl] = React.useState<string | null>(null);
+  const [removeCoverPhoto, setRemoveCoverPhoto] = React.useState(false);
 
   const contextualReturnTo = React.useMemo(() => {
     const from = searchParams.get("from");
@@ -448,6 +454,73 @@ export default function EditPropertyPage() {
     refetchOnMount: true,
     refetchOnWindowFocus: false,
   });
+  const existingCoverPhotoUrl = !removeCoverPhoto ? property?.coverPhoto?.fileUrl || null : null;
+  const activeCoverPhotoUrl = propertyPhotoPreviewUrl || existingCoverPhotoUrl;
+
+  React.useEffect(() => {
+    return () => {
+      if (propertyPhotoPreviewUrl) URL.revokeObjectURL(propertyPhotoPreviewUrl);
+    };
+  }, [propertyPhotoPreviewUrl]);
+
+  React.useEffect(() => {
+    setPropertyPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPropertyPhotoFile(null);
+    setRemoveCoverPhoto(false);
+    if (propertyPhotoInputRef.current) {
+      propertyPhotoInputRef.current.value = "";
+    }
+  }, [propertyId]);
+
+  const clearSelectedPropertyPhoto = React.useCallback(() => {
+    if (propertyPhotoPreviewUrl) {
+      URL.revokeObjectURL(propertyPhotoPreviewUrl);
+    }
+    setPropertyPhotoPreviewUrl(null);
+    setPropertyPhotoFile(null);
+    if (propertyPhotoInputRef.current) {
+      propertyPhotoInputRef.current.value = "";
+    }
+  }, [propertyPhotoPreviewUrl]);
+
+  const handlePropertyPhotoChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_PROPERTY_PHOTO_TYPES.includes(file.type)) {
+      toast({
+        title: "Invalid photo type",
+        description: "Upload JPG, PNG, WEBP, or HEIC.",
+        variant: "destructive",
+      });
+      if (propertyPhotoInputRef.current) propertyPhotoInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > MAX_PROPERTY_PHOTO_SIZE_MB * 1024 * 1024) {
+      toast({
+        title: "Photo too large",
+        description: `Photo must be under ${MAX_PROPERTY_PHOTO_SIZE_MB}MB.`,
+        variant: "destructive",
+      });
+      if (propertyPhotoInputRef.current) propertyPhotoInputRef.current.value = "";
+      return;
+    }
+
+    clearSelectedPropertyPhoto();
+    setPropertyPhotoFile(file);
+    setPropertyPhotoPreviewUrl(URL.createObjectURL(file));
+    setRemoveCoverPhoto(false);
+  }, [clearSelectedPropertyPhoto]);
+
+  const handleRemoveCoverPhoto = React.useCallback(() => {
+    const hadExistingPhoto = Boolean(property?.coverPhoto?.id);
+    clearSelectedPropertyPhoto();
+    setRemoveCoverPhoto(hadExistingPhoto);
+  }, [clearSelectedPropertyPhoto, property?.coverPhoto?.id]);
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema) as any,
@@ -490,7 +563,23 @@ export default function EditPropertyPage() {
 
   // 3. Setup Mutation
   const updateMutation = useMutation({
-    mutationFn: (data: PropertyFormValues) => {
+    mutationFn: async (data: PropertyFormValues) => {
+      let coverPhotoDocumentId: string | null | undefined = undefined;
+
+      if (propertyPhotoFile) {
+        const uploadResponse = await api.uploadDocument(propertyPhotoFile, {
+          type: "PHOTO",
+          name: propertyPhotoFile.name || "Property Photo",
+          propertyId,
+        });
+
+        if (!uploadResponse.success || !uploadResponse.data?.id) {
+          throw new Error(uploadResponse.message || "Failed to upload property photo.");
+        }
+        coverPhotoDocumentId = uploadResponse.data.id;
+      } else if (removeCoverPhoto) {
+        coverPhotoDocumentId = null;
+      }
       
       const payload = {
         name: data.name ?? undefined,
@@ -528,7 +617,8 @@ export default function EditPropertyPage() {
             id: app.id, 
             type: app.type, 
             installYear: app.installYear,
-        })) || [], 
+        })) || [],
+        ...(coverPhotoDocumentId !== undefined ? { coverPhotoDocumentId } : {}),
       };
 
       // Send the payload with the correct key and structure
@@ -553,6 +643,7 @@ export default function EditPropertyPage() {
       console.error(error);
       toast({
         title: "Couldn’t save. Try again.",
+        description: error instanceof Error ? error.message : undefined,
         variant: "destructive",
       });
     },
@@ -1113,6 +1204,84 @@ export default function EditPropertyPage() {
                     </FormItem>
                   )}
                 />
+
+                <div className="lg:col-span-12 space-y-2 rounded-md border border-black/10 bg-gray-50/50 p-3 dark:border-white/10 dark:bg-slate-900/30">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Property photo</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">Optional cover photo shown on property cards.</p>
+                    </div>
+                    {propertyPhotoFile ? (
+                      <StatusChip tone="good">New photo selected</StatusChip>
+                    ) : removeCoverPhoto ? (
+                      <StatusChip tone="elevated">Will remove</StatusChip>
+                    ) : existingCoverPhotoUrl ? (
+                      <StatusChip tone="info">Current photo</StatusChip>
+                    ) : (
+                      <StatusChip tone="info">Optional</StatusChip>
+                    )}
+                  </div>
+
+                  {activeCoverPhotoUrl ? (
+                    <div className="overflow-hidden rounded-md border border-black/10 bg-white dark:border-white/10 dark:bg-slate-900">
+                      <img
+                        src={activeCoverPhotoUrl}
+                        alt="Property photo preview"
+                        className="h-40 w-full object-cover"
+                      />
+                    </div>
+                  ) : null}
+
+                  <input
+                    ref={propertyPhotoInputRef}
+                    type="file"
+                    accept={ALLOWED_PROPERTY_PHOTO_TYPES.join(",")}
+                    className="hidden"
+                    onChange={handlePropertyPhotoChange}
+                  />
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => propertyPhotoInputRef.current?.click()}
+                      className="h-9"
+                    >
+                      {propertyPhotoFile || existingCoverPhotoUrl ? "Change Photo" : "Upload Photo"}
+                    </Button>
+
+                    {propertyPhotoFile ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          clearSelectedPropertyPhoto();
+                          setRemoveCoverPhoto(false);
+                        }}
+                        className="h-9"
+                      >
+                        Discard New Photo
+                      </Button>
+                    ) : null}
+
+                    {!propertyPhotoFile && existingCoverPhotoUrl ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={removeCoverPhoto ? () => setRemoveCoverPhoto(false) : handleRemoveCoverPhoto}
+                        className="h-9"
+                      >
+                        {removeCoverPhoto ? "Undo Remove" : "Remove Photo"}
+                      </Button>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                    JPG, PNG, WEBP, or HEIC (max {MAX_PROPERTY_PHOTO_SIZE_MB}MB).
+                  </p>
+                </div>
               </div>
             </PropertyEditSection>
 
