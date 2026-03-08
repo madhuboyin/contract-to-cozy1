@@ -40,7 +40,7 @@ export default function AIToolsPage() {
   const riskRadarHref = `/dashboard/risk-radar${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`;
 
   return (
-    <MobilePageContainer className="space-y-7 pt-2 pb-24">
+    <MobilePageContainer className="space-y-7 pt-2 pb-24 lg:max-w-7xl lg:space-y-8 lg:px-8 lg:pt-4 lg:pb-10">
       <MobileSection>
         <MobileSectionHeader title="AI Tools" subtitle="Smart decision support for your home" />
       </MobileSection>
@@ -53,7 +53,7 @@ export default function AIToolsPage() {
             metric={`${group.items.length} tools`}
             defaultOpen
           >
-            <QuickActionGrid className="gap-2.5">
+            <QuickActionGrid className="gap-2.5 lg:grid-cols-3 xl:grid-cols-4">
               {group.items.map((tool) => (
                 <QuickActionTile
                   key={tool.key}
@@ -73,18 +73,20 @@ export default function AIToolsPage() {
 
       <MobileSection>
         <SummaryCard title="Intelligence Details" subtitle="Deep-dive pages from mobile home intelligence">
-          <Link
-            href={dailySnapshotHref}
-            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-          >
-            Daily Snapshot
-          </Link>
-          <Link
-            href={riskRadarHref}
-            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-          >
-            Risk Radar
-          </Link>
+          <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+            <Link
+              href={dailySnapshotHref}
+              className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+            >
+              Daily Snapshot
+            </Link>
+            <Link
+              href={riskRadarHref}
+              className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+            >
+              Risk Radar
+            </Link>
+          </div>
         </SummaryCard>
       </MobileSection>
 
