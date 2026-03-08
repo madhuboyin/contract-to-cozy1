@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Plus, Loader2, Trash2, Edit, Upload, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck } from 'lucide-react';
+import { FileText, Plus, Loader2, Trash2, Edit, Upload, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck, Save, X } from 'lucide-react';
 import { differenceInCalendarDays, format, isPast, isValid, parseISO } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -20,7 +20,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 import {
-  CoverageModalFooter,
   CoverageModalHeader,
   COVERAGE_MODAL_CONTENT_CLASS,
   COVERAGE_MODAL_DATE_INPUT_CLASS,
@@ -168,6 +167,18 @@ const DISABLE_ASSET_LINKING_CATEGORIES: WarrantyCategory[] = [
     'STRUCTURAL',
 ];
 
+const COMMON_WARRANTY_PROVIDERS = [
+  'American Home Shield',
+  'Choice Home Warranty',
+  'First American Home Warranty',
+  'AFC Home Club',
+  'Liberty Home Guard',
+  'Cinch Home Services',
+  'Assurant',
+  'Samsung Care+',
+  'AppleCare+',
+];
+
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
@@ -306,6 +317,7 @@ interface WarrantyFormProps {
   initialData?: Warranty;
   properties: Property[];
   homeAssets: HomeAsset[];
+  providerSuggestions: string[];
   prefill?: {
     propertyId?: string;
     homeAssetId?: string;
@@ -316,7 +328,7 @@ interface WarrantyFormProps {
   isSubmitting: boolean;
 }
 
-const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, onClose, isSubmitting }: WarrantyFormProps) => {
+const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions, prefill, onSave, onClose, isSubmitting }: WarrantyFormProps) => {
   const buildInitialFormData = useCallback((): CreateWarrantyInput | UpdateWarrantyInput => ({
     providerName: initialData?.providerName || '',
     policyNumber: initialData?.policyNumber || '',
@@ -420,10 +432,6 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
       return formData.homeAssetId || SELECT_NONE_VALUE;
   }, [formData.homeAssetId, isAssetLinkingExplicitlyDisabled]);
 
-
-  // NEW: Get allowed asset types based on selected category
-  const allowedAssetTypes: string[] = formData.category ? CATEGORY_ASSET_MAP[formData.category as WarrantyCategory] : [];
-  
   // Filter assets based on the currently selected property AND the selected category (Fulfills Request)
   const filteredHomeAssets = useMemo(() => {
     // If linking is explicitly disabled (e.g., HVAC), return empty array.
@@ -431,8 +439,6 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
        return [];
     }
     
-    const currentCategory = formData.category as WarrantyCategory;
-
     // 1. Base Filter: Filter only by Property ID
     let assets = homeAssets.filter(asset => asset.propertyId === formData.propertyId);
     
@@ -448,222 +454,340 @@ const WarrantyForm = ({ initialData, properties, homeAssets, prefill, onSave, on
   const prefilledAssetMissingFromOptions =
     !!formData.homeAssetId && !filteredHomeAssets.some((asset) => asset.id === formData.homeAssetId);
 
+  const coverageLengthLabel = useMemo(() => {
+    if (!formData.startDate || !formData.expiryDate) return null;
+
+    const start = parseISO(formData.startDate);
+    const end = parseISO(formData.expiryDate);
+
+    if (!isValid(start) || !isValid(end)) return null;
+
+    const days = differenceInCalendarDays(end, start);
+    if (days <= 0) return null;
+
+    const months = Math.round(days / 30.4375);
+    if (months >= 12 && months % 12 === 0) {
+      const years = months / 12;
+      return `${years} year${years === 1 ? '' : 's'}`;
+    }
+    if (months >= 2) {
+      return `${months} months`;
+    }
+    return `${days} day${days === 1 ? '' : 's'}`;
+  }, [formData.expiryDate, formData.startDate]);
+
+
+  const submitDisabled = !initialData && !formData.category;
+  const modalTitle = initialData ? 'Edit Warranty' : 'Add Warranty';
+  const saveLabel = initialData ? 'Save Changes' : 'Save Warranty';
 
   return (
-    <form onSubmit={handleSubmit} className={COVERAGE_MODAL_FORM_CLASS}>
-      <CoverageModalHeader
-        icon={<BadgeCheck className="h-[18px] w-[18px]" />}
-        iconClassName="warranty-icon"
-        title={title}
-        subtitle="We'll remind you 60 days before this warranty expires."
-      />
-
-      <div className={COVERAGE_MODAL_CONTENT_CLASS}>
-        <div className="grid content-start gap-2">
-          <Label htmlFor="providerName" className={COVERAGE_MODAL_LABEL_CLASS}>
-            Provider name *
-          </Label>
-          <Input
-            id="providerName"
-            value={formData.providerName}
-            onChange={handleChange}
-            required
-            placeholder="e.g. Assurant, American Home Shield"
-            className={COVERAGE_MODAL_INPUT_CLASS}
-          />
-        </div>
-
-        <div className="grid content-start gap-2">
-          <Label htmlFor="category" className={COVERAGE_MODAL_LABEL_CLASS}>
-            Warranty category *
-          </Label>
-          <Select value={selectedCategory} onValueChange={(v) => handleSelectChange('category', v)} required={!initialData}>
-            <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
-              <SelectValue placeholder="Select the covered category (Required)" />
-            </SelectTrigger>
-            <SelectContent>
-              {WARRANTY_CATEGORY_OPTIONS.map(opt => (
-                <SelectItem key={opt.key} value={opt.key}>
-                  {opt.display}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid content-start gap-2">
-            <Label htmlFor="policyNumber" className={COVERAGE_MODAL_LABEL_CLASS}>
-              Policy / contract number
-            </Label>
-            <Input
-              id="policyNumber"
-              value={formData.policyNumber}
-              onChange={handleChange}
-              placeholder="e.g. WR-987654321"
-              className={COVERAGE_MODAL_INPUT_CLASS}
-            />
-          </div>
-          <div className="grid content-start gap-2">
-            <Label htmlFor="cost" className={COVERAGE_MODAL_LABEL_CLASS}>
-              What did it cost? ($)
-            </Label>
-            <Input
-              id="cost"
-              type="number"
-              min={0}
-              step="0.01"
-              value={formData.cost ?? ''}
-              onChange={handleChange}
-              placeholder="e.g. 350"
-              className={COVERAGE_MODAL_INPUT_CLASS}
-            />
-          </div>
-        </div>
-
-        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid content-start gap-2">
-            <Label htmlFor="startDate" className={COVERAGE_MODAL_LABEL_CLASS}>
-              Start date *
-            </Label>
-            <div className="date-input-wrapper relative">
-              <Input
-                id="startDate"
-                type="date"
-                value={formData.startDate}
-                onChange={handleChange}
-                required
-                className={COVERAGE_MODAL_DATE_INPUT_CLASS}
-              />
-              <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
-            </div>
-          </div>
-          <div className="grid content-start gap-2">
-            <Label htmlFor="expiryDate" className={COVERAGE_MODAL_LABEL_CLASS}>
-              Expiry date *
-            </Label>
-            <div className="date-input-wrapper relative">
-              <Input
-                id="expiryDate"
-                type="date"
-                value={formData.expiryDate}
-                onChange={handleChange}
-                required
-                className={COVERAGE_MODAL_DATE_INPUT_CLASS}
-              />
-              <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
-            </div>
-          </div>
-        </div>
-
-        <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
-          <div className="grid content-start gap-2">
-            <Label htmlFor="propertyId" className={COVERAGE_MODAL_LABEL_CLASS}>
-              Which property?
-            </Label>
-            <Select value={selectedPropertyId} onValueChange={(v) => handleSelectChange('propertyId', v)} disabled={false}>
-              <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
-                <SelectValue placeholder="Select a property (Optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SELECT_NONE_VALUE}>Not linked to a property</SelectItem>
-                {prefilledPropertyMissingFromOptions && formData.propertyId && (
-                  <SelectItem value={formData.propertyId}>
-                    Selected property
-                  </SelectItem>
-                )}
-                {properties.map(p => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name} ({p.zipCode})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid content-start gap-2">
-            <Label htmlFor="homeAssetId" className={COVERAGE_MODAL_LABEL_CLASS}>
-              Which appliance or system?
-            </Label>
-            <Select
-              value={selectedHomeAssetId}
-              onValueChange={(v) => handleSelectChange('homeAssetId', v)}
-              disabled={
-                isAssetLinkingExplicitlyDisabled ||
-                !formData.propertyId ||
-                (filteredHomeAssets.length === 0 &&
-                  !formData.homeAssetId &&
-                  !isSubmitting &&
-                  !isAssetLinkingExplicitlyDisabled)
-              }
-            >
-              <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
-                <SelectValue
-                  placeholder={
-                    isAssetLinkingExplicitlyDisabled
-                      ? `System/Structural Coverage (${WARRANTY_CATEGORIES[formData.category as WarrantyCategory]})`
-                      : !formData.category
-                      ? 'Select Category First'
-                      : !formData.propertyId
-                      ? 'Select Property First'
-                      : filteredHomeAssets.length === 0
-                      ? 'No compatible assets found for this property'
-                      : 'Select an asset (Optional)'
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {!isAssetLinkingExplicitlyDisabled && (
-                  <SelectItem value={SELECT_NONE_VALUE}>Entire category</SelectItem>
-                )}
-
-                {filteredHomeAssets.map(asset => (
-                  <SelectItem key={asset.id} value={asset.id}>
-                    {asset.assetType.replace(/_/g, ' ')} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
-                  </SelectItem>
-                ))}
-                {prefilledAssetMissingFromOptions && formData.homeAssetId && (
-                  <SelectItem value={formData.homeAssetId}>
-                    Linked appliance
-                  </SelectItem>
-                )}
-
-                {filteredHomeAssets.length === 0 && formData.category && formData.propertyId && !isAssetLinkingExplicitlyDisabled && (
-                  <div className="p-2 text-sm text-muted-foreground italic">
-                    No compatible assets found.
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
-            {!formData.propertyId && (
-              <p className={COVERAGE_MODAL_FIELD_HINT_CONDITIONAL_CLASS}>
-                Select a property above to link a system or appliance.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid content-start gap-2">
-          <Label htmlFor="coverageDetails" className={COVERAGE_MODAL_LABEL_CLASS}>
-            Coverage notes
-          </Label>
-          <Textarea
-            id="coverageDetails"
-            value={formData.coverageDetails}
-            onChange={handleChange}
-            placeholder="Optional - any specific items or exclusions worth noting."
-            className={COVERAGE_MODAL_NOTES_TEXTAREA_CLASS}
-          />
-        </div>
+    <form onSubmit={handleSubmit} className={cn(COVERAGE_MODAL_FORM_CLASS, 'flex h-full max-h-[92vh] flex-col')}>
+      <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3 sm:hidden">
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-[40px] px-1 text-sm font-medium text-[#6B7280]"
+        >
+          Cancel
+        </button>
+        <p className="text-base font-semibold text-[#111827]">{modalTitle}</p>
+        <span className="w-[58px]" aria-hidden="true" />
       </div>
 
-      <CoverageModalFooter
-        onClose={onClose}
-        isSubmitting={isSubmitting}
-        isEditMode={Boolean(initialData)}
-        createLabel="Create Warranty"
-        submitDisabled={!initialData && !formData.category}
-      />
+      <div className={cn(COVERAGE_MODAL_CONTENT_CLASS, 'flex-1 space-y-5 overflow-y-auto pb-6')}>
+        <CoverageModalHeader
+          icon={<BadgeCheck className="h-[18px] w-[18px]" />}
+          iconClassName="warranty-icon"
+          title={title}
+          subtitle="We'll remind you before it expires."
+        />
+
+        <div className="rounded-2xl border border-emerald-200/80 bg-[linear-gradient(145deg,#ecfdf5,#eef6ff)] px-3.5 py-3">
+          <p className="text-sm font-semibold text-[#111827]">Add Warranty</p>
+          <p className="mt-0.5 text-xs text-[#4B5563]">Track it once, and Cozy will remind you before expiry.</p>
+        </div>
+
+        <section className="space-y-2">
+          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Warranty Details</h3>
+          <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
+            <div className="grid content-start gap-2">
+              <Label htmlFor="providerName" className={COVERAGE_MODAL_LABEL_CLASS}>
+                Provider *
+              </Label>
+              <Input
+                id="providerName"
+                list="warranty-provider-suggestions"
+                value={formData.providerName}
+                onChange={handleChange}
+                required
+                placeholder="Search or enter provider"
+                className={COVERAGE_MODAL_INPUT_CLASS}
+              />
+              <datalist id="warranty-provider-suggestions">
+                {providerSuggestions.slice(0, 12).map((provider) => (
+                  <option key={provider} value={provider} />
+                ))}
+              </datalist>
+              {providerSuggestions.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {providerSuggestions.slice(0, 4).map((provider) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, providerName: provider }))}
+                      className="rounded-full border border-[#D1D5DB] bg-white px-2.5 py-1 text-[11px] font-medium text-[#374151] transition-colors hover:border-[#0D9488] hover:text-[#0D9488]"
+                    >
+                      {provider}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="grid content-start gap-2">
+              <Label htmlFor="category" className={COVERAGE_MODAL_LABEL_CLASS}>
+                Category *
+              </Label>
+              <Select value={selectedCategory} onValueChange={(v) => handleSelectChange('category', v)} required={!initialData}>
+                <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {WARRANTY_CATEGORY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.key} value={opt.key}>
+                      {opt.display}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
+              <div className="grid content-start gap-2">
+                <Label htmlFor="policyNumber" className={COVERAGE_MODAL_LABEL_CLASS}>
+                  Policy number
+                </Label>
+                <Input
+                  id="policyNumber"
+                  value={formData.policyNumber}
+                  onChange={handleChange}
+                  placeholder="Optional"
+                  className={COVERAGE_MODAL_INPUT_CLASS}
+                />
+              </div>
+              <div className="grid content-start gap-2">
+                <Label htmlFor="cost" className={COVERAGE_MODAL_LABEL_CLASS}>
+                  Cost ($)
+                </Label>
+                <Input
+                  id="cost"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formData.cost ?? ''}
+                  onChange={handleChange}
+                  placeholder="Optional"
+                  className={COVERAGE_MODAL_INPUT_CLASS}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Coverage Period</h3>
+          <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
+            <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
+              <div className="grid content-start gap-2">
+                <Label htmlFor="startDate" className={COVERAGE_MODAL_LABEL_CLASS}>
+                  Start date *
+                </Label>
+                <div className="date-input-wrapper relative">
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={formData.startDate}
+                    onChange={handleChange}
+                    required
+                    className={COVERAGE_MODAL_DATE_INPUT_CLASS}
+                  />
+                  <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+                </div>
+              </div>
+              <div className="grid content-start gap-2">
+                <Label htmlFor="expiryDate" className={COVERAGE_MODAL_LABEL_CLASS}>
+                  Expiry date *
+                </Label>
+                <div className="date-input-wrapper relative">
+                  <Input
+                    id="expiryDate"
+                    type="date"
+                    value={formData.expiryDate}
+                    onChange={handleChange}
+                    required
+                    className={COVERAGE_MODAL_DATE_INPUT_CLASS}
+                  />
+                  <CalendarDays className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280]" />
+                </div>
+              </div>
+            </div>
+            {coverageLengthLabel ? (
+              <p className="rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-3 py-2 text-xs font-medium text-[#0F766E]">
+                Coverage length: {coverageLengthLabel}
+              </p>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Coverage Target</h3>
+          <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
+            <div className="grid content-start gap-2">
+              <Label htmlFor="propertyId" className={COVERAGE_MODAL_LABEL_CLASS}>
+                Property
+              </Label>
+              <Select value={selectedPropertyId} onValueChange={(v) => handleSelectChange('propertyId', v)} disabled={false}>
+                <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
+                  <SelectValue placeholder="Not linked" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_NONE_VALUE}>Not linked</SelectItem>
+                  {prefilledPropertyMissingFromOptions && formData.propertyId && (
+                    <SelectItem value={formData.propertyId}>
+                      Selected property
+                    </SelectItem>
+                  )}
+                  {properties.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} ({p.zipCode})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid content-start gap-2">
+              <Label htmlFor="homeAssetId" className={COVERAGE_MODAL_LABEL_CLASS}>
+                Covered item
+              </Label>
+              <Select
+                value={selectedHomeAssetId}
+                onValueChange={(v) => handleSelectChange('homeAssetId', v)}
+                disabled={
+                  isAssetLinkingExplicitlyDisabled ||
+                  !formData.propertyId ||
+                  (filteredHomeAssets.length === 0 &&
+                    !formData.homeAssetId &&
+                    !isSubmitting &&
+                    !isAssetLinkingExplicitlyDisabled)
+                }
+              >
+                <SelectTrigger className={COVERAGE_MODAL_SELECT_TRIGGER_CLASS}>
+                  <SelectValue
+                    placeholder={
+                      isAssetLinkingExplicitlyDisabled
+                        ? `Category coverage (${WARRANTY_CATEGORIES[formData.category as WarrantyCategory]})`
+                        : !formData.category
+                        ? 'Select category first'
+                        : !formData.propertyId
+                        ? 'Select property first'
+                        : filteredHomeAssets.length === 0
+                        ? 'No compatible assets found'
+                        : 'Entire category'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {!isAssetLinkingExplicitlyDisabled && (
+                    <SelectItem value={SELECT_NONE_VALUE}>Entire category</SelectItem>
+                  )}
+
+                  {filteredHomeAssets.map((asset) => (
+                    <SelectItem key={asset.id} value={asset.id}>
+                      {asset.assetType.replace(/_/g, ' ')} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
+                    </SelectItem>
+                  ))}
+                  {prefilledAssetMissingFromOptions && formData.homeAssetId && (
+                    <SelectItem value={formData.homeAssetId}>
+                      Linked appliance
+                    </SelectItem>
+                  )}
+
+                  {filteredHomeAssets.length === 0 && formData.category && formData.propertyId && !isAssetLinkingExplicitlyDisabled && (
+                    <div className="p-2 text-sm text-muted-foreground italic">
+                      No compatible assets found.
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+              {!formData.propertyId && (
+                <p className={COVERAGE_MODAL_FIELD_HINT_CONDITIONAL_CLASS}>
+                  Select a property above to link a system or appliance.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Additional Notes</h3>
+          <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
+            <div className="grid content-start gap-2">
+              <Label htmlFor="coverageDetails" className={COVERAGE_MODAL_LABEL_CLASS}>
+                Coverage notes
+              </Label>
+              <Textarea
+                id="coverageDetails"
+                value={formData.coverageDetails}
+                onChange={handleChange}
+                placeholder="Optional details, limits, or exclusions."
+                className={COVERAGE_MODAL_NOTES_TEXTAREA_CLASS}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-[#E5E7EB] bg-white px-3.5 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#F3F4F6] text-[#4B5563]">
+                <Upload className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-[#111827]">Upload document (optional)</p>
+                <p className="text-xs text-[#6B7280]">Attach a PDF or photo right after saving this warranty.</p>
+              </div>
+            </div>
+            <span className="rounded-full border border-[#E5E7EB] px-2 py-1 text-[11px] font-medium text-[#6B7280]">
+              After save
+            </span>
+          </div>
+        </section>
+      </div>
+
+      <div className="sticky bottom-0 z-20 border-t border-[#E5E7EB] bg-white/95 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:px-6">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="h-[46px] w-full justify-center sm:h-[40px] sm:w-auto"
+          >
+            <X className="mr-2 h-4 w-4" />
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={submitDisabled || isSubmitting}
+            className="h-[48px] w-full justify-center bg-[#0D9488] text-white hover:bg-[#0F766E] sm:h-[40px] sm:w-auto"
+          >
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {saveLabel}
+          </Button>
+        </div>
+      </div>
     </form>
   );
 };
@@ -1065,6 +1189,19 @@ export default function WarrantiesPage() {
     const nextUpcoming = warrantyStatusMeta.find(({ meta }) => meta.expiryDate && meta.daysRemaining !== null && meta.daysRemaining >= 0);
     return nextUpcoming?.meta.expiryDate ?? warrantyStatusMeta[0]?.meta.expiryDate ?? null;
   }, [warrantyStatusMeta]);
+
+  const providerSuggestions = useMemo(() => {
+    const uniqueProviders = new Map<string, string>();
+    [...warranties.map((warranty) => warranty.providerName), ...COMMON_WARRANTY_PROVIDERS].forEach((provider) => {
+      const normalized = provider?.trim();
+      if (!normalized) return;
+      const key = normalized.toLowerCase();
+      if (!uniqueProviders.has(key)) {
+        uniqueProviders.set(key, normalized);
+      }
+    });
+    return Array.from(uniqueProviders.values());
+  }, [warranties]);
   
   // UPDATED: Get Property Info to handle asset-based linkage
   const getPropertyInfo = useCallback((warranty: Warranty): string => {
@@ -1154,6 +1291,7 @@ export default function WarrantiesPage() {
                 initialData={editingWarranty}
                 properties={properties}
                 homeAssets={homeAssets} // PASSED NEW PROP
+                providerSuggestions={providerSuggestions}
                 prefill={!editingWarranty ? createModalPrefill : undefined}
                 onSave={handleSave}
                 onClose={closeAddEditModal}
