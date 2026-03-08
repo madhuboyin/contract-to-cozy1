@@ -812,7 +812,7 @@ export default function CoverageIntelligencePanel({
                         <verdictIcon.Icon className="h-7 w-7" />
                       </span>
                       <div>
-                        <h3 className="text-4xl font-semibold tracking-tight text-slate-900">
+                        <h3 className="text-3xl font-semibold tracking-tight text-slate-900">
                           {humanizeEnum(analysis.overallVerdict)}
                         </h3>
                         <p className="mt-2 text-[22px] leading-tight text-slate-800">
@@ -1037,13 +1037,13 @@ export default function CoverageIntelligencePanel({
                 <div className="mt-4 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
                     <span className="text-slate-600">Expected annual repair risk</span>
-                    <span className="text-3xl font-semibold text-slate-900">
+                    <span className="text-2xl font-semibold text-slate-900">
                       {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
                     <span className="text-slate-600">Net impact</span>
-                    <span className={cn('text-4xl font-semibold', (analysis.warranty.expectedNetImpactUsd ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                    <span className={cn('text-3xl font-semibold', (analysis.warranty.expectedNetImpactUsd ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600')}>
                       {money(analysis.warranty.expectedNetImpactUsd)}
                     </span>
                   </div>
