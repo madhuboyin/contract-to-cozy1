@@ -59,7 +59,23 @@ function CoverageIntelligenceContent() {
     }
   }, [propertyIdFromUrl, selectedPropertyId]);
 
-  const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+  const renderPropertySelector = () => (
+    <div>
+      <Label className="mb-2 block text-sm font-medium text-gray-700">Select Property</Label>
+      <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+        <SelectTrigger className="w-full bg-white">
+          <SelectValue placeholder="Choose a property" />
+        </SelectTrigger>
+        <SelectContent>
+          {properties.map((property) => (
+            <SelectItem key={property.id} value={property.id}>
+              {property.name || property.address}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -96,25 +112,9 @@ function CoverageIntelligenceContent() {
       }
       filters={
         properties.length > 0 ? (
-          <MobileFilterStack
-            primaryFilters={
-              <div>
-                <Label className="mb-2 block text-sm font-medium text-gray-700">Select Property</Label>
-                <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
-                  <SelectTrigger className="w-full bg-white">
-                    <SelectValue placeholder="Choose a property" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id}>
-                        {property.name || property.address}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            }
-          />
+          <div className="lg:hidden">
+            <MobileFilterStack primaryFilters={renderPropertySelector()} />
+          </div>
         ) : undefined
       }
       summary={
@@ -135,7 +135,7 @@ function CoverageIntelligenceContent() {
       }
     >
       {selectedPropertyId ? (
-        <CoverageIntelligencePanel propertyId={selectedPropertyId} />
+        <CoverageIntelligencePanel propertyId={selectedPropertyId} propertySelector={renderPropertySelector()} />
       ) : (
         <div className="rounded-2xl border border-black/10 bg-white p-8 text-center text-gray-600">
           Select a property to load Coverage Intelligence.
