@@ -812,15 +812,15 @@ export default function CoverageIntelligencePanel({
                         <verdictIcon.Icon className="h-7 w-7" />
                       </span>
                       <div>
-                        <h3 className="text-3xl font-semibold tracking-tight text-slate-900">
+                        <h3 className="text-2xl font-semibold tracking-tight text-slate-900">
                           {humanizeEnum(analysis.overallVerdict)}
                         </h3>
-                        <p className="mt-2 text-[22px] leading-tight text-slate-800">
+                        <p className="mt-2 text-xl leading-tight text-slate-800">
                           Warranty would likely cost{' '}
                           <span className="font-semibold">{annualDeltaAbs}</span>{' '}
                           {annualDelta >= 0 ? 'more' : 'less'} than expected repairs.
                         </p>
-                        <p className="mt-2 text-2xl text-slate-700">
+                        <p className="mt-2 text-xl text-slate-700">
                           {annualDelta < 0
                             ? `Skipping this warranty saves ${annualDeltaAbs} per year.`
                             : `Coverage may cost about ${annualDeltaAbs} more per year.`}
@@ -849,13 +849,13 @@ export default function CoverageIntelligencePanel({
                   <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
                     <div className="rounded-xl border border-slate-200 bg-white/85 p-4">
                       <p className="text-xs text-slate-500">Expected annual repair risk</p>
-                      <p className="mt-2 text-4xl font-semibold text-slate-900">
+                      <p className="mt-2 text-3xl font-semibold text-slate-900">
                         {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
                       </p>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-white/85 p-4">
                       <p className="text-xs text-slate-500">Estimated warranty cost</p>
-                      <p className="mt-2 text-4xl font-semibold text-slate-900">
+                      <p className="mt-2 text-3xl font-semibold text-slate-900">
                         {money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}
                       </p>
                     </div>
@@ -863,7 +863,7 @@ export default function CoverageIntelligencePanel({
                       <p className="text-xs text-slate-500">Warranty delta</p>
                       <p
                         className={cn(
-                          'mt-2 text-4xl font-semibold',
+                          'mt-2 text-3xl font-semibold',
                           annualDelta < 0 ? 'text-rose-600' : 'text-emerald-600'
                         )}
                       >
@@ -1037,19 +1037,19 @@ export default function CoverageIntelligencePanel({
                 <div className="mt-4 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
                     <span className="text-slate-600">Expected annual repair risk</span>
-                    <span className="text-2xl font-semibold text-slate-900">
+                    <span className="text-xl font-semibold text-slate-900">
                       {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
                     <span className="text-slate-600">Net impact</span>
-                    <span className={cn('text-3xl font-semibold', (analysis.warranty.expectedNetImpactUsd ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                    <span className={cn('text-2xl font-semibold', (analysis.warranty.expectedNetImpactUsd ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600')}>
                       {money(analysis.warranty.expectedNetImpactUsd)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
                     <span className="text-slate-600">Break-even months</span>
-                    <span className="text-xl font-semibold text-slate-900">{analysis.warranty.breakEvenMonths ?? '—'} months</span>
+                    <span className="text-lg font-semibold text-slate-900">{analysis.warranty.breakEvenMonths ?? '—'} months</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-600">Warranty service fee</span>
