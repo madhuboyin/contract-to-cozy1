@@ -18,8 +18,6 @@ import {
   RoofTypes,
 } from "@/types"; 
 import { api } from "@/lib/api/client";
-import { DashboardShell } from "@/components/DashboardShell";
-import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -282,80 +280,81 @@ const ApplianceBentoGrid = () => {
 
   return (
     <div className="space-y-3">
-      <div className="appliance-table-wrapper overflow-x-auto">
-        <div className="min-w-[520px] space-y-3">
-          <div className="grid grid-cols-[35%_15%_38%_12%] gap-4 px-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-            <span>Appliance</span>
-            <span>Year</span>
-            <span>Status</span>
-            <span className="text-center">Remove</span>
-          </div>
-          <div className="space-y-3">
-            {fields.map((field, index) => (
-              <div
-                key={field.id}
-                className="grid grid-cols-[35%_15%_38%_12%] items-center gap-4 rounded-md border border-black/5 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-slate-900/30"
-              >
-                <FormField
-                  control={control}
-                  name={`appliances.${index}.type`}
-                  render={({ field: selectField }) => (
-                    <FormItem className="w-full">
-                      <FormLabel className="sr-only">Appliance</FormLabel>
-                      <Select onValueChange={selectField.onChange} value={selectField.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40">
-                            <SelectValue placeholder="Select appliance type">
-                              {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
-                            </SelectValue>
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {MAJOR_APPLIANCE_OPTIONS.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {formatApplianceLabel(type)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage>{(errors.appliances?.[index] as any)?.type?.message}</FormMessage>
-                    </FormItem>
+      <div className="space-y-3">
+        <div className="hidden md:grid md:grid-cols-[35%_15%_38%_12%] md:gap-4 md:px-3 md:text-xs md:font-semibold md:uppercase md:tracking-wide md:text-gray-500 md:dark:text-slate-400">
+          <span>Appliance</span>
+          <span>Year</span>
+          <span>Status</span>
+          <span className="text-center">Remove</span>
+        </div>
+        <div className="space-y-3">
+          {fields.map((field, index) => (
+            <div
+              key={field.id}
+              className="grid grid-cols-1 gap-3 rounded-md border border-black/5 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-slate-900/30 md:grid-cols-[35%_15%_38%_12%] md:items-center md:gap-4"
+            >
+              <FormField
+                control={control}
+                name={`appliances.${index}.type`}
+                render={({ field: selectField }) => (
+                  <FormItem className="w-full">
+                    <FormLabel className="text-xs font-medium text-muted-foreground md:sr-only">Appliance</FormLabel>
+                    <Select onValueChange={selectField.onChange} value={selectField.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40">
+                          <SelectValue placeholder="Select appliance type">
+                            {selectField.value ? formatApplianceLabel(selectField.value) : "Select appliance type"}
+                          </SelectValue>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {MAJOR_APPLIANCE_OPTIONS.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {formatApplianceLabel(type)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage>{(errors.appliances?.[index] as any)?.type?.message}</FormMessage>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={control}
+                name={`appliances.${index}.installYear`}
+                render={({ field: yearField }) => (
+                  <FormItem className="w-full">
+                    <FormLabel className="text-xs font-medium text-muted-foreground md:sr-only">Install year</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={
+                          yearField.value
+                            ? "YYYY"
+                            : Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900
+                              ? String(Number(watch("yearBuilt")))
+                              : "YYYY"
+                        }
+                        title={
+                          !yearField.value && Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900
+                            ? "Suggest based on home age"
+                            : undefined
+                        }
+                        type="number"
+                        maxLength={4}
+                        {...yearField}
+                        value={yearField.value ?? ""}
+                        onChange={(e) => yearField.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
+                        className={cn("h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40", fieldSizeClass("xs"))}
+                      />
+                    </FormControl>
+                    <FormMessage>{(errors.appliances?.[index] as any)?.installYear?.message}</FormMessage>
+                  </FormItem>
                   )}
                 />
 
-                <FormField
-                  control={control}
-                  name={`appliances.${index}.installYear`}
-                  render={({ field: yearField }) => (
-                    <FormItem className="w-full">
-                      <FormLabel className="sr-only">Install year</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder={
-                            yearField.value
-                              ? "YYYY"
-                              : Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900
-                                ? String(Number(watch("yearBuilt")))
-                                : "YYYY"
-                          }
-                          title={
-                            !yearField.value && Number.isFinite(Number(watch("yearBuilt"))) && Number(watch("yearBuilt")) >= 1900
-                              ? "Suggest based on home age"
-                              : undefined
-                          }
-                          type="number"
-                          maxLength={4}
-                          {...yearField}
-                          value={yearField.value ?? ""}
-                          onChange={(e) => yearField.onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
-                          className={cn("h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40", fieldSizeClass("xs"))}
-                        />
-                      </FormControl>
-                      <FormMessage>{(errors.appliances?.[index] as any)?.installYear?.message}</FormMessage>
-                    </FormItem>
-                    )}
-                  />
-
+              <div className="space-y-1 md:space-y-0">
+                <p className="text-xs font-medium text-muted-foreground md:hidden">Status</p>
                 <div className="flex min-h-10 items-center">
                   {(() => {
                     const yearVal = watch(`appliances.${index}.installYear`);
@@ -376,22 +375,23 @@ const ApplianceBentoGrid = () => {
                     );
                   })()}
                 </div>
-
-                <div className="flex items-center justify-center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove(index)}
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    aria-label="Remove appliance"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
               </div>
-            ))}
-          </div>
+
+              <div className="flex items-center justify-between md:justify-center">
+                <p className="text-xs font-medium text-muted-foreground md:hidden">Remove</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => remove(index)}
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  aria-label="Remove appliance"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -852,28 +852,30 @@ export default function EditPropertyPage() {
 
   if (isLoadingProperty) {
     return (
-      <DashboardShell>
+      <div className="mx-auto w-full max-w-[1200px] px-4 py-4 sm:px-6 lg:px-8">
         <div className="h-64 rounded-lg bg-gray-100 animate-pulse flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </DashboardShell>
+      </div>
     );
   }
 
   if (!property) {
     return (
-      <DashboardShell>
-        <PageHeader>
-          <PageHeaderHeading>Property Not Found</PageHeaderHeading>
-          <Card className="mt-4"><CardContent className="py-6">The property you are looking for does not exist or you do not have permission to view it.</CardContent></Card>
-        </PageHeader>
-      </DashboardShell>
+      <div className="mx-auto w-full max-w-[1200px] space-y-4 px-4 py-4 sm:px-6 lg:px-8">
+        <MobilePageIntro
+          title="Property Not Found"
+          subtitle="The property you are looking for does not exist or you do not have permission to view it."
+        />
+        <Button variant="outline" onClick={() => router.push("/dashboard/properties")}>
+          Back to Properties
+        </Button>
+      </div>
     );
   }
 
   return (
-    <DashboardShell>
-      <div className="property-edit-page mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8">
+    <div className="property-edit-page mx-auto w-full max-w-[1200px] px-4 py-4 sm:px-6 lg:px-8">
         <div className="mb-3 md:hidden">
           <MobilePageIntro
             title="Edit Property"
@@ -1571,6 +1573,5 @@ export default function EditPropertyPage() {
           </form>
         </Form>
       </div>
-    </DashboardShell>
   );
 }

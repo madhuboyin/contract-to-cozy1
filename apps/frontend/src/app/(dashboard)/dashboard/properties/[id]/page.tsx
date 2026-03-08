@@ -7,8 +7,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { Property, PropertyDashboardBootstrap } from "@/types"; // Base Property type
-import { DashboardShell } from "@/components/DashboardShell";
-import { PageHeader, PageHeaderHeading, PageHeaderDescription } from "@/components/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -984,9 +982,9 @@ export default function PropertyDetailPage() {
 
   if (isLoading) {
     return (
-      <DashboardShell>
+      <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
         <div className="h-64 rounded-lg bg-gray-100 animate-pulse" />
-      </DashboardShell>
+      </div>
     );
   }
 
@@ -994,27 +992,24 @@ export default function PropertyDetailPage() {
 
   if (!property) {
     return (
-      <DashboardShell>
-        <PageHeader>
-          <PageHeaderHeading>Property Not Found</PageHeaderHeading>
-          <PageHeaderDescription>
-            The requested property could not be loaded or does not exist.
-          </PageHeaderDescription>
-        </PageHeader>
-        <div className="mt-4">
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/properties">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Properties
-            </Link>
-          </Button>
-        </div>
-      </DashboardShell>
+      <div className="mx-auto w-full max-w-6xl space-y-4 px-4 py-4 sm:px-6 lg:px-8">
+        <MobilePageIntro
+          eyebrow="Property Hub"
+          title="Property Not Found"
+          subtitle="The requested property could not be loaded or does not exist."
+        />
+        <Button variant="outline" asChild>
+          <Link href="/dashboard/properties">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Properties
+          </Link>
+        </Button>
+      </div>
     );
   }
 
   return (
-    <DashboardShell className="gap-2">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-4 sm:px-6 lg:px-8">
       {FEATURE_FLAGS.PROPERTY_NARRATIVE_ENGINE && narrativeRun?.status === "ACTIVE" && (
         <NarrativeRevealOverlay
           run={narrativeRun}
@@ -1036,10 +1031,10 @@ export default function PropertyDetailPage() {
         />
       )}
 
-      <div className="md:hidden space-y-3">
+      <div className="space-y-3">
         <Button
           variant="ghost"
-          className="min-h-[44px] px-0 text-sm text-muted-foreground"
+          className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground"
           onClick={() => router.back()}
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" />
@@ -1058,36 +1053,6 @@ export default function PropertyDetailPage() {
             </Link>
           }
         />
-      </div>
-
-      <div className="hidden md:block">
-        <div className="mb-2">
-          <button
-            onClick={() => router.back()}
-            className="font-body text-sm font-medium text-blue-600 hover:text-blue-700 inline-flex items-center transition-colors bg-transparent border-none p-0 cursor-pointer min-h-[44px]"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
-            Back
-          </button>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-3">
-          <PageHeader className="pt-2 pb-2 gap-1 flex-1 min-w-0">
-            <PageHeaderHeading className="truncate">{property.name || "My Property"}</PageHeaderHeading>
-            <PageHeaderDescription className="truncate">
-              {property.address}, {property.city}
-            </PageHeaderDescription>
-          </PageHeader>
-
-          <div className="flex-shrink-0 sm:pt-2">
-            <Link href={`/dashboard/properties/${property.id}/edit`}>
-              <Button variant="outline" size="sm" className="gap-2 min-h-[44px]">
-                <Edit className="h-4 w-4" />
-                Edit Details
-              </Button>
-            </Link>
-          </div>
-        </div>
       </div>
 
       <div className="mb-4">
@@ -1293,6 +1258,6 @@ export default function PropertyDetailPage() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
-    </DashboardShell>
+    </div>
   );
 }
