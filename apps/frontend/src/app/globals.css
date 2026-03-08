@@ -594,6 +594,55 @@ html {
   .pulse-dot {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
+
+  .responsive-tool-shell {
+    width: 100%;
+    max-width: 414px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-bottom: calc(8rem + env(safe-area-inset-bottom));
+  }
+
+  .responsive-tool-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .responsive-tool-desktop {
+    display: none;
+  }
+
+  .responsive-tool-aside {
+    position: static;
+  }
+
+  @media (min-width: 1024px) {
+    .responsive-tool-shell {
+      max-width: 1120px;
+      padding-left: 24px;
+      padding-right: 24px;
+      padding-bottom: 2rem;
+    }
+
+    .responsive-tool-mobile {
+      display: none;
+    }
+
+    .responsive-tool-desktop {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      align-items: start;
+      gap: 32px;
+    }
+
+    .responsive-tool-aside {
+      position: sticky;
+      top: 1.5rem;
+    }
+  }
 }
 
 @keyframes fadeInUp {

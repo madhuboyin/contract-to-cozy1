@@ -582,8 +582,8 @@ export function ResponsiveToolWorkspace({
   className,
 }: ToolWorkspaceProps) {
   return (
-    <MobilePageContainer className={cn('space-y-4 md:max-w-7xl md:px-6 lg:px-8', className)}>
-      <div className="space-y-4 md:hidden">
+    <div className={cn('responsive-tool-shell', className)}>
+      <div className="responsive-tool-mobile">
         {intro}
         {summary}
         {filters}
@@ -591,8 +591,8 @@ export function ResponsiveToolWorkspace({
         {footer}
       </div>
 
-      <div className="hidden md:grid md:grid-cols-[320px_minmax(0,1fr)] md:items-start md:gap-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-8">
-        <aside className="space-y-4 md:sticky md:top-6">
+      <div className="responsive-tool-desktop">
+        <aside className="responsive-tool-aside space-y-4">
           {intro}
           {summary}
           {filters}
@@ -602,7 +602,7 @@ export function ResponsiveToolWorkspace({
           {footer}
         </main>
       </div>
-    </MobilePageContainer>
+    </div>
   );
 }
 
