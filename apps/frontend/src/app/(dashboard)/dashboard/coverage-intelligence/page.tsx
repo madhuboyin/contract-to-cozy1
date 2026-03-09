@@ -87,9 +87,9 @@ function CoverageIntelligenceContent() {
 
   return (
     <MobileToolWorkspace
-      className="max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8"
+      className="max-w-7xl space-y-6 px-4 sm:px-6 lg:space-y-4 lg:px-6"
       intro={
-        <div className="space-y-3">
+        <div className="space-y-3 lg:space-y-2">
           {propertyIdFromUrl ? (
             <Button
               variant="link"

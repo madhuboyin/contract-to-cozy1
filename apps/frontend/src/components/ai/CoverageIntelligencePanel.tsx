@@ -502,7 +502,7 @@ export default function CoverageIntelligencePanel({
   }
 
   return (
-    <div className="space-y-4 lg:space-y-5">
+    <div className="space-y-4 lg:space-y-4">
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5" />
@@ -884,7 +884,7 @@ export default function CoverageIntelligencePanel({
       {/* ═══════════════════════════════════════════════════════════════════
            DESKTOP LAYOUT  (hidden on mobile/tablet — lg:block)
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="hidden space-y-5 lg:block">
+      <div className="hidden lg:block">
 
         {/* ─── 1. CONTROLS ROW ─────────────────────────────────────────────── */}
         <div className="flex items-end gap-3 rounded-2xl border border-black/[0.07] bg-white px-5 py-4 shadow-sm">
@@ -955,7 +955,7 @@ export default function CoverageIntelligencePanel({
             const verdictIcon = getVerdictIcon(analysis.overallVerdict);
             const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
             return (
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_288px] xl:items-start">
+              <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_288px] xl:items-start">
 
                 {/* LEFT: Primary Verdict Card */}
                 <section className={cn('rounded-2xl border p-6 md:px-6 md:py-5', verdictHeroClass(analysis.overallVerdict))}>
@@ -1129,7 +1129,7 @@ export default function CoverageIntelligencePanel({
           })()
         ) : (
           /* ─── Empty / no analysis state ─── */
-          <div className="rounded-2xl border border-black/[0.07] bg-white p-10 text-center shadow-sm">
+          <div className="mt-4 rounded-2xl border border-black/[0.07] bg-white p-10 text-center shadow-sm">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-teal-100 bg-teal-50">
               <ShieldCheck className="h-6 w-6 text-teal-600" />
             </div>
@@ -1159,7 +1159,7 @@ export default function CoverageIntelligencePanel({
 
         {/* ─── 3. SCENARIO SIMULATOR + INSURANCE FINDINGS ──────────────────── */}
         {analysis && (
-          <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
+          <div className="mt-5 grid gap-5 xl:grid-cols-2 xl:items-start">
 
             {/* LEFT: Scenario Simulator */}
             <section className="rounded-2xl border border-black/[0.07] bg-white p-6 md:p-5 shadow-sm">
@@ -1437,7 +1437,7 @@ export default function CoverageIntelligencePanel({
 
         {/* ─── 4. DECISION TRACE (full width) ──────────────────────────────── */}
         {analysis && (
-          <DecisionTraceCard traces={analysis.decisionTrace} counts={decisionTraceCounts} />
+          <DecisionTraceCard className="mt-5" traces={analysis.decisionTrace} counts={decisionTraceCounts} />
         )}
 
       </div>
