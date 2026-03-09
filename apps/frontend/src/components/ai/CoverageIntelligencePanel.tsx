@@ -128,6 +128,58 @@ function severityPillClasses(severity?: 'LOW' | 'MEDIUM' | 'HIGH') {
   return 'border-slate-200 bg-slate-100 text-slate-700';
 }
 
+// ─── Desktop-only helpers ────────────────────────────────────────────────────
+
+function verdictHeadline(verdict?: CoverageAnalysisDTO['overallVerdict']): string {
+  if (verdict === 'NOT_WORTH_IT') return 'Warranty is likely not worth it for this property';
+  if (verdict === 'WORTH_IT') return 'Warranty coverage appears financially justified';
+  return 'Coverage value is situational — review your assumptions';
+}
+
+function verdictBadgeClass(verdict?: CoverageAnalysisDTO['overallVerdict']): string {
+  if (verdict === 'NOT_WORTH_IT') return 'border-rose-200 bg-rose-50 text-rose-700';
+  if (verdict === 'WORTH_IT') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  return 'border-amber-200 bg-amber-50 text-amber-700';
+}
+
+function deltaColorClass(delta: number): string {
+  if (delta < 0) return 'text-rose-600';
+  if (delta > 0) return 'text-emerald-600';
+  return 'text-slate-700';
+}
+
+function deltaCaptionShort(delta: number): string {
+  if (delta < 0) return `warranty costs ${money(Math.abs(delta))} more than repairs`;
+  if (delta > 0) return `warranty saves ${money(delta)} vs. expected repairs`;
+  return 'no net difference detected';
+}
+
+function verdictRecommendation(analysis: CoverageAnalysisDTO): string {
+  if (analysis.nextSteps && analysis.nextSteps.length > 0) {
+    return analysis.nextSteps[0].title;
+  }
+  if (analysis.overallVerdict === 'NOT_WORTH_IT') {
+    return 'Skip warranty — expected repair costs are below warranty premium';
+  }
+  if (analysis.overallVerdict === 'WORTH_IT') {
+    return 'Consider maintaining or purchasing warranty coverage';
+  }
+  return 'Review deductible and warranty terms before deciding';
+}
+
+function simulationResultSummary(analysis: CoverageAnalysisDTO): string {
+  const delta = analysis.warranty.expectedNetImpactUsd ?? 0;
+  if (analysis.overallVerdict === 'NOT_WORTH_IT') {
+    return `Under these assumptions, warranty still costs ${money(Math.abs(delta))} more than expected repairs.`;
+  }
+  if (analysis.overallVerdict === 'WORTH_IT') {
+    return `With these inputs, warranty is estimated to save ${money(delta)} compared to expected repair costs.`;
+  }
+  return 'Results are borderline — small changes to inputs can flip the verdict.';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function verdictHeroClass(verdict?: CoverageAnalysisDTO['overallVerdict']) {
   if (verdict === 'NOT_WORTH_IT') {
     return 'border-rose-200/90 bg-[linear-gradient(145deg,#fffaf9,#ffeef0)]';
@@ -166,6 +218,45 @@ function getVerdictIcon(verdict?: CoverageAnalysisDTO['overallVerdict']) {
     wrap: 'bg-amber-500 text-white',
   };
 }
+
+// ─── Desktop sub-components ──────────────────────────────────────────────────
+
+function SnapshotRow({
+  label,
+  value,
+  highlight,
+  muted,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50 last:border-0">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span
+        className={cn(
+          'text-xs font-semibold',
+          highlight ? 'text-slate-900' : muted ? 'text-slate-400' : 'text-slate-700'
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function InsuranceInputTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 p-2.5">
+      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function DecisionTraceCard({
   traces,
@@ -246,6 +337,7 @@ export default function CoverageIntelligencePanel({
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string>('');
+  const [hasSimulated, setHasSimulated] = useState(false);
 
   const fetchStatus = async () => {
     if (!propertyId) return;
@@ -327,6 +419,7 @@ export default function CoverageIntelligencePanel({
         setHasAnalysis(true);
       }
       setAnalysis(next);
+      setHasSimulated(true);
     } catch (err: any) {
       setError(err?.message || 'Failed to simulate.');
     } finally {
@@ -755,400 +848,540 @@ export default function CoverageIntelligencePanel({
         )}
       </div>
 
+      {/* ═══════════════════════════════════════════════════════════════════
+           DESKTOP LAYOUT  (hidden on mobile/tablet — lg:block)
+          ═══════════════════════════════════════════════════════════════════ */}
       <div className="hidden space-y-5 lg:block">
-        <div className={cn('grid gap-4', analysis ? 'xl:grid-cols-[360px_minmax(0,1fr)]' : 'grid-cols-1')}>
-          <section className="rounded-2xl border border-black/10 bg-white p-5">
-            <h3 className="text-xl font-semibold text-slate-900">Coverage Inputs</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              Choose an item to evaluate whether insurance or warranty coverage is financially worthwhile.
-            </p>
-            <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-              {propertySelector}
-              <label className="block text-sm font-medium text-slate-700">
-                Analyze coverage for
-                <select
-                  className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                  value={selectedItemId}
-                  onChange={(e) => setSelectedItemId(e.target.value)}
-                  disabled={itemsLoading || items.length === 0}
-                >
-                  {items.length === 0 && <option value="">No inventory items found</option>}
-                  {items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                      {item.room?.name ? ` • ${item.room.name}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <Button onClick={runNow} disabled={running}>
-                  {running ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Analyzing…
-                    </>
-                  ) : (
-                    'Analyze Coverage'
-                  )}
-                </Button>
-                <Button variant="outline" onClick={openItemCoverage} disabled={!selectedItemId}>
-                  View Item Coverage
-                </Button>
-              </div>
-            </div>
-          </section>
 
-          {analysis ? (
-            (() => {
-              const verdictIcon = getVerdictIcon(analysis.overallVerdict);
-              const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
-              const annualDeltaAbs = money(Math.abs(annualDelta));
-              return (
-                <section className={cn('rounded-2xl border p-5', verdictPanelClass(analysis.overallVerdict))}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                      <span className={cn('inline-flex h-14 w-14 items-center justify-center rounded-xl', verdictIcon.wrap)}>
-                        <verdictIcon.Icon className="h-7 w-7" />
-                      </span>
-                      <div>
-                        <h3 className="text-xl font-semibold tracking-tight text-slate-900">
+        {/* ─── 1. CONTROLS ROW ─────────────────────────────────────────────── */}
+        <div className="flex items-end gap-3 rounded-2xl border border-black/[0.07] bg-white px-5 py-4 shadow-sm">
+          {/* Property selector injected from page */}
+          <div className="w-56 flex-shrink-0">
+            {propertySelector}
+          </div>
+
+          <div className="mx-1 h-8 w-px self-center bg-slate-100" />
+
+          {/* Item selector */}
+          <div className="min-w-0 flex-1">
+            <p className="mb-1.5 text-xs font-medium text-slate-600">Coverage item</p>
+            {itemsError ? (
+              <p className="text-xs text-rose-600">{itemsError}</p>
+            ) : (
+              <select
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                value={selectedItemId}
+                onChange={(e) => setSelectedItemId(e.target.value)}
+                disabled={itemsLoading || items.length === 0}
+              >
+                {items.length === 0 && <option value="">No inventory items found</option>}
+                {items.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}{item.room?.name ? ` · ${item.room.name}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openItemCoverage}
+              disabled={!selectedItemId}
+              className="h-9 text-xs"
+            >
+              View Item Coverage
+            </Button>
+            <Button
+              onClick={runNow}
+              disabled={running}
+              size="sm"
+              className="h-9 min-w-[142px] text-xs"
+            >
+              {running ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Analyzing…
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                  Analyze Coverage
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* ─── 2. HERO VERDICT AREA ────────────────────────────────────────── */}
+        {analysis ? (
+          (() => {
+            const verdictIcon = getVerdictIcon(analysis.overallVerdict);
+            const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
+            return (
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_288px]">
+
+                {/* LEFT: Primary Verdict Card */}
+                <section className={cn('rounded-2xl border p-6', verdictHeroClass(analysis.overallVerdict))}>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                    Coverage Insight
+                  </p>
+
+                  <div className="mt-3 flex items-start gap-4">
+                    <span
+                      className={cn(
+                        'mt-0.5 inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl shadow-sm',
+                        verdictIcon.wrap
+                      )}
+                    >
+                      <verdictIcon.Icon className="h-6 w-6" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={cn(
+                            'rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                            verdictBadgeClass(analysis.overallVerdict)
+                          )}
+                        >
                           {humanizeEnum(analysis.overallVerdict)}
-                        </h3>
-                        <p className="mt-2 text-lg leading-snug text-slate-800">
-                          Warranty would likely cost{' '}
-                          <span className="font-semibold">{annualDeltaAbs}</span>{' '}
-                          {annualDelta >= 0 ? 'more' : 'less'} than expected repairs.
-                        </p>
-                        <p className="mt-2 text-lg text-slate-700">
-                          {annualDelta < 0
-                            ? `Skipping this warranty saves ${annualDeltaAbs} per year.`
-                            : `Coverage may cost about ${annualDeltaAbs} more per year.`}
-                        </p>
+                        </span>
+                        <StatusChip tone={statusChipTone}>{humanizeEnum(analysis.status)}</StatusChip>
                       </div>
-                    </div>
-                    <div className="space-y-2 text-right">
-                      <StatusChip tone={statusChipTone}>{humanizeEnum(analysis.status)}</StatusChip>
-                      <p className="text-xs text-slate-500">{compactDate(analysis.computedAt)}</p>
-                      <Button onClick={runNow} disabled={running} variant="outline" className="bg-white/80">
-                        {running ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Re-running…
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            Re-run analysis
-                          </>
-                        )}
-                      </Button>
+                      <h2 className="mt-2.5 text-2xl font-semibold leading-snug tracking-tight text-slate-900">
+                        {verdictHeadline(analysis.overallVerdict)}
+                      </h2>
+                      <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                        {analysis.summary || 'Based on your home systems, current coverage, and expected repair exposure.'}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div className="rounded-xl border border-slate-200 bg-white/85 p-4">
-                      <p className="text-xs text-slate-500">Expected annual repair risk</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-900">
+                  {/* KPI Tiles */}
+                  <div className="mt-5 grid grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
+                      <p className="text-xs font-medium text-slate-500">Expected Repair Cost</p>
+                      <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">
                         {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
                       </p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white/85 p-4">
-                      <p className="text-xs text-slate-500">Estimated warranty cost</p>
-                      <p className="mt-2 text-2xl font-semibold text-slate-900">
-                        {money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}
+                      <p className="mt-1.5 text-[11px] leading-snug text-slate-400">
+                        based on system age &amp; failure probability
                       </p>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-white/85 p-4">
-                      <p className="text-xs text-slate-500">Warranty delta</p>
+                    <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
+                      <p className="text-xs font-medium text-slate-500">Warranty Cost</p>
+                      <p className="mt-2 text-[1.6rem] font-semibold leading-none tracking-tight text-slate-900">
+                        {money(analysis.warranty.inputsUsed.warrantyAnnualCostUsd)}
+                      </p>
+                      <p className="mt-1.5 text-[11px] leading-snug text-slate-400">annual premium</p>
+                    </div>
+                    <div className="rounded-xl border border-white/60 bg-white/75 p-4 shadow-sm">
+                      <p className="text-xs font-medium text-slate-500">Cost Difference</p>
                       <p
                         className={cn(
-                          'mt-2 text-2xl font-semibold',
-                          annualDelta < 0 ? 'text-rose-600' : 'text-emerald-600'
+                          'mt-2 text-[1.6rem] font-semibold leading-none tracking-tight',
+                          deltaColorClass(annualDelta)
                         )}
                       >
                         {money(annualDelta)}
                       </p>
-                      <p className="mt-2 text-sm text-slate-600">
-                        {annualDelta < 0
-                          ? `Coverage likely costs ${annualDeltaAbs} more than repairs.`
-                          : `Coverage may save about ${annualDeltaAbs} based on current inputs.`}
+                      <p className="mt-1.5 text-[11px] leading-snug text-slate-400">
+                        {deltaCaptionShort(annualDelta)}
                       </p>
                     </div>
                   </div>
+
+                  {/* Recommendation Callout */}
+                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-black/[0.07] bg-white/60 px-4 py-3">
+                    <Shield className="h-4 w-4 flex-shrink-0 text-slate-400" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Recommendation
+                    </span>
+                    <span className="mx-0.5 h-3.5 w-px flex-shrink-0 bg-slate-200" />
+                    <span className="text-sm font-medium text-slate-800">
+                      {verdictRecommendation(analysis)}
+                    </span>
+                  </div>
                 </section>
-              );
-            })()
-          ) : (
-            <section className="rounded-2xl border border-black/10 bg-white p-6">
-              <h3 className="text-xl font-semibold text-slate-900">Coverage result</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Run Coverage Intelligence to evaluate insurance and warranty value for this property.
-              </p>
-              <div className="mt-4">
-                <Button onClick={runNow} disabled={running}>
-                  {running ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Running…
-                    </>
-                  ) : (
-                    'Run analysis'
+
+                {/* RIGHT: Snapshot Rail */}
+                <aside className="flex flex-col gap-4">
+                  {/* Analysis Snapshot card */}
+                  <div className="flex-1 rounded-2xl border border-black/[0.07] bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-slate-700">Analysis Snapshot</h3>
+                      <Button
+                        onClick={runNow}
+                        disabled={running}
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1.5 px-2.5 text-xs"
+                      >
+                        {running ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3" />
+                        )}
+                        {running ? 'Running…' : 'Re-run'}
+                      </Button>
+                    </div>
+                    <div className="mt-4 divide-y divide-slate-50">
+                      <SnapshotRow label="Overall verdict" value={humanizeEnum(analysis.overallVerdict)} highlight />
+                      <SnapshotRow label="Insurance" value={humanizeEnum(analysis.insuranceVerdict)} />
+                      <SnapshotRow label="Warranty" value={humanizeEnum(analysis.warrantyVerdict)} />
+                      <SnapshotRow label="Confidence" value={humanizeEnum(analysis.confidence)} />
+                      <SnapshotRow label="Impact level" value={humanizeEnum(analysis.impactLevel)} />
+                      <SnapshotRow
+                        label="Break-even"
+                        value={
+                          analysis.warranty.breakEvenMonths != null
+                            ? `${analysis.warranty.breakEvenMonths} months`
+                            : '—'
+                        }
+                      />
+                      <SnapshotRow label="Last computed" value={compactDate(analysis.computedAt)} muted />
+                    </div>
+                    <p className="mt-4 text-[11px] leading-relaxed text-slate-400">
+                      Educational only. Not carrier-specific advice.
+                    </p>
+                  </div>
+
+                  {/* Next Steps card */}
+                  {analysis.nextSteps && analysis.nextSteps.length > 0 && (
+                    <div className="rounded-2xl border border-black/[0.07] bg-white p-4 shadow-sm">
+                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        Next Steps
+                      </p>
+                      <div className="space-y-3">
+                        {analysis.nextSteps.slice(0, 3).map((step, i) => (
+                          <div key={i} className="flex items-start gap-2.5">
+                            <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-500" />
+                            <div>
+                              <p className="text-xs font-medium text-slate-700">{step.title}</p>
+                              {step.detail && (
+                                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+                                  {step.detail}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                </Button>
+                </aside>
+              </div>
+            );
+          })()
+        ) : (
+          /* ─── Empty / no analysis state ─── */
+          <div className="rounded-2xl border border-black/[0.07] bg-white p-10 text-center shadow-sm">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-teal-100 bg-teal-50">
+              <ShieldCheck className="h-6 w-6 text-teal-600" />
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-slate-800">No analysis yet</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
+              Select a property and item above, then click{' '}
+              <span className="font-medium text-slate-700">Analyze Coverage</span> to generate your
+              coverage intelligence report.
+            </p>
+            <div className="mt-5">
+              <Button onClick={runNow} disabled={running}>
+                {running ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing…
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    Run analysis
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── 3. SCENARIO SIMULATOR + INSURANCE FINDINGS ──────────────────── */}
+        {analysis && (
+          <div className="grid gap-5 xl:grid-cols-2">
+
+            {/* LEFT: Scenario Simulator */}
+            <section className="rounded-2xl border border-black/[0.07] bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Scenario Simulator</h3>
+                  <p className="mt-0.5 text-sm text-slate-500">
+                    Adjust assumptions to explore how the verdict would change.
+                  </p>
+                </div>
+                <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-400" />
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Annual Premium (USD)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    value={toInputValue(overrides.annualPremiumUsd)}
+                    onChange={(e) =>
+                      setOverrides((prev) => ({
+                        ...prev,
+                        annualPremiumUsd: e.target.value === '' ? undefined : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Deductible (USD)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    value={toInputValue(overrides.deductibleUsd)}
+                    onChange={(e) =>
+                      setOverrides((prev) => ({
+                        ...prev,
+                        deductibleUsd: e.target.value === '' ? undefined : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Warranty Annual Cost (USD)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    value={toInputValue(overrides.warrantyAnnualCostUsd)}
+                    onChange={(e) =>
+                      setOverrides((prev) => ({
+                        ...prev,
+                        warrantyAnnualCostUsd: e.target.value === '' ? undefined : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Warranty Service Fee (USD)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    value={toInputValue(overrides.warrantyServiceFeeUsd)}
+                    onChange={(e) =>
+                      setOverrides((prev) => ({
+                        ...prev,
+                        warrantyServiceFeeUsd: e.target.value === '' ? undefined : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Cash Buffer (USD)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    value={toInputValue(overrides.cashBufferUsd)}
+                    onChange={(e) =>
+                      setOverrides((prev) => ({
+                        ...prev,
+                        cashBufferUsd: e.target.value === '' ? undefined : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-600">
+                    Risk Tolerance
+                  </label>
+                  <select
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    value={overrides.riskTolerance ?? 'MEDIUM'}
+                    onChange={(e) =>
+                      setOverrides((prev) => ({
+                        ...prev,
+                        riskTolerance: e.target.value as CoverageAnalysisOverrides['riskTolerance'],
+                      }))
+                    }
+                  >
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={saveScenario}
+                    onChange={(e) => setSaveScenario(e.target.checked)}
+                    className="rounded border-slate-300"
+                  />
+                  Save this scenario
+                </label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setOverrides(EMPTY_OVERRIDES)}
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 text-xs"
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    onClick={runSimulation}
+                    disabled={simulating}
+                    size="sm"
+                    className="h-9 min-w-[80px] text-xs"
+                  >
+                    {simulating ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        Simulating…
+                      </>
+                    ) : (
+                      'Simulate'
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Simulation Result Box */}
+              {hasSimulated && (
+                <div className={cn('mt-4 rounded-xl border p-4', verdictPanelClass(analysis.overallVerdict))}>
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Simulation Result
+                  </p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {humanizeEnum(analysis.overallVerdict)}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    {simulationResultSummary(analysis)}
+                  </p>
+                  {analysis.warranty.breakEvenMonths != null && (
+                    <p className="mt-1.5 text-[11px] text-slate-500">
+                      Break-even: {analysis.warranty.breakEvenMonths} months
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* RIGHT: Insurance Findings */}
+            <section className="rounded-2xl border border-black/[0.07] bg-white p-6 shadow-sm">
+              <h3 className="text-base font-semibold text-slate-900">Insurance Findings</h3>
+
+              {/* Policy Signals */}
+              <div className="mt-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Policy Signals
+                  </p>
+                </div>
+                {analysis.insurance.flags.length === 0 ? (
+                  <p className="pl-5 text-sm text-slate-400">No critical signals detected.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {analysis.insurance.flags.map((flag) => (
+                      <div
+                        key={flag.code}
+                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5"
+                      >
+                        <div className="flex min-w-0 items-start gap-2.5">
+                          <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
+                          <p className="text-sm text-slate-700">{flag.label}</p>
+                        </div>
+                        <span
+                          className={cn(
+                            'ml-3 flex-shrink-0 rounded-full border px-2 py-0.5 text-xs',
+                            severityPillClasses(flag.severity)
+                          )}
+                        >
+                          {humanizeEnum(flag.severity)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Recommended Protection */}
+              <div className="mt-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <Shield className="h-3.5 w-3.5 text-slate-400" />
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Recommended Protection
+                  </p>
+                </div>
+                {analysis.insurance.recommendedAddOns.length === 0 ? (
+                  <p className="pl-5 text-sm text-slate-400">
+                    No add-ons flagged for the current profile.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {analysis.insurance.recommendedAddOns.map((addOn) => (
+                      <div
+                        key={addOn.code}
+                        className="rounded-xl border border-slate-100 bg-white px-3.5 py-2.5"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-400" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800">{addOn.label}</p>
+                            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{addOn.why}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Insurance Inputs Summary */}
+              <div className="mt-5 grid grid-cols-3 gap-2 border-t border-slate-100 pt-4">
+                <InsuranceInputTile
+                  label="Annual Premium"
+                  value={money(analysis.insurance.inputsUsed.annualPremiumUsd)}
+                />
+                <InsuranceInputTile
+                  label="Deductible"
+                  value={money(analysis.insurance.inputsUsed.deductibleUsd)}
+                />
+                <InsuranceInputTile
+                  label="Cash Buffer"
+                  value={money(analysis.insurance.inputsUsed.cashBufferUsd)}
+                />
               </div>
             </section>
-          )}
-        </div>
+          </div>
+        )}
 
-        {analysis ? (
-          <>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <section className="rounded-2xl border border-black/10 bg-white p-5">
-                <h4 className="text-2xl font-semibold tracking-tight text-slate-900">Try Your Scenario</h4>
-                <p className="mt-2 text-sm text-slate-600">
-                  Adjust inputs to see how the verdict changes based on warranty pricing and risk tolerance.
-                </p>
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <label className="text-xs text-gray-600">
-                    Annual premium
-                    <input
-                      type="number"
-                      min={0}
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      value={toInputValue(overrides.annualPremiumUsd)}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({
-                          ...prev,
-                          annualPremiumUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="text-xs text-gray-600">
-                    Deductible
-                    <input
-                      type="number"
-                      min={0}
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      value={toInputValue(overrides.deductibleUsd)}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({
-                          ...prev,
-                          deductibleUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="text-xs text-gray-600">
-                    Warranty annual cost
-                    <input
-                      type="number"
-                      min={0}
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      value={toInputValue(overrides.warrantyAnnualCostUsd)}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({
-                          ...prev,
-                          warrantyAnnualCostUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <label className="text-xs text-gray-600">
-                    Warranty service fee
-                    <input
-                      type="number"
-                      min={0}
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      value={toInputValue(overrides.warrantyServiceFeeUsd)}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({
-                          ...prev,
-                          warrantyServiceFeeUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="text-xs text-gray-600">
-                    Cash buffer
-                    <input
-                      type="number"
-                      min={0}
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      value={toInputValue(overrides.cashBufferUsd)}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({
-                          ...prev,
-                          cashBufferUsd: e.target.value === '' ? undefined : Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="text-xs text-gray-600">
-                    Risk tolerance
-                    <select
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
-                      value={overrides.riskTolerance ?? 'MEDIUM'}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({
-                          ...prev,
-                          riskTolerance: e.target.value as CoverageAnalysisOverrides['riskTolerance'],
-                        }))
-                      }
-                    >
-                      <option value="LOW">LOW</option>
-                      <option value="MEDIUM">MEDIUM</option>
-                      <option value="HIGH">HIGH</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={saveScenario}
-                      onChange={(e) => setSaveScenario(e.target.checked)}
-                    />
-                    Save this simulation scenario
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={fetchStatus} disabled={simulating} variant="outline">
-                      Refresh
-                    </Button>
-                    <Button onClick={runSimulation} disabled={simulating}>
-                      {simulating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Simulating…
-                        </>
-                      ) : (
-                        'Simulate Scenarios'
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </section>
+        {/* ─── 4. DECISION TRACE (full width) ──────────────────────────────── */}
+        {analysis && (
+          <DecisionTraceCard traces={analysis.decisionTrace} counts={decisionTraceCounts} />
+        )}
 
-              <section className="rounded-2xl border border-black/10 bg-white p-5">
-                <h4 className="text-xl font-semibold text-slate-900">Warranty economics</h4>
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
-                    <span className="text-slate-600">Expected annual repair risk</span>
-                    <span className="text-lg font-semibold text-slate-900">
-                      {money(analysis.warranty.expectedAnnualRepairRiskUsd)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
-                    <span className="text-slate-600">Net impact</span>
-                    <span className={cn('text-xl font-semibold', (analysis.warranty.expectedNetImpactUsd ?? 0) < 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                      {money(analysis.warranty.expectedNetImpactUsd)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
-                    <span className="text-slate-600">Break-even months</span>
-                    <span className="text-base font-semibold text-slate-900">{analysis.warranty.breakEvenMonths ?? '—'} months</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-600">Warranty service fee</span>
-                    <span className="font-semibold text-slate-900">
-                      {money(analysis.warranty.inputsUsed.warrantyServiceFeeUsd)}
-                    </span>
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <section className="rounded-2xl border border-black/10 bg-white p-5">
-                <h4 className="text-2xl font-semibold tracking-tight text-slate-900">Insurance Findings</h4>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-sm font-medium text-slate-900">Policy signals</p>
-                    <p className="mt-2 text-sm text-slate-600">
-                      {analysis.insurance.flags.length === 0
-                        ? 'No critical policy flags detected from current signals.'
-                        : `${analysis.insurance.flags.length} policy flags detected.`}
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {analysis.insurance.flags.length === 0 ? (
-                        <p className="text-xs text-slate-500">Upload insurance data to enrich this section.</p>
-                      ) : (
-                        analysis.insurance.flags.map((flag) => (
-                          <div key={flag.code} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs">
-                            <span className="font-medium text-slate-700">{flag.label}</span>
-                            <span className={`rounded-full border px-2 py-0.5 ${severityPillClasses(flag.severity)}`}>
-                              {humanizeEnum(flag.severity)}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <p className="text-sm font-medium text-slate-900">Recommended adjustments</p>
-                    <p className="mt-2 text-sm text-slate-600">
-                      {analysis.insurance.recommendedAddOns.length === 0
-                        ? 'No immediate add-ons are needed for the current profile.'
-                        : 'Review the suggested add-ons before your next policy renewal.'}
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {analysis.insurance.recommendedAddOns.length === 0 ? (
-                        <p className="text-xs text-slate-500">Use simulation to test alternative premium assumptions.</p>
-                      ) : (
-                        analysis.insurance.recommendedAddOns.map((addOn) => (
-                          <div key={addOn.code} className="rounded-lg border border-slate-200 px-3 py-2">
-                            <p className="text-xs font-semibold text-slate-900">{addOn.label}</p>
-                            <p className="mt-1 text-xs text-slate-600">{addOn.why}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-black/10 bg-white p-5">
-                <h4 className="text-xl font-semibold text-slate-900">Analysis snapshot</h4>
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span className="text-sm text-slate-600">Overall verdict</span>
-                    <span className="text-sm font-semibold text-slate-900">{humanizeEnum(analysis.overallVerdict)}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span className="text-sm text-slate-600">Impact level</span>
-                    <span className="text-sm font-semibold text-slate-900">{humanizeEnum(analysis.impactLevel)}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span className="text-sm text-slate-600">Insurance verdict</span>
-                    <span className="text-sm font-semibold text-slate-900">{humanizeEnum(analysis.insuranceVerdict)}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span className="text-sm text-slate-600">Warranty verdict</span>
-                    <span className="text-sm font-semibold text-slate-900">{humanizeEnum(analysis.warrantyVerdict)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Computed</span>
-                    <span className="text-sm font-semibold text-slate-900">{compactDate(analysis.computedAt)}</span>
-                  </div>
-                </div>
-                {analysis.nextSteps && analysis.nextSteps.length > 0 ? (
-                  <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Next step</p>
-                    <p className="mt-2 text-sm font-medium text-slate-900">{analysis.nextSteps[0]?.title}</p>
-                    {analysis.nextSteps[0]?.detail ? (
-                      <p className="mt-1 text-xs text-slate-600">{analysis.nextSteps[0]?.detail}</p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </section>
-            </div>
-
-            <DecisionTraceCard traces={analysis.decisionTrace} counts={decisionTraceCounts} />
-          </>
-        ) : null}
       </div>
     </div>
   );

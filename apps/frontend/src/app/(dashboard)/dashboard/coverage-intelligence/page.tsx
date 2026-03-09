@@ -142,11 +142,11 @@ function CoverageIntelligenceContent() {
         </div>
       )}
 
-      <details className="rounded-2xl border border-slate-200 bg-white p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-          Trust & methodology
+      <details className="rounded-2xl border border-slate-200 bg-white p-4 lg:p-6">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-800 lg:text-base">
+          Trust &amp; methodology
         </summary>
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-4 lg:mt-5 lg:space-y-5">
           <ToolTrustBanner
             tone="blue"
             dataSources={[
