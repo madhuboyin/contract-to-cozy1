@@ -27,6 +27,7 @@ import {
   SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { AI_TOOL_ARTWORK } from '@/components/mobile/dashboard/aiToolArtwork';
+import { resolveIconByConcept, resolveToolIcon } from '@/lib/icons';
 
 function buildAiToolHref(propertyId: string | undefined, toolHref: string): string {
   if (!propertyId) return toolHref;
@@ -158,8 +159,8 @@ export default function MobileHomeBuyerDashboard({
     {
       title: 'Moving Concierge',
       subtitle: 'Plan your move timeline',
-      icon: '🚚',
-      trailingIcon: '📦',
+      icon: React.createElement(resolveIconByConcept('tasks', Truck), { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(resolveIconByConcept('tasks', Truck), { className: 'h-5 w-5' }),
       artworkSrc: AI_TOOL_ARTWORK['repair-vs-replace'],
       href: buildAiToolHref(propertyId, '/dashboard/moving-concierge'),
       tone: 'neutral' as const,
@@ -167,8 +168,8 @@ export default function MobileHomeBuyerDashboard({
     {
       title: 'Inspection Intelligence',
       subtitle: 'Extract key issues fast',
-      icon: '🧾',
-      trailingIcon: '🔎',
+      icon: React.createElement(resolveIconByConcept('review', FileText), { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(resolveIconByConcept('review', FileText), { className: 'h-5 w-5' }),
       artworkSrc: AI_TOOL_ARTWORK['coverage-intelligence'],
       href: buildAiToolHref(propertyId, '/dashboard/inspection-report'),
       tone: 'neutral' as const,
@@ -176,8 +177,8 @@ export default function MobileHomeBuyerDashboard({
     {
       title: 'Coverage Intelligence',
       subtitle: 'Review protection early',
-      icon: '🛡️',
-      trailingIcon: '✅',
+      icon: React.createElement(resolveToolIcon('ai', 'coverage-intelligence', Shield), { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(resolveToolIcon('ai', 'coverage-intelligence', Shield), { className: 'h-5 w-5' }),
       artworkSrc: AI_TOOL_ARTWORK['risk-optimizer'],
       href: buildAiToolHref(propertyId, '/dashboard/coverage-intelligence'),
       tone: 'neutral' as const,
@@ -185,8 +186,8 @@ export default function MobileHomeBuyerDashboard({
     {
       title: 'View All',
       subtitle: 'Explore all tools',
-      icon: '🧰',
-      trailingIcon: '›',
+      icon: React.createElement(resolveToolIcon('ai', 'view-all', Sparkles), { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(resolveToolIcon('ai', 'view-all', Sparkles), { className: 'h-5 w-5' }),
       artworkSrc: AI_TOOL_ARTWORK['view-all'],
       href: buildAiToolHref(propertyId, '/dashboard/ai-tools'),
       tone: 'brand' as const,

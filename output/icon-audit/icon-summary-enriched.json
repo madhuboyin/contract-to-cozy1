@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-03-09T22:11:27.947Z",
+  "totalRows": 1262,
+  "byLibrary": {
+    "inline-svg": 57,
+    "lucide-react": 1110,
+    "emoji": 74,
+    "custom-svg-asset": 8,
+    "backend-icon-token": 13
+  },
+  "bySurface": {
+    "desktop": 243,
+    "mobile": 109,
+    "both": 910
+  },
+  "byStatus": {
+    "review": 743,
+    "keep": 445,
+    "replace": 74
+  }
+}

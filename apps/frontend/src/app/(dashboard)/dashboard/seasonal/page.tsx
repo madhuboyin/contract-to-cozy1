@@ -217,6 +217,7 @@ export default function SeasonalMaintenancePage() {
           const firstChecklist = seasonChecklists[0];
           const season = firstChecklist.season;
           const colors = getSeasonColors(season);
+          const SeasonIcon = getSeasonIcon(season);
 
           return (
             <MobileCard key={seasonKey} variant="compact" className={`overflow-hidden border ${colors.borderColor}`}>
@@ -226,7 +227,7 @@ export default function SeasonalMaintenancePage() {
                 className={`-m-3.5 mb-0 flex w-[calc(100%+1.75rem)] items-center justify-between gap-3 px-4 py-3.5 text-left ${colors.bgColor}`}
               >
                 <div className="min-w-0">
-                  <p className="mb-0 text-lg">{getSeasonIcon(season)}</p>
+                  <SeasonIcon className={`h-5 w-5 ${colors.textColor}`} />
                   <p className={`mb-0 mt-1 text-sm font-semibold ${colors.textColor}`}>
                     {getSeasonName(season)} {formatSeasonYearLabel(firstChecklist)}
                   </p>

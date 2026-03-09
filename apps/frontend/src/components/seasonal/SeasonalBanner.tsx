@@ -42,6 +42,7 @@ function ExistingOwnerSeasonalBanner({ propertyId }: SeasonalBannerProps) {
 
   const season = upcomingChecklist.season;
   const colors = getSeasonColors(season);
+  const SeasonIcon = getSeasonIcon(season);
 
   const handleViewChecklist = () => {
     setSelectedChecklistId(upcomingChecklist.id);
@@ -61,7 +62,7 @@ function ExistingOwnerSeasonalBanner({ propertyId }: SeasonalBannerProps) {
       >
         <div className="flex items-start justify-between">
           <div className="flex items-start space-x-4">
-            <div className="text-4xl">{getSeasonIcon(season)}</div>
+            <SeasonIcon className={`h-9 w-9 ${colors.textColor}`} />
             <div className="flex-1">
               <h3 className={`text-lg font-semibold ${colors.textColor} mb-1`}>
                 {colors.name} is approaching in {formatDaysRemaining(climateInfo.data.daysUntilNextSeason)}
@@ -110,7 +111,6 @@ function ExistingOwnerSeasonalBanner({ propertyId }: SeasonalBannerProps) {
 
 export function SeasonalBanner({ propertyId }: SeasonalBannerProps) {
   const { data: segment } = useHomeownerSegment();
-  console.log('👤 Homeowner segment:', segment);
 
   if (segment !== 'EXISTING_OWNER') {
     return null;

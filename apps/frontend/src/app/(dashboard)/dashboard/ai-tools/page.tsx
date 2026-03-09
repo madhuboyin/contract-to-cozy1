@@ -55,16 +55,22 @@ export default function AIToolsPage() {
           >
             <QuickActionGrid className="gap-2.5 lg:grid-cols-3 xl:grid-cols-4">
               {group.items.map((tool) => (
-                <QuickActionTile
-                  key={tool.key}
-                  title={tool.title}
-                  subtitle={tool.description}
-                  icon={tool.emoji}
-                  artworkSrc={tool.artworkSrc}
-                  href={buildAiToolHref(resolvedPropertyId, tool.href)}
-                  badgeLabel=""
-                  variant="compact"
-                />
+                (() => {
+                  const ToolIcon = tool.icon;
+                  return (
+                    <QuickActionTile
+                      key={tool.key}
+                      title={tool.title}
+                      subtitle={tool.description}
+                      icon={<ToolIcon className="h-5 w-5" />}
+                      trailingIcon={<ToolIcon className="h-5 w-5" />}
+                      artworkSrc={tool.artworkSrc}
+                      href={buildAiToolHref(resolvedPropertyId, tool.href)}
+                      badgeLabel=""
+                      variant="compact"
+                    />
+                  );
+                })()
               ))}
             </QuickActionGrid>
           </ExpandableSummaryCard>

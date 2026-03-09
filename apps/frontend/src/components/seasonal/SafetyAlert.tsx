@@ -36,7 +36,10 @@ export function SafetyAlert({ warning, className = '' }: SafetyAlertProps) {
         {icon}
       </div>
       <div className="flex-1">
-        <p className="text-xs font-semibold text-red-900 mb-0.5">⚠️ Safety Warning</p>
+        <p className="text-xs font-semibold text-red-900 mb-0.5 inline-flex items-center gap-1">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Safety Warning
+        </p>
         <p className="text-xs text-red-800">{warning}</p>
       </div>
     </div>

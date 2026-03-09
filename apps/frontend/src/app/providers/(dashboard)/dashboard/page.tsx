@@ -4,8 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { resolveIconByConcept, resolveIconByToken } from '@/lib/icons';
 import {
   BottomSafeAreaReserve,
   CompactEntityRow,
@@ -39,6 +39,11 @@ export default function ProviderDashboardPage() {
     });
   }, []);
 
+  const ManageServicesIcon = resolveIconByConcept('maintenance');
+  const UpdateCalendarIcon = resolveIconByConcept('calendar');
+  const ReviewBookingsIcon = resolveIconByToken('clipboard-list');
+  const PortfolioIcon = resolveIconByToken('file-check');
+
   return (
     <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
@@ -59,16 +64,34 @@ export default function ProviderDashboardPage() {
       <MobileSection>
         <MobileSectionHeader title="Quick Actions" subtitle="Jump to the most common provider workflows." />
         <QuickActionGrid>
-          <QuickActionTile title="Manage Services" subtitle="Update pricing and active offerings" icon="🔧" href="/providers/services" badgeLabel={null} />
+          <QuickActionTile
+            title="Manage Services"
+            subtitle="Update pricing and active offerings"
+            icon={<ManageServicesIcon className="h-6 w-6" />}
+            href="/providers/services"
+            badgeLabel={null}
+          />
           <QuickActionTile
             title="Update Calendar"
             subtitle="Set schedule and availability"
-            icon={<CalendarDays className="h-6 w-6" />}
+            icon={<UpdateCalendarIcon className="h-6 w-6" />}
             href="/providers/calendar"
             badgeLabel={null}
           />
-          <QuickActionTile title="Review Bookings" subtitle="Handle new requests quickly" icon="📅" href="/providers/bookings" badgeLabel={null} />
-          <QuickActionTile title="Portfolio" subtitle="Showcase recent projects" icon="📸" href="/providers/portfolio" badgeLabel={null} />
+          <QuickActionTile
+            title="Review Bookings"
+            subtitle="Handle new requests quickly"
+            icon={<ReviewBookingsIcon className="h-6 w-6" />}
+            href="/providers/bookings"
+            badgeLabel={null}
+          />
+          <QuickActionTile
+            title="Portfolio"
+            subtitle="Showcase recent projects"
+            icon={<PortfolioIcon className="h-6 w-6" />}
+            href="/providers/portfolio"
+            badgeLabel={null}
+          />
         </QuickActionGrid>
       </MobileSection>
 

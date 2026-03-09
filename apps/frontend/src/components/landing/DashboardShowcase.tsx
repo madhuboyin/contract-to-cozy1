@@ -1,24 +1,25 @@
 import Link from 'next/link';
+import { resolveIconByToken } from '@/lib/icons';
 
 export default function DashboardShowcase() {
   const features = [
     {
-      icon: '📊',
+      iconToken: 'layout-grid',
       title: 'Track Bookings',
       description: 'See status updates in real-time',
     },
     {
-      icon: '🏠',
+      iconToken: 'building-2',
       title: 'Manage Properties',
       description: 'All your homes in one place',
     },
     {
-      icon: '⭐',
+      iconToken: 'badge-check',
       title: 'Save Providers',
       description: 'Rebook trusted professionals',
     },
     {
-      icon: '💰',
+      iconToken: 'dollar-sign',
       title: 'Monitor Budget',
       description: 'Track spending and savings',
     },
@@ -50,16 +51,21 @@ export default function DashboardShowcase() {
 
             {/* Features Grid - Reduced margin */}
             <div className="grid grid-cols-2 gap-4 mb-6">
-              {features.map((feature, index) => (
+              {features.map((feature, index) => {
+                const FeatureIcon = resolveIconByToken(feature.iconToken);
+                return (
                 <div key={index} className="flex items-start">
                   {/* Icon size and margin are already compact, kept as is */}
-                  <span className="text-2xl mr-3">{feature.icon}</span>
+                  <span className="mr-3 mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <FeatureIcon className="h-4 w-4" />
+                  </span>
                   <div>
                     <div className="font-semibold text-gray-900 text-sm">{feature.title}</div>
                     <div className="text-xs text-gray-600">{feature.description}</div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Reduced button size */}

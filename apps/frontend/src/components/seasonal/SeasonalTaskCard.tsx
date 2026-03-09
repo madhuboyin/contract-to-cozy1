@@ -49,7 +49,7 @@ export function SeasonalTaskCard({
       queryClient.invalidateQueries({ queryKey: ['maintenance-tasks'] });
       
       toast({
-        title: 'Added to Maintenance! ✓',
+        title: 'Added to Maintenance',
         description: `"${item.title}" is now in your maintenance schedule`,
         variant: 'default',
       });
@@ -127,7 +127,7 @@ export function SeasonalTaskCard({
     dismissMutation.mutate();
   };
 
-  const priorityIcon = getPriorityIcon(item.priority);
+  const PriorityIcon = getPriorityIcon(item.priority);
   // Determine task state
   const isCompleted = item.status === 'COMPLETED' || item.maintenanceTask?.status === 'COMPLETED';
   const isAdded = (item.status === 'ADDED' || !!item.maintenanceTask) && !isCompleted;
@@ -160,7 +160,7 @@ export function SeasonalTaskCard({
             
             {/* Row 2: Icon + Title */}
             <div className="flex items-start gap-2">
-              <span className="text-xl shrink-0">{priorityIcon}</span>
+              <PriorityIcon className="h-5 w-5 shrink-0 text-slate-600" />
               <h3 className="font-semibold text-lg">{item.title}</h3>
             </div>
             

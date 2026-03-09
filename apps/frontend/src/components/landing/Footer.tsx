@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { resolveIconByConcept } from '@/lib/icons';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+  const BrandIcon = resolveIconByConcept('property');
 
   const footerLinks = {
     product: [
@@ -49,7 +51,7 @@ export default function Footer() {
           {/* Brand Column */}
           <div className="col-span-2 md:col-span-4 lg:col-span-1 mb-8 lg:mb-0">
             <Link href="/" className="flex items-center space-x-2 text-xl font-bold text-white mb-4">
-              <span className="text-2xl">🏠</span>
+              <BrandIcon className="h-6 w-6" />
               <span>Contract to Cozy</span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed max-w-xs">

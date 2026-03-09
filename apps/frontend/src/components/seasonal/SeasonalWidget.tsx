@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronRight, Calendar } from 'lucide-react';
+import { ChevronRight, Calendar, CheckCircle2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useSeasonalChecklists, useClimateInfo } from '@/lib/hooks/useSeasonalChecklists';
 import {
@@ -75,7 +75,7 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
   }
 
   const seasonName = getSeasonName(currentChecklist.season);
-  const seasonIcon = getSeasonIcon(currentChecklist.season);
+  const SeasonIcon = getSeasonIcon(currentChecklist.season);
   const displayProgress = Math.min(100, Math.max(0, completionPercentage));
   const progressColor = getProgressBarColor(displayProgress);
   const remainingTasks = Math.max(0, progress.totalCount - progress.completedCount);
@@ -96,11 +96,11 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
       <div className="rounded-lg border border-white/70 bg-white/85 p-6 shadow-sm backdrop-blur-sm will-change-transform transform-gpu transition-all hover:shadow-md">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
-            <span className="text-2xl">{seasonIcon}</span>
+            <SeasonIcon className="h-6 w-6 text-emerald-600" />
             <h3 className="text-lg font-semibold text-gray-900">{seasonName} Maintenance</h3>
           </div>
           {isComplete && (
-            <span className="text-green-600 text-2xl">✓</span>
+            <CheckCircle2 className="h-6 w-6 text-green-600" />
           )}
         </div>
 
@@ -146,8 +146,9 @@ export function SeasonalWidget({ propertyId }: SeasonalWidgetProps) {
           </>
         ) : (
           <div className="mb-4 p-4 bg-green-50 rounded-md text-center">
-            <p className="text-green-700 font-medium">
-              {seasonName} checklist complete! ✓
+            <p className="text-green-700 font-medium inline-flex items-center justify-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4" />
+              {seasonName} checklist complete!
             </p>
             <p className="text-sm text-green-600 mt-1">
               Great job maintaining your home

@@ -1,5 +1,6 @@
 // apps/frontend/src/components/landing/Testimonials.tsx
 // Compact version with reduced height
+import { Star } from 'lucide-react';
 
 export default function Testimonials() {
   const testimonials = [
@@ -49,7 +50,7 @@ export default function Testimonials() {
               {/* Stars - Smaller */}
               <div className="flex text-yellow-400 text-lg mb-3">
                 {Array.from({ length: testimonial.rating }).map((_, i) => (
-                  <span key={i}>★</span>
+                  <Star key={i} className="h-4 w-4 fill-current" />
                 ))}
               </div>
 

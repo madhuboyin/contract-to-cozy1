@@ -26,6 +26,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
+import { resolveHomeownerNavigationIcon, resolveIconByConcept, resolveToolIcon } from '@/lib/icons';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useAuth } from '@/lib/auth/AuthContext';
 import {
@@ -84,25 +85,25 @@ export function BottomNav() {
   const navItems = [
     {
       href: '/dashboard',
-      icon: Home,
+      icon: resolveHomeownerNavigationIcon('main', 'dashboard', Home),
       label: 'Home',
       match: (path: string) => path === '/dashboard',
     },
     {
       href: '/dashboard/actions',
-      icon: AlertTriangle,
+      icon: resolveHomeownerNavigationIcon('main', 'actions', AlertTriangle),
       label: 'Actions',
       match: (path: string) => path.startsWith('/dashboard/actions'),
     },
     {
       href: roomsHref,
-      icon: LayoutGrid,
+      icon: resolveHomeownerNavigationIcon('main', 'rooms', LayoutGrid),
       label: 'Rooms',
       match: (path: string) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
     },
     {
       href: '/dashboard/providers',
-      icon: Search,
+      icon: resolveHomeownerNavigationIcon('main', 'providers', Search),
       label: 'Services',
       match: (path: string) => path.startsWith('/dashboard/providers'),
     },
@@ -135,37 +136,37 @@ export function BottomNav() {
     {
       label: 'Properties',
       href: '/dashboard/properties',
-      icon: Building,
+      icon: resolveHomeownerNavigationIcon('main', 'properties', Building),
       isActive: (path) => path.startsWith('/dashboard/properties'),
     },
     {
       label: 'Bookings',
       href: '/dashboard/bookings',
-      icon: Calendar,
+      icon: resolveHomeownerNavigationIcon('main', 'bookings', Calendar),
       isActive: (path) => path.startsWith('/dashboard/bookings'),
     },
     {
       label: 'Inventory',
       href: '/dashboard/inventory',
-      icon: Box,
+      icon: resolveHomeownerNavigationIcon('main', 'inventory', Box),
       isActive: (path) => path.startsWith('/dashboard/inventory'),
     },
     {
       label: 'Maintenance',
       href: '/dashboard/maintenance',
-      icon: Wrench,
+      icon: resolveIconByConcept('maintenance', Wrench),
       isActive: (path) => path.startsWith('/dashboard/maintenance'),
     },
     {
       label: 'Checklist',
       href: '/dashboard/checklist',
-      icon: FileText,
+      icon: resolveIconByConcept('tasks', FileText),
       isActive: (path) => path.startsWith('/dashboard/checklist'),
     },
     {
       label: 'Seasonal',
       href: '/dashboard/seasonal',
-      icon: CalendarClock,
+      icon: resolveIconByConcept('calendar', CalendarClock),
       isActive: (path) => path.startsWith('/dashboard/seasonal'),
     },
   ];
@@ -174,13 +175,13 @@ export function BottomNav() {
     {
       label: 'Daily Snapshot',
       href: buildInsightHref(resolvedPropertyId, '/dashboard/daily-snapshot'),
-      icon: CalendarClock,
+      icon: resolveToolIcon('insights', 'daily-snapshot', CalendarClock),
       isActive: (path) => path.startsWith('/dashboard/daily-snapshot'),
     },
     {
       label: 'Risk Radar',
       href: buildInsightHref(resolvedPropertyId, '/dashboard/risk-radar'),
-      icon: Radar,
+      icon: resolveToolIcon('insights', 'risk-radar', Radar),
       isActive: (path) => path.startsWith('/dashboard/risk-radar'),
     },
   ];
@@ -189,29 +190,29 @@ export function BottomNav() {
     {
       label: 'Incidents',
       href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
-      icon: Shield,
+      icon: resolveHomeownerNavigationIcon('protection', 'incidents', Shield),
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
     },
     {
       label: 'Claims',
       href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
-      icon: Shield,
+      icon: resolveHomeownerNavigationIcon('protection', 'claims', Shield),
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
     },
     {
       label: 'Recalls',
       href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
-      icon: Shield,
+      icon: resolveHomeownerNavigationIcon('protection', 'recalls', Shield),
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
     },
   ];
 
   const homeAdminItems: MoreItem[] = [
-    { label: 'Reports', href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'), icon: FileText, isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path) },
-    { label: 'Warranties', href: '/dashboard/warranties', icon: FileText, isActive: (path) => path.startsWith('/dashboard/warranties') },
-    { label: 'Insurance', href: '/dashboard/insurance', icon: FileText, isActive: (path) => path.startsWith('/dashboard/insurance') },
-    { label: 'Expenses', href: '/dashboard/expenses', icon: FileText, isActive: (path) => path.startsWith('/dashboard/expenses') },
-    { label: 'Documents', href: '/dashboard/documents', icon: FileText, isActive: (path) => path.startsWith('/dashboard/documents') },
+    { label: 'Reports', href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'), icon: resolveHomeownerNavigationIcon('ownerGlobal', 'reports', FileText), isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path) },
+    { label: 'Warranties', href: '/dashboard/warranties', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', FileText), isActive: (path) => path.startsWith('/dashboard/warranties') },
+    { label: 'Insurance', href: '/dashboard/insurance', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'insurance', FileText), isActive: (path) => path.startsWith('/dashboard/insurance') },
+    { label: 'Expenses', href: '/dashboard/expenses', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'expenses', FileText), isActive: (path) => path.startsWith('/dashboard/expenses') },
+    { label: 'Documents', href: '/dashboard/documents', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'documents', FileText), isActive: (path) => path.startsWith('/dashboard/documents') },
   ];
 
   const moreItems = [
@@ -240,7 +241,7 @@ export function BottomNav() {
             {
               label: 'Community Events',
               href: '/dashboard/community-events',
-              icon: Globe,
+              icon: resolveHomeownerNavigationIcon('community', 'events', Globe),
               isActive: (path: string) => path.startsWith('/dashboard/community-events'),
             },
           ],

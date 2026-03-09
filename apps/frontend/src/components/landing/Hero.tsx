@@ -6,9 +6,12 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import Image from 'next/image';
+import { resolveIconByConcept, resolveIconByToken } from '@/lib/icons';
 
 export default function Hero() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const BrandIcon = resolveIconByConcept('property');
+  const TrustIcon = resolveIconByToken('badge-check');
 
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
@@ -26,7 +29,7 @@ export default function Hero() {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <Link href="/" className="flex items-center space-x-2">
-              <span className="text-2xl">🏠</span>
+              <BrandIcon className="h-6 w-6 text-brand-primary" />
               <span className="text-lg font-semibold text-gray-900">Contract to Cozy</span>
             </Link>
 
@@ -166,7 +169,7 @@ export default function Hero() {
         <div className="relative z-10 max-w-3xl text-white">
           {/* Badge - Tighter margin */}
           <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-white bg-opacity-30 text-white text-xs font-medium mb-2"> 
-            <span className="mr-1.5">✨</span>
+            <TrustIcon className="mr-1.5 h-3.5 w-3.5" />
             Trusted by 10,000+ homeowners
           </div>
 

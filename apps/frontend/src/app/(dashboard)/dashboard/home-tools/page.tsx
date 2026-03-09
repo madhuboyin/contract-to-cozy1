@@ -51,19 +51,19 @@ const HOME_TOOL_GROUPS = [
   },
 ] as const;
 
-const HOME_TOOL_TILE_META: Record<string, { subtitle: string; icon: string }> = {
-  'property-tax': { subtitle: 'Forecast annual tax drag', icon: '🏛️' },
-  'cost-growth': { subtitle: 'Model ownership cost trend', icon: '📈' },
-  'insurance-trend': { subtitle: 'Track premium pressure', icon: '🛡️' },
-  'cost-explainer': { subtitle: 'Understand what drives costs', icon: '🧮' },
-  'true-cost': { subtitle: 'View full ownership cost', icon: '💵' },
-  'sell-hold-rent': { subtitle: 'Compare next-step scenarios', icon: '⚖️' },
-  'cost-volatility': { subtitle: 'Measure cost variability', icon: '📊' },
-  'break-even': { subtitle: 'Estimate decision break-even', icon: '🎯' },
-  'capital-timeline': { subtitle: 'Plan major capital events', icon: '🧳' },
-  'seller-prep': { subtitle: 'Prep high-ROI improvements', icon: '🧰' },
-  'home-timeline': { subtitle: 'Track milestones over time', icon: '🗓️' },
-  'status-board': { subtitle: 'Monitor home status signals', icon: '🧭' },
+const HOME_TOOL_TILE_META: Record<string, { subtitle: string }> = {
+  'property-tax': { subtitle: 'Forecast annual tax drag' },
+  'cost-growth': { subtitle: 'Model ownership cost trend' },
+  'insurance-trend': { subtitle: 'Track premium pressure' },
+  'cost-explainer': { subtitle: 'Understand what drives costs' },
+  'true-cost': { subtitle: 'View full ownership cost' },
+  'sell-hold-rent': { subtitle: 'Compare next-step scenarios' },
+  'cost-volatility': { subtitle: 'Measure cost variability' },
+  'break-even': { subtitle: 'Estimate decision break-even' },
+  'capital-timeline': { subtitle: 'Plan major capital events' },
+  'seller-prep': { subtitle: 'Prep high-ROI improvements' },
+  'home-timeline': { subtitle: 'Track milestones over time' },
+  'status-board': { subtitle: 'Monitor home status signals' },
 };
 
 export default function HomeToolsPage() {
@@ -97,13 +97,14 @@ export default function HomeToolsPage() {
             <QuickActionGrid className="gap-2.5">
               {group.items.map((tool) => {
                 const meta = HOME_TOOL_TILE_META[tool.key];
+                const ToolIcon = tool.icon;
                 return (
                   <QuickActionTile
                     key={tool.key}
                     title={tool.name}
                     subtitle={meta?.subtitle || 'Open tool'}
-                    icon={meta?.icon || '🧩'}
-                    trailingIcon={meta?.icon || '🧩'}
+                    icon={<ToolIcon className="h-5 w-5" />}
+                    trailingIcon={<ToolIcon className="h-5 w-5" />}
                     href={buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget)}
                     badgeLabel=""
                     variant="compact"

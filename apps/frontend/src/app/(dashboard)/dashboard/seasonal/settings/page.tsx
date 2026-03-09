@@ -127,6 +127,7 @@ export default function SeasonalSettingsPage() {
           <div className="space-y-2">
             {climateRegions.map((region) => {
               const selected = formData.climateRegion === region;
+              const RegionIcon = getClimateRegionIcon(region);
               return (
                 <label
                   key={region}
@@ -142,7 +143,7 @@ export default function SeasonalSettingsPage() {
                     onChange={(e) => setFormData({ ...formData, climateRegion: e.target.value as ClimateRegion })}
                     className="h-4 w-4 text-brand-primary"
                   />
-                  <span className="text-xl leading-none">{getClimateRegionIcon(region)}</span>
+                  <RegionIcon className="h-5 w-5 text-slate-600" />
                   <span className="text-sm font-medium text-slate-900">{getClimateRegionName(region)}</span>
                 </label>
               );

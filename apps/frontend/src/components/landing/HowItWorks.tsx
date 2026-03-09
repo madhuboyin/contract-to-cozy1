@@ -1,5 +1,6 @@
 // apps/frontend/src/components/landing/HowItWorks.tsx
 // Sleeker & more compact "How It Works" section with reduced padding and simplified design.
+import { resolveIconByToken } from '@/lib/icons';
 
 export default function HowItWorks() {
   const steps = [
@@ -7,25 +8,25 @@ export default function HowItWorks() {
       number: '1',
       title: 'Enter Your Details',
       description: 'Tell us about your property and the services you need',
-      icon: '🏠'
+      iconToken: 'building-2'
     },
     {
       number: '2',
       title: 'Browse Providers',
       description: 'Compare verified local professionals with transparent pricing',
-      icon: '🔍'
+      iconToken: 'search'
     },
     {
       number: '3',
       title: 'Book Services',
       description: 'Schedule appointments that work for your timeline',
-      icon: '📅'
+      iconToken: 'calendar'
     },
     {
       number: '4',
       title: 'Move In Happy',
       description: 'Enjoy your new home with confidence and peace of mind',
-      icon: '✨'
+      iconToken: 'sparkles'
     }
   ];
 
@@ -45,7 +46,9 @@ export default function HowItWorks() {
 
         {/* Steps - Reduced gap */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {steps.map((step, index) => (
+          {steps.map((step, index) => {
+            const StepIcon = resolveIconByToken(step.iconToken);
+            return (
             <div key={index} className="relative">
               {/* Reduced card padding (p-6 to p-4) */}
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-all">
@@ -55,7 +58,9 @@ export default function HowItWorks() {
                 </div>
 
                 {/* Icon - Reduced size (text-5xl to text-4xl) and margin (mt-4 mb-4 to mt-3 mb-3) */}
-                <div className="text-4xl mb-3 mt-3 text-center">{step.icon}</div>
+                <div className="mb-3 mt-3 flex justify-center text-blue-600">
+                  <StepIcon className="h-9 w-9" />
+                </div>
 
                 {/* Content - Reduced font size and margin */}
                 <h3 className="text-base font-semibold text-gray-900 mb-1 text-center">
@@ -73,7 +78,8 @@ export default function HowItWorks() {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

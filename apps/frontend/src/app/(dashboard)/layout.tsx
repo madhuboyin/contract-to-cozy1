@@ -48,6 +48,7 @@ import {
   PauseCircle,
   PiggyBank,
 } from 'lucide-react';
+import { resolveHomeownerNavigationIcon, resolveToolIcon } from '@/lib/icons';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
 import { api } from '@/lib/api/client';
@@ -100,7 +101,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Property Tax',
     hrefSuffix: 'tools/property-tax',
     navTarget: 'tool:property-tax',
-    icon: DollarSign,
+    icon: resolveToolIcon('home', 'property-tax', DollarSign),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/property-tax(\/|$)/.test(pathname),
   },
   {
@@ -108,7 +109,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Cost Growth',
     hrefSuffix: 'tools/cost-growth',
     navTarget: 'tool:cost-growth',
-    icon: TrendingUp,
+    icon: resolveToolIcon('home', 'cost-growth', TrendingUp),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-growth(\/|$)/.test(pathname),
   },
   {
@@ -116,7 +117,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Insurance Trend',
     hrefSuffix: 'tools/insurance-trend',
     navTarget: 'tool:insurance-trend',
-    icon: Shield,
+    icon: resolveToolIcon('home', 'insurance-trend', Shield),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/insurance-trend(\/|$)/.test(pathname),
   },
   {
@@ -124,7 +125,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Cost Explainer',
     hrefSuffix: 'tools/cost-explainer',
     navTarget: 'tool:cost-explainer',
-    icon: Info,
+    icon: resolveToolIcon('home', 'cost-explainer', Info),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-explainer(\/|$)/.test(pathname),
   },
   {
@@ -132,7 +133,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'True Cost',
     hrefSuffix: 'tools/true-cost',
     navTarget: 'tool:true-cost',
-    icon: Calculator,
+    icon: resolveToolIcon('home', 'true-cost', Calculator),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/true-cost(\/|$)/.test(pathname),
   },
   {
@@ -140,7 +141,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Sell / Hold / Rent',
     hrefSuffix: 'tools/sell-hold-rent',
     navTarget: 'tool:sell-hold-rent',
-    icon: Scale,
+    icon: resolveToolIcon('home', 'sell-hold-rent', Scale),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/sell-hold-rent(\/|$)/.test(pathname),
   },
   {
@@ -148,7 +149,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Volatility',
     hrefSuffix: 'tools/cost-volatility',
     navTarget: 'tool:cost-volatility',
-    icon: Activity,
+    icon: resolveToolIcon('home', 'cost-volatility', Activity),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-volatility(\/|$)/.test(pathname),
   },
   {
@@ -156,7 +157,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Break-Even',
     hrefSuffix: 'tools/break-even',
     navTarget: 'tool:break-even',
-    icon: Target,
+    icon: resolveToolIcon('home', 'break-even', Target),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/break-even(\/|$)/.test(pathname),
   },
   {
@@ -164,7 +165,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Home Capital Timeline',
     hrefSuffix: 'tools/capital-timeline',
     navTarget: 'tool:capital-timeline',
-    icon: Calendar,
+    icon: resolveToolIcon('home', 'capital-timeline', Calendar),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/capital-timeline(\/|$)/.test(pathname),
   },
   {
@@ -172,7 +173,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Seller Prep',
     hrefSuffix: 'seller-prep',
     navTarget: 'seller-prep',
-    icon: TrendingUp,
+    icon: resolveToolIcon('home', 'seller-prep', TrendingUp),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/seller-prep(\/|$)/.test(pathname),
   },
   {
@@ -180,7 +181,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Home Timeline',
     hrefSuffix: 'timeline',
     navTarget: 'home-timeline',
-    icon: Calendar,
+    icon: resolveToolIcon('home', 'home-timeline', Calendar),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/timeline(\/|$)/.test(pathname),
   },
   {
@@ -188,7 +189,7 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     name: 'Status Board',
     hrefSuffix: 'status-board',
     navTarget: 'status-board',
-    icon: LayoutGrid,
+    icon: resolveToolIcon('home', 'status-board', LayoutGrid),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/status-board(\/|$)/.test(pathname),
   },
 ];
@@ -198,7 +199,7 @@ const AI_TOOL_LINKS: AIToolLink[] = [
     key: 'coverage-intelligence',
     name: 'Coverage Intelligence',
     href: '/dashboard/coverage-intelligence',
-    icon: ShieldCheck,
+    icon: resolveToolIcon('ai', 'coverage-intelligence', ShieldCheck),
     isActive: (pathname) =>
       /^\/dashboard\/coverage-intelligence(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/tools\/coverage-intelligence(\/|$)/.test(pathname),
@@ -207,7 +208,7 @@ const AI_TOOL_LINKS: AIToolLink[] = [
     key: 'risk-premium-optimizer',
     name: 'Risk-to-Premium Optimizer',
     href: '/dashboard/risk-premium-optimizer',
-    icon: ShieldAlert,
+    icon: resolveToolIcon('ai', 'risk-premium-optimizer', ShieldAlert),
     isActive: (pathname) =>
       /^\/dashboard\/risk-premium-optimizer(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/tools\/risk-premium-optimizer(\/|$)/.test(pathname),
@@ -216,7 +217,7 @@ const AI_TOOL_LINKS: AIToolLink[] = [
     key: 'replace-repair',
     name: 'Replace or Repair',
     href: '/dashboard/replace-repair',
-    icon: Wrench,
+    icon: resolveToolIcon('ai', 'replace-repair', Wrench),
     isActive: (pathname) =>
       /^\/dashboard\/replace-repair(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/inventory\/items\/[^/]+\/replace-repair(\/|$)/.test(pathname),
@@ -225,7 +226,7 @@ const AI_TOOL_LINKS: AIToolLink[] = [
     key: 'do-nothing-simulator',
     name: 'Do-Nothing Simulator',
     href: '/dashboard/do-nothing-simulator',
-    icon: PauseCircle,
+    icon: resolveToolIcon('ai', 'do-nothing-simulator', PauseCircle),
     isActive: (pathname) =>
       /^\/dashboard\/do-nothing-simulator(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/tools\/do-nothing(\/|$)/.test(pathname),
@@ -234,7 +235,7 @@ const AI_TOOL_LINKS: AIToolLink[] = [
     key: 'home-savings',
     name: 'Home Savings Check',
     href: '/dashboard/home-savings',
-    icon: PiggyBank,
+    icon: resolveToolIcon('ai', 'home-savings', PiggyBank),
     isActive: (pathname) =>
       /^\/dashboard\/home-savings(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/tools\/home-savings(\/|$)/.test(pathname),
@@ -243,70 +244,70 @@ const AI_TOOL_LINKS: AIToolLink[] = [
     key: 'emergency',
     name: 'Emergency Help',
     href: '/dashboard/emergency',
-    icon: AlertTriangle,
+    icon: resolveToolIcon('ai', 'emergency', AlertTriangle),
     isActive: (pathname) => /^\/dashboard\/emergency(\/|$)/.test(pathname),
   },
   {
     key: 'documents',
     name: 'Document Vault',
     href: '/dashboard/documents',
-    icon: FileText,
+    icon: resolveToolIcon('ai', 'documents', FileText),
     isActive: (pathname) => /^\/dashboard\/documents(\/|$)/.test(pathname),
   },
   {
     key: 'oracle',
     name: 'Appliance Oracle',
     href: '/dashboard/oracle',
-    icon: Zap,
+    icon: resolveToolIcon('ai', 'oracle', Zap),
     isActive: (pathname) => /^\/dashboard\/oracle(\/|$)/.test(pathname),
   },
   {
     key: 'budget',
     name: 'Budget Planner',
     href: '/dashboard/budget',
-    icon: DollarSign,
+    icon: resolveToolIcon('ai', 'budget', DollarSign),
     isActive: (pathname) => /^\/dashboard\/budget(\/|$)/.test(pathname),
   },
   {
     key: 'climate',
     name: 'Climate Risk',
     href: '/dashboard/climate',
-    icon: Cloud,
+    icon: resolveToolIcon('ai', 'climate', Cloud),
     isActive: (pathname) => /^\/dashboard\/climate(\/|$)/.test(pathname),
   },
   {
     key: 'modifications',
     name: 'Home Upgrades',
     href: '/dashboard/modifications',
-    icon: Home,
+    icon: resolveToolIcon('ai', 'modifications', Home),
     isActive: (pathname) => /^\/dashboard\/modifications(\/|$)/.test(pathname),
   },
   {
     key: 'appreciation',
     name: 'Value Tracker',
     href: '/dashboard/appreciation',
-    icon: TrendingUp,
+    icon: resolveToolIcon('ai', 'appreciation', TrendingUp),
     isActive: (pathname) => /^\/dashboard\/appreciation(\/|$)/.test(pathname),
   },
   {
     key: 'energy',
     name: 'Energy Audit',
     href: '/dashboard/energy',
-    icon: Activity,
+    icon: resolveToolIcon('ai', 'energy', Activity),
     isActive: (pathname) => /^\/dashboard\/energy(\/|$)/.test(pathname),
   },
   {
     key: 'visual-inspector',
     name: 'Visual Inspector',
     href: '/dashboard/visual-inspector',
-    icon: Camera,
+    icon: resolveToolIcon('ai', 'visual-inspector', Camera),
     isActive: (pathname) => /^\/dashboard\/visual-inspector(\/|$)/.test(pathname),
   },
   {
     key: 'tax-appeal',
     name: 'Tax Appeals',
     href: '/dashboard/tax-appeal',
-    icon: Scale,
+    icon: resolveToolIcon('ai', 'tax-appeal', Scale),
     isActive: (pathname) => /^\/dashboard\/tax-appeal(\/|$)/.test(pathname),
   },
 ];
@@ -605,31 +606,31 @@ function DesktopNav({ user }: { user: User | null }) {
     {
       name: 'Dashboard',
       href: '/dashboard',
-      icon: Home,
+      icon: resolveHomeownerNavigationIcon('main', 'dashboard', Home),
       isActive: (path) => path === '/dashboard',
     },
     {
       name: 'Actions',
       href: '/dashboard/actions',
-      icon: AlertTriangle,
+      icon: resolveHomeownerNavigationIcon('main', 'actions', AlertTriangle),
       isActive: (path) => path.startsWith('/dashboard/actions'),
     },
     {
       name: 'Properties',
       href: '/dashboard/properties',
-      icon: Building,
+      icon: resolveHomeownerNavigationIcon('main', 'properties', Building),
       isActive: (path) => path.startsWith('/dashboard/properties'),
     },
     {
       name: 'Rooms',
       href: roomsHref,
-      icon: LayoutGrid,
+      icon: resolveHomeownerNavigationIcon('main', 'rooms', LayoutGrid),
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
     },
     {
       name: 'Find Services',
       href: '/dashboard/providers',
-      icon: Search,
+      icon: resolveHomeownerNavigationIcon('main', 'providers', Search),
       isActive: (path) => path.startsWith('/dashboard/providers'),
     },
   ];
@@ -669,35 +670,35 @@ function DesktopNav({ user }: { user: User | null }) {
       key: 'home-admin-reports',
       name: 'Reports',
       href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'),
-      icon: FileText,
+      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'reports', FileText),
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path),
     },
     {
       key: 'home-admin-warranties',
       name: 'Warranties',
       href: '/dashboard/warranties',
-      icon: Wrench,
+      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', Wrench),
       isActive: (path) => path.startsWith('/dashboard/warranties'),
     },
     {
       key: 'home-admin-insurance',
       name: 'Insurance',
       href: '/dashboard/insurance',
-      icon: Shield,
+      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'insurance', Shield),
       isActive: (path) => path.startsWith('/dashboard/insurance'),
     },
     {
       key: 'home-admin-expenses',
       name: 'Expenses',
       href: '/dashboard/expenses',
-      icon: DollarSign,
+      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'expenses', DollarSign),
       isActive: (path) => path.startsWith('/dashboard/expenses'),
     },
     {
       key: 'home-admin-documents',
       name: 'Documents',
       href: '/dashboard/documents',
-      icon: FileText,
+      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'documents', FileText),
       isActive: (path) => path.startsWith('/dashboard/documents'),
     },
   ];
@@ -707,21 +708,21 @@ function DesktopNav({ user }: { user: User | null }) {
       key: 'protection-incidents',
       name: 'Incidents',
       href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
-      icon: ShieldAlert,
+      icon: resolveHomeownerNavigationIcon('protection', 'incidents', ShieldAlert),
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
     },
     {
       key: 'protection-claims',
       name: 'Claims',
       href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
-      icon: ClipboardCheck,
+      icon: resolveHomeownerNavigationIcon('protection', 'claims', ClipboardCheck),
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
     },
     {
       key: 'protection-recalls',
       name: 'Recalls',
       href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
-      icon: ShieldCheck,
+      icon: resolveHomeownerNavigationIcon('protection', 'recalls', ShieldCheck),
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
     },
   ];
@@ -747,7 +748,7 @@ function DesktopNav({ user }: { user: User | null }) {
               key: 'inventory-main',
               name: 'Inventory',
               href: '/dashboard/inventory',
-              icon: Box,
+              icon: resolveHomeownerNavigationIcon('main', 'inventory', Box),
               isActive: (path: string) => path.startsWith('/dashboard/inventory'),
             },
           ],
@@ -768,7 +769,7 @@ function DesktopNav({ user }: { user: User | null }) {
               key: 'community-events-main',
               name: 'Community Events',
               href: '/dashboard/community-events',
-              icon: Globe,
+              icon: resolveHomeownerNavigationIcon('community', 'events', Globe),
               isActive: (path: string) => path.startsWith('/dashboard/community-events'),
             },
           ],
@@ -954,25 +955,25 @@ function SidebarNav({ user }: { user: User | null }) {
     );
 
   const mainLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home, isActive: (path) => path === '/dashboard' },
-    { name: 'Actions', href: '/dashboard/actions', icon: AlertTriangle, isActive: (path) => path.startsWith('/dashboard/actions') },
-    { name: 'Properties', href: '/dashboard/properties', icon: Building, isActive: (path) => path.startsWith('/dashboard/properties') },
-    { name: 'Inventory', href: '/dashboard/inventory', icon: Box, isActive: (path) => path.startsWith('/dashboard/inventory') },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar, isActive: (path) => path.startsWith('/dashboard/bookings') },
-    { name: 'Find Services', href: '/dashboard/providers', icon: Search, isActive: (path) => path.startsWith('/dashboard/providers') },
+    { name: 'Dashboard', href: '/dashboard', icon: resolveHomeownerNavigationIcon('main', 'dashboard', Home), isActive: (path) => path === '/dashboard' },
+    { name: 'Actions', href: '/dashboard/actions', icon: resolveHomeownerNavigationIcon('main', 'actions', AlertTriangle), isActive: (path) => path.startsWith('/dashboard/actions') },
+    { name: 'Properties', href: '/dashboard/properties', icon: resolveHomeownerNavigationIcon('main', 'properties', Building), isActive: (path) => path.startsWith('/dashboard/properties') },
+    { name: 'Inventory', href: '/dashboard/inventory', icon: resolveHomeownerNavigationIcon('main', 'inventory', Box), isActive: (path) => path.startsWith('/dashboard/inventory') },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: resolveHomeownerNavigationIcon('main', 'bookings', Calendar), isActive: (path) => path.startsWith('/dashboard/bookings') },
+    { name: 'Find Services', href: '/dashboard/providers', icon: resolveHomeownerNavigationIcon('main', 'providers', Search), isActive: (path) => path.startsWith('/dashboard/providers') },
   ];
 
   const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
-    { name: 'Warranties', href: '/dashboard/warranties', icon: Wrench, isActive: (path) => path.startsWith('/dashboard/warranties') },
-    { name: 'Insurance', href: '/dashboard/insurance', icon: Shield, isActive: (path) => path.startsWith('/dashboard/insurance') },
-    { name: 'Expenses', href: '/dashboard/expenses', icon: DollarSign, isActive: (path) => path.startsWith('/dashboard/expenses') },
-    { name: 'Documents', href: '/dashboard/documents', icon: FileText, isActive: (path) => path.startsWith('/dashboard/documents') },
+    { name: 'Warranties', href: '/dashboard/warranties', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', Wrench), isActive: (path) => path.startsWith('/dashboard/warranties') },
+    { name: 'Insurance', href: '/dashboard/insurance', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'insurance', Shield), isActive: (path) => path.startsWith('/dashboard/insurance') },
+    { name: 'Expenses', href: '/dashboard/expenses', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'expenses', DollarSign), isActive: (path) => path.startsWith('/dashboard/expenses') },
+    { name: 'Documents', href: '/dashboard/documents', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'documents', FileText), isActive: (path) => path.startsWith('/dashboard/documents') },
   ];
   const ownerPropertyAdminLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
     {
       name: 'Reports',
       href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'),
-      icon: FileText,
+      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'reports', FileText),
       navTarget: 'reports',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path),
     },
@@ -982,7 +983,7 @@ function SidebarNav({ user }: { user: User | null }) {
     {
       name: 'Rooms',
       href: buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms'),
-      icon: LayoutGrid,
+      icon: resolveHomeownerNavigationIcon('main', 'rooms', LayoutGrid),
       navTarget: 'rooms',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
     },
@@ -992,21 +993,21 @@ function SidebarNav({ user }: { user: User | null }) {
     {
       name: 'Incidents',
       href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
-      icon: ShieldAlert,
+      icon: resolveHomeownerNavigationIcon('protection', 'incidents', ShieldAlert),
       navTarget: 'incidents',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
     },
     {
       name: 'Claims',
       href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
-      icon: ClipboardCheck,
+      icon: resolveHomeownerNavigationIcon('protection', 'claims', ClipboardCheck),
       navTarget: 'claims',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
     },
     {
       name: 'Recalls',
       href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
-      icon: ShieldCheck,
+      icon: resolveHomeownerNavigationIcon('protection', 'recalls', ShieldCheck),
       navTarget: 'recalls',
       isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
     },

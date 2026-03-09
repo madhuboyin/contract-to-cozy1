@@ -9,32 +9,13 @@ import { MaintenanceTaskTemplate, ServiceCategory } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import { resolveMaintenanceTemplateIcon } from '@/lib/icons';
 import {
   ArrowRight,
-  BadgeCheck,
-  BellRing,
-  Building2,
-  Bug,
   ChevronRight,
-  CloudRain,
-  CreditCard,
-  Database,
   ClipboardList,
-  Droplet,
-  FileText,
-  Flame,
   Home,
-  Landmark,
-  Leaf,
   Loader2,
-  Receipt,
-  ShieldCheck,
-  Sparkles,
-  Settings,
-  TreePine,
-  Umbrella,
-  Wind,
-  Wrench,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -91,45 +72,45 @@ const TONE_STYLES: Record<
   },
 };
 
-const TITLE_ICON_MAP: Record<string, { icon: LucideIcon; tone: VisualTone }> = {
-  'water heater flush': { icon: Droplet, tone: 'systems' },
-  'septic tank pumping': { icon: Database, tone: 'systems' },
-  'smoke detector testing': { icon: BellRing, tone: 'safety' },
-  'gutter cleaning': { icon: CloudRain, tone: 'cleaning' },
-  'dryer vent cleaning': { icon: Wind, tone: 'cleaning' },
-  'carpet deep cleaning': { icon: Sparkles, tone: 'cleaning' },
-  'lawn fertilization': { icon: Leaf, tone: 'outdoor' },
-  'tree trimming': { icon: TreePine, tone: 'outdoor' },
-  'hoa dues payment': { icon: Building2, tone: 'payments' },
-  'home insurance renewal': { icon: ShieldCheck, tone: 'insurance' },
-  'property tax payment': { icon: Landmark, tone: 'payments' },
-  'home warranty renewal': { icon: BadgeCheck, tone: 'insurance' },
-  'hoa fee payment': { icon: CreditCard, tone: 'payments' },
-  'property document review': { icon: FileText, tone: 'documents' },
-  'appliance warranty check': { icon: Settings, tone: 'systems' },
-  'umbrella insurance review': { icon: Umbrella, tone: 'insurance' },
-  'hvac filter replacement': { icon: Wind, tone: 'systems' },
-  'hvac system maintenance': { icon: Wrench, tone: 'systems' },
-  'chimney cleaning': { icon: Flame, tone: 'cleaning' },
-  'pest control treatment': { icon: Bug, tone: 'safety' },
+const TITLE_TONE_MAP: Record<string, VisualTone> = {
+  'water heater flush': 'systems',
+  'septic tank pumping': 'systems',
+  'smoke detector testing': 'safety',
+  'gutter cleaning': 'cleaning',
+  'dryer vent cleaning': 'cleaning',
+  'carpet deep cleaning': 'cleaning',
+  'lawn fertilization': 'outdoor',
+  'tree trimming': 'outdoor',
+  'hoa dues payment': 'payments',
+  'home insurance renewal': 'insurance',
+  'property tax payment': 'payments',
+  'home warranty renewal': 'insurance',
+  'hoa fee payment': 'payments',
+  'property document review': 'documents',
+  'appliance warranty check': 'systems',
+  'umbrella insurance review': 'insurance',
+  'hvac filter replacement': 'systems',
+  'hvac system maintenance': 'systems',
+  'chimney cleaning': 'cleaning',
+  'pest control treatment': 'safety',
 };
 
-const CATEGORY_FALLBACK_MAP: Partial<Record<ServiceCategory, { icon: LucideIcon; tone: VisualTone }>> = {
-  INSURANCE: { icon: ShieldCheck, tone: 'insurance' },
-  WARRANTY: { icon: BadgeCheck, tone: 'insurance' },
-  FINANCE: { icon: Receipt, tone: 'payments' },
-  ADMIN: { icon: FileText, tone: 'documents' },
-  HVAC: { icon: Wrench, tone: 'systems' },
-  PLUMBING: { icon: Droplet, tone: 'systems' },
-  ELECTRICAL: { icon: Wrench, tone: 'systems' },
-  HANDYMAN: { icon: Wrench, tone: 'systems' },
-  CLEANING: { icon: Sparkles, tone: 'cleaning' },
-  LANDSCAPING: { icon: Leaf, tone: 'outdoor' },
-  PEST_CONTROL: { icon: Bug, tone: 'safety' },
-  INSPECTION: { icon: ClipboardList, tone: 'documents' },
-  LOCKSMITH: { icon: ShieldCheck, tone: 'safety' },
-  ATTORNEY: { icon: FileText, tone: 'documents' },
-  MOVING: { icon: ClipboardList, tone: 'neutral' },
+const CATEGORY_TONE_MAP: Partial<Record<ServiceCategory, VisualTone>> = {
+  INSURANCE: 'insurance',
+  WARRANTY: 'insurance',
+  FINANCE: 'payments',
+  ADMIN: 'documents',
+  HVAC: 'systems',
+  PLUMBING: 'systems',
+  ELECTRICAL: 'systems',
+  HANDYMAN: 'systems',
+  CLEANING: 'cleaning',
+  LANDSCAPING: 'outdoor',
+  PEST_CONTROL: 'safety',
+  INSPECTION: 'documents',
+  LOCKSMITH: 'safety',
+  ATTORNEY: 'documents',
+  MOVING: 'neutral',
 };
 
 function normalizeTemplateTitle(title: string): string {
@@ -142,26 +123,18 @@ function getTemplateVisual(template: MaintenanceTaskTemplate): {
   categoryBadgeClass: string;
 } {
   const normalizedTitle = normalizeTemplateTitle(template.title);
-
-  const titleMatch = TITLE_ICON_MAP[normalizedTitle];
-  if (titleMatch) {
-    return {
-      icon: titleMatch.icon,
-      ...TONE_STYLES[titleMatch.tone],
-    };
-  }
-
-  if (template.serviceCategory && CATEGORY_FALLBACK_MAP[template.serviceCategory]) {
-    const fallback = CATEGORY_FALLBACK_MAP[template.serviceCategory]!;
-    return {
-      icon: fallback.icon,
-      ...TONE_STYLES[fallback.tone],
-    };
-  }
+  const toneFromTitle = TITLE_TONE_MAP[normalizedTitle];
+  const toneFromCategory = template.serviceCategory
+    ? CATEGORY_TONE_MAP[template.serviceCategory]
+    : undefined;
+  const tone = toneFromTitle || toneFromCategory || 'neutral';
 
   return {
-    icon: ClipboardList,
-    ...TONE_STYLES.neutral,
+    icon: resolveMaintenanceTemplateIcon({
+      title: template.title,
+      serviceCategory: template.serviceCategory,
+    }),
+    ...TONE_STYLES[tone],
   };
 }
 

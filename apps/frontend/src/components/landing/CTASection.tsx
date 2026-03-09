@@ -2,6 +2,7 @@
 // Updated with sleek/compact styling, smaller fonts, and tighter spacing
 
 import Link from 'next/link';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function CTASection() {
   return (
@@ -37,15 +38,15 @@ export default function CTASection() {
         <div className="mt-10 pt-6 border-t border-blue-400/50">
           <div className="flex flex-wrap justify-center items-center gap-8 text-blue-100">
             <div className="flex items-center">
-              <span className="text-2xl mr-2">✓</span>
+              <CheckCircle2 className="mr-2 h-5 w-5" />
               <span className="text-sm">No credit card required</span>
             </div>
             <div className="flex items-center">
-              <span className="text-2xl mr-2">✓</span>
+              <CheckCircle2 className="mr-2 h-5 w-5" />
               <span className="text-sm">Free to browse</span>
             </div>
             <div className="flex items-center">
-              <span className="text-2xl mr-2">✓</span>
+              <CheckCircle2 className="mr-2 h-5 w-5" />
               <span className="text-sm">Cancel anytime</span>
             </div>
           </div>

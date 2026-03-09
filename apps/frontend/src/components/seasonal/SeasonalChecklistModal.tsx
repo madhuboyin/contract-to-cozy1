@@ -37,7 +37,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
 
   const { checklist, tasks } = data?.data || data;
   const seasonName = getSeasonName(checklist.season);
-  const seasonIcon = getSeasonIcon(checklist.season);
+  const SeasonIcon = getSeasonIcon(checklist.season);
   const climateName = getClimateRegionName(checklist.climateRegion);
 
   const criticalCount = tasks.critical.length;
@@ -72,7 +72,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <span className="text-3xl">{seasonIcon}</span>
+            <SeasonIcon className="h-8 w-8 text-brand-primary" />
             <div>
               <h2 className="text-2xl font-bold text-gray-900">
                 {seasonName} {checklist.year} Maintenance Checklist

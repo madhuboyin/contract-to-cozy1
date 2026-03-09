@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import humanizeActionType from '@/lib/utils/humanize';
 import { SEVERITY_CHIP } from '@/lib/utils/chipTokens';
+import { resolveIconByToken } from '@/lib/icons';
 
 
 type Props = {
@@ -285,21 +286,21 @@ function sourceMeta(sourceType?: string | null) {
   const t = safeUpper(sourceType);
   switch (t) {
     case 'SCHEDULED':
-      return { icon: '⏱', label: 'Scheduled', cls: 'bg-gray-100 text-gray-700' };
+      return { iconToken: 'calendar-days', label: 'Scheduled', cls: 'bg-gray-100 text-gray-700' };
     case 'INTELLIGENCE':
-      return { icon: '📊', label: 'Intelligence', cls: 'bg-indigo-50 text-indigo-700' };
+      return { iconToken: 'sparkles', label: 'Intelligence', cls: 'bg-indigo-50 text-indigo-700' };
     case 'COVERAGE':
-      return { icon: '📄', label: 'Coverage', cls: 'bg-sky-50 text-sky-700' };
+      return { iconToken: 'shield-check', label: 'Coverage', cls: 'bg-sky-50 text-sky-700' };
     case 'MANUAL':
-      return { icon: '👤', label: 'Manual', cls: 'bg-amber-50 text-amber-800' };
+      return { iconToken: 'pencil', label: 'Manual', cls: 'bg-amber-50 text-amber-800' };
     case 'SENSOR':
-      return { icon: '🔔', label: 'Sensor', cls: 'bg-emerald-50 text-emerald-700' };
+      return { iconToken: 'bell-ring', label: 'Sensor', cls: 'bg-emerald-50 text-emerald-700' };
     case 'DOCUMENT':
-      return { icon: '🧾', label: 'Document', cls: 'bg-zinc-50 text-zinc-700' };
+      return { iconToken: 'file-text', label: 'Document', cls: 'bg-zinc-50 text-zinc-700' };
     case 'EXTERNAL':
-      return { icon: '🌎', label: 'External', cls: 'bg-teal-50 text-teal-700' };
+      return { iconToken: 'globe', label: 'External', cls: 'bg-teal-50 text-teal-700' };
     default:
-      return { icon: '•', label: 'Signal', cls: 'bg-gray-100 text-gray-700' };
+      return { iconToken: 'layout-grid', label: 'Signal', cls: 'bg-gray-100 text-gray-700' };
   }
 }
 
@@ -316,12 +317,13 @@ function signalBadge(action: OrchestratedActionDTO) {
   if (!s) return null;
 
   const meta = sourceMeta(s.sourceType);
+  const SourceIcon = resolveIconByToken(meta.iconToken);
   const base = 'text-xs font-semibold px-2 py-0.5 rounded-md inline-flex items-center gap-1';
   const title = s.summary || undefined;
 
   return (
     <span className={`${base} ${meta.cls}`} title={title}>
-      <span>{meta.icon}</span>
+      <SourceIcon className="h-3.5 w-3.5" />
       <span>{meta.label}</span>
     </span>
   );
@@ -536,7 +538,7 @@ export const OrchestrationActionCard: React.FC<Props> = ({
         </div>
       )}
 
-      {/* 🔑 NEW: Task Status Badge - Show when task has been created */}
+      {/* Task status badge when a related checklist item exists */}
       {action.hasRelatedChecklistItem && action.relatedChecklistItem && (
         <TaskStatusBadge checklistItem={action.relatedChecklistItem} />
       )}

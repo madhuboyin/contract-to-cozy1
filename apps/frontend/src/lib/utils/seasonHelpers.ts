@@ -1,10 +1,12 @@
 // apps/frontend/src/utils/seasonHelpers.ts
+import type { LucideIcon } from 'lucide-react';
+import { resolveIconByToken } from '@/lib/icons';
 import { Season, ClimateRegion, TaskPriority } from '@/types/seasonal.types';
 
 export const seasonConfig = {
   SPRING: {
     name: 'Spring',
-    icon: '🌸',
+    iconToken: 'leaf',
     color: 'green',
     gradient: 'from-green-400 to-emerald-500',
     bgColor: 'bg-green-50',
@@ -13,7 +15,7 @@ export const seasonConfig = {
   },
   SUMMER: {
     name: 'Summer',
-    icon: '☀️',
+    iconToken: 'sun',
     color: 'yellow',
     gradient: 'from-yellow-400 to-orange-500',
     bgColor: 'bg-yellow-50',
@@ -22,7 +24,7 @@ export const seasonConfig = {
   },
   FALL: {
     name: 'Fall',
-    icon: '🍂',
+    iconToken: 'tree-pine',
     color: 'orange',
     gradient: 'from-orange-400 to-red-500',
     bgColor: 'bg-orange-50',
@@ -31,7 +33,7 @@ export const seasonConfig = {
   },
   WINTER: {
     name: 'Winter',
-    icon: '❄️',
+    iconToken: 'snowflake',
     color: 'blue',
     gradient: 'from-blue-400 to-cyan-500',
     bgColor: 'bg-blue-50',
@@ -44,27 +46,27 @@ export const climateRegionConfig = {
   VERY_COLD: {
     name: 'Very Cold',
     description: 'Zones 1-4',
-    icon: '🥶',
+    iconToken: 'snowflake',
   },
   COLD: {
     name: 'Cold',
     description: 'Zones 5-6',
-    icon: '❄️',
+    iconToken: 'cloud-rain',
   },
   MODERATE: {
     name: 'Moderate',
     description: 'Zones 7-8',
-    icon: '🌤️',
+    iconToken: 'cloud',
   },
   WARM: {
     name: 'Warm',
     description: 'Zones 9-10',
-    icon: '☀️',
+    iconToken: 'sun',
   },
   TROPICAL: {
     name: 'Tropical',
     description: 'Zones 11-13',
-    icon: '🌴',
+    iconToken: 'tree-pine',
   },
 };
 
@@ -76,7 +78,7 @@ export const priorityConfig = {
     textColor: 'text-red-700',
     borderColor: 'border-red-200',
     badge: 'bg-red-100 text-red-800',
-    icon: '🔴',
+    iconToken: 'alert-triangle',
   },
   RECOMMENDED: {
     name: 'Recommended',
@@ -85,7 +87,7 @@ export const priorityConfig = {
     textColor: 'text-orange-700',
     borderColor: 'border-orange-200',
     badge: 'bg-orange-100 text-orange-800',
-    icon: '🟡',
+    iconToken: 'lightbulb',
   },
   OPTIONAL: {
     name: 'Optional',
@@ -94,12 +96,12 @@ export const priorityConfig = {
     textColor: 'text-green-700',
     borderColor: 'border-green-200',
     badge: 'bg-green-100 text-green-800',
-    icon: '🟢',
+    iconToken: 'badge-check',
   },
 };
 
-export function getSeasonIcon(season: Season): string {
-  return seasonConfig[season]?.icon || '📅';
+export function getSeasonIcon(season: Season): LucideIcon {
+  return resolveIconByToken(seasonConfig[season]?.iconToken || 'calendar');
 }
 
 export function getSeasonName(season: Season): string {
@@ -114,16 +116,16 @@ export function getClimateRegionName(region: ClimateRegion): string {
   return climateRegionConfig[region]?.name || region;
 }
 
-export function getClimateRegionIcon(region: ClimateRegion): string {
-  return climateRegionConfig[region]?.icon || '🌡️';
+export function getClimateRegionIcon(region: ClimateRegion): LucideIcon {
+  return resolveIconByToken(climateRegionConfig[region]?.iconToken || 'thermometer');
 }
 
 export function getPriorityBadgeClass(priority: TaskPriority): string {
   return priorityConfig[priority]?.badge || 'bg-gray-100 text-gray-800';
 }
 
-export function getPriorityIcon(priority: TaskPriority): string {
-  return priorityConfig[priority]?.icon || '⚪';
+export function getPriorityIcon(priority: TaskPriority): LucideIcon {
+  return resolveIconByToken(priorityConfig[priority]?.iconToken || 'badge-check');
 }
 
 export function formatCostRange(min?: number, max?: number): string {

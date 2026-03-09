@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Star } from 'lucide-react';
 
 export default function Neighborhood() {
   return (
@@ -116,8 +117,8 @@ export default function Neighborhood() {
                   </h3>
                   <div className="flex items-center space-x-2">
                     <div className="flex text-yellow-400">
-                      {'★★★★★'.split('').map((star, i) => (
-                        <span key={i}>{star}</span>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className="h-4 w-4 fill-current" />
                       ))}
                     </div>
                     <span className="text-sm text-gray-600 font-semibold">4.9</span>

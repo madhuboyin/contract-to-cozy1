@@ -3,9 +3,11 @@
 
 import Link from 'next/link';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
+import { resolveIconByConcept } from '@/lib/icons';
 
 export function NotificationBell() {
   const { unreadCount } = useNotifications();
+  const BellIcon = resolveIconByConcept('notifications');
 
   return (
     <Link
@@ -13,7 +15,7 @@ export function NotificationBell() {
       className="relative inline-flex items-center"
       aria-label="Notifications"
     >
-      <span className="text-lg">🔔</span>
+      <BellIcon className="h-5 w-5" />
 
       {unreadCount > 0 && (
         <span

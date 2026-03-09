@@ -2,26 +2,32 @@
 // Sleeker, more compact feature cards with reduced font sizes.
 
 import Link from "next/link";
+import { resolveIconByConcept } from '@/lib/icons';
+import type { IconConcept } from '@/lib/icons';
 
 export default function Features() {
-  const features = [
+  const features: Array<{
+    concept: IconConcept;
+    title: string;
+    description: string;
+  }> = [
     {
-      icon: '✨',
+      concept: 'property',
       title: 'Effortless Home Management',
       description: 'Centralize all your home maintenance, repairs, and upgrades in one intuitive dashboard.',
     },
     {
-      icon: '🤝',
+      concept: 'providers',
       title: 'Trusted Local Professionals',
       description: 'Connect with fully vetted, licensed, and insured experts in your neighborhood.',
     },
     {
-      icon: '💰',
+      concept: 'expenses',
       title: 'Transparent Pricing & Savings',
       description: 'Get upfront, guaranteed quotes and track your savings on every service.',
     },
     {
-      icon: '🔔',
+      concept: 'notifications',
       title: 'Never Miss a Beat',
       description: 'Automated reminders for routine maintenance and upcoming service appointments.',
     },
@@ -33,20 +39,25 @@ export default function Features() {
         {/* Features Grid - Set to 4 columns on large screens for single row */}
         {/* Adjusted gap to be slightly smaller */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6"> 
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              // Reduced padding (p-5 -> p-4) and added flex for better alignment
-              className="bg-white rounded-xl shadow-lg p-4 text-center transform hover:scale-105 transition-transform duration-300 border border-gray-100 flex flex-col items-center justify-start h-full"
-            >
-              {/* Icon size reduced (text-4xl -> text-3xl) and margin adjusted */}
-              <div className="text-3xl mb-3">{feature.icon}</div> 
-              {/* Title font size reduced (text-xl -> text-lg) */}
-              <h3 className="text-lg font-semibold text-gray-900 mb-1.5">{feature.title}</h3> 
-              {/* Description font size reduced (text-sm -> text-xs) */}
-              <p className="text-gray-600 text-xs leading-relaxed">{feature.description}</p>
-            </div>
-          ))}
+          {features.map((feature, index) => {
+            const FeatureIcon = resolveIconByConcept(feature.concept);
+            return (
+              <div
+                key={index}
+                // Reduced padding (p-5 -> p-4) and added flex for better alignment
+                className="bg-white rounded-xl shadow-lg p-4 text-center transform hover:scale-105 transition-transform duration-300 border border-gray-100 flex flex-col items-center justify-start h-full"
+              >
+                {/* Icon size reduced (text-4xl -> text-3xl) and margin adjusted */}
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                  <FeatureIcon className="h-5 w-5" />
+                </div>
+                {/* Title font size reduced (text-xl -> text-lg) */}
+                <h3 className="text-lg font-semibold text-gray-900 mb-1.5">{feature.title}</h3> 
+                {/* Description font size reduced (text-sm -> text-xs) */}
+                <p className="text-gray-600 text-xs leading-relaxed">{feature.description}</p>
+              </div>
+            );
+          })}
         </div>
 
         {/* CTA (Optional, kept it here) */}

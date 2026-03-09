@@ -2,30 +2,31 @@
 // Final Integrated Value Section: All differentiators and capabilities in one crisp table.
 
 import Link from 'next/link';
+import { resolveIconByToken } from '@/lib/icons';
 
 export default function ValuePropositionComparison() {
   const comparisonPoints = [
     // --- DIFFERENTIATORS (The UVPs) ---
     {
-      icon: '🔑',
+      iconToken: 'key',
       title: 'Unified Closure Services',
       cozy: 'One platform for inspection, attorney, and insurance vendor coordination.',
       competitor: 'Separate vendors, manual communication, and disjointed scheduling required.'
     },
     {
-      icon: '🖥️',
+      iconToken: 'layout-grid',
       title: 'Single Pane Dashboard',
       cozy: 'All bookings, property documents, and budget history in one beautiful interface.',
       competitor: 'Tracking services using spreadsheets, emails, and phone notes.'
     },
     {
-      icon: '🔔',
+      iconToken: 'bell-ring',
       title: 'Annual Reminders',
       cozy: 'Automatic reminders for maintenance (e.g., duct cleaning, pest control).',
       competitor: 'Homeowner must manually track and remember service cycles.'
     },
     {
-      icon: '⭐',
+      iconToken: 'badge-check',
       title: 'Neighborhood Trust',
       cozy: 'Pros vetted and rated by your actual neighbors with local job history.',
       competitor: 'Generic city-wide reviews and simple rating systems.'
@@ -33,19 +34,19 @@ export default function ValuePropositionComparison() {
 
     // --- CORE CAPABILITIES (The Necessities - Added from Features.tsx) ---
     {
-      icon: '💰',
+      iconToken: 'dollar-sign',
       title: 'Transparent Pricing',
       cozy: 'See upfront costs and guaranteed quotes before booking.',
       competitor: 'Hidden fees, estimated quotes that often change upon arrival.'
     },
     {
-      icon: '⚡',
+      iconToken: 'zap',
       title: 'Book Fast',
       cozy: 'Find, compare, and book qualified pros in minutes.',
       competitor: 'Calling multiple vendors and waiting days for callbacks or quotes.'
     },
     {
-      icon: '🛡️',
+      iconToken: 'shield-check',
       title: 'Trusted & Verified',
       cozy: 'All pros are background-checked, licensed, and insured for your peace of mind.',
       competitor: 'User must manually verify license and insurance details themselves.'
@@ -78,7 +79,11 @@ export default function ValuePropositionComparison() {
           </div>
 
           {/* Table Rows */}
-          {comparisonPoints.map((point, index) => (
+          {comparisonPoints.map((point, index) => {
+            const PointIcon = resolveIconByToken(point.iconToken);
+            const CozyIcon = resolveIconByToken('badge-check');
+            const CompetitorIcon = resolveIconByToken('shield-alert');
+            return (
             <div 
               key={index} 
               // Alternating row color is now self-contained in the white-background table
@@ -87,7 +92,9 @@ export default function ValuePropositionComparison() {
               
               {/* Column 1: Feature Title */}
               <div className="p-4 border-r border-gray-200 flex items-center">
-                <span className="text-2xl mr-3">{point.icon}</span>
+                <span className="mr-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                  <PointIcon className="h-4 w-4" />
+                </span>
                 <h3 className="text-sm font-semibold text-gray-900 leading-snug">
                   {point.title}
                 </h3>
@@ -96,7 +103,7 @@ export default function ValuePropositionComparison() {
               {/* Column 2: The Cozy Way (Thumbs Up) */}
               <div className="p-4 border-r border-gray-200">
                 <div className="flex items-center space-x-3">
-                  <span className="text-2xl text-green-500">👍</span>
+                  <CozyIcon className="h-5 w-5 text-green-500" />
                   <p className="text-sm text-gray-700 leading-snug">{point.cozy}</p>
                 </div>
               </div>
@@ -104,12 +111,13 @@ export default function ValuePropositionComparison() {
               {/* Column 3: The Old Way (Thumbs Down) */}
               <div className="p-4">
                 <div className="flex items-center space-x-3">
-                  <span className="text-2xl text-red-500">👎</span>
+                  <CompetitorIcon className="h-5 w-5 text-red-500" />
                   <p className="text-sm text-gray-700 leading-snug">{point.competitor}</p>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Final CTA - Reduced top margin */}

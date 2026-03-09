@@ -5,8 +5,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
+import { Camera, Calendar, LayoutDashboard, Menu, UserCircle2, Wrench, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { resolveProviderNavigationIcon } from '@/lib/icons';
 
 export default function ProviderDashboardLayout({
   children,
@@ -35,12 +36,12 @@ export default function ProviderDashboardLayout({
 
   const navigation = useMemo(
     () => [
-      { name: 'Dashboard', href: '/providers/dashboard', icon: '📊' },
-      { name: 'Bookings', href: '/providers/bookings', icon: '📅' },
-      { name: 'Services', href: '/providers/services', icon: '🔧' },
-      { name: 'Calendar', href: '/providers/calendar', icon: '🗓️' },
-      { name: 'Portfolio', href: '/providers/portfolio', icon: '📸' },
-      { name: 'Profile', href: '/providers/profile', icon: '⚙️' },
+      { name: 'Dashboard', href: '/providers/dashboard', icon: resolveProviderNavigationIcon('dashboard', LayoutDashboard) },
+      { name: 'Bookings', href: '/providers/bookings', icon: resolveProviderNavigationIcon('bookings', Calendar) },
+      { name: 'Services', href: '/providers/services', icon: resolveProviderNavigationIcon('services', Wrench) },
+      { name: 'Calendar', href: '/providers/calendar', icon: resolveProviderNavigationIcon('calendar', Calendar) },
+      { name: 'Portfolio', href: '/providers/portfolio', icon: resolveProviderNavigationIcon('portfolio', Camera) },
+      { name: 'Profile', href: '/providers/profile', icon: resolveProviderNavigationIcon('profile', UserCircle2) },
     ],
     []
   );
@@ -117,6 +118,7 @@ export default function ProviderDashboardLayout({
 
           <nav className="mt-3 hidden items-center gap-2 overflow-x-auto pb-1 md:flex">
             {navigation.map((item) => {
+              const Icon = item.icon;
               const active = pathname === item.href || pathname?.startsWith(item.href + '/');
               return (
                 <Link
@@ -126,7 +128,7 @@ export default function ProviderDashboardLayout({
                     active ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  <span>{item.icon}</span>
+                  <Icon className="h-4 w-4" />
                   <span>{item.name}</span>
                 </Link>
               );
@@ -138,6 +140,7 @@ export default function ProviderDashboardLayout({
           <div className="border-t border-slate-200 bg-white px-4 py-3 md:hidden">
             <div className="grid grid-cols-2 gap-2">
               {navigation.map((item) => {
+                const Icon = item.icon;
                 const active = pathname === item.href || pathname?.startsWith(item.href + '/');
                 return (
                   <Link
@@ -147,7 +150,7 @@ export default function ProviderDashboardLayout({
                       active ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-700'
                     }`}
                   >
-                    <span>{item.icon}</span>
+                    <Icon className="h-4 w-4" />
                     <span>{item.name}</span>
                   </Link>
                 );

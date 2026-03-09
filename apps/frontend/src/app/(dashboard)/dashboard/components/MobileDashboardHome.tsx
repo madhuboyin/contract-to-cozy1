@@ -45,6 +45,7 @@ import {
   MOBILE_HOME_TOOL_LINKS,
 } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { MoneyImpactTrackerCard } from '@/components/mobile/dashboard/MoneyImpactTrackerCard';
+import { resolveToolIcon } from '@/lib/icons';
 import type { LocalUpdate } from '@/types';
 import type { ScoredProperty } from '../types';
 
@@ -342,11 +343,11 @@ export default function MobileDashboardHome({
   const homeToolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));
   const homeToolsPinnedKeys = ['property-tax', 'sell-hold-rent', 'seller-prep', 'home-timeline'] as const;
   const homeToolsPageHref = `/dashboard/home-tools${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ''}`;
-  const homeToolsTileMeta: Record<string, { subtitle: string; icon: string }> = {
-    'property-tax': { subtitle: 'Forecast annual tax drag', icon: '🏛️' },
-    'sell-hold-rent': { subtitle: 'Model next property move', icon: '⚖️' },
-    'seller-prep': { subtitle: 'Prep high-ROI improvements', icon: '🧰' },
-    'home-timeline': { subtitle: 'Track milestones over time', icon: '🗓️' },
+  const homeToolsTileMeta: Record<string, { subtitle: string }> = {
+    'property-tax': { subtitle: 'Forecast annual tax drag' },
+    'sell-hold-rent': { subtitle: 'Model next property move' },
+    'seller-prep': { subtitle: 'Prep high-ROI improvements' },
+    'home-timeline': { subtitle: 'Track milestones over time' },
   };
   const homeToolTiles = homeToolsPinnedKeys
     .map((key) => homeToolByKey.get(key))
@@ -354,8 +355,8 @@ export default function MobileDashboardHome({
     .map((tool) => ({
       title: tool.name,
       subtitle: homeToolsTileMeta[tool.key]?.subtitle || 'Open tool',
-      icon: homeToolsTileMeta[tool.key]?.icon || '🧩',
-      trailingIcon: homeToolsTileMeta[tool.key]?.icon || '🧩',
+      icon: React.createElement(tool.icon, { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(tool.icon, { className: 'h-5 w-5' }),
       href: buildPropertyAwareHref(propertyId, tool.hrefSuffix, tool.navTarget),
       tone: 'neutral' as const,
       badgeLabel: '',
@@ -370,8 +371,8 @@ export default function MobileDashboardHome({
     {
       title: 'Repair vs Replace',
       subtitle: monthlySavings > 0 ? `${formatCurrency(monthlySavings)}+ save` : 'Smart fix decisions',
-      icon: '🛠️',
-      trailingIcon: '🔧',
+      icon: React.createElement(resolveToolIcon('ai', 'replace-repair'), { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(resolveToolIcon('ai', 'replace-repair'), { className: 'h-5 w-5' }),
       artworkSrc: aiToolByKey.get('replace-repair')?.artworkSrc,
       href: buildAiToolHref(propertyId, '/dashboard/replace-repair'),
       tone: 'neutral' as const,
@@ -383,8 +384,8 @@ export default function MobileDashboardHome({
         totalCoverageGaps > 0
           ? `${totalCoverageGaps} gap${totalCoverageGaps === 1 ? '' : 's'} detected`
           : 'No gaps detected',
-      icon: '🧾',
-      trailingIcon: '✅',
+      icon: React.createElement(resolveToolIcon('ai', 'coverage-intelligence'), { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(resolveToolIcon('ai', 'coverage-intelligence'), { className: 'h-5 w-5' }),
       artworkSrc: aiToolByKey.get('coverage-intelligence')?.artworkSrc,
       href: buildAiToolHref(propertyId, '/dashboard/coverage-intelligence'),
       tone: 'neutral' as const,
@@ -393,8 +394,8 @@ export default function MobileDashboardHome({
     {
       title: 'Climate Risk',
       subtitle: climateHeadline || 'Weather risk monitored',
-      icon: '🌧️',
-      trailingIcon: '🌧️',
+      icon: React.createElement(resolveToolIcon('ai', 'climate'), { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(resolveToolIcon('ai', 'climate'), { className: 'h-5 w-5' }),
       artworkSrc: aiToolByKey.get('climate')?.artworkSrc,
       href: buildAiToolHref(propertyId, '/dashboard/climate'),
       tone: 'neutral' as const,
@@ -403,8 +404,8 @@ export default function MobileDashboardHome({
     {
       title: 'Home Equity',
       subtitle: homeEquityDollars > 0 ? `Equity: ${formatCurrency(homeEquityDollars)}` : 'Track equity growth',
-      icon: '💼',
-      trailingIcon: '💼',
+      icon: React.createElement(resolveToolIcon('ai', 'appreciation'), { className: 'h-5 w-5' }),
+      trailingIcon: React.createElement(resolveToolIcon('ai', 'appreciation'), { className: 'h-5 w-5' }),
       artworkSrc: aiToolByKey.get('appreciation')?.artworkSrc,
       href: buildAiToolHref(propertyId, '/dashboard/appreciation'),
       tone: 'neutral' as const,

@@ -2,12 +2,13 @@
 // Updated with sleek/compact styling, consistent colors, and smaller fonts
 
 import Link from 'next/link';
+import { resolveIconByToken } from '@/lib/icons';
 
 export default function Services() {
   const serviceCategories = [
     {
       title: 'Closing Phase',
-      icon: '📋',
+      iconToken: 'clipboard-list',
       // color: 'bg-blue-50 border-blue-200 hover:border-blue-300', // <-- Removed for sleek consistency
       services: [
         'Home Inspection',
@@ -19,7 +20,7 @@ export default function Services() {
     },
     {
       title: 'Move-In',
-      icon: '🚚',
+      iconToken: 'truck',
       // color: 'bg-green-50 border-green-200 hover:border-green-300', // <-- Removed for sleek consistency
       services: [
         'Moving Services',
@@ -31,7 +32,7 @@ export default function Services() {
     },
     {
       title: 'Maintenance',
-      icon: '🔧',
+      iconToken: 'wrench',
       // color: 'bg-purple-50 border-purple-200 hover:border-purple-300', // <-- Removed for sleek consistency
       services: [
         'HVAC Service',
@@ -43,7 +44,7 @@ export default function Services() {
     },
     {
       title: 'Upgrades',
-      icon: '⚡',
+      iconToken: 'zap',
       // color: 'bg-amber-50 border-amber-200 hover:border-amber-300', // <-- Removed for sleek consistency
       services: [
         'Solar Installation',
@@ -71,31 +72,36 @@ export default function Services() {
 
         {/* Services Grid - Reduced gap */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {serviceCategories.map((category, index) => (
-            <div 
-              key={index}
-              // Standardized card style, removed category.color, reduced padding (p-6 to p-4)
-              className="p-4 rounded-2xl border border-gray-100 transition-all duration-300 bg-white hover:shadow-lg"
-            >
-              {/* Icon & Title - Reduced icon size and margins */}
-              <div className="text-center mb-3">
-                <div className="text-3xl mb-2">{category.icon}</div>
-                <h3 className="text-base font-semibold text-gray-900">
-                  {category.title}
-                </h3>
-              </div>
+          {serviceCategories.map((category, index) => {
+            const CategoryIcon = resolveIconByToken(category.iconToken);
+            return (
+              <div 
+                key={index}
+                // Standardized card style, removed category.color, reduced padding (p-6 to p-4)
+                className="p-4 rounded-2xl border border-gray-100 transition-all duration-300 bg-white hover:shadow-lg"
+              >
+                {/* Icon & Title - Reduced icon size and margins */}
+                <div className="text-center mb-3">
+                  <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <CategoryIcon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-900">
+                    {category.title}
+                  </h3>
+                </div>
 
-              {/* Services List - Reduced list item font size (text-sm to text-xs) */}
-              <ul className="space-y-1.5">
-                {category.services.map((service, idx) => (
-                  <li key={idx} className="flex items-start text-xs text-gray-700">
-                    <span className="mr-2 text-blue-600 font-bold">·</span>
-                    <span>{service}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                {/* Services List - Reduced list item font size (text-sm to text-xs) */}
+                <ul className="space-y-1.5">
+                  {category.services.map((service, idx) => (
+                    <li key={idx} className="flex items-start text-xs text-gray-700">
+                      <span className="mr-2 text-blue-600 font-bold">·</span>
+                      <span>{service}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
 
         {/* CTA - Reduced top margin and button size */}

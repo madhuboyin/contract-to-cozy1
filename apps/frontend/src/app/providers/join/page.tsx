@@ -6,9 +6,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Check } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 // FIX 1: Import APIError for robust error handling
 import { APIError } from '@/types/index'; 
+import { resolveIconByConcept } from '@/lib/icons';
 
 const serviceOptions = [
   { value: 'HOME_INSPECTION', label: 'Home Inspection' },
@@ -48,6 +50,8 @@ export default function ProviderJoinPage() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const BrandIcon = resolveIconByConcept('property');
+  const RegistrationIcon = resolveIconByConcept('maintenance');
 
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
@@ -146,7 +150,7 @@ export default function ProviderJoinPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-              <span className="text-2xl">🏠</span>
+              <BrandIcon className="h-6 w-6 text-brand-primary" />
               <span className="text-lg font-semibold text-gray-900">Contract to Cozy</span>
             </Link>
 
@@ -175,7 +179,7 @@ export default function ProviderJoinPage() {
             {/* Header */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium mb-4">
-                <span className="mr-1.5">🔧</span>
+                <RegistrationIcon className="mr-1.5 h-3.5 w-3.5" />
                 Provider Registration
               </div>
               <h2 className="text-3xl font-bold text-gray-900">Join as a Provider</h2>
@@ -191,7 +195,7 @@ export default function ProviderJoinPage() {
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                     currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'
                   }`}>
-                    {currentStep > 1 ? '✓' : '1'}
+                    {currentStep > 1 ? <Check className="h-4 w-4" /> : '1'}
                   </div>
                   <span className="ml-2 text-sm font-medium">Account</span>
                 </div>
