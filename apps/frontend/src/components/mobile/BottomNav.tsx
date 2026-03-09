@@ -18,6 +18,8 @@ import {
   Building,
   Calendar,
   Wrench,
+  Settings,
+  LogOut,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -25,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { useAuth } from '@/lib/auth/AuthContext';
 import {
   MOBILE_AI_TOOL_CATALOG,
   MOBILE_HOME_TOOL_LINKS,
@@ -63,11 +66,20 @@ function buildInsightHref(propertyId: string | undefined, hrefBase: string): str
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { logout } = useAuth();
   const { selectedPropertyId } = usePropertyContext();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
   const roomsHref = buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms');
+
+  const handleLogout = React.useCallback(() => {
+    setMoreOpen(false);
+    logout();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+  }, [logout]);
 
   const navItems = [
     {
@@ -383,6 +395,24 @@ export function BottomNav() {
                 <p className="border-t border-gray-100 pt-3 text-xs text-gray-500">
                   Tip: Press <span className="font-medium">⌘K</span> to jump anywhere
                 </p>
+              </div>
+              <div className="border-t border-gray-100 pt-3">
+                <Link
+                  href="/dashboard/profile"
+                  onClick={() => setMoreOpen(false)}
+                  className="mb-2 flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-brand-50 hover:text-brand-700"
+                >
+                  <Settings className="h-4 w-4" />
+                  Profile
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
               </div>
             </SheetContent>
           </Sheet>
