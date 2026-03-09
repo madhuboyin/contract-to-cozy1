@@ -63,6 +63,7 @@ export default function MobileHomeBuyerDashboard({
   localUpdates,
 }: MobileHomeBuyerDashboardProps) {
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+  const heroProperty = selectedProperty || properties[0];
   const propertyId = selectedProperty?.id || properties[0]?.id;
   const selectedPropertyName = selectedProperty?.name || selectedProperty?.address || 'Primary Property';
 
@@ -270,6 +271,9 @@ export default function MobileHomeBuyerDashboard({
                 eyebrow="Your Home Today"
                 title={`Welcome, ${userFirstName}`}
                 metric={`Closing ${progress}%`}
+                mediaSrc={heroProperty?.coverPhoto?.fileUrl || undefined}
+                mediaAlt={heroProperty?.name || heroProperty?.address || 'Property photo'}
+                mediaFallbackSrc="/images/home-cozy-illustration.png"
                 status={<StatusChip tone={progress >= 70 ? 'good' : progress >= 40 ? 'elevated' : 'needsAction'}>{progress >= 70 ? 'On Track' : 'Needs Focus'}</StatusChip>}
                 signals={heroSignals}
                 ctaLabel={pending > 0 ? 'Review Next Task' : 'View Checklist'}

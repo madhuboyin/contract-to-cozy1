@@ -481,6 +481,9 @@ export default function MobileDashboardHome({
                 eyebrow="Your Home Today"
                 title={`Good ${new Date().getHours() < 12 ? 'Morning' : 'Evening'}, ${userFirstName}`}
                 metric={`HomeScore ${homeScore}/100`}
+                mediaSrc={selectedProperty?.coverPhoto?.fileUrl || undefined}
+                mediaAlt={selectedProperty?.name || selectedProperty?.address || 'Property photo'}
+                mediaFallbackSrc="/images/home-cozy-illustration.png"
                 status={
                   <StatusChip tone={scoreChipTone(homeScore)}>
                     {homeScore >= 80 ? 'Good' : homeScore >= 60 ? 'Elevated' : 'Needs Action'}

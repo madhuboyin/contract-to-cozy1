@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/components/WelcomeSection.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Property } from '@/types';
@@ -25,6 +25,17 @@ export function WelcomeSection({
   selectedPropertyId, 
   onPropertyChange 
 }: WelcomeSectionProps) {
+  const selectedProperty = useMemo(
+    () => properties.find((property) => property.id === selectedPropertyId) ?? properties[0] ?? null,
+    [properties, selectedPropertyId]
+  );
+  const coverPhotoUrl = selectedProperty?.coverPhoto?.fileUrl || null;
+  const [hasCoverPhotoError, setHasCoverPhotoError] = useState(false);
+
+  useEffect(() => {
+    setHasCoverPhotoError(false);
+  }, [coverPhotoUrl]);
+
   return (
     /* OUTER WRAPPER: 
        - py-7 provides the slight height increase requested.
@@ -68,16 +79,29 @@ export function WelcomeSection({
             </div>
           </div>
           
-          {/* Right Column: Prominent Illustration */}
+          {/* Right Column: Property photo (if available) with fallback illustration */}
           <div className="hidden md:flex justify-end shrink-0">
-            <div className="relative w-48 h-32"> {/* Increased from w-40 h-28 */}
-              <Image 
-                src="/images/home-cozy-illustration.png" 
-                alt="Cozy Home" 
-                fill
-                className="object-contain object-right"
-                priority
-              />
+            <div className="relative w-48 h-32 overflow-hidden rounded-xl border border-teal-100/70 bg-white/70">
+              {coverPhotoUrl && !hasCoverPhotoError ? (
+                <Image
+                  src={coverPhotoUrl}
+                  alt={selectedProperty?.name || selectedProperty?.address || 'Property photo'}
+                  fill
+                  unoptimized
+                  sizes="192px"
+                  className="object-cover"
+                  onError={() => setHasCoverPhotoError(true)}
+                />
+              ) : (
+                <Image 
+                  src="/images/home-cozy-illustration.png" 
+                  alt="Cozy Home" 
+                  fill
+                  sizes="192px"
+                  className="object-contain object-right p-2"
+                  priority
+                />
+              )}
             </div>
           </div>
           

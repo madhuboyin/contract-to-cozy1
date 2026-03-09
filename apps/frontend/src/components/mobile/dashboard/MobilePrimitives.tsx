@@ -426,6 +426,9 @@ export function HeroSummaryCard({
   signals,
   ctaLabel,
   ctaHref,
+  mediaSrc,
+  mediaAlt,
+  mediaFallbackSrc,
 }: {
   eyebrow: string;
   title: string;
@@ -434,15 +437,46 @@ export function HeroSummaryCard({
   signals: string[];
   ctaLabel: string;
   ctaHref: string;
+  mediaSrc?: string;
+  mediaAlt?: string;
+  mediaFallbackSrc?: string;
 }) {
+  const [mediaLoadFailed, setMediaLoadFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setMediaLoadFailed(false);
+  }, [mediaSrc]);
+
+  const showPrimaryMedia = Boolean(mediaSrc) && !mediaLoadFailed;
+  const resolvedMediaSrc = showPrimaryMedia ? mediaSrc : mediaFallbackSrc;
+
   return (
     <MobileCard variant="hero" className="bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]">
-      <p className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
-        {eyebrow}
-      </p>
-      <h2 className="mb-0 text-[1.375rem] leading-[1.2] font-semibold text-[hsl(var(--mobile-text-primary))]">
-        {title}
-      </h2>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+            {eyebrow}
+          </p>
+          <h2 className="mb-0 text-[1.375rem] leading-[1.2] font-semibold text-[hsl(var(--mobile-text-primary))]">
+            {title}
+          </h2>
+        </div>
+        {resolvedMediaSrc ? (
+          <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white/80">
+            <Image
+              src={resolvedMediaSrc}
+              alt={mediaAlt || `${title} image`}
+              fill
+              unoptimized
+              sizes="96px"
+              className={showPrimaryMedia ? 'object-cover' : 'object-contain p-1.5'}
+              onError={() => {
+                if (showPrimaryMedia) setMediaLoadFailed(true);
+              }}
+            />
+          </div>
+        ) : null}
+      </div>
       <div className="mt-3 flex items-end justify-between gap-3">
         <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.heroMetric)}>{metric}</p>
         <div className="shrink-0">{status}</div>
