@@ -154,7 +154,7 @@ class APIClient {
   private validateFile(file: File, options?: { maxSizeMB?: number; allowedTypes?: string[] }) {
     const maxSize = (options?.maxSizeMB ?? 10) * 1024 * 1024;
     const allowedTypes = options?.allowedTypes ?? [
-      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
       'application/pdf',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

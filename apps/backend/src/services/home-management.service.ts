@@ -569,10 +569,8 @@ export async function deleteInsurancePolicy(
 
 
 // ============================================================================
-// DOCUMENT SERVICE LOGIC (MOCK UPLOAD AND LISTING)
+// DOCUMENT SERVICE LOGIC
 // ============================================================================
-
-const MOCK_STORAGE_URL = 'https://mock-storage.com/docs/';
 
 interface CreateDocumentDTO {
   type: string;
@@ -592,9 +590,9 @@ export async function createDocument(
   file: Express.Multer.File, // Assuming file is provided by multer middleware
 ): Promise<Document> {
   
-  // 1. MOCK FILE UPLOAD
-  const fileExtension = file.originalname.split('.').pop();
-  const fileUrl = MOCK_STORAGE_URL + `${Date.now()}-${file.fieldname}.${fileExtension}`;
+  // 1. Persist inline data URL so uploaded assets are immediately renderable.
+  // Replace with durable object storage URL when storage integration is available.
+  const fileUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
   
   // 2. INPUT VALIDATION (Simplified check)
   if (data.propertyId) {
