@@ -1647,6 +1647,10 @@ model MaintenancePrediction {
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([inventoryItemId])
+  @@index([status, predictedDate])
 }
 
 enum PredictionStatus {
@@ -1890,6 +1894,9 @@ model Booking {
   
   @@index([homeownerId])
   @@index([providerId])
+  @@index([providerProfileId])
+  @@index([propertyId])
+  @@index([serviceId])
   @@index([status])
   @@index([scheduledDate])
   @@index([category])

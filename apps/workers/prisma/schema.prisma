@@ -1417,6 +1417,9 @@ model Booking {
   
   @@index([homeownerId])
   @@index([providerId])
+  @@index([providerProfileId])
+  @@index([propertyId])
+  @@index([serviceId])
   @@index([status])
   @@index([scheduledDate])
   @@index([category])
