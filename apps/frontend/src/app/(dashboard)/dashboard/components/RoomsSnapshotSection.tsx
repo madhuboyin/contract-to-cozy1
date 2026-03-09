@@ -139,6 +139,13 @@ function roomIconFor(type: string) {
   }
 }
 
+function isRateLimitedError(error: unknown): boolean {
+  const candidate = error as { status?: number | string; message?: string } | undefined;
+  if (!candidate) return false;
+  if (candidate.status === 429 || candidate.status === '429') return true;
+  return String(candidate.message || '').toLowerCase().includes('too many requests');
+}
+
 export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) {
   const [rooms, setRooms] = React.useState<InventoryRoom[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -173,9 +180,13 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
         });
         setRooms(sorted);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
-        setError('Unable to load rooms right now.');
+        setError(
+          isRateLimitedError(err)
+            ? 'Too many requests right now. Please wait a moment and try again.'
+            : 'Unable to load rooms right now.'
+        );
       })
       .finally(() => {
         if (cancelled) return;
