@@ -29,6 +29,7 @@ import Step2Rooms from './steps/Step2Rooms';
 import Step3Inventory from './steps/Step3Inventory';
 import Step4Protection from './steps/Step4Protection';
 import Step5Insights from './steps/Step5Insights';
+import DesktopOnboardingTimeline from './components/DesktopOnboardingTimeline';
 
 type StepComponentProps = {
   step: OnboardingStatusDTO['steps'][number];
@@ -238,31 +239,13 @@ export default function OnboardingClient() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-[240px_1fr]">
-          <Card className="hidden md:block rounded-2xl">
-            <CardContent className="p-3">
-              <div className="space-y-1">
-                {steps.map((step) => (
-                  <button
-                    key={step.step}
-                    type="button"
-                    onClick={() => setAndPersistStep(step.step)}
-                    className={`w-full text-left rounded-xl px-3 py-2 transition ${
-                      activeStep === step.step
-                        ? 'bg-blue-50 border border-blue-200'
-                        : 'hover:bg-gray-50 border border-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Step {step.step}</p>
-                      {step.complete ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : null}
-                    </div>
-                    <p className="text-xs text-gray-600 mt-1">{step.title}</p>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-4 md:grid-cols-[280px_1fr]">
+          <DesktopOnboardingTimeline
+            steps={steps}
+            activeStep={activeStep}
+            onStepSelect={setAndPersistStep}
+            isLoading={setStepMutation.isPending}
+          />
 
           <div className="space-y-4">
             <div className="md:hidden">
