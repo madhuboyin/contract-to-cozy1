@@ -1,5 +1,30 @@
 import rateLimit from 'express-rate-limit';
+import type { Request } from 'express';
 import { authConfig } from '../config/jwt.config';
+import { verifyAccessToken } from '../utils/jwt.util';
+
+function bearerToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice('Bearer '.length).trim();
+  return token.length > 0 ? token : null;
+}
+
+function rateLimitKey(req: Request): string {
+  const token = bearerToken(req);
+  if (token) {
+    try {
+      const payload = verifyAccessToken(token);
+      if (payload.userId) return `user:${payload.userId}`;
+    } catch {
+      // Invalid/expired token: fall back to IP key.
+    }
+  }
+  return `ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+}
+
+const apiWindowMs = Number(process.env.API_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+const apiMaxRequests = Number(process.env.API_RATE_LIMIT_MAX || 900);
 
 /**
  * Rate limiter for authentication endpoints
@@ -39,8 +64,10 @@ export const strictRateLimiter = rateLimit({
  * General API rate limiter
  */
 export const apiRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300,
+  windowMs: apiWindowMs,
+  max: apiMaxRequests,
+  keyGenerator: rateLimitKey,
+  skip: (req) => req.method === 'OPTIONS',
   message: {
     success: false,
     error: {
