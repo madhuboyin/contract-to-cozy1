@@ -103,6 +103,7 @@ type MicroActionCandidate = {
 
 const DEFAULT_TIMEZONE = 'America/New_York';
 const SUPPRESSION_LOOKBACK_DAYS = 45;
+const WEATHER_INCIDENT_MAX_AGE_HOURS = 48;
 
 const PRIORITY_WEIGHT: Record<MaintenanceTaskPriority, number> = {
   URGENT: 4,
@@ -789,6 +790,7 @@ export class DailyHomePulseService {
     const timezone = property.timezone || DEFAULT_TIMEZONE;
     const todayKey = formatDateKeyInTimezone(date, timezone);
     const snapshotDate = dateKeyToDate(todayKey);
+    const recentWeatherCutoff = new Date(Date.now() - WEATHER_INCIDENT_MAX_AGE_HOURS * 60 * 60 * 1000);
 
     const [documentCount, activeBookings, maintenanceTasks, weatherIncident, recalls, localUpdates] =
       await Promise.all([
@@ -836,6 +838,7 @@ export class DailyHomePulseService {
             propertyId,
             sourceType: IncidentSourceType.WEATHER,
             isSuppressed: false,
+            updatedAt: { gte: recentWeatherCutoff },
             status: {
               in: [
                 IncidentStatus.DETECTED,

@@ -1,10 +1,18 @@
 // apps/workers/src/jobs/freezeRiskIncidents.job.ts
 import { prisma } from '../lib/prisma';
+import { IncidentStatus } from '@prisma/client';
 import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
 
 type Geo = { lat: number; lon: number; name?: string; admin1?: string; country?: string };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const OPEN_FREEZE_STATUSES: IncidentStatus[] = [
+  IncidentStatus.DETECTED,
+  IncidentStatus.EVALUATED,
+  IncidentStatus.ACTIVE,
+  IncidentStatus.ACTIONED,
+  IncidentStatus.MITIGATED,
+];
 
 function scoreFromMinF(minF: number) {
   if (minF <= 15) return 85;
@@ -91,6 +99,7 @@ export async function freezeRiskIncidentsJob() {
   });
 
   let createdOrUpdated = 0;
+  let resolved = 0;
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
 
@@ -112,7 +121,24 @@ export async function freezeRiskIncidentsJob() {
     if (minF == null) continue;
 
     // trigger: < 28F
-    if (minF >= 28) continue;
+    if (minF >= 28) {
+      // Forecast no longer indicates freeze risk; resolve active/open freeze incidents.
+      const resolveResult = await prisma.incident.updateMany({
+        where: {
+          propertyId: p.id,
+          sourceType: 'WEATHER',
+          typeKey: 'FREEZE_RISK',
+          isSuppressed: false,
+          status: { in: OPEN_FREEZE_STATUSES },
+        },
+        data: {
+          status: IncidentStatus.RESOLVED,
+          resolvedAt: now,
+        },
+      });
+      resolved += resolveResult.count;
+      continue;
+    }
 
     const score = scoreFromMinF(minF);
 
@@ -167,5 +193,22 @@ export async function freezeRiskIncidentsJob() {
     await sleep(200);
   }
 
-  return { createdOrUpdated };
+  // Safety net: resolve lingering stale freeze incidents that were not refreshed recently.
+  const staleCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+  const staleResolveResult = await prisma.incident.updateMany({
+    where: {
+      sourceType: 'WEATHER',
+      typeKey: 'FREEZE_RISK',
+      isSuppressed: false,
+      status: { in: OPEN_FREEZE_STATUSES },
+      updatedAt: { lt: staleCutoff },
+    },
+    data: {
+      status: IncidentStatus.RESOLVED,
+      resolvedAt: now,
+    },
+  });
+  resolved += staleResolveResult.count;
+
+  return { createdOrUpdated, resolved };
 }
