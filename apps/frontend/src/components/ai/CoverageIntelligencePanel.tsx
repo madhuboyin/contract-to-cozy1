@@ -131,9 +131,9 @@ function severityPillClasses(severity?: 'LOW' | 'MEDIUM' | 'HIGH') {
 // ─── Desktop-only helpers ────────────────────────────────────────────────────
 
 function verdictHeadline(verdict?: CoverageAnalysisDTO['overallVerdict']): string {
-  if (verdict === 'NOT_WORTH_IT') return 'Warranty is likely not worth it for this property';
-  if (verdict === 'WORTH_IT') return 'Warranty coverage appears financially justified';
-  return 'Coverage value is situational — review your assumptions';
+  if (verdict === 'NOT_WORTH_IT') return 'Warranty is not worth it at current costs';
+  if (verdict === 'WORTH_IT') return 'Warranty coverage is financially justified';
+  return 'Warranty value is borderline — deductible and premium are the deciding factors';
 }
 
 function verdictBadgeClass(verdict?: CoverageAnalysisDTO['overallVerdict']): string {
@@ -167,15 +167,33 @@ function verdictRecommendation(analysis: CoverageAnalysisDTO): string {
   return 'Review deductible and warranty terms before deciding';
 }
 
-function simulationResultSummary(analysis: CoverageAnalysisDTO): string {
+function simulationTakeaway(analysis: CoverageAnalysisDTO, overrides: CoverageAnalysisOverrides): string {
+  const repairRisk = analysis.warranty.expectedAnnualRepairRiskUsd ?? 0;
+  const warrantyCost = analysis.warranty.inputsUsed.warrantyAnnualCostUsd ?? 0;
   const delta = analysis.warranty.expectedNetImpactUsd ?? 0;
-  if (analysis.overallVerdict === 'NOT_WORTH_IT') {
-    return `Under these assumptions, warranty still costs ${money(Math.abs(delta))} more than expected repairs.`;
-  }
+
   if (analysis.overallVerdict === 'WORTH_IT') {
-    return `With these inputs, warranty is estimated to save ${money(delta)} compared to expected repair costs.`;
+    return `Warranty saves an estimated ${money(Math.abs(delta))} annually under these assumptions.`;
   }
-  return 'Results are borderline — small changes to inputs can flip the verdict.';
+
+  if (analysis.overallVerdict === 'NOT_WORTH_IT') {
+    if (repairRisk > 0 && warrantyCost > repairRisk) {
+      if (overrides.warrantyAnnualCostUsd !== undefined) {
+        return `Warranty becomes worthwhile if annual cost drops below ${money(repairRisk)}.`;
+      }
+      if (overrides.deductibleUsd !== undefined) {
+        return `With this deductible, warranty tips favorable only if annual cost falls below ${money(repairRisk)}.`;
+      }
+      return `Warranty becomes worthwhile if annual cost drops below ${money(repairRisk)}.`;
+    }
+    return 'No favorable scenario found with current assumptions.';
+  }
+
+  // SITUATIONAL
+  if (repairRisk > 0 && warrantyCost > 0) {
+    return `Results are borderline — warranty tips worthwhile if annual cost falls below ${money(repairRisk)}.`;
+  }
+  return 'Small changes to premium or deductible can flip this result either way.';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -256,6 +274,21 @@ function InsuranceInputTile({ label, value }: { label: string; value: string }) 
   );
 }
 
+function getBiggestRisk(
+  analysis: CoverageAnalysisDTO
+): { label: string; title: string; exposure: string } | null {
+  const exposure = money(analysis.warranty.expectedAnnualRepairRiskUsd);
+  const highFlag = analysis.insurance.flags.find((f) => f.severity === 'HIGH');
+  if (highFlag) return { label: 'Insurance gap', title: highFlag.label, exposure };
+  const negTrace = analysis.decisionTrace.find((t) => t.impact === 'NEGATIVE');
+  if (negTrace) return { label: 'Coverage risk', title: negTrace.label, exposure };
+  const highStep = analysis.nextSteps?.find((s) => s.priority === 'HIGH');
+  if (highStep) return { label: 'Action needed', title: highStep.title, exposure };
+  const medFlag = analysis.insurance.flags.find((f) => f.severity === 'MEDIUM');
+  if (medFlag) return { label: 'Insurance signal', title: medFlag.label, exposure };
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DecisionTraceCard({
@@ -289,7 +322,7 @@ function DecisionTraceCard({
         {traces.map((trace, index) => (
           <div
             key={`${trace.label}-${index}`}
-            className={`flex items-center justify-between gap-3 px-4 py-3 ${
+            className={`flex items-center justify-between gap-3 px-4 py-2 ${
               index === traces.length - 1 ? '' : 'border-b border-slate-100'
             }`}
           >
@@ -1044,7 +1077,25 @@ export default function CoverageIntelligencePanel({
                       />
                       <SnapshotRow label="Last computed" value={compactDate(analysis.computedAt)} muted />
                     </div>
-                    <p className="mt-4 text-[11px] leading-relaxed text-slate-400">
+                    {(() => {
+                      const risk = getBiggestRisk(analysis);
+                      if (!risk) return null;
+                      return (
+                        <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50/60 p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-400">
+                            Biggest risk · {risk.label}
+                          </p>
+                          <p className="mt-1 text-xs font-semibold leading-snug text-slate-800">
+                            {risk.title}
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Est. exposure:{' '}
+                            <span className="font-semibold text-slate-700">{risk.exposure}</span>
+                          </p>
+                        </div>
+                      );
+                    })()}
+                    <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
                       Educational only. Not carrier-specific advice.
                     </p>
                   </div>
@@ -1268,15 +1319,22 @@ export default function CoverageIntelligencePanel({
 
               {/* Simulation Result Box */}
               {hasSimulated && (
-                <div className={cn('mt-4 rounded-xl border p-4', verdictPanelClass(analysis.overallVerdict))}>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Simulation Result
-                  </p>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {humanizeEnum(analysis.overallVerdict)}
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                    {simulationResultSummary(analysis)}
+                <div className={cn('mt-4 rounded-xl border p-3.5', verdictPanelClass(analysis.overallVerdict))}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      Simulation result
+                    </p>
+                    <span
+                      className={cn(
+                        'rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                        verdictBadgeClass(analysis.overallVerdict)
+                      )}
+                    >
+                      {humanizeEnum(analysis.overallVerdict)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-medium leading-relaxed text-slate-700">
+                    {simulationTakeaway(analysis, overrides)}
                   </p>
                   {analysis.warranty.breakEvenMonths != null && (
                     <p className="mt-1.5 text-[11px] text-slate-500">
@@ -1306,7 +1364,7 @@ export default function CoverageIntelligencePanel({
                     {analysis.insurance.flags.map((flag) => (
                       <div
                         key={flag.code}
-                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5"
+                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
                       >
                         <div className="flex min-w-0 items-start gap-2.5">
                           <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
@@ -1343,7 +1401,7 @@ export default function CoverageIntelligencePanel({
                     {analysis.insurance.recommendedAddOns.map((addOn) => (
                       <div
                         key={addOn.code}
-                        className="rounded-xl border border-slate-100 bg-white px-3.5 py-2.5"
+                        className="rounded-xl border border-slate-100 bg-white px-3 py-2"
                       >
                         <div className="flex items-start gap-2.5">
                           <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-400" />
