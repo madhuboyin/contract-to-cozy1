@@ -955,7 +955,7 @@ export default function CoverageIntelligencePanel({
             const verdictIcon = getVerdictIcon(analysis.overallVerdict);
             const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
             return (
-              <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_288px] xl:items-start">
+              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_288px] xl:items-start">
 
                 {/* LEFT: Primary Verdict Card */}
                 <section className={cn('rounded-2xl border p-6 md:px-6 md:py-5', verdictHeroClass(analysis.overallVerdict))}>
@@ -1041,7 +1041,7 @@ export default function CoverageIntelligencePanel({
                 </section>
 
                 {/* RIGHT: Snapshot Rail */}
-                <aside className="flex flex-col gap-4">
+                <aside className="flex flex-col space-y-3">
                   {/* Analysis Snapshot card */}
                   <div className="flex-1 rounded-2xl border border-black/[0.07] bg-white p-5 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
@@ -1159,7 +1159,7 @@ export default function CoverageIntelligencePanel({
 
         {/* ─── 3. SCENARIO SIMULATOR + INSURANCE FINDINGS ──────────────────── */}
         {analysis && (
-          <div className="mt-5 grid gap-5 xl:grid-cols-2 xl:items-start">
+          <div className="mt-4 grid gap-4 xl:grid-cols-2 xl:items-start">
 
             {/* LEFT: Scenario Simulator */}
             <section className="rounded-2xl border border-black/[0.07] bg-white p-6 md:p-5 shadow-sm">
@@ -1437,7 +1437,7 @@ export default function CoverageIntelligencePanel({
 
         {/* ─── 4. DECISION TRACE (full width) ──────────────────────────────── */}
         {analysis && (
-          <DecisionTraceCard className="mt-5" traces={analysis.decisionTrace} counts={decisionTraceCounts} />
+          <DecisionTraceCard className="mt-4" traces={analysis.decisionTrace} counts={decisionTraceCounts} />
         )}
 
       </div>

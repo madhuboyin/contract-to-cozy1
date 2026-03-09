@@ -87,7 +87,7 @@ function CoverageIntelligenceContent() {
 
   return (
     <MobileToolWorkspace
-      className="max-w-7xl space-y-6 px-4 sm:px-6 lg:space-y-4 lg:px-6"
+      className="max-w-[1360px] space-y-6 px-4 sm:px-6 lg:space-y-4 lg:px-6"
       intro={
         <div className="space-y-3 lg:space-y-2">
           {propertyIdFromUrl ? (
@@ -135,7 +135,9 @@ function CoverageIntelligenceContent() {
       }
     >
       {selectedPropertyId ? (
-        <CoverageIntelligencePanel propertyId={selectedPropertyId} propertySelector={renderPropertySelector()} />
+        <div className="lg:-mb-1">
+          <CoverageIntelligencePanel propertyId={selectedPropertyId} propertySelector={renderPropertySelector()} />
+        </div>
       ) : (
         <div className="rounded-2xl border border-black/10 bg-white p-8 text-center text-gray-600">
           Select a property to load Coverage Intelligence.
