@@ -1,7 +1,7 @@
 // apps/frontend/src/components/ServiceCategoryIcon.tsx
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Wrench } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { resolveServiceCategoryIcon } from '@/lib/icons';
 
 interface ServiceCategoryIconProps {
@@ -10,10 +10,10 @@ interface ServiceCategoryIconProps {
 }
 
 export function ServiceCategoryIcon({ icon, className = "h-5 w-5" }: ServiceCategoryIconProps) {
-  const IconComponent = resolveServiceCategoryIcon(icon, Wrench);
+  const IconComponent = resolveServiceCategoryIcon(icon, HelpCircle);
   return <IconComponent className={className} />;
 }
 
 export function getServiceCategoryIcon(icon: string): LucideIcon {
-  return resolveServiceCategoryIcon(icon, Wrench);
+  return resolveServiceCategoryIcon(icon, HelpCircle);
 }

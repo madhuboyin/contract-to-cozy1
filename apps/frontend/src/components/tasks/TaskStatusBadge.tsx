@@ -2,8 +2,10 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, PlayCircle, XCircle, Ban } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { MaintenanceTaskStatus, HomeBuyerTaskStatus } from '@/types';
+import { getTaskStatusIcon } from '@/lib/config/iconMapping';
+import { resolveIcon } from '@/lib/icons';
 
 interface TaskStatusBadgeProps {
   status: MaintenanceTaskStatus | HomeBuyerTaskStatus | string;
@@ -14,28 +16,28 @@ const STATUS_CONFIG = {
   // Maintenance Task Statuses
   PENDING: {
     label: 'Pending',
-    icon: Clock,
+    iconName: getTaskStatusIcon('PENDING'),
     className: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   },
   IN_PROGRESS: {
     label: 'In Progress',
-    icon: PlayCircle,
+    iconName: getTaskStatusIcon('IN_PROGRESS'),
     className: 'bg-blue-100 text-blue-800 border-blue-300',
   },
   COMPLETED: {
     label: 'Completed',
-    icon: CheckCircle,
+    iconName: getTaskStatusIcon('COMPLETED'),
     className: 'bg-green-100 text-green-800 border-green-300',
   },
   CANCELLED: {
     label: 'Cancelled',
-    icon: Ban,
+    iconName: getTaskStatusIcon('CANCELLED'),
     className: 'bg-gray-100 text-gray-800 border-gray-300',
   },
   // Home Buyer Task Statuses
   NOT_NEEDED: {
     label: 'Not Needed',
-    icon: XCircle,
+    iconName: 'HelpCircle',
     className: 'bg-gray-100 text-gray-600 border-gray-300',
   },
 } as const;
@@ -43,11 +45,11 @@ const STATUS_CONFIG = {
 export function TaskStatusBadge({ status, variant = 'default' }: TaskStatusBadgeProps) {
   const config = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] || {
     label: status,
-    icon: Clock,
+    iconName: getTaskStatusIcon(status),
     className: 'bg-gray-100 text-gray-800 border-gray-300',
   };
 
-  const Icon = config.icon;
+  const Icon = resolveIcon(config.iconName, HelpCircle);
   const isCompact = variant === 'compact';
 
   return (

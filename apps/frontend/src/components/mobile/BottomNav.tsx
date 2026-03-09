@@ -26,7 +26,8 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
-import { resolveHomeownerNavigationIcon, resolveIconByConcept, resolveToolIcon } from '@/lib/icons';
+import { resolveHomeownerNavigationIcon, resolveIcon, resolveIconByConcept, resolveToolIcon } from '@/lib/icons';
+import { getHomeToolIcon } from '@/lib/config/iconMapping';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useAuth } from '@/lib/auth/AuthContext';
 import {
@@ -166,7 +167,7 @@ export function BottomNav() {
     {
       label: 'Seasonal',
       href: '/dashboard/seasonal',
-      icon: resolveIconByConcept('calendar', CalendarClock),
+      icon: resolveIcon(getHomeToolIcon('seasonal'), CalendarClock),
       isActive: (path) => path.startsWith('/dashboard/seasonal'),
     },
   ];

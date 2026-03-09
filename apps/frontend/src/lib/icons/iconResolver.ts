@@ -1,62 +1,227 @@
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
+  AlertOctagon,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   BadgeCheck,
+  Ban,
+  BarChart2,
+  Bath,
+  BatteryCharging,
+  BedDouble,
   Bell,
   BellRing,
+  BookOpen,
   Box,
+  Brush,
+  Bug,
   Building,
   Building2,
-  Bug,
   Calendar,
+  CalendarCheck,
+  CalendarClock,
   CalendarDays,
+  Car,
+  CheckCircle,
   ClipboardCheck,
   ClipboardList,
   Cloud,
   CloudRain,
+  Coffee,
+  Cpu,
   CreditCard,
   Database,
   DollarSign,
+  DoorOpen,
   Droplet,
+  Droplets,
+  Ellipsis,
   Eye,
   FileCheck,
+  FilePlus,
   FileText,
   Filter,
   Flame,
+  FolderOpen,
+  Globe,
+  Hammer,
+  HelpCircle,
+  Home,
+  Key,
   Landmark,
+  Layers,
   LayoutGrid,
   Leaf,
   Lightbulb,
   ListChecks,
+  Lock,
+  LogOut,
+  Monitor,
+  Package,
   Pencil,
+  PlayCircle,
   Plus,
+  Radar,
+  Receipt,
   RefreshCw,
+  RotateCcw,
   Search,
   Settings,
-  Snowflake,
-  Sun,
   Shield,
   ShieldAlert,
   ShieldCheck,
   Siren,
+  Snowflake,
+  Sofa,
   Sparkles,
+  Sun,
   Thermometer,
   Trash2,
+  TrendingUp,
   TreePine,
+  Trees,
   Truck,
   Umbrella,
+  UserCheck,
+  UtensilsCrossed,
+  Wifi,
   Wind,
   Wrench,
+  XCircle,
   Zap,
-  Key,
-  Calculator,
-  Globe,
 } from 'lucide-react';
+import {
+  getAiToolIcon,
+  getCoreNavIcon,
+  getHomeToolIcon,
+  getInsightIcon,
+  getInventoryCategoryIcon,
+  getProtectionIcon,
+  getRoomTypeIcon,
+  getServiceCategoryIcon as getServiceCategoryIconFromConfig,
+  getTaskStatusIcon,
+} from '@/lib/config/iconMapping';
 import type { CanonicalIconToken, IconConcept } from './featureIconMap';
 import { CONCEPT_ICON_MAP } from './featureIconMap';
 import { NAVIGATION_ICONS } from './navigationIcons';
 import { TOOL_ICON_MAP } from './toolIcons';
 import maintenanceTemplateIcons from './maintenanceTemplateIcons.json';
+
+export const lucideIconMap = {
+  Activity,
+  AlertOctagon,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  BadgeCheck,
+  Ban,
+  BarChart2,
+  Bath,
+  BatteryCharging,
+  BedDouble,
+  Bell,
+  BellRing,
+  BookOpen,
+  Box,
+  Brush,
+  Bug,
+  Building,
+  Building2,
+  Calendar,
+  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  Car,
+  CheckCircle,
+  ClipboardCheck,
+  ClipboardList,
+  Cloud,
+  CloudRain,
+  Coffee,
+  Cpu,
+  CreditCard,
+  Database,
+  DollarSign,
+  DoorOpen,
+  Droplet,
+  Droplets,
+  Ellipsis,
+  Eye,
+  FileCheck,
+  FilePlus,
+  FileText,
+  Filter,
+  Flame,
+  FolderOpen,
+  Globe,
+  Hammer,
+  HelpCircle,
+  Home,
+  Key,
+  Landmark,
+  Layers,
+  LayoutGrid,
+  Leaf,
+  Lightbulb,
+  ListChecks,
+  Lock,
+  LogOut,
+  Monitor,
+  Package,
+  Pencil,
+  PlayCircle,
+  Plus,
+  Radar,
+  Receipt,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Settings,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Siren,
+  Snowflake,
+  Sofa,
+  Sparkles,
+  Sun,
+  Thermometer,
+  Trash2,
+  TrendingUp,
+  TreePine,
+  Trees,
+  Truck,
+  Umbrella,
+  UserCheck,
+  UtensilsCrossed,
+  Wifi,
+  Wind,
+  Wrench,
+  XCircle,
+  Zap,
+} satisfies Record<string, LucideIcon>;
+
+const LUCIDE_NAME_LOOKUP: Record<string, keyof typeof lucideIconMap> = Object.keys(lucideIconMap).reduce(
+  (acc, key) => {
+    acc[key.toLowerCase().replace(/[-_\s]/g, '')] = key as keyof typeof lucideIconMap;
+    return acc;
+  },
+  {} as Record<string, keyof typeof lucideIconMap>
+);
+
+export function resolveIcon(name?: string | null, fallback: LucideIcon = HelpCircle): LucideIcon {
+  if (!name) return fallback;
+  const direct = lucideIconMap[name as keyof typeof lucideIconMap];
+  if (direct) return direct;
+
+  const normalized = String(name).toLowerCase().replace(/[-_\s]/g, '');
+  const aliased = LUCIDE_NAME_LOOKUP[normalized];
+  if (aliased) return lucideIconMap[aliased];
+
+  return fallback;
+}
 
 type KnownResolverToken =
   | CanonicalIconToken
@@ -120,7 +285,7 @@ const ICON_BY_TOKEN: Record<KnownResolverToken, LucideIcon> = {
   wind: Wind,
   droplet: Droplet,
   leaf: Leaf,
-  calculator: Calculator,
+  calculator: BarChart2,
   key: Key,
   database: Database,
   'bell-ring': BellRing,
@@ -130,7 +295,7 @@ const ICON_BY_TOKEN: Record<KnownResolverToken, LucideIcon> = {
   umbrella: Umbrella,
   settings: Settings,
   building: Building,
-  receipt: CreditCard,
+  receipt: Receipt,
   sun: Sun,
   snowflake: Snowflake,
   thermometer: Thermometer,
@@ -193,13 +358,19 @@ function coerceToken(token: string): KnownResolverToken | undefined {
   return TOKEN_ALIASES[normalized];
 }
 
-export function resolveIconByToken(token: string, fallback: LucideIcon = FileText): LucideIcon {
+function resolveAnyIconReference(nameOrToken: string, fallback: LucideIcon): LucideIcon {
+  const token = coerceToken(nameOrToken);
+  if (token) return ICON_BY_TOKEN[token] || fallback;
+  return resolveIcon(nameOrToken, fallback);
+}
+
+export function resolveIconByToken(token: string, fallback: LucideIcon = HelpCircle): LucideIcon {
   const resolved = coerceToken(token);
-  if (!resolved) return fallback;
+  if (!resolved) return resolveIcon(token, fallback);
   return ICON_BY_TOKEN[resolved] || fallback;
 }
 
-export function resolveIconByConcept(concept: IconConcept, fallback: LucideIcon = FileText): LucideIcon {
+export function resolveIconByConcept(concept: IconConcept, fallback: LucideIcon = HelpCircle): LucideIcon {
   const definition = CONCEPT_ICON_MAP[concept];
   if (!definition) return fallback;
   return resolveIconByToken(definition.icon, fallback);
@@ -208,20 +379,45 @@ export function resolveIconByConcept(concept: IconConcept, fallback: LucideIcon 
 export function resolveHomeownerNavigationIcon(
   group: keyof typeof NAVIGATION_ICONS.homeowner,
   key: string,
-  fallback: LucideIcon = FileText
+  fallback: LucideIcon = HelpCircle
 ): LucideIcon {
+  if (group === 'main') {
+    return resolveIcon(getCoreNavIcon(key), fallback);
+  }
+  if (group === 'ownerGlobal') {
+    return resolveIcon(getHomeToolIcon(key), fallback);
+  }
+  if (group === 'protection') {
+    return resolveIcon(getProtectionIcon(key), fallback);
+  }
+  if (group === 'community') {
+    return resolveIcon(getInsightIcon('community_events'), fallback);
+  }
+
   const groupValue = NAVIGATION_ICONS.homeowner[group];
   if (!groupValue || typeof groupValue !== 'object') return fallback;
   const entry = (groupValue as Record<string, { icon: string }>)[key];
-  return entry?.icon ? resolveIconByToken(entry.icon, fallback) : fallback;
+  return entry?.icon ? resolveAnyIconReference(entry.icon, fallback) : fallback;
 }
 
 export function resolveProviderNavigationIcon(
   key: keyof typeof NAVIGATION_ICONS.provider | string,
-  fallback: LucideIcon = FileText
+  fallback: LucideIcon = HelpCircle
 ): LucideIcon {
+  const normalized = String(key).trim().toLowerCase();
+  const providerCoreMap: Record<string, string> = {
+    dashboard: 'home',
+    bookings: 'bookings',
+    services: 'services',
+    calendar: 'bookings',
+    profile: 'profile',
+  };
+  if (providerCoreMap[normalized]) {
+    return resolveIcon(getCoreNavIcon(providerCoreMap[normalized]), fallback);
+  }
+
   const entry = NAVIGATION_ICONS.provider[key as keyof typeof NAVIGATION_ICONS.provider];
-  return entry?.icon ? resolveIconByToken(entry.icon, fallback) : fallback;
+  return entry?.icon ? resolveAnyIconReference(entry.icon, fallback) : fallback;
 }
 
 export function resolveToolIcon(
@@ -229,13 +425,28 @@ export function resolveToolIcon(
   key: string,
   fallback: LucideIcon = Sparkles
 ): LucideIcon {
+  if (group === 'ai') {
+    return resolveIcon(getAiToolIcon(key), fallback);
+  }
+  if (group === 'home') {
+    return resolveIcon(getHomeToolIcon(key), fallback);
+  }
+  if (group === 'insights') {
+    return resolveIcon(getInsightIcon(key), fallback);
+  }
+
   const groupValue = TOOL_ICON_MAP[group] as Record<string, { icon: string } | undefined>;
   if (!groupValue) return fallback;
   const entry = groupValue[key];
-  return entry?.icon ? resolveIconByToken(entry.icon, fallback) : fallback;
+  return entry?.icon ? resolveAnyIconReference(entry.icon, fallback) : fallback;
 }
 
-export function resolveServiceCategoryIcon(iconOrCategory: string, fallback: LucideIcon = Wrench): LucideIcon {
+export function resolveServiceCategoryIcon(iconOrCategory: string, fallback: LucideIcon = HelpCircle): LucideIcon {
+  const fromSharedMapping = getServiceCategoryIconFromConfig(iconOrCategory);
+  if (fromSharedMapping) {
+    return resolveIcon(fromSharedMapping, fallback);
+  }
+
   const normalized = normalizeToken(iconOrCategory);
   const alias =
     SERVICE_CATEGORY_ALIASES[normalized] ||
@@ -244,7 +455,19 @@ export function resolveServiceCategoryIcon(iconOrCategory: string, fallback: Luc
   if (alias) {
     return resolveIconByToken(alias, fallback);
   }
-  return resolveIconByToken(iconOrCategory, fallback);
+  return resolveAnyIconReference(iconOrCategory, fallback);
+}
+
+export function resolveInventoryCategoryIcon(category: string, fallback: LucideIcon = HelpCircle): LucideIcon {
+  return resolveIcon(getInventoryCategoryIcon(category), fallback);
+}
+
+export function resolveRoomTypeIcon(roomType: string, fallback: LucideIcon = HelpCircle): LucideIcon {
+  return resolveIcon(getRoomTypeIcon(roomType), fallback);
+}
+
+export function resolveTaskStatusIcon(status: string, fallback: LucideIcon = HelpCircle): LucideIcon {
+  return resolveIcon(getTaskStatusIcon(status), fallback);
 }
 
 export function resolveMaintenanceTemplateIcon(input: {
@@ -256,7 +479,7 @@ export function resolveMaintenanceTemplateIcon(input: {
     ? maintenanceTemplateIcons.titleIconMap[normalizedTitle as keyof typeof maintenanceTemplateIcons.titleIconMap]
     : undefined;
   if (titleToken) {
-    return resolveIconByToken(titleToken, ClipboardCheck);
+    return resolveAnyIconReference(titleToken, ClipboardCheck);
   }
 
   const categoryKey = (input.serviceCategory || '').trim().toUpperCase();
@@ -266,8 +489,8 @@ export function resolveMaintenanceTemplateIcon(input: {
       ]
     : undefined;
   if (categoryToken) {
-    return resolveIconByToken(categoryToken, ClipboardCheck);
+    return resolveAnyIconReference(categoryToken, ClipboardCheck);
   }
 
-  return resolveIconByToken(maintenanceTemplateIcons.defaultIcon, ClipboardCheck);
+  return resolveAnyIconReference(maintenanceTemplateIcons.defaultIcon, ClipboardCheck);
 }
