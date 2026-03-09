@@ -11,13 +11,27 @@ import { Badge } from '@/components/ui/badge';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
   ArrowRight,
+  BadgeCheck,
+  BellRing,
+  Building2,
   Bug,
   ChevronRight,
+  CloudRain,
+  CreditCard,
+  Database,
   ClipboardList,
+  Droplet,
+  FileText,
   Flame,
   Home,
+  Landmark,
+  Leaf,
   Loader2,
+  Receipt,
   ShieldCheck,
+  Sparkles,
+  Settings,
+  TreePine,
   Umbrella,
   Wind,
   Wrench,
@@ -37,44 +51,118 @@ import {
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
-const CATEGORY_ICON_MAP: Partial<
-  Record<ServiceCategory, { icon: LucideIcon; toneClass: string }>
+type VisualTone = 'insurance' | 'payments' | 'cleaning' | 'systems' | 'outdoor' | 'safety' | 'documents' | 'neutral';
+
+const TONE_STYLES: Record<
+  VisualTone,
+  { iconChipClass: string; categoryBadgeClass: string }
 > = {
-  INSURANCE: { icon: ShieldCheck, toneClass: 'border-sky-200 bg-sky-50 text-sky-700' },
-  HVAC: { icon: Wrench, toneClass: 'border-cyan-200 bg-cyan-50 text-cyan-700' },
-  PEST_CONTROL: { icon: Bug, toneClass: 'border-amber-200 bg-amber-50 text-amber-700' },
+  insurance: {
+    iconChipClass: 'border-blue-200 bg-blue-50 text-blue-700',
+    categoryBadgeClass: 'border-blue-200 bg-blue-50 text-blue-700',
+  },
+  payments: {
+    iconChipClass: 'border-purple-200 bg-purple-50 text-purple-700',
+    categoryBadgeClass: 'border-purple-200 bg-purple-50 text-purple-700',
+  },
+  cleaning: {
+    iconChipClass: 'border-teal-200 bg-teal-50 text-teal-700',
+    categoryBadgeClass: 'border-teal-200 bg-teal-50 text-teal-700',
+  },
+  systems: {
+    iconChipClass: 'border-orange-200 bg-orange-50 text-orange-700',
+    categoryBadgeClass: 'border-orange-200 bg-orange-50 text-orange-700',
+  },
+  outdoor: {
+    iconChipClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    categoryBadgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  safety: {
+    iconChipClass: 'border-rose-200 bg-rose-50 text-rose-700',
+    categoryBadgeClass: 'border-rose-200 bg-rose-50 text-rose-700',
+  },
+  documents: {
+    iconChipClass: 'border-slate-300 bg-slate-100 text-slate-700',
+    categoryBadgeClass: 'border-slate-300 bg-slate-100 text-slate-700',
+  },
+  neutral: {
+    iconChipClass: 'border-slate-200 bg-slate-50 text-slate-600',
+    categoryBadgeClass: 'border-slate-200 bg-slate-50 text-slate-600',
+  },
 };
+
+const TITLE_ICON_MAP: Record<string, { icon: LucideIcon; tone: VisualTone }> = {
+  'water heater flush': { icon: Droplet, tone: 'systems' },
+  'septic tank pumping': { icon: Database, tone: 'systems' },
+  'smoke detector testing': { icon: BellRing, tone: 'safety' },
+  'gutter cleaning': { icon: CloudRain, tone: 'cleaning' },
+  'dryer vent cleaning': { icon: Wind, tone: 'cleaning' },
+  'carpet deep cleaning': { icon: Sparkles, tone: 'cleaning' },
+  'lawn fertilization': { icon: Leaf, tone: 'outdoor' },
+  'tree trimming': { icon: TreePine, tone: 'outdoor' },
+  'hoa dues payment': { icon: Building2, tone: 'payments' },
+  'home insurance renewal': { icon: ShieldCheck, tone: 'insurance' },
+  'property tax payment': { icon: Landmark, tone: 'payments' },
+  'home warranty renewal': { icon: BadgeCheck, tone: 'insurance' },
+  'hoa fee payment': { icon: CreditCard, tone: 'payments' },
+  'property document review': { icon: FileText, tone: 'documents' },
+  'appliance warranty check': { icon: Settings, tone: 'systems' },
+  'umbrella insurance review': { icon: Umbrella, tone: 'insurance' },
+  'hvac filter replacement': { icon: Wind, tone: 'systems' },
+  'hvac system maintenance': { icon: Wrench, tone: 'systems' },
+  'chimney cleaning': { icon: Flame, tone: 'cleaning' },
+  'pest control treatment': { icon: Bug, tone: 'safety' },
+};
+
+const CATEGORY_FALLBACK_MAP: Partial<Record<ServiceCategory, { icon: LucideIcon; tone: VisualTone }>> = {
+  INSURANCE: { icon: ShieldCheck, tone: 'insurance' },
+  WARRANTY: { icon: BadgeCheck, tone: 'insurance' },
+  FINANCE: { icon: Receipt, tone: 'payments' },
+  ADMIN: { icon: FileText, tone: 'documents' },
+  HVAC: { icon: Wrench, tone: 'systems' },
+  PLUMBING: { icon: Droplet, tone: 'systems' },
+  ELECTRICAL: { icon: Wrench, tone: 'systems' },
+  HANDYMAN: { icon: Wrench, tone: 'systems' },
+  CLEANING: { icon: Sparkles, tone: 'cleaning' },
+  LANDSCAPING: { icon: Leaf, tone: 'outdoor' },
+  PEST_CONTROL: { icon: Bug, tone: 'safety' },
+  INSPECTION: { icon: ClipboardList, tone: 'documents' },
+  LOCKSMITH: { icon: ShieldCheck, tone: 'safety' },
+  ATTORNEY: { icon: FileText, tone: 'documents' },
+  MOVING: { icon: ClipboardList, tone: 'neutral' },
+};
+
+function normalizeTemplateTitle(title: string): string {
+  return title.trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 function getTemplateVisual(template: MaintenanceTaskTemplate): {
   icon: LucideIcon;
-  toneClass: string;
+  iconChipClass: string;
+  categoryBadgeClass: string;
 } {
-  const title = template.title.toLowerCase();
+  const normalizedTitle = normalizeTemplateTitle(template.title);
 
-  if (title.includes('umbrella')) {
-    return { icon: Umbrella, toneClass: 'border-indigo-200 bg-indigo-50 text-indigo-700' };
-  }
-  if (title.includes('insurance')) {
-    return { icon: ShieldCheck, toneClass: 'border-sky-200 bg-sky-50 text-sky-700' };
-  }
-  if (title.includes('filter')) {
-    return { icon: Wind, toneClass: 'border-cyan-200 bg-cyan-50 text-cyan-700' };
-  }
-  if (title.includes('hvac')) {
-    return { icon: Wrench, toneClass: 'border-cyan-200 bg-cyan-50 text-cyan-700' };
-  }
-  if (title.includes('chimney')) {
-    return { icon: Flame, toneClass: 'border-orange-200 bg-orange-50 text-orange-700' };
-  }
-  if (title.includes('pest')) {
-    return { icon: Bug, toneClass: 'border-amber-200 bg-amber-50 text-amber-700' };
+  const titleMatch = TITLE_ICON_MAP[normalizedTitle];
+  if (titleMatch) {
+    return {
+      icon: titleMatch.icon,
+      ...TONE_STYLES[titleMatch.tone],
+    };
   }
 
-  if (template.serviceCategory && CATEGORY_ICON_MAP[template.serviceCategory]) {
-    return CATEGORY_ICON_MAP[template.serviceCategory]!;
+  if (template.serviceCategory && CATEGORY_FALLBACK_MAP[template.serviceCategory]) {
+    const fallback = CATEGORY_FALLBACK_MAP[template.serviceCategory]!;
+    return {
+      icon: fallback.icon,
+      ...TONE_STYLES[fallback.tone],
+    };
   }
 
-  return { icon: ClipboardList, toneClass: 'border-slate-200 bg-slate-50 text-slate-600' };
+  return {
+    icon: ClipboardList,
+    ...TONE_STYLES.neutral,
+  };
 }
 
 function DesktopTemplateRow({
@@ -94,7 +182,7 @@ function DesktopTemplateRow({
   return (
     <div className="group flex items-center gap-4 rounded-xl border border-slate-200/90 bg-white px-4 py-3 transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50/70">
       <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${visual.toneClass}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${visual.iconChipClass}`}
       >
         <Icon className="h-5 w-5" />
       </div>
@@ -103,7 +191,7 @@ function DesktopTemplateRow({
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <Badge
             variant="outline"
-            className="rounded-full border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${visual.categoryBadgeClass}`}
           >
             {categoryLabel}
           </Badge>
