@@ -955,10 +955,10 @@ export default function CoverageIntelligencePanel({
             const verdictIcon = getVerdictIcon(analysis.overallVerdict);
             const annualDelta = analysis.warranty.expectedNetImpactUsd ?? 0;
             return (
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_288px]">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_288px] xl:items-start">
 
                 {/* LEFT: Primary Verdict Card */}
-                <section className={cn('rounded-2xl border p-6', verdictHeroClass(analysis.overallVerdict))}>
+                <section className={cn('rounded-2xl border p-6 md:px-6 md:py-5', verdictHeroClass(analysis.overallVerdict))}>
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                     Coverage Insight
                   </p>
@@ -972,7 +972,7 @@ export default function CoverageIntelligencePanel({
                     >
                       <verdictIcon.Icon className="h-6 w-6" />
                     </span>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={cn(
@@ -1159,10 +1159,10 @@ export default function CoverageIntelligencePanel({
 
         {/* ─── 3. SCENARIO SIMULATOR + INSURANCE FINDINGS ──────────────────── */}
         {analysis && (
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
 
             {/* LEFT: Scenario Simulator */}
-            <section className="rounded-2xl border border-black/[0.07] bg-white p-6 shadow-sm">
+            <section className="rounded-2xl border border-black/[0.07] bg-white p-6 md:p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">Scenario Simulator</h3>
@@ -1173,7 +1173,7 @@ export default function CoverageIntelligencePanel({
                 <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-400" />
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3">
+              <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-slate-600">
                     Annual Premium (USD)
@@ -1181,7 +1181,7 @@ export default function CoverageIntelligencePanel({
                   <input
                     type="number"
                     min={0}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
                     value={toInputValue(overrides.annualPremiumUsd)}
                     onChange={(e) =>
                       setOverrides((prev) => ({
@@ -1198,7 +1198,7 @@ export default function CoverageIntelligencePanel({
                   <input
                     type="number"
                     min={0}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
                     value={toInputValue(overrides.deductibleUsd)}
                     onChange={(e) =>
                       setOverrides((prev) => ({
@@ -1215,7 +1215,7 @@ export default function CoverageIntelligencePanel({
                   <input
                     type="number"
                     min={0}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
                     value={toInputValue(overrides.warrantyAnnualCostUsd)}
                     onChange={(e) =>
                       setOverrides((prev) => ({
@@ -1232,7 +1232,7 @@ export default function CoverageIntelligencePanel({
                   <input
                     type="number"
                     min={0}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
                     value={toInputValue(overrides.warrantyServiceFeeUsd)}
                     onChange={(e) =>
                       setOverrides((prev) => ({
@@ -1249,7 +1249,7 @@ export default function CoverageIntelligencePanel({
                   <input
                     type="number"
                     min={0}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
                     value={toInputValue(overrides.cashBufferUsd)}
                     onChange={(e) =>
                       setOverrides((prev) => ({
@@ -1264,7 +1264,7 @@ export default function CoverageIntelligencePanel({
                     Risk Tolerance
                   </label>
                   <select
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 md:h-10 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500/60"
                     value={overrides.riskTolerance ?? 'MEDIUM'}
                     onChange={(e) =>
                       setOverrides((prev) => ({
@@ -1280,7 +1280,7 @@ export default function CoverageIntelligencePanel({
                 </div>
               </div>
 
-              <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+              <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
                 <label className="inline-flex items-center gap-2 text-xs text-slate-600">
                   <input
                     type="checkbox"
