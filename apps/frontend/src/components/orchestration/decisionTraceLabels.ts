@@ -1,4 +1,5 @@
 // components/orchestration/decisionTraceLabels.ts
+import humanizeActionType from '@/lib/utils/humanize';
 
 export const TRACE_COPY = {
   header: {
@@ -104,10 +105,18 @@ export function humanizeEnum(value: string): string {
 export function formatRuleDetails(details: Record<string, any>): string {
   if (!details) return '';
 
-  // 1) Prefer backend-curated message
+  // 1) Humanize maintenance/checklist titles to avoid raw enum leaks.
+  if (details.taskTitle) {
+    return `Already scheduled: "${humanizeActionType(String(details.taskTitle))}"`;
+  }
+  if (details.itemTitle) {
+    return `Already in checklist: "${humanizeActionType(String(details.itemTitle))}"`;
+  }
+
+  // 2) Prefer backend-curated message
   if (details.message) return String(details.message);
 
-  // 2) Snooze: most human first
+  // 3) Snooze: most human first
   if (details.daysRemaining !== undefined) {
     const d = Number(details.daysRemaining);
     if (!Number.isNaN(d)) {
@@ -128,7 +137,7 @@ export function formatRuleDetails(details: Record<string, any>): string {
     return `Snoozed until ${String(iso)}`;
   }
 
-  // 3) Age evaluation
+  // 4) Age evaluation
   if (details.remainingLife !== undefined && details.percentUsed !== undefined) {
     const remaining = Number(details.remainingLife);
     const used = Number(details.percentUsed);
@@ -139,7 +148,7 @@ export function formatRuleDetails(details: Record<string, any>): string {
     }
   }
 
-  // 4) Coverage
+  // 5) Coverage
   if (details.hasCoverage === false) return 'No active coverage found';
   if (details.hasCoverage === true) {
     const t = details.coverageType || details.type;
@@ -148,17 +157,14 @@ export function formatRuleDetails(details: Record<string, any>): string {
   if (details.coverageType) return `Coverage: ${details.coverageType}`;
   if (details.type) return `Coverage: ${details.type}`;
 
-  // 5) Tasks / checklist titles (more useful than service category)
-  if (details.taskTitle) return `Task: "${details.taskTitle}"`;
-  if (details.itemTitle) return `Tracked as "${details.itemTitle}"`;
+  // 6) Generic title
   if (details.title) return `"${details.title}"`;
 
-  // 6) Service inference
+  // 7) Service inference
   if (details.serviceCategory) return `Service: ${details.serviceCategory}`;
 
-  // 7) Generic reason
+  // 8) Generic reason
   if (details.reason) return humanizeEnum(details.reason);
 
   return 'Additional context evaluated';
 }
-
