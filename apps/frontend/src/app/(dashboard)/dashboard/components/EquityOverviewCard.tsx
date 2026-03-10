@@ -143,7 +143,7 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
   const completenessPct = Math.round(
     (completenessChecks.filter(Boolean).length / completenessChecks.length) * 100
   );
-  const appraisalSettingsHref = `/dashboard/properties/${propertyId}/edit`;
+  const appraisalSettingsHref = `/dashboard/properties/${propertyId}/edit?focus=home-value`;
   const normalizedPrice = Number(purchasePriceDollars);
   const canSaveBaseline =
     Number.isFinite(normalizedPrice) &&

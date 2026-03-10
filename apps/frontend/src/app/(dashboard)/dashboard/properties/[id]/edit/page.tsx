@@ -892,12 +892,24 @@ export default function EditPropertyPage() {
   const startSectionId = startField?.sectionId ?? null;
   const applianceCount = Array.isArray(watchAppliances) ? watchAppliances.length : 0;
   const [appliancesExpanded, setAppliancesExpanded] = React.useState(false);
+  const [highlightHomeValue, setHighlightHomeValue] = React.useState(false);
 
   React.useEffect(() => {
     if (startSectionId === "appliances") {
       setAppliancesExpanded(true);
     }
   }, [startSectionId]);
+
+  React.useEffect(() => {
+    if (searchParams.get("focus") !== "home-value") return;
+    const target = document.getElementById("home-value-section");
+    if (!target) return;
+
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightHomeValue(true);
+    const timeout = window.setTimeout(() => setHighlightHomeValue(false), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [searchParams]);
 
   const mobileSectionLinks: Array<{ id: PropertySectionId; label: string }> = [
     { id: "basics", label: "Basics" },
@@ -1218,7 +1230,13 @@ export default function EditPropertyPage() {
                     )}
                   />
                 </div>
-                <div className="lg:col-span-12 rounded-md border border-black/10 bg-gray-50/60 p-3 dark:border-white/10 dark:bg-slate-900/30">
+                <div
+                  id="home-value-section"
+                  className={cn(
+                    "lg:col-span-12 rounded-md border border-black/10 bg-gray-50/60 p-3 transition-shadow dark:border-white/10 dark:bg-slate-900/30",
+                    highlightHomeValue && "border-emerald-300 ring-2 ring-emerald-200",
+                  )}
+                >
                   <div className="mb-2">
                     <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Home value</p>
                     <p className="text-xs text-gray-500 dark:text-slate-400">Used for equity and appreciation insights.</p>

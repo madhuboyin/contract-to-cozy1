@@ -21,6 +21,7 @@ import { SEVERITY_CHIP } from "@/lib/utils/chipTokens";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
+import humanizeActionType from "@/lib/utils/humanize";
 import {
     ActionPriorityRow,
     BottomSafeAreaReserve,
@@ -157,6 +158,8 @@ const getServiceCategoryForAsset = (systemType: string): MaintenanceTaskServiceC
     return categoryMap[systemType] || 'HANDYMAN';
 };
 
+const displayLabel = (value?: string | null): string => humanizeActionType(value ?? "");
+
 // 🔑 NEW: Component to show scheduled status
 const ScheduledBadge: React.FC<{ task: PropertyMaintenanceTask }> = ({ task }) => (
     <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-green-50 border border-green-200">
@@ -271,25 +274,25 @@ const RiskCategorySummaryCard = ({
 
     if (relevantAssets.length === 0) {
         // No data available
-        title = `${category.replace(/_/g, ' ')} Data Missing`;
+        title = `${displayLabel(category)} Data Missing`;
         description = `No component data available for this category.`;
         badgeStatus = 'INFO';
         badgeColor = 'default';
     } else if (highRiskCount > 0) {
         // Has high risk items
-        title = `${category.replace(/_/g, ' ')} Risk`;
+        title = `${displayLabel(category)} Risk`;
         description = `${highRiskCount} ${highRiskCount === 1 ? 'item requires' : 'items require'} attention. Total exposure: ${formattedExposure}.`;
         badgeStatus = 'HIGH';
         badgeColor = 'destructive';
     } else if (moderateRiskCount > 0) {
         // Has moderate risk items
-        title = `${category.replace(/_/g, ' ')} Risk`;
+        title = `${displayLabel(category)} Risk`;
         description = `${moderateRiskCount} ${moderateRiskCount === 1 ? 'item' : 'items'} with moderate risk. Total exposure: ${formattedExposure}.`;
         badgeStatus = 'MODERATE';
         badgeColor = 'warning';
     } else {
         // All low risk
-        title = `${category.replace(/_/g, ' ')} Health`;
+        title = `${displayLabel(category)} Health`;
         description = `All components are currently low risk. Exposure: ${formattedExposure}.`;
         badgeStatus = 'GOOD';
         badgeColor = 'success';
@@ -492,10 +495,10 @@ const AssetMatrixTable = ({
                                 <div className="flex justify-between items-start gap-2">
                                     <div className="min-w-0 flex-1">
                                         <h4 className="font-semibold text-sm leading-tight">
-                                            {item.assetName.replace(/_/g, ' ')}
+                                            {displayLabel(item.assetName)}
                                         </h4>
                                         <p className="text-xs text-muted-foreground mt-0.5">
-                                            {item.category.replace(/_/g, ' ')} · {item.systemType.replace(/_/g, ' ')}
+                                            {displayLabel(item.category)} · {displayLabel(item.systemType)}
                                         </p>
                                     </div>
                                     {getRiskBadge(item.riskLevel)}
@@ -559,14 +562,14 @@ const AssetMatrixTable = ({
                                         <TableCell className="font-medium whitespace-normal break-words">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <div>
-                                                    {item.assetName.replace(/_/g, ' ')}
-                                                    <div className="text-xs text-muted-foreground">{item.systemType.replace(/_/g, ' ')}</div>
+                                                    {displayLabel(item.assetName)}
+                                                    <div className="text-xs text-muted-foreground">{displayLabel(item.systemType)}</div>
                                                 </div>
                                                 {renderStatusBadges(data)}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                                            {item.category.replace(/_/g, ' ')}
+                                            {displayLabel(item.category)}
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">
                                             <span className="font-semibold">{item.age} yrs</span> / {item.expectedLife} yrs
@@ -1369,7 +1372,7 @@ export default function RiskAssessmentPage() {
                     }}
                     template={{
                         id: `risk:${selectedAsset.systemType}`,
-                        title: selectedAsset.assetName.replace(/_/g, ' '),
+                        title: displayLabel(selectedAsset.assetName),
                         description: selectedAsset.actionCta || 'Schedule Inspection/Replacement',
                         serviceCategory: getServiceCategoryForAsset(selectedAsset.systemType) as any,
                         defaultFrequency: RecurrenceFrequency.ANNUALLY,
@@ -1380,7 +1383,7 @@ export default function RiskAssessmentPage() {
                     onSuccess={handleTaskCreated}
                     existingConfig={{
                         templateId: `risk:${selectedAsset.systemType}`,
-                        title: selectedAsset.assetName.replace(/_/g, ' '),
+                        title: displayLabel(selectedAsset.assetName),
                         description: selectedAsset.actionCta || 'Schedule Inspection/Replacement',
                         isRecurring: false,
                         frequency: null,
