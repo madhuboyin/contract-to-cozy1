@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { api } from '@/lib/api/client';
 import { InventoryItem, InventoryRoom } from '@/types';
+import { formatEnumLabel } from '@/lib/utils/formatters';
 import InsuranceQuoteModal from '@/app/(dashboard)/dashboard/components/coverage/InsuranceQuoteModal';
 import WhatsCoveredModal from '@/app/(dashboard)/dashboard/components/coverage/WhatsCoveredModal';
 import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer';
@@ -167,13 +168,15 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
       ) : (
         <ScenarioInputCard title="Priority Items" subtitle="Resolve uncovered or partially covered inventory first.">
           <div className="space-y-3">
-            {gaps.map((gap: any) => (
+            {gaps.map((gap: any) => {
+              const gapTypeLabel = formatEnumLabel(gap.gapType) || 'Coverage Gap';
+              return (
               <div key={gap.inventoryItemId} className="space-y-2.5 rounded-xl border border-black/10 p-2.5">
                 <CompactEntityRow
                   title={gap.itemName}
                   subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
-                  meta={gap.roomName ? `${gap.roomName} • ${gap.gapType}` : gap.gapType}
-                  status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gap.gapType}</StatusChip>}
+                  meta={gap.roomName ? `${gap.roomName} • ${gapTypeLabel}` : gapTypeLabel}
+                  status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gapTypeLabel}</StatusChip>}
                 />
                 <ActionPriorityRow
                   primaryAction={
@@ -221,7 +224,8 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
                   }
                 />
               </div>
-            ))}
+              );
+            })}
           </div>
         </ScenarioInputCard>
       )}

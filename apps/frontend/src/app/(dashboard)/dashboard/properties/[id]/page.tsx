@@ -623,7 +623,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
                 {property.homeAssets.map((asset: any, index: number) => (
                   <div key={index} className="space-y-1 p-3 bg-gray-50 rounded-md border border-gray-200">
                     <p className="font-body text-xs text-gray-500 uppercase tracking-wide">
-                      {asset.assetType.replace(/_/g, " ")}
+                      {formatEnumLabel(asset.assetType, "Appliance")}
                     </p>
                     <p className="font-heading text-base font-medium text-gray-900">
                       Installed: {asset.installationYear}

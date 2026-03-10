@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { formatEnumLabel } from '@/lib/utils/formatters';
 
 export default function InsuranceQuoteModal(props: {
   open: boolean;
@@ -83,7 +84,7 @@ export default function InsuranceQuoteModal(props: {
           <div className="text-xs opacity-70">
             Estimated exposure: {exposureCents != null ? `$${(exposureCents / 100).toFixed(0)}` : '—'} {currency}
           </div>
-          {props.gapType && <div className="text-xs opacity-70">Gap type: {props.gapType}</div>}
+          {props.gapType && <div className="text-xs opacity-70">Gap type: {formatEnumLabel(props.gapType)}</div>}
         </div>
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">

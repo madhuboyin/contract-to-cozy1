@@ -21,6 +21,7 @@ import IncidentSeverityExplainPanel from '@/app/(dashboard)/dashboard/components
 import IncidentAckControls from '@/app/(dashboard)/dashboard/components/incidents/IncidentAckControls';
 import IncidentDecisionTracePanel from '@/app/(dashboard)/dashboard/components/incidents/IncidentDecisionTracePanel';
 import { Button } from '@/components/ui/button';
+import humanizeActionType from '@/lib/utils/humanize';
 import {
   EmptyStateCard,
   MobileActionRow,
@@ -147,12 +148,12 @@ export default function IncidentDetailClient() {
               <div className="flex flex-wrap items-center gap-2">
                 <IncidentSeverityBadge severity={incident.severity} />
                 <IncidentStatusBadge status={incident.status} />
-                <StatusChip tone="info">{incident.typeKey}</StatusChip>
-                {incident.category ? <StatusChip tone="elevated">{incident.category}</StatusChip> : null}
+                <StatusChip tone="info">{humanizeActionType(incident.typeKey)}</StatusChip>
+                {incident.category ? <StatusChip tone="elevated">{humanizeActionType(incident.category)}</StatusChip> : null}
               </div>
 
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                <span className="rounded-md bg-slate-50 px-2 py-1">Source: {incident.sourceType}</span>
+                <span className="rounded-md bg-slate-50 px-2 py-1">Source: {humanizeActionType(incident.sourceType)}</span>
                 {incident.severityScore != null ? (
                   <span className="rounded-md bg-slate-50 px-2 py-1">Score: {incident.severityScore}</span>
                 ) : null}
@@ -200,7 +201,7 @@ export default function IncidentDetailClient() {
                 {incident.signals.map((signal) => (
                   <div key={signal.id} className="rounded-lg border p-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-800">{signal.signalType}</p>
+                      <p className="text-xs font-semibold text-slate-800">{humanizeActionType(signal.signalType)}</p>
                       <p className="text-xs text-slate-500">{new Date(signal.observedAt).toLocaleString()}</p>
                     </div>
                     <pre className="mt-2 overflow-auto text-xs text-slate-700">{JSON.stringify(signal.payload, null, 2)}</pre>

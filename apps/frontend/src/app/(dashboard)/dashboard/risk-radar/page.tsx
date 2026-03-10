@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, Shield, ShieldAlert } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
+import humanizeActionType from '@/lib/utils/humanize';
 import {
   EmptyStateCard,
   ExpandableSummaryCard,
@@ -32,6 +33,11 @@ function riskTone(level: string): 'danger' | 'elevated' | 'info' {
   if (normalized === 'HIGH') return 'danger';
   if (normalized === 'ELEVATED' || normalized === 'MODERATE') return 'elevated';
   return 'info';
+}
+
+function displayLabel(value?: string | null): string {
+  const label = humanizeActionType(value ?? '');
+  return label === '—' ? 'Unknown' : label;
 }
 
 export default function RiskRadarPage() {
@@ -121,12 +127,15 @@ export default function RiskRadarPage() {
                 .map((detail) => (
                   <ExpandableSummaryCard
                     key={`${detail.assetName}-${detail.systemType}`}
-                    title={detail.assetName}
-                    summary={`${detail.systemType} • ${detail.category}`}
+                    title={displayLabel(detail.assetName)}
+                    summary={`${displayLabel(detail.systemType)} • ${displayLabel(detail.category)}`}
                     metric={formatCurrency(detail.riskDollar)}
                   >
                     <div className="space-y-2">
-                      <MetricRow label="Risk level" value={<StatusChip tone={riskTone(detail.riskLevel)}>{detail.riskLevel}</StatusChip>} />
+                      <MetricRow
+                        label="Risk level"
+                        value={<StatusChip tone={riskTone(detail.riskLevel)}>{displayLabel(detail.riskLevel)}</StatusChip>}
+                      />
                       <MetricRow label="Out-of-pocket" value={formatCurrency(detail.outOfPocketCost)} />
                       <MetricRow label="Replacement cost" value={formatCurrency(detail.replacementCost)} />
                       <MetricRow label="Probability" value={`${Math.round((detail.probability || 0) * 100)}%`} />

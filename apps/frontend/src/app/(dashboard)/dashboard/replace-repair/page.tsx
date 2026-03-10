@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { Property, InventoryItem } from '@/types';
+import humanizeActionType from '@/lib/utils/humanize';
 import { listInventoryItems } from '../inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -165,7 +166,7 @@ function ReplaceRepairContent() {
 
         {selectedItem && (
           <div className="text-xs text-gray-600">
-            {selectedItem.category}
+            {humanizeActionType(selectedItem.category)}
             {selectedItem.room?.name ? ` • ${selectedItem.room.name}` : ' • Unassigned room'}
           </div>
         )}

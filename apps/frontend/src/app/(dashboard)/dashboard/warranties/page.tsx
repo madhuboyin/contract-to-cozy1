@@ -18,6 +18,7 @@ import { Property, APIResponse, APIError, Document, DocumentUploadInput, Documen
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import humanizeActionType from '@/lib/utils/humanize';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 import {
   CoverageModalHeader,
@@ -652,7 +653,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
 
                   {filteredHomeAssets.map((asset) => (
                     <SelectItem key={asset.id} value={asset.id}>
-                      {asset.assetType.replace(/_/g, ' ')} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
+                      {humanizeActionType(asset.assetType)} {asset.modelNumber ? `(${asset.modelNumber})` : ''}
                     </SelectItem>
                   ))}
                   {prefilledAssetMissingFromOptions && formData.homeAssetId && (
@@ -1173,10 +1174,7 @@ export default function WarrantiesPage() {
       if (homeAssetId) {
         const asset = homeAssets.find(a => a.id === homeAssetId);
         if (asset) {
-          const assetName = asset.assetType
-            .replace(/_/g, ' ')
-            .toLowerCase()
-            .replace(/\b\w/g, l => l.toUpperCase());
+          const assetName = humanizeActionType(asset.assetType);
           return asset.modelNumber ? `${assetName} (${asset.modelNumber})` : assetName;
         }
         

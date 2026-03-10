@@ -63,6 +63,7 @@ import {
 import Link from "next/link";
 import { useCallback } from "react";
 import { cn } from "@/lib/utils";
+import humanizeActionType from "@/lib/utils/humanize";
 import InventoryItemDrawer from '../../../components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms } from '../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
@@ -456,7 +457,7 @@ export default function StatusBoardClient() {
                   );
                 })()}
                 <p className="mt-1 text-xs text-muted-foreground lg:hidden">
-                  {item.category}
+                  {humanizeActionType(item.category)}
                   {item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}
                 </p>
               </div>
@@ -465,7 +466,7 @@ export default function StatusBoardClient() {
           <TableCell className="hidden py-5 text-sm text-muted-foreground lg:table-cell">
             <span className="inline-flex items-center gap-1.5">
               <CategoryIcon className="h-3.5 w-3.5 text-slate-500" />
-              {item.category}
+              {humanizeActionType(item.category)}
             </span>
           </TableCell>
           <TableCell className="hidden py-5 text-sm md:table-cell">{formatAgeDisplay(item.ageYears)}</TableCell>
@@ -876,7 +877,7 @@ export default function StatusBoardClient() {
         <ScenarioInputCard
           key={item.id}
           title={formatDisplayName(item.displayName)}
-          subtitle={`${item.category}${item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}`}
+          subtitle={`${humanizeActionType(item.category)}${item.ageYears != null ? ` • ${formatAgeDisplay(item.ageYears)}` : ""}`}
           badge={<StatusChip tone={getConditionTone(item.condition)}>{CONDITION_LABELS[item.condition]}</StatusChip>}
         >
           <ReadOnlySummaryBlock
