@@ -6,6 +6,7 @@ import { CheckCircle, HelpCircle, Shield, Upload } from 'lucide-react';
 
 import type { InventoryItem } from '@/types';
 import { CATEGORY_CONFIG } from '@/lib/config/categoryConfig';
+import { getInventoryItemIcon, resolveIcon } from '@/lib/icons';
 import { centsToDollars, formatCurrency } from '@/lib/utils/format';
 import { normalizeDisplaySegments, titleCaseCategory } from '@/lib/utils/string';
 import InlineValueEditor from '@/app/(dashboard)/dashboard/components/inventory/InlineValueEditor';
@@ -92,7 +93,19 @@ export default function ItemCard({
 
   const categoryKey = String(item.category || 'DEFAULT').toUpperCase();
   const categoryConfig = CATEGORY_CONFIG[categoryKey] ?? CATEGORY_CONFIG.DEFAULT;
-  const CategoryIcon = categoryConfig.icon;
+  const ItemIcon = resolveIcon(
+    getInventoryItemIcon({
+      name: item.name,
+      type: (item as any).type ?? (item as any).itemType,
+      category: item.category,
+      subtype: (item as any).subtype,
+      kind: (item as any).kind,
+      label: (item as any).label ?? (item as any).displayName,
+      applianceType: (item as any).applianceType,
+      sourceHash: item.sourceHash,
+    }),
+    categoryConfig.icon,
+  );
 
   const coverageStyle = {
     gap: 'border-l-4 border-l-red-400',
@@ -150,7 +163,7 @@ export default function ItemCard({
                 categoryConfig.iconBg,
               ].join(' ')}
             >
-              <CategoryIcon className={`${isCompact ? 'h-4 w-4' : 'h-5 w-5'} ${categoryConfig.iconColor}`} />
+              <ItemIcon className={`${isCompact ? 'h-4 w-4' : 'h-5 w-5'} ${categoryConfig.iconColor}`} />
             </div>
 
             <div className="min-w-0">

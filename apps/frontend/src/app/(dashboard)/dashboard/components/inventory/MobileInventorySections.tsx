@@ -20,6 +20,7 @@ import {
 import type { InventoryItem, InventoryItemCategory, InventoryRoom } from '@/types';
 import { CATEGORY_CONFIG } from '@/lib/config/categoryConfig';
 import { INVENTORY_CATEGORY_FILTER_OPTIONS } from '@/lib/config/inventoryConfig';
+import { getInventoryItemIcon, resolveIcon } from '@/lib/icons';
 import { centsToDollars, formatCurrency } from '@/lib/utils/format';
 import { normalizeDisplaySegments, titleCaseCategory } from '@/lib/utils/string';
 import InlineValueEditor from './InlineValueEditor';
@@ -563,7 +564,19 @@ export function MobileInventoryItemCard({
 
   const categoryKey = String(item.category || 'DEFAULT').toUpperCase();
   const categoryConfig = CATEGORY_CONFIG[categoryKey] ?? CATEGORY_CONFIG.DEFAULT;
-  const CategoryIcon = categoryConfig.icon;
+  const ItemIcon = resolveIcon(
+    getInventoryItemIcon({
+      name: item.name,
+      type: (item as any).type ?? (item as any).itemType,
+      category: item.category,
+      subtype: (item as any).subtype,
+      kind: (item as any).kind,
+      label: (item as any).label ?? (item as any).displayName,
+      applianceType: (item as any).applianceType,
+      sourceHash: item.sourceHash,
+    }),
+    categoryConfig.icon,
+  );
 
   function handleOpenCoverage(event: React.MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
@@ -610,7 +623,7 @@ export function MobileInventoryItemCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-2.5">
             <div className={['inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', categoryConfig.iconBg].join(' ')}>
-              <CategoryIcon className={['h-4 w-4', categoryConfig.iconColor].join(' ')} />
+              <ItemIcon className={['h-4 w-4', categoryConfig.iconColor].join(' ')} />
             </div>
             <div className="min-w-0">
               <p className="mb-0 truncate text-[1.05rem] font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">

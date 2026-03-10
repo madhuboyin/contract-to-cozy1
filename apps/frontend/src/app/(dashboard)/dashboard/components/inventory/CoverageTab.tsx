@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { AlertTriangle, Monitor, Package, Shield, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, HelpCircle } from 'lucide-react';
 import type { InventoryItem, InventoryRoom } from '@/types';
+import { getInventoryItemIcon, resolveIcon } from '@/lib/icons';
 import { centsToDollars, formatCurrency } from '@/lib/utils/format';
 
 type CoverageTabProps = {
@@ -18,15 +19,6 @@ function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'cove
   if (!hasWarranty && !hasInsurance) return 'uncovered';
   if (!hasWarranty || !hasInsurance) return 'partial';
   return 'covered';
-}
-
-function categoryIcon(category?: string) {
-  const normalized = String(category || '').toUpperCase();
-  if (normalized === 'APPLIANCE') return Wrench;
-  if (normalized === 'ELECTRONICS') return Monitor;
-  if (normalized === 'SAFETY') return Shield;
-  if (normalized === 'ELECTRICAL') return Zap;
-  return Package;
 }
 
 export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenActions }: CoverageTabProps) {
@@ -178,7 +170,19 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
 
           <div className="space-y-2">
             {gapItems.map((item) => {
-              const Icon = categoryIcon(item.category);
+              const Icon = resolveIcon(
+                getInventoryItemIcon({
+                  name: item.name,
+                  type: (item as any).type ?? (item as any).itemType,
+                  category: item.category,
+                  subtype: (item as any).subtype,
+                  kind: (item as any).kind,
+                  label: (item as any).label ?? (item as any).displayName,
+                  applianceType: (item as any).applianceType,
+                  sourceHash: item.sourceHash,
+                }),
+                HelpCircle,
+              );
               const replacementValue = centsToDollars(item.replacementCostCents);
 
               return (

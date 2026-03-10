@@ -12,6 +12,7 @@ export const iconMapping = {
     SAFETY: 'ShieldAlert',
     SMART_HOME: 'Wifi',
     FURNITURE: 'Sofa',
+    ELECTRONICS: 'Cpu',
     OUTDOOR: 'Sun',
     OTHER: 'HelpCircle',
   },
@@ -131,7 +132,6 @@ function normalizeLookupKey(value?: string | null): string {
 }
 
 const INVENTORY_CATEGORY_ALIASES: Record<string, InventoryCategoryKey> = {
-  ELECTRONICS: 'APPLIANCE',
   ROOF_EXTERIOR: 'ROOFING',
   ROOF_EXTERIORS: 'ROOFING',
   WINDOWS: 'WINDOWS_DOORS',
