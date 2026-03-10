@@ -16,8 +16,22 @@ type HomeScoreConsistencyStatus = 'PASS' | 'WARN' | 'FAIL';
 type HomeScoreConsistencySeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 type HomeScoreVerificationStatus = 'VERIFIED' | 'REVIEW_NEEDED' | 'UNVERIFIED' | 'UNKNOWN';
 type HomeScoreCorrectionStatus = 'SUBMITTED' | 'APPLIED' | 'REJECTED';
+type HomeScoreGrade = 'A' | 'B' | 'C' | 'D' | 'F';
+type HomeScoreRatingTier = 'EXCELLENT' | 'STRONG' | 'STABLE' | 'MODERATE_RISK' | 'HIGH_RISK';
+type HomeScoreProvenanceBadge = 'VERIFIED' | 'DOCUMENT_BACKED' | 'PUBLIC_RECORD' | 'USER_REPORTED' | 'INFERRED' | 'MISSING';
+type HomeScoreTimelineDatePrecision = 'DATE' | 'YEAR';
+type HomeScoreDataSourceStatus = 'AVAILABLE' | 'PARTIAL' | 'PLANNED';
+type HomeScoreEffortLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+type HomeScoreUrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 const RISK_EXPOSURE_CAP = 15000;
+const HOME_SCORE_GRADE_MAPPING: HomeScoreGradeBandConfigDTO[] = [
+  { min: 90, max: 100, grade: 'A', ratingTier: 'EXCELLENT', label: 'Excellent' },
+  { min: 80, max: 89, grade: 'B', ratingTier: 'STRONG', label: 'Strong' },
+  { min: 70, max: 79, grade: 'C', ratingTier: 'STABLE', label: 'Stable' },
+  { min: 60, max: 69, grade: 'D', ratingTier: 'MODERATE_RISK', label: 'Moderate Risk' },
+  { min: 0, max: 59, grade: 'F', ratingTier: 'HIGH_RISK', label: 'High Risk' },
+];
 
 export type HomeScoreComponentDTO = {
   key: HomeScoreComponentKey;
@@ -116,6 +130,193 @@ export type HomeScoreUncertaintyDTO = {
   detail: string;
 };
 
+export type HomeScoreGradeBandConfigDTO = {
+  min: number;
+  max: number;
+  grade: HomeScoreGrade;
+  ratingTier: HomeScoreRatingTier;
+  label: string;
+};
+
+export type HomeScoreReportMetaDTO = {
+  reportTitle: string;
+  propertyAddress: string;
+  reportId: string;
+  generatedDate: string;
+  preparedFor: string | null;
+  ownerName: string | null;
+  dataCoveragePercentage: number;
+  verificationStatusSummary: string;
+  confidenceLevel: HomeScoreConfidence;
+  reportMode: 'HOMEOWNER';
+  reportVersion: string;
+  gradeMapping: HomeScoreGradeBandConfigDTO[];
+};
+
+export type HomeScoreExecutiveSummaryDTO = {
+  homeScore: number;
+  homeScoreMax: number;
+  grade: HomeScoreGrade;
+  ratingTier: HomeScoreRatingTier;
+  confidenceLevel: HomeScoreConfidence;
+  valueProtectionScore: number;
+  moneyAtRiskHeadline: number;
+  moneyAtRiskHorizonMonths: number;
+  scoreDeltaFromPreviousPeriod: number | null;
+  trendStatus: 'AVAILABLE' | 'INSUFFICIENT_HISTORY';
+};
+
+export type HomeScoreRadarAxisDTO = {
+  key: 'MAINTENANCE' | 'INSURANCE' | 'SAFETY' | 'FINANCIAL' | 'WEATHER';
+  label: string;
+  score: number;
+  confidence: HomeScoreConfidence;
+  estimated: boolean;
+};
+
+export type HomeScoreRadarDTO = {
+  axes: HomeScoreRadarAxisDTO[];
+  weakestArea: string;
+  strongestArea: string;
+  explanation: string;
+};
+
+export type HomeScoreDriverDTO = {
+  id: string;
+  title: string;
+  explanation: string;
+  scoreImpact: number;
+  financialImpact: number | null;
+  confidence: HomeScoreConfidence;
+  provenance: HomeScoreProvenanceBadge;
+  actionHref?: string;
+};
+
+export type HomeScoreTimelineEventDTO = {
+  id: string;
+  title: string;
+  summary: string | null;
+  eventType: string;
+  occurredAt: string | null;
+  year: number | null;
+  datePrecision: HomeScoreTimelineDatePrecision;
+  provenance: HomeScoreProvenanceBadge;
+  verified: boolean;
+};
+
+export type HomeScoreSystemHealthDTO = {
+  key:
+    | 'ROOF'
+    | 'HVAC'
+    | 'WATER_HEATER'
+    | 'PLUMBING'
+    | 'ELECTRICAL'
+    | 'SAFETY_SYSTEMS'
+    | 'EXTERIOR_ENVELOPE'
+    | 'FOUNDATION_STRUCTURE';
+  label: string;
+  grade: HomeScoreGrade;
+  statusLabel: string;
+  ageYears: number | null;
+  serviceWindow: string | null;
+  verification: HomeScoreProvenanceBadge;
+  nextRecommendedAction: string;
+  projectedRiskHorizonMonths: number | null;
+  isPlaceholder: boolean;
+};
+
+export type HomeScoreFinancialExposureLineDTO = {
+  id: string;
+  label: string;
+  exposure: number;
+  confidence: HomeScoreConfidence;
+  provenance: HomeScoreProvenanceBadge;
+  urgency: HomeScoreUrgencyLevel;
+};
+
+export type HomeScoreFinancialExposureDTO = {
+  currency: 'USD';
+  headlineMoneyAtRisk: number;
+  horizon12Months: number;
+  horizon3Years: number;
+  horizon5Years: number;
+  confidenceRangeLow: number | null;
+  confidenceRangeHigh: number | null;
+  lines: HomeScoreFinancialExposureLineDTO[];
+  whatReducesRisk: Array<{
+    title: string;
+    detail: string;
+  }>;
+};
+
+export type HomeScoreTrustVerificationDTO = {
+  dataCoveragePct: number;
+  verifiedPct: number;
+  estimatedPct: number;
+  userReportedPct: number;
+  publicRecordPct: number;
+  documentBackedPct: number;
+  confidenceScore: number;
+  confidenceLevel: HomeScoreConfidence;
+  badgeTaxonomy: HomeScoreProvenanceBadge[];
+  explanation: string;
+};
+
+export type HomeScoreIntegrityCheckItemDTO = {
+  id: string;
+  title: string;
+  status: HomeScoreConsistencyStatus;
+  detail: string;
+  remediation: string | null;
+  actionHref?: string;
+};
+
+export type HomeScoreBenchmarkItemDTO = {
+  key: 'NEIGHBORHOOD' | 'ZIP' | 'CITY' | 'STATE' | 'TOP_PERCENTILE' | 'PLATFORM_COMPARABLES';
+  label: string;
+  score: number;
+  sampleSize: number | null;
+  available: boolean;
+};
+
+export type HomeScoreBenchmarkDTO = {
+  thisHomeScore: number;
+  percentile: number | null;
+  sources: HomeScoreBenchmarkItemDTO[];
+  interpretation: string;
+};
+
+export type HomeScoreImprovementActionDTO = {
+  id: string;
+  title: string;
+  projectedPointGain: number;
+  projectedRiskReduction: number;
+  estimatedCostToImprove: number | null;
+  estimatedConfidenceGain: HomeScoreConfidence;
+  effort: HomeScoreEffortLevel;
+  urgency: HomeScoreUrgencyLevel;
+  actionHref?: string;
+};
+
+export type HomeScoreImprovementPlanDTO = {
+  actions: HomeScoreImprovementActionDTO[];
+  potentialNewScore: number;
+  potentialMoneyAtRiskReduction: number;
+};
+
+export type HomeScoreMethodologyDTO = {
+  summary: string;
+  inputsUsed: string[];
+  intendedUse: string;
+  disclosures: string[];
+  methodologyHref: string | null;
+  dataSources: Array<{
+    key: string;
+    label: string;
+    status: HomeScoreDataSourceStatus;
+  }>;
+};
+
 export type HomeScoreReportDTO = {
   propertyId: string;
   generatedAt: string;
@@ -143,6 +344,26 @@ export type HomeScoreReportDTO = {
     href?: string;
   } | null;
   trend: HomeScoreTrendPointDTO[];
+  reportMeta: HomeScoreReportMetaDTO;
+  executiveSummary: HomeScoreExecutiveSummaryDTO;
+  radar: HomeScoreRadarDTO;
+  scoreDrivers: HomeScoreDriverDTO[];
+  timeline: {
+    events: HomeScoreTimelineEventDTO[];
+    emptyState: {
+      title: string;
+      detail: string;
+      ctaLabel: string;
+      ctaHref: string;
+    } | null;
+  };
+  systemHealth: HomeScoreSystemHealthDTO[];
+  financialExposure: HomeScoreFinancialExposureDTO;
+  trustAndVerification: HomeScoreTrustVerificationDTO;
+  integrityChecks: HomeScoreIntegrityCheckItemDTO[];
+  benchmarks: HomeScoreBenchmarkDTO;
+  improvementPlan: HomeScoreImprovementPlanDTO;
+  methodology: HomeScoreMethodologyDTO;
 };
 
 type PropertyQualitySignals = {
@@ -191,6 +412,12 @@ export type HomeScoreCorrectionInput = {
   proposedValue?: string;
 };
 
+export type HomeScoreEventInput = {
+  event: string;
+  section?: string;
+  metadata?: Record<string, unknown>;
+};
+
 function asNumber(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (
@@ -215,6 +442,43 @@ function scoreBand(score: number): HomeScoreReportDTO['scoreBand'] {
   if (score >= 70) return 'GOOD';
   if (score >= 50) return 'FAIR';
   return 'NEEDS_ATTENTION';
+}
+
+function scoreGrade(score: number): { grade: HomeScoreGrade; ratingTier: HomeScoreRatingTier; label: string } {
+  const normalizedScore = clamp(Math.round(score), 0, 100);
+  const match =
+    HOME_SCORE_GRADE_MAPPING.find((row) => normalizedScore >= row.min && normalizedScore <= row.max) ??
+    HOME_SCORE_GRADE_MAPPING[HOME_SCORE_GRADE_MAPPING.length - 1];
+  return {
+    grade: match.grade,
+    ratingTier: match.ratingTier,
+    label: match.label,
+  };
+}
+
+function toIsoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatAddress(parts: Array<string | null | undefined>) {
+  return parts.map((part) => String(part || '').trim()).filter(Boolean).join(', ');
+}
+
+function formatPersonName(firstName?: string | null, lastName?: string | null) {
+  const first = String(firstName || '').trim();
+  const last = String(lastName || '').trim();
+  return [first, last].filter(Boolean).join(' ').trim();
+}
+
+function toPercent(numerator: number, denominator: number) {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return 0;
+  return clamp(Math.round((numerator / denominator) * 100), 0, 100);
+}
+
+function confidenceToScore(confidence: HomeScoreConfidence) {
+  if (confidence === 'HIGH') return 85;
+  if (confidence === 'MEDIUM') return 65;
+  return 40;
 }
 
 function confidenceFromRatio(ratio: number): HomeScoreConfidence {
@@ -332,10 +596,23 @@ export class HomeScoreReportService {
       select: {
         id: true,
         name: true,
+        address: true,
+        city: true,
+        state: true,
+        zipCode: true,
         yearBuilt: true,
         propertyType: true,
         propertySize: true,
-        zipCode: true,
+        homeownerProfile: {
+          select: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
         createdAt: true,
       },
     });
@@ -974,6 +1251,714 @@ export class HomeScoreReportService {
     }));
   }
 
+  private mapRiskLevelToConfidence(riskLevel: unknown): HomeScoreConfidence {
+    const normalized = String(riskLevel || '').toUpperCase();
+    if (normalized === 'CRITICAL' || normalized === 'HIGH') return 'HIGH';
+    if (normalized === 'ELEVATED' || normalized === 'MODERATE') return 'MEDIUM';
+    return 'LOW';
+  }
+
+  private mapEventProvenance(event: {
+    createdById?: string | null;
+    type?: string | null;
+    documents?: Array<unknown>;
+  }): HomeScoreProvenanceBadge {
+    if ((event.documents || []).length > 0) return 'DOCUMENT_BACKED';
+    if (event.createdById) return 'USER_REPORTED';
+    if (event.type === 'CLAIM' || event.type === 'INSPECTION') return 'VERIFIED';
+    if (event.type === 'VALUE_UPDATE') return 'PUBLIC_RECORD';
+    return 'INFERRED';
+  }
+
+  private formatSystemLabel(rawSystemType: unknown) {
+    const normalized = String(rawSystemType || '')
+      .replace(/^MAJOR_APPLIANCE_/, '')
+      .replace(/_/g, ' ')
+      .trim();
+    if (!normalized) return 'General home system';
+    return normalized
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  private buildRadar(
+    components: HomeScoreComponentDTO[],
+    signals: PropertyQualitySignals,
+    financialSummaryStatus: 'CALCULATED' | 'MISSING_DATA' | 'QUEUED' | 'NO_PROPERTY'
+  ): HomeScoreRadarDTO {
+    const componentScore = (key: HomeScoreComponentKey) => components.find((component) => component.key === key)?.score ?? 0;
+    const maintenanceScore = Math.round(
+      clamp(
+        componentScore('HEALTH') * 0.75 +
+          (signals.overdueTaskCount === 0 ? 15 : Math.max(0, 12 - signals.overdueTaskCount * 2)),
+        0,
+        100
+      )
+    );
+    const insuranceScore = Math.round(
+      clamp(
+        signals.insuranceCount > 0 ? 70 : 38,
+        0,
+        100
+      )
+    );
+    const safetySignal = [signals.property.hasSmokeDetectors, signals.property.hasCoDetectors].filter(
+      (item) => item === true
+    ).length;
+    const safetyUnknown = [signals.property.hasSmokeDetectors, signals.property.hasCoDetectors].filter(
+      (item) => item === null
+    ).length;
+    const safetyScore = Math.round(
+      clamp(45 + safetySignal * 22 - safetyUnknown * 8 + (signals.property.hasFireExtinguisher ? 8 : 0), 0, 100)
+    );
+    const financialScore = Math.round(componentScore('FINANCIAL'));
+    const weatherScore = Math.round(
+      clamp(
+        componentScore('RISK') * 0.7 + (signals.property.hasDrainageIssues ? -12 : 10),
+        0,
+        100
+      )
+    );
+
+    const axes: HomeScoreRadarAxisDTO[] = [
+      {
+        key: 'MAINTENANCE',
+        label: 'Maintenance',
+        score: maintenanceScore,
+        confidence: confidenceFromRatio(clamp(signals.profileCompletenessRatio + 0.1, 0, 1)),
+        estimated: signals.overdueTaskCount === 0 && signals.criticalTaskCount === 0 ? false : signals.documentCount === 0,
+      },
+      {
+        key: 'INSURANCE',
+        label: 'Insurance',
+        score: insuranceScore,
+        confidence: signals.insuranceCount > 0 ? 'MEDIUM' : 'LOW',
+        estimated: signals.insuranceCount === 0,
+      },
+      {
+        key: 'SAFETY',
+        label: 'Safety',
+        score: safetyScore,
+        confidence: safetyUnknown > 0 ? 'MEDIUM' : 'HIGH',
+        estimated: safetyUnknown > 0,
+      },
+      {
+        key: 'FINANCIAL',
+        label: 'Financial',
+        score: financialScore,
+        confidence: financialSummaryStatus === 'CALCULATED' ? 'HIGH' : 'LOW',
+        estimated: financialSummaryStatus !== 'CALCULATED',
+      },
+      {
+        key: 'WEATHER',
+        label: 'Weather',
+        score: weatherScore,
+        confidence: components.find((component) => component.key === 'RISK')?.confidence ?? 'MEDIUM',
+        estimated: signals.documentCount === 0,
+      },
+    ];
+
+    const strongestArea = [...axes].sort((a, b) => b.score - a.score)[0];
+    const weakestArea = [...axes].sort((a, b) => a.score - b.score)[0];
+
+    return {
+      axes,
+      weakestArea: weakestArea?.label ?? 'Maintenance',
+      strongestArea: strongestArea?.label ?? 'Maintenance',
+      explanation: `${weakestArea?.label ?? 'One area'} is limiting score resilience most right now, while ${
+        strongestArea?.label ?? 'another area'
+      } is currently performing best.`,
+    };
+  }
+
+  private buildTimeline(
+    propertyId: string,
+    propertyContext: {
+      yearBuilt: number | null;
+      createdAt: Date;
+    },
+    homeEvents: Array<{
+      id: string;
+      type: string;
+      occurredAt: Date;
+      title: string;
+      summary: string | null;
+      createdById: string | null;
+      documents?: Array<unknown>;
+    }>
+  ): HomeScoreReportDTO['timeline'] {
+    const timelineEvents: HomeScoreTimelineEventDTO[] = homeEvents
+      .map((event) => {
+        const provenance = this.mapEventProvenance(event);
+        return {
+          id: event.id,
+          title: event.title,
+          summary: event.summary,
+          eventType: event.type,
+          occurredAt: event.occurredAt.toISOString(),
+          year: event.occurredAt.getUTCFullYear(),
+          datePrecision: 'DATE' as const,
+          provenance,
+          verified: provenance === 'VERIFIED' || provenance === 'DOCUMENT_BACKED' || provenance === 'PUBLIC_RECORD',
+        };
+      })
+      .sort((a, b) => new Date(a.occurredAt || 0).getTime() - new Date(b.occurredAt || 0).getTime());
+
+    if (propertyContext.yearBuilt) {
+      timelineEvents.unshift({
+        id: 'property-year-built',
+        title: 'Home constructed',
+        summary: null,
+        eventType: 'MILESTONE',
+        occurredAt: null,
+        year: propertyContext.yearBuilt,
+        datePrecision: 'YEAR' as const,
+        provenance: 'PUBLIC_RECORD',
+        verified: true,
+      });
+    } else {
+      const createdYear = propertyContext.createdAt.getUTCFullYear();
+      timelineEvents.unshift({
+        id: 'property-created-on-platform',
+        title: 'Property profile created',
+        summary: 'Add key home history milestones to improve report confidence.',
+        eventType: 'MILESTONE',
+        occurredAt: null,
+        year: createdYear,
+        datePrecision: 'YEAR' as const,
+        provenance: 'INFERRED',
+        verified: false,
+      });
+    }
+
+    const hasRealEvents = timelineEvents.some((event) => event.id !== 'property-year-built');
+
+    return {
+      events: timelineEvents.slice(0, 40),
+      emptyState: hasRealEvents
+        ? null
+        : {
+            title: 'Build your home timeline',
+            detail: 'Add service records and key upgrades to improve report quality and trust.',
+            ctaLabel: 'Add timeline event',
+            ctaHref: `/dashboard/properties/${propertyId}/timeline`,
+          },
+    };
+  }
+
+  private buildSystemHealth(
+    signals: PropertyQualitySignals,
+    riskDetails: Array<Record<string, unknown>>,
+    hasEvidenceDocuments: boolean
+  ): HomeScoreSystemHealthDTO[] {
+    const currentYear = new Date().getUTCFullYear();
+    const maxRiskByKeyword = (keyword: string) =>
+      riskDetails
+        .filter((detail) => String(detail.systemType || '').includes(keyword))
+        .reduce((max, detail) => Math.max(max, asNumber(detail.riskDollar ?? detail.outOfPocketCost ?? 0)), 0);
+
+    const isHighRiskByKeyword = (keyword: string) =>
+      riskDetails.some((detail) => {
+        const systemType = String(detail.systemType || '');
+        const riskLevel = String(detail.riskLevel || '').toUpperCase();
+        return systemType.includes(keyword) && (riskLevel === 'HIGH' || riskLevel === 'CRITICAL');
+      });
+
+    const buildSystemRow = (args: {
+      key: HomeScoreSystemHealthDTO['key'];
+      label: string;
+      installYear: number | null;
+      expectedLifeYears: number;
+      keyword: string;
+      fallbackStatus: string;
+      placeholder?: boolean;
+    }): HomeScoreSystemHealthDTO => {
+      if (args.placeholder) {
+        return {
+          key: args.key,
+          label: args.label,
+          grade: 'C',
+          statusLabel: 'Pending external data support',
+          ageYears: null,
+          serviceWindow: null,
+          verification: 'MISSING',
+          nextRecommendedAction: 'Connect inspection or structural records to activate this section.',
+          projectedRiskHorizonMonths: null,
+          isPlaceholder: true,
+        };
+      }
+
+      const ageYears = args.installYear ? Math.max(0, currentYear - args.installYear) : null;
+      let score = 78;
+      if (ageYears !== null) {
+        const lifeRatio = ageYears / Math.max(args.expectedLifeYears, 1);
+        if (lifeRatio >= 1) score -= 34;
+        else if (lifeRatio >= 0.75) score -= 18;
+        else if (lifeRatio >= 0.5) score -= 8;
+      } else {
+        score -= 12;
+      }
+
+      const riskPenalty = isHighRiskByKeyword(args.keyword) ? 16 : maxRiskByKeyword(args.keyword) > 0 ? 8 : 0;
+      score = clamp(Math.round(score - riskPenalty + (hasEvidenceDocuments ? 4 : 0)), 0, 100);
+
+      const grade = scoreGrade(score).grade;
+      const statusLabel =
+        grade === 'A' || grade === 'B'
+          ? 'Stable'
+          : grade === 'C'
+          ? args.fallbackStatus
+          : 'Needs attention';
+
+      const remainingYears =
+        ageYears !== null ? Math.max(0, Math.round(args.expectedLifeYears - ageYears)) : null;
+
+      return {
+        key: args.key,
+        label: args.label,
+        grade,
+        statusLabel,
+        ageYears,
+        serviceWindow:
+          ageYears === null
+            ? 'Install year not verified'
+            : remainingYears === 0
+            ? 'At or beyond expected service life'
+            : `${remainingYears} year${remainingYears === 1 ? '' : 's'} remaining (estimated)`,
+        verification: hasEvidenceDocuments ? 'DOCUMENT_BACKED' : ageYears === null ? 'MISSING' : 'USER_REPORTED',
+        nextRecommendedAction:
+          grade === 'D' || grade === 'F'
+            ? `Prioritize inspection for ${args.label.toLowerCase()}.`
+            : ageYears === null
+            ? `Verify ${args.label.toLowerCase()} install year.`
+            : `Continue scheduled upkeep for ${args.label.toLowerCase()}.`,
+        projectedRiskHorizonMonths: remainingYears === null ? null : clamp(remainingYears * 12, 3, 180),
+        isPlaceholder: false,
+      };
+    };
+
+    return [
+      buildSystemRow({
+        key: 'ROOF',
+        label: 'Roof',
+        installYear: signals.property.roofReplacementYear ?? signals.property.yearBuilt,
+        expectedLifeYears: 25,
+        keyword: 'ROOF',
+        fallbackStatus: 'Watch condition',
+      }),
+      buildSystemRow({
+        key: 'HVAC',
+        label: 'HVAC',
+        installYear: signals.property.hvacInstallYear,
+        expectedLifeYears: 15,
+        keyword: 'HVAC',
+        fallbackStatus: 'Service planning recommended',
+      }),
+      buildSystemRow({
+        key: 'WATER_HEATER',
+        label: 'Water Heater',
+        installYear: signals.property.waterHeaterInstallYear,
+        expectedLifeYears: 10,
+        keyword: 'WATER_HEATER',
+        fallbackStatus: 'Lifecycle verification needed',
+      }),
+      buildSystemRow({
+        key: 'PLUMBING',
+        label: 'Plumbing',
+        installYear: signals.property.yearBuilt,
+        expectedLifeYears: 35,
+        keyword: 'PLUMB',
+        fallbackStatus: 'Routine checks advised',
+      }),
+      buildSystemRow({
+        key: 'ELECTRICAL',
+        label: 'Electrical',
+        installYear: signals.property.yearBuilt,
+        expectedLifeYears: 40,
+        keyword: 'ELECT',
+        fallbackStatus: 'Panel update may be needed',
+      }),
+      buildSystemRow({
+        key: 'SAFETY_SYSTEMS',
+        label: 'Safety Systems',
+        installYear: signals.property.yearBuilt,
+        expectedLifeYears: 8,
+        keyword: 'SAFETY',
+        fallbackStatus: 'Validate safety coverage',
+      }),
+      buildSystemRow({
+        key: 'EXTERIOR_ENVELOPE',
+        label: 'Exterior / Envelope',
+        installYear: signals.property.yearBuilt,
+        expectedLifeYears: 30,
+        keyword: 'EXTERIOR',
+        fallbackStatus: 'Seasonal inspection advised',
+      }),
+      buildSystemRow({
+        key: 'FOUNDATION_STRUCTURE',
+        label: 'Foundation / Structure',
+        installYear: null,
+        expectedLifeYears: 0,
+        keyword: 'FOUNDATION',
+        fallbackStatus: 'Future ready',
+        placeholder: true,
+      }),
+    ];
+  }
+
+  private deriveFinancialExposure(
+    riskExposure: number,
+    uncertainty: HomeScoreUncertaintyDTO,
+    riskDetails: Array<Record<string, unknown>>,
+    doNothingRuns: Array<{
+      horizonMonths: number;
+      expectedCostDeltaCentsMin: number | null;
+      expectedCostDeltaCentsMax: number | null;
+      nextSteps: Prisma.JsonValue | null;
+    }>
+  ): HomeScoreFinancialExposureDTO {
+    const averageRunExposure = (run?: {
+      expectedCostDeltaCentsMin: number | null;
+      expectedCostDeltaCentsMax: number | null;
+    }) => {
+      if (!run) return null;
+      const min = run.expectedCostDeltaCentsMin ?? run.expectedCostDeltaCentsMax ?? null;
+      const max = run.expectedCostDeltaCentsMax ?? run.expectedCostDeltaCentsMin ?? null;
+      if (min === null || max === null) return null;
+      return Math.round((min + max) / 2 / 100);
+    };
+
+    const run12 = doNothingRuns.find((run) => run.horizonMonths === 12);
+    const run36 = doNothingRuns.find((run) => run.horizonMonths === 36);
+    const run24 = doNothingRuns.find((run) => run.horizonMonths === 24);
+    const run6 = doNothingRuns.find((run) => run.horizonMonths === 6);
+
+    const horizon12 = averageRunExposure(run12) ?? averageRunExposure(run6) ?? Math.round(riskExposure * 0.55);
+    const horizon3Years =
+      averageRunExposure(run36) ?? (averageRunExposure(run24) ? Math.round((averageRunExposure(run24) as number) * 1.4) : null) ?? Math.round(riskExposure * 1.2);
+    const horizon5Years = Math.round(Math.max(horizon3Years * 1.65, horizon12 * 2.1));
+
+    const prioritizedLines = [...riskDetails]
+      .sort(
+        (a, b) =>
+          asNumber(b.riskDollar ?? b.outOfPocketCost ?? b.replacementCost ?? 0) -
+          asNumber(a.riskDollar ?? a.outOfPocketCost ?? a.replacementCost ?? 0)
+      )
+      .slice(0, 6)
+      .map((detail, index): HomeScoreFinancialExposureLineDTO => {
+        const exposure = Math.round(asNumber(detail.riskDollar ?? detail.outOfPocketCost ?? detail.replacementCost ?? 0));
+        const riskLevel = String(detail.riskLevel || '').toUpperCase();
+        return {
+          id: `financial-line-${index}`,
+          label: this.formatSystemLabel(detail.systemType ?? detail.assetName),
+          exposure,
+          confidence: this.mapRiskLevelToConfidence(riskLevel),
+          provenance: asNumber(detail.coverageFactor ?? 0) > 0.3 ? 'VERIFIED' : 'INFERRED',
+          urgency: riskLevel === 'CRITICAL' || riskLevel === 'HIGH' ? 'HIGH' : riskLevel === 'ELEVATED' ? 'MEDIUM' : 'LOW',
+        };
+      });
+
+    const parsedNextSteps = (run36?.nextSteps && Array.isArray(run36.nextSteps) ? run36.nextSteps : []) as Array<
+      Record<string, unknown>
+    >;
+    const whatReducesRisk =
+      parsedNextSteps.slice(0, 3).map((step) => ({
+        title: String(step.title || 'Complete priority maintenance action'),
+        detail: String(step.detail || 'Timely maintenance and verification narrows downside risk.'),
+      })) || [];
+
+    return {
+      currency: 'USD',
+      headlineMoneyAtRisk: horizon3Years,
+      horizon12Months: horizon12,
+      horizon3Years,
+      horizon5Years,
+      confidenceRangeLow: uncertainty.riskExposureRangeLow ? Math.round(uncertainty.riskExposureRangeLow) : null,
+      confidenceRangeHigh: uncertainty.riskExposureRangeHigh ? Math.round(uncertainty.riskExposureRangeHigh) : null,
+      lines: prioritizedLines,
+      whatReducesRisk:
+        whatReducesRisk.length > 0
+          ? whatReducesRisk
+          : [
+              {
+                title: 'Address top high-risk systems first',
+                detail: 'Prioritizing one high-risk system typically reduces near-term exposure materially.',
+              },
+            ],
+    };
+  }
+
+  private buildTrustAndVerification(
+    overallConfidence: HomeScoreConfidence,
+    verificationLadder: {
+      userStated: number;
+      inferred: number;
+      systemComputed: number;
+    },
+    signals: PropertyQualitySignals,
+    timelineEvents: HomeScoreTimelineEventDTO[],
+    uncertainty: HomeScoreUncertaintyDTO
+  ): HomeScoreTrustVerificationDTO {
+    const totalLadder = verificationLadder.userStated + verificationLadder.inferred + verificationLadder.systemComputed;
+    const publicRecordCount = timelineEvents.filter((event) => event.provenance === 'PUBLIC_RECORD').length;
+    const documentBackedCount = timelineEvents.filter((event) => event.provenance === 'DOCUMENT_BACKED').length;
+    const dataCoveragePct = toPercent(
+      signals.userStatedFilled + signals.documentCount + signals.insuranceCount + signals.warrantyCount,
+      signals.userStatedTotal + 12
+    );
+
+    return {
+      dataCoveragePct,
+      verifiedPct: toPercent(verificationLadder.systemComputed, totalLadder),
+      estimatedPct: toPercent(verificationLadder.inferred, totalLadder),
+      userReportedPct: toPercent(verificationLadder.userStated, totalLadder),
+      publicRecordPct: toPercent(publicRecordCount, Math.max(1, timelineEvents.length)),
+      documentBackedPct: toPercent(documentBackedCount + signals.evidenceDocumentCount, Math.max(1, timelineEvents.length + 4)),
+      confidenceScore: Math.round((confidenceToScore(overallConfidence) + uncertainty.accuracyScore) / 2),
+      confidenceLevel: overallConfidence,
+      badgeTaxonomy: ['VERIFIED', 'DOCUMENT_BACKED', 'PUBLIC_RECORD', 'USER_REPORTED', 'INFERRED', 'MISSING'],
+      explanation:
+        'Confidence reflects source quality, data completeness, and consistency checks. Add documents and structured records to increase trust.',
+    };
+  }
+
+  private async buildBenchmarks(
+    propertyId: string,
+    homeScore: number,
+    propertyContext: { zipCode: string; city: string; state: string }
+  ): Promise<HomeScoreBenchmarkDTO> {
+    const snapshotModel = (prisma as any).propertyScoreSnapshot;
+    const empty: HomeScoreBenchmarkDTO = {
+      thisHomeScore: Math.round(homeScore),
+      percentile: null,
+      sources: [
+        { key: 'ZIP', label: 'ZIP average', score: 0, sampleSize: null, available: false },
+        { key: 'CITY', label: 'City average', score: 0, sampleSize: null, available: false },
+        { key: 'STATE', label: 'State average', score: 0, sampleSize: null, available: false },
+      ],
+      interpretation: 'Benchmark data will appear as comparable score snapshots become available.',
+    };
+
+    if (!snapshotModel) return empty;
+
+    const computeLevel = async (whereProperty: Record<string, unknown>) => {
+      const rows = (await snapshotModel.findMany({
+        where: {
+          propertyId: { not: propertyId },
+          scoreType: { in: ['HEALTH', 'RISK', 'FINANCIAL'] },
+          property: whereProperty,
+        },
+        orderBy: [{ weekStart: 'desc' }],
+        take: 1800,
+        select: {
+          propertyId: true,
+          scoreType: true,
+          score: true,
+          weekStart: true,
+        },
+      })) as Array<{
+        propertyId: string;
+        scoreType: HomeScoreComponentKey;
+        score: number;
+      }>;
+
+      const latestByPropertyAndType = new Map<string, number>();
+      for (const row of rows) {
+        const key = `${row.propertyId}-${row.scoreType}`;
+        if (!latestByPropertyAndType.has(key)) {
+          latestByPropertyAndType.set(key, asNumber(row.score));
+        }
+      }
+
+      const byProperty = new Map<string, number[]>();
+      for (const [key, score] of latestByPropertyAndType.entries()) {
+        const [rowPropertyId] = key.split('-');
+        const existing = byProperty.get(rowPropertyId) ?? [];
+        existing.push(score);
+        byProperty.set(rowPropertyId, existing);
+      }
+
+      const peerScores = Array.from(byProperty.values())
+        .map((scores) => Math.round(average(scores) * 10) / 10)
+        .filter((score) => Number.isFinite(score));
+
+      if (peerScores.length === 0) return null;
+      return {
+        score: Math.round(average(peerScores)),
+        sampleSize: peerScores.length,
+        peerScores,
+      };
+    };
+
+    const [zip, city, state] = await Promise.all([
+      computeLevel({ zipCode: propertyContext.zipCode }),
+      computeLevel({ city: propertyContext.city, state: propertyContext.state }),
+      computeLevel({ state: propertyContext.state }),
+    ]);
+
+    const percentileBase = zip?.peerScores || city?.peerScores || state?.peerScores || [];
+    const percentile =
+      percentileBase.length > 0
+        ? clamp(
+            Math.round(
+              (percentileBase.filter((peerScore) => homeScore >= peerScore).length / Math.max(percentileBase.length, 1)) * 100
+            ),
+            1,
+            99
+          )
+        : null;
+
+    const sources: HomeScoreBenchmarkItemDTO[] = [
+      {
+        key: 'ZIP',
+        label: 'ZIP average',
+        score: zip?.score ?? 0,
+        sampleSize: zip?.sampleSize ?? null,
+        available: Boolean(zip),
+      },
+      {
+        key: 'CITY',
+        label: 'City average',
+        score: city?.score ?? 0,
+        sampleSize: city?.sampleSize ?? null,
+        available: Boolean(city),
+      },
+      {
+        key: 'STATE',
+        label: 'State average',
+        score: state?.score ?? 0,
+        sampleSize: state?.sampleSize ?? null,
+        available: Boolean(state),
+      },
+      {
+        key: 'TOP_PERCENTILE',
+        label: 'Top percentile homes',
+        score:
+          percentileBase.length > 0
+            ? Math.round(
+                [...percentileBase].sort((a, b) => a - b)[Math.max(0, Math.floor(percentileBase.length * 0.8) - 1)] || homeScore
+              )
+            : 0,
+        sampleSize: percentileBase.length || null,
+        available: percentileBase.length > 0,
+      },
+    ];
+
+    const strongestSource = sources.find((source) => source.available);
+    const interpretation = strongestSource
+      ? homeScore >= strongestSource.score
+        ? `This home is currently above the ${strongestSource.label.toLowerCase()} benchmark.`
+        : `This home is currently below the ${strongestSource.label.toLowerCase()} benchmark, with clear upside from improvement actions.`
+      : empty.interpretation;
+
+    return {
+      thisHomeScore: Math.round(homeScore),
+      percentile,
+      sources,
+      interpretation,
+    };
+  }
+
+  private buildImprovementPlan(
+    homeScore: number,
+    verificationOpportunities: HomeScoreVerificationOpportunityDTO[],
+    consistencyChecks: HomeScoreConsistencyCheckDTO[],
+    reasons: HomeScoreReasonDTO[],
+    financialExposure: HomeScoreFinancialExposureDTO
+  ): HomeScoreImprovementPlanDTO {
+    const actions: HomeScoreImprovementActionDTO[] = [];
+
+    for (const opportunity of verificationOpportunities) {
+      actions.push({
+        id: `improve-${opportunity.id}`,
+        title: opportunity.title,
+        projectedPointGain: opportunity.estimatedConfidenceGain === 'HIGH' ? 4 : opportunity.estimatedConfidenceGain === 'MEDIUM' ? 3 : 2,
+        projectedRiskReduction: Math.round(financialExposure.headlineMoneyAtRisk * 0.06),
+        estimatedCostToImprove: null,
+        estimatedConfidenceGain: opportunity.estimatedConfidenceGain,
+        effort: opportunity.verificationType === 'DOCUMENT' ? 'MEDIUM' : 'LOW',
+        urgency: opportunity.component === 'RISK' ? 'HIGH' : 'MEDIUM',
+        actionHref: opportunity.href,
+      });
+    }
+
+    for (const check of consistencyChecks.filter((item) => item.status !== 'PASS')) {
+      actions.push({
+        id: `improve-check-${check.id}`,
+        title: check.title,
+        projectedPointGain: check.status === 'FAIL' ? 5 : 3,
+        projectedRiskReduction: Math.round(financialExposure.headlineMoneyAtRisk * (check.status === 'FAIL' ? 0.08 : 0.04)),
+        estimatedCostToImprove: null,
+        estimatedConfidenceGain: check.status === 'FAIL' ? 'HIGH' : 'MEDIUM',
+        effort: 'MEDIUM',
+        urgency: check.status === 'FAIL' ? 'HIGH' : 'MEDIUM',
+        actionHref: check.actionHref,
+      });
+    }
+
+    for (const reason of reasons.filter((item) => item.impact === 'NEGATIVE')) {
+      actions.push({
+        id: `improve-reason-${reason.id}`,
+        title: reason.title,
+        projectedPointGain: clamp(Math.round(reason.weight / 28), 2, 6),
+        projectedRiskReduction: Math.round(financialExposure.headlineMoneyAtRisk * 0.05),
+        estimatedCostToImprove: null,
+        estimatedConfidenceGain: reason.confidence,
+        effort: 'MEDIUM',
+        urgency: reason.component === 'RISK' ? 'HIGH' : 'MEDIUM',
+        actionHref: reason.actionHref,
+      });
+    }
+
+    const deduped = actions.filter(
+      (action, index, array) =>
+        index === array.findIndex((other) => other.title.toLowerCase() === action.title.toLowerCase())
+    );
+    const prioritized = deduped
+      .sort((a, b) => b.projectedPointGain - a.projectedPointGain || (a.urgency === 'HIGH' ? -1 : 1))
+      .slice(0, 3);
+
+    const totalProjectedGain = prioritized.reduce((sum, action) => sum + action.projectedPointGain, 0);
+    const potentialMoneyAtRiskReduction = prioritized.reduce((sum, action) => sum + action.projectedRiskReduction, 0);
+
+    return {
+      actions: prioritized,
+      potentialNewScore: clamp(Math.round(homeScore + totalProjectedGain), 0, 100),
+      potentialMoneyAtRiskReduction,
+    };
+  }
+
+  private buildMethodology(): HomeScoreMethodologyDTO {
+    return {
+      summary:
+        'HomeScore combines health, risk, and financial signals into a 0-100 score intended to support planning and value protection decisions.',
+      inputsUsed: [
+        'Property profile details',
+        'Maintenance activity and overdue tasks',
+        'Risk assessment model outputs',
+        'Insurance, warranty, and utility cost signals',
+        'Timeline and documentation evidence',
+      ],
+      intendedUse:
+        'For homeowner planning, prioritization, and trust transparency. It is not a substitute for lender underwriting, appraisal, or code inspection.',
+      disclosures: [
+        'Some values are estimated using inferred or user-provided data.',
+        'Confidence ranges widen when key fields or documents are missing.',
+        'External source modules are integrated progressively and may be partially available by region.',
+      ],
+      methodologyHref: null,
+      dataSources: [
+        { key: 'CTC_ENGINE', label: 'Contract-to-Cozy analysis engine', status: 'AVAILABLE' },
+        { key: 'FEMA_FLOOD', label: 'FEMA flood risk', status: 'PLANNED' },
+        { key: 'CLIMATE', label: 'Climate/weather risk provider', status: 'PARTIAL' },
+        { key: 'PERMITS', label: 'County permit records', status: 'PARTIAL' },
+        { key: 'TAX', label: 'Property tax records', status: 'PARTIAL' },
+        { key: 'UTILITY_BENCH', label: 'Utility benchmark model', status: 'AVAILABLE' },
+        { key: 'INSURANCE_MODEL', label: 'Insurance adequacy model', status: 'AVAILABLE' },
+      ],
+    };
+  }
+
   private async getHealthScore(propertyId: string): Promise<{
     health: HealthScoreResult;
     lastUpdatedAt: string;
@@ -1026,20 +2011,54 @@ export class HomeScoreReportService {
   }
 
   private async build(propertyId: string, userId: string, weeks: number): Promise<HomeScoreBuildResult> {
-    await this.assertPropertyAccess(propertyId, userId);
+    const propertyContext = await this.assertPropertyAccess(propertyId, userId);
 
-    const [healthResult, riskReportOrQueued, financialSummary, scoreSummary, qualitySignals] = await Promise.all([
+    const [healthResult, riskReportOrQueued, financialSummary, scoreSummary, qualitySignals, homeEvents, doNothingRuns] = await Promise.all([
       this.getHealthScore(propertyId),
       RiskAssessmentService.getOrCreateRiskReport(propertyId),
       this.financialService.getFinancialEfficiencySummary(propertyId),
       getPropertyScoreSnapshotSummary(propertyId, userId, weeks),
       this.getPropertyQualitySignals(propertyId),
+      prisma.homeEvent.findMany({
+        where: { propertyId },
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+        take: 60,
+        select: {
+          id: true,
+          type: true,
+          occurredAt: true,
+          title: true,
+          summary: true,
+          createdById: true,
+          documents: {
+            select: { id: true },
+            take: 2,
+          },
+        },
+      }),
+      prisma.doNothingSimulationRun.findMany({
+        where: {
+          propertyId,
+          status: 'READY',
+        },
+        orderBy: { computedAt: 'desc' },
+        take: 8,
+        select: {
+          horizonMonths: true,
+          expectedCostDeltaCentsMin: true,
+          expectedCostDeltaCentsMax: true,
+          nextSteps: true,
+        },
+      }),
     ]);
 
     const healthScore = Math.round((healthResult.health.totalScore / Math.max(healthResult.health.maxPotentialScore || 100, 1)) * 100);
 
     const riskReportReady = riskReportOrQueued !== 'QUEUED';
     const riskExposure = riskReportReady ? asNumber((riskReportOrQueued as any).financialExposureTotal) : 0;
+    const riskDetails = riskReportReady && Array.isArray((riskReportOrQueued as any).details)
+      ? ((riskReportOrQueued as any).details as Array<Record<string, unknown>>)
+      : [];
     const riskScore = riskReportReady
       ? clamp(asNumber((riskReportOrQueued as any).riskScore), 0, 100)
       : scoreSummary.scores.RISK.latest?.score ?? 0;
@@ -1151,9 +2170,6 @@ export class HomeScoreReportService {
         actionHref: `/dashboard/properties/${propertyId}/risk-assessment`,
       });
     } else {
-      const riskDetails = Array.isArray((riskReportOrQueued as any).details)
-        ? ((riskReportOrQueued as any).details as Array<Record<string, unknown>>)
-        : [];
       const elevatedCount = riskDetails.filter((detail) =>
         ['HIGH', 'CRITICAL', 'ELEVATED'].includes(String(detail.riskLevel || '').toUpperCase())
       ).length;
@@ -1323,9 +2339,151 @@ export class HomeScoreReportService {
     const fieldFacts = this.buildFieldFacts(propertyId, qualitySignals, components);
     const changeLog = this.buildChangeLog(scoreSummary, correctionHistory);
 
+    const uncertainty: HomeScoreUncertaintyDTO = {
+      scoreRangeLow,
+      scoreRangeHigh,
+      riskExposureRangeLow,
+      riskExposureRangeHigh,
+      accuracyScore,
+      detail:
+        accuracyScore >= 75
+          ? 'Score range is tight because profile and evidence quality are strong.'
+          : 'Score range is wider due to missing profile inputs or unverified evidence.',
+    };
+
+    const timeline = this.buildTimeline(
+      propertyId,
+      {
+        yearBuilt: propertyContext.yearBuilt,
+        createdAt: propertyContext.createdAt,
+      },
+      homeEvents
+    );
+    const trustAndVerification = this.buildTrustAndVerification(
+      overallConfidence,
+      verificationLadder,
+      qualitySignals,
+      timeline.events,
+      uncertainty
+    );
+    const systemHealth = this.buildSystemHealth(
+      qualitySignals,
+      riskDetails,
+      qualitySignals.evidenceDocumentCount > 0
+    );
+    const financialExposure = this.deriveFinancialExposure(
+      riskExposure,
+      uncertainty,
+      riskDetails,
+      doNothingRuns.map((run) => ({
+        horizonMonths: run.horizonMonths,
+        expectedCostDeltaCentsMin: run.expectedCostDeltaCentsMin ?? null,
+        expectedCostDeltaCentsMax: run.expectedCostDeltaCentsMax ?? null,
+        nextSteps: run.nextSteps ?? null,
+      }))
+    );
+    const scoreDrivers: HomeScoreDriverDTO[] = sortedReasons
+      .map((reason) => {
+        const baseImpact = clamp(Math.round(reason.weight / 12), 0, 15);
+        const scoreImpact =
+          reason.impact === 'NEGATIVE' ? -Math.max(1, baseImpact) : reason.impact === 'POSITIVE' ? Math.max(1, baseImpact) : 0;
+        const provenance: HomeScoreProvenanceBadge =
+          reason.provenance === 'SYSTEM_COMPUTED'
+            ? 'VERIFIED'
+            : reason.provenance === 'USER_STATED'
+            ? 'USER_REPORTED'
+            : 'INFERRED';
+        return {
+          id: reason.id,
+          title: reason.title,
+          explanation: reason.detail,
+          scoreImpact,
+          financialImpact:
+            reason.component === 'RISK'
+              ? Math.round(riskExposure * 0.14)
+              : reason.component === 'FINANCIAL'
+              ? Math.round(financialExposure.headlineMoneyAtRisk * 0.08)
+              : null,
+          confidence: reason.confidence,
+          provenance,
+          actionHref: reason.actionHref,
+        };
+      })
+      .sort((a, b) => Math.abs(b.scoreImpact) - Math.abs(a.scoreImpact))
+      .slice(0, 6);
+
+    const integrityChecks: HomeScoreIntegrityCheckItemDTO[] = consistencyChecks.map((check) => ({
+      id: check.id,
+      title: check.title,
+      status: check.status,
+      detail: check.detail,
+      remediation: check.status === 'PASS' ? null : 'Resolve this item to improve report consistency and confidence.',
+      actionHref: check.actionHref,
+    }));
+
+    const benchmarks = await this.buildBenchmarks(propertyId, homeScore, {
+      zipCode: propertyContext.zipCode,
+      city: propertyContext.city,
+      state: propertyContext.state,
+    });
+
+    const improvementPlan = this.buildImprovementPlan(
+      homeScore,
+      verificationOpportunities,
+      consistencyChecks,
+      sortedReasons,
+      financialExposure
+    );
+    const methodology = this.buildMethodology();
+    const reportGrade = scoreGrade(homeScore);
+    const valueProtectionScore = Math.round(clamp(healthScore * 0.55 + riskScore * 0.45, 0, 100));
+    const generatedAt = new Date();
+    const generatedAtIso = generatedAt.toISOString();
+    const ownerName = formatPersonName(
+      propertyContext.homeownerProfile?.user?.firstName ?? null,
+      propertyContext.homeownerProfile?.user?.lastName ?? null
+    );
+    const reportId = `HSR-${toIsoDate(generatedAt).replace(/-/g, '')}-${propertyId.slice(0, 8).toUpperCase()}`;
+    const reportMeta: HomeScoreReportMetaDTO = {
+      reportTitle: 'Contract-to-Cozy Certified HomeScore Report',
+      propertyAddress: formatAddress([
+        propertyContext.address,
+        propertyContext.city,
+        propertyContext.state,
+        propertyContext.zipCode,
+      ]),
+      reportId,
+      generatedDate: generatedAtIso,
+      preparedFor: ownerName || null,
+      ownerName: ownerName || null,
+      dataCoveragePercentage: trustAndVerification.dataCoveragePct,
+      verificationStatusSummary:
+        trustAndVerification.verifiedPct >= 55
+          ? 'Verification status: strong evidence coverage'
+          : 'Verification status: mixed evidence quality',
+      confidenceLevel: overallConfidence,
+      reportMode: 'HOMEOWNER',
+      reportVersion: '2.0',
+      gradeMapping: HOME_SCORE_GRADE_MAPPING,
+    };
+
+    const executiveSummary: HomeScoreExecutiveSummaryDTO = {
+      homeScore,
+      homeScoreMax: 100,
+      grade: reportGrade.grade,
+      ratingTier: reportGrade.ratingTier,
+      confidenceLevel: overallConfidence,
+      valueProtectionScore,
+      moneyAtRiskHeadline: financialExposure.headlineMoneyAtRisk,
+      moneyAtRiskHorizonMonths: 36,
+      scoreDeltaFromPreviousPeriod: deltaFromPreviousWeek,
+      trendStatus: trend.length > 1 ? 'AVAILABLE' : 'INSUFFICIENT_HISTORY',
+    };
+    const radar = this.buildRadar(components, qualitySignals, financialSummary.status);
+
     const report: HomeScoreReportDTO = {
       propertyId,
-      generatedAt: new Date().toISOString(),
+      generatedAt: generatedAtIso,
       homeScore,
       scoreBand: scoreBand(homeScore),
       deltaFromPreviousWeek,
@@ -1339,19 +2497,21 @@ export class HomeScoreReportService {
       fieldFacts,
       correctionHistory,
       changeLog,
-      uncertainty: {
-        scoreRangeLow,
-        scoreRangeHigh,
-        riskExposureRangeLow,
-        riskExposureRangeHigh,
-        accuracyScore,
-        detail:
-          accuracyScore >= 75
-            ? 'Score range is tight because profile and evidence quality are strong.'
-            : 'Score range is wider due to missing profile inputs or unverified evidence.',
-      },
+      uncertainty,
       nextBestAction,
       trend,
+      reportMeta,
+      executiveSummary,
+      radar,
+      scoreDrivers,
+      timeline,
+      systemHealth,
+      financialExposure,
+      trustAndVerification,
+      integrityChecks,
+      benchmarks,
+      improvementPlan,
+      methodology,
     };
 
     return {
@@ -1441,6 +2601,28 @@ export class HomeScoreReportService {
         submittedBy: userId,
       },
     };
+  }
+
+  async trackEvent(propertyId: string, userId: string, input: HomeScoreEventInput) {
+    await this.assertPropertyAccess(propertyId, userId);
+
+    const eventName = String(input.event || 'unknown').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 80);
+    const section = input.section ? String(input.section).slice(0, 80) : null;
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: `HOME_SCORE_${eventName || 'UNKNOWN'}`,
+        entityType: 'PROPERTY',
+        entityId: propertyId,
+        newValues: {
+          section,
+          metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return { ok: true };
   }
 
   async refresh(propertyId: string, userId: string, weeks = 26) {

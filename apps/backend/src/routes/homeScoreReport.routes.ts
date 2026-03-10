@@ -11,6 +11,7 @@ import {
   getHomeScoreReport,
   refreshHomeScoreReport,
   submitHomeScoreCorrection,
+  trackHomeScoreEvent,
 } from '../controllers/homeScoreReport.controller';
 
 const router = Router();
@@ -32,6 +33,12 @@ const correctionBodySchema = z.object({
   title: z.string().min(1).max(180).optional(),
   detail: z.string().min(6).max(2000),
   proposedValue: z.string().max(500).optional(),
+});
+
+const trackEventBodySchema = z.object({
+  event: z.string().min(1).max(80),
+  section: z.string().min(1).max(80).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 router.use(apiRateLimiter);
@@ -77,6 +84,13 @@ router.post(
   propertyAuthMiddleware,
   validateBody(correctionBodySchema),
   submitHomeScoreCorrection
+);
+
+router.post(
+  '/properties/:propertyId/home-score/events',
+  propertyAuthMiddleware,
+  validateBody(trackEventBodySchema),
+  trackHomeScoreEvent
 );
 
 export default router;

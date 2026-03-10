@@ -358,6 +358,15 @@ export type HomeScoreConsistencyStatus = 'PASS' | 'WARN' | 'FAIL';
 export type HomeScoreConsistencySeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 export type HomeScoreVerificationStatus = 'VERIFIED' | 'REVIEW_NEEDED' | 'UNVERIFIED' | 'UNKNOWN';
 export type HomeScoreCorrectionStatus = 'SUBMITTED' | 'APPLIED' | 'REJECTED';
+export type HomeScoreGrade = 'A' | 'B' | 'C' | 'D' | 'F';
+export type HomeScoreRatingTier = 'EXCELLENT' | 'STRONG' | 'STABLE' | 'MODERATE_RISK' | 'HIGH_RISK';
+export type HomeScoreProvenanceBadge =
+  | 'VERIFIED'
+  | 'DOCUMENT_BACKED'
+  | 'PUBLIC_RECORD'
+  | 'USER_REPORTED'
+  | 'INFERRED'
+  | 'MISSING';
 
 export interface HomeScoreComponent {
   key: HomeScoreComponentKey;
@@ -456,6 +465,193 @@ export interface HomeScoreUncertainty {
   detail: string;
 }
 
+export interface HomeScoreGradeBandConfig {
+  min: number;
+  max: number;
+  grade: HomeScoreGrade;
+  ratingTier: HomeScoreRatingTier;
+  label: string;
+}
+
+export interface HomeScoreReportMeta {
+  reportTitle: string;
+  propertyAddress: string;
+  reportId: string;
+  generatedDate: string;
+  preparedFor: string | null;
+  ownerName: string | null;
+  dataCoveragePercentage: number;
+  verificationStatusSummary: string;
+  confidenceLevel: HomeScoreConfidence;
+  reportMode: 'HOMEOWNER';
+  reportVersion: string;
+  gradeMapping: HomeScoreGradeBandConfig[];
+}
+
+export interface HomeScoreExecutiveSummary {
+  homeScore: number;
+  homeScoreMax: number;
+  grade: HomeScoreGrade;
+  ratingTier: HomeScoreRatingTier;
+  confidenceLevel: HomeScoreConfidence;
+  valueProtectionScore: number;
+  moneyAtRiskHeadline: number;
+  moneyAtRiskHorizonMonths: number;
+  scoreDeltaFromPreviousPeriod: number | null;
+  trendStatus: 'AVAILABLE' | 'INSUFFICIENT_HISTORY';
+}
+
+export interface HomeScoreRadarAxis {
+  key: 'MAINTENANCE' | 'INSURANCE' | 'SAFETY' | 'FINANCIAL' | 'WEATHER';
+  label: string;
+  score: number;
+  confidence: HomeScoreConfidence;
+  estimated: boolean;
+}
+
+export interface HomeScoreRadar {
+  axes: HomeScoreRadarAxis[];
+  weakestArea: string;
+  strongestArea: string;
+  explanation: string;
+}
+
+export interface HomeScoreDriver {
+  id: string;
+  title: string;
+  explanation: string;
+  scoreImpact: number;
+  financialImpact: number | null;
+  confidence: HomeScoreConfidence;
+  provenance: HomeScoreProvenanceBadge;
+  actionHref?: string;
+}
+
+export interface HomeScoreTimelineEvent {
+  id: string;
+  title: string;
+  summary: string | null;
+  eventType: string;
+  occurredAt: string | null;
+  year: number | null;
+  datePrecision: 'DATE' | 'YEAR';
+  provenance: HomeScoreProvenanceBadge;
+  verified: boolean;
+}
+
+export interface HomeScoreSystemHealthRow {
+  key:
+    | 'ROOF'
+    | 'HVAC'
+    | 'WATER_HEATER'
+    | 'PLUMBING'
+    | 'ELECTRICAL'
+    | 'SAFETY_SYSTEMS'
+    | 'EXTERIOR_ENVELOPE'
+    | 'FOUNDATION_STRUCTURE';
+  label: string;
+  grade: HomeScoreGrade;
+  statusLabel: string;
+  ageYears: number | null;
+  serviceWindow: string | null;
+  verification: HomeScoreProvenanceBadge;
+  nextRecommendedAction: string;
+  projectedRiskHorizonMonths: number | null;
+  isPlaceholder: boolean;
+}
+
+export interface HomeScoreFinancialExposureLine {
+  id: string;
+  label: string;
+  exposure: number;
+  confidence: HomeScoreConfidence;
+  provenance: HomeScoreProvenanceBadge;
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+export interface HomeScoreFinancialExposure {
+  currency: 'USD';
+  headlineMoneyAtRisk: number;
+  horizon12Months: number;
+  horizon3Years: number;
+  horizon5Years: number;
+  confidenceRangeLow: number | null;
+  confidenceRangeHigh: number | null;
+  lines: HomeScoreFinancialExposureLine[];
+  whatReducesRisk: Array<{
+    title: string;
+    detail: string;
+  }>;
+}
+
+export interface HomeScoreTrustAndVerification {
+  dataCoveragePct: number;
+  verifiedPct: number;
+  estimatedPct: number;
+  userReportedPct: number;
+  publicRecordPct: number;
+  documentBackedPct: number;
+  confidenceScore: number;
+  confidenceLevel: HomeScoreConfidence;
+  badgeTaxonomy: HomeScoreProvenanceBadge[];
+  explanation: string;
+}
+
+export interface HomeScoreIntegrityCheckItem {
+  id: string;
+  title: string;
+  status: HomeScoreConsistencyStatus;
+  detail: string;
+  remediation: string | null;
+  actionHref?: string;
+}
+
+export interface HomeScoreBenchmarkItem {
+  key: 'NEIGHBORHOOD' | 'ZIP' | 'CITY' | 'STATE' | 'TOP_PERCENTILE' | 'PLATFORM_COMPARABLES';
+  label: string;
+  score: number;
+  sampleSize: number | null;
+  available: boolean;
+}
+
+export interface HomeScoreBenchmarks {
+  thisHomeScore: number;
+  percentile: number | null;
+  sources: HomeScoreBenchmarkItem[];
+  interpretation: string;
+}
+
+export interface HomeScoreImprovementAction {
+  id: string;
+  title: string;
+  projectedPointGain: number;
+  projectedRiskReduction: number;
+  estimatedCostToImprove: number | null;
+  estimatedConfidenceGain: HomeScoreConfidence;
+  effort: 'LOW' | 'MEDIUM' | 'HIGH';
+  urgency: 'LOW' | 'MEDIUM' | 'HIGH';
+  actionHref?: string;
+}
+
+export interface HomeScoreImprovementPlan {
+  actions: HomeScoreImprovementAction[];
+  potentialNewScore: number;
+  potentialMoneyAtRiskReduction: number;
+}
+
+export interface HomeScoreMethodology {
+  summary: string;
+  inputsUsed: string[];
+  intendedUse: string;
+  disclosures: string[];
+  methodologyHref: string | null;
+  dataSources: Array<{
+    key: string;
+    label: string;
+    status: 'AVAILABLE' | 'PARTIAL' | 'PLANNED';
+  }>;
+}
+
 export interface HomeScoreReport {
   propertyId: string;
   generatedAt: string;
@@ -483,6 +679,26 @@ export interface HomeScoreReport {
     href?: string;
   } | null;
   trend: HomeScoreTrendPoint[];
+  reportMeta: HomeScoreReportMeta;
+  executiveSummary: HomeScoreExecutiveSummary;
+  radar: HomeScoreRadar;
+  scoreDrivers: HomeScoreDriver[];
+  timeline: {
+    events: HomeScoreTimelineEvent[];
+    emptyState: {
+      title: string;
+      detail: string;
+      ctaLabel: string;
+      ctaHref: string;
+    } | null;
+  };
+  systemHealth: HomeScoreSystemHealthRow[];
+  financialExposure: HomeScoreFinancialExposure;
+  trustAndVerification: HomeScoreTrustAndVerification;
+  integrityChecks: HomeScoreIntegrityCheckItem[];
+  benchmarks: HomeScoreBenchmarks;
+  improvementPlan: HomeScoreImprovementPlan;
+  methodology: HomeScoreMethodology;
 }
 
 // ============================================================================

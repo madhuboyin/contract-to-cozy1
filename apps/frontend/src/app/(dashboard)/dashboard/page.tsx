@@ -44,6 +44,44 @@ import MobileHomeBuyerDashboard from './components/MobileHomeBuyerDashboard';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 
+const DEFAULT_LOCAL_UPDATES: LocalUpdate[] = [
+  {
+    id: 'demo-local-update-verizon',
+    title: 'Verizon Fios owner offer',
+    shortDescription: 'Check current fiber pricing and owner discounts available in your area.',
+    category: 'INTERNET',
+    sourceName: 'Verizon Fios',
+    isSponsored: true,
+    ctaText: 'View offer',
+    ctaUrl: 'https://www.verizon.com/home/fios/',
+  },
+  {
+    id: 'demo-local-update-tmobile',
+    title: 'T-Mobile 5G Home promotion',
+    shortDescription: 'Compare 5G home internet promotions against your current monthly bill.',
+    category: 'INTERNET',
+    sourceName: 'T-Mobile',
+    isSponsored: true,
+    ctaText: 'Compare plans',
+    ctaUrl: 'https://www.t-mobile.com/home-internet',
+  },
+  {
+    id: 'demo-local-update-insurance',
+    title: 'Annual insurance savings check',
+    shortDescription: 'Run a quick annual premium check to spot coverage and deductible optimization.',
+    category: 'INSURANCE',
+    sourceName: 'ContractToCozy',
+    isSponsored: false,
+    ctaText: 'Review now',
+    ctaUrl: '/dashboard/insurance',
+  },
+];
+
+function withLocalUpdatesFallback(updates?: LocalUpdate[] | null): LocalUpdate[] {
+  if (Array.isArray(updates) && updates.length > 0) return updates;
+  return DEFAULT_LOCAL_UPDATES;
+}
+
 // --- START PHASE 1: DATA CONSOLIDATION TYPES ---
 
 export interface UrgentActionItem {
@@ -319,11 +357,8 @@ export default function DashboardPage() {
   }, [userLoading, user, redirectChecked]);
 
   useEffect(() => {
-    const effectiveSegment = homeownerSegment ?? user?.segment;
-    const shouldLoadLocalUpdates = effectiveSegment !== 'HOME_BUYER';
-
-    if (!selectedPropertyId || !shouldLoadLocalUpdates) {
-      setLocalUpdates([]);
+    if (!selectedPropertyId) {
+      setLocalUpdates(withLocalUpdatesFallback([]));
       return;
     }
 
@@ -331,15 +366,15 @@ export default function DashboardPage() {
       .getLocalUpdates(selectedPropertyId)
       .then((res) => {
         if (res.success) {
-          setLocalUpdates(res.data.updates || []);
+          setLocalUpdates(withLocalUpdatesFallback(res.data.updates || []));
         } else {
-          setLocalUpdates([]);
+          setLocalUpdates(withLocalUpdatesFallback([]));
         }
       })
       .catch(() => {
-        setLocalUpdates([]);
+        setLocalUpdates(withLocalUpdatesFallback([]));
       });
-  }, [selectedPropertyId, user?.segment, homeownerSegment]);
+  }, [selectedPropertyId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -468,8 +503,13 @@ export default function DashboardPage() {
               updates={localUpdates}
               variant="ticker"
               onDismiss={async (id) => {
-                setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
-                await api.dismissLocalUpdate(id);
+                setLocalUpdates((prev) => {
+                  const next = prev.filter((u) => u.id !== id);
+                  return next.length > 0 ? next : DEFAULT_LOCAL_UPDATES;
+                });
+                if (!id.startsWith('demo-local-update-')) {
+                  await api.dismissLocalUpdate(id);
+                }
                 const toastRef = toast({
                   title: 'Offer dismissed',
                   description: 'You can manage offers in Settings.',

@@ -1,6 +1,10 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
-import { HomeScoreCorrectionInput, HomeScoreReportService } from '../services/homeScoreReport.service';
+import {
+  HomeScoreCorrectionInput,
+  HomeScoreEventInput,
+  HomeScoreReportService,
+} from '../services/homeScoreReport.service';
 
 const service = new HomeScoreReportService();
 
@@ -126,6 +130,26 @@ export async function submitHomeScoreCorrection(req: CustomRequest, res: Respons
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to submit home score correction.',
+    });
+  }
+}
+
+export async function trackHomeScoreEvent(req: CustomRequest, res: Response) {
+  try {
+    const propertyId = req.params.propertyId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+
+    const payload = (req.body ?? {}) as HomeScoreEventInput;
+    const result = await service.trackEvent(propertyId, userId, payload);
+    return res.status(201).json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('Error tracking home score event:', error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to track home score event.',
     });
   }
 }
