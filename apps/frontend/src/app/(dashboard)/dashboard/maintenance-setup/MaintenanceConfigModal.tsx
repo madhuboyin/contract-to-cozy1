@@ -10,7 +10,6 @@ import {
   ServiceCategory,
   Property,
   MaintenanceTaskPriority,
-  MaintenanceTaskServiceCategory, // Add service category type for API
 } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,6 +43,7 @@ import { format, parseISO } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api/client'; 
 import { Badge } from '@/components/ui/badge';
+import { isMaintenanceServiceCategory } from '@/lib/config/serviceCategoryMapping';
 
 // Manually define options
 const frequencyOptions: RecurrenceFrequency[] = [
@@ -388,14 +388,8 @@ export function MaintenanceConfigModal({
           }
 
           // 🔑 Map category if valid
-          const validMaintenanceCategories = [
-            'HVAC', 'PLUMBING', 'ELECTRICAL', 'HANDYMAN', 
-            'LANDSCAPING', 'CLEANING', 'PEST_CONTROL', 
-            'LOCKSMITH', 'ROOFING', 'APPLIANCE_REPAIR'
-          ];
-          
-          const mappedCategory = category && validMaintenanceCategories.includes(category)
-            ? (category as any)
+          const mappedCategory = category && isMaintenanceServiceCategory(category)
+            ? category
             : undefined;
 
           console.log('🔍 Orchestration Mode - Creating PropertyMaintenanceTask:', {
@@ -438,16 +432,9 @@ export function MaintenanceConfigModal({
             }
             
             // Format data for PropertyMaintenanceTask API
-            // 🔑 Map ServiceCategory to MaintenanceTaskServiceCategory
-            // Only certain categories are valid for PropertyMaintenanceTask
-            const validMaintenanceCategories: MaintenanceTaskServiceCategory[] = [
-              'HVAC', 'PLUMBING', 'ELECTRICAL', 'HANDYMAN', 
-              'LANDSCAPING', 'CLEANING', 'PEST_CONTROL', 
-              'LOCKSMITH', 'ROOFING', 'APPLIANCE_REPAIR'
-            ];
-            
-            const mappedCategory = category && validMaintenanceCategories.includes(category as MaintenanceTaskServiceCategory)
-              ? (category as MaintenanceTaskServiceCategory)
+            // Only categories valid for PropertyMaintenanceTask are forwarded.
+            const mappedCategory = category && isMaintenanceServiceCategory(category)
+              ? category
               : undefined;
             
             const createTaskData = {

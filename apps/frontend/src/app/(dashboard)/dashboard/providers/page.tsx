@@ -9,10 +9,14 @@ import { api } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Info, Loader2, MapPin, Search, Star } from 'lucide-react';
-import { Provider, ServiceCategory } from '@/types';
+import { Provider } from '@/types';
 import { cn } from '@/lib/utils';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import {
+  normalizeProviderCategoryForSearch,
+  PROVIDER_SEARCH_CATEGORY_OPTIONS,
+} from '@/lib/config/serviceCategoryMapping';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -30,15 +34,6 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
 const DEFAULT_RADIUS = 25;
-const CATEGORIES: { value: ServiceCategory; label: string; icon?: string }[] = [
-  { value: 'INSPECTION', label: 'Home Inspection', icon: 'INSPECTION' },
-  { value: 'HANDYMAN', label: 'Handyman Services', icon: 'HANDYMAN' },
-  { value: 'PLUMBING', label: 'Plumbing', icon: 'PLUMBING' },
-  { value: 'ELECTRICAL', label: 'Electrical', icon: 'ELECTRICAL' },
-  { value: 'HVAC', label: 'HVAC', icon: 'HVAC' },
-  { value: 'CLEANING', label: 'Cleaning', icon: 'CLEANING' },
-  { value: 'LANDSCAPING', label: 'Landscaping', icon: 'LANDSCAPING' },
-];
 
 interface ServiceFilterProps {
   onFilterChange: (filters: { zipCode: string; category: string | undefined }) => void;
@@ -55,9 +50,11 @@ const ServiceFilter = React.memo(
 
     const displayCategories = useMemo(() => {
       if (isHomeBuyer) {
-        return CATEGORIES.filter((category) => ['INSPECTION', 'HANDYMAN', 'CLEANING'].includes(category.value));
+        return PROVIDER_SEARCH_CATEGORY_OPTIONS.filter((category) =>
+          ['INSPECTION', 'HANDYMAN', 'CLEANING'].includes(category.value)
+        );
       }
-      return CATEGORIES;
+      return PROVIDER_SEARCH_CATEGORY_OPTIONS;
     }, [isHomeBuyer]);
 
     const handleSearch = useCallback(
@@ -285,7 +282,7 @@ export default function ProvidersPage() {
   const { user, loading } = useAuth();
   const searchParams = useSearchParams();
 
-  const defaultCategory = searchParams.get('category') || searchParams.get('service') || undefined;
+  const defaultCategory = normalizeProviderCategoryForSearch(searchParams.get('category') || searchParams.get('service'));
   const insightContext = searchParams.get('insightFactor') || undefined;
   const targetPropertyId = searchParams.get('propertyId') || undefined;
   const predictionId = searchParams.get('predictionId') || undefined;

@@ -30,6 +30,15 @@ import {
   X,
 } from 'lucide-react';
 import { titleCase, titleCaseCategory } from '@/lib/utils/string';
+import {
+  inferApplianceTypeFromName as inferApplianceType,
+  formatApplianceTypeLabel as formatApplianceType,
+  inferInventoryCategoryFromLookup as inferCategoryFromLookup,
+  INSTALL_YEAR_CATEGORIES,
+  INVENTORY_ITEM_CATEGORIES,
+  isMajorApplianceName,
+  PURCHASE_DATE_CATEGORIES,
+} from '@/lib/config/inventoryConfig';
 
 
 import {
@@ -51,87 +60,9 @@ import {
 import { listInventoryItemRecalls } from '../../properties/[id]/recalls/recallsApi';
 import { verifyItem } from '../verification/verificationApi';
 
-const CATEGORIES: InventoryItemCategory[] = [
-  'APPLIANCE',
-  'HVAC',
-  'PLUMBING',
-  'ELECTRICAL',
-  'ROOF_EXTERIOR',
-  'SAFETY',
-  'SMART_HOME',
-  'FURNITURE',
-  'ELECTRONICS',
-  'OTHER',
-];
-
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-/**
- * Major appliance types managed from Property Details page
- */
-const MAJOR_APPLIANCE_KEYWORDS = [
-  'dishwasher',
-  'refrigerator',
-  'fridge',
-  'freezer',
-  'oven',
-  'range',
-  'stove',
-  'cooktop',
-  'washer',
-  'dryer',
-  'laundry',
-  'microwave',
-  'water softener',
-];
-
-/**
- * Map of keywords to canonical appliance types
- */
-const KEYWORD_TO_TYPE: Record<string, string> = {
-  'dishwasher': 'DISHWASHER',
-  'refrigerator': 'REFRIGERATOR',
-  'fridge': 'REFRIGERATOR',
-  'freezer': 'REFRIGERATOR',
-  'oven': 'OVEN_RANGE',
-  'range': 'OVEN_RANGE',
-  'stove': 'OVEN_RANGE',
-  'cooktop': 'OVEN_RANGE',
-  'washer': 'WASHER_DRYER',
-  'dryer': 'WASHER_DRYER',
-  'laundry': 'WASHER_DRYER',
-  'microwave': 'MICROWAVE_HOOD',
-  'water softener': 'WATER_SOFTENER',
-  'softener': 'WATER_SOFTENER',
-};
-
-/**
- * Infer major appliance type from name (client-side version)
- */
-function inferApplianceType(name: string): string | null {
-  const normalized = name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
-  
-  for (const [keyword, type] of Object.entries(KEYWORD_TO_TYPE)) {
-    if (normalized.includes(keyword)) {
-      return type;
-    }
-  }
-  return null;
-}
-
-/**
- * Format appliance type for display
- */
-function formatApplianceType(type: string): string {
-  return type.replace(/_/g, ' ').toLowerCase();
-}
-/**
- * Categories that use Install Year (year picker) vs Purchase Date (date picker)
- */
-const INSTALL_YEAR_CATEGORIES: InventoryItemCategory[] = ['APPLIANCE'];
-const PURCHASE_DATE_CATEGORIES: InventoryItemCategory[] = ['ELECTRONICS', 'FURNITURE', 'OTHER'];
 
 /**
  * Check if an item is managed from Property Details page
@@ -141,13 +72,6 @@ function isPropertyManagedAppliance(item: InventoryItem | null): boolean {
   return item.sourceHash?.startsWith('property_appliance::') ?? false;
 }
 
-/**
- * Check if a name matches a major appliance type
- */
-function isMajorApplianceName(name: string): boolean {
-  const normalized = name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
-  return MAJOR_APPLIANCE_KEYWORDS.some(keyword => normalized.includes(keyword));
-}
 
 /**
  * Convert DateTime to year number for display
@@ -208,29 +132,6 @@ function unwrapOcrResponse(raw: any): any {
   if (!raw || typeof raw !== 'object') return null;
   if ('success' in raw && 'data' in raw) return (raw as any).data;
   return raw;
-}
-
-/**
- * Best-effort mapping from lookup category hint / name into your InventoryItemCategory enum.
- * Keep this conservative; user can still override.
- */
-function inferCategoryFromLookup(lookup?: Partial<BarcodeLookupResult> | null): InventoryItemCategory {
-  const hint = String(lookup?.categoryHint || '').toLowerCase();
-  const name = String(lookup?.name || '').toLowerCase();
-  const t = `${hint} ${name}`;
-
-  if (t.includes('refrigerator') || t.includes('microwave') || t.includes('dishwasher') || t.includes('oven'))
-    return 'APPLIANCE';
-  if (t.includes('thermostat') || t.includes('hvac') || t.includes('furnace') || t.includes('air conditioner'))
-    return 'HVAC';
-  if (t.includes('smoke') || t.includes('carbon monoxide') || t.includes('detector') || t.includes('alarm'))
-    return 'SAFETY';
-  if (t.includes('tv') || t.includes('router') || t.includes('speaker') || t.includes('laptop') || t.includes('camera'))
-    return 'ELECTRONICS';
-  if (t.includes('sofa') || t.includes('chair') || t.includes('table') || t.includes('bed'))
-    return 'FURNITURE';
-
-  return 'OTHER';
 }
 
 function pct(n?: number) {
@@ -1213,7 +1114,7 @@ useEffect(() => {
                     }}
                     className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
                   >
-                    {CATEGORIES.map((c) => (
+                    {INVENTORY_ITEM_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
                         {titleCaseCategory(c)}
                       </option>

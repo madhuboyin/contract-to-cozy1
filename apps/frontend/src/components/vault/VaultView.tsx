@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { VaultAsset, VaultData, VaultServiceEntry } from '@/types';
+import { getCategoryDisplayLabel } from '@/lib/config/serviceCategoryMapping';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Badge catalogue — maps the badge key stored in unlockedBadges[] to display
@@ -63,23 +64,6 @@ const BADGE_CATALOGUE: Record<string, { label: string; description: string; icon
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function categoryLabel(cat: string): string {
-  const MAP: Record<string, string> = {
-    HVAC: 'HVAC',
-    PLUMBING: 'Plumbing',
-    ELECTRICAL: 'Electrical',
-    ROOFING: 'Roofing',
-    INSPECTION: 'Inspection',
-    HANDYMAN: 'Handyman',
-    LANDSCAPING: 'Landscaping',
-    CLEANING: 'Cleaning',
-    PEST_CONTROL: 'Pest Control',
-    APPLIANCE: 'Appliance',
-    ROOF_EXTERIOR: 'Roof / Exterior',
-  };
-  return MAP[cat] ?? cat.replace(/_/g, ' ');
-}
 
 function assetAge(asset: VaultAsset): string | null {
   const base = asset.installedOn || asset.purchasedOn;
@@ -318,7 +302,7 @@ function AssetCard({ asset }: { asset: VaultAsset }) {
         <div>
           <p className="font-semibold text-slate-900">{asset.name}</p>
           <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-            {categoryLabel(asset.category)}
+            {getCategoryDisplayLabel(asset.category)}
           </span>
         </div>
         <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
@@ -402,7 +386,7 @@ function TimelineEntry({ entry, isLast }: { entry: VaultServiceEntry; isLast: bo
       <div className={`pb-6 ${isLast ? '' : ''}`}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-            {categoryLabel(entry.category)}
+            {getCategoryDisplayLabel(entry.category)}
           </span>
           {date && (
             <span className="text-xs text-slate-400">{format(date, 'MMM d, yyyy')}</span>

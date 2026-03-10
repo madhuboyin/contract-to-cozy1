@@ -9,6 +9,7 @@ import {
   bulkDismissInventoryDrafts,
   updateInventoryDraft,
 } from '../../inventory/inventoryApi';
+import { ROOM_SCAN_CATEGORY_OPTIONS, type RoomScanCategoryOption } from '@/lib/config/inventoryConfig';
 
 type Props = {
   open: boolean;
@@ -22,18 +23,6 @@ type Props = {
 function safeArray(v: any): any[] {
   return Array.isArray(v) ? v : [];
 }
-
-const CATEGORY_OPTIONS = [
-  'APPLIANCE',
-  'ELECTRONICS',
-  'FURNITURE',
-  'HVAC',
-  'PLUMBING',
-  'SECURITY',
-  'TOOL',
-  'DOCUMENT',
-  'OTHER',
-] as const;
 
 export default function RoomScanModal({ open, onClose, propertyId, roomId, roomName, initialSessionId }: Props) {
   // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURNS
@@ -50,7 +39,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
   // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [editCategory, setEditCategory] = useState<string>('OTHER');
+  const [editCategory, setEditCategory] = useState<RoomScanCategoryOption>('OTHER');
 
   // Phase 3 placeholders (safe even if not used yet)
   const [scanImages, setScanImages] = useState<any[]>([]);
@@ -211,7 +200,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
   function beginEdit(d: any) {
     setEditingId(d.id);
     setEditName(String(d?.name || ''));
-    setEditCategory(String(d?.category || 'OTHER'));
+    setEditCategory(String(d?.category || 'OTHER') as RoomScanCategoryOption);
   }
 
   async function saveEdit(draftId: string) {
@@ -415,10 +404,10 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                                             <div className="text-xs uppercase tracking-wide opacity-60">Category</div>
                                             <select
                                               value={editCategory}
-                                              onChange={(e) => setEditCategory(e.target.value)}
+                                              onChange={(e) => setEditCategory(e.target.value as RoomScanCategoryOption)}
                                               className="mt-1 w-full text-sm bg-transparent outline-none"
                                             >
-                                              {CATEGORY_OPTIONS.map((c) => (
+                                              {ROOM_SCAN_CATEGORY_OPTIONS.map((c) => (
                                                 <option key={c} value={c}>
                                                   {c}
                                                 </option>

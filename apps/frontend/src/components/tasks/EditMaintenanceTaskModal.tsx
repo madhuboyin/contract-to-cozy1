@@ -35,6 +35,7 @@ import {
   UpdateMaintenanceTaskInput,
 } from '@/types';
 import { format, parseISO } from 'date-fns';
+import { MAINTENANCE_SERVICE_CATEGORY_OPTIONS } from '@/lib/config/serviceCategoryMapping';
 
 interface EditMaintenanceTaskModalProps {
   task: PropertyMaintenanceTask | null;
@@ -44,19 +45,6 @@ interface EditMaintenanceTaskModalProps {
 }
 
 const PRIORITY_OPTIONS: MaintenanceTaskPriority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
-
-const SERVICE_CATEGORY_OPTIONS: MaintenanceTaskServiceCategory[] = [
-  'HVAC',
-  'PLUMBING',
-  'ELECTRICAL',
-  'HANDYMAN',
-  'LANDSCAPING',
-  'CLEANING',
-  'PEST_CONTROL',
-  'LOCKSMITH',
-  'ROOFING',
-  'APPLIANCE_REPAIR',
-];
 
 const FREQUENCY_OPTIONS: MaintenanceTaskFrequency[] = [
   'MONTHLY',
@@ -254,7 +242,7 @@ export function EditMaintenanceTaskModal({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {SERVICE_CATEGORY_OPTIONS.map((category) => (
+                  {MAINTENANCE_SERVICE_CATEGORY_OPTIONS.map((category) => (
                     <SelectItem key={category} value={category}>
                       {category.replace('_', ' ')}
                     </SelectItem>

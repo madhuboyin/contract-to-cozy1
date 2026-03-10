@@ -4,7 +4,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, MaintenanceTaskServiceCategory, PropertyScoreSeries } from "@/types"; 
+import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, PropertyScoreSeries } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
@@ -22,6 +22,11 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import humanizeActionType from "@/lib/utils/humanize";
+import {
+    getMaintenanceServiceCategoryForSystemType,
+    getProviderCategoryForSystemType,
+    getSystemTypesForWarrantyCategory,
+} from "@/lib/config/serviceCategoryMapping";
 import {
     ActionPriorityRow,
     BottomSafeAreaReserve,
@@ -139,24 +144,6 @@ function buildRiskChangeItems(series: PropertyScoreSeries | undefined) {
 
     return changes.slice(0, 4);
 }
-
-// 🔑 NEW: Map system types to maintenance service categories
-const getServiceCategoryForAsset = (systemType: string): MaintenanceTaskServiceCategory => {
-    const categoryMap: Record<string, MaintenanceTaskServiceCategory> = {
-        'HVAC_FURNACE': 'HVAC',
-        'HVAC_HEAT_PUMP': 'HVAC',
-        'WATER_HEATER_TANK': 'PLUMBING',
-        'WATER_HEATER_TANKLESS': 'PLUMBING',
-        'ROOF_SHINGLE': 'ROOFING',
-        'ROOF_TILE_METAL': 'ROOFING',
-        'ELECTRICAL_PANEL_MODERN': 'ELECTRICAL',
-        'ELECTRICAL_PANEL_OLD': 'ELECTRICAL',
-        'SAFETY_SMOKE_CO_DETECTORS': 'HANDYMAN',
-        'MAJOR_APPLIANCE_FRIDGE': 'APPLIANCE_REPAIR',
-        'MAJOR_APPLIANCE_DISHWASHER': 'APPLIANCE_REPAIR',
-    };
-    return categoryMap[systemType] || 'HANDYMAN';
-};
 
 const displayLabel = (value?: string | null): string => humanizeActionType(value ?? "");
 
@@ -411,7 +398,7 @@ const AssetMatrixTable = ({
                     <Link href={{
                         pathname: '/dashboard/providers',
                         query: {
-                            category: getServiceCategoryForAsset(item.systemType),
+                            category: getProviderCategoryForSystemType(item.systemType),
                             insightFactor: item.assetName.replace(/_/g, ' '),
                             propertyId: propertyId
                         }
@@ -702,39 +689,9 @@ export default function RiskAssessmentPage() {
     const warrantiesBySystemType = new Map<string, any>();
     if (Array.isArray(activeWarranties)) {
         activeWarranties.forEach((warranty: any) => {
-            // Map warranty category to system types
-            if (warranty.category === 'HVAC') {
-                warrantiesBySystemType.set('HVAC_FURNACE', warranty);
-                warrantiesBySystemType.set('HVAC_HEAT_PUMP', warranty);
-            } else if (warranty.category === 'PLUMBING') {
-                warrantiesBySystemType.set('WATER_HEATER_TANK', warranty);
-                warrantiesBySystemType.set('WATER_HEATER_TANKLESS', warranty);
-            } else if (warranty.category === 'ELECTRICAL') {
-                warrantiesBySystemType.set('ELECTRICAL_PANEL', warranty);
-            } else if (warranty.category === 'ROOFING') {
-                warrantiesBySystemType.set('ROOF_SHINGLE', warranty);
-                warrantiesBySystemType.set('ROOF_TILE_METAL', warranty);
-            } else if (warranty.category === 'APPLIANCES') {
-                // Home warranty plans typically cover all appliances
-                warrantiesBySystemType.set('APPLIANCE', warranty);
-            } else if (warranty.category === 'HOME_WARRANTY_PLAN' || warranty.category === 'HOME_WARRANTY') {
-                // Comprehensive home warranty - covers ALL major systems
-                // HVAC Systems
-                warrantiesBySystemType.set('HVAC_FURNACE', warranty);
-                warrantiesBySystemType.set('HVAC_HEAT_PUMP', warranty);
-                // Plumbing
-                warrantiesBySystemType.set('WATER_HEATER_TANK', warranty);
-                warrantiesBySystemType.set('WATER_HEATER_TANKLESS', warranty);
-                // Electrical
-                warrantiesBySystemType.set('ELECTRICAL_PANEL', warranty);
-                // Roofing (typically with additional coverage)
-                warrantiesBySystemType.set('ROOF_SHINGLE', warranty);
-                warrantiesBySystemType.set('ROOF_TILE_METAL', warranty);
-                // Appliances
-                warrantiesBySystemType.set('APPLIANCE', warranty);
-                // Safety
-                warrantiesBySystemType.set('SAFETY_SMOKE_CO_DETECTORS', warranty);
-            }
+            getSystemTypesForWarrantyCategory(warranty.category).forEach((systemType) => {
+                warrantiesBySystemType.set(systemType, warranty);
+            });
             
             // If warranty is linked to specific asset, add that too
             if (warranty.linkedAssetId && warranty.linkedAsset?.assetType) {
@@ -937,19 +894,7 @@ export default function RiskAssessmentPage() {
         
         // 2. Schedule Inspection/Maintenance → Provider Search (for booking services)
         if (asset.actionCta?.includes('Schedule') || asset.actionCta?.includes('Book')) {
-            // Map systemType to service category
-            let category = 'INSPECTION'; // default
-            if (asset.systemType.includes('HVAC')) {
-                category = 'HVAC';
-            } else if (asset.systemType.includes('WATER_HEATER')) {
-                category = 'PLUMBING';
-            } else if (asset.systemType.includes('ROOF')) {
-                category = 'ROOFING';
-            } else if (asset.systemType.includes('ELECTRICAL')) {
-                category = 'ELECTRICAL';
-            } else if (asset.systemType.includes('SAFETY')) {
-                category = 'HANDYMAN';
-            }
+            const category = getProviderCategoryForSystemType(asset.systemType);
             
             // Navigate to provider search with context AND from parameter
             const params = new URLSearchParams({
@@ -1374,7 +1319,7 @@ export default function RiskAssessmentPage() {
                         id: `risk:${selectedAsset.systemType}`,
                         title: displayLabel(selectedAsset.assetName),
                         description: selectedAsset.actionCta || 'Schedule Inspection/Replacement',
-                        serviceCategory: getServiceCategoryForAsset(selectedAsset.systemType) as any,
+                        serviceCategory: getMaintenanceServiceCategoryForSystemType(selectedAsset.systemType) as any,
                         defaultFrequency: RecurrenceFrequency.ANNUALLY,
                         sortOrder: 0,
                     }}
@@ -1388,7 +1333,7 @@ export default function RiskAssessmentPage() {
                         isRecurring: false,
                         frequency: null,
                         nextDueDate: new Date(),
-                        serviceCategory: getServiceCategoryForAsset(selectedAsset.systemType) as any,
+                        serviceCategory: getMaintenanceServiceCategoryForSystemType(selectedAsset.systemType) as any,
                         propertyId: propertyId,
                     }}
                 />

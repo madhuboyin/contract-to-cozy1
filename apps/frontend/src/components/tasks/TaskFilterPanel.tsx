@@ -15,6 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MaintenanceTaskFilters } from '@/types';
+import { MAINTENANCE_SERVICE_CATEGORY_FILTER_OPTIONS } from '@/lib/config/serviceCategoryMapping';
 
 interface TaskFilterPanelProps {
   filters: MaintenanceTaskFilters;
@@ -44,19 +45,6 @@ const SOURCE_OPTIONS = [
   { value: 'RISK_ASSESSMENT', label: 'Risk Report' },
   { value: 'WARRANTY_RENEWAL', label: 'Warranty' },
   { value: 'TEMPLATE', label: 'Template' },
-];
-
-const SERVICE_CATEGORY_OPTIONS = [
-  { value: 'HVAC', label: 'HVAC' },
-  { value: 'PLUMBING', label: 'Plumbing' },
-  { value: 'ELECTRICAL', label: 'Electrical' },
-  { value: 'HANDYMAN', label: 'Handyman' },
-  { value: 'LANDSCAPING', label: 'Landscaping' },
-  { value: 'CLEANING', label: 'Cleaning' },
-  { value: 'PEST_CONTROL', label: 'Pest Control' },
-  { value: 'LOCKSMITH', label: 'Locksmith' },
-  { value: 'ROOFING', label: 'Roofing' },
-  { value: 'APPLIANCE_REPAIR', label: 'Appliance Repair' },
 ];
 
 export function TaskFilterPanel({
@@ -234,7 +222,7 @@ export function TaskFilterPanel({
           <div className="space-y-2">
             <Label>Service Category</Label>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {SERVICE_CATEGORY_OPTIONS.map((option) => (
+              {MAINTENANCE_SERVICE_CATEGORY_FILTER_OPTIONS.map((option) => (
                 <div key={option.value} className="flex items-center space-x-2">
                   <Checkbox
                     id={`category-${option.value}`}

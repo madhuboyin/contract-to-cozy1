@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 // UPDATED IMPORT: Added HomeAsset
-import { Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType, HomeAsset } from '@/types'; // Removed Warranty, Create/UpdateWarrantyInput to redefine locally
+import { Property, APIResponse, APIError, Document, DocumentUploadInput, DocumentType, HomeAsset, WarrantyCategory } from '@/types'; // Removed Warranty, Create/UpdateWarrantyInput to redefine locally
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -54,6 +54,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  ASSET_LINKING_DISABLED_WARRANTY_CATEGORIES,
+  COMMON_WARRANTY_PROVIDERS,
+  getWarrantyCategoryLabel,
+  getWarrantySystemCoverageLabel,
+  isWarrantyCategory,
+  SYSTEM_COVERAGE_WARRANTY_CATEGORIES,
+  WARRANTY_CATEGORY_ASSET_MAP,
+  WARRANTY_CATEGORY_OPTIONS,
+  WARRANTY_CATEGORY_LABELS,
+} from '@/lib/config/warrantyConfig';
 
 /**
  * Infer appliance type from InventoryItem for HomeAsset compatibility
@@ -81,33 +92,6 @@ function inferAssetTypeFromItem(item: any): string {
   
   return 'OTHER';
 }
-// ============================================================================
-// LOCAL TYPE DEFINITIONS AND ENUMS (TO RESOLVE COMPILE ERRORS)
-// ============================================================================
-
-const WARRANTY_CATEGORIES = {
-    APPLIANCE: 'Appliance',
-    HVAC: 'HVAC',
-    ROOFING: 'Roofing',
-    PLUMBING: 'Plumbing',
-    ELECTRICAL: 'Electrical',
-    STRUCTURAL: 'Structural',
-    HOME_WARRANTY_PLAN: 'Home Warranty Plan',
-    OTHER: 'Other',
-} as const;
-type WarrantyCategory = keyof typeof WARRANTY_CATEGORIES;
-
-const WARRANTY_CATEGORY_OPTIONS = Object.entries(WARRANTY_CATEGORIES).map(([key, display]) => ({
-    key: key as WarrantyCategory,
-    display,
-}));
-
-const WARRANTY_CATEGORY_KEYS = Object.keys(WARRANTY_CATEGORIES) as WarrantyCategory[];
-
-function isWarrantyCategory(value: string | null): value is WarrantyCategory {
-  return !!value && WARRANTY_CATEGORY_KEYS.includes(value as WarrantyCategory);
-}
-
 // Augmented interfaces to include the new required fields
 interface Warranty {
     id: string;
@@ -141,43 +125,6 @@ interface CreateWarrantyInput {
 interface UpdateWarrantyInput extends Partial<CreateWarrantyInput> {
     // Allows updating subsets of the fields
 }
-// ============================================================================
-
-// ============================================================================
-// NEW: CATEGORY-TO-ASSET MAPPING (For validation of component type)
-// ============================================================================
-const CATEGORY_ASSET_MAP: Record<WarrantyCategory, string[]> = {
-    APPLIANCE: ['REFRIGERATOR', 'OVEN', 'DISHWASHER', 'WASHER', 'DRYER', 'MICROWAVE', 'GARBAGE_DISPOSAL'],
-    HVAC: ['HVAC_FURNACE', 'HEAT_PUMP', 'CENTRAL_AC'],
-    PLUMBING: ['WATER_HEATER', 'SUMP_PUMP', 'SEPTIC_SYSTEM'],
-    ELECTRICAL: ['ELECTRICAL_PANEL', 'GENERATOR'],
-    ROOFING: ['ROOF'], // Can be linked if roof is added as an asset type
-    STRUCTURAL: ['FOUNDATION', 'SIDING', 'GARAGE_DOOR'], // If these become asset types
-    // These categories allow for a general policy or no asset link
-    HOME_WARRANTY_PLAN: [], 
-    OTHER: [],
-};
-
-// NEW: Categories that should DISABLE ONLY the asset linking dropdown
-const DISABLE_ASSET_LINKING_CATEGORIES: WarrantyCategory[] = [
-    'HVAC', 
-    'ROOFING', 
-    'PLUMBING', 
-    'ELECTRICAL', 
-    'STRUCTURAL',
-];
-
-const COMMON_WARRANTY_PROVIDERS = [
-  'American Home Shield',
-  'Choice Home Warranty',
-  'First American Home Warranty',
-  'AFC Home Club',
-  'Liberty Home Guard',
-  'Cinch Home Services',
-  'Assurant',
-  'Samsung Care+',
-  'AppleCare+',
-];
 
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
@@ -357,7 +304,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
   
   // Custom hook to determine if linking should be disabled based on category
   const isAssetLinkingExplicitlyDisabled = useMemo(() => {
-        return !!formData.category && DISABLE_ASSET_LINKING_CATEGORIES.includes(formData.category as WarrantyCategory);
+        return !!formData.category && ASSET_LINKING_DISABLED_WARRANTY_CATEGORIES.includes(formData.category as WarrantyCategory);
   }, [formData.category]);
 
   // UPDATED: Handle change for propertyId, homeAssetId, AND category with synchronization
@@ -397,12 +344,12 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
                   }
                   
                   // Infer category from asset type to ensure consistency
-                  const inferredCategory = Object.entries(CATEGORY_ASSET_MAP).find(
+                  const inferredCategory = Object.entries(WARRANTY_CATEGORY_ASSET_MAP).find(
                       ([cat, types]) => types.includes(asset.assetType)
                   )?.[0];
 
                   // Only set the category if it hasn't been set yet, or if the current category is non-specific
-                  if (inferredCategory && (!prev.category || prev.category === 'OTHER' || DISABLE_ASSET_LINKING_CATEGORIES.includes(prev.category as WarrantyCategory))) {
+                  if (inferredCategory && (!prev.category || prev.category === 'OTHER' || ASSET_LINKING_DISABLED_WARRANTY_CATEGORIES.includes(prev.category as WarrantyCategory))) {
                        newState.category = inferredCategory as WarrantyCategory;
                   }
               }
@@ -687,7 +634,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
                   <SelectValue
                     placeholder={
                       isAssetLinkingExplicitlyDisabled
-                        ? `Category coverage (${WARRANTY_CATEGORIES[formData.category as WarrantyCategory]})`
+                        ? `Category coverage (${WARRANTY_CATEGORY_LABELS[formData.category as WarrantyCategory]})`
                         : !formData.category
                         ? 'Select category first'
                         : !formData.propertyId
@@ -860,15 +807,6 @@ function openCozyChat() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event('cozy-chat-open'));
 }
-
-const SYSTEM_COVERAGE_CATEGORIES: WarrantyCategory[] = [
-  'HVAC',
-  'PLUMBING',
-  'ELECTRICAL',
-  'ROOFING',
-  'STRUCTURAL',
-  'HOME_WARRANTY_PLAN',
-];
 
 // --- Main Page Component ---
 export default function WarrantiesPage() {
@@ -1227,17 +1165,8 @@ export default function WarrantiesPage() {
       const { homeAssetId, category } = warranty;
       
       // 1. If it's a system-wide warranty category, show that instead of N/A
-      if (SYSTEM_COVERAGE_CATEGORIES.includes(category)) {
-        // These warranties cover entire systems, not specific appliances
-        const categoryLabels: Record<string, string> = {
-          'HVAC': 'HVAC System',
-          'PLUMBING': 'Plumbing System',
-          'ELECTRICAL': 'Electrical System',
-          'ROOFING': 'Roof Coverage',
-          'STRUCTURAL': 'Structural Coverage',
-          'HOME_WARRANTY_PLAN': 'All Covered Systems',
-        };
-        return categoryLabels[category] || 'System Coverage';
+      if (SYSTEM_COVERAGE_WARRANTY_CATEGORIES.includes(category)) {
+        return getWarrantySystemCoverageLabel(category);
       }
       
       // 2. Try to find the linked asset by ID
@@ -1368,7 +1297,7 @@ export default function WarrantiesPage() {
               const assetInfo = getAssetInfo(warranty);
               const headline =
                 assetInfo === 'N/A' || assetInfo === 'Linked Asset'
-                  ? `${WARRANTY_CATEGORIES[warranty.category] || warranty.category} Coverage`
+                  ? `${getWarrantyCategoryLabel(warranty.category)} Coverage`
                   : assetInfo;
               const metadataLine = `${warranty.policyNumber ? `Policy #${warranty.policyNumber}` : 'Policy unlisted'} • ${propertyInfo}`;
               const expanded = Boolean(expandedWarrantyIds[warranty.id]);
@@ -1478,7 +1407,7 @@ export default function WarrantiesPage() {
                       <div className="space-y-2.5 px-4 py-3">
                         <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
                           <p className="text-slate-500">Category</p>
-                          <p className="font-medium text-slate-800">{WARRANTY_CATEGORIES[warranty.category] || warranty.category}</p>
+                          <p className="font-medium text-slate-800">{getWarrantyCategoryLabel(warranty.category)}</p>
                         </div>
                         <div className="grid grid-cols-[108px_1fr] gap-2 text-sm">
                           <p className="text-slate-500">Asset</p>
@@ -1547,7 +1476,7 @@ export default function WarrantiesPage() {
                     </TableCell>
                     {/* NEW TABLE CELL: CATEGORY */}
                     <TableCell className="font-semibold text-xs">
-                        {WARRANTY_CATEGORIES[warranty.category] || warranty.category}
+                        {getWarrantyCategoryLabel(warranty.category)}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-gray-600 max-w-[250px] truncate">
                       {warranty.coverageDetails || 'No details provided.'}

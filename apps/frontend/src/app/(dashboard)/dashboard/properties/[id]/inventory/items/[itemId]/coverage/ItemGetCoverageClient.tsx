@@ -24,6 +24,7 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { getWarrantyCategoryForInventoryCategory } from '@/lib/config/serviceCategoryMapping';
 
 type TraceImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 
@@ -84,15 +85,6 @@ function recommendationCopy(recommendation?: ItemCoverageAnalysisDTO['warranty']
   if (recommendation === 'REPLACE_SOON') return 'Plan replacement soon';
   if (recommendation === 'WAIT') return 'Wait and monitor';
   return '—';
-}
-
-function mapItemCategoryToWarrantyCategory(category?: string | null): string {
-  if (category === 'HVAC') return 'HVAC';
-  if (category === 'PLUMBING') return 'PLUMBING';
-  if (category === 'ELECTRICAL') return 'ELECTRICAL';
-  if (category === 'ROOF_EXTERIOR') return 'ROOFING';
-  if (category === 'APPLIANCE') return 'APPLIANCE';
-  return 'OTHER';
 }
 
 function sanitizeReturnTo(raw: string | null): string | null {
@@ -195,7 +187,7 @@ export default function ItemGetCoverageClient() {
   const [itemName, setItemName] = useState<string>('Inventory Item');
   const [roomName, setRoomName] = useState<string | null>(null);
   const [didAutoPrefill, setDidAutoPrefill] = useState(false);
-  const defaultWarrantyCategory = mapItemCategoryToWarrantyCategory(analysis?.item?.category);
+  const defaultWarrantyCategory = getWarrantyCategoryForInventoryCategory(analysis?.item?.category);
   const addWarrantyHref =
     propertyId && itemId
       ? `/dashboard/warranties?action=new&from=coverage-buy&propertyId=${encodeURIComponent(propertyId)}&homeAssetId=${encodeURIComponent(itemId)}&category=${encodeURIComponent(defaultWarrantyCategory)}&returnTo=${encodeURIComponent(currentPathWithQuery)}`

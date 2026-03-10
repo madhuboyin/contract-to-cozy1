@@ -19,6 +19,7 @@ import {
 
 import type { InventoryItem, InventoryItemCategory, InventoryRoom } from '@/types';
 import { CATEGORY_CONFIG } from '@/lib/config/categoryConfig';
+import { INVENTORY_CATEGORY_FILTER_OPTIONS } from '@/lib/config/inventoryConfig';
 import { centsToDollars, formatCurrency } from '@/lib/utils/format';
 import { normalizeDisplaySegments, titleCaseCategory } from '@/lib/utils/string';
 import InlineValueEditor from './InlineValueEditor';
@@ -37,20 +38,6 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import type { SmartFilterId } from './InventoryFilterBar';
 import type { InventoryPortfolioFilter, PortfolioStats } from './PortfolioIntelligenceStrip';
-
-const CATEGORY_OPTIONS: Array<{ value: InventoryItemCategory | null; label: string }> = [
-  { value: null, label: 'All Categories' },
-  { value: 'APPLIANCE', label: 'Appliance' },
-  { value: 'HVAC', label: 'HVAC' },
-  { value: 'PLUMBING', label: 'Plumbing' },
-  { value: 'ELECTRICAL', label: 'Electrical' },
-  { value: 'ROOF_EXTERIOR', label: 'Roof/Exterior' },
-  { value: 'SAFETY', label: 'Safety' },
-  { value: 'SMART_HOME', label: 'Smart Home' },
-  { value: 'FURNITURE', label: 'Furniture' },
-  { value: 'ELECTRONICS', label: 'Electronics' },
-  { value: 'OTHER', label: 'Other' },
-];
 
 type CoverageStatus = 'gap' | 'partial' | 'covered';
 
@@ -430,7 +417,7 @@ export function InventoryFiltersPanel({
         <FilterDropdown
           value={categoryFilter ?? 'all'}
           onChange={(value) => onCategoryFilterChange(value === 'all' ? null : (value as InventoryItemCategory))}
-          options={CATEGORY_OPTIONS.map((option) => ({ value: option.value ?? 'all', label: option.label }))}
+          options={INVENTORY_CATEGORY_FILTER_OPTIONS.map((option) => ({ value: option.value ?? 'all', label: option.label }))}
           ariaLabel="Category filter"
         />
       </div>
