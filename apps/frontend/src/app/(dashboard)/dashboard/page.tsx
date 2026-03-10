@@ -319,7 +319,10 @@ export default function DashboardPage() {
   }, [userLoading, user, redirectChecked]);
 
   useEffect(() => {
-    if (!selectedPropertyId || user?.segment !== 'EXISTING_OWNER') {
+    const effectiveSegment = homeownerSegment ?? user?.segment;
+    const shouldLoadLocalUpdates = effectiveSegment !== 'HOME_BUYER';
+
+    if (!selectedPropertyId || !shouldLoadLocalUpdates) {
       setLocalUpdates([]);
       return;
     }
@@ -336,7 +339,7 @@ export default function DashboardPage() {
       .catch(() => {
         setLocalUpdates([]);
       });
-  }, [selectedPropertyId, user?.segment]);
+  }, [selectedPropertyId, user?.segment, homeownerSegment]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -379,7 +382,9 @@ export default function DashboardPage() {
   }
   // --- END CONDITIONAL RENDERING ---
 
-  const userSegment = user.segment;
+  const userSegment = homeownerSegment ?? user.segment;
+  const isHomeBuyerSegment = userSegment === 'HOME_BUYER';
+  const isOwnerSegment = !isHomeBuyerSegment;
   const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
   
   // Derived property values using the context state
@@ -391,7 +396,7 @@ export default function DashboardPage() {
     transition: { duration: 0.4, delay: index * 0.08 },
   });
   
-  if (userSegment === 'HOME_BUYER') {
+  if (isHomeBuyerSegment) {
     if (isMobileViewport) {
       return (
         <MobileHomeBuyerDashboard
@@ -416,7 +421,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (userSegment === 'EXISTING_OWNER' && isMobileViewport) {
+  if (isOwnerSegment && isMobileViewport) {
     return (
       <MobileDashboardHome
         userFirstName={user.firstName}
@@ -443,21 +448,21 @@ export default function DashboardPage() {
 
       {/* 2. CONSTRAINED WIDTH AREA (Aligns with other cards) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
-        {userSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+        {isOwnerSegment && selectedPropertyId && (
           <motion.div {...sectionMotion(0)}>
             <PriorityAlertBanner propertyId={selectedPropertyId} />
           </motion.div>
         )}
 
         {/* MORNING HOME PULSE */}
-        {userSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+        {isOwnerSegment && selectedPropertyId && (
           <motion.section className="mb-5 md:mb-6" {...sectionMotion(1)}>
             <MorningHomePulseCard propertyId={selectedPropertyId} />
           </motion.section>
         )}
 
         {/* LOCAL UPDATES TICKER */}
-        {userSegment === 'EXISTING_OWNER' && localUpdates.length > 0 && (
+        {isOwnerSegment && localUpdates.length > 0 && (
           <section className="mb-5 md:mb-6">
             <LocalUpdatesCarousel
               updates={localUpdates}
