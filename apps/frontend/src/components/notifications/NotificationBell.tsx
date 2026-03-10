@@ -15,7 +15,7 @@ export function NotificationBell() {
       className="relative inline-flex items-center"
       aria-label="Notifications"
     >
-      <BellIcon className="h-5 w-5" />
+      <BellIcon className="h-5 w-5 text-amber-300" />
 
       {unreadCount > 0 && (
         <span
