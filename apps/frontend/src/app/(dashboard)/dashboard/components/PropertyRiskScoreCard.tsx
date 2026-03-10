@@ -6,6 +6,7 @@ import { ArrowRight, HelpCircle, Loader2, Shield } from "lucide-react";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import { api } from "@/lib/api/client";
 import { PrimaryRiskSummary, RiskSummaryStatus } from "@/types";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface PropertyRiskScoreCardProps {
   propertyId?: string;
@@ -192,10 +193,24 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
           </span>
           <span className="text-xs font-bold text-red-600">{formatCurrency(exposure)}</span>
         </div>
-        <button className="mt-1 inline-flex items-center gap-1 text-[10px] text-brand-600 hover:underline">
-          <HelpCircle className="h-3 w-3" />
-          How is this calculated?
-        </button>
+        <TooltipProvider delayDuration={120}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="How risk exposure is calculated"
+                className="mt-1 inline-flex items-center gap-1 text-[10px] text-brand-600 hover:underline"
+              >
+                <HelpCircle className="h-3 w-3" />
+                How is this calculated?
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="start" className="max-w-[280px] text-[11px] leading-relaxed">
+              Exposure combines each asset&apos;s estimated cost, risk probability, and current coverage.
+              Higher uncovered cost and likelihood increase total risk exposure.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   );
