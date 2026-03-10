@@ -132,6 +132,11 @@ function getSaveBarCopy(completionPercent: number): string {
   return `Profile ${completionPercent}% complete · Keep going to unlock your full plan.`;
 }
 
+function dollarsToCents(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  return Math.round(value * 100);
+}
+
 // Schema for a single HomeAsset record being sent from the frontend
 const applianceSchema = z.object({
   id: z.string().optional(), 
@@ -185,6 +190,10 @@ const propertySchema = z.object({
   hasSecuritySystem: z.boolean().optional(),
   hasFireExtinguisher: z.boolean().optional(),
   hasIrrigation: z.boolean().optional(),
+  purchasePriceDollars: z.number().nonnegative().optional().nullable(),
+  purchaseDate: z.string().optional().nullable(),
+  lastAppraisedValueDollars: z.number().nonnegative().optional().nullable(),
+  lastAppraisalDate: z.string().optional().nullable(),
 
   // NEW FIELD: Structured appliance data
   appliances: z.array(applianceSchema).optional(), 
@@ -262,6 +271,18 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         hasSecuritySystem: property.hasSecuritySystem ?? false,
         hasFireExtinguisher: property.hasFireExtinguisher ?? false,
         hasIrrigation: property.hasIrrigation ?? false,
+        purchasePriceDollars:
+          typeof property.purchasePriceCents === "number"
+            ? property.purchasePriceCents / 100
+            : null,
+        purchaseDate: property.purchaseDate ? String(property.purchaseDate).slice(0, 10) : null,
+        lastAppraisedValueDollars:
+          typeof property.lastAppraisedValue === "number"
+            ? property.lastAppraisedValue / 100
+            : null,
+        lastAppraisalDate: property.lastAppraisalDate
+          ? String(property.lastAppraisalDate).slice(0, 10)
+          : null,
 
         // NEW FIELD: Load structured array
         appliances: structuredAppliances,
@@ -533,6 +554,10 @@ export default function EditPropertyPage() {
       roofReplacementYear: null, hasDrainageIssues: false, hasSmokeDetectors: false,
       hasCoDetectors: false, hasSecuritySystem: false, hasFireExtinguisher: false,
       hasIrrigation: false,
+      purchasePriceDollars: null,
+      purchaseDate: null,
+      lastAppraisedValueDollars: null,
+      lastAppraisalDate: null,
       appliances: [], // Set default to empty array
     },
     mode: "onBlur",
@@ -610,6 +635,10 @@ export default function EditPropertyPage() {
         hasSecuritySystem: data.hasSecuritySystem ?? false,
         hasFireExtinguisher: data.hasFireExtinguisher ?? false,
         hasIrrigation: data.hasIrrigation ?? false,
+        purchasePriceCents: dollarsToCents(data.purchasePriceDollars),
+        purchaseDate: data.purchaseDate ?? null,
+        lastAppraisedValue: dollarsToCents(data.lastAppraisedValueDollars),
+        lastAppraisalDate: data.lastAppraisalDate ?? null,
         
         // FIX: Send the structured array under the correct backend key: homeAssets
         homeAssets: data.appliances?.map(app => ({
@@ -1188,6 +1217,98 @@ export default function EditPropertyPage() {
                       </FormItem>
                     )}
                   />
+                </div>
+                <div className="lg:col-span-12 rounded-md border border-black/10 bg-gray-50/60 p-3 dark:border-white/10 dark:bg-slate-900/30">
+                  <div className="mb-2">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Home value</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Used for equity and appreciation insights.</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <FormField
+                      control={form.control}
+                      name="purchasePriceDollars"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Purchase price (USD)</FormLabel>
+                          <FormControl>
+                            <Input
+                              id="field-purchasePriceDollars"
+                              className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                              placeholder="e.g., 600000"
+                              inputMode="decimal"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="purchaseDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Purchase date</FormLabel>
+                          <FormControl>
+                            <Input
+                              id="field-purchaseDate"
+                              className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                              type="date"
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastAppraisedValueDollars"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Latest appraisal (USD)</FormLabel>
+                          <FormControl>
+                            <Input
+                              id="field-lastAppraisedValueDollars"
+                              className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                              placeholder="e.g., 725000"
+                              inputMode="decimal"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastAppraisalDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Appraisal date</FormLabel>
+                          <FormControl>
+                            <Input
+                              id="field-lastAppraisalDate"
+                              className="h-9 text-sm focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40"
+                              type="date"
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
                 <FormField
                   control={form.control}
