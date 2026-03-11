@@ -61,6 +61,22 @@ function formatDate(iso?: string | null) {
   });
 }
 
+function formatMonthYear(input?: string | Date | null) {
+  if (!input) return "Unknown";
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+  });
+}
+
+function addDays(input: Date, days: number) {
+  const date = new Date(input);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
 function formatConstantLabel(value: string) {
   return value.replace(/_/g, " ").toLowerCase().replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
 }
@@ -119,6 +135,13 @@ function benchmarkDeltaLabel(thisScore: number, benchmarkScore: number) {
   const delta = Math.round((thisScore - benchmarkScore) * 10) / 10;
   if (delta === 0) return "At benchmark";
   return `${delta > 0 ? "+" : ""}${delta} vs benchmark`;
+}
+
+function reportStatusBadgeClass(status: "Current" | "Refresh recommended" | "Limited coverage" | "Updating") {
+  if (status === "Current") return "bg-emerald-100 text-emerald-700 border-emerald-200";
+  if (status === "Updating") return "bg-sky-100 text-sky-700 border-sky-200";
+  if (status === "Limited coverage") return "bg-amber-100 text-amber-700 border-amber-200";
+  return "bg-amber-100 text-amber-700 border-amber-200";
 }
 
 function SectionCard(props: {
@@ -298,6 +321,7 @@ export default function HomeScoreReportPage() {
   const [weeks, setWeeks] = useState<26 | 52>(26);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const viewedRef = useRef<string | null>(null);
+  const statusStripViewedRef = useRef<string | null>(null);
 
   const trackEvent = useCallback((event: string, section?: string, metadata?: Record<string, unknown>) => {
     if (!propertyId) return;
@@ -421,6 +445,70 @@ export default function HomeScoreReportPage() {
 
     return { tierOne, tierTwo, groupedTierTwo };
   }, [timelineEvents]);
+  const reportLifecycle = useMemo(() => {
+    const generatedIso = report?.reportMeta?.generatedDate || report?.generatedAt || null;
+    const generatedDate = generatedIso ? new Date(generatedIso) : null;
+    const hasGeneratedDate = Boolean(generatedDate && !Number.isNaN(generatedDate.getTime()));
+
+    const confidenceLevel = report?.reportMeta?.confidenceLevel || report?.trustAndVerification?.confidenceLevel || report?.confidence || "MEDIUM";
+    const dataCoveragePct = report?.reportMeta?.dataCoveragePercentage ?? report?.trustAndVerification?.dataCoveragePct ?? 0;
+    const staleMs = 1000 * 60 * 60 * 24 * 90;
+    const refreshIntervalDays = 90;
+    const isStale = hasGeneratedDate
+      ? Date.now() - (generatedDate as Date).getTime() > staleMs
+      : true;
+
+    const status: "Current" | "Refresh recommended" | "Limited coverage" | "Updating" =
+      refreshMutation.isPending || reportQuery.isFetching
+        ? "Updating"
+        : dataCoveragePct < 55
+          ? "Limited coverage"
+          : !hasGeneratedDate || isStale || confidenceLevel === "LOW"
+            ? "Refresh recommended"
+            : confidenceLevel === "MEDIUM" && dataCoveragePct < 70
+              ? "Refresh recommended"
+              : "Current";
+
+    const freshnessLabel = hasGeneratedDate
+      ? confidenceLevel === "HIGH" && dataCoveragePct >= 70
+        ? `Verified through ${formatMonthYear(generatedDate)}`
+        : `Latest report cycle ${formatMonthYear(generatedDate)}`
+      : "Latest report cycle unavailable";
+
+    const nextRefreshDate = hasGeneratedDate ? addDays(generatedDate as Date, refreshIntervalDays) : null;
+
+    return {
+      status,
+      generatedIso,
+      generatedLabel: hasGeneratedDate ? formatDate(generatedIso) : "Unknown",
+      freshnessLabel,
+      nextRefreshLabel: nextRefreshDate ? formatMonthYear(nextRefreshDate) : "After next report cycle",
+      dataCoveragePct,
+      confidenceLevel: formatConstantLabel(confidenceLevel),
+    };
+  }, [
+    report?.reportMeta?.generatedDate,
+    report?.reportMeta?.dataCoveragePercentage,
+    report?.reportMeta?.confidenceLevel,
+    report?.generatedAt,
+    report?.confidence,
+    report?.trustAndVerification?.confidenceLevel,
+    report?.trustAndVerification?.dataCoveragePct,
+    refreshMutation.isPending,
+    reportQuery.isFetching,
+  ]);
+
+  useEffect(() => {
+    if (!report || !reportLifecycle) return;
+    const key = `${report.propertyId}:${report.generatedAt}:${reportLifecycle.status}`;
+    if (statusStripViewedRef.current === key) return;
+    statusStripViewedRef.current = key;
+    trackEvent("REPORT_STATUS_STRIP_VIEWED", "report-status-strip", {
+      status: reportLifecycle.status,
+      coveragePct: reportLifecycle.dataCoveragePct,
+      confidence: reportLifecycle.confidenceLevel,
+    });
+  }, [report, reportLifecycle, trackEvent]);
 
   if (!propertyId || propertyQuery.isLoading || reportQuery.isLoading) {
     return (
@@ -612,6 +700,46 @@ export default function HomeScoreReportPage() {
               </Badge>
               <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">Version {meta?.reportVersion || "2.0"}</Badge>
             </div>
+          </div>
+        </section>
+
+        <section className="border border-slate-200 bg-slate-50/80 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-slate-500" />
+                <Badge variant="outline" className={reportStatusBadgeClass(reportLifecycle.status)}>
+                  Report status: {reportLifecycle.status}
+                </Badge>
+              </div>
+              {[
+                { label: "Generated", value: reportLifecycle.generatedLabel },
+                { label: "Data freshness", value: reportLifecycle.freshnessLabel },
+                { label: "Next recommended refresh", value: reportLifecycle.nextRefreshLabel },
+                { label: "Data coverage", value: `${reportLifecycle.dataCoveragePct}%` },
+                { label: "Confidence", value: reportLifecycle.confidenceLevel },
+              ].map((item) => (
+                <div key={item.label} className="min-w-[145px] border-l border-slate-200 pl-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{item.label}</p>
+                  <p className="mt-0.5 text-sm font-medium text-slate-900">{item.value}</p>
+                </div>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="print:hidden"
+              disabled={refreshMutation.isPending}
+              onClick={() => {
+                trackEvent("REPORT_REFRESH_CLICKED_FROM_STATUS_STRIP", "report-status-strip", {
+                  status: reportLifecycle.status,
+                });
+                refreshMutation.mutate();
+              }}
+            >
+              {refreshMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Refresh now
+            </Button>
           </div>
         </section>
 
@@ -1438,10 +1566,6 @@ export default function HomeScoreReportPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Gauge className="h-3.5 w-3.5" />
             HomeScore report optimized for homeowner mode today, with buyer/seller, certification, and share-link workflow support prepared in this architecture.
-          </div>
-          <div className="mt-2 flex items-center gap-2 text-slate-400">
-            <CalendarClock className="h-3.5 w-3.5" />
-            Last generated {formatDate(report.generatedAt)}
           </div>
         </div>
       </div>
