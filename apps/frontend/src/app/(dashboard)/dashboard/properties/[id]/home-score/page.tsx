@@ -41,6 +41,7 @@ import {
   HomeScoreImprovementAction,
   HomeScoreRadarAxis,
   HomeScoreReport,
+  HomeScoreSystemHealthRow,
   HomeScoreTimelineEvent,
 } from "@/types";
 
@@ -122,6 +123,133 @@ function normalizeSystemStatus(raw: string, grade: string, verification: string,
   if (grade === "B") return "Monitor";
   if (raw.toLowerCase().includes("inspect")) return "Needs inspection";
   return "Stable";
+}
+
+function systemStatusHeadline(status: string, grade: string, serviceWindow: string | null) {
+  const serviceWindowLower = (serviceWindow || "").toLowerCase();
+  if (serviceWindowLower.includes("at or beyond expected service life") || status === "High risk") return "Service life exceeded";
+  if (status === "Needs inspection") return "Needs inspection";
+  if (status === "Needs verification") return "Needs verification";
+  if (status === "Pending data") return "Pending data";
+  if (status === "Aging") return "Aging system";
+  if (status === "Monitor") return "Monitor condition";
+  if (grade === "A") return "Strong condition";
+  return "Stable";
+}
+
+function gradeToneTextClass(grade: string) {
+  if (grade === "A" || grade === "B") return "text-emerald-700";
+  if (grade === "C") return "text-amber-700";
+  return "text-rose-700";
+}
+
+function getLifecycleProgress(ageYears: number | null, serviceWindow: string | null) {
+  if (ageYears === null || !serviceWindow) return null;
+  const lower = serviceWindow.toLowerCase();
+  if (lower.includes("at or beyond expected service life")) return 100;
+  const remainingMatch = lower.match(/(\d+)\s+years?\s+remaining/);
+  if (!remainingMatch) return null;
+  const remainingYears = Number.parseInt(remainingMatch[1], 10);
+  if (!Number.isFinite(remainingYears) || remainingYears < 0) return null;
+  const totalYears = ageYears + remainingYears;
+  if (totalYears <= 0) return null;
+  return Math.max(0, Math.min(100, Math.round((ageYears / totalYears) * 100)));
+}
+
+function lifecycleBarClass(progress: number | null) {
+  if (progress === null) return "bg-slate-300";
+  if (progress >= 90) return "bg-rose-400";
+  if (progress >= 70) return "bg-amber-400";
+  return "bg-emerald-400";
+}
+
+function systemRowSeverity(status: string, projectedRiskHorizonMonths: number | null) {
+  if (status === "High risk" || (projectedRiskHorizonMonths !== null && projectedRiskHorizonMonths <= 6)) return "HIGH";
+  if (
+    ["Aging", "Needs inspection", "Needs verification"].includes(status) ||
+    (projectedRiskHorizonMonths !== null && projectedRiskHorizonMonths <= 24)
+  ) {
+    return "MEDIUM";
+  }
+  return "LOW";
+}
+
+function systemRowSurfaceClass(severity: "HIGH" | "MEDIUM" | "LOW") {
+  if (severity === "HIGH") return "bg-rose-50/35 hover:bg-rose-50/55";
+  if (severity === "MEDIUM") return "bg-amber-50/25 hover:bg-amber-50/45";
+  return "hover:bg-slate-50/60";
+}
+
+function systemAccentClass(severity: "HIGH" | "MEDIUM" | "LOW") {
+  if (severity === "HIGH") return "border-rose-300";
+  if (severity === "MEDIUM") return "border-amber-300";
+  return "border-slate-200";
+}
+
+function verificationPillClass(provenance: string) {
+  if (provenance === "VERIFIED" || provenance === "DOCUMENT_BACKED" || provenance === "PUBLIC_RECORD") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (provenance === "INFERRED") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (provenance === "MISSING") return "border-slate-200 bg-slate-50 text-slate-500";
+  return "border-slate-200 bg-slate-100 text-slate-700";
+}
+
+function riskHorizonPresentation(projectedRiskHorizonMonths: number | null) {
+  if (!projectedRiskHorizonMonths) {
+    return {
+      value: "N/A",
+      detail: "No horizon available",
+      tone: "text-slate-600",
+    };
+  }
+  if (projectedRiskHorizonMonths <= 6) {
+    return {
+      value: `${projectedRiskHorizonMonths} months`,
+      detail: "Near-term window",
+      tone: "text-rose-700",
+    };
+  }
+  if (projectedRiskHorizonMonths <= 24) {
+    return {
+      value: `${projectedRiskHorizonMonths} months`,
+      detail: "Watch window",
+      tone: "text-amber-700",
+    };
+  }
+  return {
+    value: `${projectedRiskHorizonMonths} months`,
+    detail: "Longer horizon",
+    tone: "text-slate-700",
+  };
+}
+
+function shortenSystemAction(nextAction: string) {
+  const cleaned = nextAction.replace(/\.$/, "").trim();
+  const inspectionMatch = cleaned.match(/(?:prioritize\s+)?inspection\s+for\s+(.+)/i);
+  if (inspectionMatch?.[1]) {
+    return `Inspect ${inspectionMatch[1]}`;
+  }
+  const upkeepMatch = cleaned.match(/continue\s+scheduled\s+upkeep\s+for\s+(.+)/i);
+  if (upkeepMatch?.[1]) {
+    return `Continue ${upkeepMatch[1]} upkeep`;
+  }
+  const verifyMatch = cleaned.match(/verify\s+(.+)/i);
+  if (verifyMatch?.[1]) {
+    return `Verify ${verifyMatch[1]}`;
+  }
+  return cleaned;
+}
+
+function systemHealthIcon(key: HomeScoreSystemHealthRow["key"]) {
+  switch (key) {
+    case "ROOF":
+      return Home;
+    case "SAFETY_SYSTEMS":
+      return Shield;
+    default:
+      return Wrench;
+  }
 }
 
 function formatPropertyType(value?: string | null) {
@@ -1147,64 +1275,86 @@ export default function HomeScoreReportPage() {
           subtitle="Per-system grades, verification status, and next recommended actions."
           onToggle={onSectionToggle}
         >
-            <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                {systemHealthInsight}
-              </div>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              {systemHealthInsight}
+            </div>
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                  <th className="py-2 pr-3">System</th>
-                  <th className="py-2 pr-3">Grade</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Age / Window</th>
-                  <th className="py-2 pr-3">Verification</th>
-                  <th className="py-2 pr-3">Next Action</th>
-                  <th className="py-2">Risk Horizon</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(report.systemHealth || []).map((row) => {
-                  const normalizedStatus = normalizeSystemStatus(
-                    row.statusLabel,
-                    row.grade,
-                    row.verification,
-                    row.projectedRiskHorizonMonths
-                  );
-
-                  return (
-                  <tr key={row.key} className="border-b border-slate-100 align-top">
-                    <td className="py-3 pr-3 font-medium text-slate-900">{row.label}</td>
-                    <td className="py-3 pr-3">
-                      <Badge variant="outline" className={gradeBadgeClass(row.grade)}>{row.grade}</Badge>
-                    </td>
-                    <td className="py-3 pr-3 text-slate-700">
-                      <Badge
-                        variant="outline"
-                        className={systemStatusBadgeClass(normalizedStatus)}
-                      >
-                        {normalizedStatus}
-                      </Badge>
-                    </td>
-                    <td className="py-3 pr-3 text-slate-700">
-                      {row.ageYears === null ? "Unknown age" : `${row.ageYears} years`}<br />
-                      <span className="text-xs text-slate-500">{row.serviceWindow || "-"}</span>
-                    </td>
-                    <td className="py-3 pr-3">
-                      <Badge variant="outline" className={provenanceBadgeClass(row.verification)}>
-                        {formatConstantLabel(row.verification)}
-                      </Badge>
-                    </td>
-                    <td className="py-3 pr-3 text-slate-700">{row.nextRecommendedAction}</td>
-                    <td className="py-3 text-slate-700">
-                      {row.projectedRiskHorizonMonths ? `${row.projectedRiskHorizonMonths} months` : "N/A"}
-                    </td>
+              <table className="w-full min-w-[900px] text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                    <th className="py-2.5 pr-4">System</th>
+                    <th className="py-2.5 pr-4">Health Status</th>
+                    <th className="py-2.5 pr-4">Age / Lifecycle</th>
+                    <th className="py-2.5 pr-4">Verification</th>
+                    <th className="py-2.5 pr-4">Next Action</th>
+                    <th className="py-2.5">Risk Horizon</th>
                   </tr>
-                )})}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {(report.systemHealth || []).map((row) => {
+                    const normalizedStatus = normalizeSystemStatus(
+                      row.statusLabel,
+                      row.grade,
+                      row.verification,
+                      row.projectedRiskHorizonMonths
+                    );
+                    const statusHeadline = systemStatusHeadline(normalizedStatus, row.grade, row.serviceWindow);
+                    const lifecycleProgress = getLifecycleProgress(row.ageYears, row.serviceWindow);
+                    const severity = systemRowSeverity(normalizedStatus, row.projectedRiskHorizonMonths);
+                    const shortAction = shortenSystemAction(row.nextRecommendedAction);
+                    const horizon = riskHorizonPresentation(row.projectedRiskHorizonMonths);
+                    const SystemIcon = systemHealthIcon(row.key);
+
+                    return (
+                      <tr key={row.key} className={cx("align-top border-b border-slate-100 transition-colors", systemRowSurfaceClass(severity))}>
+                        <td className="py-3.5 pr-4">
+                          <div className={cx("border-l-2 pl-3", systemAccentClass(severity))}>
+                            <div className="flex items-center gap-2">
+                              <SystemIcon className="h-4 w-4 text-slate-500" aria-hidden />
+                              <p className="text-sm font-semibold text-slate-900">{row.label}</p>
+                            </div>
+                            {row.isPlaceholder ? <p className="mt-1 text-xs text-slate-500">Pending system data</p> : null}
+                          </div>
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <p className={cx("text-sm font-semibold", gradeToneTextClass(row.grade))}>
+                            {row.grade} • {statusHeadline}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">{normalizedStatus}</p>
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <p className="text-sm font-medium text-slate-900">{row.ageYears === null ? "Unknown age" : `${row.ageYears} years`}</p>
+                          {lifecycleProgress !== null ? (
+                            <div className="mt-2 h-1.5 w-full rounded-full bg-slate-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={lifecycleProgress}>
+                              <div
+                                className={cx("h-1.5 rounded-full", lifecycleBarClass(lifecycleProgress))}
+                                style={{ width: `${Math.max(8, lifecycleProgress)}%` }}
+                              />
+                            </div>
+                          ) : null}
+                          <p className="mt-1 text-xs text-slate-500">{row.serviceWindow || "Service window unavailable"}</p>
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <span className={cx("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", verificationPillClass(row.verification))}>
+                            {formatConstantLabel(row.verification)}
+                          </span>
+                        </td>
+                        <td className="py-3.5 pr-4">
+                          <p className="text-sm font-medium text-slate-900" title={row.nextRecommendedAction}>
+                            {shortAction}
+                          </p>
+                        </td>
+                        <td className="py-3.5">
+                          <p className={cx("text-sm font-semibold", horizon.tone)}>{horizon.value}</p>
+                          <p className="mt-1 text-xs text-slate-500">{horizon.detail}</p>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </SectionCard>
 
