@@ -317,6 +317,78 @@ function resolveTimelineEventIcon(event: HomeScoreTimelineEvent) {
   return null;
 }
 
+function timelineEventTimestamp(event: HomeScoreTimelineEvent) {
+  if (event.datePrecision === "YEAR" && typeof event.year === "number") {
+    return Date.UTC(event.year, 0, 1);
+  }
+  if (event.occurredAt) {
+    const parsed = new Date(event.occurredAt).getTime();
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function canonicalPurchaseTimelineKey(event: HomeScoreTimelineEvent) {
+  if (event.eventType?.toUpperCase() !== "PURCHASE") return null;
+  if (!/^purchased:\s*/i.test(event.title || "")) return null;
+
+  const normalized = String(event.title || "")
+    .toLowerCase()
+    .replace(/^purchased:\s*/i, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (!normalized) return null;
+
+  if (/dish\s*washer/.test(normalized)) return "appliance:DISHWASHER";
+  if (/refrigerator|fridge|freezer/.test(normalized)) return "appliance:REFRIGERATOR";
+  if (/washer|dryer|laundry|washing\s*machine/.test(normalized)) return "appliance:WASHER_DRYER";
+  if (/microwave|hood|vent/.test(normalized)) return "appliance:MICROWAVE_HOOD";
+  if (/oven|range|stove|cooktop/.test(normalized)) return "appliance:OVEN_RANGE";
+  if (/water\s*softener|softener/.test(normalized)) return "appliance:WATER_SOFTENER";
+
+  return `purchase:${normalized}`;
+}
+
+function dedupePurchaseTimelineEvents(events: HomeScoreTimelineEvent[]) {
+  const passthrough: HomeScoreTimelineEvent[] = [];
+  const grouped = new Map<string, HomeScoreTimelineEvent[]>();
+
+  events.forEach((event) => {
+    const key = canonicalPurchaseTimelineKey(event);
+    if (!key) {
+      passthrough.push(event);
+      return;
+    }
+    const bucket = grouped.get(key) || [];
+    bucket.push(event);
+    grouped.set(key, bucket);
+  });
+
+  const collapsed = Array.from(grouped.values()).map((group) => {
+    if (group.length === 1) return group[0];
+
+    const sorted = [...group].sort((a, b) => timelineEventTimestamp(a) - timelineEventTimestamp(b));
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const preferred = sorted.find((event) => event.verified) || first;
+    const firstLabel = formatTimelineEventDate(first);
+    const lastLabel = formatTimelineEventDate(last);
+    const rangeLabel = firstLabel === lastLabel ? firstLabel : `${firstLabel} to ${lastLabel}`;
+    const consolidatedSummary = `Consolidated ${group.length} similar purchase entries (${rangeLabel}).`;
+
+    return {
+      ...preferred,
+      id: `dedup-${first.id}`,
+      occurredAt: first.occurredAt,
+      year: first.year,
+      datePrecision: first.datePrecision,
+      summary: [preferred.summary, consolidatedSummary].filter(Boolean).join(" "),
+    };
+  });
+
+  return [...passthrough, ...collapsed].sort((a, b) => timelineEventTimestamp(a) - timelineEventTimestamp(b));
+}
+
 function SectionCard(props: {
   id: string;
   title: string;
@@ -566,7 +638,10 @@ export default function HomeScoreReportPage() {
       })),
     [report?.trend]
   );
-  const timelineEvents = useMemo(() => report?.timeline?.events || [], [report?.timeline?.events]);
+  const timelineEvents = useMemo(
+    () => dedupePurchaseTimelineEvents(report?.timeline?.events || []),
+    [report?.timeline?.events]
+  );
   const tieredTimeline = useMemo(() => {
     const tierOneKeywords = [
       "roof",
@@ -586,7 +661,7 @@ export default function HomeScoreReportPage() {
 
     const isTierOne = (event: (typeof timelineEvents)[number]) => {
       const type = event.eventType?.toUpperCase();
-      if (["PURCHASE", "REPAIR", "MAINTENANCE", "CLAIM", "IMPROVEMENT", "INSPECTION", "MILESTONE"].includes(type)) {
+      if (["REPAIR", "MAINTENANCE", "CLAIM", "IMPROVEMENT", "INSPECTION", "MILESTONE"].includes(type)) {
         return true;
       }
       const haystack = `${event.title} ${event.summary || ""}`.toLowerCase();
@@ -605,7 +680,12 @@ export default function HomeScoreReportPage() {
 
     const groupedTierTwo = tierTwo.reduce<Record<string, typeof timelineEvents>>((acc, event) => {
       const title = event.title.toLowerCase();
-      const key = title.includes("appliance")
+      const isAppliancePurchase =
+        event.eventType?.toUpperCase() === "PURCHASE" &&
+        /(dish\s*washer|refrigerator|fridge|washer|dryer|laundry|microwave|oven|range|stove|cooktop|water\s*softener|freezer)/.test(
+          title
+        );
+      const key = isAppliancePurchase || title.includes("appliance")
         ? "Appliance additions"
         : title.includes("document") || title.includes("upload")
           ? "Document uploads"
