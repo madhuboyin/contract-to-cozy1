@@ -162,23 +162,27 @@ function SectionCard(props: {
   );
 }
 
-function ScoreRing({ score }: { score: number }) {
+function ScoreRing({ score, inverse = false }: { score: number; inverse?: boolean }) {
   const normalized = Math.max(0, Math.min(100, Math.round(score)));
   const radius = 62;
   const stroke = 9;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (normalized / 100) * circumference;
+  const trackStroke = inverse ? "rgba(255,255,255,0.22)" : "#e2e8f0";
+  const valueStroke = inverse ? "#ffffff" : "#0f172a";
+  const valueClass = inverse ? "text-white" : "text-slate-950";
+  const labelClass = inverse ? "text-slate-200" : "text-slate-500";
 
   return (
     <div className="relative h-40 w-40">
       <svg viewBox="0 0 180 180" className="h-full w-full -rotate-90">
-        <circle cx="90" cy="90" r={radius} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
+        <circle cx="90" cy="90" r={radius} fill="none" stroke={trackStroke} strokeWidth={stroke} />
         <circle
           cx="90"
           cy="90"
           r={radius}
           fill="none"
-          stroke="#0f172a"
+          stroke={valueStroke}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -186,8 +190,8 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-4xl font-semibold tracking-tight text-slate-950">{normalized}</div>
-        <div className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">out of 100</div>
+        <div className={cx("text-4xl font-semibold tracking-tight", valueClass)}>{normalized}</div>
+        <div className={cx("text-xs font-medium uppercase tracking-[0.12em]", labelClass)}>out of 100</div>
       </div>
     </div>
   );
@@ -620,7 +624,7 @@ export default function HomeScoreReportPage() {
           </CardHeader>
           <CardContent className="grid gap-5 lg:grid-cols-[190px,1fr]">
             <div className="flex flex-col items-center gap-2">
-              <ScoreRing score={executive?.homeScore ?? report.homeScore} />
+              <ScoreRing score={executive?.homeScore ?? report.homeScore} inverse />
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className={cx("bg-white/10 text-white border-white/20", gradeBadgeClass(executive?.grade || "F"))}>
                   Grade {executive?.grade || "-"}
@@ -632,22 +636,22 @@ export default function HomeScoreReportPage() {
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-300">Money at Risk (3 years)</p>
-                  <p className="mt-1 text-2xl font-semibold">
+                  <p className="mt-1 text-2xl font-semibold text-white">
                     {formatCurrency(executive?.moneyAtRiskHeadline ?? financialExposure?.headlineMoneyAtRisk)}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-300">Estimated repair exposure</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-300">Confidence</p>
-                  <p className="mt-1 text-lg font-semibold">{formatConstantLabel(executive?.confidenceLevel || report.confidence)}</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{formatConstantLabel(executive?.confidenceLevel || report.confidence)}</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-300">Value Protection</p>
-                  <p className="mt-1 text-lg font-semibold">{executive?.valueProtectionScore ?? report.homeScore}/100</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{executive?.valueProtectionScore ?? report.homeScore}/100</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-300">Weekly Delta</p>
-                  <p className="mt-1 text-lg font-semibold inline-flex items-center gap-1">
+                  <p className="mt-1 inline-flex items-center gap-1 text-lg font-semibold text-white">
                     <TrendingUp className="h-4 w-4" />
                     {report.deltaFromPreviousWeek === null ? "No change" : `${report.deltaFromPreviousWeek > 0 ? "+" : ""}${report.deltaFromPreviousWeek.toFixed(1)}`}
                   </p>
