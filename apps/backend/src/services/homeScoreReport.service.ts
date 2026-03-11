@@ -8,6 +8,7 @@ import {
   formatMajorApplianceType,
   inferMajorApplianceType,
   majorApplianceTypeFromSourceHash,
+  PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
 } from './majorAppliance.util';
 import {
   getPropertyScoreSnapshotSummary,
@@ -442,6 +443,12 @@ type HomeScoreTimelineSourceEvent = {
     name: string;
     category: string;
   } | null;
+};
+
+type HomeScoreCanonicalApplianceInput = {
+  sourceHash: string | null;
+  installedOn: Date | null;
+  createdAt: Date;
 };
 
 export type HomeScoreCorrectionInput = {
@@ -1665,7 +1672,7 @@ export class HomeScoreReportService {
   private normalizeTimelineTitle(value: string) {
     return String(value || '')
       .toLowerCase()
-      .replace(/^purchased:\s*/i, '')
+      .replace(/^purchased(?:\s*:)?\s*/i, '')
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
   }
@@ -1676,7 +1683,7 @@ export class HomeScoreReportService {
     const sourceHashType = majorApplianceTypeFromSourceHash(event.inventoryItem?.sourceHash);
     if (sourceHashType) return `appliance:${sourceHashType}`;
 
-    if (!/^purchased:\s*/i.test(event.title)) return null;
+    if (!/^purchased\b/i.test(event.title)) return null;
 
     const inferredFromTitle = inferMajorApplianceType(event.title);
     if (inferredFromTitle) return `appliance:${inferredFromTitle}`;
@@ -1707,7 +1714,10 @@ export class HomeScoreReportService {
       const sortedByDate = [...duplicates].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
       const earliest = sortedByDate[0];
       const latest = sortedByDate[sortedByDate.length - 1];
-      const documentBackedEvent = sortedByDate.find((entry) => (entry.documents || []).length > 0) ?? earliest;
+      const preferredEvent =
+        sortedByDate.find((entry) => (entry.documents || []).length > 0) ??
+        [...sortedByDate].reverse().find((entry) => Boolean(entry.createdById)) ??
+        latest;
       const inferredType = key.startsWith('appliance:')
         ? key.replace('appliance:', '')
         : inferMajorApplianceType(earliest.title);
@@ -1718,20 +1728,54 @@ export class HomeScoreReportService {
         toIsoDate(earliest.occurredAt) === toIsoDate(latest.occurredAt)
           ? `on ${toIsoDate(earliest.occurredAt)}`
           : `from ${toIsoDate(earliest.occurredAt)} to ${toIsoDate(latest.occurredAt)}`;
-      const mergedSummary = [documentBackedEvent.summary, `Consolidated ${duplicates.length} similar purchase entries ${rangeLabel}.`]
+      const mergedSummary = [preferredEvent.summary, `Consolidated ${duplicates.length} similar purchase entries ${rangeLabel}.`]
         .filter(Boolean)
         .join(' ');
 
       return {
-        ...documentBackedEvent,
+        ...preferredEvent,
         id: `dedup-${earliest.id}`,
-        occurredAt: earliest.occurredAt,
+        occurredAt: preferredEvent.occurredAt,
         title: canonicalTitle,
         summary: mergedSummary || null,
       };
     });
 
     return [...passthrough, ...collapsedPurchases].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+  }
+
+  private buildMissingCanonicalApplianceEvents(
+    existingEvents: HomeScoreTimelineSourceEvent[],
+    canonicalAppliances: HomeScoreCanonicalApplianceInput[]
+  ): HomeScoreTimelineEventDTO[] {
+    const existingTypes = new Set<string>();
+    existingEvents.forEach((event) => {
+      const key = this.canonicalPurchaseKey(event);
+      if (key?.startsWith('appliance:')) {
+        existingTypes.add(key.replace('appliance:', ''));
+      }
+    });
+
+    const synthetic: HomeScoreTimelineEventDTO[] = [];
+    canonicalAppliances.forEach((appliance) => {
+      const applianceType = majorApplianceTypeFromSourceHash(appliance.sourceHash);
+      if (!applianceType || existingTypes.has(applianceType)) return;
+
+      const referenceDate = appliance.installedOn ?? appliance.createdAt;
+      synthetic.push({
+        id: `inventory-appliance-${applianceType.toLowerCase()}`,
+        title: `Recorded appliance: ${formatMajorApplianceType(applianceType)}`,
+        summary: 'Captured from property appliance profile. Add purchase/service records to improve timeline precision.',
+        eventType: 'PURCHASE',
+        occurredAt: referenceDate.toISOString(),
+        year: referenceDate.getUTCFullYear(),
+        datePrecision: 'YEAR',
+        provenance: 'INFERRED',
+        verified: false,
+      });
+    });
+
+    return synthetic;
   }
 
   private formatSystemLabel(rawSystemType: unknown) {
@@ -1841,10 +1885,11 @@ export class HomeScoreReportService {
       yearBuilt: number | null;
       createdAt: Date;
     },
-    homeEvents: HomeScoreTimelineSourceEvent[]
+    homeEvents: HomeScoreTimelineSourceEvent[],
+    canonicalAppliances: HomeScoreCanonicalApplianceInput[]
   ): HomeScoreReportDTO['timeline'] {
     const normalizedHomeEvents = this.collapseDuplicatePurchaseEvents(homeEvents);
-    const timelineEvents: HomeScoreTimelineEventDTO[] = normalizedHomeEvents
+    const mappedTimelineEvents: HomeScoreTimelineEventDTO[] = normalizedHomeEvents
       .map((event) => {
         const provenance = this.mapEventProvenance(event);
         return {
@@ -1858,7 +1903,9 @@ export class HomeScoreReportService {
           provenance,
           verified: provenance === 'VERIFIED' || provenance === 'DOCUMENT_BACKED' || provenance === 'PUBLIC_RECORD',
         };
-      })
+      });
+    const inferredMissingApplianceEvents = this.buildMissingCanonicalApplianceEvents(normalizedHomeEvents, canonicalAppliances);
+    const timelineEvents: HomeScoreTimelineEventDTO[] = [...mappedTimelineEvents, ...inferredMissingApplianceEvents]
       .sort((a, b) => new Date(a.occurredAt || 0).getTime() - new Date(b.occurredAt || 0).getTime());
 
     if (propertyContext.yearBuilt) {
@@ -2470,7 +2517,7 @@ export class HomeScoreReportService {
   private async build(propertyId: string, userId: string, weeks: number): Promise<HomeScoreBuildResult> {
     const propertyContext = await this.assertPropertyAccess(propertyId, userId);
 
-    const [healthResult, riskReportOrQueued, financialSummary, scoreSummary, qualitySignals, homeEvents, doNothingRuns] = await Promise.all([
+    const [healthResult, riskReportOrQueued, financialSummary, scoreSummary, qualitySignals, homeEvents, canonicalAppliances, doNothingRuns] = await Promise.all([
       this.getHealthScore(propertyId),
       RiskAssessmentService.getOrCreateRiskReport(propertyId),
       this.financialService.getFinancialEfficiencySummary(propertyId),
@@ -2498,6 +2545,20 @@ export class HomeScoreReportService {
             select: { id: true },
             take: 2,
           },
+        },
+      }),
+      prisma.inventoryItem.findMany({
+        where: {
+          propertyId,
+          category: 'APPLIANCE',
+          sourceHash: {
+            startsWith: PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
+          },
+        },
+        select: {
+          sourceHash: true,
+          installedOn: true,
+          createdAt: true,
         },
       }),
       prisma.doNothingSimulationRun.findMany({
@@ -2821,7 +2882,8 @@ export class HomeScoreReportService {
         yearBuilt: propertyContext.yearBuilt,
         createdAt: propertyContext.createdAt,
       },
-      homeEvents
+      homeEvents,
+      canonicalAppliances
     );
     const trustAndVerification = this.buildTrustAndVerification(
       overallConfidence,

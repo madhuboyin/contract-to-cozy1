@@ -330,11 +330,11 @@ function timelineEventTimestamp(event: HomeScoreTimelineEvent) {
 
 function canonicalPurchaseTimelineKey(event: HomeScoreTimelineEvent) {
   if (event.eventType?.toUpperCase() !== "PURCHASE") return null;
-  if (!/^purchased:\s*/i.test(event.title || "")) return null;
+  if (!/^purchased\b/i.test(event.title || "")) return null;
 
   const normalized = String(event.title || "")
     .toLowerCase()
-    .replace(/^purchased:\s*/i, "")
+    .replace(/^purchased(?:\s*:)?\s*/i, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
   if (!normalized) return null;
@@ -370,7 +370,9 @@ function dedupePurchaseTimelineEvents(events: HomeScoreTimelineEvent[]) {
     const sorted = [...group].sort((a, b) => timelineEventTimestamp(a) - timelineEventTimestamp(b));
     const first = sorted[0];
     const last = sorted[sorted.length - 1];
-    const preferred = sorted.find((event) => event.verified) || first;
+    const preferred =
+      [...sorted].reverse().find((event) => event.verified || event.provenance === "USER_REPORTED") ||
+      last;
     const firstLabel = formatTimelineEventDate(first);
     const lastLabel = formatTimelineEventDate(last);
     const rangeLabel = firstLabel === lastLabel ? firstLabel : `${firstLabel} to ${lastLabel}`;
@@ -379,9 +381,9 @@ function dedupePurchaseTimelineEvents(events: HomeScoreTimelineEvent[]) {
     return {
       ...preferred,
       id: `dedup-${first.id}`,
-      occurredAt: first.occurredAt,
-      year: first.year,
-      datePrecision: first.datePrecision,
+      occurredAt: preferred.occurredAt,
+      year: preferred.year,
+      datePrecision: preferred.datePrecision,
       summary: [preferred.summary, consolidatedSummary].filter(Boolean).join(" "),
     };
   });
