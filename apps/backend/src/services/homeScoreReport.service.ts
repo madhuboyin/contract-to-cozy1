@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.util';
 import RiskAssessmentService from './RiskAssessment.service';
@@ -24,7 +25,23 @@ type HomeScoreDataSourceStatus = 'AVAILABLE' | 'PARTIAL' | 'PLANNED';
 type HomeScoreEffortLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 type HomeScoreUrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
+type HomeScoreSectionKey =
+  | 'REPORT_META'
+  | 'EXECUTIVE_SUMMARY'
+  | 'RADAR'
+  | 'SCORE_DRIVERS'
+  | 'TIMELINE'
+  | 'SYSTEM_HEALTH'
+  | 'FINANCIAL_EXPOSURE'
+  | 'TRUST_VERIFICATION'
+  | 'INTEGRITY_CHECKS'
+  | 'BENCHMARKS'
+  | 'IMPROVEMENT_PLAN'
+  | 'METHODOLOGY';
+
 const RISK_EXPOSURE_CAP = 15000;
+const HOME_SCORE_SNAPSHOT_STALE_HOURS = Math.max(1, Number(process.env.HOME_SCORE_SNAPSHOT_STALE_HOURS || 24));
+const HOME_SCORE_SNAPSHOT_STALE_MS = HOME_SCORE_SNAPSHOT_STALE_HOURS * 60 * 60 * 1000;
 const HOME_SCORE_GRADE_MAPPING: HomeScoreGradeBandConfigDTO[] = [
   { min: 90, max: 100, grade: 'A', ratingTier: 'EXCELLENT', label: 'Excellent' },
   { min: 80, max: 89, grade: 'B', ratingTier: 'STRONG', label: 'Strong' },
@@ -742,6 +759,359 @@ export class HomeScoreReportService {
   private parseJsonObject(value: Prisma.JsonValue | null): Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
     return value as Record<string, unknown>;
+  }
+
+  private toCents(value: number | null | undefined): bigint | null {
+    if (value === null || value === undefined || !Number.isFinite(value)) return null;
+    return BigInt(Math.round(value * 100));
+  }
+
+  private scoreModelVersion(weeks: number) {
+    return `homescore-v2:weeks:${weeks}`;
+  }
+
+  private sectionHash(payload: unknown) {
+    return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  }
+
+  private mapMethodologySourceName(key: string):
+    | 'FEMA'
+    | 'CLIMATE_RISK'
+    | 'COUNTY_PERMITS'
+    | 'TAX_RECORDS'
+    | 'UTILITY_BENCHMARK'
+    | 'INSURANCE_MODEL'
+    | 'CONTRACT_TO_COZY_ENGINE'
+    | null {
+    const normalized = String(key || '').toUpperCase();
+    if (normalized === 'FEMA_FLOOD') return 'FEMA';
+    if (normalized === 'CLIMATE') return 'CLIMATE_RISK';
+    if (normalized === 'PERMITS') return 'COUNTY_PERMITS';
+    if (normalized === 'TAX') return 'TAX_RECORDS';
+    if (normalized === 'UTILITY_BENCH') return 'UTILITY_BENCHMARK';
+    if (normalized === 'INSURANCE_MODEL') return 'INSURANCE_MODEL';
+    if (normalized === 'CTC_ENGINE') return 'CONTRACT_TO_COZY_ENGINE';
+    return null;
+  }
+
+  private mapMethodologyRunStatus(status: HomeScoreDataSourceStatus): 'SUCCESS' | 'PARTIAL' | 'FAILED' {
+    if (status === 'AVAILABLE') return 'SUCCESS';
+    if (status === 'PARTIAL') return 'PARTIAL';
+    return 'FAILED';
+  }
+
+  private mapSeverityFromIntegrityStatus(status: HomeScoreConsistencyStatus): 'LOW' | 'MEDIUM' | 'HIGH' {
+    if (status === 'FAIL') return 'HIGH';
+    if (status === 'WARN') return 'MEDIUM';
+    return 'LOW';
+  }
+
+  private sectionPayloads(report: HomeScoreReportDTO): Array<{ sectionKey: HomeScoreSectionKey; payload: unknown }> {
+    return [
+      {
+        sectionKey: 'REPORT_META',
+        payload: {
+          reportMeta: report.reportMeta,
+          fullReport: report,
+        },
+      },
+      { sectionKey: 'EXECUTIVE_SUMMARY', payload: report.executiveSummary },
+      { sectionKey: 'RADAR', payload: report.radar },
+      { sectionKey: 'SCORE_DRIVERS', payload: report.scoreDrivers },
+      { sectionKey: 'TIMELINE', payload: report.timeline },
+      { sectionKey: 'SYSTEM_HEALTH', payload: report.systemHealth },
+      { sectionKey: 'FINANCIAL_EXPOSURE', payload: report.financialExposure },
+      { sectionKey: 'TRUST_VERIFICATION', payload: report.trustAndVerification },
+      { sectionKey: 'INTEGRITY_CHECKS', payload: report.integrityChecks },
+      { sectionKey: 'BENCHMARKS', payload: report.benchmarks },
+      { sectionKey: 'IMPROVEMENT_PLAN', payload: report.improvementPlan },
+      { sectionKey: 'METHODOLOGY', payload: report.methodology },
+    ];
+  }
+
+  private normalizePersistedReport(propertyId: string, fallbackGeneratedAt: string, raw: unknown): HomeScoreReportDTO | null {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const report = raw as Partial<HomeScoreReportDTO>;
+    if (!report.propertyId || report.propertyId !== propertyId) return null;
+    if (!report.reportMeta || !report.executiveSummary || !report.financialExposure || !report.trustAndVerification) {
+      return null;
+    }
+
+    const normalizedHomeScore = asNumber(report.homeScore ?? report.executiveSummary.homeScore ?? 0);
+    const normalizedConfidence = (report.confidence || report.trustAndVerification.confidenceLevel || 'MEDIUM') as HomeScoreConfidence;
+
+    return {
+      ...report,
+      propertyId,
+      homeScore: normalizedHomeScore,
+      generatedAt: report.generatedAt || fallbackGeneratedAt,
+      scoreBand: report.scoreBand || scoreBand(normalizedHomeScore),
+      deltaFromPreviousWeek:
+        typeof report.deltaFromPreviousWeek === 'number' && Number.isFinite(report.deltaFromPreviousWeek)
+          ? report.deltaFromPreviousWeek
+          : report.executiveSummary.scoreDeltaFromPreviousPeriod,
+      confidence: normalizedConfidence,
+      verificationLadder:
+        report.verificationLadder && typeof report.verificationLadder === 'object'
+          ? report.verificationLadder
+          : { userStated: 0, inferred: 0, systemComputed: 0 },
+      components: Array.isArray(report.components) ? report.components : [],
+      topReasonsScoreNotHigher: Array.isArray(report.topReasonsScoreNotHigher) ? report.topReasonsScoreNotHigher : [],
+      whatChangedSinceLastWeek: Array.isArray(report.whatChangedSinceLastWeek) ? report.whatChangedSinceLastWeek : [],
+      consistencyChecks: Array.isArray(report.consistencyChecks) ? report.consistencyChecks : [],
+      verificationOpportunities: Array.isArray(report.verificationOpportunities) ? report.verificationOpportunities : [],
+      fieldFacts: Array.isArray(report.fieldFacts) ? report.fieldFacts : [],
+      correctionHistory: Array.isArray(report.correctionHistory) ? report.correctionHistory : [],
+      changeLog: Array.isArray(report.changeLog) ? report.changeLog : [],
+      trend: Array.isArray(report.trend) ? report.trend : [],
+      scoreDrivers: Array.isArray(report.scoreDrivers) ? report.scoreDrivers : [],
+      systemHealth: Array.isArray(report.systemHealth) ? report.systemHealth : [],
+      integrityChecks: Array.isArray(report.integrityChecks) ? report.integrityChecks : [],
+      timeline:
+        report.timeline && typeof report.timeline === 'object'
+          ? report.timeline
+          : { events: [], emptyState: null },
+      methodology:
+        report.methodology && typeof report.methodology === 'object'
+          ? report.methodology
+          : {
+              summary: '',
+              inputsUsed: [],
+              intendedUse: '',
+              disclosures: [],
+              methodologyHref: null,
+              dataSources: [],
+            },
+      uncertainty:
+        report.uncertainty && typeof report.uncertainty === 'object'
+          ? report.uncertainty
+          : {
+              scoreRangeLow: Math.round(asNumber(report.homeScore)),
+              scoreRangeHigh: Math.round(asNumber(report.homeScore)),
+              riskExposureRangeLow: null,
+              riskExposureRangeHigh: null,
+              accuracyScore: 50,
+              detail: 'Derived from persisted snapshot.',
+            },
+      nextBestAction:
+        report.nextBestAction && typeof report.nextBestAction === 'object'
+          ? report.nextBestAction
+          : null,
+      reportMeta: report.reportMeta,
+      executiveSummary: report.executiveSummary,
+      radar: report.radar || {
+        axes: [],
+        weakestArea: 'Unavailable',
+        strongestArea: 'Unavailable',
+        explanation: 'Radar data unavailable in persisted snapshot.',
+      },
+      financialExposure: report.financialExposure,
+      trustAndVerification: report.trustAndVerification,
+      benchmarks:
+        report.benchmarks && typeof report.benchmarks === 'object'
+          ? report.benchmarks
+          : {
+              thisHomeScore: Math.round(normalizedHomeScore),
+              percentile: null,
+              sources: [],
+              interpretation: 'Benchmark data will appear as comparable score snapshots become available.',
+            },
+      improvementPlan:
+        report.improvementPlan && typeof report.improvementPlan === 'object'
+          ? report.improvementPlan
+          : {
+              actions: [],
+              potentialNewScore: Math.round(normalizedHomeScore),
+              potentialMoneyAtRiskReduction: 0,
+            },
+    } as HomeScoreReportDTO;
+  }
+
+  private async getPersistedReport(propertyId: string, weeks: number): Promise<HomeScoreReportDTO | null> {
+    const snapshot = await prisma.homeScoreReport.findFirst({
+      where: {
+        propertyId,
+        reportMode: 'HOMEOWNER',
+        status: 'FINAL',
+        scoreModelVersion: this.scoreModelVersion(weeks),
+      },
+      orderBy: [{ generatedAt: 'desc' }],
+      include: {
+        sections: {
+          select: {
+            sectionKey: true,
+            sectionJson: true,
+          },
+        },
+      },
+    });
+
+    if (!snapshot) return null;
+
+    const reportMetaSection = snapshot.sections.find((section) => section.sectionKey === 'REPORT_META');
+    if (!reportMetaSection) return null;
+    const reportMetaPayload = this.parseJsonObject(reportMetaSection.sectionJson ?? null);
+    const fullReport = this.normalizePersistedReport(
+      propertyId,
+      snapshot.generatedAt.toISOString(),
+      reportMetaPayload.fullReport
+    );
+
+    return fullReport;
+  }
+
+  private isPersistedReportStale(generatedAtIso: string): boolean {
+    const generatedAtMs = new Date(generatedAtIso).getTime();
+    if (!Number.isFinite(generatedAtMs)) return true;
+    return Date.now() - generatedAtMs > HOME_SCORE_SNAPSHOT_STALE_MS;
+  }
+
+  private async persistReportArtifacts(
+    tx: Prisma.TransactionClient,
+    reportId: string,
+    propertyId: string,
+    report: HomeScoreReportDTO
+  ) {
+    const generatedAt = new Date(report.generatedAt);
+    const sectionRows = this.sectionPayloads(report).map((entry) => ({
+      reportId,
+      sectionKey: entry.sectionKey,
+      sectionJson: entry.payload as Prisma.InputJsonValue,
+      hashSha256: this.sectionHash(entry.payload),
+    }));
+
+    if (sectionRows.length > 0) {
+      await tx.homeScoreReportSection.createMany({ data: sectionRows });
+    }
+
+    if (report.integrityChecks.length > 0) {
+      await tx.homeScoreIntegrityCheckRun.createMany({
+        data: report.integrityChecks.map((check) => ({
+          propertyId,
+          reportId,
+          checkKey: check.id,
+          status: check.status,
+          severity: this.mapSeverityFromIntegrityStatus(check.status),
+          detail: check.detail,
+          remediationHref: check.actionHref ?? null,
+          computedAt: generatedAt,
+        })),
+      });
+    }
+
+    const forecastHorizons: Array<{ horizonMonths: 12 | 36 | 60; value: number }> = [
+      { horizonMonths: 12, value: report.financialExposure.horizon12Months },
+      { horizonMonths: 36, value: report.financialExposure.horizon3Years },
+      { horizonMonths: 60, value: report.financialExposure.horizon5Years },
+    ];
+
+    for (const horizon of forecastHorizons) {
+      const createdForecast = await tx.homeScoreFinancialForecast.create({
+        data: {
+          propertyId,
+          reportId,
+          modelVersion: report.reportMeta.reportVersion || '2.0',
+          horizonMonths: horizon.horizonMonths,
+          moneyAtRiskCents: this.toCents(horizon.value) ?? BigInt(0),
+          confidenceLowCents: this.toCents(report.financialExposure.confidenceRangeLow),
+          confidenceHighCents: this.toCents(report.financialExposure.confidenceRangeHigh),
+          computedAt: generatedAt,
+        },
+        select: { id: true },
+      });
+
+      if (report.financialExposure.lines.length > 0) {
+        await tx.homeScoreFinancialForecastItem.createMany({
+          data: report.financialExposure.lines.map((line) => ({
+            forecastId: createdForecast.id,
+            categoryKey: line.label,
+            estimatedCostCents: this.toCents(line.exposure) ?? BigInt(0),
+            verifiedCostCents:
+              line.provenance === 'VERIFIED' ||
+              line.provenance === 'DOCUMENT_BACKED' ||
+              line.provenance === 'PUBLIC_RECORD'
+                ? this.toCents(line.exposure)
+                : null,
+            urgency: line.urgency,
+            sourceType:
+              line.provenance === 'VERIFIED' ||
+              line.provenance === 'DOCUMENT_BACKED' ||
+              line.provenance === 'PUBLIC_RECORD'
+                ? 'VERIFIED'
+                : 'ESTIMATED',
+          })),
+        });
+      }
+    }
+
+    for (const source of report.methodology.dataSources) {
+      const sourceName = this.mapMethodologySourceName(source.key);
+      if (!sourceName) continue;
+
+      const run = await tx.homeScoreDataSourceRun.create({
+        data: {
+          propertyId,
+          sourceName,
+          sourceVersion: report.reportMeta.reportVersion || '2.0',
+          runStatus: this.mapMethodologyRunStatus(source.status),
+          startedAt: generatedAt,
+          completedAt: generatedAt,
+          recordsRead: 1,
+          recordsWritten: source.status === 'AVAILABLE' ? 1 : 0,
+          errorSummary: source.status === 'PLANNED' ? 'Source not integrated in this region yet.' : null,
+        },
+        select: { id: true },
+      });
+
+      await tx.homeScoreDataSourceFact.create({
+        data: {
+          propertyId,
+          sourceName,
+          factKey: 'SOURCE_STATUS',
+          factValueJson: {
+            key: source.key,
+            label: source.label,
+            status: source.status,
+            generatedAt: report.generatedAt,
+          } as Prisma.InputJsonValue,
+          effectiveAt: generatedAt,
+          runId: run.id,
+        },
+      });
+    }
+  }
+
+  private async persistReportSnapshot(propertyId: string, userId: string, weeks: number, report: HomeScoreReportDTO) {
+    await prisma.$transaction(async (tx) => {
+      const scoreModelVersion = this.scoreModelVersion(weeks);
+
+      await tx.homeScoreReport.updateMany({
+        where: {
+          propertyId,
+          reportMode: 'HOMEOWNER',
+          status: 'FINAL',
+          scoreModelVersion,
+        },
+        data: {
+          status: 'SUPERSEDED',
+        },
+      });
+
+      const createdReport = await tx.homeScoreReport.create({
+        data: {
+          propertyId,
+          generatedByUserId: userId,
+          reportMode: 'HOMEOWNER',
+          reportVersion: report.reportMeta.reportVersion || '2.0',
+          scoreModelVersion,
+          status: 'FINAL',
+          generatedAt: new Date(report.generatedAt),
+        },
+        select: { id: true },
+      });
+
+      await this.persistReportArtifacts(tx, createdReport.id, propertyId, report);
+    });
   }
 
   private async getCorrectionHistory(propertyId: string, limit = 20): Promise<HomeScoreCorrectionDTO[]> {
@@ -2526,13 +2896,34 @@ export class HomeScoreReportService {
   }
 
   async getReport(propertyId: string, userId: string, weeks = 26): Promise<HomeScoreReportDTO> {
-    const result = await this.build(propertyId, userId, weeks);
-    return result.report;
+    await this.assertPropertyAccess(propertyId, userId);
+
+    const persisted = await this.getPersistedReport(propertyId, weeks);
+    const persistedIsFresh = persisted ? !this.isPersistedReportStale(persisted.generatedAt) : false;
+    if (persisted && persistedIsFresh) {
+      return persisted;
+    }
+
+    try {
+      const result = await this.build(propertyId, userId, weeks);
+      try {
+        await this.persistReportSnapshot(propertyId, userId, weeks, result.report);
+      } catch (error) {
+        console.error('Failed to persist HomeScore snapshot after build:', error);
+      }
+      return result.report;
+    } catch (error) {
+      if (persisted) {
+        console.error('Failed to recompute stale HomeScore snapshot; falling back to persisted snapshot:', error);
+        return persisted;
+      }
+      throw error;
+    }
   }
 
   async getFactors(propertyId: string, userId: string, weeks = 26) {
-    const result = await this.build(propertyId, userId, weeks);
-    return result.reasons;
+    const report = await this.getReport(propertyId, userId, weeks);
+    return report.topReasonsScoreNotHigher || [];
   }
 
   async getHistory(propertyId: string, userId: string, weeks = 52) {
@@ -2636,7 +3027,12 @@ export class HomeScoreReportService {
       RiskAssessmentService.calculateAndSaveReport(propertyId),
       this.financialService.calculateAndSaveFES(propertyId),
     ]);
-
-    return this.getReport(propertyId, userId, weeks);
+    const result = await this.build(propertyId, userId, weeks);
+    try {
+      await this.persistReportSnapshot(propertyId, userId, weeks, result.report);
+    } catch (error) {
+      console.error('Failed to persist HomeScore snapshot after refresh:', error);
+    }
+    return result.report;
   }
 }
