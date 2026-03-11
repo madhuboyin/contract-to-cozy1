@@ -115,6 +115,13 @@ function gradeBadgeClass(grade: string) {
   return "bg-rose-100 text-rose-700 border-rose-200";
 }
 
+function systemStatusBadgeClass(status: string) {
+  if (status === "Stable") return "bg-emerald-100 text-emerald-700 border-emerald-200";
+  if (status === "High risk") return "bg-rose-100 text-rose-700 border-rose-200";
+  if (status === "Pending data") return "bg-slate-100 text-slate-700 border-slate-200";
+  return "bg-amber-100 text-amber-700 border-amber-200";
+}
+
 function normalizeSystemStatus(raw: string, grade: string, verification: string, projectedRiskHorizonMonths: number | null) {
   if (verification === "MISSING") return "Pending data";
   if (verification === "USER_REPORTED" || verification === "INFERRED") return "Needs verification";
@@ -1134,25 +1141,19 @@ export default function HomeScoreReportPage() {
                     row.verification,
                     row.projectedRiskHorizonMonths
                   );
-                  const normalizedUrgency =
-                    normalizedStatus === "High risk"
-                      ? "HIGH"
-                      : normalizedStatus === "Aging" || normalizedStatus === "Monitor"
-                        ? "MEDIUM"
-                        : "LOW";
 
                   return (
                   <tr key={row.key} className="border-b border-slate-100 align-top">
                     <td className="py-3 pr-3 font-medium text-slate-900">{row.label}</td>
                     <td className="py-3 pr-3">
-                      <Badge variant="outline" className={gradeBadgeClass(row.grade)}>Grade: {row.grade}</Badge>
+                      <Badge variant="outline" className={gradeBadgeClass(row.grade)}>{row.grade}</Badge>
                     </td>
                     <td className="py-3 pr-3 text-slate-700">
                       <Badge
                         variant="outline"
-                        className={urgencyBadgeClass(normalizedUrgency)}
+                        className={systemStatusBadgeClass(normalizedStatus)}
                       >
-                        Status: {normalizedStatus}
+                        {normalizedStatus}
                       </Badge>
                     </td>
                     <td className="py-3 pr-3 text-slate-700">
@@ -1161,7 +1162,7 @@ export default function HomeScoreReportPage() {
                     </td>
                     <td className="py-3 pr-3">
                       <Badge variant="outline" className={provenanceBadgeClass(row.verification)}>
-                        Verification: {formatConstantLabel(row.verification)}
+                        {formatConstantLabel(row.verification)}
                       </Badge>
                     </td>
                     <td className="py-3 pr-3 text-slate-700">{row.nextRecommendedAction}</td>
