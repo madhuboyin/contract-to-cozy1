@@ -172,14 +172,14 @@ function SectionCard(props: {
         onToggle?.(id, details.open);
       }}
     >
-      <summary className="list-none cursor-pointer px-6 py-4">
+      <summary className="list-none cursor-pointer px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id={id} className="text-[15px] font-semibold text-slate-950">
+            <h2 id={id} className="text-base font-semibold tracking-tight text-slate-950">
               {icon ? <span className="mr-2">{icon}</span> : null}
               {title}
             </h2>
-            {subtitle ? <p className="mt-1 max-w-3xl text-sm text-slate-600">{subtitle}</p> : null}
+            {subtitle ? <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">{subtitle}</p> : null}
           </div>
           <div className="flex items-center gap-2">
             {action}
@@ -187,24 +187,24 @@ function SectionCard(props: {
           </div>
         </div>
       </summary>
-      <div className="border-t border-slate-200/80 px-6 py-6">{children}</div>
+      <div className="border-t border-slate-200/80 px-6 py-5">{children}</div>
     </details>
   );
 }
 
 function ScoreRing({ score, inverse = false }: { score: number; inverse?: boolean }) {
   const normalized = Math.max(0, Math.min(100, Math.round(score)));
-  const radius = 62;
-  const stroke = 9;
+  const radius = 64;
+  const stroke = 10;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (normalized / 100) * circumference;
-  const trackStroke = inverse ? "rgba(255,255,255,0.22)" : "#e2e8f0";
-  const valueStroke = inverse ? "#ffffff" : "#0f172a";
+  const trackStroke = inverse ? "rgba(255,255,255,0.18)" : "#cbd5e1";
+  const valueStroke = inverse ? "rgba(255,255,255,0.98)" : "#0f172a";
   const valueClass = inverse ? "text-white" : "text-slate-950";
   const labelClass = inverse ? "text-slate-200" : "text-slate-500";
 
   return (
-    <div className="relative h-40 w-40">
+    <div className="relative h-44 w-44">
       <svg viewBox="0 0 180 180" className="h-full w-full -rotate-90">
         <circle cx="90" cy="90" r={radius} fill="none" stroke={trackStroke} strokeWidth={stroke} />
         <circle
@@ -220,8 +220,8 @@ function ScoreRing({ score, inverse = false }: { score: number; inverse?: boolea
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className={cx("text-4xl font-semibold tracking-tight", valueClass)}>{normalized}</div>
-        <div className={cx("text-xs font-medium uppercase tracking-[0.12em]", labelClass)}>out of 100</div>
+        <div className={cx("text-5xl font-semibold leading-none tracking-tight tabular-nums", valueClass)}>{normalized}</div>
+        <div className={cx("mt-1 text-[11px] font-medium uppercase tracking-[0.1em]", labelClass)}>/100</div>
       </div>
     </div>
   );
@@ -639,7 +639,7 @@ export default function HomeScoreReportPage() {
 
   return (
     <DashboardShell className="pb-8 print:bg-white">
-      <div className="space-y-6">
+      <div className="space-y-5">
         <div className="flex items-center justify-between print:hidden">
           <Button variant="ghost" className="px-0 text-slate-600" onClick={() => router.back()}>
             <ArrowLeft className="mr-1 h-4 w-4" /> Back
@@ -674,11 +674,11 @@ export default function HomeScoreReportPage() {
 
         <section className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-6 py-4">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Report Header</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Report Header</p>
+            <h1 className="mt-2 text-[2rem] font-semibold tracking-tight text-slate-950">
               {meta?.reportTitle || "Contract-to-Cozy Certified HomeScore Report"}
             </h1>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1.5 text-sm text-slate-600">
               {meta?.propertyAddress || `${propertyQuery.data?.address || ""}, ${propertyQuery.data?.city || ""}`}
             </p>
           </div>
@@ -692,7 +692,7 @@ export default function HomeScoreReportPage() {
               { label: "Year Built", value: meta?.yearBuilt || propertyQuery.data?.yearBuilt || "Not available" },
             ].map((item) => (
               <div key={item.label} className="border-t border-slate-200 px-6 py-3 sm:[&:nth-child(odd)]:border-r lg:[&:not(:nth-child(3n))]:border-r">
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">{item.label}</p>
+                <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">{item.label}</p>
                 <p className="mt-1 text-sm font-medium text-slate-900">{item.value}</p>
               </div>
             ))}
@@ -710,7 +710,7 @@ export default function HomeScoreReportPage() {
           </div>
         </section>
 
-        <section className="border border-slate-200 bg-slate-50/80 px-4 py-3">
+        <section className="border border-slate-200 bg-slate-50/80 px-4 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
@@ -727,7 +727,7 @@ export default function HomeScoreReportPage() {
                 { label: "Confidence", value: reportLifecycle.confidenceLevel },
               ].map((item) => (
                 <div key={item.label} className="min-w-[145px] border-l border-slate-200 pl-3">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{item.label}</p>
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">{item.label}</p>
                   <p className="mt-0.5 text-sm font-medium text-slate-900">{item.value}</p>
                 </div>
               ))}
@@ -751,14 +751,14 @@ export default function HomeScoreReportPage() {
         </section>
 
         <Card className="border-slate-200 bg-gradient-to-br from-slate-950 to-slate-800 text-slate-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold">📊 Executive Summary</CardTitle>
-            <CardDescription className="text-slate-300">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl font-semibold tracking-tight">📊 Executive Summary</CardTitle>
+            <CardDescription className="text-sm text-slate-300">
               Overall home health, financial exposure, and verification confidence.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-5 lg:grid-cols-[190px,1fr]">
-            <div className="flex flex-col items-center gap-2">
+          <CardContent className="grid gap-6 lg:grid-cols-[210px,1fr]">
+            <div className="flex flex-col items-center gap-3">
               <ScoreRing score={executive?.homeScore ?? report.homeScore} inverse />
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className={cx("bg-white/10 text-white border-white/20", gradeBadgeClass(executive?.grade || "F"))}>
@@ -767,26 +767,26 @@ export default function HomeScoreReportPage() {
                 <Badge className="bg-white/10 text-white border-white/20">{formatConstantLabel(executive?.ratingTier || "")}</Badge>
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Money at Risk (3 years)</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-300">Money at Risk (3 years)</p>
+                  <p className="mt-1 text-[2rem] font-semibold leading-none text-white">
                     {formatCurrency(executive?.moneyAtRiskHeadline ?? financialExposure?.headlineMoneyAtRisk)}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-300">Estimated repair exposure</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Confidence</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{formatConstantLabel(executive?.confidenceLevel || report.confidence)}</p>
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-300">Confidence</p>
+                  <p className="mt-1 text-xl font-semibold leading-none text-white">{formatConstantLabel(executive?.confidenceLevel || report.confidence)}</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Value Protection</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{executive?.valueProtectionScore ?? report.homeScore}/100</p>
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-300">Value Protection</p>
+                  <p className="mt-1 text-xl font-semibold leading-none text-white">{executive?.valueProtectionScore ?? report.homeScore}/100</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Weekly Delta</p>
-                  <p className="mt-1 inline-flex items-center gap-1 text-lg font-semibold text-white">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-300">Weekly Delta</p>
+                  <p className="mt-1 inline-flex items-center gap-1 text-xl font-semibold leading-none text-white">
                     <TrendingUp className="h-4 w-4" />
                     {report.deltaFromPreviousWeek === null ? "No change" : `${report.deltaFromPreviousWeek > 0 ? "+" : ""}${report.deltaFromPreviousWeek.toFixed(1)}`}
                   </p>
@@ -794,7 +794,7 @@ export default function HomeScoreReportPage() {
               </div>
               <div className="rounded-lg border border-white/15 bg-white/5 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">HomeScore trend</p>
+                  <p className="text-sm font-medium text-slate-100">HomeScore trend</p>
                   <div className="flex items-center gap-2 print:hidden">
                     <Button
                       size="sm"
@@ -837,8 +837,8 @@ export default function HomeScoreReportPage() {
         <section className="border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">HomeScore Snapshot</p>
-              <p className="mt-1 text-sm text-slate-600">{meta?.propertyAddress || propertyQuery.data?.address}</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">HomeScore Snapshot</p>
+              <p className="mt-1.5 text-sm text-slate-600">{meta?.propertyAddress || propertyQuery.data?.address}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge variant="outline" className={gradeBadgeClass(executive?.grade || "F")}>
                   HomeScore: {executive?.homeScore ?? report.homeScore}/100
@@ -1116,14 +1116,14 @@ export default function HomeScoreReportPage() {
           subtitle="Per-system grades, verification status, and next recommended actions."
           onToggle={onSectionToggle}
         >
-          <div className="space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              {systemHealthInsight}
-            </div>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                {systemHealthInsight}
+              </div>
             <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-[0.08em] text-slate-500">
                   <th className="py-2 pr-3">System</th>
                   <th className="py-2 pr-3">Grade</th>
                   <th className="py-2 pr-3">Status</th>
