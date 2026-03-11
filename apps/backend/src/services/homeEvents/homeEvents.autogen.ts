@@ -1,5 +1,10 @@
 // apps/backend/src/services/homeEvents/homeEvents.autogen.ts
 import { prisma } from '../../lib/prisma';
+import {
+  formatMajorApplianceType,
+  inferMajorApplianceType,
+  PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
+} from '../majorAppliance.util';
 
 // Keep it dead simple + safe
 function enabled() {
@@ -9,6 +14,14 @@ function enabled() {
 function safeDate(d?: Date | string | null) {
   if (!d) return null;
   return d instanceof Date ? d : new Date(d);
+}
+
+function normalizeInventoryCategory(value?: string | null) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Z0-9_]/g, '');
 }
 
 /**
@@ -150,6 +163,16 @@ export class HomeEventsAutoGen {
     sku?: string | null;
   }) {
     const occurredAt = safeDate(args.purchasedOn) ?? new Date();
+    const normalizedCategory = normalizeInventoryCategory(args.category);
+    const applianceType =
+      normalizedCategory === 'APPLIANCE' ? inferMajorApplianceType(args.name) : null;
+    const purchaseDateKey = args.purchasedOn ? occurredAt.toISOString().slice(0, 10) : 'unknown-date';
+    const semanticIdempotencyKey = applianceType
+      ? `purchase:${args.propertyId}:appliance:${applianceType}:${purchaseDateKey}`
+      : `inventoryItem:${args.itemId}:created`;
+    const purchaseTitle = applianceType
+      ? `Purchased: ${formatMajorApplianceType(applianceType)}`
+      : `Purchased: ${args.name}`;
 
     // Convert cents -> decimal string
     const amount =
@@ -162,18 +185,21 @@ export class HomeEventsAutoGen {
       propertyId: args.propertyId,
       createdById: args.userId ?? null,
       type: 'PURCHASE',
-      subtype: args.category ? `ITEM_${args.category}` : 'ITEM',
+      subtype: normalizedCategory ? `ITEM_${normalizedCategory}` : 'ITEM',
       occurredAt,
-      title: `Purchased: ${args.name}`,
+      title: purchaseTitle,
       summary,
       roomId: args.roomId ?? null,
       inventoryItemId: args.itemId,
       amount,
       currency: args.currency ?? undefined,
-      idempotencyKey: `inventoryItem:${args.itemId}:created`,
-      groupKey: `purchase:${occurredAt.toISOString().slice(0, 10)}`,
+      idempotencyKey: semanticIdempotencyKey,
+      groupKey: applianceType
+        ? `purchase:${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${applianceType}`
+        : `purchase:${occurredAt.toISOString().slice(0, 10)}`,
       meta: {
         itemId: args.itemId,
+        applianceType: applianceType ?? null,
         brand: args.brand ?? null,
         model: args.model ?? null,
         upc: args.upc ?? null,

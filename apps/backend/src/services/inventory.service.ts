@@ -7,6 +7,11 @@ import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
 import { NextFunction } from 'express';
 import { applianceOracleService } from './applianceOracle.service';
 import { generateForecast } from './maintenancePrediction.service';
+import {
+  formatMajorApplianceType,
+  inferMajorApplianceType,
+  PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
+} from './majorAppliance.util';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -72,90 +77,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 8000) {
   }
 }
 
-const PROPERTY_APPLIANCE_PREFIX = 'property_appliance::';
 const TAG_PROPERTY_APPLIANCE = 'PROPERTY_APPLIANCE';
-
-function normalizeNameLoose(s: string) {
-  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
-/**
- * Major appliance types that are managed from Property Details page.
- * These should NOT be created manually on Inventory page.
- */
-const MAJOR_APPLIANCE_TYPES = [
-  'DISHWASHER',
-  'REFRIGERATOR',
-  'OVEN_RANGE',
-  'WASHER_DRYER',
-  'MICROWAVE_HOOD',
-  'WATER_SOFTENER',
-] as const;
-
-type MajorApplianceType = typeof MAJOR_APPLIANCE_TYPES[number];
-
-/**
- * Fuzzy matching patterns for detecting major appliance types from user input.
- * Each pattern maps to a canonical appliance type.
- */
-const APPLIANCE_PATTERNS: Record<MajorApplianceType, RegExp[]> = {
-  DISHWASHER: [
-    /dish\s*washer/i,
-    /dishwasher/i,
-  ],
-  REFRIGERATOR: [
-    /refrigerator/i,
-    /fridge/i,
-    /freezer/i,  // standalone freezers often grouped here
-  ],
-  OVEN_RANGE: [
-    /\boven\b/i,
-    /\brange\b/i,
-    /\bstove\b/i,
-    /cooktop/i,
-    /cook\s*top/i,
-  ],
-  WASHER_DRYER: [
-    /washer/i,
-    /dryer/i,
-    /laundry/i,
-    /washing\s*machine/i,
-  ],
-  MICROWAVE_HOOD: [
-    /microwave/i,
-    /micro\s*wave/i,
-    /range\s*hood/i,
-    /vent\s*hood/i,
-    /exhaust\s*hood/i,
-  ],
-  WATER_SOFTENER: [
-    /water\s*softener/i,
-    /softener/i,
-    /water\s*conditioner/i,
-  ],
-};
-// Canonical major appliance types
-function inferMajorApplianceType(name: string | null | undefined): MajorApplianceType | null {
-  if (!name) return null;
-  
-  const normalized = String(name)
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  
-  if (!normalized) return null;
-
-  for (const [type, patterns] of Object.entries(APPLIANCE_PATTERNS)) {
-    for (const pattern of patterns) {
-      if (pattern.test(normalized)) {
-        return type as MajorApplianceType;
-      }
-    }
-  }
-
-  return null;
-}
 
 function mergeTags(
   existing: string[] | null | undefined,
@@ -167,10 +89,6 @@ function mergeTags(
     ...(incoming || []),
     ...enforced,
   ]));
-}
-
-function formatApplianceType(type: string): string {
-  return type.replace(/_/g, ' ').toLowerCase();
 }
 
 export class InventoryService {
@@ -212,7 +130,7 @@ export class InventoryService {
       return { isDuplicate: false };
     }
 
-    const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
+    const sourceHash = `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${inferredType}`;
 
     const existing = await prisma.inventoryItem.findFirst({
       where: { propertyId, sourceHash },
@@ -220,7 +138,7 @@ export class InventoryService {
     });
 
     if (existing) {
-      const friendlyName = formatApplianceType(inferredType);
+      const friendlyName = formatMajorApplianceType(inferredType).toLowerCase();
       return {
         isDuplicate: true,
         message: `A ${friendlyName} already exists for this property.`,
@@ -373,7 +291,7 @@ export class InventoryService {
       const inferredType = inferMajorApplianceType(data.name);
       
       if (inferredType) {
-        sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
+        sourceHash = `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${inferredType}`;
         enforcedTags = [TAG_PROPERTY_APPLIANCE, `APPLIANCE_TYPE:${inferredType}`];
   
         // Check if this major appliance already exists
@@ -384,7 +302,7 @@ export class InventoryService {
   
         if (existingCanonical) {
           // Simple duplicate error - one liner
-          const friendlyName = formatApplianceType(inferredType);
+          const friendlyName = formatMajorApplianceType(inferredType).toLowerCase();
           throw new APIError(
             `A ${friendlyName} already exists for this property.`,
             409,
@@ -508,7 +426,7 @@ export class InventoryService {
       const inferredType = inferMajorApplianceType(nextName);
       
       if (inferredType) {
-        const sourceHash = `${PROPERTY_APPLIANCE_PREFIX}${inferredType}`;
+        const sourceHash = `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${inferredType}`;
         
         // Check if another item with this type exists
         const canonical = await prisma.inventoryItem.findFirst({
@@ -517,7 +435,7 @@ export class InventoryService {
         });
   
         if (canonical && canonical.id !== itemId) {
-          const friendlyName = formatApplianceType(inferredType);
+          const friendlyName = formatMajorApplianceType(inferredType).toLowerCase();
           throw new APIError(
             `A ${friendlyName} already exists for this property.`,
             409,
@@ -526,7 +444,7 @@ export class InventoryService {
         }
   
         // Update sourceHash if this item is becoming a major appliance
-        if (!existing.sourceHash?.startsWith(PROPERTY_APPLIANCE_PREFIX)) {
+        if (!existing.sourceHash?.startsWith(PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX)) {
           (patch as any).sourceHash = sourceHash;
           (patch as any).tags = mergeTags(existing.tags, patch.tags, [
             TAG_PROPERTY_APPLIANCE,

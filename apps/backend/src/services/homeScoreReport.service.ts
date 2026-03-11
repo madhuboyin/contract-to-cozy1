@@ -5,6 +5,11 @@ import { calculateHealthScore, HealthScoreResult } from '../utils/propertyScore.
 import RiskAssessmentService from './RiskAssessment.service';
 import { FinancialReportService } from './FinancialReport.service';
 import {
+  formatMajorApplianceType,
+  inferMajorApplianceType,
+  majorApplianceTypeFromSourceHash,
+} from './majorAppliance.util';
+import {
   getPropertyScoreSnapshotSummary,
   PropertyScoreSnapshotSummaryDTO,
 } from './propertyScoreSnapshot.service';
@@ -422,6 +427,21 @@ type HomeScoreBuildResult = {
   report: HomeScoreReportDTO;
   components: HomeScoreComponentDTO[];
   reasons: HomeScoreReasonDTO[];
+};
+
+type HomeScoreTimelineSourceEvent = {
+  id: string;
+  type: string;
+  occurredAt: Date;
+  title: string;
+  summary: string | null;
+  createdById: string | null;
+  documents?: Array<unknown>;
+  inventoryItem?: {
+    sourceHash: string | null;
+    name: string;
+    category: string;
+  } | null;
 };
 
 export type HomeScoreCorrectionInput = {
@@ -1642,6 +1662,78 @@ export class HomeScoreReportService {
     return 'INFERRED';
   }
 
+  private normalizeTimelineTitle(value: string) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/^purchased:\s*/i, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  private canonicalPurchaseKey(event: HomeScoreTimelineSourceEvent): string | null {
+    if (event.type !== 'PURCHASE') return null;
+
+    const sourceHashType = majorApplianceTypeFromSourceHash(event.inventoryItem?.sourceHash);
+    if (sourceHashType) return `appliance:${sourceHashType}`;
+
+    if (!/^purchased:\s*/i.test(event.title)) return null;
+
+    const inferredFromTitle = inferMajorApplianceType(event.title);
+    if (inferredFromTitle) return `appliance:${inferredFromTitle}`;
+
+    const normalized = this.normalizeTimelineTitle(event.title);
+    return normalized ? `purchase:${normalized}` : null;
+  }
+
+  private collapseDuplicatePurchaseEvents(events: HomeScoreTimelineSourceEvent[]): HomeScoreTimelineSourceEvent[] {
+    const passthrough: HomeScoreTimelineSourceEvent[] = [];
+    const groupedPurchases = new Map<string, HomeScoreTimelineSourceEvent[]>();
+
+    for (const event of events) {
+      const key = this.canonicalPurchaseKey(event);
+      if (!key) {
+        passthrough.push(event);
+        continue;
+      }
+      if (!groupedPurchases.has(key)) {
+        groupedPurchases.set(key, []);
+      }
+      groupedPurchases.get(key)!.push(event);
+    }
+
+    const collapsedPurchases = Array.from(groupedPurchases.entries()).map(([key, duplicates]) => {
+      if (duplicates.length === 1) return duplicates[0];
+
+      const sortedByDate = [...duplicates].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+      const earliest = sortedByDate[0];
+      const latest = sortedByDate[sortedByDate.length - 1];
+      const documentBackedEvent = sortedByDate.find((entry) => (entry.documents || []).length > 0) ?? earliest;
+      const inferredType = key.startsWith('appliance:')
+        ? key.replace('appliance:', '')
+        : inferMajorApplianceType(earliest.title);
+      const canonicalTitle = inferredType
+        ? `Purchased: ${formatMajorApplianceType(inferredType)}`
+        : earliest.title;
+      const rangeLabel =
+        toIsoDate(earliest.occurredAt) === toIsoDate(latest.occurredAt)
+          ? `on ${toIsoDate(earliest.occurredAt)}`
+          : `from ${toIsoDate(earliest.occurredAt)} to ${toIsoDate(latest.occurredAt)}`;
+      const mergedSummary = [documentBackedEvent.summary, `Consolidated ${duplicates.length} similar purchase entries ${rangeLabel}.`]
+        .filter(Boolean)
+        .join(' ');
+
+      return {
+        ...documentBackedEvent,
+        id: `dedup-${earliest.id}`,
+        occurredAt: earliest.occurredAt,
+        title: canonicalTitle,
+        summary: mergedSummary || null,
+      };
+    });
+
+    return [...passthrough, ...collapsedPurchases].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+  }
+
   private formatSystemLabel(rawSystemType: unknown) {
     const normalized = String(rawSystemType || '')
       .replace(/^MAJOR_APPLIANCE_/, '')
@@ -1749,17 +1841,10 @@ export class HomeScoreReportService {
       yearBuilt: number | null;
       createdAt: Date;
     },
-    homeEvents: Array<{
-      id: string;
-      type: string;
-      occurredAt: Date;
-      title: string;
-      summary: string | null;
-      createdById: string | null;
-      documents?: Array<unknown>;
-    }>
+    homeEvents: HomeScoreTimelineSourceEvent[]
   ): HomeScoreReportDTO['timeline'] {
-    const timelineEvents: HomeScoreTimelineEventDTO[] = homeEvents
+    const normalizedHomeEvents = this.collapseDuplicatePurchaseEvents(homeEvents);
+    const timelineEvents: HomeScoreTimelineEventDTO[] = normalizedHomeEvents
       .map((event) => {
         const provenance = this.mapEventProvenance(event);
         return {
@@ -2402,6 +2487,13 @@ export class HomeScoreReportService {
           title: true,
           summary: true,
           createdById: true,
+          inventoryItem: {
+            select: {
+              sourceHash: true,
+              name: true,
+              category: true,
+            },
+          },
           documents: {
             select: { id: true },
             take: 2,
