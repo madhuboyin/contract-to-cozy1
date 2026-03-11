@@ -478,6 +478,8 @@ export interface HomeScoreReportMeta {
   propertyAddress: string;
   reportId: string;
   generatedDate: string;
+  propertyType?: string | null;
+  yearBuilt?: number | null;
   preparedFor: string | null;
   ownerName: string | null;
   dataCoveragePercentage: number;

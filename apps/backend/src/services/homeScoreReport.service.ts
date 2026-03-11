@@ -143,6 +143,8 @@ export type HomeScoreReportMetaDTO = {
   propertyAddress: string;
   reportId: string;
   generatedDate: string;
+  propertyType?: string | null;
+  yearBuilt?: number | null;
   preparedFor: string | null;
   ownerName: string | null;
   dataCoveragePercentage: number;
@@ -2454,6 +2456,8 @@ export class HomeScoreReportService {
       ]),
       reportId,
       generatedDate: generatedAtIso,
+      propertyType: propertyContext.propertyType,
+      yearBuilt: propertyContext.yearBuilt,
       preparedFor: ownerName || null,
       ownerName: ownerName || null,
       dataCoveragePercentage: trustAndVerification.dataCoveragePct,

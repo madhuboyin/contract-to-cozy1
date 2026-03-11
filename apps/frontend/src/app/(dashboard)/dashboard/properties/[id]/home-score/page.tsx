@@ -10,11 +10,14 @@ import {
   BadgeCheck,
   CalendarClock,
   CheckCircle2,
+  Copy,
   ChevronRight,
   FileDown,
   Gauge,
+  Link2,
   Loader2,
   RefreshCw,
+  Share2,
   TrendingUp,
 } from "lucide-react";
 
@@ -58,10 +61,14 @@ function formatDate(iso?: string | null) {
   });
 }
 
+function formatConstantLabel(value: string) {
+  return value.replace(/_/g, " ").toLowerCase().replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
 function confidenceBadgeClass(confidence: string) {
   if (confidence === "HIGH") return "bg-emerald-100 text-emerald-700 border-emerald-200";
   if (confidence === "MEDIUM") return "bg-amber-100 text-amber-700 border-amber-200";
-  return "bg-slate-100 text-slate-700 border-slate-200";
+  return "bg-rose-100 text-rose-700 border-rose-200";
 }
 
 function statusBadgeClass(status: string) {
@@ -77,6 +84,37 @@ function urgencyBadgeClass(urgency: string) {
   return "bg-emerald-100 text-emerald-700 border-emerald-200";
 }
 
+function provenanceBadgeClass(provenance: string) {
+  if (provenance === "VERIFIED" || provenance === "DOCUMENT_BACKED" || provenance === "PUBLIC_RECORD") {
+    return "bg-emerald-100 text-emerald-700 border-emerald-200";
+  }
+  if (provenance === "INFERRED") return "bg-sky-100 text-sky-700 border-sky-200";
+  if (provenance === "MISSING") return "bg-slate-100 text-slate-600 border-slate-200";
+  return "bg-slate-100 text-slate-700 border-slate-200";
+}
+
+function gradeBadgeClass(grade: string) {
+  if (grade === "A" || grade === "B") return "bg-emerald-100 text-emerald-700 border-emerald-200";
+  if (grade === "C") return "bg-amber-100 text-amber-700 border-amber-200";
+  return "bg-rose-100 text-rose-700 border-rose-200";
+}
+
+function normalizeSystemStatus(raw: string, grade: string, verification: string, projectedRiskHorizonMonths: number | null) {
+  if (verification === "MISSING") return "Pending data";
+  if (verification === "USER_REPORTED" || verification === "INFERRED") return "Needs verification";
+  if (grade === "F" || (projectedRiskHorizonMonths !== null && projectedRiskHorizonMonths <= 12)) return "High risk";
+  if (grade === "D") return "Needs inspection";
+  if (grade === "C") return "Aging";
+  if (grade === "B") return "Monitor";
+  if (raw.toLowerCase().includes("inspect")) return "Needs inspection";
+  return "Stable";
+}
+
+function formatPropertyType(value?: string | null) {
+  if (!value) return null;
+  return formatConstantLabel(value);
+}
+
 function benchmarkDeltaLabel(thisScore: number, benchmarkScore: number) {
   const delta = Math.round((thisScore - benchmarkScore) * 10) / 10;
   if (delta === 0) return "At benchmark";
@@ -87,50 +125,52 @@ function SectionCard(props: {
   id: string;
   title: string;
   subtitle?: string;
+  icon?: string;
   defaultOpen?: boolean;
   onToggle?: (sectionId: string, open: boolean) => void;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const { id, title, subtitle, defaultOpen = true, onToggle, action, children } = props;
+  const { id, title, subtitle, icon, defaultOpen = true, onToggle, action, children } = props;
 
   return (
     <details
       open={defaultOpen}
-      className="group rounded-2xl border border-slate-200 bg-white shadow-sm"
+      className="group border border-slate-200/90 bg-white"
       onToggle={(event) => {
         const details = event.currentTarget;
         onToggle?.(id, details.open);
       }}
     >
-      <summary className="list-none cursor-pointer px-6 py-5">
+      <summary className="list-none cursor-pointer px-6 py-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id={id} className="text-base font-semibold text-slate-900">
+            <h2 id={id} className="text-[15px] font-semibold text-slate-950">
+              {icon ? <span className="mr-2">{icon}</span> : null}
               {title}
             </h2>
-            {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
+            {subtitle ? <p className="mt-1 max-w-3xl text-sm text-slate-600">{subtitle}</p> : null}
           </div>
           <div className="flex items-center gap-2">
             {action}
-            <ChevronRight className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-90" />
+            <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-90" />
           </div>
         </div>
       </summary>
-      <div className="border-t border-slate-100 px-6 py-5">{children}</div>
+      <div className="border-t border-slate-200/80 px-6 py-6">{children}</div>
     </details>
   );
 }
 
 function ScoreRing({ score }: { score: number }) {
   const normalized = Math.max(0, Math.min(100, Math.round(score)));
-  const radius = 68;
-  const stroke = 10;
+  const radius = 62;
+  const stroke = 9;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (normalized / 100) * circumference;
 
   return (
-    <div className="relative h-44 w-44">
+    <div className="relative h-40 w-40">
       <svg viewBox="0 0 180 180" className="h-full w-full -rotate-90">
         <circle cx="90" cy="90" r={radius} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
         <circle
@@ -146,7 +186,7 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-5xl font-semibold tracking-tight text-slate-950">{normalized}</div>
+        <div className="text-4xl font-semibold tracking-tight text-slate-950">{normalized}</div>
         <div className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">out of 100</div>
       </div>
     </div>
@@ -252,6 +292,7 @@ export default function HomeScoreReportPage() {
   const queryClient = useQueryClient();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const [weeks, setWeeks] = useState<26 | 52>(26);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const viewedRef = useRef<string | null>(null);
 
   const trackEvent = useCallback((event: string, section?: string, metadata?: Record<string, unknown>) => {
@@ -303,6 +344,10 @@ export default function HomeScoreReportPage() {
       confidence: report.confidence,
       coveragePct: report.trustAndVerification?.dataCoveragePct,
     });
+    trackEvent("SHARE_CARD_VIEWED", "share-card", {
+      homeScore: report.homeScore,
+      grade: report.executiveSummary?.grade,
+    });
   }, [report, trackEvent]);
 
   const trendPoints = useMemo(
@@ -321,6 +366,57 @@ export default function HomeScoreReportPage() {
       })),
     [report?.trend]
   );
+  const timelineEvents = useMemo(() => report?.timeline?.events || [], [report?.timeline?.events]);
+  const tieredTimeline = useMemo(() => {
+    const tierOneKeywords = [
+      "roof",
+      "hvac",
+      "water heater",
+      "plumbing",
+      "electrical",
+      "inspection",
+      "claim",
+      "permit",
+      "insurance",
+      "warranty",
+      "remodel",
+      "constructed",
+      "verification",
+    ];
+
+    const isTierOne = (event: (typeof timelineEvents)[number]) => {
+      const type = event.eventType?.toUpperCase();
+      if (["PURCHASE", "REPAIR", "MAINTENANCE", "CLAIM", "IMPROVEMENT", "INSPECTION", "MILESTONE"].includes(type)) {
+        return true;
+      }
+      const haystack = `${event.title} ${event.summary || ""}`.toLowerCase();
+      return tierOneKeywords.some((keyword) => haystack.includes(keyword));
+    };
+
+    const tierOne: typeof timelineEvents = [];
+    const tierTwo: typeof timelineEvents = [];
+    timelineEvents.forEach((event) => {
+      if (isTierOne(event)) {
+        tierOne.push(event);
+      } else {
+        tierTwo.push(event);
+      }
+    });
+
+    const groupedTierTwo = tierTwo.reduce<Record<string, typeof timelineEvents>>((acc, event) => {
+      const title = event.title.toLowerCase();
+      const key = title.includes("appliance")
+        ? "Appliance additions"
+        : title.includes("document") || title.includes("upload")
+          ? "Document uploads"
+          : "Supporting events";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(event);
+      return acc;
+    }, {});
+
+    return { tierOne, tierTwo, groupedTierTwo };
+  }, [timelineEvents]);
 
   if (!propertyId || propertyQuery.isLoading || reportQuery.isLoading) {
     return (
@@ -357,10 +453,86 @@ export default function HomeScoreReportPage() {
   const executive = report.executiveSummary;
   const radar = report.radar;
   const drivers: HomeScoreDriver[] = report.scoreDrivers || [];
-  const timelineEvents = report.timeline?.events || [];
   const financialExposure: HomeScoreFinancialExposure = report.financialExposure;
   const benchmarkItems: HomeScoreBenchmarkItem[] = report.benchmarks?.sources || [];
   const improvementActions: HomeScoreImprovementAction[] = report.improvementPlan?.actions || [];
+  const availableBenchmarkItems = benchmarkItems.filter((item) => item.available);
+  const unavailableBenchmarkCount = benchmarkItems.length - availableBenchmarkItems.length;
+  const allBenchmarksUnavailable = benchmarkItems.length === 0 || availableBenchmarkItems.length === 0;
+
+  const rankedNegativeDrivers = drivers
+    .filter((driver) => driver.scoreImpact < 0)
+    .sort((a, b) => Math.abs(b.scoreImpact) - Math.abs(a.scoreImpact));
+  const rankedPositiveDrivers = drivers
+    .filter((driver) => driver.scoreImpact > 0)
+    .sort((a, b) => Math.abs(b.scoreImpact) - Math.abs(a.scoreImpact));
+
+  const radarInsight = radar?.weakestArea
+    ? `${radar.weakestArea} is currently the primary limitation on your HomeScore. Improving this axis should produce the clearest report-level uplift.`
+    : "Radar insights will become sharper as additional verified records are added.";
+  const driversInsight =
+    rankedNegativeDrivers.length > 0
+      ? `Most score drag is concentrated in ${rankedNegativeDrivers
+          .slice(0, 2)
+          .map((driver) => driver.title.toLowerCase())
+          .join(" and ")}.`
+      : "Current drivers are mostly neutral or positive, with limited downward pressure on score.";
+  const systemHealthInsight = (() => {
+    const rows = report.systemHealth || [];
+    const urgentCount = rows.filter((row) => (row.projectedRiskHorizonMonths ?? 999) <= 12).length;
+    const agingCount = rows.filter((row) => ["C", "D", "F"].includes(row.grade)).length;
+    if (urgentCount > 0) {
+      return `${urgentCount} system${urgentCount > 1 ? "s are" : " is"} in a near-term risk window. Prioritize inspection and verification for those lines first.`;
+    }
+    if (agingCount > 0) {
+      return `${agingCount} system${agingCount > 1 ? "s are" : " is"} aging into higher-risk service windows.`;
+    }
+    return "Most major systems are currently stable with no immediate high-risk horizon.";
+  })();
+  const financialInsight = (() => {
+    const topLines = [...(financialExposure.lines || [])]
+      .sort((a, b) => b.exposure - a.exposure)
+      .slice(0, 2)
+      .map((line) => line.label);
+    if (topLines.length === 0) {
+      return "Exposure lines will become more precise as additional system and cost evidence is added.";
+    }
+    return `${topLines.join(" and ")} currently account for the largest share of projected exposure. Addressing one top line first may materially reduce 3-year risk.`;
+  })();
+  const verificationInsight = (() => {
+    const trust = report.trustAndVerification;
+    if (!trust) return "Confidence interpretation is not available yet.";
+    if (trust.userReportedPct >= 45) {
+      return "Coverage is broad, but trust is still limited by a heavy user-reported mix. Adding invoices, reports, and inspection records will improve verification quality.";
+    }
+    if (trust.verifiedPct >= 55) {
+      return "Verification quality is strong. Continue adding document-backed records to maintain high trust confidence.";
+    }
+    return "Verification is mixed across sources. Prioritize one documentation action to improve report trustworthiness.";
+  })();
+  const improvementInsight =
+    "Start with one verification action and one risk-reduction action for the fastest trust and score uplift.";
+  const verificationSummaryTone =
+    (report.trustAndVerification?.verifiedPct ?? 0) >= 55
+      ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+      : (report.trustAndVerification?.verifiedPct ?? 0) >= 35
+        ? "border-amber-200 bg-amber-100 text-amber-700"
+        : "border-rose-200 bg-rose-100 text-rose-700";
+
+  const copyShareLink = async () => {
+    trackEvent("SHARE_ACTION_CLICKED", "share-card", { action: "copy_link" });
+    try {
+      const shareUrl = `${window.location.origin}/dashboard/properties/${propertyId}/home-score`;
+      await navigator.clipboard.writeText(shareUrl);
+      setCopyState("copied");
+      trackEvent("SHARE_LINK_COPIED", "share-card", { destination: "clipboard" });
+      window.setTimeout(() => setCopyState("idle"), 1800);
+    } catch (error) {
+      setCopyState("error");
+      trackEvent("SHARE_LINK_COPIED", "share-card", { destination: "clipboard", status: "failed" });
+      window.setTimeout(() => setCopyState("idle"), 2000);
+    }
+  };
 
   const onSectionToggle = (sectionId: string, open: boolean) => {
     trackEvent(open ? "SECTION_EXPANDED" : "SECTION_COLLAPSED", sectionId);
@@ -401,77 +573,79 @@ export default function HomeScoreReportPage() {
           </div>
         </div>
 
-        <Card className="border-slate-200 bg-white">
-          <CardHeader className="pb-4">
-            <div className="space-y-2">
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Report Header</div>
-              <CardTitle className="text-2xl font-semibold tracking-tight text-slate-950">
-                {meta?.reportTitle || "Contract-to-Cozy Certified HomeScore Report"}
-              </CardTitle>
-              <CardDescription className="text-sm text-slate-600">
-                {meta?.propertyAddress || `${propertyQuery.data?.address || ""}, ${propertyQuery.data?.city || ""}`}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Report ID</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{meta?.reportId || "Pending"}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Generated</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{formatDate(meta?.generatedDate)}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Prepared For</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{meta?.preparedFor || "Property Owner"}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Data Coverage</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{meta?.dataCoveragePercentage ?? report.trustAndVerification?.dataCoveragePct}%</p>
-            </div>
-            <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-2 pt-1">
+        <section className="border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-6 py-4">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Report Header</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+              {meta?.reportTitle || "Contract-to-Cozy Certified HomeScore Report"}
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              {meta?.propertyAddress || `${propertyQuery.data?.address || ""}, ${propertyQuery.data?.city || ""}`}
+            </p>
+          </div>
+          <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { label: "Report ID", value: meta?.reportId || "Pending" },
+              { label: "Generated", value: formatDate(meta?.generatedDate) },
+              { label: "Prepared For", value: meta?.preparedFor || "Property Owner" },
+              { label: "Data Coverage", value: `${meta?.dataCoveragePercentage ?? report.trustAndVerification?.dataCoveragePct ?? 0}%` },
+              { label: "Property Type", value: formatPropertyType(meta?.propertyType) || formatPropertyType(propertyQuery.data?.propertyType) || "Not available" },
+              { label: "Year Built", value: meta?.yearBuilt || propertyQuery.data?.yearBuilt || "Not available" },
+            ].map((item) => (
+              <div key={item.label} className="border-t border-slate-200 px-6 py-3 sm:[&:nth-child(odd)]:border-r lg:[&:not(:nth-child(3n))]:border-r">
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">{item.label}</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-slate-200 px-6 py-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={confidenceBadgeClass(meta?.confidenceLevel || report.confidence)}>
-                Confidence: {meta?.confidenceLevel || report.confidence}
+                Confidence: {formatConstantLabel(meta?.confidenceLevel || report.confidence)}
               </Badge>
-              <Badge variant="outline">Verification: {meta?.verificationStatusSummary || "In progress"}</Badge>
-              <Badge variant="outline">Version {meta?.reportVersion || "2.0"}</Badge>
+              <Badge variant="outline" className={verificationSummaryTone}>
+                Verification: {meta?.verificationStatusSummary || "In progress"}
+              </Badge>
+              <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">Version {meta?.reportVersion || "2.0"}</Badge>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
         <Card className="border-slate-200 bg-gradient-to-br from-slate-950 to-slate-800 text-slate-50">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Executive Summary</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold">📊 Executive Summary</CardTitle>
             <CardDescription className="text-slate-300">
               Overall home health, financial exposure, and verification confidence.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-6 lg:grid-cols-[220px,1fr]">
-            <div className="flex flex-col items-center gap-3">
+          <CardContent className="grid gap-5 lg:grid-cols-[190px,1fr]">
+            <div className="flex flex-col items-center gap-2">
               <ScoreRing score={executive?.homeScore ?? report.homeScore} />
               <div className="flex items-center gap-2">
-                <Badge className="bg-white/15 text-white border-white/20">Grade {executive?.grade || "-"}</Badge>
-                <Badge className="bg-white/15 text-white border-white/20">{(executive?.ratingTier || "").replace("_", " ")}</Badge>
+                <Badge variant="outline" className={cx("bg-white/10 text-white border-white/20", gradeBadgeClass(executive?.grade || "F"))}>
+                  Grade {executive?.grade || "-"}
+                </Badge>
+                <Badge className="bg-white/10 text-white border-white/20">{formatConstantLabel(executive?.ratingTier || "")}</Badge>
               </div>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl border border-white/15 bg-white/5 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Confidence</p>
-                  <p className="mt-1 text-lg font-semibold">{executive?.confidenceLevel || report.confidence}</p>
+                <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-300">Money at Risk (3 years)</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {formatCurrency(executive?.moneyAtRiskHeadline ?? financialExposure?.headlineMoneyAtRisk)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-300">Estimated repair exposure</p>
                 </div>
-                <div className="rounded-xl border border-white/15 bg-white/5 p-3">
+                <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-300">Confidence</p>
+                  <p className="mt-1 text-lg font-semibold">{formatConstantLabel(executive?.confidenceLevel || report.confidence)}</p>
+                </div>
+                <div className="rounded-lg border border-white/15 bg-white/5 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-300">Value Protection</p>
                   <p className="mt-1 text-lg font-semibold">{executive?.valueProtectionScore ?? report.homeScore}/100</p>
                 </div>
-                <div className="rounded-xl border border-white/15 bg-white/5 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-300">Money At Risk (3y)</p>
-                  <p className="mt-1 text-lg font-semibold">
-                    {formatCurrency(executive?.moneyAtRiskHeadline ?? financialExposure?.headlineMoneyAtRisk)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-white/15 bg-white/5 p-3">
+                <div className="rounded-lg border border-white/15 bg-white/5 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-300">Weekly Delta</p>
                   <p className="mt-1 text-lg font-semibold inline-flex items-center gap-1">
                     <TrendingUp className="h-4 w-4" />
@@ -479,9 +653,9 @@ export default function HomeScoreReportPage() {
                   </p>
                 </div>
               </div>
-              <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">Score trend</p>
+              <div className="rounded-lg border border-white/15 bg-white/5 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">HomeScore trend</p>
                   <div className="flex items-center gap-2 print:hidden">
                     <Button
                       size="sm"
@@ -507,30 +681,110 @@ export default function HomeScoreReportPage() {
                     </Button>
                   </div>
                 </div>
-                <div className="rounded-lg border border-white/10 bg-white px-2 py-1 text-slate-900">
-                  <ScoreTrendChart points={trendPoints} ariaLabel="HomeScore trend" />
-                </div>
+                {trendPoints.length > 1 ? (
+                  <div className="rounded-lg border border-white/10 bg-white px-2 py-1 text-slate-900">
+                    <ScoreTrendChart points={trendPoints} ariaLabel="HomeScore trend" />
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-white/25 bg-white/5 p-3 text-sm text-slate-200">
+                    Weekly score snapshots will appear as more report cycles are collected. As your home data evolves, trend and improvement history will become visible here.
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
 
+        <section className="border border-slate-200 bg-white p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">HomeScore Snapshot</p>
+              <p className="mt-1 text-sm text-slate-600">{meta?.propertyAddress || propertyQuery.data?.address}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge variant="outline" className={gradeBadgeClass(executive?.grade || "F")}>
+                  HomeScore: {executive?.homeScore ?? report.homeScore}/100
+                </Badge>
+                <Badge variant="outline" className={gradeBadgeClass(executive?.grade || "F")}>
+                  Grade: {executive?.grade || "-"}
+                </Badge>
+                <Badge variant="outline" className={urgencyBadgeClass(financialExposure.headlineMoneyAtRisk > 15000 ? "HIGH" : financialExposure.headlineMoneyAtRisk > 8000 ? "MEDIUM" : "LOW")}>
+                  Money at Risk: {formatCurrency(financialExposure.headlineMoneyAtRisk)}
+                </Badge>
+                <Badge variant="outline" className={confidenceBadgeClass(report.trustAndVerification?.confidenceLevel || report.confidence)}>
+                  Confidence: {formatConstantLabel(report.trustAndVerification?.confidenceLevel || report.confidence)}
+                </Badge>
+                <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+                  Coverage: {report.trustAndVerification?.dataCoveragePct ?? meta?.dataCoveragePercentage ?? 0}%
+                </Badge>
+                <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+                  Generated: {formatDate(meta?.generatedDate || report.generatedAt)}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 print:hidden">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  trackEvent("SHARE_ACTION_CLICKED", "share-card", { action: "open_reports" });
+                  router.push(`/dashboard/properties/${propertyId}/reports`);
+                }}
+              >
+                <Share2 className="mr-2 h-4 w-4" /> Share report
+              </Button>
+              <Button variant="outline" size="sm" onClick={copyShareLink}>
+                <Copy className="mr-2 h-4 w-4" />
+                {copyState === "copied" ? "Link copied" : copyState === "error" ? "Copy failed" : "Copy share link"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  trackEvent("PDF_EXPORT_CLICKED", "share-card", { action: "export" });
+                  router.push(`/dashboard/properties/${propertyId}/reports`);
+                }}
+              >
+                <FileDown className="mr-2 h-4 w-4" /> Download PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  trackEvent("PDF_EXPORT_CLICKED", "share-card", { action: "print" });
+                  window.print();
+                }}
+              >
+                <Link2 className="mr-2 h-4 w-4" /> Print
+              </Button>
+            </div>
+          </div>
+        </section>
+
         <SectionCard
           id="home-protection-radar"
           title="Home Protection Radar"
+          icon="🛡"
           subtitle="Signature view across maintenance, insurance, safety, financial, and weather resilience."
           onToggle={onSectionToggle}
         >
           <div className="grid gap-5 lg:grid-cols-[360px,1fr]">
             <RadarChart axes={radar?.axes || []} />
             <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <p className="font-medium text-slate-900">{radarInsight}</p>
+                <p className="mt-1">
+                  {radar?.strongestArea
+                    ? `${radar.strongestArea} is currently your strongest protection area.`
+                    : "Strongest-area confidence will improve with more verified evidence."}
+                </p>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {(radar?.axes || []).map((axis) => (
-                  <div key={axis.key} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div key={axis.key} className="rounded-lg border border-slate-200 bg-white p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-slate-900">{axis.label}</p>
                       <Badge variant="outline" className={confidenceBadgeClass(axis.confidence)}>
-                        {axis.confidence}
+                        Confidence: {formatConstantLabel(axis.confidence)}
                       </Badge>
                     </div>
                     <p className="mt-2 text-2xl font-semibold text-slate-950">{axis.score}</p>
@@ -538,7 +792,7 @@ export default function HomeScoreReportPage() {
                   </div>
                 ))}
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm text-slate-700">
                   <span className="font-semibold text-slate-900">Weakest area:</span> {radar?.weakestArea || "N/A"}
                 </p>
@@ -554,40 +808,74 @@ export default function HomeScoreReportPage() {
         <SectionCard
           id="score-drivers"
           title="Score Drivers / Top Risk Drivers"
+          icon="⚠"
           subtitle="Ranked contributors with explicit score impact and financial relevance."
           onToggle={onSectionToggle}
         >
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <p className="font-medium text-slate-900">{driversInsight}</p>
+              <p className="mt-1">Top drivers below combine score impact, financial exposure, and data confidence.</p>
+            </div>
             {drivers.length > 0 ? (
-              drivers.map((driver) => (
-                <Card key={driver.id} className="border-slate-200">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-sm font-semibold text-slate-900">{driver.title}</CardTitle>
-                      <Badge variant="outline" className={driver.scoreImpact < 0 ? "text-rose-700 border-rose-200" : "text-emerald-700 border-emerald-200"}>
-                        {driver.scoreImpact > 0 ? "+" : ""}{driver.scoreImpact}
-                      </Badge>
+              <div className="space-y-4">
+                {rankedNegativeDrivers.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Top negative drivers</p>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {rankedNegativeDrivers.map((driver) => (
+                        <div key={driver.id} className="border border-slate-200 bg-white p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-900">{driver.title}</p>
+                            <Badge variant="outline" className="border-rose-200 bg-rose-100 text-rose-700">
+                              Score impact: {driver.scoreImpact} pts
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-600">{driver.explanation}</p>
+                          <div className="mt-3 grid gap-2 text-xs text-slate-600">
+                            <p><span className="font-medium text-slate-900">Financial impact:</span> {formatCurrency(driver.financialImpact)}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className={confidenceBadgeClass(driver.confidence)}>
+                                Confidence: {formatConstantLabel(driver.confidence)}
+                              </Badge>
+                              <Badge variant="outline" className={provenanceBadgeClass(driver.provenance)}>
+                                Source: {formatConstantLabel(driver.provenance)}
+                              </Badge>
+                            </div>
+                          </div>
+                          {driver.actionHref ? (
+                            <Link
+                              href={driver.actionHref}
+                              className="mt-3 inline-flex items-center text-sm text-slate-900 hover:underline"
+                              onClick={() => trackEvent("IMPROVEMENT_ACTION_CLICKED", "score-drivers", { driverId: driver.id })}
+                            >
+                              Take action <ChevronRight className="ml-1 h-3 w-3" />
+                            </Link>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
-                    <CardDescription>{driver.explanation}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-xs text-slate-600">
-                    <p>Financial impact: {formatCurrency(driver.financialImpact)}</p>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={confidenceBadgeClass(driver.confidence)}>{driver.confidence}</Badge>
-                      <Badge variant="outline">{driver.provenance.replace("_", " ")}</Badge>
+                  </div>
+                ) : null}
+                {rankedPositiveDrivers.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Positive contributors</p>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {rankedPositiveDrivers.slice(0, 3).map((driver) => (
+                        <div key={driver.id} className="border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-900">{driver.title}</p>
+                            <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">
+                              Score impact: +{driver.scoreImpact} pts
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-600">{driver.explanation}</p>
+                        </div>
+                      ))}
                     </div>
-                    {driver.actionHref ? (
-                      <Link
-                        href={driver.actionHref}
-                        className="inline-flex items-center text-sm text-slate-900 hover:underline"
-                        onClick={() => trackEvent("IMPROVEMENT_ACTION_CLICKED", "score-drivers", { driverId: driver.id })}
-                      >
-                        Take action <ChevronRight className="ml-1 h-3 w-3" />
-                      </Link>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              ))
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <p className="text-sm text-slate-600">No score driver details available yet.</p>
             )}
@@ -597,28 +885,74 @@ export default function HomeScoreReportPage() {
         <SectionCard
           id="home-timeline"
           title="Home Timeline"
+          icon="🕒"
           subtitle="CARFAX-style chronology of property milestones, maintenance, and verification events."
           onToggle={onSectionToggle}
         >
           {timelineEvents.length > 0 ? (
-            <ol className="space-y-3">
-              {timelineEvents.map((event) => (
-                <li
-                  key={event.id}
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-                  onClick={() => trackEvent("TIMELINE_INTERACTION", "home-timeline", { eventId: event.id })}
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                Tier 1 property-level events are shown first. Lower-signal events are grouped to keep chronology scannable without losing history.
+              </div>
+              <ol className="space-y-3">
+                {tieredTimeline.tierOne.map((event) => (
+                  <li
+                    key={event.id}
+                    className="border border-slate-200 bg-white p-4"
+                    onClick={() => trackEvent("TIMELINE_INTERACTION", "home-timeline", { eventId: event.id })}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{event.title}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={provenanceBadgeClass(event.provenance)}>
+                          Source: {formatConstantLabel(event.provenance)}
+                        </Badge>
+                        <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+                          {event.datePrecision === "YEAR" ? event.year : formatDate(event.occurredAt)}
+                        </Badge>
+                      </div>
+                    </div>
+                    {event.summary ? <p className="mt-2 text-sm text-slate-600">{event.summary}</p> : null}
+                  </li>
+                ))}
+              </ol>
+              {tieredTimeline.tierTwo.length > 0 ? (
+                <details
+                  className="group border border-slate-200 bg-slate-50"
+                  onToggle={(event) =>
+                    trackEvent("TIMELINE_GROUP_EXPANDED", "home-timeline", {
+                      open: event.currentTarget.open,
+                      groups: Object.keys(tieredTimeline.groupedTierTwo),
+                    })
+                  }
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900">{event.title}</p>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{event.provenance.replace("_", " ")}</Badge>
-                      <Badge variant="outline">{event.datePrecision === "YEAR" ? event.year : formatDate(event.occurredAt)}</Badge>
+                  <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-slate-900">
+                    Supporting timeline events ({tieredTimeline.tierTwo.length})
+                  </summary>
+                  <div className="border-t border-slate-200 px-4 py-3">
+                    <div className="space-y-3">
+                      {Object.entries(tieredTimeline.groupedTierTwo).map(([groupLabel, events]) => (
+                        <div key={groupLabel} className="border border-slate-200 bg-white p-3">
+                          <p className="text-xs uppercase tracking-wide text-slate-500">
+                            {groupLabel} ({events.length})
+                          </p>
+                          <ul className="mt-2 space-y-2">
+                            {events.map((event) => (
+                              <li key={event.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
+                                <span>{event.title}</span>
+                                <span className="text-xs text-slate-500">
+                                  {event.datePrecision === "YEAR" ? event.year : formatDate(event.occurredAt)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  {event.summary ? <p className="mt-2 text-sm text-slate-600">{event.summary}</p> : null}
-                </li>
-              ))}
-            </ol>
+                </details>
+              ) : null}
+            </div>
           ) : (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
               <p className="text-sm font-medium text-slate-900">{report.timeline?.emptyState?.title || "No timeline events yet"}</p>
@@ -639,10 +973,15 @@ export default function HomeScoreReportPage() {
         <SectionCard
           id="major-system-health"
           title="Major System Health"
+          icon="🔧"
           subtitle="Per-system grades, verification status, and next recommended actions."
           onToggle={onSectionToggle}
         >
-          <div className="overflow-x-auto">
+          <div className="space-y-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              {systemHealthInsight}
+            </div>
+            <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
@@ -656,34 +995,59 @@ export default function HomeScoreReportPage() {
                 </tr>
               </thead>
               <tbody>
-                {(report.systemHealth || []).map((row) => (
+                {(report.systemHealth || []).map((row) => {
+                  const normalizedStatus = normalizeSystemStatus(
+                    row.statusLabel,
+                    row.grade,
+                    row.verification,
+                    row.projectedRiskHorizonMonths
+                  );
+                  const normalizedUrgency =
+                    normalizedStatus === "High risk"
+                      ? "HIGH"
+                      : normalizedStatus === "Aging" || normalizedStatus === "Monitor"
+                        ? "MEDIUM"
+                        : "LOW";
+
+                  return (
                   <tr key={row.key} className="border-b border-slate-100 align-top">
                     <td className="py-3 pr-3 font-medium text-slate-900">{row.label}</td>
                     <td className="py-3 pr-3">
-                      <Badge variant="outline">{row.grade}</Badge>
+                      <Badge variant="outline" className={gradeBadgeClass(row.grade)}>Grade: {row.grade}</Badge>
                     </td>
-                    <td className="py-3 pr-3 text-slate-700">{row.statusLabel}</td>
+                    <td className="py-3 pr-3 text-slate-700">
+                      <Badge
+                        variant="outline"
+                        className={urgencyBadgeClass(normalizedUrgency)}
+                      >
+                        Status: {normalizedStatus}
+                      </Badge>
+                    </td>
                     <td className="py-3 pr-3 text-slate-700">
                       {row.ageYears === null ? "Unknown age" : `${row.ageYears} years`}<br />
                       <span className="text-xs text-slate-500">{row.serviceWindow || "-"}</span>
                     </td>
                     <td className="py-3 pr-3">
-                      <Badge variant="outline">{row.verification.replace("_", " ")}</Badge>
+                      <Badge variant="outline" className={provenanceBadgeClass(row.verification)}>
+                        Verification: {formatConstantLabel(row.verification)}
+                      </Badge>
                     </td>
                     <td className="py-3 pr-3 text-slate-700">{row.nextRecommendedAction}</td>
                     <td className="py-3 text-slate-700">
                       {row.projectedRiskHorizonMonths ? `${row.projectedRiskHorizonMonths} months` : "N/A"}
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
+          </div>
           </div>
         </SectionCard>
 
         <SectionCard
           id="financial-exposure"
           title="Financial Exposure Forecast"
+          icon="💰"
           subtitle="Money at Risk across 12 months, 3 years, and 5 years with prioritized exposure lines."
           onToggle={onSectionToggle}
           action={
@@ -704,54 +1068,61 @@ export default function HomeScoreReportPage() {
         >
           <div className="grid gap-4 lg:grid-cols-[1.1fr,1fr]">
             <div className="space-y-3">
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Money at Risk (3 years)</p>
+                <p className="mt-1 text-3xl font-semibold text-slate-950">{formatCurrency(financialExposure.headlineMoneyAtRisk)}</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  Estimated exposure range: {formatCurrency(financialExposure.confidenceRangeLow)} - {formatCurrency(financialExposure.confidenceRangeHigh)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                {financialInsight}
+              </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Card className="border-slate-200">
+                <Card className="border-slate-200 shadow-none">
                   <CardHeader className="pb-2">
                     <CardDescription>12 months</CardDescription>
                     <CardTitle className="text-lg">{formatCurrency(financialExposure.horizon12Months)}</CardTitle>
                   </CardHeader>
                 </Card>
-                <Card className="border-slate-200">
+                <Card className="border-slate-200 shadow-none">
                   <CardHeader className="pb-2">
                     <CardDescription>3 years</CardDescription>
                     <CardTitle className="text-lg">{formatCurrency(financialExposure.horizon3Years)}</CardTitle>
                   </CardHeader>
                 </Card>
-                <Card className="border-slate-200">
+                <Card className="border-slate-200 shadow-none">
                   <CardHeader className="pb-2">
                     <CardDescription>5 years</CardDescription>
                     <CardTitle className="text-lg">{formatCurrency(financialExposure.horizon5Years)}</CardTitle>
                   </CardHeader>
                 </Card>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Headline Money At Risk</p>
-                <p className="mt-1 text-2xl font-semibold text-slate-950">{formatCurrency(financialExposure.headlineMoneyAtRisk)}</p>
-                <p className="mt-1 text-xs text-slate-600">
-                  Confidence range: {formatCurrency(financialExposure.confidenceRangeLow)} - {formatCurrency(financialExposure.confidenceRangeHigh)}
-                </p>
-              </div>
               <div className="space-y-2">
                 {(financialExposure.lines || []).map((line) => (
-                  <div key={line.id} className="rounded-xl border border-slate-200 p-3">
+                  <div key={line.id} className="border border-slate-200 bg-white p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-medium text-slate-900">{line.label}</p>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={urgencyBadgeClass(line.urgency)}>{line.urgency}</Badge>
-                        <Badge variant="outline" className={confidenceBadgeClass(line.confidence)}>{line.confidence}</Badge>
+                        <Badge variant="outline" className={urgencyBadgeClass(line.urgency)}>
+                          Risk: {formatConstantLabel(line.urgency)}
+                        </Badge>
+                        <Badge variant="outline" className={confidenceBadgeClass(line.confidence)}>
+                          Confidence: {formatConstantLabel(line.confidence)}
+                        </Badge>
                       </div>
                     </div>
                     <p className="mt-1 text-sm text-slate-700">{formatCurrency(line.exposure)}</p>
-                    <p className="text-xs text-slate-500">{line.provenance.replace("_", " ")}</p>
+                    <p className="text-xs text-slate-500">Source: {formatConstantLabel(line.provenance)}</p>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-semibold text-slate-900">What reduces this risk?</p>
               <ul className="mt-3 space-y-3">
                 {(financialExposure.whatReducesRisk || []).map((item, index) => (
-                  <li key={`${item.title}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <li key={`${item.title}-${index}`} className="border border-slate-200 bg-white p-3">
                     <p className="text-sm font-medium text-slate-900">{item.title}</p>
                     <p className="mt-1 text-sm text-slate-600">{item.detail}</p>
                   </li>
@@ -764,6 +1135,7 @@ export default function HomeScoreReportPage() {
         <SectionCard
           id="verification-confidence"
           title="Verification + Data Confidence"
+          icon="✔"
           subtitle="Source quality, coverage percentages, and confidence indicators across the report."
           onToggle={onSectionToggle}
         >
@@ -785,23 +1157,28 @@ export default function HomeScoreReportPage() {
                   <Progress value={metric.value ?? 0} className="h-2" />
                 </div>
               ))}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                {verificationInsight}
+              </div>
             </div>
             <div className="space-y-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Confidence score</p>
                 <p className="mt-1 text-2xl font-semibold text-slate-950">{report.trustAndVerification?.confidenceScore}/100</p>
                 <p className="mt-1 text-sm text-slate-600">{report.trustAndVerification?.explanation}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(report.trustAndVerification?.badgeTaxonomy || []).map((badge) => (
-                    <Badge key={badge} variant="outline">{badge.replace("_", " ")}</Badge>
+                    <Badge key={badge} variant="outline" className={provenanceBadgeClass(badge)}>
+                      {formatConstantLabel(badge)}
+                    </Badge>
                   ))}
                 </div>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">Verification opportunities</p>
                 <ul className="mt-3 space-y-2">
                   {(report.verificationOpportunities || []).slice(0, 5).map((opportunity) => (
-                    <li key={opportunity.id} className="flex items-start justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <li key={opportunity.id} className="flex items-start justify-between gap-2 border border-slate-200 bg-white p-3">
                       <div>
                         <p className="text-sm font-medium text-slate-900">{opportunity.title}</p>
                         <p className="mt-1 text-xs text-slate-600">{opportunity.detail}</p>
@@ -831,7 +1208,7 @@ export default function HomeScoreReportPage() {
         >
           <div className="space-y-3">
             {(report.integrityChecks || []).map((check) => (
-              <div key={check.id} className="rounded-xl border border-slate-200 bg-white p-4">
+              <div key={check.id} className="border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     {check.status === "PASS" ? (
@@ -841,7 +1218,9 @@ export default function HomeScoreReportPage() {
                     )}
                     <p className="text-sm font-semibold text-slate-900">{check.title}</p>
                   </div>
-                  <Badge variant="outline" className={statusBadgeClass(check.status)}>{check.status}</Badge>
+                  <Badge variant="outline" className={statusBadgeClass(check.status)}>
+                    Integrity: {formatConstantLabel(check.status)}
+                  </Badge>
                 </div>
                 <p className="mt-2 text-sm text-slate-600">{check.detail}</p>
                 {check.remediation ? <p className="mt-1 text-xs text-slate-500">{check.remediation}</p> : null}
@@ -862,38 +1241,45 @@ export default function HomeScoreReportPage() {
         <SectionCard
           id="benchmark-comparison"
           title="Benchmark Comparison"
+          icon="📈"
           subtitle="How this home compares against available peer and market benchmark sources."
           onToggle={onSectionToggle}
         >
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {benchmarkItems.length > 0 ? (
-              benchmarkItems.map((item) => (
+          {allBenchmarksUnavailable ? (
+            <div className="border border-dashed border-slate-300 bg-slate-50 p-5">
+              <p className="text-sm font-medium text-slate-900">Benchmark data is not available yet</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Benchmark data will appear as comparable score snapshots become available. This report remains valid for direct property risk and trust analysis.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {availableBenchmarkItems.map((item) => (
                 <button
                   key={item.key}
                   type="button"
-                  className={cx(
-                    "rounded-xl border p-4 text-left transition",
-                    item.available ? "border-slate-200 bg-white hover:bg-slate-50" : "border-dashed border-slate-300 bg-slate-50"
-                  )}
+                  className="border border-slate-200 bg-white p-4 text-left transition hover:bg-slate-50"
                   onClick={() => trackEvent("BENCHMARK_INTERACTION", "benchmark-comparison", { source: item.key, available: item.available })}
                 >
                   <p className="text-xs uppercase tracking-wide text-slate-500">{item.label}</p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">{item.available ? item.score : "N/A"}</p>
+                  <p className="mt-1 text-2xl font-semibold text-slate-900">{item.score}</p>
                   <p className="mt-1 text-xs text-slate-600">
-                    {item.available
-                      ? benchmarkDeltaLabel(report.benchmarks.thisHomeScore, item.score)
-                      : "Awaiting sufficient source data"}
+                    {benchmarkDeltaLabel(report.benchmarks.thisHomeScore, item.score)}
                   </p>
-                  <p className="mt-2 text-xs text-slate-500">Sample size: {item.sampleSize ?? "N/A"}</p>
+                  <p className="mt-2 text-xs text-slate-500">Sample size: {item.sampleSize ?? "Not available"}</p>
                 </button>
-              ))
-            ) : (
-              <p className="text-sm text-slate-600">No benchmark sources available yet.</p>
-            )}
-          </div>
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              ))}
+            </div>
+          )}
+          {unavailableBenchmarkCount > 0 && !allBenchmarksUnavailable ? (
+            <p className="mt-3 text-xs text-slate-500">
+              {unavailableBenchmarkCount} benchmark source{unavailableBenchmarkCount > 1 ? "s are" : " is"} still warming up.
+            </p>
+          ) : null}
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
             <p>
-              <span className="font-semibold text-slate-900">Interpretation:</span> {report.benchmarks?.interpretation}
+              <span className="font-semibold text-slate-900">Interpretation:</span>{" "}
+              {report.benchmarks?.interpretation || "Benchmark interpretation will populate as more comparable sources become available."}
             </p>
             <p className="mt-1">Percentile: {report.benchmarks?.percentile ? `${report.benchmarks.percentile}th` : "Not available yet"}</p>
           </div>
@@ -902,17 +1288,40 @@ export default function HomeScoreReportPage() {
         <SectionCard
           id="improvement-plan"
           title="Score Improvement Plan"
+          icon="🚀"
           subtitle="Top actions to raise HomeScore, reduce exposure, and increase confidence quality."
           onToggle={onSectionToggle}
         >
           <div className="grid gap-4 lg:grid-cols-[1.1fr,1fr]">
             <div className="space-y-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                {improvementInsight}
+              </div>
               {improvementActions.length > 0 ? (
-                improvementActions.map((action) => (
-                  <div key={action.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                improvementActions.map((action, index) => {
+                  const labels = [
+                    action.effort === "LOW" ? "Quick win" : null,
+                    action.projectedPointGain >= 4 ? "High impact" : null,
+                    action.estimatedConfidenceGain === "HIGH" ? "Trust boost" : null,
+                    action.projectedRiskReduction >= 1500 ? "Risk reduction" : null,
+                    action.urgency === "HIGH" ? "High priority" : null,
+                    action.effort === "LOW" ? "Low effort" : action.effort === "MEDIUM" ? "Medium effort" : null,
+                  ].filter(Boolean).slice(0, 3) as string[];
+
+                  return (
+                  <div key={action.id} className="border border-slate-200 bg-white p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-900">{action.title}</p>
-                      <Badge variant="outline" className={urgencyBadgeClass(action.urgency)}>{action.urgency}</Badge>
+                      <Badge variant="outline" className={urgencyBadgeClass(action.urgency)}>
+                        Priority: {formatConstantLabel(action.urgency)}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {labels.map((label) => (
+                        <Badge key={`${action.id}-${label}`} variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+                          {label}
+                        </Badge>
+                      ))}
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 md:grid-cols-4">
                       <div>
@@ -929,10 +1338,12 @@ export default function HomeScoreReportPage() {
                       </div>
                       <div>
                         <p className="text-slate-500">Confidence gain</p>
-                        <p className="font-medium text-slate-900">{action.estimatedConfidenceGain}</p>
+                        <p className="font-medium text-slate-900">{formatConstantLabel(action.estimatedConfidenceGain)}</p>
                       </div>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">Effort: {action.effort}</p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Rank #{index + 1} · Effort: {formatConstantLabel(action.effort)}
+                    </p>
                     {action.actionHref ? (
                       <Link
                         href={action.actionHref}
@@ -943,24 +1354,24 @@ export default function HomeScoreReportPage() {
                       </Link>
                     ) : null}
                   </div>
-                ))
+                )})
               ) : (
                 <p className="text-sm text-slate-600">No improvement actions are available yet.</p>
               )}
             </div>
             <div className="space-y-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Potential New Score</p>
                 <p className="mt-1 text-3xl font-semibold text-slate-950">{report.improvementPlan?.potentialNewScore ?? report.homeScore}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Potential Money At Risk Reduction</p>
                 <p className="mt-1 text-3xl font-semibold text-slate-950">
                   {formatCurrency(report.improvementPlan?.potentialMoneyAtRiskReduction)}
                 </p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                Prioritize one verification action and one risk-reduction action first for the fastest score and trust uplift.
+              <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                These projections reflect the action stack above. Completing the top-ranked two actions usually delivers the fastest combined score and risk outcome.
               </div>
             </div>
           </div>
@@ -974,6 +1385,9 @@ export default function HomeScoreReportPage() {
           defaultOpen={false}
         >
           <div className="space-y-4 text-sm text-slate-700">
+            <p className="text-slate-800">
+              HomeScore combines property condition modeling, maintenance lifecycle analysis, financial exposure forecasting, documentation verification, and available public property signals.
+            </p>
             <p>{report.methodology?.summary}</p>
             <div>
               <p className="mb-1 font-semibold text-slate-900">Inputs used</p>
@@ -1003,8 +1417,8 @@ export default function HomeScoreReportPage() {
                 {(report.methodology?.dataSources || []).map((source) => (
                   <div key={source.key} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
                     <span className="text-xs text-slate-700">{source.label}</span>
-                    <Badge variant="outline" className={source.status === "AVAILABLE" ? "text-emerald-700 border-emerald-200" : source.status === "PARTIAL" ? "text-amber-700 border-amber-200" : "text-slate-700 border-slate-200"}>
-                      {source.status}
+                    <Badge variant="outline" className={source.status === "AVAILABLE" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : source.status === "PARTIAL" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-slate-100 text-slate-700 border-slate-200"}>
+                      Source status: {formatConstantLabel(source.status)}
                     </Badge>
                   </div>
                 ))}
