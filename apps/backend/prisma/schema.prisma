@@ -3467,7 +3467,7 @@ model KnowledgeArticleSection {
 
 // High-level grouping: Maintenance / Insurance / Climate / Property Value, etc.
 model KnowledgeCategory {
-  id           String                    @id @default(uuid())
+  id           String                    @id @default(dbgenerated("(gen_random_uuid())::text"))
   slug         String                    @unique
   name         String
   description  String?
@@ -3475,7 +3475,7 @@ model KnowledgeCategory {
   isActive     Boolean                   @default(true)
 
   createdAt    DateTime                  @default(now())
-  updatedAt    DateTime                  @updatedAt
+  updatedAt    DateTime                  @default(now()) @updatedAt
 
   // Relations
   articles     KnowledgeArticleCategory[]
@@ -3486,14 +3486,14 @@ model KnowledgeCategory {
 
 // Granular tagging: roof-age / hvac-age / climate-risk / curb-appeal, etc.
 model KnowledgeTag {
-  id           String                @id @default(uuid())
+  id           String                @id @default(dbgenerated("(gen_random_uuid())::text"))
   slug         String                @unique
   name         String
   tagGroup     String?
   isActive     Boolean               @default(true)
 
   createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  updatedAt    DateTime              @default(now()) @updatedAt
 
   // Relations
   articles     KnowledgeArticleTag[]
@@ -3537,7 +3537,7 @@ model KnowledgeArticleTag {
 
 // Canonical registry for AI Tools / Home Tools / Features / Reports that articles can promote
 model ProductTool {
-  id               String                @id @default(uuid())
+  id               String                @id @default(dbgenerated("(gen_random_uuid())::text"))
   key              String                @unique
   slug             String                @unique
   name             String
@@ -3555,7 +3555,7 @@ model ProductTool {
   metadata         Json?
 
   createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  updatedAt        DateTime              @default(now()) @updatedAt
 
   // Relations
   articleLinks     KnowledgeArticleToolLink[]
