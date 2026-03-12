@@ -140,7 +140,7 @@ function systemStatusHeadline(status: string, grade: string, serviceWindow: stri
 }
 
 function systemStatusSecondaryCopy(normalizedStatus: string, statusHeadline: string) {
-  if (normalizedStatus === "Needs verification") return null;
+  if (normalizedStatus === "Needs verification" || normalizedStatus === "High risk") return null;
   if (normalizedStatus === "Pending data") return "Limited condition inputs";
   if (statusHeadline.toLowerCase().includes(normalizedStatus.toLowerCase())) return null;
   return normalizedStatus;
@@ -165,9 +165,25 @@ function getLifecycleProgress(ageYears: number | null, serviceWindow: string | n
   return Math.max(0, Math.min(100, Math.round((ageYears / totalYears) * 100)));
 }
 
-function lifecycleBarClass(progress: number | null) {
+function lifecycleBarClass(
+  progress: number | null,
+  severity: SystemSeverity,
+  normalizedStatus: string,
+  serviceWindow: string | null
+) {
   if (progress === null) return "bg-slate-300";
-  if (progress >= 90) return "bg-rose-400";
+  const serviceWindowLower = (serviceWindow || "").toLowerCase();
+  if (
+    normalizedStatus === "High risk" ||
+    serviceWindowLower.includes("at or beyond expected service life") ||
+    severity === "HIGH"
+  ) {
+    return "bg-rose-500";
+  }
+  if (severity === "MEDIUM") {
+    if (progress >= 85) return "bg-orange-500";
+    return "bg-amber-400";
+  }
   if (progress >= 70) return "bg-amber-400";
   return "bg-emerald-400";
 }
@@ -1538,8 +1554,8 @@ export default function HomeScoreReportPage() {
               <table className="w-full min-w-[900px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                    <th className="w-[6px] py-0 pr-3" aria-hidden />
-                    <th className="py-2.5 pr-4">System</th>
+                    <th className="w-0 p-0" aria-hidden />
+                    <th className="py-2.5 pr-4 pl-4">System</th>
                     <th className="py-2.5 pr-4">Health Status</th>
                     <th className="py-2.5 pr-4">Age / Lifecycle</th>
                     <th className="py-2.5 pr-4">Verification</th>
@@ -1563,10 +1579,10 @@ export default function HomeScoreReportPage() {
                         key={row.key}
                         className={cx("align-top border-b border-slate-100 transition-colors print:bg-white", systemRowSurfaceClass(severity))}
                       >
-                        <td className="w-[6px] p-0 pr-3" aria-hidden>
-                          <span className={cx("block h-full min-h-[86px] w-1.5 rounded-r-sm", priorityStripClass(stripTone))} />
+                        <td className="relative w-0 p-0" aria-hidden>
+                          <span className={cx("absolute inset-y-0 left-0 block w-1.5", priorityStripClass(stripTone))} />
                         </td>
-                        <td className="py-3.5 pr-4">
+                        <td className="py-3.5 pr-4 pl-4">
                           <div>
                             <div className="flex items-center gap-2">
                               <SystemIcon className="h-3.5 w-3.5 text-slate-400" aria-hidden />
@@ -1586,7 +1602,10 @@ export default function HomeScoreReportPage() {
                           {lifecycleProgress !== null ? (
                             <div className="mt-2 h-1.5 w-full rounded-full bg-slate-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={lifecycleProgress}>
                               <div
-                                className={cx("h-1.5 rounded-full", lifecycleBarClass(lifecycleProgress))}
+                                className={cx(
+                                  "h-1.5 rounded-full",
+                                  lifecycleBarClass(lifecycleProgress, severity, normalizedStatus, row.serviceWindow)
+                                )}
                                 style={{ width: `${Math.max(8, lifecycleProgress)}%` }}
                               />
                             </div>
