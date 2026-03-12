@@ -3,6 +3,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { seedKnowledgeHub } from './knowledgeHub.seed';
 
 const prisma = new PrismaClient();
 
@@ -869,6 +870,8 @@ async function main() {
   });
   console.log('✅ ATTORNEY: attorney@example.com');
 
+  console.log('');
+  await seedKnowledgeHub(prisma);
   console.log('');
   console.log('🎉 Seed completed successfully!');
   console.log('');
