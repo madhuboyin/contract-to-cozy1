@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { markReplaceRepairStale } from './replaceRepairAnalysis.service';
 import { markDoNothingRunsStale } from './doNothingSimulator.service';
+import { formatMajorApplianceType, inferMajorApplianceType, majorApplianceTypeFromSourceHash } from './majorAppliance.util';
 
 type ListQuery = {
   type?: any;
@@ -35,6 +36,18 @@ function shouldInvalidateReplaceRepair(args: {
 
   const descriptor = `${args.subtype ?? ''} ${args.title ?? ''}`.toUpperCase();
   return descriptor.includes('REPAIR') || descriptor.includes('REPLACE') || descriptor.includes('MAINTEN');
+}
+
+function toIsoDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function normalizeTimelineTitle(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/^purchased(?:\s*:)?\s*/i, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 export class HomeEventsService {
@@ -88,6 +101,15 @@ export class HomeEventsService {
 
   async listHomeEvents(propertyId: string, query: ListQuery) {
     const take = Math.min(Math.max(query.limit ?? 60, 1), 200);
+    const shouldNormalizePurchases = !query.type || String(query.type).toUpperCase() === 'PURCHASE';
+    const shouldInjectCanonicalAppliances =
+      shouldNormalizePurchases &&
+      !query.importance &&
+      !query.roomId &&
+      !query.inventoryItemId &&
+      !query.claimId &&
+      !query.from &&
+      !query.to;
 
     const where: any = { propertyId };
 
@@ -103,19 +125,178 @@ export class HomeEventsService {
       if (query.to) where.occurredAt.lte = new Date(query.to);
     }
 
+    const fetchTake = shouldNormalizePurchases ? Math.min(take * 2, 400) : take;
+
     const events = await prisma.homeEvent.findMany({
       where,
-      take,
+      take: fetchTake,
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
       include: {
         documents: {
           include: { document: true },
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
+        inventoryItem: {
+          select: { id: true, name: true, sourceHash: true },
+        },
       },
     });
 
-    return events;
+    const normalizedEvents = shouldNormalizePurchases ? this.collapseDuplicatePurchaseEvents(events) : events;
+    const canonicalBackfilledEvents = shouldInjectCanonicalAppliances
+      ? await this.injectMissingCanonicalApplianceEvents(propertyId, normalizedEvents)
+      : normalizedEvents;
+    const sorted = canonicalBackfilledEvents.sort((a, b) => {
+      const byDate = new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime();
+      if (byDate !== 0) return byDate;
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
+
+    return sorted.slice(0, take).map(({ inventoryItem, ...event }) => event);
+  }
+
+  private canonicalPurchaseKey(event: any): string | null {
+    if (String(event?.type || '').toUpperCase() !== 'PURCHASE') return null;
+
+    const sourceHashType = majorApplianceTypeFromSourceHash(event?.inventoryItem?.sourceHash);
+    if (sourceHashType) return `appliance:${sourceHashType}`;
+
+    const title = String(event?.title || '');
+    if (!/^purchased\b/i.test(title)) return null;
+
+    const inferredFromTitle = inferMajorApplianceType(title);
+    if (inferredFromTitle) return `appliance:${inferredFromTitle}`;
+
+    const normalized = normalizeTimelineTitle(title);
+    return normalized ? `purchase:${normalized}` : null;
+  }
+
+  private collapseDuplicatePurchaseEvents(events: any[]) {
+    const passthrough: any[] = [];
+    const groupedPurchases = new Map<string, any[]>();
+
+    for (const event of events) {
+      const key = this.canonicalPurchaseKey(event);
+      if (!key) {
+        passthrough.push(event);
+        continue;
+      }
+      if (!groupedPurchases.has(key)) {
+        groupedPurchases.set(key, []);
+      }
+      groupedPurchases.get(key)!.push(event);
+    }
+
+    const collapsedPurchases = Array.from(groupedPurchases.entries()).map(([key, duplicates]) => {
+      if (duplicates.length === 1) return duplicates[0];
+
+      const sortedByDate = [...duplicates].sort(
+        (a, b) => new Date(a?.occurredAt || 0).getTime() - new Date(b?.occurredAt || 0).getTime()
+      );
+      const earliest = sortedByDate[0];
+      const latest = sortedByDate[sortedByDate.length - 1];
+      const preferredEvent =
+        sortedByDate.find((entry) => (entry.documents || []).length > 0) ??
+        [...sortedByDate].reverse().find((entry) => Boolean(entry.createdById)) ??
+        latest;
+      const inferredType = key.startsWith('appliance:')
+        ? key.replace('appliance:', '')
+        : inferMajorApplianceType(earliest.title);
+      const canonicalTitle = inferredType
+        ? `Purchased: ${formatMajorApplianceType(inferredType)}`
+        : earliest.title;
+      const rangeLabel =
+        toIsoDate(new Date(earliest.occurredAt)) === toIsoDate(new Date(latest.occurredAt))
+          ? `on ${toIsoDate(new Date(earliest.occurredAt))}`
+          : `from ${toIsoDate(new Date(earliest.occurredAt))} to ${toIsoDate(new Date(latest.occurredAt))}`;
+      const mergedSummary = [preferredEvent.summary, `Consolidated ${duplicates.length} similar purchase entries ${rangeLabel}.`]
+        .filter(Boolean)
+        .join(' ');
+
+      return {
+        ...preferredEvent,
+        title: canonicalTitle,
+        summary: mergedSummary || null,
+      };
+    });
+
+    return [...passthrough, ...collapsedPurchases];
+  }
+
+  private async injectMissingCanonicalApplianceEvents(propertyId: string, events: any[]) {
+    const existingTypes = new Set<string>();
+    events.forEach((event) => {
+      const key = this.canonicalPurchaseKey(event);
+      if (key?.startsWith('appliance:')) {
+        existingTypes.add(key.replace('appliance:', ''));
+      }
+    });
+
+    const canonicalAppliances = await prisma.inventoryItem.findMany({
+      where: {
+        propertyId,
+        sourceHash: { startsWith: 'property_appliance::' },
+      },
+      select: {
+        id: true,
+        name: true,
+        sourceHash: true,
+        installedOn: true,
+        purchasedOn: true,
+        createdAt: true,
+      },
+      orderBy: [{ installedOn: 'desc' }, { purchasedOn: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    const syntheticEvents = canonicalAppliances
+      .map((appliance) => {
+        const applianceType = majorApplianceTypeFromSourceHash(appliance.sourceHash);
+        if (!applianceType || existingTypes.has(applianceType)) return null;
+
+        const referenceDate = appliance.installedOn ?? appliance.purchasedOn ?? appliance.createdAt;
+
+        return {
+          id: `synthetic-appliance-${applianceType.toLowerCase()}`,
+          propertyId,
+          createdById: null,
+          roomId: null,
+          inventoryItemId: appliance.id,
+          claimId: null,
+          expenseId: null,
+          type: 'PURCHASE',
+          subtype: 'APPLIANCE_INVENTORY',
+          importance: 'LOW',
+          visibility: 'HOUSEHOLD',
+          occurredAt: referenceDate,
+          endAt: null,
+          title: `Purchased: ${formatMajorApplianceType(applianceType)}`,
+          summary: 'Captured from property appliance profile. Add purchase records to improve timeline precision.',
+          amount: null,
+          currency: 'USD',
+          valueDelta: null,
+          meta: {
+            synthetic: true,
+            source: 'property_appliance_inventory',
+            applianceType,
+          },
+          groupKey: null,
+          idempotencyKey: null,
+          sourceBadge: 'INFERRED',
+          confidenceScore: null,
+          provenanceId: null,
+          createdAt: referenceDate,
+          updatedAt: referenceDate,
+          documents: [],
+          inventoryItem: {
+            id: appliance.id,
+            name: appliance.name,
+            sourceHash: appliance.sourceHash,
+          },
+        };
+      })
+      .filter(Boolean);
+
+    return [...events, ...syntheticEvents];
   }
 
   async getHomeEvent(propertyId: string, eventId: string) {
