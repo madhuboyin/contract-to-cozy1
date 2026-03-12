@@ -186,6 +186,84 @@ function systemAccentClass(severity: "HIGH" | "MEDIUM" | "LOW") {
   return "border-slate-200";
 }
 
+type SystemRiskBucketKey = "IMMEDIATE_ATTENTION" | "WATCH_WINDOW" | "LOWER_PRIORITY";
+
+type SystemRiskBucketSummary = {
+  count: number;
+  systems: string[];
+};
+
+function deriveSystemHealthSignals(row: HomeScoreSystemHealthRow) {
+  const normalizedStatus = normalizeSystemStatus(
+    row.statusLabel,
+    row.grade,
+    row.verification,
+    row.projectedRiskHorizonMonths
+  );
+  const severity = systemRowSeverity(normalizedStatus, row.projectedRiskHorizonMonths);
+  const serviceLifeExceeded = (row.serviceWindow || "").toLowerCase().includes("at or beyond expected service life");
+  return { normalizedStatus, severity, serviceLifeExceeded };
+}
+
+function classifySystemRiskBucket(row: HomeScoreSystemHealthRow): SystemRiskBucketKey {
+  const { normalizedStatus, severity, serviceLifeExceeded } = deriveSystemHealthSignals(row);
+  const horizon = row.projectedRiskHorizonMonths;
+
+  if (severity === "HIGH" || row.grade === "F" || serviceLifeExceeded || (horizon !== null && horizon <= 6)) {
+    return "IMMEDIATE_ATTENTION";
+  }
+
+  if (
+    severity === "MEDIUM" ||
+    row.grade === "D" ||
+    (horizon !== null && horizon > 6 && horizon <= 36) ||
+    normalizedStatus === "Aging" ||
+    normalizedStatus === "Needs inspection" ||
+    normalizedStatus === "Needs verification" ||
+    normalizedStatus === "Monitor"
+  ) {
+    return "WATCH_WINDOW";
+  }
+
+  return "LOWER_PRIORITY";
+}
+
+function buildSystemRiskOverview(rows: HomeScoreSystemHealthRow[]) {
+  const overview: Record<"immediateAttention" | "watchWindow" | "lowerPriority", SystemRiskBucketSummary> = {
+    immediateAttention: { count: 0, systems: [] },
+    watchWindow: { count: 0, systems: [] },
+    lowerPriority: { count: 0, systems: [] },
+  };
+
+  rows.forEach((row) => {
+    const bucket = classifySystemRiskBucket(row);
+    if (bucket === "IMMEDIATE_ATTENTION") {
+      overview.immediateAttention.count += 1;
+      overview.immediateAttention.systems.push(row.label);
+      return;
+    }
+    if (bucket === "WATCH_WINDOW") {
+      overview.watchWindow.count += 1;
+      overview.watchWindow.systems.push(row.label);
+      return;
+    }
+    overview.lowerPriority.count += 1;
+    overview.lowerPriority.systems.push(row.label);
+  });
+
+  return overview;
+}
+
+function formatSystemBucketNames(names: string[], maxVisible = 3) {
+  const unique = Array.from(new Set(names.map((name) => name.trim()).filter(Boolean)));
+  if (unique.length === 0) return "No systems currently in this group";
+
+  const visible = unique.slice(0, maxVisible);
+  const remaining = unique.length - visible.length;
+  if (remaining <= 0) return visible.join(" • ");
+  return `${visible.join(" • ")} • +${remaining} more`;
+}
+
 function verificationPillClass(provenance: string) {
   if (provenance === "VERIFIED" || provenance === "DOCUMENT_BACKED" || provenance === "PUBLIC_RECORD") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -762,6 +840,8 @@ export default function HomeScoreReportPage() {
   const financialExposure: HomeScoreFinancialExposure = report.financialExposure;
   const benchmarkItems: HomeScoreBenchmarkItem[] = report.benchmarks?.sources || [];
   const improvementActions: HomeScoreImprovementAction[] = report.improvementPlan?.actions || [];
+  const systemHealthRows: HomeScoreSystemHealthRow[] = report.systemHealth || [];
+  const systemRiskOverview = buildSystemRiskOverview(systemHealthRows);
   const availableBenchmarkItems = benchmarkItems.filter((item) => item.available);
   const unavailableBenchmarkCount = benchmarkItems.length - availableBenchmarkItems.length;
   const allBenchmarksUnavailable = benchmarkItems.length === 0 || availableBenchmarkItems.length === 0;
@@ -784,7 +864,7 @@ export default function HomeScoreReportPage() {
           .join(" and ")}.`
       : "Current drivers are mostly neutral or positive, with limited downward pressure on score.";
   const systemHealthInsight = (() => {
-    const rows = report.systemHealth || [];
+    const rows = systemHealthRows;
     const urgentCount = rows.filter((row) => (row.projectedRiskHorizonMonths ?? 999) <= 12).length;
     const agingCount = rows.filter((row) => ["C", "D", "F"].includes(row.grade)).length;
     if (urgentCount > 0) {
@@ -1361,6 +1441,53 @@ export default function HomeScoreReportPage() {
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               {systemHealthInsight}
             </div>
+            <section
+              aria-label="System Risk Overview"
+              className="rounded-lg border border-slate-200 bg-white px-3.5 py-3 print:break-inside-avoid"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">System Risk Overview</h3>
+                <p className="text-[11px] text-slate-500">{systemHealthRows.length} systems reviewed</p>
+              </div>
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-3 print:grid-cols-3 print:gap-2" role="list">
+                {[
+                  {
+                    key: "immediate-attention",
+                    label: "Immediate attention",
+                    summary: systemRiskOverview.immediateAttention,
+                    tone: "border-rose-200 bg-rose-50/60",
+                    helper: "Near-term inspection priority",
+                  },
+                  {
+                    key: "watch-window",
+                    label: "Watch window",
+                    summary: systemRiskOverview.watchWindow,
+                    tone: "border-amber-200 bg-amber-50/60",
+                    helper: "Approaching lifecycle limits",
+                  },
+                  {
+                    key: "lower-priority",
+                    label: "Lower priority",
+                    summary: systemRiskOverview.lowerPriority,
+                    tone: "border-emerald-200 bg-emerald-50/60",
+                    helper: "Operating within normal range",
+                  },
+                ].map((group) => {
+                  const countLabel = `${group.summary.count} system${group.summary.count === 1 ? "" : "s"}`;
+                  return (
+                    <div key={group.key} role="listitem" className={cx("rounded-md border px-3 py-2.5", group.tone)}>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-700">{group.label}</p>
+                      <p className="mt-1 text-lg font-semibold leading-none text-slate-950 tabular-nums">{group.summary.count}</p>
+                      <p className="mt-1 text-xs font-medium text-slate-600">{countLabel}</p>
+                      <p className="mt-1.5 text-xs leading-5 text-slate-700">{formatSystemBucketNames(group.summary.systems)}</p>
+                      <p className="sr-only">
+                        {group.label}: {countLabel}. {group.helper}. {formatSystemBucketNames(group.summary.systems)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-sm">
                 <thead>
@@ -1374,16 +1501,10 @@ export default function HomeScoreReportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(report.systemHealth || []).map((row) => {
-                    const normalizedStatus = normalizeSystemStatus(
-                      row.statusLabel,
-                      row.grade,
-                      row.verification,
-                      row.projectedRiskHorizonMonths
-                    );
+                  {systemHealthRows.map((row) => {
+                    const { normalizedStatus, severity } = deriveSystemHealthSignals(row);
                     const statusHeadline = systemStatusHeadline(normalizedStatus, row.grade, row.serviceWindow);
                     const lifecycleProgress = getLifecycleProgress(row.ageYears, row.serviceWindow);
-                    const severity = systemRowSeverity(normalizedStatus, row.projectedRiskHorizonMonths);
                     const shortAction = shortenSystemAction(row.nextRecommendedAction);
                     const horizon = riskHorizonPresentation(row.projectedRiskHorizonMonths);
                     const SystemIcon = systemHealthIcon(row.key);
