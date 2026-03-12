@@ -163,7 +163,9 @@ function lifecycleBarClass(progress: number | null) {
   return "bg-emerald-400";
 }
 
-function systemRowSeverity(status: string, projectedRiskHorizonMonths: number | null) {
+type SystemSeverity = "HIGH" | "MEDIUM" | "LOW";
+
+function systemRowSeverity(status: string, projectedRiskHorizonMonths: number | null): SystemSeverity {
   if (status === "High risk" || (projectedRiskHorizonMonths !== null && projectedRiskHorizonMonths <= 6)) return "HIGH";
   if (
     ["Aging", "Needs inspection", "Needs verification"].includes(status) ||
@@ -174,13 +176,13 @@ function systemRowSeverity(status: string, projectedRiskHorizonMonths: number | 
   return "LOW";
 }
 
-function systemRowSurfaceClass(severity: "HIGH" | "MEDIUM" | "LOW") {
+function systemRowSurfaceClass(severity: SystemSeverity) {
   if (severity === "HIGH") return "bg-rose-50/35 hover:bg-rose-50/55";
   if (severity === "MEDIUM") return "bg-amber-50/25 hover:bg-amber-50/45";
   return "hover:bg-slate-50/60";
 }
 
-function systemAccentClass(severity: "HIGH" | "MEDIUM" | "LOW") {
+function systemAccentClass(severity: SystemSeverity) {
   if (severity === "HIGH") return "border-rose-300";
   if (severity === "MEDIUM") return "border-amber-300";
   return "border-slate-200";
