@@ -1114,6 +1114,7 @@ model User {
 
   propertyInsightSnapshots PropertyInsightSnapshot[]
   propertyNarrativeRuns    PropertyNarrativeRun[]
+  knowledgeArticleEvents KnowledgeArticleEvent[]
   
   @@index([email])
   @@index([role])
@@ -1622,6 +1623,7 @@ model Property {
 
   insightSnapshots PropertyInsightSnapshot[]
   narrativeRuns    PropertyNarrativeRun[]
+  knowledgeArticleEvents KnowledgeArticleEvent[]
 
   estimatedMaintenancePremiumCents Int @default(0)
   isEquityVerified      Boolean @default(false)
@@ -2019,6 +2021,7 @@ model Document {
   homeEventLinks HomeEventDocument[]
   riskMitigationPlanItems RiskMitigationPlanItem[]
   capitalTimelineItems HomeCapitalTimelineItem[]
+  knowledgeArticleCoverFor KnowledgeArticle[] @relation("KnowledgeArticleCoverDocument")
   
   homeSavingsAccountId     String?
   homeSavingsOpportunityId String?
@@ -3304,6 +3307,396 @@ enum DeliveryStatus {
   SENT
   FAILED
   SKIPPED
+}
+
+
+// ============================================================================
+// KNOWLEDGE HUB
+// ============================================================================
+
+enum KnowledgeArticleStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum KnowledgeArticleType {
+  EDUCATIONAL
+  BUYER_GUIDE
+  VALUE_FACTORS
+  RISK_EXPLAINER
+  CHECKLIST_ARTICLE
+  TOOL_LANDING
+  SEASONAL
+}
+
+enum KnowledgeSectionType {
+  INTRO
+  TEXT
+  CALLOUT
+  CHECKLIST
+  FACT_BOX
+  RISK_BOX
+  TOOL_EMBED
+  CTA
+  FAQ
+  SUMMARY
+}
+
+enum ProductToolType {
+  AI_TOOL
+  HOME_TOOL
+  FEATURE
+  REPORT
+  WORKFLOW
+}
+
+enum ProductToolStatus {
+  ACTIVE
+  HIDDEN
+  DEPRECATED
+}
+
+enum KnowledgeToolPlacement {
+  HERO
+  INLINE
+  SIDEBAR
+  END_OF_ARTICLE
+  STICKY_CARD
+}
+
+enum KnowledgeCtaType {
+  TOOL
+  DATA_PROMPT
+  INTERNAL_LINK
+  REPORT
+  SIGNUP
+}
+
+enum KnowledgeEventType {
+  VIEW
+  TOOL_CLICK
+  CTA_CLICK
+  SECTION_EXPAND
+  RELATED_ARTICLE_CLICK
+  DATA_PROMPT_CLICK
+}
+
+
+// Core article record for Knowledge Hub / SEO / in-app education
+model KnowledgeArticle {
+  id               String                 @id @default(uuid())
+  slug             String                 @unique
+  title            String
+  subtitle         String?
+  excerpt          String?
+
+  status           KnowledgeArticleStatus @default(DRAFT)
+  articleType      KnowledgeArticleType   @default(EDUCATIONAL)
+
+  // Hero / editorial metadata
+  heroTitle        String?
+  heroDescription  String?
+  heroImageUrl     String?
+  coverDocumentId  String?
+
+  // SEO
+  seoTitle         String?
+  seoDescription   String?
+  seoKeywords      String[]               @default([])
+  canonicalUrl     String?
+
+  // Editorial controls
+  readingMinutes   Int?
+  featured         Boolean                @default(false)
+  evergreenScore   Int?
+  sortOrder        Int                    @default(0)
+  schemaVersion    String                 @default("v1")
+  publishedAt      DateTime?
+
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  // Relations
+  coverDocument    Document?              @relation("KnowledgeArticleCoverDocument", fields: [coverDocumentId], references: [id], onDelete: SetNull)
+
+  sections         KnowledgeArticleSection[]
+  categoryLinks    KnowledgeArticleCategory[]
+  tagLinks         KnowledgeArticleTag[]
+  toolLinks        KnowledgeArticleToolLink[]
+  ctaLinks         KnowledgeArticleCta[]
+
+  relatedFrom      KnowledgeArticleRelation[] @relation("KnowledgeArticleRelationSource")
+  relatedTo        KnowledgeArticleRelation[] @relation("KnowledgeArticleRelationTarget")
+
+  audienceRules    KnowledgeAudienceRule[]
+  events           KnowledgeArticleEvent[]
+
+  @@index([status, publishedAt])
+  @@index([articleType, status])
+  @@index([featured, sortOrder])
+  @@index([coverDocumentId])
+  @@map("knowledge_articles")
+}
+
+// Structured sections so frontend can inject cards / FAQs / tool embeds / CTA blocks
+model KnowledgeArticleSection {
+  id           String               @id @default(uuid())
+  articleId    String
+
+  sectionType  KnowledgeSectionType @default(TEXT)
+  title        String?
+  body         String?
+  dataJson     Json?
+  sortOrder    Int                  @default(0)
+
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  // Relations
+  article      KnowledgeArticle     @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  toolLinks    KnowledgeArticleToolLink[]
+  ctaLinks     KnowledgeArticleCta[]
+  events       KnowledgeArticleEvent[]
+
+  @@index([articleId, sortOrder])
+  @@map("knowledge_article_sections")
+}
+
+// High-level grouping: Maintenance / Insurance / Climate / Property Value, etc.
+model KnowledgeCategory {
+  id           String                    @id @default(uuid())
+  slug         String                    @unique
+  name         String
+  description  String?
+  sortOrder    Int                       @default(0)
+  isActive     Boolean                   @default(true)
+
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  // Relations
+  articles     KnowledgeArticleCategory[]
+
+  @@index([isActive, sortOrder])
+  @@map("knowledge_categories")
+}
+
+// Granular tagging: roof-age / hvac-age / climate-risk / curb-appeal, etc.
+model KnowledgeTag {
+  id           String                @id @default(uuid())
+  slug         String                @unique
+  name         String
+  tagGroup     String?
+  isActive     Boolean               @default(true)
+
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  // Relations
+  articles     KnowledgeArticleTag[]
+
+  @@index([tagGroup])
+  @@index([isActive])
+  @@map("knowledge_tags")
+}
+
+// Join table: Article <-> Category
+model KnowledgeArticleCategory {
+  articleId    String
+  categoryId   String
+
+  createdAt    DateTime              @default(now())
+
+  // Relations
+  article      KnowledgeArticle      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  category     KnowledgeCategory     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, categoryId])
+  @@index([categoryId])
+  @@map("knowledge_article_categories")
+}
+
+// Join table: Article <-> Tag
+model KnowledgeArticleTag {
+  articleId    String
+  tagId        String
+
+  createdAt    DateTime              @default(now())
+
+  // Relations
+  article      KnowledgeArticle      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag          KnowledgeTag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@index([tagId])
+  @@map("knowledge_article_tags")
+}
+
+// Canonical registry for AI Tools / Home Tools / Features / Reports that articles can promote
+model ProductTool {
+  id               String                @id @default(uuid())
+  key              String                @unique
+  slug             String                @unique
+  name             String
+  shortDescription String?
+
+  toolType         ProductToolType
+  status           ProductToolStatus     @default(ACTIVE)
+
+  routePath        String?
+  iconName         String?
+  badgeLabel       String?
+  sortOrder        Int                   @default(0)
+
+  category         String?
+  metadata         Json?
+
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  // Relations
+  articleLinks     KnowledgeArticleToolLink[]
+  ctaLinks         KnowledgeArticleCta[]
+  events           KnowledgeArticleEvent[]
+
+  @@index([toolType, status])
+  @@index([category])
+  @@index([status, sortOrder])
+  @@map("product_tools")
+}
+
+// Controls which tools appear on which article, where, and with what override copy
+model KnowledgeArticleToolLink {
+  id               String                 @id @default(uuid())
+  articleId        String
+  productToolId    String
+  anchorSectionId  String?
+
+  placement        KnowledgeToolPlacement @default(END_OF_ARTICLE)
+  priority         Int                    @default(1)
+
+  customTitle      String?
+  customBody       String?
+  ctaLabel         String?
+  isPrimary        Boolean                @default(false)
+
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  // Relations
+  article          KnowledgeArticle       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  productTool      ProductTool            @relation(fields: [productToolId], references: [id], onDelete: Cascade)
+  anchorSection    KnowledgeArticleSection? @relation(fields: [anchorSectionId], references: [id], onDelete: SetNull)
+
+  @@index([articleId, placement, priority])
+  @@index([productToolId])
+  @@index([anchorSectionId])
+  @@map("knowledge_article_tool_links")
+}
+
+// Rich CTA modules inside articles: tool launch, data prompt, signup, report, internal jump, etc.
+model KnowledgeArticleCta {
+  id               String                 @id @default(uuid())
+  articleId        String
+  productToolId    String?
+  sectionId        String?
+
+  ctaType          KnowledgeCtaType
+  title            String
+  description      String?
+  ctaLabel         String
+  href             String?
+
+  priority         Int                    @default(1)
+
+  // Optional product/data-collection hook
+  dataPromptKey    String?
+  visibilityRule   Json?
+
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  // Relations
+  article          KnowledgeArticle       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  productTool      ProductTool?           @relation(fields: [productToolId], references: [id], onDelete: SetNull)
+  section          KnowledgeArticleSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([articleId, priority])
+  @@index([productToolId])
+  @@index([sectionId])
+  @@map("knowledge_article_ctas")
+}
+
+// Optional personalization / targeting rules for article variants and CTA visibility
+model KnowledgeAudienceRule {
+  id               String               @id @default(uuid())
+  articleId        String
+
+  name             String
+  description      String?
+  ruleJson         Json
+  priority         Int                  @default(1)
+  isActive         Boolean              @default(true)
+
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  // Relations
+  article          KnowledgeArticle     @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId, isActive, priority])
+  @@map("knowledge_audience_rules")
+}
+
+// Related / recommended article graph
+model KnowledgeArticleRelation {
+  sourceArticleId  String
+  targetArticleId  String
+  relationType     String
+  sortOrder        Int                  @default(0)
+
+  createdAt        DateTime             @default(now())
+
+  // Relations
+  sourceArticle    KnowledgeArticle     @relation("KnowledgeArticleRelationSource", fields: [sourceArticleId], references: [id], onDelete: Cascade)
+  targetArticle    KnowledgeArticle     @relation("KnowledgeArticleRelationTarget", fields: [targetArticleId], references: [id], onDelete: Cascade)
+
+  @@id([sourceArticleId, targetArticleId, relationType])
+  @@index([targetArticleId])
+  @@map("knowledge_article_relations")
+}
+
+// Analytics layer: article view -> tool click -> CTA click -> personalized engagement
+model KnowledgeArticleEvent {
+  id               String                 @id @default(uuid())
+  articleId        String
+  userId           String?
+  propertyId       String?
+  productToolId    String?
+  sectionId        String?
+
+  eventType        KnowledgeEventType
+  sessionId        String?
+  metadata         Json?
+
+  createdAt        DateTime               @default(now())
+
+  // Relations
+  article          KnowledgeArticle       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user             User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  property         Property?              @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  productTool      ProductTool?           @relation(fields: [productToolId], references: [id], onDelete: SetNull)
+  section          KnowledgeArticleSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([articleId, eventType, createdAt])
+  @@index([userId, createdAt])
+  @@index([propertyId, createdAt])
+  @@index([productToolId, createdAt])
+  @@index([sectionId, createdAt])
+  @@map("knowledge_article_events")
 }
 
 // ============================================================================
