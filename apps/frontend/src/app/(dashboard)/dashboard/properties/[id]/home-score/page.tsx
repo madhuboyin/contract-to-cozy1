@@ -116,12 +116,15 @@ function systemStatusBadgeClass(status: string) {
 
 function normalizeSystemStatus(raw: string, grade: string, verification: string, projectedRiskHorizonMonths: number | null) {
   if (verification === "MISSING") return "Pending data";
-  if (verification === "USER_REPORTED" || verification === "INFERRED") return "Needs verification";
   if (grade === "F" || (projectedRiskHorizonMonths !== null && projectedRiskHorizonMonths <= 12)) return "High risk";
   if (grade === "D") return "Needs inspection";
   if (grade === "C") return "Aging";
   if (grade === "B") return "Monitor";
-  if (raw.toLowerCase().includes("inspect")) return "Needs inspection";
+  const normalizedRaw = raw.toLowerCase();
+  if (normalizedRaw.includes("pending")) return "Pending data";
+  if (normalizedRaw.includes("inspect")) return "Needs inspection";
+  if (normalizedRaw.includes("aging")) return "Aging";
+  if (normalizedRaw.includes("monitor")) return "Monitor";
   return "Stable";
 }
 
@@ -129,12 +132,18 @@ function systemStatusHeadline(status: string, grade: string, serviceWindow: stri
   const serviceWindowLower = (serviceWindow || "").toLowerCase();
   if (serviceWindowLower.includes("at or beyond expected service life") || status === "High risk") return "Service life exceeded";
   if (status === "Needs inspection") return "Needs inspection";
-  if (status === "Needs verification") return "Needs verification";
   if (status === "Pending data") return "Pending data";
   if (status === "Aging") return "Aging system";
   if (status === "Monitor") return "Monitor condition";
   if (grade === "A") return "Strong condition";
   return "Stable";
+}
+
+function systemStatusSecondaryCopy(normalizedStatus: string, statusHeadline: string) {
+  if (normalizedStatus === "Needs verification") return null;
+  if (normalizedStatus === "Pending data") return "Limited condition inputs";
+  if (statusHeadline.toLowerCase().includes(normalizedStatus.toLowerCase())) return null;
+  return normalizedStatus;
 }
 
 function gradeToneTextClass(grade: string) {
@@ -177,15 +186,37 @@ function systemRowSeverity(status: string, projectedRiskHorizonMonths: number | 
 }
 
 function systemRowSurfaceClass(severity: SystemSeverity) {
-  if (severity === "HIGH") return "bg-rose-50/35 hover:bg-rose-50/55";
-  if (severity === "MEDIUM") return "bg-amber-50/25 hover:bg-amber-50/45";
+  if (severity === "HIGH") return "bg-rose-50/20 hover:bg-rose-50/35";
+  if (severity === "MEDIUM") return "bg-amber-50/18 hover:bg-amber-50/30";
   return "hover:bg-slate-50/60";
 }
 
-function systemAccentClass(severity: SystemSeverity) {
-  if (severity === "HIGH") return "border-rose-300";
-  if (severity === "MEDIUM") return "border-amber-300";
-  return "border-slate-200";
+type SystemPriorityStripTone = "HIGH" | "MEDIUM" | "LOW" | "HEALTHY" | "NEUTRAL";
+
+function getSystemPriorityStripTone(
+  row: HomeScoreSystemHealthRow,
+  normalizedStatus: string,
+  severity: SystemSeverity
+): SystemPriorityStripTone {
+  if (normalizedStatus === "Pending data" || row.isPlaceholder || row.verification === "MISSING") return "NEUTRAL";
+  if (severity === "HIGH") return "HIGH";
+  if (severity === "MEDIUM") return "MEDIUM";
+
+  const isVerifiedHealthy =
+    ["VERIFIED", "DOCUMENT_BACKED", "PUBLIC_RECORD"].includes(row.verification) &&
+    (row.grade === "A" || row.grade === "B") &&
+    (row.projectedRiskHorizonMonths === null || row.projectedRiskHorizonMonths > 24);
+
+  if (isVerifiedHealthy) return "HEALTHY";
+  return "LOW";
+}
+
+function priorityStripClass(tone: SystemPriorityStripTone) {
+  if (tone === "HIGH") return "bg-rose-400";
+  if (tone === "MEDIUM") return "bg-amber-400";
+  if (tone === "HEALTHY") return "bg-emerald-400";
+  if (tone === "LOW") return "bg-yellow-400";
+  return "bg-slate-300";
 }
 
 type SystemRiskBucketKey = "IMMEDIATE_ATTENTION" | "WATCH_WINDOW" | "LOWER_PRIORITY";
@@ -193,6 +224,7 @@ type SystemRiskBucketKey = "IMMEDIATE_ATTENTION" | "WATCH_WINDOW" | "LOWER_PRIOR
 type SystemRiskBucketSummary = {
   count: number;
   systems: string[];
+  pendingOrUnknownCount: number;
 };
 
 function deriveSystemHealthSignals(row: HomeScoreSystemHealthRow) {
@@ -232,25 +264,30 @@ function classifySystemRiskBucket(row: HomeScoreSystemHealthRow): SystemRiskBuck
 
 function buildSystemRiskOverview(rows: HomeScoreSystemHealthRow[]) {
   const overview: Record<"immediateAttention" | "watchWindow" | "lowerPriority", SystemRiskBucketSummary> = {
-    immediateAttention: { count: 0, systems: [] },
-    watchWindow: { count: 0, systems: [] },
-    lowerPriority: { count: 0, systems: [] },
+    immediateAttention: { count: 0, systems: [], pendingOrUnknownCount: 0 },
+    watchWindow: { count: 0, systems: [], pendingOrUnknownCount: 0 },
+    lowerPriority: { count: 0, systems: [], pendingOrUnknownCount: 0 },
   };
 
   rows.forEach((row) => {
+    const { normalizedStatus } = deriveSystemHealthSignals(row);
+    const hasPendingOrUnknown = normalizedStatus === "Pending data" || row.isPlaceholder || row.verification === "MISSING";
     const bucket = classifySystemRiskBucket(row);
     if (bucket === "IMMEDIATE_ATTENTION") {
       overview.immediateAttention.count += 1;
       overview.immediateAttention.systems.push(row.label);
+      if (hasPendingOrUnknown) overview.immediateAttention.pendingOrUnknownCount += 1;
       return;
     }
     if (bucket === "WATCH_WINDOW") {
       overview.watchWindow.count += 1;
       overview.watchWindow.systems.push(row.label);
+      if (hasPendingOrUnknown) overview.watchWindow.pendingOrUnknownCount += 1;
       return;
     }
     overview.lowerPriority.count += 1;
     overview.lowerPriority.systems.push(row.label);
+    if (hasPendingOrUnknown) overview.lowerPriority.pendingOrUnknownCount += 1;
   });
 
   return overview;
@@ -268,11 +305,11 @@ function formatSystemBucketNames(names: string[], maxVisible = 3) {
 
 function verificationPillClass(provenance: string) {
   if (provenance === "VERIFIED" || provenance === "DOCUMENT_BACKED" || provenance === "PUBLIC_RECORD") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-emerald-200/80 bg-emerald-50/50 text-emerald-700";
   }
-  if (provenance === "INFERRED") return "border-sky-200 bg-sky-50 text-sky-700";
-  if (provenance === "MISSING") return "border-slate-200 bg-slate-50 text-slate-500";
-  return "border-slate-200 bg-slate-100 text-slate-700";
+  if (provenance === "INFERRED") return "border-sky-200/70 bg-sky-50/45 text-sky-700";
+  if (provenance === "MISSING") return "border-slate-200 bg-slate-100/70 text-slate-500";
+  return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 function riskHorizonPresentation(projectedRiskHorizonMonths: number | null) {
@@ -286,7 +323,7 @@ function riskHorizonPresentation(projectedRiskHorizonMonths: number | null) {
   if (projectedRiskHorizonMonths <= 6) {
     return {
       value: `${projectedRiskHorizonMonths} months`,
-      detail: "Near-term window",
+      detail: "Near-term",
       tone: "text-rose-700",
     };
   }
@@ -299,7 +336,7 @@ function riskHorizonPresentation(projectedRiskHorizonMonths: number | null) {
   }
   return {
     value: `${projectedRiskHorizonMonths} months`,
-    detail: "Longer horizon",
+    detail: "Long horizon",
     tone: "text-slate-700",
   };
 }
@@ -1439,19 +1476,20 @@ export default function HomeScoreReportPage() {
           subtitle="Per-system grades, verification status, and next recommended actions."
           onToggle={onSectionToggle}
         >
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               {systemHealthInsight}
             </div>
             <section
               aria-label="System Risk Overview"
-              className="rounded-lg border border-slate-200 bg-white px-3.5 py-3 print:break-inside-avoid"
+              className="rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 print:break-inside-avoid"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">System Risk Overview</h3>
                 <p className="text-[11px] text-slate-500">{systemHealthRows.length} systems reviewed</p>
               </div>
-              <div className="mt-3 grid gap-2.5 sm:grid-cols-3 print:grid-cols-3 print:gap-2" role="list">
+              <p className="mt-1 text-[11px] text-slate-500">Based on lifecycle estimates and currently reported system data.</p>
+              <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3 print:grid-cols-3 print:gap-2" role="list">
                 {[
                   {
                     key: "immediate-attention",
@@ -1471,17 +1509,22 @@ export default function HomeScoreReportPage() {
                     key: "lower-priority",
                     label: "Lower priority",
                     summary: systemRiskOverview.lowerPriority,
-                    tone: "border-emerald-200 bg-emerald-50/60",
-                    helper: "Operating within normal range",
+                    tone:
+                      systemRiskOverview.lowerPriority.pendingOrUnknownCount > 0
+                        ? "border-slate-200 bg-slate-50/80"
+                        : "border-emerald-200/80 bg-emerald-50/45",
+                    helper:
+                      systemRiskOverview.lowerPriority.pendingOrUnknownCount > 0
+                        ? "Includes systems with limited or pending data"
+                        : "Longer horizon with no immediate triggers",
                   },
                 ].map((group) => {
                   const countLabel = `${group.summary.count} system${group.summary.count === 1 ? "" : "s"}`;
                   return (
-                    <div key={group.key} role="listitem" className={cx("rounded-md border px-3 py-2.5", group.tone)}>
+                    <div key={group.key} role="listitem" className={cx("rounded-md border px-3 py-2", group.tone)}>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-700">{group.label}</p>
-                      <p className="mt-1 text-lg font-semibold leading-none text-slate-950 tabular-nums">{group.summary.count}</p>
-                      <p className="mt-1 text-xs font-medium text-slate-600">{countLabel}</p>
-                      <p className="mt-1.5 text-xs leading-5 text-slate-700">{formatSystemBucketNames(group.summary.systems)}</p>
+                      <p className="mt-1 text-base font-semibold leading-none text-slate-950 tabular-nums">{countLabel}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-700">{formatSystemBucketNames(group.summary.systems)}</p>
                       <p className="sr-only">
                         {group.label}: {countLabel}. {group.helper}. {formatSystemBucketNames(group.summary.systems)}
                       </p>
@@ -1490,10 +1533,12 @@ export default function HomeScoreReportPage() {
                 })}
               </div>
             </section>
-            <div className="overflow-x-auto">
+            <div className="border-t border-slate-200/80 pt-4">
+              <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                    <th className="w-[6px] py-0 pr-3" aria-hidden />
                     <th className="py-2.5 pr-4">System</th>
                     <th className="py-2.5 pr-4">Health Status</th>
                     <th className="py-2.5 pr-4">Age / Lifecycle</th>
@@ -1506,17 +1551,25 @@ export default function HomeScoreReportPage() {
                   {systemHealthRows.map((row) => {
                     const { normalizedStatus, severity } = deriveSystemHealthSignals(row);
                     const statusHeadline = systemStatusHeadline(normalizedStatus, row.grade, row.serviceWindow);
+                    const secondaryStatus = systemStatusSecondaryCopy(normalizedStatus, statusHeadline);
                     const lifecycleProgress = getLifecycleProgress(row.ageYears, row.serviceWindow);
                     const shortAction = shortenSystemAction(row.nextRecommendedAction);
                     const horizon = riskHorizonPresentation(row.projectedRiskHorizonMonths);
                     const SystemIcon = systemHealthIcon(row.key);
+                    const stripTone = getSystemPriorityStripTone(row, normalizedStatus, severity);
 
                     return (
-                      <tr key={row.key} className={cx("align-top border-b border-slate-100 transition-colors", systemRowSurfaceClass(severity))}>
+                      <tr
+                        key={row.key}
+                        className={cx("align-top border-b border-slate-100 transition-colors print:bg-white", systemRowSurfaceClass(severity))}
+                      >
+                        <td className="w-[6px] p-0 pr-3" aria-hidden>
+                          <span className={cx("block h-full min-h-[86px] w-1.5 rounded-r-sm", priorityStripClass(stripTone))} />
+                        </td>
                         <td className="py-3.5 pr-4">
-                          <div className={cx("border-l-2 pl-3", systemAccentClass(severity))}>
+                          <div>
                             <div className="flex items-center gap-2">
-                              <SystemIcon className="h-4 w-4 text-slate-500" aria-hidden />
+                              <SystemIcon className="h-3.5 w-3.5 text-slate-400" aria-hidden />
                               <p className="text-sm font-semibold text-slate-900">{row.label}</p>
                             </div>
                             {row.isPlaceholder ? <p className="mt-1 text-xs text-slate-500">Pending system data</p> : null}
@@ -1526,7 +1579,7 @@ export default function HomeScoreReportPage() {
                           <p className={cx("text-sm font-semibold", gradeToneTextClass(row.grade))}>
                             {row.grade} • {statusHeadline}
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">{normalizedStatus}</p>
+                          {secondaryStatus ? <p className="mt-1 text-xs text-slate-500">{secondaryStatus}</p> : null}
                         </td>
                         <td className="py-3.5 pr-4">
                           <p className="text-sm font-medium text-slate-900">{row.ageYears === null ? "Unknown age" : `${row.ageYears} years`}</p>
@@ -1541,7 +1594,7 @@ export default function HomeScoreReportPage() {
                           <p className="mt-1 text-xs text-slate-500">{row.serviceWindow || "Service window unavailable"}</p>
                         </td>
                         <td className="py-3.5 pr-4">
-                          <span className={cx("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium", verificationPillClass(row.verification))}>
+                          <span className={cx("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium", verificationPillClass(row.verification))}>
                             {formatConstantLabel(row.verification)}
                           </span>
                         </td>
@@ -1559,6 +1612,7 @@ export default function HomeScoreReportPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         </SectionCard>
