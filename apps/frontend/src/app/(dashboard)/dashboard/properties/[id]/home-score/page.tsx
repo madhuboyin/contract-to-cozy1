@@ -374,6 +374,24 @@ function shortenSystemAction(nextAction: string) {
   return cleaned;
 }
 
+function improvementPlanTags(action: HomeScoreImprovementAction) {
+  const impactOrPriorityTag =
+    action.urgency === "HIGH"
+      ? "High priority"
+      : action.projectedPointGain >= 4
+        ? "High impact"
+        : action.projectedRiskReduction >= 1500
+          ? "Risk reduction"
+          : action.effort === "LOW"
+            ? "Quick win"
+            : null;
+
+  const effortTag =
+    action.effort === "LOW" ? "Low effort" : action.effort === "MEDIUM" ? "Medium effort" : action.effort === "HIGH" ? "High effort" : null;
+
+  return [impactOrPriorityTag, effortTag].filter((value): value is string => Boolean(value)).slice(0, 2);
+}
+
 function systemHealthIcon(key: HomeScoreSystemHealthRow["key"]) {
   switch (key) {
     case "ROOF":
@@ -951,8 +969,8 @@ export default function HomeScoreReportPage() {
     }
     return "Verification is mixed across sources. Prioritize one documentation action to improve report trustworthiness.";
   })();
-  const improvementInsight =
-    "Start with one verification action and one risk-reduction action for the fastest trust and score uplift.";
+  const improvementInsight = "Complete the top two actions for the fastest HomeScore improvement.";
+  const potentialNewScore = report.improvementPlan?.potentialNewScore ?? report.homeScore;
   const reportStatus = (() => {
     const generatedIso = meta?.generatedDate || report.generatedAt || null;
     const generatedDate = generatedIso ? new Date(generatedIso) : null;
@@ -1891,22 +1909,29 @@ export default function HomeScoreReportPage() {
               </div>
               {improvementActions.length > 0 ? (
                 improvementActions.map((action, index) => {
-                  const labels = [
-                    action.effort === "LOW" ? "Quick win" : null,
-                    action.projectedPointGain >= 4 ? "High impact" : null,
-                    action.estimatedConfidenceGain === "HIGH" ? "Trust boost" : null,
-                    action.projectedRiskReduction >= 1500 ? "Risk reduction" : null,
-                    action.urgency === "HIGH" ? "High priority" : null,
-                    action.effort === "LOW" ? "Low effort" : action.effort === "MEDIUM" ? "Medium effort" : null,
-                  ].filter(Boolean).slice(0, 3) as string[];
+                  const labels = improvementPlanTags(action);
+                  const isTopAction = index === 0;
 
                   return (
-                  <div key={action.id} className="border border-slate-200 bg-white p-4">
+                  <div
+                    key={action.id}
+                    className={cx(
+                      "border p-4",
+                      isTopAction ? "border-slate-300 bg-slate-50/70" : "border-slate-200 bg-white"
+                    )}
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">{action.title}</p>
-                      <Badge variant="outline" className={urgencyBadgeClass(action.urgency)}>
-                        Priority: {formatConstantLabel(action.urgency)}
-                      </Badge>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                          Rank #{index + 1}{isTopAction ? " · Recommended" : ""}
+                        </p>
+                        <p className={cx("text-sm font-semibold text-slate-900", isTopAction && "text-slate-950")}>{action.title}</p>
+                      </div>
+                      {isTopAction ? (
+                        <Badge variant="outline" className="border-slate-300 bg-white text-slate-700">
+                          Recommended
+                        </Badge>
+                      ) : null}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {labels.map((label) => (
@@ -1915,27 +1940,24 @@ export default function HomeScoreReportPage() {
                         </Badge>
                       ))}
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 md:grid-cols-4">
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600 md:grid-cols-3">
                       <div>
-                        <p className="text-slate-500">Point gain</p>
-                        <p className="font-medium text-slate-900">+{action.projectedPointGain}</p>
+                        <p className="text-slate-500">Score impact</p>
+                        <p className="font-semibold text-slate-900">+{action.projectedPointGain} pts</p>
                       </div>
                       <div>
                         <p className="text-slate-500">Risk reduction</p>
-                        <p className="font-medium text-slate-900">{formatCurrency(action.projectedRiskReduction)}</p>
+                        <p className="font-semibold text-slate-900">{formatCurrency(action.projectedRiskReduction)}</p>
                       </div>
                       <div>
-                        <p className="text-slate-500">Cost</p>
-                        <p className="font-medium text-slate-900">{formatCurrency(action.estimatedCostToImprove)}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500">Confidence gain</p>
-                        <p className="font-medium text-slate-900">{formatConstantLabel(action.estimatedConfidenceGain)}</p>
+                        <p className="text-slate-500">Effort</p>
+                        <p className="font-semibold text-slate-900">{formatConstantLabel(action.effort)}</p>
                       </div>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Rank #{index + 1} · Effort: {formatConstantLabel(action.effort)}
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                      <span>Estimated cost: {formatCurrency(action.estimatedCostToImprove)}</span>
+                      <span>Confidence gain: {formatConstantLabel(action.estimatedConfidenceGain)}</span>
+                    </div>
                     {action.actionHref ? (
                       <Link
                         href={action.actionHref}
@@ -1953,8 +1975,18 @@ export default function HomeScoreReportPage() {
             </div>
             <div className="space-y-3">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Potential New Score</p>
-                <p className="mt-1 text-3xl font-semibold text-slate-950">{report.improvementPlan?.potentialNewScore ?? report.homeScore}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Score Projection</p>
+                <div className="mt-2 flex items-end gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Current</p>
+                    <p className="text-2xl font-semibold text-slate-900">{report.homeScore}</p>
+                  </div>
+                  <span className="pb-1 text-lg text-slate-400">→</span>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Potential</p>
+                    <p className="text-3xl font-semibold text-slate-950">{potentialNewScore}</p>
+                  </div>
+                </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Potential Money At Risk Reduction</p>
