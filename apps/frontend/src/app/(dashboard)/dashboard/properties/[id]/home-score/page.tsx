@@ -641,7 +641,7 @@ function RadarChart({ axes }: { axes: HomeScoreRadarAxis[] }) {
     };
   };
 
-  const polygons = [25, 50, 75, 100].map((level) =>
+  const polygons = [20, 40, 60, 80, 100].map((level) =>
     axes
       .map((_, index) => {
         const p = pointFor(index, level);
@@ -690,9 +690,27 @@ function RadarChart({ axes }: { axes: HomeScoreRadarAxis[] }) {
         {axes.map((axis, index) => {
           const p = pointFor(index, axis.score);
           const labelPos = axisFor(index);
+          const dx = p.x - center;
+          const dy = p.y - center;
+          const length = Math.hypot(dx, dy) || 1;
+          const scorePos = {
+            x: p.x - (dx / length) * 12,
+            y: p.y - (dy / length) * 12,
+          };
           return (
             <g key={`point-${axis.key}`}>
-              <circle cx={p.x} cy={p.y} r={4.5} fill="#0f172a" />
+              <circle cx={p.x} cy={p.y} r={4} fill="#0f172a" />
+              <text
+                x={scorePos.x}
+                y={scorePos.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="10"
+                fontWeight="600"
+                fill="#475569"
+              >
+                {Math.round(axis.score)}
+              </text>
               <text
                 x={labelPos.x}
                 y={labelPos.y}
