@@ -2550,7 +2550,6 @@ export class HomeScoreReportService {
       prisma.inventoryItem.findMany({
         where: {
           propertyId,
-          category: 'APPLIANCE',
           sourceHash: {
             startsWith: PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
           },
