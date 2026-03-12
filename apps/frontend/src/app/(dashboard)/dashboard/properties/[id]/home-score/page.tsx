@@ -685,7 +685,14 @@ function RadarChart({ axes }: { axes: HomeScoreRadarAxis[] }) {
           );
         })}
 
-        <polygon points={dataPoints} fill="rgba(15,23,42,0.14)" stroke="#0f172a" strokeWidth={2.5} />
+        <polygon
+          points={dataPoints}
+          fill="rgba(15,23,42,0.14)"
+          stroke="#0f172a"
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+          strokeMiterlimit={1}
+        />
 
         {axes.map((axis, index) => {
           const p = pointFor(index, axis.score);
