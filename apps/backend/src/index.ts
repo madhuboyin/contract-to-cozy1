@@ -78,6 +78,7 @@ import homeStatusBoardRoutes from './routes/homeStatusBoard.routes';
 import inventoryVerificationRoutes from './routes/inventoryVerification.routes';
 import maintenancePredictionRoutes from './routes/maintenancePrediction.routes';
 import weatherRoutes from './routes/weather.routes';
+import negotiationShieldRoutes from './routes/negotiationShield.routes';
 import vaultRoutes from './routes/vault.routes';
 import narrativeRoutes from './routes/narrative.routes';
 import knowledgeHubRoutes from './routes/knowledgeHub.routes';
@@ -362,6 +363,7 @@ app.use('/api', homeSavingsRoutes);
 //app.use(express.json({ limit: '10mb' })); // Ensure this is present
 app.use('/api', trueCostOwnershipRoutes);
 app.use('/api', homeCapitalTimelineRoutes);
+app.use('/api', negotiationShieldRoutes);
 app.use('/api', homeStatusBoardRoutes);
 app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
