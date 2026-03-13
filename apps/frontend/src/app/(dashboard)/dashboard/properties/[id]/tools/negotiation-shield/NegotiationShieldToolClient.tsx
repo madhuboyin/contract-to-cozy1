@@ -622,6 +622,14 @@ function formatConfidence(confidence: number | null | undefined) {
   return `${Math.round(normalized)}% confidence`;
 }
 
+function formatConfidenceDescriptor(confidence: number | null | undefined) {
+  if (typeof confidence !== 'number' || !Number.isFinite(confidence)) return null;
+  const normalized = confidence <= 1 ? confidence * 100 : confidence;
+  if (normalized >= 75) return 'Stronger support';
+  if (normalized >= 50) return 'Moderate support';
+  return 'Limited support';
+}
+
 function formatTokenLabel(value: string | null | undefined) {
   if (!value) return null;
 
@@ -1680,18 +1688,41 @@ function AnalysisResultsSection({
   const recommendedActions = normalizeObjectList(analysis.recommendedActions);
   const pricingAssessment = getPricingAssessment(analysis);
   const confidenceLabel = formatConfidence(analysis.confidence);
+  const confidenceDescriptor = formatConfidenceDescriptor(analysis.confidence);
+  const assessmentLabel = formatTokenLabel(pricingAssessment.status) ?? 'Assessment pending';
 
   return (
     <Card className={SECTION_CARD_CLASS}>
       <CardHeader className={SECTION_HEADER_CLASS}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-          <div>
-            <CardTitle>Analysis results</CardTitle>
-            <CardDescription>Grounded guidance based on the case details currently saved for this property.</CardDescription>
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Analysis results</CardTitle>
+              <CardDescription>Grounded guidance based on the case details currently saved for this property.</CardDescription>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {pricingAssessment.status ? <Badge variant="secondary">{formatTokenLabel(pricingAssessment.status)}</Badge> : null}
-            {confidenceLabel ? <Badge variant="outline">{confidenceLabel}</Badge> : null}
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+            <div className="rounded-2xl border border-border bg-accent/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assessment</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{assessmentLabel}</p>
+              {pricingAssessment.summary ? (
+                <p className="mt-2 text-sm leading-6 text-foreground/85">{pricingAssessment.summary}</p>
+              ) : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Confidence</p>
+                <p className="mt-2 text-base font-semibold text-foreground">{confidenceDescriptor ?? 'Pending'}</p>
+                {confidenceLabel ? <p className="mt-1 text-sm text-muted-foreground">{confidenceLabel}</p> : null}
+              </div>
+              {analysis.generatedAt ? (
+                <div className="rounded-2xl border border-border bg-background p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Updated</p>
+                  <p className="mt-2 text-base font-semibold text-foreground">{formatDateTime(analysis.generatedAt)}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Based on the latest saved case input.</p>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -1711,6 +1742,7 @@ function AnalysisResultsSection({
             titleKey="title"
             bodyKey="detail"
             metaKey="status"
+            metaLabel="Signal"
           />
           <ResultList
             title="Negotiation leverage"
@@ -1719,6 +1751,8 @@ function AnalysisResultsSection({
             titleKey="title"
             bodyKey="detail"
             metaKey="strength"
+            metaLabel="Strength"
+            emphasis="leverage"
           />
         </div>
 
@@ -1729,6 +1763,7 @@ function AnalysisResultsSection({
           titleKey="title"
           bodyKey="detail"
           metaKey="priority"
+          metaLabel="Priority"
           ordered
         />
 
@@ -1802,7 +1837,9 @@ function ResultList({
   titleKey,
   bodyKey,
   metaKey,
+  metaLabel,
   ordered = false,
+  emphasis = 'default',
 }: {
   title: string;
   emptyLabel: string;
@@ -1810,7 +1847,9 @@ function ResultList({
   titleKey: string;
   bodyKey: string;
   metaKey?: string;
+  metaLabel?: string;
   ordered?: boolean;
+  emphasis?: 'default' | 'leverage';
 }) {
   const ListTag = ordered ? 'ol' : 'ul';
 
@@ -1827,7 +1866,13 @@ function ResultList({
             const itemMeta = metaKey && typeof item[metaKey] === 'string' ? formatTokenLabel(String(item[metaKey])) : null;
 
             return (
-              <li key={`${itemTitle}-${index}`} className="rounded-xl border border-border bg-background p-2.5 sm:p-3">
+              <li
+                key={`${itemTitle}-${index}`}
+                className={cn(
+                  'rounded-xl border border-border bg-background p-2.5 sm:p-3',
+                  emphasis === 'leverage' ? 'border-sky-200/80 bg-sky-50/40' : null
+                )}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
                     {ordered ? (
@@ -1836,11 +1881,21 @@ function ResultList({
                       </span>
                     ) : null}
                     <div>
-                      <p className="text-sm font-medium text-foreground">{itemTitle}</p>
+                      {emphasis === 'leverage' ? (
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Use this angle</p>
+                      ) : null}
+                      <p className={cn('text-sm font-medium text-foreground', emphasis === 'leverage' ? 'mt-1 text-[15px]' : null)}>
+                        {itemTitle}
+                      </p>
                       {itemBody ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{itemBody}</p> : null}
                     </div>
                   </div>
-                  {itemMeta ? <Badge variant="outline">{itemMeta}</Badge> : null}
+                  {itemMeta ? (
+                    <div className="flex flex-col items-start gap-1 sm:items-end">
+                      {metaLabel ? <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{metaLabel}</span> : null}
+                      <Badge variant={emphasis === 'leverage' ? 'secondary' : 'outline'}>{itemMeta}</Badge>
+                    </div>
+                  ) : null}
                 </div>
               </li>
             );
@@ -1925,6 +1980,118 @@ function DraftSection({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function DesktopCaseRail({
+  cases,
+  activeCaseId,
+  isLoading,
+  isError,
+  isWorkspaceMode,
+  onOpenCase,
+  onOpenCreate,
+  onRefetch,
+}: {
+  cases: NegotiationShieldCaseDetail['case'][];
+  activeCaseId: string | null;
+  isLoading: boolean;
+  isError: boolean;
+  isWorkspaceMode: boolean;
+  onOpenCase: (caseId: string) => void;
+  onOpenCreate: (scenario?: ScenarioRouteValue) => void;
+  onRefetch: () => void;
+}) {
+  return (
+    <div className="hidden xl:block xl:sticky xl:top-6 xl:space-y-4">
+      {isWorkspaceMode ? (
+        <Card className={SECTION_CARD_CLASS}>
+          <CardHeader className={cn(SECTION_HEADER_CLASS, 'pb-4')}>
+            <div className="space-y-2">
+              <CardTitle className="text-base">New review</CardTitle>
+              <CardDescription>
+                Need a separate negotiation? Start a fresh case without leaving the current workspace.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className={cn(SECTION_CONTENT_CLASS, 'pt-0')}>
+            <Button type="button" className="w-full" onClick={onOpenCreate}>
+              <Plus className="h-4 w-4" />
+              Start new review
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <MobileFilterSurface className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-foreground">Start a new review</p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Choose the situation you want help with, then build the case from there.
+            </p>
+          </div>
+          <ScenarioQuickStart onStart={(scenario) => onOpenCreate(scenario)} />
+        </MobileFilterSurface>
+      )}
+
+      <Card className={SECTION_CARD_CLASS}>
+        <CardHeader className={SECTION_HEADER_CLASS}>
+          <CardTitle className="text-base">{isWorkspaceMode ? 'Other cases' : 'Recent cases'}</CardTitle>
+          <CardDescription>
+            {isWorkspaceMode
+              ? 'Jump to another property-scoped review without losing this workflow.'
+              : 'Property-scoped reviews stay here so you can reopen them later.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className={SECTION_CONTENT_CLASS}>
+          {isLoading ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading cases...
+            </div>
+          ) : isError ? (
+            <div className="space-y-3 py-1">
+              <p className="text-sm leading-6 text-muted-foreground">
+                We could not load the latest reviews for this property.
+              </p>
+              <Button type="button" variant="outline" className="w-full" onClick={onRefetch}>
+                Try again
+              </Button>
+            </div>
+          ) : cases.length === 0 ? (
+            <p className="text-sm leading-6 text-muted-foreground">
+              No cases yet. Start with the scenario that matches what you need reviewed.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {cases.map((item) => {
+                const active = activeCaseId === item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onOpenCase(item.id)}
+                    className={cn(
+                      'w-full rounded-2xl border p-4 text-left transition-colors',
+                      active
+                        ? 'border-foreground/20 bg-accent/40 shadow-sm'
+                        : 'border-border bg-white hover:border-foreground/15 hover:bg-accent/30'
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                      <Badge variant={getStatusVariant(item.status)}>{formatStatusLabel(item.status)}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{formatScenarioLabel(item.scenarioType)}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Updated {formatDateTime(item.updatedAt)}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -2179,6 +2346,7 @@ function CaseWorkspace({
   const parsedDocumentsCount = caseDetail.documents.filter((document) => getDocumentParseInfo(document, caseDetail.inputs).isParsed).length;
   const needsDocumentParseReminder = caseDetail.documents.length > 0 && parsedDocumentsCount === 0;
   const hasUsableInput = hasMeaningfulAnalysisInput(caseDetail);
+  const hasAnalysis = Boolean(caseDetail.latestAnalysis);
   const manualActionInFlight =
     saveInputMutation.isPending || parseDocumentMutation.isPending || analyzeCaseMutation.isPending;
   const documentActionInFlight =
@@ -2221,6 +2389,236 @@ function CaseWorkspace({
     }
   }
 
+  const manualInputSection =
+    caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? (
+      <ContractorManualInputSection
+        caseDetail={caseDetail}
+        feedback={manualFeedback}
+        isSaving={manualActionInFlight}
+        onSave={(payload) => saveInputMutation.mutate(payload)}
+      />
+    ) : caseDetail.case.scenarioType === 'INSURANCE_PREMIUM_INCREASE' ? (
+      <InsuranceManualInputSection
+        caseDetail={caseDetail}
+        feedback={manualFeedback}
+        isSaving={manualActionInFlight}
+        onSave={(payload) => saveInputMutation.mutate(payload)}
+      />
+    ) : caseDetail.case.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT' ? (
+      <ClaimSettlementManualInputSection
+        caseDetail={caseDetail}
+        feedback={manualFeedback}
+        isSaving={manualActionInFlight}
+        onSave={(payload) => saveInputMutation.mutate(payload)}
+      />
+    ) : caseDetail.case.scenarioType === 'BUYER_INSPECTION_NEGOTIATION' ? (
+      <BuyerInspectionManualInputSection
+        caseDetail={caseDetail}
+        feedback={manualFeedback}
+        isSaving={manualActionInFlight}
+        onSave={(payload) => saveInputMutation.mutate(payload)}
+      />
+    ) : (
+      <ContractorUrgencyManualInputSection
+        caseDetail={caseDetail}
+        feedback={manualFeedback}
+        isSaving={manualActionInFlight}
+        onSave={(payload) => saveInputMutation.mutate(payload)}
+      />
+    );
+
+  const documentSection = (
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
+        <CardTitle>Documents</CardTitle>
+        <CardDescription>{getDocumentSectionDescription(caseDetail.case.scenarioType)}</CardDescription>
+      </CardHeader>
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-6')}>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] xl:items-end">
+          <Field label="Document name">
+            <Input
+              value={documentName}
+              onChange={(event) => setDocumentName(event.target.value)}
+              placeholder={selectedFile?.name || 'Use the original filename or add a cleaner label'}
+              disabled={documentActionInFlight}
+            />
+          </Field>
+          <Field label="Document type">
+            <Select
+              value={documentType}
+              onValueChange={(nextValue: NegotiationShieldDocumentType) => setDocumentType(nextValue)}
+              disabled={documentActionInFlight}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a document type" />
+              </SelectTrigger>
+              <SelectContent>
+                {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="File">
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt"
+              disabled={documentActionInFlight}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setSelectedFile(file);
+                if (file && !documentName.trim()) {
+                  setDocumentName(file.name);
+                }
+              }}
+            />
+          </Field>
+        </div>
+
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => uploadDocumentMutation.mutate()}
+            disabled={documentActionInFlight || !selectedFile}
+          >
+            {uploadDocumentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploadDocumentMutation.isPending ? 'Attaching document...' : 'Upload and attach'}
+          </Button>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Attach the source document first, then parse it to pull useful text into the case.
+          </p>
+        </div>
+
+        <InlineFeedback feedback={documentFeedback} />
+
+        <Separator />
+
+        {caseDetail.documents.length === 0 ? (
+          <EmptyStateCard
+            title="No documents attached yet"
+            description={getEmptyStateDescription(caseDetail.case.scenarioType)}
+          />
+        ) : (
+          <div className="space-y-3">
+            {caseDetail.documents.map((document) => {
+              const parseInfo = getDocumentParseInfo(document, caseDetail.inputs);
+              const isParsingThisDocument =
+                parseDocumentMutation.isPending && parseDocumentMutation.variables === document.id;
+
+              return (
+                <div key={document.id} className="rounded-2xl border border-border p-3.5 sm:p-4">
+                  <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{document.fileName}</p>
+                        <Badge variant="outline">{formatDocumentTypeLabel(document.documentType)}</Badge>
+                        {parseInfo.isParsed ? <Badge variant="success">Parsed</Badge> : <Badge variant="outline">Not parsed yet</Badge>}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Attached {formatDateTime(document.uploadedAt)}
+                        {parseInfo.isParsed && parseInfo.parsedAt ? ` • Last parsed ${formatDateTime(parseInfo.parsedAt)}` : ''}
+                      </p>
+                      {parseInfo.isParsed ? (
+                        <p className="text-sm text-muted-foreground">
+                          Parsed fields: {parseInfo.parsedFieldCount}
+                          {parseInfo.warnings.length ? ` • ${parseInfo.warnings.length} warning${parseInfo.warnings.length === 1 ? '' : 's'}` : ''}
+                        </p>
+                      ) : null}
+                      {parseInfo.warnings.length ? (
+                        <ul className="space-y-1 text-sm text-muted-foreground">
+                          {parseInfo.warnings.map((warning) => (
+                            <li key={warning} className="list-disc ml-5">
+                              {warning}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                      {document.fileUrl ? (
+                        <Button type="button" variant="outline" className="w-full sm:w-auto" asChild>
+                          <a href={document.fileUrl} target="_blank" rel="noreferrer">
+                            <FileText className="h-4 w-4" />
+                            View file
+                          </a>
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => parseDocumentMutation.mutate(document.id)}
+                        disabled={documentActionInFlight}
+                      >
+                        {isParsingThisDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+                        {isParsingThisDocument ? 'Parsing...' : parseInfo.isParsed ? 'Re-parse' : 'Parse'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const analysisActionSection = (
+    <Card className={cn(SECTION_CARD_CLASS, needsDocumentParseReminder ? 'border-amber-200/80' : '')}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
+        <CardTitle>{hasAnalysis ? 'Refresh analysis' : 'Run analysis'}</CardTitle>
+        <CardDescription>
+          {hasAnalysis
+            ? 'Update the guidance when your case changes so the leverage points and draft stay current.'
+            : 'When your case has enough manual or parsed document context, run analysis to generate leverage points and a draft response.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-3')}>
+        {needsDocumentParseReminder ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-3.5 py-3 text-sm leading-6 text-amber-900">
+            You can analyze with manual input only, but parsing your uploaded document first usually gives the review more context.
+          </div>
+        ) : null}
+        {analyzeBlockedReason ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3.5 py-3 text-sm leading-6 text-slate-700">
+            {analyzeBlockedReason}
+          </div>
+        ) : null}
+        <InlineFeedback feedback={analysisFeedback} />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => analyzeCaseMutation.mutate()}
+            disabled={!canAnalyze}
+          >
+            {analyzeCaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {analyzeCaseMutation.isPending ? 'Analyzing...' : getAnalysisActionLabel(caseDetail.case.scenarioType)}
+          </Button>
+          <p className="text-sm leading-6 text-muted-foreground lg:max-w-xl lg:text-right">
+            Manual details always take priority. Parsed document fields fill in gaps when available.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const resultsSection = <AnalysisResultsSection analysis={caseDetail.latestAnalysis} />;
+  const draftSection = (
+    <DraftSection
+      caseId={caseDetail.case.id}
+      draft={caseDetail.latestDraft}
+      feedback={draftFeedback}
+      onCopy={handleDraftCopy}
+    />
+  );
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <Card className={SECTION_CARD_CLASS}>
@@ -2256,219 +2654,23 @@ function CaseWorkspace({
         </CardHeader>
       </Card>
 
-      {caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? (
-        <ContractorManualInputSection
-          caseDetail={caseDetail}
-          feedback={manualFeedback}
-          isSaving={manualActionInFlight}
-          onSave={(payload) => saveInputMutation.mutate(payload)}
-        />
-      ) : caseDetail.case.scenarioType === 'INSURANCE_PREMIUM_INCREASE' ? (
-        <InsuranceManualInputSection
-          caseDetail={caseDetail}
-          feedback={manualFeedback}
-          isSaving={manualActionInFlight}
-          onSave={(payload) => saveInputMutation.mutate(payload)}
-        />
-      ) : caseDetail.case.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT' ? (
-        <ClaimSettlementManualInputSection
-          caseDetail={caseDetail}
-          feedback={manualFeedback}
-          isSaving={manualActionInFlight}
-          onSave={(payload) => saveInputMutation.mutate(payload)}
-        />
-      ) : caseDetail.case.scenarioType === 'BUYER_INSPECTION_NEGOTIATION' ? (
-        <BuyerInspectionManualInputSection
-          caseDetail={caseDetail}
-          feedback={manualFeedback}
-          isSaving={manualActionInFlight}
-          onSave={(payload) => saveInputMutation.mutate(payload)}
-        />
+      {hasAnalysis ? (
+        <>
+          {resultsSection}
+          {draftSection}
+          {analysisActionSection}
+          {manualInputSection}
+          {documentSection}
+        </>
       ) : (
-        <ContractorUrgencyManualInputSection
-          caseDetail={caseDetail}
-          feedback={manualFeedback}
-          isSaving={manualActionInFlight}
-          onSave={(payload) => saveInputMutation.mutate(payload)}
-        />
+        <>
+          {manualInputSection}
+          {documentSection}
+          {analysisActionSection}
+          {resultsSection}
+          {draftSection}
+        </>
       )}
-
-      <Card className={SECTION_CARD_CLASS}>
-        <CardHeader className={SECTION_HEADER_CLASS}>
-          <CardTitle>Documents</CardTitle>
-          <CardDescription>{getDocumentSectionDescription(caseDetail.case.scenarioType)}</CardDescription>
-        </CardHeader>
-        <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-6')}>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] xl:items-end">
-            <Field label="Document name">
-              <Input
-                value={documentName}
-                onChange={(event) => setDocumentName(event.target.value)}
-                placeholder={selectedFile?.name || 'Use the original filename or add a cleaner label'}
-                disabled={documentActionInFlight}
-              />
-            </Field>
-            <Field label="Document type">
-              <Select
-                value={documentType}
-                onValueChange={(nextValue: NegotiationShieldDocumentType) => setDocumentType(nextValue)}
-                disabled={documentActionInFlight}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a document type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOCUMENT_TYPE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="File">
-              <Input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt"
-                disabled={documentActionInFlight}
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  setSelectedFile(file);
-                  if (file && !documentName.trim()) {
-                    setDocumentName(file.name);
-                  }
-                }}
-              />
-            </Field>
-          </div>
-
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <Button
-              type="button"
-              className="w-full sm:w-auto"
-              onClick={() => uploadDocumentMutation.mutate()}
-              disabled={documentActionInFlight || !selectedFile}
-            >
-              {uploadDocumentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploadDocumentMutation.isPending ? 'Attaching document...' : 'Upload and attach'}
-            </Button>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Attach the source document first, then parse it to pull useful text into the case.
-            </p>
-          </div>
-
-          <InlineFeedback feedback={documentFeedback} />
-
-          <Separator />
-
-          {caseDetail.documents.length === 0 ? (
-            <EmptyStateCard
-              title="No documents attached yet"
-              description={getEmptyStateDescription(caseDetail.case.scenarioType)}
-            />
-          ) : (
-            <div className="space-y-3">
-              {caseDetail.documents.map((document) => {
-                const parseInfo = getDocumentParseInfo(document, caseDetail.inputs);
-                const isParsingThisDocument =
-                  parseDocumentMutation.isPending && parseDocumentMutation.variables === document.id;
-
-                return (
-                  <div key={document.id} className="rounded-2xl border border-border p-3.5 sm:p-4">
-                    <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-foreground">{document.fileName}</p>
-                          <Badge variant="outline">{formatDocumentTypeLabel(document.documentType)}</Badge>
-                          {parseInfo.isParsed ? <Badge variant="success">Parsed</Badge> : <Badge variant="outline">Not parsed yet</Badge>}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Attached {formatDateTime(document.uploadedAt)}
-                          {parseInfo.isParsed && parseInfo.parsedAt ? ` • Last parsed ${formatDateTime(parseInfo.parsedAt)}` : ''}
-                        </p>
-                        {parseInfo.isParsed ? (
-                          <p className="text-sm text-muted-foreground">
-                            Parsed fields: {parseInfo.parsedFieldCount}
-                            {parseInfo.warnings.length ? ` • ${parseInfo.warnings.length} warning${parseInfo.warnings.length === 1 ? '' : 's'}` : ''}
-                          </p>
-                        ) : null}
-                        {parseInfo.warnings.length ? (
-                          <ul className="space-y-1 text-sm text-muted-foreground">
-                            {parseInfo.warnings.map((warning) => (
-                              <li key={warning} className="list-disc ml-5">
-                                {warning}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </div>
-
-                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                        {document.fileUrl ? (
-                          <Button type="button" variant="outline" className="w-full sm:w-auto" asChild>
-                            <a href={document.fileUrl} target="_blank" rel="noreferrer">
-                              <FileText className="h-4 w-4" />
-                              View file
-                            </a>
-                          </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full sm:w-auto"
-                          onClick={() => parseDocumentMutation.mutate(document.id)}
-                          disabled={documentActionInFlight}
-                        >
-                          {isParsingThisDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-                          {isParsingThisDocument ? 'Parsing...' : parseInfo.isParsed ? 'Re-parse' : 'Parse'}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className={cn(SECTION_CARD_CLASS, needsDocumentParseReminder ? 'border-amber-200/80' : '')}>
-        <CardHeader className={SECTION_HEADER_CLASS}>
-          <CardTitle>Run analysis</CardTitle>
-          <CardDescription>
-            When your case has enough manual or parsed document context, run analysis to generate leverage points and a draft response.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-3')}>
-          {needsDocumentParseReminder ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-3.5 py-3 text-sm leading-6 text-amber-900">
-              You can analyze with manual input only, but parsing your uploaded document first usually gives the review more context.
-            </div>
-          ) : null}
-          {analyzeBlockedReason ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3.5 py-3 text-sm leading-6 text-slate-700">
-              {analyzeBlockedReason}
-            </div>
-          ) : null}
-          <InlineFeedback feedback={analysisFeedback} />
-          <Button
-            type="button"
-            className="w-full sm:w-auto"
-            onClick={() => analyzeCaseMutation.mutate()}
-            disabled={!canAnalyze}
-          >
-            {analyzeCaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {analyzeCaseMutation.isPending ? 'Analyzing...' : getAnalysisActionLabel(caseDetail.case.scenarioType)}
-          </Button>
-          <p className="text-sm leading-6 text-muted-foreground">
-            Manual details always take priority. Parsed document fields fill in gaps when available.
-          </p>
-        </CardContent>
-      </Card>
-
-      <AnalysisResultsSection analysis={caseDetail.latestAnalysis} />
-      <DraftSection caseId={caseDetail.case.id} draft={caseDetail.latestDraft} feedback={draftFeedback} onCopy={handleDraftCopy} />
     </div>
   );
 }
@@ -2614,9 +2816,10 @@ export default function NegotiationShieldToolClient() {
 
   const property = propertyQuery.data;
   const cases = casesQuery.data ?? [];
+  const hasOpenCase = Boolean(caseId);
 
   const introAction = (
-    <Button type="button" className="hidden sm:inline-flex" onClick={() => openCreate()}>
+    <Button type="button" variant={hasOpenCase ? 'outline' : 'default'} className="hidden sm:inline-flex" onClick={() => openCreate()}>
       <Plus className="h-4 w-4" />
       Start new review
     </Button>
@@ -2727,70 +2930,24 @@ export default function NegotiationShieldToolClient() {
         action={introAction}
       />
 
-      <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
-        <div className="hidden xl:block xl:sticky xl:top-6 xl:space-y-4">
-          <MobileFilterSurface className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-foreground">Start a new review</p>
-              <p className="text-sm leading-6 text-muted-foreground">
-                Create a case for a quote, insurance negotiation, buyer inspection response, or contractor pressure review for {property?.name || property?.address || 'this property'}.
-              </p>
-            </div>
-            <ScenarioQuickStart onStart={(scenario) => openCreate(scenario)} />
-          </MobileFilterSurface>
-
-          <Card className={SECTION_CARD_CLASS}>
-            <CardHeader className={SECTION_HEADER_CLASS}>
-              <CardTitle className="text-base">Recent cases</CardTitle>
-              <CardDescription>Property-scoped reviews stay here so you can reopen them later.</CardDescription>
-            </CardHeader>
-            <CardContent className={SECTION_CONTENT_CLASS}>
-              {casesQuery.isLoading ? (
-                <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading cases...
-                </div>
-              ) : casesQuery.isError ? (
-                <div className="space-y-3 py-1">
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    We could not load the latest reviews for this property.
-                  </p>
-                  <Button type="button" variant="outline" className="w-full" onClick={() => casesQuery.refetch()}>
-                    Try again
-                  </Button>
-                </div>
-              ) : cases.length === 0 ? (
-                <p className="text-sm leading-6 text-muted-foreground">No cases yet. Start with the scenario that matches what you need reviewed.</p>
-              ) : (
-                <div className="space-y-3">
-                  {cases.map((item) => {
-                    const active = caseId === item.id;
-
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => openCase(item.id)}
-                        className={cn(
-                          'w-full rounded-2xl border p-4 text-left transition-colors',
-                          active ? 'border-foreground/20 bg-accent/40' : 'border-border bg-white hover:border-foreground/15 hover:bg-accent/30'
-                        )}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-foreground">{item.title}</p>
-                          <Badge variant={getStatusVariant(item.status)}>{formatStatusLabel(item.status)}</Badge>
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">{formatScenarioLabel(item.scenarioType)}</p>
-                        <p className="mt-2 text-xs text-muted-foreground">Updated {formatDateTime(item.updatedAt)}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
+      <div
+        className={cn(
+          'grid gap-5 xl:items-start',
+          hasOpenCase
+            ? 'xl:grid-cols-[280px_minmax(0,1fr)]'
+            : 'xl:grid-cols-[360px_minmax(0,1fr)]'
+        )}
+      >
+        <DesktopCaseRail
+          cases={cases}
+          activeCaseId={caseId}
+          isLoading={casesQuery.isLoading}
+          isError={casesQuery.isError}
+          isWorkspaceMode={hasOpenCase}
+          onOpenCase={openCase}
+          onOpenCreate={openCreate}
+          onRefetch={() => casesQuery.refetch()}
+        />
         <div className="space-y-4 xl:space-y-4">
           {selectedCaseQuery.isLoading ? (
             <DetailSkeleton />
