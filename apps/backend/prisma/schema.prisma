@@ -1115,6 +1115,7 @@ model User {
   propertyInsightSnapshots PropertyInsightSnapshot[]
   propertyNarrativeRuns    PropertyNarrativeRun[]
   knowledgeArticleEvents KnowledgeArticleEvent[]
+  negotiationShieldCasesCreated NegotiationShieldCase[] @relation("NegotiationShieldCaseCreatedBy")
   
   @@index([email])
   @@index([role])
@@ -1596,6 +1597,7 @@ model Property {
   coverageAnalyses CoverageAnalysis[]
   coverageScenarios CoverageScenario[]
   replaceRepairAnalyses ReplaceRepairAnalysis[]
+  negotiationShieldCases NegotiationShieldCase[]
   riskPremiumOptimizationAnalyses RiskPremiumOptimizationAnalysis[]
   riskMitigationPlanItems         RiskMitigationPlanItem[]
 
@@ -2021,6 +2023,7 @@ model Document {
   homeEventLinks HomeEventDocument[]
   riskMitigationPlanItems RiskMitigationPlanItem[]
   capitalTimelineItems HomeCapitalTimelineItem[]
+  negotiationShieldDocuments NegotiationShieldDocument[]
   knowledgeArticleCoverFor KnowledgeArticle[] @relation("KnowledgeArticleCoverDocument")
   
   homeSavingsAccountId     String?
@@ -4079,6 +4082,40 @@ enum RiskPremiumOptimizationStatus {
   ERROR
 }
 
+enum NegotiationShieldScenarioType {
+  CONTRACTOR_QUOTE_REVIEW
+  INSURANCE_PREMIUM_INCREASE
+}
+
+enum NegotiationShieldCaseStatus {
+  DRAFT
+  READY_FOR_REVIEW
+  ANALYZED
+  ARCHIVED
+}
+
+enum NegotiationShieldSourceType {
+  MANUAL
+  DOCUMENT_UPLOAD
+  HYBRID
+}
+
+enum NegotiationShieldInputType {
+  CONTRACTOR_QUOTE
+  INSURANCE_PREMIUM
+}
+
+enum NegotiationShieldDocumentType {
+  QUOTE
+  PREMIUM_NOTICE
+  SUPPORTING_DOCUMENT
+}
+
+enum NegotiationShieldDraftType {
+  EMAIL
+  MESSAGE
+}
+
 enum RiskPremiumOptimizationConfidence {
   HIGH
   MEDIUM
@@ -4166,6 +4203,117 @@ model RiskPremiumOptimizationAnalysis {
   @@index([propertyId, computedAt(sort: Desc)])
   @@index([propertyId, status])
   @@map("risk_premium_optimization_analyses")
+}
+
+// ============================================================================
+// Negotiation Shield
+// ============================================================================
+
+model NegotiationShieldCase {
+  id              String                         @id @default(uuid())
+  propertyId      String
+  createdByUserId String?
+
+  scenarioType    NegotiationShieldScenarioType
+  status          NegotiationShieldCaseStatus   @default(DRAFT)
+  sourceType      NegotiationShieldSourceType
+
+  title           String
+  description     String?
+
+  analysisVersion String?
+  latestAnalysisAt DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy       User?    @relation("NegotiationShieldCaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  inputs          NegotiationShieldInput[]
+  documents       NegotiationShieldDocument[]
+  analyses        NegotiationShieldAnalysis[]
+  drafts          NegotiationShieldDraft[]
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@index([propertyId, scenarioType])
+  @@index([createdByUserId])
+  @@map("negotiation_shield_cases")
+}
+
+model NegotiationShieldInput {
+  id              String                     @id @default(uuid())
+  caseId          String
+
+  inputType       NegotiationShieldInputType
+  rawText         String?
+  structuredData  Json
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt(sort: Desc)])
+  @@map("negotiation_shield_inputs")
+}
+
+model NegotiationShieldDocument {
+  id              String                        @id @default(uuid())
+  caseId          String
+  documentId      String
+
+  documentType    NegotiationShieldDocumentType
+  uploadedAt      DateTime                      @default(now())
+
+  negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  document        Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, documentId])
+  @@index([caseId, uploadedAt(sort: Desc)])
+  @@index([documentId])
+  @@map("negotiation_shield_documents")
+}
+
+model NegotiationShieldAnalysis {
+  id                  String                        @id @default(uuid())
+  caseId              String
+
+  scenarioType        NegotiationShieldScenarioType
+  summary             String?
+  findings            Json
+  negotiationLeverage Json
+  recommendedActions  Json
+  pricingAssessment   Json?
+  confidence          Float?
+  generatedAt         DateTime                      @default(now())
+  modelVersion        String?
+  createdAt           DateTime                      @default(now())
+
+  negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, generatedAt(sort: Desc)])
+  @@index([caseId, scenarioType])
+  @@map("negotiation_shield_analyses")
+}
+
+model NegotiationShieldDraft {
+  id              String                     @id @default(uuid())
+  caseId          String
+
+  draftType       NegotiationShieldDraftType
+  subject         String?
+  body            String
+  tone            String?
+  isLatest        Boolean                    @default(true)
+  createdAt       DateTime                   @default(now())
+
+  negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt(sort: Desc)])
+  @@index([caseId, isLatest])
+  @@map("negotiation_shield_drafts")
 }
 
 model RiskMitigationPlanItem {
