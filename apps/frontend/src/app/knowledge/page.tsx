@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, BookOpenText } from 'lucide-react';
 import type { Metadata } from 'next';
 import { DashboardShell } from '@/components/DashboardShell';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { KnowledgeArticleCard } from '@/components/knowledge/KnowledgeArticleCard';
 import { getPublishedKnowledgeArticles } from '@/lib/knowledge/api';
@@ -33,28 +34,41 @@ export default async function KnowledgeHubPage({
     : articles;
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#fbfdff_0%,#ffffff_18%,#f8fafc_100%)]">
-      <DashboardShell className="space-y-12 py-10 md:space-y-14 md:py-14">
-        <section className="grid gap-8 border-b border-slate-200/80 pb-8 md:gap-10 md:pb-10 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
-          <div className="space-y-5">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_18%,#f8fafc_100%)]">
+      <DashboardShell className="space-y-14 py-10 md:space-y-16 md:py-16">
+        <section className="space-y-6">
           <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />
             Back to dashboard
           </Link>
-          <div className="space-y-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Knowledge Hub</p>
-            <h1 className="max-w-4xl text-[2.6rem] font-semibold tracking-tight text-slate-950 md:text-[4rem] md:leading-[1.02]">
-              Calm guidance for the ownership decisions that carry real weight.
-            </h1>
-            <p className="max-w-3xl text-base leading-8 text-slate-600 md:text-[1.08rem]">
-              Read practical briefings on maintenance, insurance, property value, climate exposure, and the quieter
-              signals that shape what your home costs, protects, and becomes over time.
-            </p>
-          </div>
-          </div>
-          <div className="space-y-2 text-sm leading-7 text-slate-500 lg:justify-self-end">
-            <p className="font-medium text-slate-700">{articles.length} published reads</p>
-            <p>Editorial homeowner guidance with subtle pathways into Contract-to-Cozy tools when they help.</p>
+          <div className="relative overflow-hidden rounded-[34px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.52),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] px-7 py-8 shadow-[0_30px_120px_-80px_rgba(15,23,42,0.32)] md:px-10 md:py-12">
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white hover:bg-slate-950">
+                  Knowledge Hub
+                </Badge>
+                <Badge variant="outline" className="rounded-full border-slate-200 bg-white/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Homeowner guidance
+                </Badge>
+              </div>
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
+                <BookOpenText className="h-6 w-6" />
+              </div>
+              <div className="space-y-4">
+                <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 md:text-[4rem] md:leading-[0.98]">
+                  Calm guidance for the ownership decisions that carry real weight.
+                </h1>
+                <p className="max-w-3xl text-base leading-8 text-slate-600 md:text-[1.15rem]">
+                  Read practical briefings on maintenance, insurance, property value, climate exposure, and the quiet
+                  signals that shape what your home costs, protects, and becomes over time.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-sm text-slate-500">
+                <span className="font-medium text-slate-700">{articles.length} published reads</span>
+                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                <span>Editorial guidance connected to live Contract-to-Cozy tools</span>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -101,7 +115,7 @@ export default async function KnowledgeHubPage({
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Latest articles</p>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Practical reads for the next home decision</h2>
                 </div>
-                <div className="grid gap-x-10 gap-y-0 lg:grid-cols-2">
+                <div className="grid gap-6 lg:grid-cols-2">
                   {remainingArticles.map((article) => (
                     <KnowledgeArticleCard key={article.id} article={article} propertyId={propertyId} />
                   ))}
