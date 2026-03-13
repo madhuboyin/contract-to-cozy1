@@ -32,6 +32,13 @@ export const NEGOTIATION_SHIELD_DRAFT_TYPES = [
   'MESSAGE',
 ] as const;
 
+export const NEGOTIATION_SHIELD_PRICING_ASSESSMENT_STATUSES = [
+  'INSUFFICIENT_DATA',
+  'APPEARS_HIGH',
+  'APPEARS_REASONABLE',
+  'NEEDS_COMPARISON',
+] as const;
+
 export type NegotiationShieldScenarioType =
   (typeof NEGOTIATION_SHIELD_SCENARIO_TYPES)[number];
 
@@ -49,6 +56,63 @@ export type NegotiationShieldDocumentType =
 
 export type NegotiationShieldDraftType =
   (typeof NEGOTIATION_SHIELD_DRAFT_TYPES)[number];
+
+export type NegotiationShieldPricingAssessmentStatus =
+  (typeof NEGOTIATION_SHIELD_PRICING_ASSESSMENT_STATUSES)[number];
+
+export type NegotiationShieldFindingStatus =
+  | 'INFO'
+  | 'MISSING'
+  | 'CAUTION'
+  | 'POSITIVE';
+
+export type NegotiationShieldPriority = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export type NegotiationShieldFinding = {
+  key: string;
+  title: string;
+  detail: string;
+  status: NegotiationShieldFindingStatus;
+};
+
+export type NegotiationShieldLeveragePoint = {
+  key: string;
+  title: string;
+  detail: string;
+  strength: NegotiationShieldPriority;
+};
+
+export type NegotiationShieldRecommendedAction = {
+  key: string;
+  title: string;
+  detail: string;
+  priority: NegotiationShieldPriority;
+};
+
+export type NegotiationShieldPricingAssessment = {
+  status: NegotiationShieldPricingAssessmentStatus;
+  summary: string;
+  rationale: string[];
+  confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
+  quoteAmount: number | null;
+  currency: string | null;
+};
+
+export type ContractorQuoteAnalysisResult = {
+  summary: string;
+  findings: NegotiationShieldFinding[];
+  negotiationLeverage: NegotiationShieldLeveragePoint[];
+  recommendedActions: NegotiationShieldRecommendedAction[];
+  pricingAssessment: NegotiationShieldPricingAssessment;
+  confidence: number;
+  modelVersion: string;
+  draft: {
+    draftType: NegotiationShieldDraftType;
+    subject: string | null;
+    body: string;
+    tone: string | null;
+  };
+};
 
 export type NegotiationShieldCaseSummaryDTO = {
   id: string;
@@ -93,10 +157,10 @@ export type NegotiationShieldAnalysisDTO = {
   caseId: string;
   scenarioType: NegotiationShieldScenarioType;
   summary: string | null;
-  findings: unknown;
-  negotiationLeverage: unknown;
-  recommendedActions: unknown;
-  pricingAssessment: unknown;
+  findings: NegotiationShieldFinding[] | Record<string, unknown> | null;
+  negotiationLeverage: NegotiationShieldLeveragePoint[] | Record<string, unknown> | null;
+  recommendedActions: NegotiationShieldRecommendedAction[] | Record<string, unknown> | null;
+  pricingAssessment: NegotiationShieldPricingAssessment | Record<string, unknown> | null;
   confidence: number | null;
   generatedAt: string;
   modelVersion: string | null;

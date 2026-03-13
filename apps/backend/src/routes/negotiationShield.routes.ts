@@ -4,6 +4,7 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import {
+  analyzeNegotiationShieldCase,
   attachNegotiationShieldDocumentMetadata,
   createNegotiationShieldCase,
   getNegotiationShieldCaseDetail,
@@ -59,6 +60,13 @@ router.post(
   validate(negotiationShieldCaseParamsSchema),
   validateBody(attachNegotiationShieldDocumentBodySchema),
   attachNegotiationShieldDocumentMetadata
+);
+
+router.post(
+  '/properties/:propertyId/negotiation-shield/cases/:caseId/analyze',
+  propertyAuthMiddleware,
+  validate(negotiationShieldCaseParamsSchema),
+  analyzeNegotiationShieldCase
 );
 
 export default router;

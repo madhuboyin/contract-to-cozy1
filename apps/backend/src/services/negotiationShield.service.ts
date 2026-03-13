@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
   AttachNegotiationShieldDocumentPayload,
+  ContractorQuoteAnalysisResult,
   CreateNegotiationShieldCaseInput,
   NegotiationShieldAnalysisDTO,
   NegotiationShieldCaseDetailDTO,
@@ -13,6 +14,7 @@ import {
   NegotiationShieldSourceType,
   SaveNegotiationShieldInputPayload,
 } from './negotiationShield.types';
+import { generateContractorQuoteAnalysis } from './negotiationShieldContractorQuote.service';
 
 function asIsoString(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -25,6 +27,58 @@ function asObject(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
   }
   return {};
+}
+
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function asTrimmedString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const normalized = value.replace(/[$,\s]/g, '');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (value && typeof value === 'object' && 'toNumber' in (value as Record<string, unknown>)) {
+    const maybe = (value as { toNumber: () => number }).toNumber();
+    return Number.isFinite(maybe) ? maybe : null;
+  }
+  return null;
+}
+
+function asBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1 ? true : value === 0 ? false : null;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', 'y', 'immediate', 'urgent', 'same_day', 'same-day'].includes(normalized)) {
+      return true;
+    }
+    if (['false', 'no', 'n', 'not_urgent', 'not-urgent'].includes(normalized)) {
+      return false;
+    }
+  }
+  return null;
+}
+
+function firstPresent(source: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    if (key in source && source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+  return undefined;
+}
+
+function hasMeaningfulText(value: string | null | undefined, minLength = 20): boolean {
+  return typeof value === 'string' && value.trim().length >= minLength;
 }
 
 function readStorageKey(metadata: unknown): string | null {
@@ -161,7 +215,14 @@ export class NegotiationShieldService {
   private async assertCaseBelongsToProperty(propertyId: string, caseId: string) {
     const record = await this.models.caseModel.findFirst({
       where: { id: caseId, propertyId },
-      select: { id: true, propertyId: true, sourceType: true },
+      select: {
+        id: true,
+        propertyId: true,
+        sourceType: true,
+        scenarioType: true,
+        title: true,
+        description: true,
+      },
     });
 
     if (!record) {
@@ -211,6 +272,262 @@ export class NegotiationShieldService {
     ]);
 
     return { inputCount, documentCount };
+  }
+
+  private buildContractorQuoteContext(record: any) {
+    const allInputs = asArray<any>(record.inputs);
+    const contractorInputs =
+      allInputs.filter((input) => input.inputType === 'CONTRACTOR_QUOTE');
+    const relevantInputs = contractorInputs.length > 0 ? contractorInputs : allInputs;
+    const orderedInputs = [...relevantInputs].sort(
+      (a, b) =>
+        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    );
+
+    const mergedStructuredData = orderedInputs.reduce<Record<string, unknown>>((acc, input) => {
+      return { ...acc, ...asObject(input.structuredData) };
+    }, {});
+
+    const latestRawText =
+      orderedInputs
+        .map((input) => asTrimmedString(input.rawText))
+        .find((value) => !!value) ?? null;
+
+    const noteFromStructured = asTrimmedString(
+      firstPresent(mergedStructuredData, ['notes', 'note', 'description', 'scopeNotes'])
+    );
+
+    const documents = asArray<any>(record.documents);
+    const quoteDocumentCount = documents.filter((item) => item.documentType === 'QUOTE').length;
+    const supportingDocumentCount = documents.filter(
+      (item) => item.documentType === 'SUPPORTING_DOCUMENT'
+    ).length;
+
+    const contractorName = asTrimmedString(
+      firstPresent(mergedStructuredData, ['contractorName', 'vendorName', 'companyName'])
+    );
+    const quoteAmount = asNumber(
+      firstPresent(mergedStructuredData, ['quoteAmount', 'amount', 'estimateAmount', 'totalAmount'])
+    );
+    const currency =
+      asTrimmedString(firstPresent(mergedStructuredData, ['currency', 'quoteCurrency'])) ?? 'USD';
+    const quoteDate = asTrimmedString(
+      firstPresent(mergedStructuredData, ['quoteDate', 'estimateDate', 'proposalDate'])
+    );
+    const serviceCategory = asTrimmedString(
+      firstPresent(mergedStructuredData, ['serviceCategory', 'jobCategory', 'tradeCategory'])
+    );
+    const systemCategory = asTrimmedString(
+      firstPresent(mergedStructuredData, ['systemCategory', 'system', 'component'])
+    );
+    const urgencyClaimed = asBoolean(
+      firstPresent(mergedStructuredData, ['urgencyClaimed', 'urgent', 'immediate', 'sameDay'])
+    );
+    const comparisonQuoteCount = asNumber(
+      firstPresent(mergedStructuredData, ['comparisonQuoteCount', 'otherQuoteCount', 'quoteCount'])
+    );
+    const comparisonQuotesAvailable = (() => {
+      const explicit = asBoolean(
+        firstPresent(mergedStructuredData, ['comparisonQuotesAvailable', 'hasComparisonQuotes'])
+      );
+      if (explicit !== null) return explicit;
+      return comparisonQuoteCount !== null ? comparisonQuoteCount > 1 : false;
+    })();
+    const laborBreakdownProvided = (() => {
+      const explicit = asBoolean(
+        firstPresent(mergedStructuredData, ['laborBreakdownProvided', 'hasLaborBreakdown'])
+      );
+      if (explicit !== null) return explicit;
+      return asNumber(firstPresent(mergedStructuredData, ['laborCost', 'laborAmount'])) !== null;
+    })();
+    const materialsBreakdownProvided = (() => {
+      const explicit = asBoolean(
+        firstPresent(mergedStructuredData, ['materialsBreakdownProvided', 'hasMaterialsBreakdown'])
+      );
+      if (explicit !== null) return explicit;
+      return asNumber(firstPresent(mergedStructuredData, ['materialsCost', 'materialsAmount'])) !== null;
+    })();
+    const lineItemBreakdownProvided = (() => {
+      const explicit = asBoolean(
+        firstPresent(mergedStructuredData, ['lineItemBreakdownProvided', 'itemized', 'itemizedBreakdown'])
+      );
+      if (explicit !== null) return explicit;
+      const lineItems = firstPresent(mergedStructuredData, ['lineItems', 'items', 'breakdown']);
+      return Array.isArray(lineItems) && lineItems.length > 0
+        ? true
+        : laborBreakdownProvided || materialsBreakdownProvided;
+    })();
+    const scopeClarityProvided = (() => {
+      const explicit = asBoolean(
+        firstPresent(mergedStructuredData, ['scopeClarityProvided', 'scopeClear'])
+      );
+      if (explicit !== null) return explicit;
+      return (
+        asTrimmedString(firstPresent(mergedStructuredData, ['scope', 'scopeDescription', 'workDescription'])) !==
+          null || hasMeaningfulText(noteFromStructured, 15)
+      );
+    })();
+    const repairOptionDiscussed = asBoolean(
+      firstPresent(mergedStructuredData, ['repairOptionDiscussed', 'repairOffered', 'repairPossible'])
+    );
+    const replacementRecommended = asBoolean(
+      firstPresent(mergedStructuredData, ['replacementRecommended', 'fullReplacementRecommended'])
+    );
+    const warrantyMentioned = asBoolean(
+      firstPresent(mergedStructuredData, ['warrantyMentioned', 'warrantyIncluded'])
+    );
+    const inspectionEvidenceProvided = asBoolean(
+      firstPresent(mergedStructuredData, ['inspectionEvidenceProvided', 'photosProvided', 'inspectionPhotosProvided'])
+    );
+
+    const meaningfulSignalKeys = [
+      'contractorName',
+      'vendorName',
+      'companyName',
+      'quoteAmount',
+      'amount',
+      'estimateAmount',
+      'totalAmount',
+      'quoteDate',
+      'estimateDate',
+      'proposalDate',
+      'serviceCategory',
+      'jobCategory',
+      'tradeCategory',
+      'systemCategory',
+      'system',
+      'component',
+      'notes',
+      'note',
+      'description',
+      'scopeNotes',
+      'scope',
+      'scopeDescription',
+      'workDescription',
+      'comparisonQuoteCount',
+      'otherQuoteCount',
+      'quoteCount',
+      'comparisonQuotesAvailable',
+      'hasComparisonQuotes',
+      'urgencyClaimed',
+      'urgent',
+      'immediate',
+      'sameDay',
+      'laborBreakdownProvided',
+      'hasLaborBreakdown',
+      'materialsBreakdownProvided',
+      'hasMaterialsBreakdown',
+      'lineItemBreakdownProvided',
+      'itemized',
+      'itemizedBreakdown',
+      'repairOptionDiscussed',
+      'repairOffered',
+      'repairPossible',
+      'replacementRecommended',
+      'fullReplacementRecommended',
+      'warrantyMentioned',
+      'warrantyIncluded',
+      'inspectionEvidenceProvided',
+      'photosProvided',
+      'inspectionPhotosProvided',
+      'lineItems',
+      'items',
+      'breakdown',
+    ];
+    const hasMeaningfulStructuredInput = meaningfulSignalKeys.some((key) => {
+      if (!(key in mergedStructuredData)) return false;
+      const value = mergedStructuredData[key];
+      if (typeof value === 'string') return value.trim().length > 0;
+      if (typeof value === 'number') return Number.isFinite(value);
+      if (typeof value === 'boolean') return true;
+      if (Array.isArray(value)) return value.length > 0;
+      return value !== null && value !== undefined;
+    });
+
+    const hasMeaningfulInput =
+      hasMeaningfulText(latestRawText, 20) ||
+      hasMeaningfulStructuredInput ||
+      quoteAmount !== null ||
+      hasMeaningfulText(noteFromStructured, 20);
+
+    return {
+      hasMeaningfulInput,
+      analysisInput: {
+        caseTitle: record.title,
+        caseDescription: record.description ?? null,
+        contractorName,
+        quoteAmount,
+        currency,
+        quoteDate,
+        serviceCategory,
+        systemCategory,
+        urgencyClaimed,
+        notes: noteFromStructured,
+        rawText: latestRawText,
+        supportingDocumentCount,
+        quoteDocumentCount,
+        hasAnyDocument: documents.length > 0,
+        laborBreakdownProvided,
+        materialsBreakdownProvided,
+        lineItemBreakdownProvided,
+        scopeClarityProvided,
+        comparisonQuotesAvailable,
+        comparisonQuoteCount,
+        repairOptionDiscussed,
+        replacementRecommended,
+        warrantyMentioned,
+        inspectionEvidenceProvided,
+      },
+    };
+  }
+
+  private async persistContractorQuoteAnalysis(
+    caseId: string,
+    result: ContractorQuoteAnalysisResult
+  ) {
+    const now = new Date();
+
+    await prisma.$transaction(async (tx) => {
+      await (tx as any).negotiationShieldDraft.updateMany({
+        where: { caseId, isLatest: true },
+        data: { isLatest: false },
+      });
+
+      await (tx as any).negotiationShieldAnalysis.create({
+        data: {
+          caseId,
+          scenarioType: 'CONTRACTOR_QUOTE_REVIEW',
+          summary: result.summary,
+          findings: result.findings,
+          negotiationLeverage: result.negotiationLeverage,
+          recommendedActions: result.recommendedActions,
+          pricingAssessment: result.pricingAssessment,
+          confidence: result.confidence,
+          generatedAt: now,
+          modelVersion: result.modelVersion,
+        },
+      });
+
+      await (tx as any).negotiationShieldDraft.create({
+        data: {
+          caseId,
+          draftType: result.draft.draftType,
+          subject: result.draft.subject,
+          body: result.draft.body,
+          tone: result.draft.tone,
+          isLatest: true,
+        },
+      });
+
+      await (tx as any).negotiationShieldCase.update({
+        where: { id: caseId },
+        data: {
+          status: 'ANALYZED',
+          latestAnalysisAt: now,
+          analysisVersion: result.modelVersion,
+        },
+      });
+    });
   }
 
   async listCasesForProperty(propertyId: string): Promise<NegotiationShieldCaseSummaryDTO[]> {
@@ -457,5 +774,48 @@ export class NegotiationShieldService {
     }
 
     return this.getCaseDetail(args.propertyId, args.caseId);
+  }
+
+  async analyzeContractorQuoteCase(
+    propertyId: string,
+    caseId: string
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    const record = await this.models.caseModel.findFirst({
+      where: { id: caseId, propertyId },
+      include: {
+        inputs: {
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        },
+        documents: {
+          include: { document: true },
+          orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }],
+        },
+      },
+    });
+
+    if (!record) {
+      throw new APIError('Negotiation Shield case not found.', 404, 'NEGOTIATION_SHIELD_CASE_NOT_FOUND');
+    }
+
+    if (record.scenarioType !== 'CONTRACTOR_QUOTE_REVIEW') {
+      throw new APIError(
+        'This case does not support contractor quote review analysis.',
+        400,
+        'NEGOTIATION_SHIELD_UNSUPPORTED_SCENARIO'
+      );
+    }
+
+    const context = this.buildContractorQuoteContext(record);
+    if (!context.hasMeaningfulInput) {
+      throw new APIError(
+        'Add manual quote details before running contractor quote analysis.',
+        400,
+        'NEGOTIATION_SHIELD_ANALYSIS_INPUT_REQUIRED'
+      );
+    }
+
+    const result = generateContractorQuoteAnalysis(context.analysisInput);
+    await this.persistContractorQuoteAnalysis(caseId, result);
+    return this.getCaseDetail(propertyId, caseId);
   }
 }

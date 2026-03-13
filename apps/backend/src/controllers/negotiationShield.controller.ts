@@ -102,3 +102,20 @@ export async function attachNegotiationShieldDocumentMetadata(
     next(error);
   }
 }
+
+export async function analyzeNegotiationShieldCase(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    requireUser(req);
+    const detail = await service.analyzeContractorQuoteCase(
+      req.params.propertyId,
+      req.params.caseId
+    );
+    res.status(201).json({ success: true, data: detail });
+  } catch (error) {
+    next(error);
+  }
+}
