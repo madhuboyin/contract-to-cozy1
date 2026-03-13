@@ -98,7 +98,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
           </Link>
 
           <section className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.42),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] px-6 py-7 shadow-[0_24px_80px_-70px_rgba(15,23,42,0.3)] md:px-8 md:py-8">
-            <div className="max-w-[58rem] space-y-5">
+            <div className="max-w-[60rem] space-y-5">
               <div className="flex flex-wrap items-center gap-2.5">
                 {article.featured ? (
                   <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white hover:bg-slate-950">
@@ -117,14 +117,14 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
               </div>
 
               <div className="space-y-4">
-                <h1 className="max-w-[50rem] text-[2.35rem] font-semibold tracking-tight text-slate-950 md:text-[2.8rem] md:leading-[1.03]">
+                <h1 className="max-w-[54rem] text-[2.2rem] font-semibold tracking-tight text-slate-950 md:text-[2.55rem] md:leading-[1.02]">
                   {article.title}
                 </h1>
                 {article.subtitle ? (
-                  <p className="max-w-[52rem] text-[1.02rem] leading-8 text-slate-600 md:text-[1.12rem]">{article.subtitle}</p>
+                  <p className="max-w-[56rem] text-[1.02rem] leading-8 text-slate-600 md:text-[1.12rem]">{article.subtitle}</p>
                 ) : null}
                 {article.excerpt ? (
-                  <p className="max-w-[52rem] text-[15px] leading-7 text-slate-600">{article.excerpt}</p>
+                  <p className="max-w-[56rem] text-[15px] leading-7 text-slate-600">{article.excerpt}</p>
                 ) : null}
               </div>
 
