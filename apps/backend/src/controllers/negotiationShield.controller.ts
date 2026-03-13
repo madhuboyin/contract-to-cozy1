@@ -110,7 +110,7 @@ export async function analyzeNegotiationShieldCase(
 ) {
   try {
     requireUser(req);
-    const detail = await service.analyzeContractorQuoteCase(
+    const detail = await service.analyzeCase(
       req.params.propertyId,
       req.params.caseId
     );

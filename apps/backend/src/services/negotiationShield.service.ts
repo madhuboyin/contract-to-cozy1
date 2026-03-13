@@ -1,20 +1,22 @@
-import { DocumentType } from '@prisma/client';
+import { DocumentType, HomeEventType, MaintenanceTaskStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
   AttachNegotiationShieldDocumentPayload,
-  ContractorQuoteAnalysisResult,
   CreateNegotiationShieldCaseInput,
+  InsurancePremiumIncreaseAnalysisResult,
   NegotiationShieldAnalysisDTO,
   NegotiationShieldCaseDetailDTO,
   NegotiationShieldCaseSummaryDTO,
   NegotiationShieldDocumentDTO,
   NegotiationShieldDraftDTO,
+  NegotiationShieldGeneratedAnalysisResult,
   NegotiationShieldInputDTO,
   NegotiationShieldSourceType,
   SaveNegotiationShieldInputPayload,
 } from './negotiationShield.types';
 import { generateContractorQuoteAnalysis } from './negotiationShieldContractorQuote.service';
+import { generateInsurancePremiumIncreaseAnalysis } from './negotiationShieldInsurancePremium.service';
 
 function asIsoString(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -274,6 +276,93 @@ export class NegotiationShieldService {
     return { inputCount, documentCount };
   }
 
+  private async getInsurancePropertySignals(propertyId: string) {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        id: true,
+        roofReplacementYear: true,
+        hasSecuritySystem: true,
+        hasSmokeDetectors: true,
+        hasCoDetectors: true,
+        hasSumpPumpBackup: true,
+        insurancePolicies: {
+          orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+          select: {
+            carrierName: true,
+            isVerified: true,
+            premiumAmount: true,
+            coverageType: true,
+            expiryDate: true,
+          },
+        },
+        maintenanceTasks: {
+          where: { status: MaintenanceTaskStatus.COMPLETED },
+          select: { id: true },
+        },
+        claims: {
+          select: { id: true },
+        },
+        homeEvents: {
+          where: {
+            type: {
+              in: [
+                HomeEventType.IMPROVEMENT,
+                HomeEventType.MAINTENANCE,
+                HomeEventType.REPAIR,
+              ],
+            },
+          },
+          orderBy: [{ occurredAt: 'desc' }],
+          take: 10,
+          select: {
+            id: true,
+            occurredAt: true,
+          },
+        },
+      },
+    });
+
+    if (!property) {
+      throw new APIError('Property not found.', 404, 'PROPERTY_NOT_FOUND');
+    }
+
+    const currentYear = new Date().getFullYear();
+    const roofAgeYears =
+      property.roofReplacementYear && property.roofReplacementYear > 1900
+        ? Math.max(0, currentYear - property.roofReplacementYear)
+        : null;
+    const recentImprovementCutoff = new Date();
+    recentImprovementCutoff.setMonth(recentImprovementCutoff.getMonth() - 24);
+    const recentImprovementCount = property.homeEvents.filter(
+      (event) => new Date(event.occurredAt).getTime() >= recentImprovementCutoff.getTime()
+    ).length;
+    const latestPolicy = property.insurancePolicies[0] ?? null;
+
+    return {
+      roofReplacementYear: property.roofReplacementYear ?? null,
+      roofAgeYears,
+      hasSecuritySystem: property.hasSecuritySystem ?? null,
+      hasSmokeDetectors: property.hasSmokeDetectors ?? null,
+      hasCoDetectors: property.hasCoDetectors ?? null,
+      hasSumpPumpBackup: property.hasSumpPumpBackup ?? null,
+      completedMaintenanceCount: property.maintenanceTasks.length,
+      recentImprovementCount,
+      claimCount: property.claims.length,
+      claimFreeRecorded: property.claims.length === 0,
+      policyOnFile: latestPolicy
+        ? {
+            carrierName: latestPolicy.carrierName ?? null,
+            isVerified: Boolean(latestPolicy.isVerified),
+            premiumAmount: asNumber(latestPolicy.premiumAmount),
+            coverageType: latestPolicy.coverageType ?? null,
+            expiryDate: asIsoString(latestPolicy.expiryDate),
+          }
+        : null,
+    };
+  }
+
   private buildContractorQuoteContext(record: any) {
     const allInputs = asArray<any>(record.inputs);
     const contractorInputs =
@@ -481,9 +570,144 @@ export class NegotiationShieldService {
     };
   }
 
-  private async persistContractorQuoteAnalysis(
+  private buildInsurancePremiumIncreaseContext(record: any, propertySignals: any) {
+    const allInputs = asArray<any>(record.inputs);
+    const insuranceInputs =
+      allInputs.filter((input) => input.inputType === 'INSURANCE_PREMIUM');
+    const relevantInputs = insuranceInputs.length > 0 ? insuranceInputs : allInputs;
+    const orderedInputs = [...relevantInputs].sort(
+      (a, b) =>
+        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    );
+
+    const mergedStructuredData = orderedInputs.reduce<Record<string, unknown>>((acc, input) => {
+      return { ...acc, ...asObject(input.structuredData) };
+    }, {});
+
+    const latestRawText =
+      orderedInputs
+        .map((input) => asTrimmedString(input.rawText))
+        .find((value) => !!value) ?? null;
+
+    const notes = asTrimmedString(
+      firstPresent(mergedStructuredData, ['notes', 'note', 'description'])
+    );
+    const insurerName =
+      asTrimmedString(firstPresent(mergedStructuredData, ['insurerName', 'carrierName', 'providerName'])) ??
+      propertySignals.policyOnFile?.carrierName ??
+      null;
+
+    const priorPremium = asNumber(
+      firstPresent(mergedStructuredData, ['priorPremium', 'oldPremium', 'currentPremium'])
+    );
+    const newPremium = asNumber(
+      firstPresent(mergedStructuredData, ['newPremium', 'renewalPremium', 'premiumAmount'])
+    );
+    const providedIncreaseAmount = asNumber(
+      firstPresent(mergedStructuredData, ['increaseAmount', 'premiumIncreaseAmount'])
+    );
+    const providedIncreasePercentage = asNumber(
+      firstPresent(mergedStructuredData, ['increasePercentage', 'premiumIncreasePercentage'])
+    );
+    const increaseAmount =
+      providedIncreaseAmount !== null
+        ? providedIncreaseAmount
+        : priorPremium !== null && newPremium !== null
+          ? Number((newPremium - priorPremium).toFixed(2))
+          : null;
+    const increasePercentage =
+      providedIncreasePercentage !== null
+        ? providedIncreasePercentage
+        : priorPremium !== null &&
+            newPremium !== null &&
+            priorPremium > 0
+          ? Number((((newPremium - priorPremium) / priorPremium) * 100).toFixed(1))
+          : null;
+    const renewalDate = asTrimmedString(
+      firstPresent(mergedStructuredData, ['renewalDate', 'policyRenewalDate', 'effectiveDate'])
+    );
+    const reasonProvided = asTrimmedString(
+      firstPresent(mergedStructuredData, ['reasonProvided', 'insurerReason', 'rationale', 'explanation'])
+    );
+
+    const documents = asArray<any>(record.documents);
+    const premiumNoticeDocumentCount = documents.filter(
+      (item) => item.documentType === 'PREMIUM_NOTICE'
+    ).length;
+    const supportingDocumentCount = documents.filter(
+      (item) => item.documentType === 'SUPPORTING_DOCUMENT'
+    ).length;
+
+    const meaningfulSignalKeys = [
+      'insurerName',
+      'carrierName',
+      'providerName',
+      'priorPremium',
+      'oldPremium',
+      'currentPremium',
+      'newPremium',
+      'renewalPremium',
+      'premiumAmount',
+      'increaseAmount',
+      'premiumIncreaseAmount',
+      'increasePercentage',
+      'premiumIncreasePercentage',
+      'renewalDate',
+      'policyRenewalDate',
+      'effectiveDate',
+      'reasonProvided',
+      'insurerReason',
+      'rationale',
+      'explanation',
+      'notes',
+      'note',
+      'description',
+    ];
+    const hasMeaningfulStructuredInput = meaningfulSignalKeys.some((key) => {
+      if (!(key in mergedStructuredData)) return false;
+      const value = mergedStructuredData[key];
+      if (typeof value === 'string') return value.trim().length > 0;
+      if (typeof value === 'number') return Number.isFinite(value);
+      if (typeof value === 'boolean') return true;
+      if (Array.isArray(value)) return value.length > 0;
+      return value !== null && value !== undefined;
+    });
+
+    const hasMeaningfulInput =
+      hasMeaningfulText(latestRawText, 20) ||
+      hasMeaningfulStructuredInput ||
+      priorPremium !== null ||
+      newPremium !== null ||
+      increaseAmount !== null ||
+      increasePercentage !== null ||
+      hasMeaningfulText(notes, 20);
+
+    return {
+      hasMeaningfulInput,
+      analysisInput: {
+        caseTitle: record.title,
+        caseDescription: record.description ?? null,
+        insurerName,
+        priorPremium,
+        newPremium,
+        increaseAmount,
+        increasePercentage,
+        renewalDate,
+        reasonProvided,
+        notes,
+        rawText: latestRawText,
+        hasAnyDocument: documents.length > 0,
+        premiumNoticeDocumentCount,
+        supportingDocumentCount,
+        propertySignals,
+      },
+    };
+  }
+
+  private async persistAnalysisResult(
     caseId: string,
-    result: ContractorQuoteAnalysisResult
+    scenarioType: 'CONTRACTOR_QUOTE_REVIEW' | 'INSURANCE_PREMIUM_INCREASE',
+    result: NegotiationShieldGeneratedAnalysisResult
   ) {
     const now = new Date();
 
@@ -496,7 +720,7 @@ export class NegotiationShieldService {
       await (tx as any).negotiationShieldAnalysis.create({
         data: {
           caseId,
-          scenarioType: 'CONTRACTOR_QUOTE_REVIEW',
+          scenarioType,
           summary: result.summary,
           findings: result.findings,
           negotiationLeverage: result.negotiationLeverage,
@@ -815,7 +1039,70 @@ export class NegotiationShieldService {
     }
 
     const result = generateContractorQuoteAnalysis(context.analysisInput);
-    await this.persistContractorQuoteAnalysis(caseId, result);
+    await this.persistAnalysisResult(caseId, 'CONTRACTOR_QUOTE_REVIEW', result);
     return this.getCaseDetail(propertyId, caseId);
+  }
+
+  async analyzeInsurancePremiumIncreaseCase(
+    propertyId: string,
+    caseId: string
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    const record = await this.models.caseModel.findFirst({
+      where: { id: caseId, propertyId },
+      include: {
+        inputs: {
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        },
+        documents: {
+          include: { document: true },
+          orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }],
+        },
+      },
+    });
+
+    if (!record) {
+      throw new APIError('Negotiation Shield case not found.', 404, 'NEGOTIATION_SHIELD_CASE_NOT_FOUND');
+    }
+
+    if (record.scenarioType !== 'INSURANCE_PREMIUM_INCREASE') {
+      throw new APIError(
+        'This case does not support insurance premium increase analysis.',
+        400,
+        'NEGOTIATION_SHIELD_UNSUPPORTED_SCENARIO'
+      );
+    }
+
+    const propertySignals = await this.getInsurancePropertySignals(propertyId);
+    const context = this.buildInsurancePremiumIncreaseContext(record, propertySignals);
+    if (!context.hasMeaningfulInput) {
+      throw new APIError(
+        'Add premium increase details before running insurance premium analysis.',
+        400,
+        'NEGOTIATION_SHIELD_ANALYSIS_INPUT_REQUIRED'
+      );
+    }
+
+    const result: InsurancePremiumIncreaseAnalysisResult =
+      generateInsurancePremiumIncreaseAnalysis(context.analysisInput);
+    await this.persistAnalysisResult(caseId, 'INSURANCE_PREMIUM_INCREASE', result);
+    return this.getCaseDetail(propertyId, caseId);
+  }
+
+  async analyzeCase(propertyId: string, caseId: string): Promise<NegotiationShieldCaseDetailDTO> {
+    const record = await this.assertCaseBelongsToProperty(propertyId, caseId);
+
+    if (record.scenarioType === 'CONTRACTOR_QUOTE_REVIEW') {
+      return this.analyzeContractorQuoteCase(propertyId, caseId);
+    }
+
+    if (record.scenarioType === 'INSURANCE_PREMIUM_INCREASE') {
+      return this.analyzeInsurancePremiumIncreaseCase(propertyId, caseId);
+    }
+
+    throw new APIError(
+      'This case scenario is not supported for analysis.',
+      400,
+      'NEGOTIATION_SHIELD_UNSUPPORTED_SCENARIO'
+    );
   }
 }

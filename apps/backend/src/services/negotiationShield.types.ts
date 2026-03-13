@@ -37,6 +37,10 @@ export const NEGOTIATION_SHIELD_PRICING_ASSESSMENT_STATUSES = [
   'APPEARS_HIGH',
   'APPEARS_REASONABLE',
   'NEEDS_COMPARISON',
+  'EXPLANATION_UNCLEAR',
+  'NEEDS_REVIEW',
+  'DOCUMENTED_INCREASE',
+  'LEVERAGE_PRESENT',
 ] as const;
 
 export type NegotiationShieldScenarioType =
@@ -94,11 +98,15 @@ export type NegotiationShieldPricingAssessment = {
   summary: string;
   rationale: string[];
   confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
-  quoteAmount: number | null;
   currency: string | null;
+  quoteAmount?: number | null;
+  priorPremium?: number | null;
+  newPremium?: number | null;
+  increaseAmount?: number | null;
+  increasePercentage?: number | null;
 };
 
-export type ContractorQuoteAnalysisResult = {
+export type NegotiationShieldGeneratedAnalysisResult = {
   summary: string;
   findings: NegotiationShieldFinding[];
   negotiationLeverage: NegotiationShieldLeveragePoint[];
@@ -113,6 +121,9 @@ export type ContractorQuoteAnalysisResult = {
     tone: string | null;
   };
 };
+
+export type ContractorQuoteAnalysisResult = NegotiationShieldGeneratedAnalysisResult;
+export type InsurancePremiumIncreaseAnalysisResult = NegotiationShieldGeneratedAnalysisResult;
 
 export type NegotiationShieldCaseSummaryDTO = {
   id: string;
