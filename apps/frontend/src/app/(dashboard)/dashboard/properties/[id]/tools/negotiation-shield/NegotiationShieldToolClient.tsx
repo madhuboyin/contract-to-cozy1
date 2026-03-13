@@ -1,142 +1,1411 @@
 'use client';
 
-import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { type ReactNode, useEffect, useState } from 'react';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  Clipboard,
   FileText,
-  Shield,
+  Loader2,
+  Plus,
+  RefreshCcw,
   ShieldCheck,
+  Sparkles,
+  Upload,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import HomeToolsRail from '../../components/HomeToolsRail';
-import { api } from '@/lib/api/client';
-import type { Property } from '@/types';
+import HomeToolsRail from '@/app/(dashboard)/dashboard/properties/[id]/components/HomeToolsRail';
 import {
-  IconBadge,
+  BottomSafeAreaReserve,
+  EmptyStateCard,
   MobileFilterSurface,
   MobilePageContainer,
   MobilePageIntro,
-  MobileSection,
-  MobileSectionHeader,
-  StatusChip,
-  SummaryCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/use-toast';
+import { api } from '@/lib/api/client';
+import { cn } from '@/lib/utils';
+import type { DocumentType, Property } from '@/types';
 import {
+  analyzeNegotiationShieldCase,
+  attachNegotiationShieldDocument,
+  createNegotiationShieldCase,
+  getNegotiationShieldCaseDetail,
   listNegotiationShieldCases,
-  type NegotiationShieldCaseSummary,
+  parseNegotiationShieldCaseDocument,
+  saveNegotiationShieldInput,
+  type CreateNegotiationShieldCasePayload,
+  type NegotiationShieldAnalysis,
+  type NegotiationShieldCaseDetail,
+  type NegotiationShieldCaseScenarioType,
+  type NegotiationShieldCaseStatus,
+  type NegotiationShieldDocument,
+  type NegotiationShieldDocumentType,
+  type NegotiationShieldDraft,
+  type NegotiationShieldInput,
+  type NegotiationShieldInputType,
+  type NegotiationShieldPricingAssessment,
+  type NegotiationShieldSourceType,
+  type SaveNegotiationShieldInputPayload,
 } from './negotiationShieldApi';
 
-type ScenarioCardDefinition = {
-  key: 'contractor-quote-review' | 'insurance-premium-increase';
-  title: string;
-  description: string;
-  href: (propertyId: string) => string;
-  icon: typeof FileText;
+type ScenarioRouteValue = 'contractor-quote-review' | 'insurance-premium-increase';
+type ContractorFormValues = {
+  contractorName: string;
+  quoteAmount: string;
+  quoteDate: string;
+  serviceCategory: string;
+  systemCategory: string;
+  urgencyClaimed: 'unknown' | 'yes' | 'no';
+  notes: string;
+  rawText: string;
+};
+type InsuranceFormValues = {
+  insurerName: string;
+  priorPremium: string;
+  newPremium: string;
+  renewalDate: string;
+  reasonProvided: string;
+  notes: string;
+  rawText: string;
 };
 
-const SCENARIO_CARDS: ScenarioCardDefinition[] = [
+const SCENARIO_OPTIONS: Array<{
+  routeValue: ScenarioRouteValue;
+  scenarioType: NegotiationShieldCaseScenarioType;
+  label: string;
+  shortDescription: string;
+}> = [
   {
-    key: 'contractor-quote-review',
-    title: 'Contractor quote review',
-    description: 'Review pricing clarity, leverage points, and the questions worth asking before you approve work.',
-    href: (propertyId) =>
-      `/dashboard/properties/${propertyId}/tools/negotiation-shield?scenario=contractor-quote-review`,
-    icon: FileText,
+    routeValue: 'contractor-quote-review',
+    scenarioType: 'CONTRACTOR_QUOTE_REVIEW',
+    label: 'Contractor quote review',
+    shortDescription: 'Review a contractor estimate, surface leverage, and draft a response before you approve the work.',
   },
   {
-    key: 'insurance-premium-increase',
-    title: 'Insurance premium increase',
-    description: 'Pressure-test a renewal jump, surface property-backed leverage, and prepare a review request.',
-    href: (propertyId) =>
-      `/dashboard/properties/${propertyId}/tools/negotiation-shield?scenario=insurance-premium-increase`,
-    icon: Shield,
+    routeValue: 'insurance-premium-increase',
+    scenarioType: 'INSURANCE_PREMIUM_INCREASE',
+    label: 'Insurance premium increase',
+    shortDescription: 'Review a renewal jump, identify property-backed leverage, and prepare a firm request for review.',
   },
 ];
 
-function formatPropertyLabel(property: Property | null | undefined, propertyId: string) {
-  if (!property) return `Property ${propertyId.slice(0, 8)}`;
-  return property.name?.trim() || property.address || `Property ${propertyId.slice(0, 8)}`;
+const DOCUMENT_TYPE_OPTIONS: Array<{
+  value: NegotiationShieldDocumentType;
+  label: string;
+}> = [
+  { value: 'QUOTE', label: 'Quote or estimate' },
+  { value: 'PREMIUM_NOTICE', label: 'Premium notice' },
+  { value: 'SUPPORTING_DOCUMENT', label: 'Supporting document' },
+];
+
+const CONTRACTOR_DEFAULTS: ContractorFormValues = {
+  contractorName: '',
+  quoteAmount: '',
+  quoteDate: '',
+  serviceCategory: '',
+  systemCategory: '',
+  urgencyClaimed: 'unknown',
+  notes: '',
+  rawText: '',
+};
+
+const INSURANCE_DEFAULTS: InsuranceFormValues = {
+  insurerName: '',
+  priorPremium: '',
+  newPremium: '',
+  renewalDate: '',
+  reasonProvided: '',
+  notes: '',
+  rawText: '',
+};
+
+function asStringParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
 }
 
-function formatCaseSubtitle(item: NegotiationShieldCaseSummary) {
-  const scenarioLabel =
-    item.scenarioType === 'CONTRACTOR_QUOTE_REVIEW'
-      ? 'Contractor quote review'
-      : 'Insurance premium increase';
-  const updatedLabel = new Intl.DateTimeFormat('en-US', {
+function getScenarioOptionByRouteValue(routeValue: string | null) {
+  return SCENARIO_OPTIONS.find((option) => option.routeValue === routeValue) ?? SCENARIO_OPTIONS[0];
+}
+
+function getScenarioOptionByType(scenarioType: NegotiationShieldCaseScenarioType) {
+  return SCENARIO_OPTIONS.find((option) => option.scenarioType === scenarioType) ?? SCENARIO_OPTIONS[0];
+}
+
+function formatScenarioLabel(scenarioType: NegotiationShieldCaseScenarioType) {
+  return getScenarioOptionByType(scenarioType).label;
+}
+
+function formatStatusLabel(status: NegotiationShieldCaseStatus) {
+  switch (status) {
+    case 'DRAFT':
+      return 'Draft';
+    case 'READY_FOR_REVIEW':
+      return 'Ready for review';
+    case 'ANALYZED':
+      return 'Analyzed';
+    case 'ARCHIVED':
+      return 'Archived';
+    default:
+      return status;
+  }
+}
+
+function getStatusVariant(status: NegotiationShieldCaseStatus): 'outline' | 'secondary' | 'success' {
+  if (status === 'ANALYZED') return 'success';
+  if (status === 'READY_FOR_REVIEW') return 'secondary';
+  return 'outline';
+}
+
+function formatSourceLabel(sourceType: NegotiationShieldSourceType) {
+  switch (sourceType) {
+    case 'MANUAL':
+      return 'Manual';
+    case 'DOCUMENT_UPLOAD':
+      return 'Document upload';
+    case 'HYBRID':
+      return 'Hybrid';
+    default:
+      return sourceType;
+  }
+}
+
+function formatDocumentTypeLabel(documentType: NegotiationShieldDocumentType) {
+  return DOCUMENT_TYPE_OPTIONS.find((option) => option.value === documentType)?.label ?? documentType;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return 'Unavailable';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unavailable';
+
+  return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
-  }).format(new Date(item.updatedAt));
-  return `${scenarioLabel} • Updated ${updatedLabel}`;
+    year: 'numeric',
+  }).format(date);
 }
 
-function getStatusTone(
-  status: NegotiationShieldCaseSummary['status']
-): 'info' | 'elevated' | 'good' {
-  if (status === 'ANALYZED') return 'good';
-  if (status === 'READY_FOR_REVIEW') return 'elevated';
-  return 'info';
+function formatDateInput(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
 }
 
-function formatStatusLabel(status: NegotiationShieldCaseSummary['status']) {
-  return status
-    .toLowerCase()
-    .split('_')
-    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(' ');
+function formatNumberInput(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return value;
+  }
+
+  return '';
 }
 
-function ScenarioCard({
-  propertyId,
-  card,
-  active,
+function errorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function hasMeaningfulValue(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'boolean') return true;
+  if (Array.isArray(value)) return value.some(hasMeaningfulValue);
+  if (typeof value === 'object') return Object.values(value as Record<string, unknown>).some(hasMeaningfulValue);
+  return false;
+}
+
+function countMeaningfulFields(data: Record<string, unknown>) {
+  return Object.entries(data).filter(([key, value]) => key !== '_meta' && hasMeaningfulValue(value)).length;
+}
+
+function toNumber(value: string): number | undefined {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function mapCaseDocumentToUploadType(documentType: NegotiationShieldDocumentType): DocumentType {
+  switch (documentType) {
+    case 'QUOTE':
+      return 'ESTIMATE';
+    case 'PREMIUM_NOTICE':
+      return 'INSURANCE_CERTIFICATE';
+    case 'SUPPORTING_DOCUMENT':
+      return 'OTHER';
+    default:
+      return 'OTHER';
+  }
+}
+
+function getInputTypeForScenario(scenarioType: NegotiationShieldCaseScenarioType): NegotiationShieldInputType {
+  return scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'CONTRACTOR_QUOTE' : 'INSURANCE_PREMIUM';
+}
+
+function getAnalysisActionLabel(scenarioType: NegotiationShieldCaseScenarioType) {
+  return scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'Analyze quote' : 'Review premium increase';
+}
+
+function getEmptyStateDescription(scenarioType: NegotiationShieldCaseScenarioType) {
+  return scenarioType === 'CONTRACTOR_QUOTE_REVIEW'
+    ? 'Add quote details or upload the estimate to surface leverage before you reply.'
+    : 'Add renewal details or upload the notice to prepare a stronger review request.';
+}
+
+function getParsedMeta(input: NegotiationShieldInput) {
+  const data = asRecord(input.structuredData);
+  return asRecord(data._meta);
+}
+
+function isParsedInput(input: NegotiationShieldInput) {
+  return String(getParsedMeta(input).origin ?? '') === 'PARSED_DOCUMENT';
+}
+
+function latestByDate<T extends { updatedAt?: string; createdAt?: string }>(items: T[]) {
+  return [...items].sort((left, right) => {
+    const leftTime = new Date(left.updatedAt ?? left.createdAt ?? 0).getTime();
+    const rightTime = new Date(right.updatedAt ?? right.createdAt ?? 0).getTime();
+    return rightTime - leftTime;
+  })[0] ?? null;
+}
+
+function mergeInputData(caseDetail: NegotiationShieldCaseDetail) {
+  const scenarioInputType = getInputTypeForScenario(caseDetail.case.scenarioType);
+  const relevantInputs = caseDetail.inputs.filter((input) => input.inputType === scenarioInputType);
+  const manualInputs = relevantInputs.filter((input) => !isParsedInput(input));
+  const parsedInputs = relevantInputs.filter((input) => isParsedInput(input));
+  const manualInput = latestByDate(manualInputs);
+  const parsedStructured = parsedInputs.reduce<Record<string, unknown>>((acc, input) => {
+    const nextData = { ...asRecord(input.structuredData) };
+    delete nextData._meta;
+    return { ...acc, ...nextData };
+  }, {});
+  const manualStructured = manualInputs.reduce<Record<string, unknown>>((acc, input) => {
+    const nextData = { ...asRecord(input.structuredData) };
+    delete nextData._meta;
+    return { ...acc, ...nextData };
+  }, {});
+  const effectiveStructured = { ...parsedStructured, ...manualStructured };
+  const manualRawText = manualInputs
+    .map((input) => input.rawText?.trim())
+    .filter((value): value is string => Boolean(value))
+    .join('\n\n');
+  const parsedRawText = parsedInputs
+    .map((input) => input.rawText?.trim())
+    .filter((value): value is string => Boolean(value))
+    .join('\n\n');
+  const effectiveRawText = [manualRawText, parsedRawText].filter(Boolean).join('\n\n');
+
+  return {
+    manualInput,
+    parsedInputs,
+    effectiveStructured,
+    effectiveRawText,
+  };
+}
+
+function getDocumentParseInfo(document: NegotiationShieldDocument, inputs: NegotiationShieldInput[]) {
+  const parsedInputs = inputs.filter((input) => {
+    if (!isParsedInput(input)) return false;
+    const meta = getParsedMeta(input);
+    return String(meta.caseDocumentId ?? '') === document.id;
+  });
+
+  const latestParsedInput = latestByDate(parsedInputs);
+  if (!latestParsedInput) {
+    return {
+      isParsed: false,
+      parsedFieldCount: 0,
+      warnings: [] as string[],
+      parsedAt: null as string | null,
+    };
+  }
+
+  const structuredData = asRecord(latestParsedInput.structuredData);
+  const meta = getParsedMeta(latestParsedInput);
+  const warnings = Array.isArray(meta.parseWarnings)
+    ? meta.parseWarnings.filter((warning): warning is string => typeof warning === 'string')
+    : [];
+
+  return {
+    isParsed: true,
+    parsedFieldCount: countMeaningfulFields(structuredData),
+    warnings,
+    parsedAt: latestParsedInput.updatedAt,
+  };
+}
+
+function normalizeObjectList(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).filter(
+      (item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+    );
+  }
+
+  return [];
+}
+
+function formatConfidence(confidence: number | null | undefined) {
+  if (typeof confidence !== 'number' || !Number.isFinite(confidence)) return null;
+  const normalized = confidence <= 1 ? confidence * 100 : confidence;
+  return `${Math.round(normalized)}% confidence`;
+}
+
+function buildContractorFormValues(caseDetail: NegotiationShieldCaseDetail): ContractorFormValues {
+  const manualInput = mergeInputData(caseDetail).manualInput;
+  const data = manualInput ? asRecord(manualInput.structuredData) : {};
+
+  return {
+    contractorName: typeof data.contractorName === 'string' ? data.contractorName : '',
+    quoteAmount: formatNumberInput(data.quoteAmount),
+    quoteDate: formatDateInput(data.quoteDate),
+    serviceCategory: typeof data.serviceCategory === 'string' ? data.serviceCategory : '',
+    systemCategory: typeof data.systemCategory === 'string' ? data.systemCategory : '',
+    urgencyClaimed:
+      data.urgencyClaimed === true
+        ? 'yes'
+        : data.urgencyClaimed === false
+        ? 'no'
+        : typeof data.urgencyClaimed === 'string'
+        ? ((data.urgencyClaimed.toLowerCase() === 'yes' || data.urgencyClaimed.toLowerCase() === 'true' || data.urgencyClaimed.toLowerCase() === 'immediate')
+            ? 'yes'
+            : data.urgencyClaimed.toLowerCase() === 'no' || data.urgencyClaimed.toLowerCase() === 'false'
+            ? 'no'
+            : 'unknown')
+        : 'unknown',
+    notes: typeof data.notes === 'string' ? data.notes : '',
+    rawText: manualInput?.rawText ?? '',
+  };
+}
+
+function buildInsuranceFormValues(caseDetail: NegotiationShieldCaseDetail): InsuranceFormValues {
+  const manualInput = mergeInputData(caseDetail).manualInput;
+  const data = manualInput ? asRecord(manualInput.structuredData) : {};
+
+  return {
+    insurerName: typeof data.insurerName === 'string' ? data.insurerName : '',
+    priorPremium: formatNumberInput(data.priorPremium),
+    newPremium: formatNumberInput(data.newPremium),
+    renewalDate: formatDateInput(data.renewalDate),
+    reasonProvided: typeof data.reasonProvided === 'string' ? data.reasonProvided : '',
+    notes: typeof data.notes === 'string' ? data.notes : '',
+    rawText: manualInput?.rawText ?? '',
+  };
+}
+
+function buildContractorPayload(values: ContractorFormValues, inputId?: string): SaveNegotiationShieldInputPayload {
+  const structuredData: Record<string, unknown> = {};
+
+  if (values.contractorName.trim()) structuredData.contractorName = values.contractorName.trim();
+  if (toNumber(values.quoteAmount) !== undefined) structuredData.quoteAmount = toNumber(values.quoteAmount);
+  if (values.quoteDate) structuredData.quoteDate = values.quoteDate;
+  if (values.serviceCategory.trim()) structuredData.serviceCategory = values.serviceCategory.trim();
+  if (values.systemCategory.trim()) structuredData.systemCategory = values.systemCategory.trim();
+  if (values.urgencyClaimed === 'yes') structuredData.urgencyClaimed = true;
+  if (values.urgencyClaimed === 'no') structuredData.urgencyClaimed = false;
+  if (values.notes.trim()) structuredData.notes = values.notes.trim();
+
+  return {
+    inputId,
+    inputType: 'CONTRACTOR_QUOTE',
+    rawText: values.rawText.trim() || null,
+    structuredData,
+  };
+}
+
+function buildInsurancePayload(values: InsuranceFormValues, inputId?: string): SaveNegotiationShieldInputPayload {
+  const structuredData: Record<string, unknown> = {};
+
+  if (values.insurerName.trim()) structuredData.insurerName = values.insurerName.trim();
+  if (toNumber(values.priorPremium) !== undefined) structuredData.priorPremium = toNumber(values.priorPremium);
+  if (toNumber(values.newPremium) !== undefined) structuredData.newPremium = toNumber(values.newPremium);
+  if (values.renewalDate) structuredData.renewalDate = values.renewalDate;
+  if (values.reasonProvided.trim()) structuredData.reasonProvided = values.reasonProvided.trim();
+  if (values.notes.trim()) structuredData.notes = values.notes.trim();
+
+  return {
+    inputId,
+    inputType: 'INSURANCE_PREMIUM',
+    rawText: values.rawText.trim() || null,
+    structuredData,
+  };
+}
+
+function getPricingAssessment(analysis: NegotiationShieldAnalysis | null): NegotiationShieldPricingAssessment {
+  return asRecord(analysis?.pricingAssessment) as NegotiationShieldPricingAssessment;
+}
+
+function buildCopyText(draft: NegotiationShieldDraft) {
+  return draft.subject ? `Subject: ${draft.subject}\n\n${draft.body}` : draft.body;
+}
+
+function DetailSkeleton() {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3 py-12 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading case workspace...
+      </CardContent>
+    </Card>
+  );
+}
+
+function ScenarioQuickStart({
+  onStart,
 }: {
-  propertyId: string;
-  card: ScenarioCardDefinition;
-  active: boolean;
+  onStart: (scenario: ScenarioRouteValue) => void;
 }) {
-  const Icon = card.icon;
+  return (
+    <div className="grid gap-3">
+      {SCENARIO_OPTIONS.map((option) => (
+        <button
+          key={option.routeValue}
+          type="button"
+          onClick={() => onStart(option.routeValue)}
+          className="rounded-2xl border border-border bg-white p-4 text-left transition-colors hover:border-foreground/20 hover:bg-accent/40"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">{option.label}</p>
+              <p className="text-sm leading-6 text-muted-foreground">{option.shortDescription}</p>
+            </div>
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-muted-foreground" />
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CreateCasePanel({
+  initialScenario,
+  isSubmitting,
+  onCancel,
+  onSubmit,
+}: {
+  initialScenario: NegotiationShieldCaseScenarioType;
+  isSubmitting: boolean;
+  onCancel: () => void;
+  onSubmit: (payload: CreateNegotiationShieldCasePayload) => void;
+}) {
+  const [scenarioType, setScenarioType] = useState<NegotiationShieldCaseScenarioType>(initialScenario);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    setScenarioType(initialScenario);
+  }, [initialScenario]);
+
+  const selectedScenario = getScenarioOptionByType(scenarioType);
 
   return (
-    <Link
-      href={card.href(propertyId)}
-      className={`no-brand-style block rounded-[20px] border p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-colors ${
-        active
-          ? 'border-[hsl(var(--mobile-brand-border))] bg-[linear-gradient(145deg,hsl(var(--mobile-brand-soft)),#fff7e3)]'
-          : 'border-[hsl(var(--mobile-border-subtle))] bg-white'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <IconBadge tone={active ? 'brand' : 'info'}>
-          <Icon className="h-4 w-4" />
-        </IconBadge>
-        {active ? <StatusChip tone="info">Selected</StatusChip> : null}
-      </div>
-      <div className="mt-4 space-y-1.5">
-        <p className="mb-0 text-base font-semibold text-[hsl(var(--mobile-text-primary))]">
-          {card.title}
-        </p>
-        <p className="mb-0 text-sm leading-6 text-[hsl(var(--mobile-text-secondary))]">
-          {card.description}
-        </p>
-      </div>
-    </Link>
+    <Card>
+      <CardHeader>
+        <CardTitle>Start a new review</CardTitle>
+        <CardDescription>
+          Choose the situation you want to review first. You will land in the workspace immediately after the case is created.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid gap-4 lg:grid-cols-2">
+          {SCENARIO_OPTIONS.map((option) => {
+            const active = option.scenarioType === scenarioType;
+            return (
+              <button
+                key={option.routeValue}
+                type="button"
+                onClick={() => setScenarioType(option.scenarioType)}
+                className={cn(
+                  'rounded-2xl border p-4 text-left transition-colors',
+                  active ? 'border-foreground/20 bg-accent/50' : 'border-border bg-white hover:border-foreground/15 hover:bg-accent/30'
+                )}
+              >
+                <p className="text-sm font-semibold text-foreground">{option.label}</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">{option.shortDescription}</p>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="space-y-2">
+            <Label htmlFor="negotiation-title">Case title</Label>
+            <Input
+              id="negotiation-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={
+                selectedScenario.scenarioType === 'CONTRACTOR_QUOTE_REVIEW'
+                  ? 'Example: Roof replacement estimate review'
+                  : 'Example: Homeowners premium increase review'
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="negotiation-description">Description</Label>
+            <Textarea
+              id="negotiation-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Optional context for your review."
+              className="min-h-[112px]"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            onClick={() =>
+              onSubmit({
+                scenarioType,
+                title: title.trim(),
+                description: description.trim() || null,
+                sourceType: 'MANUAL',
+              })
+            }
+            disabled={isSubmitting || !title.trim()}
+          >
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Create case
+          </Button>
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
+            Cancel
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ContractorManualInputSection({
+  caseDetail,
+  isSaving,
+  onSave,
+}: {
+  caseDetail: NegotiationShieldCaseDetail;
+  isSaving: boolean;
+  onSave: (payload: SaveNegotiationShieldInputPayload) => void;
+}) {
+  const [values, setValues] = useState<ContractorFormValues>(CONTRACTOR_DEFAULTS);
+  const parsedInputs = mergeInputData(caseDetail).parsedInputs;
+
+  useEffect(() => {
+    setValues(buildContractorFormValues(caseDetail));
+  }, [caseDetail]);
+
+  const manualInput = mergeInputData(caseDetail).manualInput;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Manual input</CardTitle>
+        <CardDescription>
+          Paste the quote details you have, or fill in only the fields that are easy to confirm.
+          {parsedInputs.length ? ' Parsed document fields are already available in the background and will fill gaps during analysis.' : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Field label="Contractor name">
+            <Input value={values.contractorName} onChange={(event) => setValues((current) => ({ ...current, contractorName: event.target.value }))} />
+          </Field>
+          <Field label="Quote amount">
+            <Input
+              inputMode="decimal"
+              placeholder="4500"
+              value={values.quoteAmount}
+              onChange={(event) => setValues((current) => ({ ...current, quoteAmount: event.target.value }))}
+            />
+          </Field>
+          <Field label="Quote date">
+            <Input
+              type="date"
+              value={values.quoteDate}
+              onChange={(event) => setValues((current) => ({ ...current, quoteDate: event.target.value }))}
+            />
+          </Field>
+          <Field label="Urgency claimed">
+            <Select
+              value={values.urgencyClaimed}
+              onValueChange={(nextValue: ContractorFormValues['urgencyClaimed']) =>
+                setValues((current) => ({ ...current, urgencyClaimed: nextValue }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select urgency" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unknown">Unclear</SelectItem>
+                <SelectItem value="yes">Yes, urgent</SelectItem>
+                <SelectItem value="no">No urgency claimed</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Service category">
+            <Input value={values.serviceCategory} onChange={(event) => setValues((current) => ({ ...current, serviceCategory: event.target.value }))} />
+          </Field>
+          <Field label="System category">
+            <Input value={values.systemCategory} onChange={(event) => setValues((current) => ({ ...current, systemCategory: event.target.value }))} />
+          </Field>
+        </div>
+
+        <Field label="Notes">
+          <Textarea
+            value={values.notes}
+            onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
+            placeholder="Any details you want the review to keep in mind."
+            className="min-h-[120px]"
+          />
+        </Field>
+
+        <Field label="Pasted quote text">
+          <Textarea
+            value={values.rawText}
+            onChange={(event) => setValues((current) => ({ ...current, rawText: event.target.value }))}
+            placeholder="Paste estimate text, inspection notes, or contractor messages here."
+            className="min-h-[180px]"
+          />
+        </Field>
+
+        <div className="flex justify-end">
+          <Button type="button" onClick={() => onSave(buildContractorPayload(values, manualInput?.id ?? undefined))} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save input
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InsuranceManualInputSection({
+  caseDetail,
+  isSaving,
+  onSave,
+}: {
+  caseDetail: NegotiationShieldCaseDetail;
+  isSaving: boolean;
+  onSave: (payload: SaveNegotiationShieldInputPayload) => void;
+}) {
+  const [values, setValues] = useState<InsuranceFormValues>(INSURANCE_DEFAULTS);
+  const parsedInputs = mergeInputData(caseDetail).parsedInputs;
+
+  useEffect(() => {
+    setValues(buildInsuranceFormValues(caseDetail));
+  }, [caseDetail]);
+
+  const manualInput = mergeInputData(caseDetail).manualInput;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Manual input</CardTitle>
+        <CardDescription>
+          Capture the key renewal details here, even if you only have part of the notice handy.
+          {parsedInputs.length ? ' Parsed document fields are already available in the background and will fill gaps during analysis.' : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Field label="Insurer name">
+            <Input value={values.insurerName} onChange={(event) => setValues((current) => ({ ...current, insurerName: event.target.value }))} />
+          </Field>
+          <Field label="Renewal date">
+            <Input
+              type="date"
+              value={values.renewalDate}
+              onChange={(event) => setValues((current) => ({ ...current, renewalDate: event.target.value }))}
+            />
+          </Field>
+          <Field label="Prior premium">
+            <Input
+              inputMode="decimal"
+              value={values.priorPremium}
+              onChange={(event) => setValues((current) => ({ ...current, priorPremium: event.target.value }))}
+            />
+          </Field>
+          <Field label="New premium">
+            <Input
+              inputMode="decimal"
+              value={values.newPremium}
+              onChange={(event) => setValues((current) => ({ ...current, newPremium: event.target.value }))}
+            />
+          </Field>
+        </div>
+
+        <Field label="Reason provided">
+          <Textarea
+            value={values.reasonProvided}
+            onChange={(event) => setValues((current) => ({ ...current, reasonProvided: event.target.value }))}
+            placeholder="Any explanation you received from the insurer or agent."
+            className="min-h-[110px]"
+          />
+        </Field>
+
+        <Field label="Notes">
+          <Textarea
+            value={values.notes}
+            onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
+            placeholder="Any policy context or questions you already have."
+            className="min-h-[120px]"
+          />
+        </Field>
+
+        <Field label="Pasted notice text">
+          <Textarea
+            value={values.rawText}
+            onChange={(event) => setValues((current) => ({ ...current, rawText: event.target.value }))}
+            placeholder="Paste notice text, email content, or agent messages here."
+            className="min-h-[180px]"
+          />
+        </Field>
+
+        <div className="flex justify-end">
+          <Button type="button" onClick={() => onSave(buildInsurancePayload(values, manualInput?.id ?? undefined))} disabled={isSaving}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save input
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function AnalysisResultsSection({
+  analysis,
+}: {
+  analysis: NegotiationShieldAnalysis | null;
+}) {
+  if (!analysis) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Analysis results</CardTitle>
+          <CardDescription>The latest review will appear here after you run analysis.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EmptyStateCard
+            title="No analysis yet"
+            description="Once you have enough manual or parsed document input, run analysis to get leverage points and recommended next steps."
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const findings = normalizeObjectList(analysis.findings);
+  const leveragePoints = normalizeObjectList(analysis.negotiationLeverage);
+  const recommendedActions = normalizeObjectList(analysis.recommendedActions);
+  const pricingAssessment = getPricingAssessment(analysis);
+  const confidenceLabel = formatConfidence(analysis.confidence);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Analysis results</CardTitle>
+            <CardDescription>Grounded guidance based on the case details currently saved for this property.</CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {pricingAssessment.status ? <Badge variant="secondary">{pricingAssessment.status.replace(/_/g, ' ')}</Badge> : null}
+            {confidenceLabel ? <Badge variant="outline">{confidenceLabel}</Badge> : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {analysis.summary ? (
+          <div className="rounded-2xl border border-border bg-accent/40 p-4">
+            <p className="text-sm font-semibold text-foreground">Summary</p>
+            <p className="mt-2 text-sm leading-7 text-foreground/85">{analysis.summary}</p>
+          </div>
+        ) : null}
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <ResultList
+            title="Findings"
+            emptyLabel="No findings were returned yet."
+            items={findings}
+            titleKey="title"
+            bodyKey="detail"
+            metaKey="status"
+          />
+          <ResultList
+            title="Negotiation leverage"
+            emptyLabel="No leverage points were returned yet."
+            items={leveragePoints}
+            titleKey="title"
+            bodyKey="detail"
+            metaKey="strength"
+          />
+        </div>
+
+        <ResultList
+          title="Recommended actions"
+          emptyLabel="No recommended actions were returned yet."
+          items={recommendedActions}
+          titleKey="title"
+          bodyKey="detail"
+          metaKey="priority"
+          ordered
+        />
+
+        {(pricingAssessment.summary || pricingAssessment.rationale?.length || pricingAssessment.increaseAmount || pricingAssessment.quoteAmount) ? (
+          <div className="rounded-2xl border border-border p-4">
+            <p className="text-sm font-semibold text-foreground">Pricing assessment</p>
+            {pricingAssessment.summary ? <p className="mt-2 text-sm leading-7 text-foreground/85">{pricingAssessment.summary}</p> : null}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {typeof pricingAssessment.quoteAmount === 'number' ? (
+                <Badge variant="outline">Quote amount: {pricingAssessment.quoteAmount}</Badge>
+              ) : null}
+              {typeof pricingAssessment.priorPremium === 'number' ? (
+                <Badge variant="outline">Prior premium: {pricingAssessment.priorPremium}</Badge>
+              ) : null}
+              {typeof pricingAssessment.newPremium === 'number' ? (
+                <Badge variant="outline">New premium: {pricingAssessment.newPremium}</Badge>
+              ) : null}
+              {typeof pricingAssessment.increaseAmount === 'number' ? (
+                <Badge variant="outline">Increase: {pricingAssessment.increaseAmount}</Badge>
+              ) : null}
+              {typeof pricingAssessment.increasePercentage === 'number' ? (
+                <Badge variant="outline">Increase %: {Math.round(pricingAssessment.increasePercentage)}%</Badge>
+              ) : null}
+            </div>
+
+            {pricingAssessment.rationale?.length ? (
+              <ul className="mt-4 space-y-2 text-sm leading-7 text-muted-foreground">
+                {pricingAssessment.rationale.map((reason) => (
+                  <li key={reason} className="list-disc ml-5">
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ResultList({
+  title,
+  emptyLabel,
+  items,
+  titleKey,
+  bodyKey,
+  metaKey,
+  ordered = false,
+}: {
+  title: string;
+  emptyLabel: string;
+  items: Array<Record<string, unknown>>;
+  titleKey: string;
+  bodyKey: string;
+  metaKey?: string;
+  ordered?: boolean;
+}) {
+  const ListTag = ordered ? 'ol' : 'ul';
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-border p-4">
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{emptyLabel}</p>
+      ) : (
+        <ListTag className="space-y-3">
+          {items.map((item, index) => {
+            const itemTitle = typeof item[titleKey] === 'string' ? String(item[titleKey]) : `Item ${index + 1}`;
+            const itemBody = typeof item[bodyKey] === 'string' ? String(item[bodyKey]) : '';
+            const itemMeta = metaKey && typeof item[metaKey] === 'string' ? String(item[metaKey]) : null;
+
+            return (
+              <li key={`${itemTitle}-${index}`} className="rounded-xl border border-border bg-background p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{itemTitle}</p>
+                    {itemBody ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{itemBody}</p> : null}
+                  </div>
+                  {itemMeta ? <Badge variant="outline">{itemMeta}</Badge> : null}
+                </div>
+              </li>
+            );
+          })}
+        </ListTag>
+      )}
+    </div>
+  );
+}
+
+function DraftSection({
+  draft,
+}: {
+  draft: NegotiationShieldDraft | null;
+}) {
+  const { toast } = useToast();
+
+  async function handleCopy() {
+    if (!draft) return;
+
+    try {
+      await navigator.clipboard.writeText(buildCopyText(draft));
+      toast({ title: 'Draft copied', description: 'The latest message draft is ready to paste.' });
+    } catch {
+      toast({ title: 'Copy failed', description: 'Your browser blocked clipboard access.', variant: 'destructive' });
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Negotiation draft</CardTitle>
+            <CardDescription>A homeowner-ready message generated from the latest analysis.</CardDescription>
+          </div>
+          {draft ? (
+            <Button type="button" variant="outline" onClick={handleCopy}>
+              <Clipboard className="h-4 w-4" />
+              Copy draft
+            </Button>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!draft ? (
+          <EmptyStateCard
+            title="No draft yet"
+            description="Run analysis to generate a message you can copy into an email or portal response."
+          />
+        ) : (
+          <div className="space-y-4 rounded-2xl border border-border bg-background p-4">
+            {draft.subject ? (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Subject</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{draft.subject}</p>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Message</p>
+              <div className="mt-2 whitespace-pre-wrap rounded-xl border border-border bg-white p-4 text-sm leading-7 text-foreground/90">
+                {draft.body}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CaseWorkspace({
+  propertyId,
+  property,
+  caseDetail,
+  onBack,
+}: {
+  propertyId: string;
+  property: Property | undefined;
+  caseDetail: NegotiationShieldCaseDetail;
+  onBack: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [documentName, setDocumentName] = useState('');
+  const [documentType, setDocumentType] = useState<NegotiationShieldDocumentType>(
+    caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'QUOTE' : 'PREMIUM_NOTICE'
+  );
+
+  useEffect(() => {
+    setSelectedFile(null);
+    setDocumentName('');
+    setDocumentType(caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'QUOTE' : 'PREMIUM_NOTICE');
+  }, [caseDetail.case.id, caseDetail.case.scenarioType]);
+
+  const detailQueryKey = ['negotiation-shield-case', propertyId, caseDetail.case.id];
+  const listQueryKey = ['negotiation-shield-cases', propertyId];
+
+  function syncCaseDetail(nextDetail: NegotiationShieldCaseDetail) {
+    queryClient.setQueryData(detailQueryKey, nextDetail);
+    queryClient.invalidateQueries({ queryKey: listQueryKey });
+  }
+
+  const saveInputMutation = useMutation({
+    mutationFn: (payload: SaveNegotiationShieldInputPayload) => saveNegotiationShieldInput(propertyId, caseDetail.case.id, payload),
+    onSuccess: (nextDetail) => {
+      syncCaseDetail(nextDetail);
+      toast({ title: 'Input saved', description: 'Your case details were updated.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Save failed', description: errorMessage(error, 'Unable to save case input.'), variant: 'destructive' });
+    },
+  });
+
+  const uploadDocumentMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedFile) {
+        throw new Error('Select a file to upload.');
+      }
+
+      const uploadResponse = await api.uploadDocument(selectedFile, {
+        propertyId,
+        name: documentName.trim() || selectedFile.name,
+        type: mapCaseDocumentToUploadType(documentType),
+      });
+
+      if (!uploadResponse.success) {
+        throw new Error(uploadResponse.message || 'Upload failed.');
+      }
+
+      return attachNegotiationShieldDocument(propertyId, caseDetail.case.id, {
+        documentType,
+        documentId: uploadResponse.data.id,
+      });
+    },
+    onSuccess: (nextDetail) => {
+      syncCaseDetail(nextDetail);
+      setSelectedFile(null);
+      setDocumentName('');
+      toast({ title: 'Document attached', description: 'The file is now available inside this review.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Upload failed', description: errorMessage(error, 'Unable to upload and attach this document.'), variant: 'destructive' });
+    },
+  });
+
+  const parseDocumentMutation = useMutation({
+    mutationFn: (caseDocumentId: string) => parseNegotiationShieldCaseDocument(propertyId, caseDetail.case.id, caseDocumentId),
+    onSuccess: (nextDetail) => {
+      syncCaseDetail(nextDetail);
+      toast({ title: 'Document parsed', description: 'Parsed content is now available to the analysis flow.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Parse failed', description: errorMessage(error, 'Unable to parse this document.'), variant: 'destructive' });
+    },
+  });
+
+  const analyzeCaseMutation = useMutation({
+    mutationFn: () => analyzeNegotiationShieldCase(propertyId, caseDetail.case.id),
+    onSuccess: (nextDetail) => {
+      syncCaseDetail(nextDetail);
+      toast({ title: 'Analysis complete', description: 'Negotiation guidance and a draft message are ready.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Analysis failed', description: errorMessage(error, 'Unable to analyze this case yet.'), variant: 'destructive' });
+    },
+  });
+
+  const parsedDocumentsCount = caseDetail.documents.filter((document) => getDocumentParseInfo(document, caseDetail.inputs).isParsed).length;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <Button type="button" variant="ghost" className="-ml-3 w-fit" onClick={onBack}>
+                <ArrowLeft className="h-4 w-4" />
+                Back to cases
+              </Button>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={getStatusVariant(caseDetail.case.status)}>{formatStatusLabel(caseDetail.case.status)}</Badge>
+                  <Badge variant="outline">{formatScenarioLabel(caseDetail.case.scenarioType)}</Badge>
+                  <Badge variant="outline">{formatSourceLabel(caseDetail.case.sourceType)}</Badge>
+                </div>
+                <CardTitle className="text-2xl">{caseDetail.case.title}</CardTitle>
+                <CardDescription className="max-w-3xl">
+                  {caseDetail.case.description ||
+                    `Use this workspace to gather context, run analysis, and prepare a response for ${property?.name || property?.address || 'this property'}.`}
+                </CardDescription>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              <p>Last updated {formatDateTime(caseDetail.case.updatedAt)}</p>
+              <p className="mt-1">
+                {caseDetail.documents.length} document{caseDetail.documents.length === 1 ? '' : 's'} attached
+                {caseDetail.documents.length ? `, ${parsedDocumentsCount} parsed` : ''}
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? (
+        <ContractorManualInputSection
+          caseDetail={caseDetail}
+          isSaving={saveInputMutation.isPending}
+          onSave={(payload) => saveInputMutation.mutate(payload)}
+        />
+      ) : (
+        <InsuranceManualInputSection
+          caseDetail={caseDetail}
+          isSaving={saveInputMutation.isPending}
+          onSave={(payload) => saveInputMutation.mutate(payload)}
+        />
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Documents</CardTitle>
+          <CardDescription>Attach the quote, renewal notice, or supporting screenshots using the existing upload flow.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] xl:items-end">
+            <Field label="Document name">
+              <Input
+                value={documentName}
+                onChange={(event) => setDocumentName(event.target.value)}
+                placeholder={selectedFile?.name || 'Use the original filename or add a cleaner label'}
+              />
+            </Field>
+            <Field label="Document type">
+              <Select value={documentType} onValueChange={(nextValue: NegotiationShieldDocumentType) => setDocumentType(nextValue)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a document type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="File">
+              <Input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  setSelectedFile(file);
+                  if (file && !documentName.trim()) {
+                    setDocumentName(file.name);
+                  }
+                }}
+              />
+            </Field>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" onClick={() => uploadDocumentMutation.mutate()} disabled={uploadDocumentMutation.isPending || !selectedFile}>
+              {uploadDocumentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Upload and attach
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Attach the source document first, then parse it to pull useful text into the case.
+            </p>
+          </div>
+
+          <Separator />
+
+          {caseDetail.documents.length === 0 ? (
+            <EmptyStateCard
+              title="No documents attached yet"
+              description={getEmptyStateDescription(caseDetail.case.scenarioType)}
+            />
+          ) : (
+            <div className="space-y-3">
+              {caseDetail.documents.map((document) => {
+                const parseInfo = getDocumentParseInfo(document, caseDetail.inputs);
+                const isParsingThisDocument =
+                  parseDocumentMutation.isPending && parseDocumentMutation.variables === document.id;
+
+                return (
+                  <div key={document.id} className="rounded-2xl border border-border p-4">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">{document.fileName}</p>
+                          <Badge variant="outline">{formatDocumentTypeLabel(document.documentType)}</Badge>
+                          {parseInfo.isParsed ? <Badge variant="success">Parsed</Badge> : <Badge variant="outline">Not parsed yet</Badge>}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Attached {formatDateTime(document.uploadedAt)}
+                          {parseInfo.isParsed && parseInfo.parsedAt ? ` • Last parsed ${formatDateTime(parseInfo.parsedAt)}` : ''}
+                        </p>
+                        {parseInfo.isParsed ? (
+                          <p className="text-sm text-muted-foreground">
+                            Parsed fields: {parseInfo.parsedFieldCount}
+                            {parseInfo.warnings.length ? ` • ${parseInfo.warnings.length} warning${parseInfo.warnings.length === 1 ? '' : 's'}` : ''}
+                          </p>
+                        ) : null}
+                        {parseInfo.warnings.length ? (
+                          <ul className="space-y-1 text-sm text-muted-foreground">
+                            {parseInfo.warnings.map((warning) => (
+                              <li key={warning} className="list-disc ml-5">
+                                {warning}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {document.fileUrl ? (
+                          <Button type="button" variant="outline" asChild>
+                            <a href={document.fileUrl} target="_blank" rel="noreferrer">
+                              <FileText className="h-4 w-4" />
+                              View file
+                            </a>
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => parseDocumentMutation.mutate(document.id)}
+                          disabled={isParsingThisDocument}
+                        >
+                          {isParsingThisDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+                          {parseInfo.isParsed ? 'Re-parse' : 'Parse'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Run analysis</CardTitle>
+          <CardDescription>
+            When your case has enough manual or parsed document context, run analysis to generate leverage points and a draft response.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <Button type="button" onClick={() => analyzeCaseMutation.mutate()} disabled={analyzeCaseMutation.isPending}>
+            {analyzeCaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {getAnalysisActionLabel(caseDetail.case.scenarioType)}
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            Manual details always take priority. Parsed document fields fill in gaps when available.
+          </p>
+        </CardContent>
+      </Card>
+
+      <AnalysisResultsSection analysis={caseDetail.latestAnalysis} />
+      <DraftSection draft={caseDetail.latestDraft} />
+    </div>
   );
 }
 
 export default function NegotiationShieldToolClient() {
   const params = useParams<{ id: string }>();
+  const propertyId = asStringParam(params?.id);
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const propertyId = params.id;
-  const selectedScenario = searchParams.get('scenario');
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const caseId = searchParams.get('caseId');
+  const createMode = searchParams.get('create') === '1';
+  const initialCreateScenario = getScenarioOptionByRouteValue(searchParams.get('scenario')).scenarioType;
+
+  function updateSearch(nextValues: Record<string, string | null | undefined>) {
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    Object.entries(nextValues).forEach(([key, value]) => {
+      if (!value) {
+        nextParams.delete(key);
+      } else {
+        nextParams.set(key, value);
+      }
+    });
+
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname, { scroll: false });
+  }
+
+  function openCreate(routeValue?: ScenarioRouteValue) {
+    updateSearch({
+      caseId: null,
+      create: '1',
+      scenario: routeValue ?? null,
+    });
+  }
+
+  function openCase(nextCaseId: string) {
+    updateSearch({
+      caseId: nextCaseId,
+      create: null,
+      scenario: null,
+    });
+  }
+
+  function goToList() {
+    updateSearch({
+      caseId: null,
+      create: null,
+      scenario: null,
+    });
+  }
 
   const propertyQuery = useQuery({
     queryKey: ['property', propertyId],
     queryFn: async () => {
       const response = await api.getProperty(propertyId);
-      return response.data as Property;
+      return response.data;
     },
     enabled: Boolean(propertyId),
   });
@@ -147,142 +1416,188 @@ export default function NegotiationShieldToolClient() {
     enabled: Boolean(propertyId),
   });
 
-  const propertyLabel = formatPropertyLabel(propertyQuery.data, propertyId);
-  const selectedScenarioCard =
-    SCENARIO_CARDS.find((card) => card.key === selectedScenario) ?? null;
-  const recentCases = (casesQuery.data ?? []).slice(0, 3);
+  const selectedCaseQuery = useQuery({
+    queryKey: ['negotiation-shield-case', propertyId, caseId],
+    queryFn: () => getNegotiationShieldCaseDetail(propertyId, caseId as string),
+    enabled: Boolean(propertyId && caseId),
+  });
+
+  const createCaseMutation = useMutation({
+    mutationFn: (payload: CreateNegotiationShieldCasePayload) => createNegotiationShieldCase(propertyId, payload),
+    onSuccess: (nextDetail) => {
+      queryClient.setQueryData(['negotiation-shield-case', propertyId, nextDetail.case.id], nextDetail);
+      queryClient.invalidateQueries({ queryKey: ['negotiation-shield-cases', propertyId] });
+      toast({ title: 'Case created', description: 'You can start adding input right away.' });
+      openCase(nextDetail.case.id);
+    },
+    onError: (error) => {
+      toast({ title: 'Unable to create case', description: errorMessage(error, 'Please try again.'), variant: 'destructive' });
+    },
+  });
+
+  const property = propertyQuery.data;
+  const cases = casesQuery.data ?? [];
+
+  const introAction = (
+    <Button type="button" onClick={() => openCreate()}>
+      <Plus className="h-4 w-4" />
+      Start new review
+    </Button>
+  );
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to property
-        </Link>
-      </Button>
+    <MobilePageContainer className="space-y-5">
+      <HomeToolsRail propertyId={propertyId} />
 
       <MobilePageIntro
         eyebrow="Home Tool"
         title="Negotiation Shield"
-        subtitle={`Use ${propertyLabel} to review contractor quotes and insurance premium increases with clearer leverage and a response-ready workflow.`}
+        subtitle="Review contractor quotes or premium increases, gather stronger leverage, and generate a message you can actually send."
+        action={introAction}
       />
 
-      <MobileFilterSurface>
-        <HomeToolsRail propertyId={propertyId} />
-      </MobileFilterSurface>
-
-      <MobileSection>
-        <SummaryCard
-          title="When to use it"
-          subtitle="Bring in a quote, renewal notice, or your own notes. Negotiation Shield helps organize the evidence before you respond."
-        >
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {SCENARIO_CARDS.map((card) => (
-              <ScenarioCard
-                key={card.key}
-                propertyId={propertyId}
-                card={card}
-                active={selectedScenarioCard?.key === card.key}
-              />
-            ))}
-          </div>
-        </SummaryCard>
-      </MobileSection>
-
-      <MobileSection>
-        <SummaryCard
-          title="Entry point"
-          subtitle={
-            selectedScenarioCard
-              ? `${selectedScenarioCard.title} is selected. Step 7 will add the full create-and-review flow here.`
-              : 'Choose a scenario to focus the upcoming create-and-review flow.'
-          }
-        >
-          <div className="space-y-2.5">
-            <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-3">
-              <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                {selectedScenarioCard
-                  ? `${selectedScenarioCard.title} ready`
-                  : 'Select a scenario to get started'}
-              </p>
-              <p className="mb-0 mt-1 text-sm leading-6 text-[hsl(var(--mobile-text-secondary))]">
-                {selectedScenarioCard
-                  ? 'Case setup, input collection, and document upload wiring will land in the next UI step.'
-                  : 'You can already deep-link into this page now, and recent cases will appear below as the workflow UI is added.'}
+      <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-start">
+        <div className="space-y-4 xl:sticky xl:top-6">
+          <MobileFilterSurface className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">Start a new review</p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Create a case for a contractor quote or an insurance premium increase for {property?.name || property?.address || 'this property'}.
               </p>
             </div>
-            {selectedScenarioCard ? (
-              <Button asChild className="min-h-[44px] w-full sm:w-auto">
-                <Link href={selectedScenarioCard.href(propertyId)}>
-                  Continue with {selectedScenarioCard.title}
-                </Link>
-              </Button>
-            ) : null}
-          </div>
-        </SummaryCard>
-      </MobileSection>
+            <ScenarioQuickStart onStart={(scenario) => openCreate(scenario)} />
+          </MobileFilterSurface>
 
-      <MobileSection>
-        <MobileSectionHeader
-          title="Recent cases"
-          subtitle="A compact preview from the property-scoped backend list. Full list and detail UI comes next."
-        />
-        <SummaryCard
-          title="Case activity"
-          subtitle={
-            casesQuery.isLoading
-              ? 'Loading recent Negotiation Shield activity...'
-              : recentCases.length > 0
-                ? 'Your latest case summaries are ready for the next workflow step.'
-                : 'No Negotiation Shield cases yet. Start with a contractor quote or premium increase when you are ready.'
-          }
-        >
-          {casesQuery.isError ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              We could not load recent cases right now.
-            </div>
-          ) : casesQuery.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <div
-                  key={`negotiation-shield-loading-${index}`}
-                  className="h-16 animate-pulse rounded-xl bg-[hsl(var(--mobile-bg-muted))]"
-                />
-              ))}
-            </div>
-          ) : recentCases.length > 0 ? (
-            <div className="space-y-2">
-              {recentCases.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-3"
-                >
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <IconBadge tone="info">
-                      <ShieldCheck className="h-4 w-4" />
-                    </IconBadge>
-                    <div className="min-w-0">
-                      <p className="mb-0 truncate text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                        {item.title}
-                      </p>
-                      <p className="mb-0 mt-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
-                        {formatCaseSubtitle(item)}
-                      </p>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Recent cases</CardTitle>
+              <CardDescription>Property-scoped reviews stay here so you can reopen them later.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {casesQuery.isLoading ? (
+                <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading cases...
+                </div>
+              ) : cases.length === 0 ? (
+                <p className="text-sm leading-6 text-muted-foreground">No cases yet. Start with the scenario that matches what you need reviewed.</p>
+              ) : (
+                <div className="space-y-3">
+                  {cases.map((item) => {
+                    const active = caseId === item.id;
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => openCase(item.id)}
+                        className={cn(
+                          'w-full rounded-2xl border p-4 text-left transition-colors',
+                          active ? 'border-foreground/20 bg-accent/40' : 'border-border bg-white hover:border-foreground/15 hover:bg-accent/30'
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                          <Badge variant={getStatusVariant(item.status)}>{formatStatusLabel(item.status)}</Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{formatScenarioLabel(item.scenarioType)}</p>
+                        <p className="mt-2 text-xs text-muted-foreground">Updated {formatDateTime(item.updatedAt)}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          {selectedCaseQuery.isLoading ? (
+            <DetailSkeleton />
+          ) : selectedCaseQuery.data ? (
+            <CaseWorkspace propertyId={propertyId} property={property} caseDetail={selectedCaseQuery.data} onBack={goToList} />
+          ) : caseId && selectedCaseQuery.isError ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Unable to load this case</CardTitle>
+                <CardDescription>{errorMessage(selectedCaseQuery.error, 'The case may have been removed or you may not have access to it.')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button type="button" variant="outline" onClick={goToList}>
+                  Return to case list
+                </Button>
+              </CardContent>
+            </Card>
+          ) : createMode ? (
+            <CreateCasePanel
+              initialScenario={initialCreateScenario}
+              isSubmitting={createCaseMutation.isPending}
+              onCancel={goToList}
+              onSubmit={(payload) => createCaseMutation.mutate(payload)}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Negotiation Shield workspace</CardTitle>
+                <CardDescription>
+                  Start a new review or reopen an existing case to gather details, parse uploaded documents, and generate a message you can send.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {casesQuery.isError ? (
+                  <EmptyStateCard title="Unable to load cases" description={errorMessage(casesQuery.error, 'Try refreshing the page.')} />
+                ) : cases.length === 0 ? (
+                  <EmptyStateCard
+                    title="No reviews yet"
+                    description="Use Negotiation Shield when you want a second pass on a contractor quote or when your insurance renewal jumps and you need better leverage."
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {SCENARIO_OPTIONS.map((option) => (
+                        <button
+                          key={option.routeValue}
+                          type="button"
+                          onClick={() => openCreate(option.routeValue)}
+                          className="rounded-2xl border border-border bg-white p-5 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30"
+                        >
+                          <p className="text-sm font-semibold text-foreground">{option.label}</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{option.shortDescription}</p>
+                        </button>
+                      ))}
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold text-foreground">Existing cases</p>
+                      {cases.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => openCase(item.id)}
+                          className="flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white p-4 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{formatScenarioLabel(item.scenarioType)}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={getStatusVariant(item.status)}>{formatStatusLabel(item.status)}</Badge>
+                            <span className="text-xs text-muted-foreground">Updated {formatDateTime(item.updatedAt)}</span>
+                          </div>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <StatusChip tone={getStatusTone(item.status)}>
-                    {formatStatusLabel(item.status)}
-                  </StatusChip>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-4 text-sm leading-6 text-[hsl(var(--mobile-text-secondary))]">
-              Recent cases will appear here once the create flow is live. The backend list wiring is already connected for this property.
-            </div>
+                )}
+              </CardContent>
+            </Card>
           )}
-        </SummaryCard>
-      </MobileSection>
+        </div>
+      </div>
+
+      <BottomSafeAreaReserve size="chatAware" />
     </MobilePageContainer>
   );
 }
