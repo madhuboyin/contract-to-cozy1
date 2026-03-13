@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -77,30 +77,30 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
   const deferredToolLinks = article.toolLinks.filter(
     (toolLink) => toolLink.id !== heroToolLink?.id && !inlineToolLinks.some((inlineToolLink) => inlineToolLink.id === toolLink.id)
   );
-  const railToolLink = !heroToolLink ? deferredToolLinks[0] || null : null;
   const deferredCtas = article.ctaLinks.filter((cta) => !inlineCtas.some((inlineCta) => inlineCta.id === cta.id));
-  const endToolLinks = deferredToolLinks.filter((toolLink) => toolLink.id !== railToolLink?.id).slice(0, 2);
+  const endToolLinks = deferredToolLinks.slice(0, 2);
   const primaryEndCta = deferredCtas[0] || null;
   const remainingEndCtas = primaryEndCta ? deferredCtas.slice(1, 2) : [];
   const headerTags = article.tags.slice(0, 4);
-  const railTags = article.tags.slice(4);
+  const railTags = article.tags.slice(4, 8);
+  const nextRecommendedRead = article.relatedArticles[0] || null;
   const tocItems = buildKnowledgeArticleToc(article.sections);
   const sectionAnchorMap = new Map(tocItems.map((item) => [item.sectionId, item.id]));
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_22%,#ffffff_100%)]">
-      <DashboardShell className="space-y-12 py-10 md:space-y-14 md:py-16">
-        <div className="space-y-6">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_18%,#ffffff_100%)]">
+      <DashboardShell className="space-y-10 py-10 md:space-y-12 md:py-12">
+        <div className="space-y-5">
           <Link href={withKnowledgeProperty('/knowledge', propertyId)} className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />
             Back to Knowledge Hub
           </Link>
 
-          <section className="relative overflow-hidden rounded-[36px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.5),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] px-7 py-8 shadow-[0_34px_120px_-90px_rgba(15,23,42,0.32)] md:px-10 md:py-12">
-            <div className="space-y-6">
+          <section className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.42),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] px-6 py-7 shadow-[0_24px_80px_-70px_rgba(15,23,42,0.3)] md:px-8 md:py-8">
+            <div className="max-w-[50rem] space-y-5">
               <div className="flex flex-wrap items-center gap-2.5">
                 {article.featured ? (
-                  <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white hover:bg-slate-950">
+                  <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white hover:bg-slate-950">
                     Featured article
                   </Badge>
                 ) : null}
@@ -108,22 +108,22 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                   <Badge
                     key={category.slug}
                     variant="outline"
-                    className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                    className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500"
                   >
                     {category.name}
                   </Badge>
                 ))}
               </div>
 
-              <div className="space-y-5">
-                <h1 className="max-w-4xl text-[2.25rem] font-semibold tracking-tight text-slate-950 md:text-[2.75rem] md:leading-[1.05]">
+              <div className="space-y-4">
+                <h1 className="max-w-[44rem] text-[2.6rem] font-semibold tracking-tight text-slate-950 md:text-[3.35rem] md:leading-[1.06]">
                   {article.title}
                 </h1>
                 {article.subtitle ? (
-                  <p className="max-w-3xl text-lg leading-8 text-slate-600 md:text-[1.2rem]">{article.subtitle}</p>
+                  <p className="max-w-[42rem] text-[1.02rem] leading-8 text-slate-600 md:text-[1.12rem]">{article.subtitle}</p>
                 ) : null}
                 {article.excerpt ? (
-                  <p className="max-w-3xl text-base leading-8 text-slate-600">{article.excerpt}</p>
+                  <p className="max-w-[42rem] text-[15px] leading-7 text-slate-600">{article.excerpt}</p>
                 ) : null}
               </div>
 
@@ -140,7 +140,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                     <Badge
                       key={tag.slug}
                       variant="outline"
-                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500"
+                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.08em] text-slate-500"
                     >
                       {tag.name}
                     </Badge>
@@ -152,17 +152,17 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
         </div>
 
         {heroToolLink ? (
-          <section className="space-y-4">
+          <section className="max-w-[44rem] space-y-3">
             <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start here</p>
-              <h2 className="text-xl font-semibold tracking-tight text-slate-950">The clearest next step after reading</h2>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start here</p>
+              <h2 className="text-lg font-semibold tracking-tight text-slate-950">The clearest next step after reading</h2>
             </div>
             <KnowledgeToolCard toolLink={heroToolLink} propertyId={propertyId} variant="feature" />
           </section>
         ) : null}
 
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-start">
-          <div className="space-y-12">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,44rem)_220px] lg:items-start lg:gap-14">
+          <div className="max-w-[44rem] space-y-10">
             {tocItems.length > 0 ? (
               <div className="lg:hidden">
                 <KnowledgeArticleToc items={tocItems} variant="mobile" />
@@ -187,10 +187,10 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             )}
 
             {primaryEndCta || endToolLinks.length > 0 || remainingEndCtas.length > 0 ? (
-              <section className="space-y-6 border-t border-slate-200/80 pt-10">
+              <section className="space-y-5 border-t border-slate-200/80 pt-10">
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Put this into motion</p>
-                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Turn the article into a useful next action</h2>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Put this into motion</p>
+                  <h2 className="text-[1.55rem] font-semibold tracking-tight text-slate-950 md:text-[1.75rem]">Turn the article into a useful next action</h2>
                   <p className="max-w-2xl text-sm leading-7 text-slate-600">
                     Contract-to-Cozy works best when guidance connects to a practical next step. Start with one action
                     that reduces uncertainty or gets your home data into better shape.
@@ -215,42 +215,37 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             ) : null}
           </div>
 
-          <aside className="space-y-6 lg:sticky lg:top-8 lg:border-l lg:border-slate-200/80 lg:pl-6">
+          <aside className="space-y-5 lg:sticky lg:top-8 lg:border-l lg:border-slate-200/70 lg:pl-6">
             {tocItems.length > 0 ? (
               <div className="hidden lg:block">
                 <KnowledgeArticleToc items={tocItems} />
               </div>
             ) : null}
 
-            {article.relatedArticles.length > 0 ? (
+            {nextRecommendedRead ? (
               <section className="space-y-4 border-t border-slate-200/80 pt-6">
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Related reads</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Next recommended read</p>
                   <h2 className="text-sm font-medium text-slate-900">Keep reading</h2>
                 </div>
-                <div className="space-y-4">
-                  {article.relatedArticles.map((relatedArticle) => (
-                    <Link
-                      key={`${relatedArticle.relationType}-${relatedArticle.slug}`}
-                      href={buildKnowledgeArticleHref(relatedArticle.slug, propertyId)}
-                      className="block border-t border-slate-200/80 pt-4 first:border-t-0 first:pt-0"
-                    >
-                      <p className="font-semibold leading-6 text-slate-900 transition-colors hover:text-slate-700">
-                        {relatedArticle.title}
-                      </p>
-                      {relatedArticle.excerpt ? (
-                        <p className="mt-1.5 text-sm leading-6 text-slate-600">{relatedArticle.excerpt}</p>
-                      ) : null}
-                    </Link>
-                  ))}
-                </div>
+                <Link
+                  href={buildKnowledgeArticleHref(nextRecommendedRead.slug, propertyId)}
+                  className="block space-y-2 text-sm leading-6 text-slate-600 transition-colors hover:text-slate-700"
+                >
+                  <p className="font-medium text-slate-900">{nextRecommendedRead.title}</p>
+                  {nextRecommendedRead.excerpt ? <p className="text-[13px] leading-6 text-slate-500">{nextRecommendedRead.excerpt}</p> : null}
+                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                    Read article
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
+                </Link>
               </section>
             ) : null}
 
             {railTags.length > 0 ? (
               <section className="space-y-4 border-t border-slate-200/80 pt-6">
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Topics</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Topics</p>
                   <h2 className="text-sm font-medium text-slate-900">More in this article</h2>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -264,16 +259,6 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                     </Badge>
                   ))}
                 </div>
-              </section>
-            ) : null}
-
-            {railToolLink ? (
-              <section className="space-y-4 border-t border-slate-200/80 pt-6">
-                <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Useful tool</p>
-                  <h2 className="text-sm font-medium text-slate-900">A connected CtC workflow</h2>
-                </div>
-                <KnowledgeToolCard toolLink={railToolLink} propertyId={propertyId} variant="rail" />
               </section>
             ) : null}
           </aside>

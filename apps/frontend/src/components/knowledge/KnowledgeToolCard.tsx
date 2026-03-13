@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 type KnowledgeToolCardProps = {
   toolLink: KnowledgeArticleToolLink;
   propertyId?: string | null;
-  variant?: 'feature' | 'compact' | 'rail';
+  variant?: 'feature' | 'compact' | 'rail' | 'inline';
 };
 
 export function KnowledgeToolCard({ toolLink, propertyId, variant = 'compact' }: KnowledgeToolCardProps) {
@@ -22,23 +22,26 @@ export function KnowledgeToolCard({ toolLink, propertyId, variant = 'compact' }:
   const buttonLabel = toolLink.ctaLabel || 'Open tool';
   const isFeature = variant === 'feature';
   const isRail = variant === 'rail';
+  const isInline = variant === 'inline';
 
   return (
     <div
       className={cn(
-        'rounded-[24px] border border-slate-200/80 bg-white/80 p-4 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.45)]',
+        'rounded-[22px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(250,252,255,0.96),rgba(255,255,255,0.98))] p-4 shadow-none transition-colors',
         isFeature &&
-          'rounded-[28px] border-teal-200/70 bg-[linear-gradient(180deg,rgba(240,253,250,0.95),rgba(255,255,255,0.98))] p-6 md:p-7',
-        isRail && 'rounded-2xl border-slate-200/70 bg-slate-50/80 p-4 shadow-none'
+          'rounded-[24px] border-teal-100/90 bg-[linear-gradient(180deg,rgba(240,253,250,0.82),rgba(255,255,255,0.98))] p-5 md:p-6',
+        isInline && 'rounded-[20px] border-slate-200/75 bg-[linear-gradient(180deg,rgba(247,250,252,0.95),rgba(255,255,255,0.98))] p-4',
+        isRail && 'rounded-2xl border-slate-200/70 bg-white/75 p-4'
       )}
     >
-      <div className="space-y-4">
+      <div className="space-y-3.5">
         <div className="flex items-start gap-3">
           <div
             className={cn(
-              'flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700',
-              isFeature && 'h-12 w-12 bg-teal-950 text-white',
-              isRail && 'h-9 w-9 bg-white text-slate-700'
+              'flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700',
+              isFeature && 'h-11 w-11 bg-teal-950 text-white',
+              isRail && 'bg-slate-50 text-slate-700',
+              isInline && 'bg-white ring-1 ring-slate-200/80'
             )}
           >
             <ToolIcon className={cn('h-4 w-4', isFeature && 'h-5 w-5')} />
@@ -48,8 +51,8 @@ export function KnowledgeToolCard({ toolLink, propertyId, variant = 'compact' }:
               <Badge
                 variant="outline"
                 className={cn(
-                  'rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500',
-                  isFeature && 'border-teal-200 bg-white/70 text-teal-800'
+                  'rounded-full border-slate-200 bg-white/80 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500',
+                  isFeature && 'border-teal-100 bg-white/80 text-teal-900'
                 )}
               >
                 {tool.toolType.replace(/_/g, ' ')}

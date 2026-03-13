@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 type KnowledgeCtaCardProps = {
   cta: KnowledgeArticleCta;
   propertyId?: string | null;
-  variant?: 'feature' | 'compact' | 'rail';
+  variant?: 'feature' | 'compact' | 'rail' | 'inline';
 };
 
 export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: KnowledgeCtaCardProps) {
@@ -23,22 +23,24 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
         : 'Next step';
   const isFeature = variant === 'feature';
   const isRail = variant === 'rail';
+  const isInline = variant === 'inline';
 
   return (
     <div
       className={cn(
-        'rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98))] p-4 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.4)]',
-        isFeature && 'rounded-[28px] border-slate-200 bg-white p-6 md:p-7',
-        isRail && 'rounded-2xl border-slate-200/70 bg-slate-50/80 p-4 shadow-none'
+        'rounded-[22px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98))] p-4 shadow-none',
+        isFeature && 'rounded-[24px] border-teal-100/90 bg-[linear-gradient(180deg,rgba(240,253,250,0.82),rgba(255,255,255,0.98))] p-5 md:p-6',
+        isInline && 'rounded-[20px] border-slate-200/75 p-4',
+        isRail && 'rounded-2xl border-slate-200/70 bg-white/75 p-4'
       )}
     >
-      <div className="space-y-4">
+      <div className="space-y-3.5">
         <div className="flex flex-wrap items-center gap-2">
           <Badge
             variant="outline"
             className={cn(
-              'rounded-full border-slate-200 bg-white/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600',
-              isFeature && 'bg-transparent'
+              'rounded-full border-slate-200 bg-white/80 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-600',
+              isFeature && 'bg-white/80'
             )}
           >
             {eyebrow}
@@ -65,7 +67,7 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
           </p>
         ) : null}
         {cta.dataPromptKey ? (
-          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-600">
+          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-[11px] text-slate-600">
             <Sparkles className="h-3.5 w-3.5" />
             Prompt key: {cta.dataPromptKey}
           </div>

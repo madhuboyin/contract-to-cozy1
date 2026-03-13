@@ -101,7 +101,7 @@ export function KnowledgeArticleToc({
   }
 
   const nav = (
-    <nav aria-label="In this article" className="space-y-1.5">
+    <nav aria-label="In this article" className="space-y-1">
       {items.map((item) => {
         const isActive = item.id === activeId;
 
@@ -116,7 +116,7 @@ export function KnowledgeArticleToc({
               }
             }}
             className={cn(
-              'group flex items-start gap-3 rounded-2xl py-1.5 text-sm leading-5 text-slate-500 transition-colors hover:text-slate-900',
+              'group flex items-start gap-3 rounded-2xl py-1 text-[13px] leading-5 text-slate-500 transition-colors hover:text-slate-900',
               isDesktop ? 'pr-2' : 'pr-1',
               isActive && 'text-slate-950'
             )}
@@ -125,7 +125,7 @@ export function KnowledgeArticleToc({
               aria-hidden="true"
               className={cn(
                 'mt-2 h-1.5 w-1.5 flex-none rounded-full bg-slate-300 transition-all group-hover:bg-slate-500',
-                isActive && 'w-5 rounded-full bg-teal-700 group-hover:bg-teal-700'
+                isActive && 'h-4 w-px rounded-full bg-teal-700 group-hover:bg-teal-700'
               )}
             />
             <span className={cn('text-pretty', isActive && 'font-medium')}>{item.title}</span>
@@ -139,10 +139,10 @@ export function KnowledgeArticleToc({
     return (
       <section className="space-y-4">
         <div className="space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">In this article</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">In this article</p>
           <h2 className="text-sm font-medium text-slate-900">A quick read map</h2>
         </div>
-        <div className="border-l border-slate-200/80 pl-4">{nav}</div>
+        <div className="border-l border-slate-200/70 pl-4">{nav}</div>
       </section>
     );
   }
