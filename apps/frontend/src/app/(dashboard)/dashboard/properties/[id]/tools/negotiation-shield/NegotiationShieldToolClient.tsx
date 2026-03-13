@@ -418,6 +418,28 @@ function formatConfidence(confidence: number | null | undefined) {
   return `${Math.round(normalized)}% confidence`;
 }
 
+function formatTokenLabel(value: string | null | undefined) {
+  if (!value) return null;
+
+  return value
+    .toLowerCase()
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatMoneyValue(value: number) {
+  const maximumFractionDigits = Number.isInteger(value) ? 0 : 2;
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  }).format(value);
+}
+
 function getErrorCode(error: unknown) {
   if (!error || typeof error !== 'object') return null;
 
@@ -497,6 +519,12 @@ function InlineFeedback({
       {feedback.message}
     </div>
   );
+}
+
+function resetFileInputValue(input: HTMLInputElement | null) {
+  if (!input) return;
+
+  input.value = '';
 }
 
 function buildContractorFormValues(caseDetail: NegotiationShieldCaseDetail): ContractorFormValues {
@@ -1001,7 +1029,7 @@ function AnalysisResultsSection({
             <CardDescription>Grounded guidance based on the case details currently saved for this property.</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            {pricingAssessment.status ? <Badge variant="secondary">{pricingAssessment.status.replace(/_/g, ' ')}</Badge> : null}
+            {pricingAssessment.status ? <Badge variant="secondary">{formatTokenLabel(pricingAssessment.status)}</Badge> : null}
             {confidenceLabel ? <Badge variant="outline">{confidenceLabel}</Badge> : null}
           </div>
         </div>
@@ -1050,16 +1078,16 @@ function AnalysisResultsSection({
 
             <div className="mt-3 flex flex-wrap gap-2">
               {typeof pricingAssessment.quoteAmount === 'number' ? (
-                <Badge variant="outline">Quote amount: {pricingAssessment.quoteAmount}</Badge>
+                <Badge variant="outline">Quote amount: {formatMoneyValue(pricingAssessment.quoteAmount)}</Badge>
               ) : null}
               {typeof pricingAssessment.priorPremium === 'number' ? (
-                <Badge variant="outline">Prior premium: {pricingAssessment.priorPremium}</Badge>
+                <Badge variant="outline">Prior premium: {formatMoneyValue(pricingAssessment.priorPremium)}</Badge>
               ) : null}
               {typeof pricingAssessment.newPremium === 'number' ? (
-                <Badge variant="outline">New premium: {pricingAssessment.newPremium}</Badge>
+                <Badge variant="outline">New premium: {formatMoneyValue(pricingAssessment.newPremium)}</Badge>
               ) : null}
               {typeof pricingAssessment.increaseAmount === 'number' ? (
-                <Badge variant="outline">Increase: {pricingAssessment.increaseAmount}</Badge>
+                <Badge variant="outline">Increase: {formatMoneyValue(pricingAssessment.increaseAmount)}</Badge>
               ) : null}
               {typeof pricingAssessment.increasePercentage === 'number' ? (
                 <Badge variant="outline">Increase %: {Math.round(pricingAssessment.increasePercentage)}%</Badge>
@@ -1111,14 +1139,21 @@ function ResultList({
           {items.map((item, index) => {
             const itemTitle = typeof item[titleKey] === 'string' ? String(item[titleKey]) : `Item ${index + 1}`;
             const itemBody = typeof item[bodyKey] === 'string' ? String(item[bodyKey]) : '';
-            const itemMeta = metaKey && typeof item[metaKey] === 'string' ? String(item[metaKey]) : null;
+            const itemMeta = metaKey && typeof item[metaKey] === 'string' ? formatTokenLabel(String(item[metaKey])) : null;
 
             return (
               <li key={`${itemTitle}-${index}`} className="rounded-xl border border-border bg-background p-2.5 sm:p-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{itemTitle}</p>
-                    {itemBody ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{itemBody}</p> : null}
+                  <div className="flex min-w-0 items-start gap-3">
+                    {ordered ? (
+                      <span className="mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-foreground">
+                        {index + 1}
+                      </span>
+                    ) : null}
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{itemTitle}</p>
+                      {itemBody ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{itemBody}</p> : null}
+                    </div>
                   </div>
                   {itemMeta ? <Badge variant="outline">{itemMeta}</Badge> : null}
                 </div>
@@ -1168,8 +1203,8 @@ function DraftSection({
       <CardHeader className={SECTION_HEADER_CLASS}>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div>
-            <CardTitle>Negotiation draft</CardTitle>
-            <CardDescription>A homeowner-ready message generated from the latest analysis.</CardDescription>
+            <CardTitle>Message draft</CardTitle>
+            <CardDescription>A ready-to-send response based on the latest saved analysis.</CardDescription>
           </div>
           {draft ? (
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleCopy} disabled={copyState === 'copying'}>
@@ -1196,7 +1231,7 @@ function DraftSection({
             ) : null}
 
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Message</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ready-to-send message</p>
               <div className="mt-2 whitespace-pre-wrap rounded-xl border border-border bg-white p-3.5 text-sm leading-6 text-foreground/90 sm:p-4 sm:leading-7">
                 {draft.body}
               </div>
@@ -1223,6 +1258,7 @@ function CaseWorkspace({
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState('');
   const [documentType, setDocumentType] = useState<NegotiationShieldDocumentType>(
@@ -1236,6 +1272,7 @@ function CaseWorkspace({
   useEffect(() => {
     setSelectedFile(null);
     setDocumentName('');
+    resetFileInputValue(fileInputRef.current);
     setDocumentType(caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'QUOTE' : 'PREMIUM_NOTICE');
     setManualFeedback(null);
     setDocumentFeedback(null);
@@ -1317,6 +1354,7 @@ function CaseWorkspace({
       syncCaseDetail(nextDetail);
       setSelectedFile(null);
       setDocumentName('');
+      resetFileInputValue(fileInputRef.current);
       setDocumentFeedback({
         tone: 'success',
         message: 'Document attached. Parse it when you want Negotiation Shield to pull details into the case.',
@@ -1584,6 +1622,7 @@ function CaseWorkspace({
             </Field>
             <Field label="File">
               <Input
+                ref={fileInputRef}
                 type="file"
                 accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt"
                 disabled={documentActionInFlight}
@@ -1737,11 +1776,17 @@ export default function NegotiationShieldToolClient() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const openedViewRef = useRef<string | null>(null);
+  const previousPropertyIdRef = useRef<string | null>(null);
   const [createFeedback, setCreateFeedback] = useState<InlineFeedbackState | null>(null);
 
   const caseId = searchParams.get('caseId');
   const createMode = searchParams.get('create') === '1';
   const initialCreateScenario = getScenarioOptionByRouteValue(searchParams.get('scenario')).scenarioType;
+  const hasStaleCaseSelectionForNewProperty = Boolean(
+    previousPropertyIdRef.current &&
+      previousPropertyIdRef.current !== propertyId &&
+      caseId
+  );
 
   function trackNegotiationEvent(event: string, section?: string, metadata?: Record<string, unknown>) {
     if (!propertyId) return;
@@ -1821,7 +1866,7 @@ export default function NegotiationShieldToolClient() {
   const selectedCaseQuery = useQuery({
     queryKey: ['negotiation-shield-case', propertyId, caseId],
     queryFn: () => getNegotiationShieldCaseDetail(propertyId, caseId as string),
-    enabled: Boolean(propertyId && caseId),
+    enabled: Boolean(propertyId && caseId && !hasStaleCaseSelectionForNewProperty),
   });
 
   const createCaseMutation = useMutation({
@@ -1870,6 +1915,20 @@ export default function NegotiationShieldToolClient() {
       Start new review
     </Button>
   );
+
+  useEffect(() => {
+    if (!propertyId) return;
+
+    if (previousPropertyIdRef.current && previousPropertyIdRef.current !== propertyId && caseId) {
+      updateSearch({
+        caseId: null,
+        create: null,
+        scenario: null,
+      });
+    }
+
+    previousPropertyIdRef.current = propertyId;
+  }, [caseId, propertyId]);
 
   useEffect(() => {
     if (!propertyId) return;
