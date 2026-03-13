@@ -1799,7 +1799,11 @@ export default function NegotiationShieldToolClient() {
     queryKey: ['property', propertyId],
     queryFn: async () => {
       const response = await api.getProperty(propertyId);
-      return response.data;
+      if (response.success && response.data) {
+        return response.data;
+      }
+
+      throw new Error(response.message || 'Failed to load property.');
     },
     enabled: Boolean(propertyId),
   });
