@@ -968,6 +968,9 @@ function SidebarNav({ user }: { user: User | null }) {
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
   const isOwner = user?.segment === 'EXISTING_OWNER';
   const isBuyer = user?.segment === 'HOME_BUYER';
+  const knowledgeHref = resolvedPropertyId
+    ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}`
+    : '/knowledge';
 
   const navLinkClass = (isActive: boolean) =>
     cn(
@@ -984,7 +987,18 @@ function SidebarNav({ user }: { user: User | null }) {
     { name: 'Inventory', href: '/dashboard/inventory', icon: resolveHomeownerNavigationIcon('main', 'inventory', Box), isActive: (path) => path.startsWith('/dashboard/inventory') },
     { name: 'Bookings', href: '/dashboard/bookings', icon: resolveHomeownerNavigationIcon('main', 'bookings', Calendar), isActive: (path) => path.startsWith('/dashboard/bookings') },
     { name: 'Find Services', href: '/dashboard/providers', icon: resolveHomeownerNavigationIcon('main', 'providers', Search), isActive: (path) => path.startsWith('/dashboard/providers') },
+    { name: 'Knowledge Hub', href: knowledgeHref, icon: BookOpen, isActive: (path) => path.startsWith('/knowledge') },
   ];
+  const knowledgeAdminLink =
+    user?.role === 'ADMIN'
+      ? {
+          name: 'Knowledge Admin',
+          href: '/dashboard/knowledge-admin',
+          icon: Settings,
+          isActive: (path: string) => path.startsWith('/dashboard/knowledge-admin'),
+        }
+      : null;
+  const KnowledgeAdminIcon = knowledgeAdminLink?.icon;
 
   const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     { name: 'Warranties', href: '/dashboard/warranties', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', Wrench), isActive: (path) => path.startsWith('/dashboard/warranties') },
@@ -1220,6 +1234,18 @@ function SidebarNav({ user }: { user: User | null }) {
           Community Events
         </Link>
       </SheetClose>
+
+      {knowledgeAdminLink && KnowledgeAdminIcon && (
+        <SheetClose asChild>
+          <Link
+            href={knowledgeAdminLink.href}
+            className={navLinkClass(knowledgeAdminLink.isActive(pathname || ''))}
+          >
+            <KnowledgeAdminIcon className="h-4 w-4" />
+            {knowledgeAdminLink.name}
+          </Link>
+        </SheetClose>
+      )}
     </nav>
   );
 }
