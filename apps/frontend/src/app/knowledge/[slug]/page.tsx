@@ -116,7 +116,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
               </div>
 
               <div className="space-y-5">
-                <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 md:text-[4rem] md:leading-[0.98]">
+                <h1 className="max-w-4xl text-[2.9rem] font-semibold tracking-tight text-slate-950 md:text-[3.45rem] md:leading-[1.02]">
                   {article.title}
                 </h1>
                 {article.subtitle ? (

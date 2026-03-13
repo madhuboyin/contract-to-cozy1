@@ -55,7 +55,7 @@ export default async function KnowledgeHubPage({
                 <BookOpenText className="h-6 w-6" />
               </div>
               <div className="space-y-4">
-                <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 md:text-[4rem] md:leading-[0.98]">
+                <h1 className="max-w-4xl text-[2.85rem] font-semibold tracking-tight text-slate-950 md:text-[3.35rem] md:leading-[1.02]">
                   Calm guidance for the ownership decisions that carry real weight.
                 </h1>
                 <p className="max-w-3xl text-base leading-8 text-slate-600 md:text-[1.15rem]">
