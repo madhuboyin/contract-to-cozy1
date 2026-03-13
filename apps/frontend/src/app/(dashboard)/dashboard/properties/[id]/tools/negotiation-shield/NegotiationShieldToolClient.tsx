@@ -128,6 +128,10 @@ const INSURANCE_DEFAULTS: InsuranceFormValues = {
   rawText: '',
 };
 
+const SECTION_CARD_CLASS = 'rounded-2xl border-border/80 shadow-sm';
+const SECTION_HEADER_CLASS = 'space-y-3 p-4 sm:p-6';
+const SECTION_CONTENT_CLASS = 'p-4 pt-0 sm:p-6 sm:pt-0';
+
 function asStringParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
 }
@@ -475,8 +479,8 @@ function buildCopyText(draft: NegotiationShieldDraft) {
 
 function DetailSkeleton() {
   return (
-    <Card>
-      <CardContent className="flex items-center gap-3 py-12 text-sm text-muted-foreground">
+    <Card className={SECTION_CARD_CLASS}>
+      <CardContent className="flex items-center gap-3 py-10 text-sm text-muted-foreground sm:py-12">
         <Loader2 className="h-4 w-4 animate-spin" />
         Loading case workspace...
       </CardContent>
@@ -496,7 +500,7 @@ function ScenarioQuickStart({
           key={option.routeValue}
           type="button"
           onClick={() => onStart(option.routeValue)}
-          className="rounded-2xl border border-border bg-white p-4 text-left transition-colors hover:border-foreground/20 hover:bg-accent/40"
+          className="rounded-2xl border border-border bg-white p-3.5 text-left transition-colors hover:border-foreground/20 hover:bg-accent/40 sm:p-4"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
@@ -533,15 +537,15 @@ function CreateCasePanel({
   const selectedScenario = getScenarioOptionByType(scenarioType);
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
         <CardTitle>Start a new review</CardTitle>
         <CardDescription>
-          Choose the situation you want to review first. You will land in the workspace immediately after the case is created.
+          Pick the situation you want reviewed, add a short title, and we will drop you into the workspace right away.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid gap-4 lg:grid-cols-2">
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-5 sm:space-y-6')}>
+        <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
           {SCENARIO_OPTIONS.map((option) => {
             const active = option.scenarioType === scenarioType;
             return (
@@ -550,7 +554,7 @@ function CreateCasePanel({
                 type="button"
                 onClick={() => setScenarioType(option.scenarioType)}
                 className={cn(
-                  'rounded-2xl border p-4 text-left transition-colors',
+                  'rounded-2xl border p-3.5 text-left transition-colors sm:p-4',
                   active ? 'border-foreground/20 bg-accent/50' : 'border-border bg-white hover:border-foreground/15 hover:bg-accent/30'
                 )}
               >
@@ -561,7 +565,7 @@ function CreateCasePanel({
           })}
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-2">
             <Label htmlFor="negotiation-title">Case title</Label>
             <Input
@@ -588,9 +592,10 @@ function CreateCasePanel({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           <Button
             type="button"
+            className="w-full sm:w-auto"
             onClick={() =>
               onSubmit({
                 scenarioType,
@@ -604,7 +609,7 @@ function CreateCasePanel({
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Create case
           </Button>
-          <Button type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
+          <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         </div>
@@ -632,15 +637,15 @@ function ContractorManualInputSection({
   const manualInput = mergeInputData(caseDetail).manualInput;
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
         <CardTitle>Manual input</CardTitle>
         <CardDescription>
           Paste the quote details you have, or fill in only the fields that are easy to confirm.
           {parsedInputs.length ? ' Parsed document fields are already available in the background and will fill gaps during analysis.' : ''}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-5')}>
         <div className="grid gap-4 xl:grid-cols-2">
           <Field label="Contractor name">
             <Input value={values.contractorName} onChange={(event) => setValues((current) => ({ ...current, contractorName: event.target.value }))} />
@@ -690,7 +695,7 @@ function ContractorManualInputSection({
             value={values.notes}
             onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
             placeholder="Any details you want the review to keep in mind."
-            className="min-h-[120px]"
+            className="min-h-[96px] sm:min-h-[120px]"
           />
         </Field>
 
@@ -699,12 +704,17 @@ function ContractorManualInputSection({
             value={values.rawText}
             onChange={(event) => setValues((current) => ({ ...current, rawText: event.target.value }))}
             placeholder="Paste estimate text, inspection notes, or contractor messages here."
-            className="min-h-[180px]"
+            className="min-h-[136px] sm:min-h-[180px]"
           />
         </Field>
 
         <div className="flex justify-end">
-          <Button type="button" onClick={() => onSave(buildContractorPayload(values, manualInput?.id ?? undefined))} disabled={isSaving}>
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => onSave(buildContractorPayload(values, manualInput?.id ?? undefined))}
+            disabled={isSaving}
+          >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Save input
           </Button>
@@ -733,15 +743,15 @@ function InsuranceManualInputSection({
   const manualInput = mergeInputData(caseDetail).manualInput;
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
         <CardTitle>Manual input</CardTitle>
         <CardDescription>
           Capture the key renewal details here, even if you only have part of the notice handy.
           {parsedInputs.length ? ' Parsed document fields are already available in the background and will fill gaps during analysis.' : ''}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-5')}>
         <div className="grid gap-4 xl:grid-cols-2">
           <Field label="Insurer name">
             <Input value={values.insurerName} onChange={(event) => setValues((current) => ({ ...current, insurerName: event.target.value }))} />
@@ -774,7 +784,7 @@ function InsuranceManualInputSection({
             value={values.reasonProvided}
             onChange={(event) => setValues((current) => ({ ...current, reasonProvided: event.target.value }))}
             placeholder="Any explanation you received from the insurer or agent."
-            className="min-h-[110px]"
+            className="min-h-[96px] sm:min-h-[110px]"
           />
         </Field>
 
@@ -783,7 +793,7 @@ function InsuranceManualInputSection({
             value={values.notes}
             onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
             placeholder="Any policy context or questions you already have."
-            className="min-h-[120px]"
+            className="min-h-[96px] sm:min-h-[120px]"
           />
         </Field>
 
@@ -792,12 +802,17 @@ function InsuranceManualInputSection({
             value={values.rawText}
             onChange={(event) => setValues((current) => ({ ...current, rawText: event.target.value }))}
             placeholder="Paste notice text, email content, or agent messages here."
-            className="min-h-[180px]"
+            className="min-h-[136px] sm:min-h-[180px]"
           />
         </Field>
 
         <div className="flex justify-end">
-          <Button type="button" onClick={() => onSave(buildInsurancePayload(values, manualInput?.id ?? undefined))} disabled={isSaving}>
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => onSave(buildInsurancePayload(values, manualInput?.id ?? undefined))}
+            disabled={isSaving}
+          >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Save input
           </Button>
@@ -829,12 +844,12 @@ function AnalysisResultsSection({
 }) {
   if (!analysis) {
     return (
-      <Card>
-        <CardHeader>
+      <Card className={SECTION_CARD_CLASS}>
+        <CardHeader className={SECTION_HEADER_CLASS}>
           <CardTitle>Analysis results</CardTitle>
           <CardDescription>The latest review will appear here after you run analysis.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className={SECTION_CONTENT_CLASS}>
           <EmptyStateCard
             title="No analysis yet"
             description="Once you have enough manual or parsed document input, run analysis to get leverage points and recommended next steps."
@@ -851,9 +866,9 @@ function AnalysisResultsSection({
   const confidenceLabel = formatConfidence(analysis.confidence);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div>
             <CardTitle>Analysis results</CardTitle>
             <CardDescription>Grounded guidance based on the case details currently saved for this property.</CardDescription>
@@ -864,15 +879,15 @@ function AnalysisResultsSection({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-6')}>
         {analysis.summary ? (
-          <div className="rounded-2xl border border-border bg-accent/40 p-4">
+          <div className="rounded-2xl border border-border bg-accent/40 p-3.5 sm:p-4">
             <p className="text-sm font-semibold text-foreground">Summary</p>
-            <p className="mt-2 text-sm leading-7 text-foreground/85">{analysis.summary}</p>
+            <p className="mt-2 text-sm leading-6 text-foreground/85 sm:leading-7">{analysis.summary}</p>
           </div>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        <div className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <ResultList
             title="Findings"
             emptyLabel="No findings were returned yet."
@@ -902,9 +917,9 @@ function AnalysisResultsSection({
         />
 
         {(pricingAssessment.summary || pricingAssessment.rationale?.length || pricingAssessment.increaseAmount || pricingAssessment.quoteAmount) ? (
-          <div className="rounded-2xl border border-border p-4">
+          <div className="rounded-2xl border border-border p-3.5 sm:p-4">
             <p className="text-sm font-semibold text-foreground">Pricing assessment</p>
-            {pricingAssessment.summary ? <p className="mt-2 text-sm leading-7 text-foreground/85">{pricingAssessment.summary}</p> : null}
+            {pricingAssessment.summary ? <p className="mt-2 text-sm leading-6 text-foreground/85 sm:leading-7">{pricingAssessment.summary}</p> : null}
 
             <div className="mt-3 flex flex-wrap gap-2">
               {typeof pricingAssessment.quoteAmount === 'number' ? (
@@ -925,7 +940,7 @@ function AnalysisResultsSection({
             </div>
 
             {pricingAssessment.rationale?.length ? (
-              <ul className="mt-4 space-y-2 text-sm leading-7 text-muted-foreground">
+              <ul className="mt-4 space-y-2 text-sm leading-6 text-muted-foreground sm:leading-7">
                 {pricingAssessment.rationale.map((reason) => (
                   <li key={reason} className="list-disc ml-5">
                     {reason}
@@ -960,7 +975,7 @@ function ResultList({
   const ListTag = ordered ? 'ol' : 'ul';
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border p-4">
+    <div className="space-y-3 rounded-2xl border border-border p-3.5 sm:p-4">
       <p className="text-sm font-semibold text-foreground">{title}</p>
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">{emptyLabel}</p>
@@ -972,7 +987,7 @@ function ResultList({
             const itemMeta = metaKey && typeof item[metaKey] === 'string' ? String(item[metaKey]) : null;
 
             return (
-              <li key={`${itemTitle}-${index}`} className="rounded-xl border border-border bg-background p-3">
+              <li key={`${itemTitle}-${index}`} className="rounded-xl border border-border bg-background p-2.5 sm:p-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">{itemTitle}</p>
@@ -1008,29 +1023,29 @@ function DraftSection({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div>
             <CardTitle>Negotiation draft</CardTitle>
             <CardDescription>A homeowner-ready message generated from the latest analysis.</CardDescription>
           </div>
           {draft ? (
-            <Button type="button" variant="outline" onClick={handleCopy}>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleCopy}>
               <Clipboard className="h-4 w-4" />
               Copy draft
             </Button>
           ) : null}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className={SECTION_CONTENT_CLASS}>
         {!draft ? (
           <EmptyStateCard
             title="No draft yet"
             description="Run analysis to generate a message you can copy into an email or portal response."
           />
         ) : (
-          <div className="space-y-4 rounded-2xl border border-border bg-background p-4">
+          <div className="space-y-3 rounded-2xl border border-border bg-background p-3.5 sm:space-y-4 sm:p-4">
             {draft.subject ? (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Subject</p>
@@ -1040,7 +1055,7 @@ function DraftSection({
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Message</p>
-              <div className="mt-2 whitespace-pre-wrap rounded-xl border border-border bg-white p-4 text-sm leading-7 text-foreground/90">
+              <div className="mt-2 whitespace-pre-wrap rounded-xl border border-border bg-white p-3.5 text-sm leading-6 text-foreground/90 sm:p-4 sm:leading-7">
                 {draft.body}
               </div>
             </div>
@@ -1150,12 +1165,13 @@ function CaseWorkspace({
   });
 
   const parsedDocumentsCount = caseDetail.documents.filter((document) => getDocumentParseInfo(document, caseDetail.inputs).isParsed).length;
+  const needsDocumentParseReminder = caseDetail.documents.length > 0 && parsedDocumentsCount === 0;
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-4 sm:space-y-5">
+      <Card className={SECTION_CARD_CLASS}>
+        <CardHeader className={cn(SECTION_HEADER_CLASS, 'space-y-4')}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
             <div className="space-y-2">
               <Button type="button" variant="ghost" className="-ml-3 w-fit" onClick={onBack}>
                 <ArrowLeft className="h-4 w-4" />
@@ -1167,7 +1183,7 @@ function CaseWorkspace({
                   <Badge variant="outline">{formatScenarioLabel(caseDetail.case.scenarioType)}</Badge>
                   <Badge variant="outline">{formatSourceLabel(caseDetail.case.sourceType)}</Badge>
                 </div>
-                <CardTitle className="text-2xl">{caseDetail.case.title}</CardTitle>
+                <CardTitle className="text-xl leading-tight sm:text-2xl">{caseDetail.case.title}</CardTitle>
                 <CardDescription className="max-w-3xl">
                   {caseDetail.case.description ||
                     `Use this workspace to gather context, run analysis, and prepare a response for ${property?.name || property?.address || 'this property'}.`}
@@ -1175,7 +1191,7 @@ function CaseWorkspace({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-border bg-background px-3.5 py-3 text-sm text-muted-foreground sm:px-4">
               <p>Last updated {formatDateTime(caseDetail.case.updatedAt)}</p>
               <p className="mt-1">
                 {caseDetail.documents.length} document{caseDetail.documents.length === 1 ? '' : 's'} attached
@@ -1200,12 +1216,12 @@ function CaseWorkspace({
         />
       )}
 
-      <Card>
-        <CardHeader>
+      <Card className={SECTION_CARD_CLASS}>
+        <CardHeader className={SECTION_HEADER_CLASS}>
           <CardTitle>Documents</CardTitle>
           <CardDescription>Attach the quote, renewal notice, or supporting screenshots using the existing upload flow.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-6')}>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] xl:items-end">
             <Field label="Document name">
               <Input
@@ -1243,12 +1259,17 @@ function CaseWorkspace({
             </Field>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={() => uploadDocumentMutation.mutate()} disabled={uploadDocumentMutation.isPending || !selectedFile}>
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => uploadDocumentMutation.mutate()}
+              disabled={uploadDocumentMutation.isPending || !selectedFile}
+            >
               {uploadDocumentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               Upload and attach
             </Button>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm leading-6 text-muted-foreground">
               Attach the source document first, then parse it to pull useful text into the case.
             </p>
           </div>
@@ -1268,8 +1289,8 @@ function CaseWorkspace({
                   parseDocumentMutation.isPending && parseDocumentMutation.variables === document.id;
 
                 return (
-                  <div key={document.id} className="rounded-2xl border border-border p-4">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div key={document.id} className="rounded-2xl border border-border p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-semibold text-foreground">{document.fileName}</p>
@@ -1297,9 +1318,9 @@ function CaseWorkspace({
                         ) : null}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                         {document.fileUrl ? (
-                          <Button type="button" variant="outline" asChild>
+                          <Button type="button" variant="outline" className="w-full sm:w-auto" asChild>
                             <a href={document.fileUrl} target="_blank" rel="noreferrer">
                               <FileText className="h-4 w-4" />
                               View file
@@ -1309,6 +1330,7 @@ function CaseWorkspace({
                         <Button
                           type="button"
                           variant="outline"
+                          className="w-full sm:w-auto"
                           onClick={() => parseDocumentMutation.mutate(document.id)}
                           disabled={isParsingThisDocument}
                         >
@@ -1325,19 +1347,29 @@ function CaseWorkspace({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className={cn(SECTION_CARD_CLASS, needsDocumentParseReminder ? 'border-amber-200/80' : '')}>
+        <CardHeader className={SECTION_HEADER_CLASS}>
           <CardTitle>Run analysis</CardTitle>
           <CardDescription>
             When your case has enough manual or parsed document context, run analysis to generate leverage points and a draft response.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={() => analyzeCaseMutation.mutate()} disabled={analyzeCaseMutation.isPending}>
+        <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-3')}>
+          {needsDocumentParseReminder ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-3.5 py-3 text-sm leading-6 text-amber-900">
+              You can analyze with manual input only, but parsing your uploaded document first usually gives the review more context.
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => analyzeCaseMutation.mutate()}
+            disabled={analyzeCaseMutation.isPending}
+          >
             {analyzeCaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {getAnalysisActionLabel(caseDetail.case.scenarioType)}
           </Button>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm leading-6 text-muted-foreground">
             Manual details always take priority. Parsed document fields fill in gaps when available.
           </p>
         </CardContent>
@@ -1439,25 +1471,25 @@ export default function NegotiationShieldToolClient() {
   const cases = casesQuery.data ?? [];
 
   const introAction = (
-    <Button type="button" onClick={() => openCreate()}>
+    <Button type="button" className="hidden sm:inline-flex" onClick={() => openCreate()}>
       <Plus className="h-4 w-4" />
       Start new review
     </Button>
   );
 
   return (
-    <MobilePageContainer className="space-y-5">
+    <MobilePageContainer className="space-y-4 sm:space-y-5">
       <HomeToolsRail propertyId={propertyId} />
 
       <MobilePageIntro
         eyebrow="Home Tool"
         title="Negotiation Shield"
-        subtitle="Review contractor quotes or premium increases, gather stronger leverage, and generate a message you can actually send."
+        subtitle="Review quotes or premium increases and get a message you can actually send."
         action={introAction}
       />
 
       <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-start">
-        <div className="space-y-4 xl:sticky xl:top-6">
+        <div className="hidden xl:block xl:sticky xl:top-6 xl:space-y-4">
           <MobileFilterSurface className="space-y-4">
             <div className="space-y-2">
               <p className="text-sm font-semibold text-foreground">Start a new review</p>
@@ -1468,12 +1500,12 @@ export default function NegotiationShieldToolClient() {
             <ScenarioQuickStart onStart={(scenario) => openCreate(scenario)} />
           </MobileFilterSurface>
 
-          <Card>
-            <CardHeader>
+          <Card className={SECTION_CARD_CLASS}>
+            <CardHeader className={SECTION_HEADER_CLASS}>
               <CardTitle className="text-base">Recent cases</CardTitle>
               <CardDescription>Property-scoped reviews stay here so you can reopen them later.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className={SECTION_CONTENT_CLASS}>
               {casesQuery.isLoading ? (
                 <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1511,19 +1543,19 @@ export default function NegotiationShieldToolClient() {
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 xl:space-y-4">
           {selectedCaseQuery.isLoading ? (
             <DetailSkeleton />
           ) : selectedCaseQuery.data ? (
             <CaseWorkspace propertyId={propertyId} property={property} caseDetail={selectedCaseQuery.data} onBack={goToList} />
           ) : caseId && selectedCaseQuery.isError ? (
-            <Card>
-              <CardHeader>
+            <Card className={SECTION_CARD_CLASS}>
+              <CardHeader className={SECTION_HEADER_CLASS}>
                 <CardTitle>Unable to load this case</CardTitle>
                 <CardDescription>{errorMessage(selectedCaseQuery.error, 'The case may have been removed or you may not have access to it.')}</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button type="button" variant="outline" onClick={goToList}>
+              <CardContent className={SECTION_CONTENT_CLASS}>
+                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={goToList}>
                   Return to case list
                 </Button>
               </CardContent>
@@ -1536,30 +1568,51 @@ export default function NegotiationShieldToolClient() {
               onSubmit={(payload) => createCaseMutation.mutate(payload)}
             />
           ) : (
-            <Card>
-              <CardHeader>
+            <Card className={SECTION_CARD_CLASS}>
+              <CardHeader className={SECTION_HEADER_CLASS}>
                 <CardTitle>Negotiation Shield workspace</CardTitle>
                 <CardDescription>
-                  Start a new review or reopen an existing case to gather details, parse uploaded documents, and generate a message you can send.
+                  Start with a scenario or reopen an existing review to keep moving.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-5 sm:space-y-6')}>
+                <div className="sm:hidden">
+                  <Button type="button" className="w-full" onClick={() => openCreate()}>
+                    <Plus className="h-4 w-4" />
+                    Start new review
+                  </Button>
+                </div>
                 {casesQuery.isError ? (
                   <EmptyStateCard title="Unable to load cases" description={errorMessage(casesQuery.error, 'Try refreshing the page.')} />
                 ) : cases.length === 0 ? (
-                  <EmptyStateCard
-                    title="No reviews yet"
-                    description="Use Negotiation Shield when you want a second pass on a contractor quote or when your insurance renewal jumps and you need better leverage."
-                  />
-                ) : (
                   <div className="space-y-4">
-                    <div className="grid gap-4 lg:grid-cols-2">
+                    <EmptyStateCard
+                      title="No reviews yet"
+                      description="Use Negotiation Shield when you want a second pass on a contractor quote or when your insurance renewal jumps and you need better leverage."
+                    />
+                    <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
                       {SCENARIO_OPTIONS.map((option) => (
                         <button
                           key={option.routeValue}
                           type="button"
                           onClick={() => openCreate(option.routeValue)}
-                          className="rounded-2xl border border-border bg-white p-5 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30"
+                          className="rounded-2xl border border-border bg-white p-4 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30 sm:p-5"
+                        >
+                          <p className="text-sm font-semibold text-foreground">{option.label}</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{option.shortDescription}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+                      {SCENARIO_OPTIONS.map((option) => (
+                        <button
+                          key={option.routeValue}
+                          type="button"
+                          onClick={() => openCreate(option.routeValue)}
+                          className="rounded-2xl border border-border bg-white p-4 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30 sm:p-5"
                         >
                           <p className="text-sm font-semibold text-foreground">{option.label}</p>
                           <p className="mt-2 text-sm leading-6 text-muted-foreground">{option.shortDescription}</p>
@@ -1576,7 +1629,7 @@ export default function NegotiationShieldToolClient() {
                           key={item.id}
                           type="button"
                           onClick={() => openCase(item.id)}
-                          className="flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white p-4 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30"
+                          className="flex w-full flex-col items-start gap-2.5 rounded-2xl border border-border bg-white p-3.5 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:p-4"
                         >
                           <div>
                             <p className="text-sm font-semibold text-foreground">{item.title}</p>
