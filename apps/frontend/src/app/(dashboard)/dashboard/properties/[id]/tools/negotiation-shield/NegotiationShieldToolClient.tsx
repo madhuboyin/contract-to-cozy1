@@ -1946,7 +1946,7 @@ export default function NegotiationShieldToolClient() {
 
   if (!propertyId) {
     return (
-      <MobilePageContainer className="space-y-4 sm:space-y-5">
+      <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
         <MobilePageIntro
           eyebrow="Home Tool"
           title="Negotiation Shield"
@@ -1969,7 +1969,7 @@ export default function NegotiationShieldToolClient() {
 
   if (propertyQuery.isLoading && !property) {
     return (
-      <MobilePageContainer className="space-y-4 sm:space-y-5">
+      <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
         <HomeToolsRail propertyId={propertyId} />
         <MobilePageIntro
           eyebrow="Home Tool"
@@ -1983,7 +1983,7 @@ export default function NegotiationShieldToolClient() {
 
   if (propertyQuery.isError && !property) {
     return (
-      <MobilePageContainer className="space-y-4 sm:space-y-5">
+      <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
         <HomeToolsRail propertyId={propertyId} />
         <MobilePageIntro
           eyebrow="Home Tool"
@@ -2011,7 +2011,7 @@ export default function NegotiationShieldToolClient() {
   }
 
   return (
-    <MobilePageContainer className="space-y-4 sm:space-y-5">
+    <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
       <HomeToolsRail propertyId={propertyId} />
 
       <MobilePageIntro
@@ -2021,7 +2021,7 @@ export default function NegotiationShieldToolClient() {
         action={introAction}
       />
 
-      <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-start">
+      <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
         <div className="hidden xl:block xl:sticky xl:top-6 xl:space-y-4">
           <MobileFilterSurface className="space-y-4">
             <div className="space-y-2">
