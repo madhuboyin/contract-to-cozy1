@@ -736,6 +736,17 @@ function DesktopNav({ user }: { user: User | null }) {
       icon: BookOpen,
       isActive: (path) => path.startsWith('/knowledge'),
     },
+    ...(user?.role === 'ADMIN'
+      ? [
+          {
+            key: 'knowledge-admin',
+            name: 'Knowledge Admin',
+            href: '/dashboard/knowledge-admin',
+            icon: Settings,
+            isActive: (path: string) => path.startsWith('/dashboard/knowledge-admin'),
+          },
+        ]
+      : []),
   ];
 
   const moreGroups = [

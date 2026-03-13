@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Search } from 'lucide-react';
+import { useAuth } from '@/lib/auth/AuthContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Command } from 'cmdk';
 
@@ -74,6 +75,7 @@ function fuzzyScore(text: string, query: string): number {
 export default function DashboardCommandPalette({ propertyId }: DashboardCommandPaletteProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { user } = useAuth();
   const { selectedPropertyId } = usePropertyContext();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -126,6 +128,16 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
         href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
         group: 'Navigation',
       },
+      ...(user?.role === 'ADMIN'
+        ? [
+            {
+              id: 'nav-knowledge-admin',
+              label: 'Knowledge Admin',
+              href: '/dashboard/knowledge-admin',
+              group: 'Navigation' as const,
+            },
+          ]
+        : []),
       { id: 'nav-protection', label: 'Protection', href: protectionHref, group: 'Navigation' },
       { id: 'nav-home-admin', label: 'Home Admin', href: '/dashboard/warranties', group: 'Navigation' },
       { id: 'nav-community', label: 'Community Events', href: '/dashboard/community-events', group: 'Navigation' },
@@ -150,7 +162,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     ];
 
     return [...navItems, ...recent, ...quick];
-  }, [homeToolsHref, propertyRoomsHref, protectionHref, recentActions, resolvedPropertyId, riskReportHref]);
+  }, [homeToolsHref, propertyRoomsHref, protectionHref, recentActions, resolvedPropertyId, riskReportHref, user?.role]);
 
   const groups: Array<CommandItem['group']> = ['Navigation', 'Recent Actions', 'Quick Shortcuts'];
 
