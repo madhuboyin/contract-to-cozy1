@@ -22,7 +22,13 @@ export default async function KnowledgeHubPage({
 }: {
   searchParams?: { propertyId?: string };
 }) {
-  const articles = await getPublishedKnowledgeArticles();
+  let articles: Awaited<ReturnType<typeof getPublishedKnowledgeArticles>> = [];
+  let fetchError = false;
+  try {
+    articles = await getPublishedKnowledgeArticles();
+  } catch {
+    fetchError = true;
+  }
   const propertyId = searchParams?.propertyId || null;
   const featuredArticle = articles.find((article) => article.featured) || articles[0] || null;
   const remainingArticles = featuredArticle
@@ -74,7 +80,19 @@ export default async function KnowledgeHubPage({
           </Card>
         </div>
 
-        {articles.length === 0 ? (
+        {fetchError ? (
+          <Card className="rounded-[28px] border-dashed border-slate-300 bg-white/90 shadow-sm">
+            <CardContent className="space-y-4 py-14 text-center">
+              <h2 className="text-2xl font-semibold text-slate-950">Content temporarily unavailable</h2>
+              <p className="mx-auto max-w-xl text-sm leading-6 text-slate-600">
+                We couldn&apos;t load Knowledge Hub articles right now. Please try again in a moment.
+              </p>
+              <Button asChild variant="outline" className="rounded-full">
+                <Link href="/dashboard">Return to dashboard</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : articles.length === 0 ? (
           <Card className="rounded-[28px] border-dashed border-slate-300 bg-white/90 shadow-sm">
             <CardContent className="space-y-4 py-14 text-center">
               <h2 className="text-2xl font-semibold text-slate-950">No published articles yet</h2>
