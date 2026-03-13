@@ -8,17 +8,23 @@ type KnowledgeApiEnvelope<T> = {
 };
 
 async function getKnowledgeApiBase(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+  if (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
   }
 
   const requestHeaders = headers();
   const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host');
 
   if (host) {
-    const proto =
-      requestHeaders.get('x-forwarded-proto') ||
-      (host.includes('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+    if (host.includes('localhost') || host.startsWith('127.0.0.1')) {
+      return 'http://localhost:8080';
+    }
+
+    if (host.includes('contracttocozy.com')) {
+      return 'https://api.contracttocozy.com';
+    }
+
+    const proto = requestHeaders.get('x-forwarded-proto') || 'https';
     return `${proto}://${host}`;
   }
 

@@ -18,7 +18,7 @@ import {
 const router = Router();
 
 router.use(apiRateLimiter);
-router.use(authenticate, requireRole(UserRole.ADMIN));
+router.use('/knowledge/admin', authenticate, requireRole(UserRole.ADMIN));
 
 router.get('/knowledge/admin/options', getKnowledgeEditorOptions);
 router.get('/knowledge/admin/articles', listKnowledgeArticlesForAdmin);
