@@ -81,6 +81,7 @@ import weatherRoutes from './routes/weather.routes';
 import vaultRoutes from './routes/vault.routes';
 import narrativeRoutes from './routes/narrative.routes';
 import knowledgeHubRoutes from './routes/knowledgeHub.routes';
+import knowledgeHubAdminRoutes from './routes/knowledgeHubAdmin.routes';
 dotenv.config();
 
 const app = express();
@@ -363,6 +364,7 @@ app.use('/api', homeStatusBoardRoutes);
 app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
 app.use('/api', narrativeRoutes);
+app.use('/api', knowledgeHubAdminRoutes);
 app.use('/api', knowledgeHubRoutes);
 app.use('/api/weather', weatherRoutes);
 
