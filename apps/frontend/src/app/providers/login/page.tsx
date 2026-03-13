@@ -79,7 +79,7 @@ export default function ProviderLoginPage() {
       if (userRole === 'PROVIDER') {
         router.push('/providers/dashboard');
       } else if (userRole === 'ADMIN') {
-        router.push('/admin/dashboard');
+        router.push('/dashboard/knowledge-admin');
       } else {
         // Homeowners using provider login? Redirect to regular dashboard
         router.push('/dashboard');

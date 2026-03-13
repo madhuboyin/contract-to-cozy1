@@ -25,7 +25,7 @@ export default function LoginPage() {
       if (user.role === 'PROVIDER') {
         router.replace('/providers/dashboard');
       } else if (user.role === 'ADMIN') {
-        router.replace('/admin/dashboard');
+        router.replace('/dashboard/knowledge-admin');
       } else {
         router.replace('/dashboard');
       }
@@ -56,7 +56,7 @@ export default function LoginPage() {
         if (userRole === 'PROVIDER') {
           router.replace('/providers/dashboard');
         } else if (userRole === 'ADMIN') {
-          router.replace('/admin/dashboard');
+          router.replace('/dashboard/knowledge-admin');
         } else {
           router.replace('/dashboard');
         }
