@@ -1,6 +1,5 @@
+import { headers } from 'next/headers';
 import type { KnowledgeArticleDetail, KnowledgeArticleListItem } from './types';
-
-const KNOWLEDGE_API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 type KnowledgeApiEnvelope<T> = {
   success: boolean;
@@ -8,8 +7,27 @@ type KnowledgeApiEnvelope<T> = {
   message?: string;
 };
 
+async function getKnowledgeApiBase(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+
+  const requestHeaders = headers();
+  const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host');
+
+  if (host) {
+    const proto =
+      requestHeaders.get('x-forwarded-proto') ||
+      (host.includes('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+    return `${proto}://${host}`;
+  }
+
+  return 'http://localhost:8080';
+}
+
 async function knowledgeFetch<T>(path: string): Promise<T> {
-  const response = await fetch(`${KNOWLEDGE_API_BASE}${path}`, {
+  const baseUrl = await getKnowledgeApiBase();
+  const response = await fetch(`${baseUrl}${path}`, {
     cache: 'no-store',
   });
 
