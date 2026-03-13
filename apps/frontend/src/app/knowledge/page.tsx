@@ -41,7 +41,7 @@ export default async function KnowledgeHubPage({
             <ArrowLeft className="h-4 w-4" />
             Back to dashboard
           </Link>
-          <div className="max-w-[52rem] space-y-4">
+          <div className="max-w-[56rem] space-y-4">
             <div className="flex flex-wrap items-center gap-2.5">
               <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white hover:bg-slate-950">
                 Knowledge Hub
@@ -50,10 +50,10 @@ export default async function KnowledgeHubPage({
                 Homeowner guidance
               </Badge>
             </div>
-            <h1 className="max-w-[48rem] text-[2.35rem] font-semibold tracking-tight text-slate-950 md:text-[2.5rem] md:leading-[1.08]">
+            <h1 className="max-w-[52rem] text-[2.35rem] font-semibold tracking-tight text-slate-950 md:text-[2.5rem] md:leading-[1.08]">
               Calm guidance for the ownership decisions that carry real weight.
             </h1>
-            <p className="max-w-[46rem] text-[16px] leading-8 text-slate-600 md:text-[1.05rem]">
+            <p className="max-w-[50rem] text-[16px] leading-8 text-slate-600 md:text-[1.05rem]">
               Read practical briefings on maintenance, insurance, property value, climate exposure, and the quieter
               signals that shape what your home costs, protects, and becomes over time.
             </p>
