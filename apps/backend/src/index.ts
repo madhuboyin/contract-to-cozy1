@@ -80,6 +80,7 @@ import maintenancePredictionRoutes from './routes/maintenancePrediction.routes';
 import weatherRoutes from './routes/weather.routes';
 import vaultRoutes from './routes/vault.routes';
 import narrativeRoutes from './routes/narrative.routes';
+import knowledgeHubRoutes from './routes/knowledgeHub.routes';
 dotenv.config();
 
 const app = express();
@@ -362,6 +363,7 @@ app.use('/api', homeStatusBoardRoutes);
 app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
 app.use('/api', narrativeRoutes);
+app.use('/api', knowledgeHubRoutes);
 app.use('/api/weather', weatherRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -393,6 +395,7 @@ app.use((req: Request, res: Response) => {
       'GET /api/v1/community/events',
       'GET /api/inventory',
       'GET /api/home-events',
+      'GET /api/knowledge/articles',
     ],
   });
 });
@@ -434,6 +437,7 @@ app.listen(PORT, () => {
   console.log(`   - GET  /api/v1/community/events`);
   console.log(`   - GET  /api/inventory`);
   console.log(`   - GET  /api/room-insights`);
+  console.log(`   - GET  /api/knowledge/articles`);
   console.log(`   - PATCH  /api/room-insights/rooms/:roomId/profile`);
   console.log(`   - GET  /api/room-insights/rooms/:roomId/checklist-items`);
   console.log(`   - POST /api/room-insights/rooms/:roomId/checklist-items`);

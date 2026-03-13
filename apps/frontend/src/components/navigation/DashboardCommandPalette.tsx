@@ -120,6 +120,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
       { id: 'nav-inventory', label: 'Inventory', href: '/dashboard/inventory', group: 'Navigation' },
       { id: 'nav-ai-tools', label: 'AI Tools', href: '/dashboard/coverage-intelligence', group: 'Navigation' },
       { id: 'nav-home-tools', label: 'Home Tools', href: homeToolsHref, group: 'Navigation' },
+      { id: 'nav-knowledge', label: 'Knowledge Hub', href: '/knowledge', group: 'Navigation' },
       { id: 'nav-protection', label: 'Protection', href: protectionHref, group: 'Navigation' },
       { id: 'nav-home-admin', label: 'Home Admin', href: '/dashboard/warranties', group: 'Navigation' },
       { id: 'nav-community', label: 'Community Events', href: '/dashboard/community-events', group: 'Navigation' },

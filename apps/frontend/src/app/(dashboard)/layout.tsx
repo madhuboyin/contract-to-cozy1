@@ -27,6 +27,7 @@ import {
   Wrench,
   DollarSign,
   FileText,
+  BookOpen,
   Globe,
   AlertTriangle,
   Box,
@@ -727,6 +728,16 @@ function DesktopNav({ user }: { user: User | null }) {
     },
   ];
 
+  const knowledgeItems: MoreMenuItem[] = [
+    {
+      key: 'knowledge-hub',
+      name: 'Knowledge Hub',
+      href: '/knowledge',
+      icon: BookOpen,
+      isActive: (path) => path.startsWith('/knowledge'),
+    },
+  ];
+
   const moreGroups = [
     {
       key: 'group-intelligence',
@@ -734,6 +745,7 @@ function DesktopNav({ user }: { user: User | null }) {
       buckets: [
         { key: 'bucket-ai-tools', label: 'AI Tools', items: aiToolItems },
         { key: 'bucket-home-tools', label: 'Home Tools', items: homeToolItems },
+        { key: 'bucket-knowledge', label: 'Knowledge Hub', items: knowledgeItems },
       ],
     },
     {
