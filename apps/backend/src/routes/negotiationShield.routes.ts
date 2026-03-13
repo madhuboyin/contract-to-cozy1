@@ -9,12 +9,14 @@ import {
   createNegotiationShieldCase,
   getNegotiationShieldCaseDetail,
   listNegotiationShieldCases,
+  parseNegotiationShieldDocument,
   saveNegotiationShieldManualInput,
 } from '../controllers/negotiationShield.controller';
 import {
   attachNegotiationShieldDocumentBodySchema,
   createNegotiationShieldCaseBodySchema,
   negotiationShieldCaseParamsSchema,
+  negotiationShieldCaseDocumentParamsSchema,
   negotiationShieldPropertyParamsSchema,
   saveNegotiationShieldInputBodySchema,
 } from '../validators/negotiationShield.validators';
@@ -60,6 +62,13 @@ router.post(
   validate(negotiationShieldCaseParamsSchema),
   validateBody(attachNegotiationShieldDocumentBodySchema),
   attachNegotiationShieldDocumentMetadata
+);
+
+router.post(
+  '/properties/:propertyId/negotiation-shield/cases/:caseId/documents/:caseDocumentId/parse',
+  propertyAuthMiddleware,
+  validate(negotiationShieldCaseDocumentParamsSchema),
+  parseNegotiationShieldDocument
 );
 
 router.post(

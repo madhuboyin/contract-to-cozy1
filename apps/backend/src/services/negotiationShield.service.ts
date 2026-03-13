@@ -16,7 +16,10 @@ import {
   SaveNegotiationShieldInputPayload,
 } from './negotiationShield.types';
 import { generateContractorQuoteAnalysis } from './negotiationShieldContractorQuote.service';
+import { parseNegotiationShieldDocument } from './negotiationShieldDocumentParsing.service';
 import { generateInsurancePremiumIncreaseAnalysis } from './negotiationShieldInsurancePremium.service';
+
+const PARSED_DOCUMENT_INPUT_ORIGIN = 'PARSED_DOCUMENT';
 
 function asIsoString(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -109,6 +112,21 @@ function buildStoredFileUrl(fileUrl?: string | null, storageKey?: string | null)
     return `storage://${storageKey.trim()}`;
   }
   throw new APIError('A fileUrl or storageKey is required.', 400, 'NEGOTIATION_SHIELD_FILE_REFERENCE_REQUIRED');
+}
+
+function stripInputMeta(value: unknown): Record<string, unknown> {
+  const source = asObject(value);
+  const next = { ...source };
+  delete next._meta;
+  return next;
+}
+
+function getInputMeta(value: unknown): Record<string, unknown> {
+  return asObject(asObject(value)._meta);
+}
+
+function isParsedDocumentInput(value: unknown): boolean {
+  return getInputMeta(value).origin === PARSED_DOCUMENT_INPUT_ORIGIN;
 }
 
 export class NegotiationShieldService {
@@ -276,6 +294,47 @@ export class NegotiationShieldService {
     return { inputCount, documentCount };
   }
 
+  private buildMergedScenarioInput(record: any, expectedInputType: 'CONTRACTOR_QUOTE' | 'INSURANCE_PREMIUM') {
+    const allInputs = asArray<any>(record.inputs);
+    const typedInputs = allInputs.filter((input) => input.inputType === expectedInputType);
+    const relevantInputs = typedInputs.length > 0 ? typedInputs : allInputs;
+    const orderedInputs = [...relevantInputs].sort(
+      (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    );
+    const parsedInputs = orderedInputs.filter((input) => isParsedDocumentInput(input.structuredData));
+    const manualInputs = orderedInputs.filter((input) => !isParsedDocumentInput(input.structuredData));
+
+    const mergeStructuredData = (items: any[]) =>
+      items.reduce<Record<string, unknown>>((acc, input) => {
+        return { ...acc, ...stripInputMeta(input.structuredData) };
+      }, {});
+
+    const parsedStructuredData = mergeStructuredData(parsedInputs);
+    const manualStructuredData = mergeStructuredData(manualInputs);
+    const mergedStructuredData = { ...parsedStructuredData, ...manualStructuredData };
+
+    const collectRawText = (items: any[]) => {
+      const values = items
+        .map((input) => asTrimmedString(input.rawText))
+        .filter((value): value is string => Boolean(value));
+      return [...new Set(values)].join('\n\n');
+    };
+
+    const manualRawText = collectRawText(manualInputs);
+    const parsedRawText = collectRawText(parsedInputs);
+    const mergedRawText = (() => {
+      if (manualRawText && parsedRawText) {
+        return `Manual input:\n${manualRawText}\n\nParsed document text:\n${parsedRawText}`;
+      }
+      return manualRawText || parsedRawText || null;
+    })();
+
+    return {
+      mergedStructuredData,
+      latestRawText: mergedRawText,
+    };
+  }
+
   private async getInsurancePropertySignals(propertyId: string) {
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -364,23 +423,10 @@ export class NegotiationShieldService {
   }
 
   private buildContractorQuoteContext(record: any) {
-    const allInputs = asArray<any>(record.inputs);
-    const contractorInputs =
-      allInputs.filter((input) => input.inputType === 'CONTRACTOR_QUOTE');
-    const relevantInputs = contractorInputs.length > 0 ? contractorInputs : allInputs;
-    const orderedInputs = [...relevantInputs].sort(
-      (a, b) =>
-        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    const { mergedStructuredData, latestRawText } = this.buildMergedScenarioInput(
+      record,
+      'CONTRACTOR_QUOTE'
     );
-
-    const mergedStructuredData = orderedInputs.reduce<Record<string, unknown>>((acc, input) => {
-      return { ...acc, ...asObject(input.structuredData) };
-    }, {});
-
-    const latestRawText =
-      orderedInputs
-        .map((input) => asTrimmedString(input.rawText))
-        .find((value) => !!value) ?? null;
 
     const noteFromStructured = asTrimmedString(
       firstPresent(mergedStructuredData, ['notes', 'note', 'description', 'scopeNotes'])
@@ -571,23 +617,10 @@ export class NegotiationShieldService {
   }
 
   private buildInsurancePremiumIncreaseContext(record: any, propertySignals: any) {
-    const allInputs = asArray<any>(record.inputs);
-    const insuranceInputs =
-      allInputs.filter((input) => input.inputType === 'INSURANCE_PREMIUM');
-    const relevantInputs = insuranceInputs.length > 0 ? insuranceInputs : allInputs;
-    const orderedInputs = [...relevantInputs].sort(
-      (a, b) =>
-        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    const { mergedStructuredData, latestRawText } = this.buildMergedScenarioInput(
+      record,
+      'INSURANCE_PREMIUM'
     );
-
-    const mergedStructuredData = orderedInputs.reduce<Record<string, unknown>>((acc, input) => {
-      return { ...acc, ...asObject(input.structuredData) };
-    }, {});
-
-    const latestRawText =
-      orderedInputs
-        .map((input) => asTrimmedString(input.rawText))
-        .find((value) => !!value) ?? null;
 
     const notes = asTrimmedString(
       firstPresent(mergedStructuredData, ['notes', 'note', 'description'])
@@ -875,16 +908,26 @@ export class NegotiationShieldService {
         );
       }
     } else {
-      existingInput = await this.models.inputModel.findFirst({
+      const candidateInputs = await this.models.inputModel.findMany({
         where: {
           caseId,
           inputType: payload.inputType,
         },
         orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
       });
+      existingInput =
+        candidateInputs.find((input: any) => !isParsedDocumentInput(input.structuredData)) ?? null;
     }
 
     if (existingInput) {
+      if (isParsedDocumentInput(existingInput.structuredData)) {
+        throw new APIError(
+          'Parsed document input must be refreshed through document parsing, not manual input save.',
+          400,
+          'NEGOTIATION_SHIELD_PARSED_INPUT_IMMUTABLE'
+        );
+      }
+
       await this.models.inputModel.update({
         where: { id: existingInput.id },
         data: {
@@ -998,6 +1041,104 @@ export class NegotiationShieldService {
     }
 
     return this.getCaseDetail(args.propertyId, args.caseId);
+  }
+
+  async parseCaseDocument(
+    propertyId: string,
+    caseId: string,
+    caseDocumentId: string
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    const parentCase = await this.assertCaseBelongsToProperty(propertyId, caseId);
+    const supportedScenario =
+      parentCase.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ||
+      parentCase.scenarioType === 'INSURANCE_PREMIUM_INCREASE';
+
+    if (!supportedScenario) {
+      throw new APIError(
+        'This case scenario is not supported for document parsing.',
+        400,
+        'NEGOTIATION_SHIELD_UNSUPPORTED_SCENARIO'
+      );
+    }
+
+    const caseDocument = await this.models.documentModel.findFirst({
+      where: { id: caseDocumentId, caseId },
+      include: {
+        document: true,
+      },
+    });
+
+    if (!caseDocument?.document) {
+      throw new APIError(
+        'Negotiation Shield document not found for this case.',
+        404,
+        'NEGOTIATION_SHIELD_CASE_DOCUMENT_NOT_FOUND'
+      );
+    }
+
+    const parsed = await parseNegotiationShieldDocument({
+      scenarioType: parentCase.scenarioType,
+      source: {
+        fileUrl: caseDocument.document.fileUrl,
+        fileName: caseDocument.document.name,
+        mimeType: caseDocument.document.mimeType ?? null,
+        metadata: caseDocument.document.metadata,
+      },
+    });
+
+    const candidateInputs = await this.models.inputModel.findMany({
+      where: {
+        caseId,
+        inputType: parsed.inputType,
+      },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    const existingParsedInput =
+      candidateInputs.find((input: any) => {
+        const meta = getInputMeta(input.structuredData);
+        return (
+          meta.origin === PARSED_DOCUMENT_INPUT_ORIGIN &&
+          meta.caseDocumentId === caseDocumentId
+        );
+      }) ?? null;
+
+    const parsedAt = new Date().toISOString();
+    const structuredData = {
+      ...parsed.structuredData,
+      _meta: {
+        origin: PARSED_DOCUMENT_INPUT_ORIGIN,
+        caseDocumentId,
+        documentId: caseDocument.documentId,
+        documentType: caseDocument.documentType,
+        parserVersion: parsed.parserVersion,
+        parsedAt,
+        parsedFieldCount: parsed.parsedFieldCount,
+        parseWarnings: parsed.warnings,
+        fileName: caseDocument.document.name,
+        mimeType: caseDocument.document.mimeType ?? null,
+      },
+    };
+
+    if (existingParsedInput) {
+      await this.models.inputModel.update({
+        where: { id: existingParsedInput.id },
+        data: {
+          rawText: parsed.rawText,
+          structuredData,
+        },
+      });
+    } else {
+      await this.models.inputModel.create({
+        data: {
+          caseId,
+          inputType: parsed.inputType,
+          rawText: parsed.rawText,
+          structuredData,
+        },
+      });
+    }
+
+    return this.getCaseDetail(propertyId, caseId);
   }
 
   async analyzeContractorQuoteCase(

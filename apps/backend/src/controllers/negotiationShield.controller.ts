@@ -103,6 +103,24 @@ export async function attachNegotiationShieldDocumentMetadata(
   }
 }
 
+export async function parseNegotiationShieldDocument(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    requireUser(req);
+    const detail = await service.parseCaseDocument(
+      req.params.propertyId,
+      req.params.caseId,
+      req.params.caseDocumentId
+    );
+    res.json({ success: true, data: detail });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function analyzeNegotiationShieldCase(
   req: CustomRequest,
   res: Response,

@@ -18,12 +18,22 @@ const propertyCaseParams = z.object({
   caseId: uuidSchema,
 });
 
+const propertyCaseDocumentParams = z.object({
+  propertyId: uuidSchema,
+  caseId: uuidSchema,
+  caseDocumentId: uuidSchema,
+});
+
 export const negotiationShieldPropertyParamsSchema = z.object({
   params: propertyIdParams,
 });
 
 export const negotiationShieldCaseParamsSchema = z.object({
   params: propertyCaseParams,
+});
+
+export const negotiationShieldCaseDocumentParamsSchema = z.object({
+  params: propertyCaseDocumentParams,
 });
 
 export const createNegotiationShieldCaseBodySchema = z.object({
