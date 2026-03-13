@@ -4,21 +4,25 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowLeft,
   Clipboard,
+  ClipboardCheck,
   FileText,
+  HandCoins,
   Loader2,
   Plus,
   RefreshCcw,
+  Shield,
   ShieldCheck,
   Sparkles,
   Upload,
+  Wrench,
 } from 'lucide-react';
 import HomeToolsRail from '@/app/(dashboard)/dashboard/properties/[id]/components/HomeToolsRail';
 import {
   BottomSafeAreaReserve,
   EmptyStateCard,
-  MobileFilterSurface,
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
@@ -122,36 +126,42 @@ const SCENARIO_OPTIONS: Array<{
   scenarioType: NegotiationShieldCaseScenarioType;
   label: string;
   shortDescription: string;
+  Icon: typeof ShieldCheck;
 }> = [
   {
     routeValue: 'contractor-quote-review',
     scenarioType: 'CONTRACTOR_QUOTE_REVIEW',
     label: 'Contractor quote review',
     shortDescription: 'Review a contractor estimate, surface leverage, and draft a response before you approve the work.',
+    Icon: Wrench,
   },
   {
     routeValue: 'insurance-premium-increase',
     scenarioType: 'INSURANCE_PREMIUM_INCREASE',
     label: 'Insurance premium increase',
     shortDescription: 'Review a renewal jump, identify property-backed leverage, and prepare a firm request for review.',
+    Icon: Shield,
   },
   {
     routeValue: 'insurance-claim-settlement',
     scenarioType: 'INSURANCE_CLAIM_SETTLEMENT',
     label: 'Insurance claim settlement',
     shortDescription: 'Compare a settlement against your repair estimate, surface leverage, and draft a review request.',
+    Icon: HandCoins,
   },
   {
     routeValue: 'buyer-inspection-negotiation',
     scenarioType: 'BUYER_INSPECTION_NEGOTIATION',
     label: 'Buyer inspection negotiation',
     shortDescription: 'Review inspection-driven concession requests and prepare a calm, specific counter-response.',
+    Icon: ClipboardCheck,
   },
   {
     routeValue: 'contractor-urgency-pressure',
     scenarioType: 'CONTRACTOR_URGENCY_PRESSURE',
     label: 'Contractor urgency pressure',
     shortDescription: 'Review same-day pressure, request evidence, and prepare a careful response before approving work.',
+    Icon: AlertTriangle,
   },
 ];
 
@@ -1021,20 +1031,22 @@ function ScenarioQuickStart({
   onStart: (scenario: ScenarioRouteValue) => void;
 }) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {SCENARIO_OPTIONS.map((option) => (
         <button
           key={option.routeValue}
           type="button"
           onClick={() => onStart(option.routeValue)}
-          className="rounded-2xl border border-border bg-white p-3.5 text-left transition-colors hover:border-foreground/20 hover:bg-accent/40 sm:p-4"
+          className="group flex h-full flex-col rounded-2xl border border-border bg-white p-4 text-left transition-all hover:border-foreground/15 hover:bg-accent/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-5"
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">{option.label}</p>
-              <p className="text-sm leading-6 text-muted-foreground">{option.shortDescription}</p>
+          <div className="flex h-full items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-accent/30 text-foreground/80 transition-colors group-hover:border-foreground/10 group-hover:bg-accent/50">
+              <option.Icon className="h-4.5 w-4.5" />
             </div>
-            <ShieldCheck className="mt-0.5 h-5 w-5 text-muted-foreground" />
+            <div className="min-w-0 space-y-1.5">
+              <p className="text-sm font-semibold leading-5 text-foreground">{option.label}</p>
+              <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">{option.shortDescription}</p>
+            </div>
           </div>
         </button>
       ))}
@@ -2051,45 +2063,33 @@ function DesktopCaseRail({
   onOpenCreate: (scenario?: ScenarioRouteValue) => void;
   onRefetch: () => void;
 }) {
+  if (!isWorkspaceMode) {
+    return null;
+  }
+
   return (
     <div className="hidden xl:block xl:sticky xl:top-6 xl:space-y-4">
-      {isWorkspaceMode ? (
-        <Card className={SECTION_CARD_CLASS}>
-          <CardHeader className={cn(SECTION_HEADER_CLASS, 'pb-4')}>
-            <div className="space-y-2">
-              <CardTitle className="text-base">New review</CardTitle>
-              <CardDescription>
-                Need a separate negotiation? Start a fresh case without leaving the current workspace.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className={cn(SECTION_CONTENT_CLASS, 'pt-0')}>
-            <Button type="button" className="w-full" onClick={() => onOpenCreate()}>
-              <Plus className="h-4 w-4" />
-              Start new review
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <MobileFilterSurface className="space-y-4">
+      <Card className={SECTION_CARD_CLASS}>
+        <CardHeader className={cn(SECTION_HEADER_CLASS, 'pb-4')}>
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground">Start a new review</p>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Choose the situation you want help with, then build the case from there.
-            </p>
+            <CardTitle className="text-base">New review</CardTitle>
+            <CardDescription>
+              Need a separate negotiation? Start a fresh case without leaving the current workspace.
+            </CardDescription>
           </div>
-          <ScenarioQuickStart onStart={(scenario) => onOpenCreate(scenario)} />
-        </MobileFilterSurface>
-      )}
+        </CardHeader>
+        <CardContent className={cn(SECTION_CONTENT_CLASS, 'pt-0')}>
+          <Button type="button" className="w-full" onClick={() => onOpenCreate()}>
+            <Plus className="h-4 w-4" />
+            Start new review
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card className={SECTION_CARD_CLASS}>
         <CardHeader className={SECTION_HEADER_CLASS}>
-          <CardTitle className="text-base">{isWorkspaceMode ? 'Other cases' : 'Recent cases'}</CardTitle>
-          <CardDescription>
-            {isWorkspaceMode
-              ? 'Jump to another property-scoped review without losing this workflow.'
-              : 'Property-scoped reviews stay here so you can reopen them later.'}
-          </CardDescription>
+          <CardTitle className="text-base">Other cases</CardTitle>
+          <CardDescription>Jump to another property-scoped review without losing this workflow.</CardDescription>
         </CardHeader>
         <CardContent className={SECTION_CONTENT_CLASS}>
           {isLoading ? (
@@ -2870,7 +2870,7 @@ export default function NegotiationShieldToolClient() {
   const introAction = (
     <Button type="button" variant={hasOpenCase ? 'outline' : 'default'} className="hidden sm:inline-flex" onClick={() => openCreate()}>
       <Plus className="h-4 w-4" />
-      Start new review
+      Start review
     </Button>
   );
 
@@ -2979,24 +2979,19 @@ export default function NegotiationShieldToolClient() {
         action={introAction}
       />
 
-      <div
-        className={cn(
-          'grid gap-5 xl:items-start',
-          hasOpenCase
-            ? 'xl:grid-cols-[280px_minmax(0,1fr)]'
-            : 'xl:grid-cols-[360px_minmax(0,1fr)]'
-        )}
-      >
-        <DesktopCaseRail
-          cases={cases}
-          activeCaseId={caseId}
-          isLoading={casesQuery.isLoading}
-          isError={casesQuery.isError}
-          isWorkspaceMode={hasOpenCase}
-          onOpenCase={openCase}
-          onOpenCreate={openCreate}
-          onRefetch={() => casesQuery.refetch()}
-        />
+      <div className={cn(hasOpenCase ? 'grid gap-5 xl:items-start xl:grid-cols-[280px_minmax(0,1fr)]' : 'space-y-4 xl:space-y-5')}>
+        {hasOpenCase ? (
+          <DesktopCaseRail
+            cases={cases}
+            activeCaseId={caseId}
+            isLoading={casesQuery.isLoading}
+            isError={casesQuery.isError}
+            isWorkspaceMode={hasOpenCase}
+            onOpenCase={openCase}
+            onOpenCreate={openCreate}
+            onRefetch={() => casesQuery.refetch()}
+          />
+        ) : null}
         <div className="space-y-4 xl:space-y-4">
           {selectedCaseQuery.isLoading ? (
             <DetailSkeleton />
@@ -3040,83 +3035,55 @@ export default function NegotiationShieldToolClient() {
               onSubmit={(payload) => createCaseMutation.mutate(payload)}
             />
           ) : (
-            <Card className={SECTION_CARD_CLASS}>
-              <CardHeader className={SECTION_HEADER_CLASS}>
-                <CardTitle>Negotiation Shield workspace</CardTitle>
-                <CardDescription>
-                  Start with a scenario or reopen an existing review to keep moving.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-5 sm:space-y-6')}>
-                <div className="sm:hidden">
-                  <Button type="button" className="w-full" onClick={() => openCreate()}>
-                    <Plus className="h-4 w-4" />
-                    Start new review
-                  </Button>
-                </div>
-                {casesQuery.isLoading ? (
-                  <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-8 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading your recent reviews...
-                  </div>
-                ) : casesQuery.isError ? (
-                  <div className="space-y-3">
-                    <EmptyStateCard
-                      title="Unable to load cases"
-                      description="We could not load the latest reviews for this property."
-                    />
-                    <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => casesQuery.refetch()}>
-                      Try again
-                    </Button>
-                  </div>
-                ) : cases.length === 0 ? (
-                  <div className="space-y-4">
+            <div className="space-y-4 xl:space-y-5">
+              <Card className={SECTION_CARD_CLASS} id="negotiation-shield-launcher">
+                <CardHeader className={SECTION_HEADER_CLASS}>
+                  <CardTitle>Start a new review</CardTitle>
+                  <CardDescription>
+                    Pick the situation you want reviewed, then build the case from there.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className={SECTION_CONTENT_CLASS}>
+                  <ScenarioQuickStart onStart={(scenario) => openCreate(scenario)} />
+                </CardContent>
+              </Card>
+
+              <Card className={SECTION_CARD_CLASS}>
+                <CardHeader className={SECTION_HEADER_CLASS}>
+                  <CardTitle className="text-base">Existing cases</CardTitle>
+                  <CardDescription>Reopen a saved review for this property.</CardDescription>
+                </CardHeader>
+                <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4')}>
+                  {casesQuery.isLoading ? (
+                    <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-8 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading your recent reviews...
+                    </div>
+                  ) : casesQuery.isError ? (
+                    <div className="space-y-3">
+                      <EmptyStateCard
+                        title="Unable to load cases"
+                        description="We could not load the latest reviews for this property."
+                      />
+                      <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => casesQuery.refetch()}>
+                        Try again
+                      </Button>
+                    </div>
+                  ) : cases.length === 0 ? (
                     <EmptyStateCard
                       title="No reviews yet"
-                      description="Use Negotiation Shield when you want help with a contractor quote, insurance negotiation, buyer inspection response, or urgency-heavy recommendation."
+                      description="Your saved Negotiation Shield cases will appear here once you start one."
                     />
-                    <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
-                      {SCENARIO_OPTIONS.map((option) => (
-                        <button
-                          key={option.routeValue}
-                          type="button"
-                          onClick={() => openCreate(option.routeValue)}
-                          className="rounded-2xl border border-border bg-white p-4 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30 sm:p-5"
-                        >
-                          <p className="text-sm font-semibold text-foreground">{option.label}</p>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{option.shortDescription}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
-                      {SCENARIO_OPTIONS.map((option) => (
-                        <button
-                          key={option.routeValue}
-                          type="button"
-                          onClick={() => openCreate(option.routeValue)}
-                          className="rounded-2xl border border-border bg-white p-4 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30 sm:p-5"
-                        >
-                          <p className="text-sm font-semibold text-foreground">{option.label}</p>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{option.shortDescription}</p>
-                        </button>
-                      ))}
-                    </div>
-
-                    <Separator />
-
+                  ) : (
                     <div className="space-y-3">
-                      <p className="text-sm font-semibold text-foreground">Existing cases</p>
                       {cases.map((item) => (
                         <button
                           key={item.id}
                           type="button"
                           onClick={() => openCase(item.id)}
-                          className="flex w-full flex-col items-start gap-2.5 rounded-2xl border border-border bg-white p-3.5 text-left transition-colors hover:border-foreground/15 hover:bg-accent/30 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:p-4"
+                          className="flex w-full flex-col items-start gap-2 rounded-2xl border border-border bg-white p-3.5 text-left transition-colors hover:border-foreground/15 hover:bg-accent/20 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:p-4"
                         >
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-semibold text-foreground">{item.title}</p>
                             <p className="mt-1 text-sm text-muted-foreground">{formatScenarioLabel(item.scenarioType)}</p>
                           </div>
@@ -3127,10 +3094,10 @@ export default function NegotiationShieldToolClient() {
                         </button>
                       ))}
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
       </div>
