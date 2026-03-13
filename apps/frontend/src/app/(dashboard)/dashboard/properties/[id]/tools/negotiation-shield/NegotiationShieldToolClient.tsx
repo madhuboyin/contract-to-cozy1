@@ -2015,7 +2015,7 @@ function DesktopCaseRail({
             </div>
           </CardHeader>
           <CardContent className={cn(SECTION_CONTENT_CLASS, 'pt-0')}>
-            <Button type="button" className="w-full" onClick={onOpenCreate}>
+            <Button type="button" className="w-full" onClick={() => onOpenCreate()}>
               <Plus className="h-4 w-4" />
               Start new review
             </Button>
