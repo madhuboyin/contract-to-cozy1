@@ -4,11 +4,13 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DashboardShell } from '@/components/DashboardShell';
 import { Badge } from '@/components/ui/badge';
+import { KnowledgeArticleToc } from '@/components/knowledge/KnowledgeArticleToc';
 import { KnowledgeMetaRow } from '@/components/knowledge/KnowledgeMetaRow';
 import { KnowledgeSectionRenderer } from '@/components/knowledge/KnowledgeSectionRenderer';
 import { KnowledgeToolCard } from '@/components/knowledge/KnowledgeToolCard';
 import { KnowledgeCtaCard } from '@/components/knowledge/KnowledgeCtaCard';
 import { getKnowledgeArticleBySlug } from '@/lib/knowledge/api';
+import { buildKnowledgeArticleToc } from '@/lib/knowledge/articleToc';
 import { buildKnowledgeArticleHref, withKnowledgeProperty } from '@/lib/knowledge/links';
 
 type KnowledgeArticlePageProps = {
@@ -82,6 +84,8 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
   const remainingEndCtas = primaryEndCta ? deferredCtas.slice(1, 2) : [];
   const headerTags = article.tags.slice(0, 4);
   const railTags = article.tags.slice(4);
+  const tocItems = buildKnowledgeArticleToc(article.sections);
+  const sectionAnchorMap = new Map(tocItems.map((item) => [item.sectionId, item.id]));
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_22%,#ffffff_100%)]">
@@ -159,11 +163,18 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
 
         <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-start">
           <div className="space-y-12">
+            {tocItems.length > 0 ? (
+              <div className="lg:hidden">
+                <KnowledgeArticleToc items={tocItems} variant="mobile" />
+              </div>
+            ) : null}
+
             {article.sections.length > 0 ? (
               article.sections.map((section) => (
                 <KnowledgeSectionRenderer
                   key={section.id}
                   section={section}
+                  anchorId={sectionAnchorMap.get(section.id) ?? null}
                   toolLinks={inlineSectionId === section.id ? inlineToolLinks : []}
                   ctas={inlineSectionId === section.id ? inlineCtas : []}
                   propertyId={propertyId}
@@ -204,12 +215,18 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             ) : null}
           </div>
 
-          <aside className="space-y-8 lg:sticky lg:top-8 lg:border-l lg:border-slate-200/80 lg:pl-6">
+          <aside className="space-y-6 lg:sticky lg:top-8 lg:border-l lg:border-slate-200/80 lg:pl-6">
+            {tocItems.length > 0 ? (
+              <div className="hidden lg:block">
+                <KnowledgeArticleToc items={tocItems} />
+              </div>
+            ) : null}
+
             {article.relatedArticles.length > 0 ? (
-              <section className="space-y-4">
+              <section className="space-y-4 border-t border-slate-200/80 pt-6">
                 <div className="space-y-1">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Related reads</p>
-                  <h2 className="text-base font-semibold text-slate-950">Keep reading</h2>
+                  <h2 className="text-sm font-medium text-slate-900">Keep reading</h2>
                 </div>
                 <div className="space-y-4">
                   {article.relatedArticles.map((relatedArticle) => (
@@ -231,10 +248,10 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             ) : null}
 
             {railTags.length > 0 ? (
-              <section className="space-y-4">
+              <section className="space-y-4 border-t border-slate-200/80 pt-6">
                 <div className="space-y-1">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Topics</p>
-                  <h2 className="text-base font-semibold text-slate-950">More in this article</h2>
+                  <h2 className="text-sm font-medium text-slate-900">More in this article</h2>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {railTags.map((tag) => (
@@ -251,10 +268,10 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             ) : null}
 
             {railToolLink ? (
-              <section className="space-y-4">
+              <section className="space-y-4 border-t border-slate-200/80 pt-6">
                 <div className="space-y-1">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Useful tool</p>
-                  <h2 className="text-base font-semibold text-slate-950">A connected CtC workflow</h2>
+                  <h2 className="text-sm font-medium text-slate-900">A connected CtC workflow</h2>
                 </div>
                 <KnowledgeToolCard toolLink={railToolLink} propertyId={propertyId} variant="rail" />
               </section>

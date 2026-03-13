@@ -57,6 +57,7 @@ type KnowledgeSectionRendererProps = {
   toolLinks?: KnowledgeArticleToolLink[];
   ctas?: KnowledgeArticleCta[];
   propertyId?: string | null;
+  anchorId?: string | null;
 };
 
 export function KnowledgeSectionRenderer({
@@ -64,6 +65,7 @@ export function KnowledgeSectionRenderer({
   toolLinks = [],
   ctas = [],
   propertyId,
+  anchorId,
 }: KnowledgeSectionRendererProps) {
   const checklistItems = getStringArray(section.dataJson, 'items');
   const factItems = getStringArray(section.dataJson, 'factors');
@@ -71,7 +73,10 @@ export function KnowledgeSectionRenderer({
 
   if (section.sectionType === 'CHECKLIST') {
     return (
-      <section className="rounded-[28px] bg-slate-50/90 px-6 py-6 ring-1 ring-slate-200/80 md:px-7 md:py-7">
+      <section
+        id={anchorId ?? undefined}
+        className="scroll-mt-24 rounded-[28px] bg-slate-50/90 px-6 py-6 ring-1 ring-slate-200/80 md:scroll-mt-28 md:px-7 md:py-7"
+      >
         <div className="space-y-5">
           {section.title ? <h2 className="text-[1.65rem] font-semibold tracking-tight text-slate-950">{section.title}</h2> : null}
           {section.body ? <p className="max-w-3xl text-[15px] leading-7 text-slate-600">{section.body}</p> : null}
@@ -100,7 +105,10 @@ export function KnowledgeSectionRenderer({
 
   if (section.sectionType === 'FACT_BOX' || section.sectionType === 'RISK_BOX' || section.sectionType === 'CALLOUT' || section.sectionType === 'CTA') {
     return (
-      <section className="rounded-[28px] bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(255,255,255,0.98))] px-6 py-6 ring-1 ring-slate-200/80 md:px-7 md:py-7">
+      <section
+        id={anchorId ?? undefined}
+        className="scroll-mt-24 rounded-[28px] bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(255,255,255,0.98))] px-6 py-6 ring-1 ring-slate-200/80 md:scroll-mt-28 md:px-7 md:py-7"
+      >
         <div className="space-y-5">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="rounded-full border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">
@@ -136,7 +144,7 @@ export function KnowledgeSectionRenderer({
 
   if (section.sectionType === 'FAQ' && faqEntries.length > 0) {
     return (
-      <section className="space-y-5 border-t border-slate-200/80 pt-8">
+      <section id={anchorId ?? undefined} className="scroll-mt-24 space-y-5 border-t border-slate-200/80 pt-8 md:scroll-mt-28">
         {section.title ? <h2 className="text-[1.75rem] font-semibold tracking-tight text-slate-950">{section.title}</h2> : null}
         <div className="space-y-5">
           {faqEntries.map((entry) => (
@@ -152,8 +160,9 @@ export function KnowledgeSectionRenderer({
 
   return (
     <section
+      id={anchorId ?? undefined}
       className={cn(
-        'space-y-5',
+        'scroll-mt-24 space-y-5 md:scroll-mt-28',
         section.sectionType === 'SUMMARY' && 'border-t border-slate-200/80 pt-8',
         section.sectionType === 'TOOL_EMBED' && 'rounded-[28px] bg-slate-50/80 px-6 py-6 ring-1 ring-slate-200/80 md:px-7'
       )}
