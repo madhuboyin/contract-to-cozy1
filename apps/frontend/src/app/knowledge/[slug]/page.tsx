@@ -86,18 +86,19 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
   const nextRecommendedRead = article.relatedArticles[0] || null;
   const tocItems = buildKnowledgeArticleToc(article.sections);
   const sectionAnchorMap = new Map(tocItems.map((item) => [item.sectionId, item.id]));
+  const articlePageFrameClass = 'mx-auto w-full max-w-[66rem]';
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_18%,#ffffff_100%)]">
       <DashboardShell className="space-y-10 py-10 md:space-y-12 md:py-12">
-        <div className="space-y-5">
+        <div className={`${articlePageFrameClass} space-y-5`}>
           <Link href={withKnowledgeProperty('/knowledge', propertyId)} className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />
             Back to Knowledge Hub
           </Link>
 
           <section className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.42),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] px-6 py-7 shadow-[0_24px_80px_-70px_rgba(15,23,42,0.3)] md:px-8 md:py-8">
-            <div className="max-w-[54rem] space-y-5">
+            <div className="max-w-[56rem] space-y-5">
               <div className="flex flex-wrap items-center gap-2.5">
                 {article.featured ? (
                   <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white hover:bg-slate-950">
@@ -116,14 +117,14 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
               </div>
 
               <div className="space-y-4">
-                <h1 className="max-w-[48rem] text-[2.35rem] font-semibold tracking-tight text-slate-950 md:text-[3rem] md:leading-[1.04]">
+                <h1 className="max-w-[52rem] text-[2.35rem] font-semibold tracking-tight text-slate-950 md:text-[3rem] md:leading-[1.04]">
                   {article.title}
                 </h1>
                 {article.subtitle ? (
-                  <p className="max-w-[42rem] text-[1.02rem] leading-8 text-slate-600 md:text-[1.12rem]">{article.subtitle}</p>
+                  <p className="max-w-[48rem] text-[1.02rem] leading-8 text-slate-600 md:text-[1.12rem]">{article.subtitle}</p>
                 ) : null}
                 {article.excerpt ? (
-                  <p className="max-w-[42rem] text-[15px] leading-7 text-slate-600">{article.excerpt}</p>
+                  <p className="max-w-[48rem] text-[15px] leading-7 text-slate-600">{article.excerpt}</p>
                 ) : null}
               </div>
 
@@ -152,17 +153,19 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
         </div>
 
         {heroToolLink ? (
-          <section className="max-w-[50rem] space-y-3">
-            <div className="space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start here</p>
-              <h2 className="text-lg font-semibold tracking-tight text-slate-950">The clearest next step after reading</h2>
+          <section className={articlePageFrameClass}>
+            <div className="max-w-[56rem] space-y-3">
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start here</p>
+                <h2 className="text-lg font-semibold tracking-tight text-slate-950">The clearest next step after reading</h2>
+              </div>
+              <KnowledgeToolCard toolLink={heroToolLink} propertyId={propertyId} variant="feature" />
             </div>
-            <KnowledgeToolCard toolLink={heroToolLink} propertyId={propertyId} variant="feature" />
           </section>
         ) : null}
 
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,52rem)_200px] lg:items-start lg:gap-10 xl:grid-cols-[minmax(0,54rem)_210px]">
-          <div className="max-w-[54rem] space-y-10">
+        <div className={`${articlePageFrameClass} grid gap-10 lg:grid-cols-[minmax(0,52rem)_11.5rem] lg:items-start lg:gap-8`}>
+          <div className="space-y-10">
             {tocItems.length > 0 ? (
               <div className="lg:hidden">
                 <KnowledgeArticleToc items={tocItems} variant="mobile" />
@@ -215,7 +218,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             ) : null}
           </div>
 
-          <aside className="space-y-5 lg:sticky lg:top-8 lg:border-l lg:border-slate-200/70 lg:pl-5">
+          <aside className="space-y-5 lg:sticky lg:top-8 lg:border-l lg:border-slate-200/70 lg:pl-4">
             {tocItems.length > 0 ? (
               <div className="hidden lg:block">
                 <KnowledgeArticleToc items={tocItems} />
