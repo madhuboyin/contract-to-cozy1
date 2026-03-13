@@ -1,4 +1,4 @@
-import { Clock3, FileText } from 'lucide-react';
+import { Clock3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { KnowledgeCategorySummary } from '@/lib/knowledge/types';
@@ -28,26 +28,31 @@ export function KnowledgeMetaRow({
   className,
 }: KnowledgeMetaRowProps) {
   const publishedLabel = formatPublishedDate(publishedAt);
+  const visibleCategories = categories.slice(0, 3);
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2.5 text-sm text-slate-600', className)}>
+    <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-slate-500', className)}>
       {publishedLabel ? <span>{publishedLabel}</span> : null}
+      {publishedLabel && readingMinutes ? <span className="h-1 w-1 rounded-full bg-slate-300" /> : null}
       {readingMinutes ? (
         <span className="inline-flex items-center gap-1.5">
-          <Clock3 className="h-4 w-4 text-slate-400" />
+          <Clock3 className="h-3.5 w-3.5 text-slate-400" />
           {readingMinutes} min read
         </span>
       ) : null}
-      {categories.slice(0, 3).map((category) => (
-        <Badge
-          key={category.slug}
-          variant="outline"
-          className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
-        >
-          <FileText className="mr-1.5 h-3.5 w-3.5" />
-          {category.name}
-        </Badge>
-      ))}
+      {visibleCategories.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {visibleCategories.map((category) => (
+            <Badge
+              key={category.slug}
+              variant="outline"
+              className="rounded-full border-slate-200/80 bg-transparent px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+            >
+              {category.name}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

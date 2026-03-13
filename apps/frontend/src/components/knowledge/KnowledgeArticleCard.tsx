@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { KnowledgeMetaRow } from './KnowledgeMetaRow';
@@ -18,16 +17,17 @@ export function KnowledgeArticleCard({ article, featured = false, propertyId }: 
   const articleHref = buildKnowledgeArticleHref(article.slug, propertyId);
 
   return (
-    <Card
+    <article
       className={cn(
-        'border-slate-200/80 bg-white/90 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg',
-        featured && 'border-slate-900/10 bg-[linear-gradient(160deg,rgba(247,250,252,0.98),rgba(255,255,255,0.98))] shadow-md'
+        'group rounded-[28px] border border-slate-200/70 bg-white/70 p-6 shadow-[0_18px_60px_-40px_rgba(15,23,42,0.3)] transition-all hover:border-slate-300/90 hover:bg-white/90',
+        featured &&
+          'rounded-[32px] border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.55),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] p-7 md:p-8'
       )}
     >
-      <CardHeader className={cn('space-y-4', featured && 'pb-4')}>
-        <div className="flex items-center gap-2">
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center gap-2">
           {article.featured ? (
-            <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-slate-900">
+            <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white hover:bg-slate-950">
               Featured
             </Badge>
           ) : null}
@@ -37,30 +37,41 @@ export function KnowledgeArticleCard({ article, featured = false, propertyId }: 
             categories={featured ? article.categories.slice(0, 2) : article.categories.slice(0, 1)}
           />
         </div>
-        <div className="space-y-2">
-          <CardTitle className={cn('text-xl leading-tight text-slate-950', featured && 'text-2xl md:text-[2rem]')}>
-            <Link href={articleHref} className="hover:text-slate-700">
+        <div className="space-y-3">
+          <h2
+            className={cn(
+              'max-w-3xl text-2xl font-semibold leading-tight tracking-tight text-slate-950 transition-colors group-hover:text-slate-700',
+              featured && 'text-[2.4rem] leading-[1.05] md:text-[3rem]'
+            )}
+          >
+            <Link href={articleHref}>
               {article.title}
             </Link>
-          </CardTitle>
-          {article.subtitle ? <p className="text-sm text-slate-600 md:text-base">{article.subtitle}</p> : null}
+          </h2>
+          {article.subtitle ? (
+            <p className={cn('max-w-2xl text-[15px] leading-7 text-slate-600', featured && 'text-lg leading-8 text-slate-700')}>
+              {article.subtitle}
+            </p>
+          ) : null}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
         {article.excerpt ? (
-          <p className="text-sm leading-6 text-slate-600 md:text-[15px]">{article.excerpt}</p>
+          <p className={cn('max-w-3xl text-[15px] leading-7 text-slate-600', featured && 'text-base leading-8')}>
+            {article.excerpt}
+          </p>
         ) : (
           <p className="text-sm leading-6 text-slate-500">Open the article to explore the full guidance.</p>
         )}
-      </CardContent>
-      <CardFooter>
-        <Button asChild variant={featured ? 'default' : 'outline'} className="rounded-full">
+        <Button
+          asChild
+          variant={featured ? 'default' : 'ghost'}
+          className={cn('h-auto rounded-full px-0 py-0 text-sm font-semibold text-teal-700 hover:bg-transparent hover:text-teal-800', featured && 'mt-1 h-11 px-5 py-2 text-white hover:bg-primary/90 hover:text-white')}
+        >
           <Link href={articleHref}>
             Read article
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
-      </CardFooter>
-    </Card>
+      </div>
+    </article>
   );
 }

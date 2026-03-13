@@ -4,7 +4,6 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DashboardShell } from '@/components/DashboardShell';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { KnowledgeMetaRow } from '@/components/knowledge/KnowledgeMetaRow';
 import { KnowledgeSectionRenderer } from '@/components/knowledge/KnowledgeSectionRenderer';
 import { KnowledgeToolCard } from '@/components/knowledge/KnowledgeToolCard';
@@ -46,26 +45,58 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
     notFound();
   }
 
-  const heroToolLinks = article.toolLinks.filter((toolLink) => toolLink.placement === 'HERO');
-  const inlineToolLinks = article.toolLinks.filter((toolLink) => toolLink.placement === 'INLINE' && toolLink.anchorSectionId);
-  const endToolLinks = article.toolLinks.filter((toolLink) => toolLink.placement !== 'HERO' && !toolLink.anchorSectionId);
-  const inlineCtas = article.ctaLinks.filter((cta) => cta.sectionId);
-  const endCtas = article.ctaLinks.filter((cta) => !cta.sectionId);
+  const sectionOrder = new Map(article.sections.map((section) => [section.id, section.sortOrder]));
+  const heroToolLink = article.toolLinks.find((toolLink) => toolLink.placement === 'HERO') || null;
+  const anchoredToolLinks = article.toolLinks.filter((toolLink) => toolLink.anchorSectionId);
+  const anchoredCtas = article.ctaLinks.filter((cta) => cta.sectionId);
+  const inlineCandidates = [
+    ...anchoredToolLinks.map((toolLink) => ({
+      kind: 'tool' as const,
+      id: toolLink.id,
+      sectionId: toolLink.anchorSectionId!,
+      order: sectionOrder.get(toolLink.anchorSectionId!) ?? Number.MAX_SAFE_INTEGER,
+      priority: toolLink.priority,
+    })),
+    ...anchoredCtas.map((cta) => ({
+      kind: 'cta' as const,
+      id: cta.id,
+      sectionId: cta.sectionId!,
+      order: sectionOrder.get(cta.sectionId!) ?? Number.MAX_SAFE_INTEGER,
+      priority: cta.priority,
+    })),
+  ].sort((left, right) => left.order - right.order || left.priority - right.priority);
+  const inlineSectionId = inlineCandidates[0]?.sectionId ?? null;
+  const inlineToolLinks = inlineSectionId
+    ? anchoredToolLinks.filter((toolLink) => toolLink.anchorSectionId === inlineSectionId).slice(0, 1)
+    : [];
+  const inlineCtas = inlineSectionId
+    ? anchoredCtas.filter((cta) => cta.sectionId === inlineSectionId).slice(0, inlineToolLinks.length > 0 ? 0 : 1)
+    : [];
+  const deferredToolLinks = article.toolLinks.filter(
+    (toolLink) => toolLink.id !== heroToolLink?.id && !inlineToolLinks.some((inlineToolLink) => inlineToolLink.id === toolLink.id)
+  );
+  const railToolLink = !heroToolLink ? deferredToolLinks[0] || null : null;
+  const deferredCtas = article.ctaLinks.filter((cta) => !inlineCtas.some((inlineCta) => inlineCta.id === cta.id));
+  const endToolLinks = deferredToolLinks.filter((toolLink) => toolLink.id !== railToolLink?.id).slice(0, 2);
+  const primaryEndCta = deferredCtas[0] || null;
+  const remainingEndCtas = primaryEndCta ? deferredCtas.slice(1, 2) : [];
+  const headerTags = article.tags.slice(0, 4);
+  const railTags = article.tags.slice(4);
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_28%,#ffffff_100%)]">
-      <DashboardShell className="space-y-10 py-10 md:py-14">
-        <div className="space-y-5">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_22%,#ffffff_100%)]">
+      <DashboardShell className="space-y-12 py-10 md:space-y-14 md:py-16">
+        <div className="space-y-6">
           <Link href={withKnowledgeProperty('/knowledge', propertyId)} className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />
             Back to Knowledge Hub
           </Link>
 
-          <Card className="overflow-hidden rounded-[30px] border-slate-200/80 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.55),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] shadow-sm">
-            <CardContent className="space-y-6 p-7 md:p-10">
-              <div className="flex flex-wrap items-center gap-2">
+          <section className="relative overflow-hidden rounded-[36px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.5),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] px-7 py-8 shadow-[0_34px_120px_-90px_rgba(15,23,42,0.32)] md:px-10 md:py-12">
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center gap-2.5">
                 {article.featured ? (
-                  <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-900">
+                  <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white hover:bg-slate-950">
                     Featured article
                   </Badge>
                 ) : null}
@@ -73,22 +104,22 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                   <Badge
                     key={category.slug}
                     variant="outline"
-                    className="rounded-full border-slate-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
+                    className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500"
                   >
                     {category.name}
                   </Badge>
                 ))}
               </div>
 
-              <div className="space-y-4">
-                <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 md:text-[3.2rem] md:leading-[1.02]">
+              <div className="space-y-5">
+                <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 md:text-[4rem] md:leading-[0.98]">
                   {article.title}
                 </h1>
                 {article.subtitle ? (
-                  <p className="max-w-3xl text-lg leading-8 text-slate-600">{article.subtitle}</p>
+                  <p className="max-w-3xl text-lg leading-8 text-slate-600 md:text-[1.2rem]">{article.subtitle}</p>
                 ) : null}
                 {article.excerpt ? (
-                  <p className="max-w-3xl text-base leading-7 text-slate-600">{article.excerpt}</p>
+                  <p className="max-w-3xl text-base leading-8 text-slate-600">{article.excerpt}</p>
                 ) : null}
               </div>
 
@@ -99,126 +130,134 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                 className="pt-1"
               />
 
-              {article.tags.length > 0 ? (
+              {headerTags.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {article.tags.map((tag) => (
+                  {headerTags.map((tag) => (
                     <Badge
                       key={tag.slug}
                       variant="outline"
-                      className="rounded-full border-slate-200 bg-slate-50/90 px-3 py-1 text-[11px] font-medium text-slate-600"
+                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500"
                     >
                       {tag.name}
                     </Badge>
                   ))}
                 </div>
               ) : null}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
 
-        {heroToolLinks.length > 0 ? (
+        {heroToolLink ? (
           <section className="space-y-4">
             <div className="space-y-1">
-              <h2 className="text-xl font-semibold tracking-tight text-slate-950">Start with the most useful next step</h2>
-              <p className="text-sm leading-6 text-slate-600">These recommendations are linked directly from the article seed data.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start here</p>
+              <h2 className="text-xl font-semibold tracking-tight text-slate-950">The clearest next step after reading</h2>
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {heroToolLinks.map((toolLink) => (
-                <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
-              ))}
-            </div>
+            <KnowledgeToolCard toolLink={heroToolLink} propertyId={propertyId} variant="feature" />
           </section>
         ) : null}
 
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-          <div className="space-y-8">
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-start">
+          <div className="space-y-12">
             {article.sections.length > 0 ? (
               article.sections.map((section) => (
                 <KnowledgeSectionRenderer
                   key={section.id}
                   section={section}
-                  toolLinks={inlineToolLinks.filter((toolLink) => toolLink.anchorSectionId === section.id)}
-                  ctas={inlineCtas.filter((cta) => cta.sectionId === section.id)}
+                  toolLinks={inlineSectionId === section.id ? inlineToolLinks : []}
+                  ctas={inlineSectionId === section.id ? inlineCtas : []}
                   propertyId={propertyId}
                 />
               ))
             ) : (
-              <Card className="rounded-3xl border-dashed border-slate-300 bg-white shadow-sm">
-                <CardContent className="py-12 text-center text-sm leading-6 text-slate-600">
+              <div className="rounded-[28px] border border-dashed border-slate-300 bg-white/70 px-6 py-12 text-center text-sm leading-6 text-slate-600 shadow-[0_20px_70px_-60px_rgba(15,23,42,0.25)]">
                   This article has not been structured into sections yet.
-                </CardContent>
-              </Card>
+              </div>
             )}
 
-            {endToolLinks.length > 0 ? (
-              <section className="space-y-4">
-                <div className="space-y-1">
-                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Recommended tools</h2>
-                  <p className="text-sm leading-6 text-slate-600">Use these connected CtC workflows to move from reading to action.</p>
+            {primaryEndCta || endToolLinks.length > 0 || remainingEndCtas.length > 0 ? (
+              <section className="space-y-6 border-t border-slate-200/80 pt-10">
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Put this into motion</p>
+                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Turn the article into a useful next action</h2>
+                  <p className="max-w-2xl text-sm leading-7 text-slate-600">
+                    Contract-to-Cozy works best when guidance connects to a practical next step. Start with one action
+                    that reduces uncertainty or gets your home data into better shape.
+                  </p>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {endToolLinks.map((toolLink) => (
-                    <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {endCtas.length > 0 ? (
-              <section className="space-y-4">
-                <div className="space-y-1">
-                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Recommended actions</h2>
-                  <p className="text-sm leading-6 text-slate-600">These CTA modules come straight from the article seed data.</p>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {endCtas.map((cta) => (
-                    <KnowledgeCtaCard key={cta.id} cta={cta} propertyId={propertyId} />
-                  ))}
-                </div>
+                {primaryEndCta ? <KnowledgeCtaCard cta={primaryEndCta} propertyId={propertyId} variant="feature" /> : null}
+                {endToolLinks.length > 0 ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {endToolLinks.map((toolLink) => (
+                      <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
+                    ))}
+                  </div>
+                ) : null}
+                {remainingEndCtas.length > 0 ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {remainingEndCtas.map((cta) => (
+                      <KnowledgeCtaCard key={cta.id} cta={cta} propertyId={propertyId} />
+                    ))}
+                  </div>
+                ) : null}
               </section>
             ) : null}
           </div>
 
-          <aside className="space-y-5 lg:sticky lg:top-8">
+          <aside className="space-y-8 lg:sticky lg:top-8 lg:border-l lg:border-slate-200/80 lg:pl-6">
             {article.relatedArticles.length > 0 ? (
-              <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg text-slate-950">Related reads</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+              <section className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Related reads</p>
+                  <h2 className="text-base font-semibold text-slate-950">Keep reading</h2>
+                </div>
+                <div className="space-y-4">
                   {article.relatedArticles.map((relatedArticle) => (
                     <Link
                       key={`${relatedArticle.relationType}-${relatedArticle.slug}`}
                       href={buildKnowledgeArticleHref(relatedArticle.slug, propertyId)}
-                      className="block rounded-2xl border border-slate-200 px-4 py-4 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                      className="block border-t border-slate-200/80 pt-4 first:border-t-0 first:pt-0"
                     >
-                      <p className="font-semibold text-slate-900">{relatedArticle.title}</p>
+                      <p className="font-semibold leading-6 text-slate-900 transition-colors hover:text-slate-700">
+                        {relatedArticle.title}
+                      </p>
                       {relatedArticle.excerpt ? (
-                        <p className="mt-2 text-sm leading-6 text-slate-600">{relatedArticle.excerpt}</p>
+                        <p className="mt-1.5 text-sm leading-6 text-slate-600">{relatedArticle.excerpt}</p>
                       ) : null}
                     </Link>
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </section>
             ) : null}
 
-            {article.tags.length > 0 ? (
-              <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg text-slate-950">Tags in this article</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  {article.tags.map((tag) => (
+            {railTags.length > 0 ? (
+              <section className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Topics</p>
+                  <h2 className="text-base font-semibold text-slate-950">More in this article</h2>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {railTags.map((tag) => (
                     <Badge
                       key={tag.slug}
                       variant="outline"
-                      className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-medium text-slate-600"
+                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500"
                     >
                       {tag.name}
                     </Badge>
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </section>
+            ) : null}
+
+            {railToolLink ? (
+              <section className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Useful tool</p>
+                  <h2 className="text-base font-semibold text-slate-950">A connected CtC workflow</h2>
+                </div>
+                <KnowledgeToolCard toolLink={railToolLink} propertyId={propertyId} variant="rail" />
+              </section>
             ) : null}
           </aside>
         </div>
