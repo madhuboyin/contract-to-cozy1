@@ -296,6 +296,8 @@ app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
 // Keep vault public and mount before any generic '/api' routers that apply auth middleware.
 app.use('/api/vault', vaultRoutes);
+// Keep Knowledge Hub public and mount before generic '/api' routers with internal auth middleware.
+app.use('/api', knowledgeHubRoutes);
 app.use('/api', homeReportExportRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/users', userRoutes);
@@ -365,7 +367,6 @@ app.use('/api', inventoryVerificationRoutes);
 app.use('/api', maintenancePredictionRoutes);
 app.use('/api', narrativeRoutes);
 app.use('/api', knowledgeHubAdminRoutes);
-app.use('/api', knowledgeHubRoutes);
 app.use('/api/weather', weatherRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
