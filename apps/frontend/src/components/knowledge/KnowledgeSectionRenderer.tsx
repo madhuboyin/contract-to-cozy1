@@ -57,12 +57,14 @@ type KnowledgeSectionRendererProps = {
   section: KnowledgeArticleSection;
   toolLinks?: KnowledgeArticleToolLink[];
   ctas?: KnowledgeArticleCta[];
+  propertyId?: string | null;
 };
 
 export function KnowledgeSectionRenderer({
   section,
   toolLinks = [],
   ctas = [],
+  propertyId,
 }: KnowledgeSectionRendererProps) {
   const checklistItems = getStringArray(section.dataJson, 'items');
   const factItems = getStringArray(section.dataJson, 'factors');
@@ -85,14 +87,14 @@ export function KnowledgeSectionRenderer({
           {toolLinks.length > 0 ? (
             <div className="grid gap-4 pt-3 md:grid-cols-2">
               {toolLinks.map((toolLink) => (
-                <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} />
+                <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
               ))}
             </div>
           ) : null}
           {ctas.length > 0 ? (
             <div className="grid gap-4 pt-3 md:grid-cols-2">
               {ctas.map((cta) => (
-                <KnowledgeCtaCard key={cta.id} cta={cta} />
+                <KnowledgeCtaCard key={cta.id} cta={cta} propertyId={propertyId} />
               ))}
             </div>
           ) : null}
@@ -127,14 +129,14 @@ export function KnowledgeSectionRenderer({
           {toolLinks.length > 0 ? (
             <div className="grid gap-4 pt-1 md:grid-cols-2">
               {toolLinks.map((toolLink) => (
-                <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} />
+                <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
               ))}
             </div>
           ) : null}
           {ctas.length > 0 ? (
             <div className="grid gap-4 pt-1 md:grid-cols-2">
               {ctas.map((cta) => (
-                <KnowledgeCtaCard key={cta.id} cta={cta} />
+                <KnowledgeCtaCard key={cta.id} cta={cta} propertyId={propertyId} />
               ))}
             </div>
           ) : null}
@@ -178,14 +180,14 @@ export function KnowledgeSectionRenderer({
       {toolLinks.length > 0 ? (
         <div className="grid gap-4 pt-2 md:grid-cols-2">
           {toolLinks.map((toolLink) => (
-            <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} />
+            <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
           ))}
         </div>
       ) : null}
       {ctas.length > 0 ? (
         <div className="grid gap-4 pt-2 md:grid-cols-2">
           {ctas.map((cta) => (
-            <KnowledgeCtaCard key={cta.id} cta={cta} />
+            <KnowledgeCtaCard key={cta.id} cta={cta} propertyId={propertyId} />
           ))}
         </div>
       ) : null}

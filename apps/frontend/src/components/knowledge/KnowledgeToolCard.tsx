@@ -5,23 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { resolveIcon } from '@/lib/icons';
 import type { KnowledgeArticleToolLink } from '@/lib/knowledge/types';
-
-function resolveKnowledgeHref(href?: string | null) {
-  if (!href) return { href: null, requiresProperty: false };
-  if (href.includes(':propertyId')) {
-    return { href: '/dashboard/properties', requiresProperty: true };
-  }
-  return { href, requiresProperty: false };
-}
+import { resolveKnowledgeActionHref } from '@/lib/knowledge/links';
 
 type KnowledgeToolCardProps = {
   toolLink: KnowledgeArticleToolLink;
+  propertyId?: string | null;
 };
 
-export function KnowledgeToolCard({ toolLink }: KnowledgeToolCardProps) {
+export function KnowledgeToolCard({ toolLink, propertyId }: KnowledgeToolCardProps) {
   const tool = toolLink.productTool;
   const ToolIcon = resolveIcon(tool.iconName, Sparkles);
-  const action = resolveKnowledgeHref(tool.routePath);
+  const action = resolveKnowledgeActionHref(tool.routePath, propertyId);
   const title = toolLink.customTitle || tool.name;
   const body = toolLink.customBody || tool.shortDescription || 'Explore the tool inside Contract-to-Cozy.';
   const buttonLabel = toolLink.ctaLabel || 'Open tool';

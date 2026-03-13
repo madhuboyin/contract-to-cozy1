@@ -732,7 +732,7 @@ function DesktopNav({ user }: { user: User | null }) {
     {
       key: 'knowledge-hub',
       name: 'Knowledge Hub',
-      href: '/knowledge',
+      href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
       icon: BookOpen,
       isActive: (path) => path.startsWith('/knowledge'),
     },

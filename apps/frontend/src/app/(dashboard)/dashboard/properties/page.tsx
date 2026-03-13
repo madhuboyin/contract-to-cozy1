@@ -67,6 +67,7 @@ export default function PropertiesPage() {
     'seller-prep': 'Home Tools > Seller Prep',
     'home-timeline': 'Home Tools > Home Timeline',
     'status-board': 'Home Tools > Status Board',
+    'home-score': 'Reports > Home Score Report',
     reports: 'Home Admin > Reports',
     'tool:property-tax': 'Home Tools > Property Tax',
     'tool:cost-growth': 'Home Tools > Cost Growth',
@@ -90,6 +91,7 @@ export default function PropertiesPage() {
     if (navTarget === 'seller-prep') return `/dashboard/properties/${propertyId}/seller-prep`;
     if (navTarget === 'home-timeline') return `/dashboard/properties/${propertyId}/timeline`;
     if (navTarget === 'status-board') return `/dashboard/properties/${propertyId}/status-board`;
+    if (navTarget === 'home-score') return `/dashboard/properties/${propertyId}/home-score`;
     if (navTarget === 'reports') return `/dashboard/properties/${propertyId}/reports`;
     if (navTarget.startsWith('tool:')) {
       const toolSlug = navTarget.replace('tool:', '');

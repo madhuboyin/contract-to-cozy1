@@ -10,10 +10,14 @@ import { KnowledgeSectionRenderer } from '@/components/knowledge/KnowledgeSectio
 import { KnowledgeToolCard } from '@/components/knowledge/KnowledgeToolCard';
 import { KnowledgeCtaCard } from '@/components/knowledge/KnowledgeCtaCard';
 import { getKnowledgeArticleBySlug } from '@/lib/knowledge/api';
+import { buildKnowledgeArticleHref, withKnowledgeProperty } from '@/lib/knowledge/links';
 
 type KnowledgeArticlePageProps = {
   params: {
     slug: string;
+  };
+  searchParams?: {
+    propertyId?: string;
   };
 };
 
@@ -34,8 +38,9 @@ export async function generateMetadata({ params }: KnowledgeArticlePageProps): P
   };
 }
 
-export default async function KnowledgeArticlePage({ params }: KnowledgeArticlePageProps) {
+export default async function KnowledgeArticlePage({ params, searchParams }: KnowledgeArticlePageProps) {
   const article = await getKnowledgeArticleBySlug(params.slug);
+  const propertyId = searchParams?.propertyId || null;
 
   if (!article) {
     notFound();
@@ -51,7 +56,7 @@ export default async function KnowledgeArticlePage({ params }: KnowledgeArticleP
     <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_28%,#ffffff_100%)]">
       <DashboardShell className="space-y-10 py-10 md:py-14">
         <div className="space-y-5">
-          <Link href="/knowledge" className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
+          <Link href={withKnowledgeProperty('/knowledge', propertyId)} className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />
             Back to Knowledge Hub
           </Link>
@@ -119,7 +124,7 @@ export default async function KnowledgeArticlePage({ params }: KnowledgeArticleP
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               {heroToolLinks.map((toolLink) => (
-                <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} />
+                <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
               ))}
             </div>
           </section>
@@ -134,6 +139,7 @@ export default async function KnowledgeArticlePage({ params }: KnowledgeArticleP
                   section={section}
                   toolLinks={inlineToolLinks.filter((toolLink) => toolLink.anchorSectionId === section.id)}
                   ctas={inlineCtas.filter((cta) => cta.sectionId === section.id)}
+                  propertyId={propertyId}
                 />
               ))
             ) : (
@@ -152,7 +158,7 @@ export default async function KnowledgeArticlePage({ params }: KnowledgeArticleP
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   {endToolLinks.map((toolLink) => (
-                    <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} />
+                    <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
                   ))}
                 </div>
               </section>
@@ -166,7 +172,7 @@ export default async function KnowledgeArticlePage({ params }: KnowledgeArticleP
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   {endCtas.map((cta) => (
-                    <KnowledgeCtaCard key={cta.id} cta={cta} />
+                    <KnowledgeCtaCard key={cta.id} cta={cta} propertyId={propertyId} />
                   ))}
                 </div>
               </section>
@@ -183,7 +189,7 @@ export default async function KnowledgeArticlePage({ params }: KnowledgeArticleP
                   {article.relatedArticles.map((relatedArticle) => (
                     <Link
                       key={`${relatedArticle.relationType}-${relatedArticle.slug}`}
-                      href={`/knowledge/${relatedArticle.slug}`}
+                      href={buildKnowledgeArticleHref(relatedArticle.slug, propertyId)}
                       className="block rounded-2xl border border-slate-200 px-4 py-4 transition-colors hover:border-slate-300 hover:bg-slate-50"
                     >
                       <p className="font-semibold text-slate-900">{relatedArticle.title}</p>

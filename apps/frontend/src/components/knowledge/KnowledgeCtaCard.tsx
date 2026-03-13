@@ -4,22 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { KnowledgeArticleCta } from '@/lib/knowledge/types';
-
-function resolveKnowledgeHref(href?: string | null) {
-  if (!href) return { href: null, requiresProperty: false };
-  if (href.includes(':propertyId')) {
-    return { href: '/dashboard/properties', requiresProperty: true };
-  }
-  return { href, requiresProperty: false };
-}
+import { resolveKnowledgeActionHref } from '@/lib/knowledge/links';
 
 type KnowledgeCtaCardProps = {
   cta: KnowledgeArticleCta;
+  propertyId?: string | null;
 };
 
-export function KnowledgeCtaCard({ cta }: KnowledgeCtaCardProps) {
+export function KnowledgeCtaCard({ cta, propertyId }: KnowledgeCtaCardProps) {
   const fallbackHref = cta.productTool?.routePath ?? null;
-  const action = resolveKnowledgeHref(cta.href || fallbackHref);
+  const action = resolveKnowledgeActionHref(cta.href || fallbackHref, propertyId);
   const eyebrow =
     cta.ctaType === 'DATA_PROMPT'
       ? 'Add data'

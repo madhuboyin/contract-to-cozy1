@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { KnowledgeArticleCard } from '@/components/knowledge/KnowledgeArticleCard';
 import { getPublishedKnowledgeArticles } from '@/lib/knowledge/api';
+import { withKnowledgeProperty } from '@/lib/knowledge/links';
 
 export const metadata: Metadata = {
   title: 'Knowledge Hub | Contract to Cozy',
@@ -16,8 +17,13 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function KnowledgeHubPage() {
+export default async function KnowledgeHubPage({
+  searchParams,
+}: {
+  searchParams?: { propertyId?: string };
+}) {
   const articles = await getPublishedKnowledgeArticles();
+  const propertyId = searchParams?.propertyId || null;
   const featuredArticle = articles.find((article) => article.featured) || articles[0] || null;
   const remainingArticles = featuredArticle
     ? articles.filter((article) => article.slug !== featuredArticle.slug)
@@ -88,7 +94,7 @@ export default async function KnowledgeHubPage() {
                 <div className="flex items-center justify-between gap-4">
                   <h2 className="text-xl font-semibold tracking-tight text-slate-950">Featured insight</h2>
                 </div>
-                <KnowledgeArticleCard article={featuredArticle} featured />
+                <KnowledgeArticleCard article={featuredArticle} featured propertyId={propertyId} />
               </section>
             ) : null}
 
@@ -97,7 +103,7 @@ export default async function KnowledgeHubPage() {
                 <h2 className="text-xl font-semibold tracking-tight text-slate-950">Latest articles</h2>
                 <div className="grid gap-5 lg:grid-cols-2">
                   {remainingArticles.map((article) => (
-                    <KnowledgeArticleCard key={article.id} article={article} />
+                    <KnowledgeArticleCard key={article.id} article={article} propertyId={propertyId} />
                   ))}
                 </div>
               </section>

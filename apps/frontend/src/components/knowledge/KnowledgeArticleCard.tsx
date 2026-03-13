@@ -6,13 +6,17 @@ import { Badge } from '@/components/ui/badge';
 import { KnowledgeMetaRow } from './KnowledgeMetaRow';
 import type { KnowledgeArticleListItem } from '@/lib/knowledge/types';
 import { cn } from '@/lib/utils';
+import { buildKnowledgeArticleHref } from '@/lib/knowledge/links';
 
 type KnowledgeArticleCardProps = {
   article: KnowledgeArticleListItem;
   featured?: boolean;
+  propertyId?: string | null;
 };
 
-export function KnowledgeArticleCard({ article, featured = false }: KnowledgeArticleCardProps) {
+export function KnowledgeArticleCard({ article, featured = false, propertyId }: KnowledgeArticleCardProps) {
+  const articleHref = buildKnowledgeArticleHref(article.slug, propertyId);
+
   return (
     <Card
       className={cn(
@@ -35,7 +39,7 @@ export function KnowledgeArticleCard({ article, featured = false }: KnowledgeArt
         </div>
         <div className="space-y-2">
           <CardTitle className={cn('text-xl leading-tight text-slate-950', featured && 'text-2xl md:text-[2rem]')}>
-            <Link href={`/knowledge/${article.slug}`} className="hover:text-slate-700">
+            <Link href={articleHref} className="hover:text-slate-700">
               {article.title}
             </Link>
           </CardTitle>
@@ -51,7 +55,7 @@ export function KnowledgeArticleCard({ article, featured = false }: KnowledgeArt
       </CardContent>
       <CardFooter>
         <Button asChild variant={featured ? 'default' : 'outline'} className="rounded-full">
-          <Link href={`/knowledge/${article.slug}`}>
+          <Link href={articleHref}>
             Read article
             <ArrowRight className="h-4 w-4" />
           </Link>
