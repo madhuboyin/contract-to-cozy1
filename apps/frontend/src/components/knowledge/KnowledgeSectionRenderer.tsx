@@ -44,7 +44,7 @@ function BodyCopy({ body, intro = false }: { body?: string | null; intro?: boole
   return (
     <div
       className={cn(
-        'space-y-5 text-[16px] leading-8 text-slate-700 md:text-[1.04rem] md:leading-[1.75]',
+        'space-y-6 text-[16px] leading-8 text-slate-700 md:text-[1.04rem] md:leading-[1.75]',
         intro && 'text-[1.08rem] leading-8 text-slate-800 md:text-[1.12rem]'
       )}
     >
@@ -82,7 +82,7 @@ export function KnowledgeSectionRenderer({
         id={anchorId ?? undefined}
         className="scroll-mt-24 rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,0.98))] px-5 py-5 md:scroll-mt-28 md:px-6"
       >
-        <div className="space-y-5">
+        <div className="space-y-6">
           {section.title ? <h2 className="text-[1.65rem] font-semibold tracking-tight text-slate-950">{section.title}</h2> : null}
           {section.body ? <p className="max-w-3xl text-[15px] leading-7 text-slate-600">{section.body}</p> : null}
           <div className="space-y-2">
@@ -94,12 +94,12 @@ export function KnowledgeSectionRenderer({
             ))}
           </div>
           {toolLinks.length > 0 ? (
-            <div className="border-t border-slate-200/80 pt-4">
+            <div className="mt-10 border-t border-slate-200/80 pt-6">
               <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} variant="inline" />
             </div>
           ) : null}
           {ctas.length > 0 ? (
-            <div className="border-t border-slate-200/80 pt-4">
+            <div className="mt-10 border-t border-slate-200/80 pt-6">
               <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} variant="inline" />
             </div>
           ) : null}
@@ -114,7 +114,7 @@ export function KnowledgeSectionRenderer({
         id={anchorId ?? undefined}
         className="scroll-mt-24 rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(255,255,255,0.98))] px-5 py-5 md:scroll-mt-28 md:px-6"
       >
-        <div className="space-y-5">
+        <div className="space-y-6">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="rounded-full border-slate-200 bg-white px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-600">
               {section.sectionType === 'CALLOUT' ? 'Insight' : section.sectionType.replace(/_/g, ' ')}
@@ -133,12 +133,12 @@ export function KnowledgeSectionRenderer({
             </div>
           ) : null}
           {toolLinks.length > 0 ? (
-            <div className="border-t border-slate-200/80 pt-4">
+            <div className="mt-10 border-t border-slate-200/80 pt-6">
               <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} variant="inline" />
             </div>
           ) : null}
           {ctas.length > 0 ? (
-            <div className="border-t border-slate-200/80 pt-4">
+            <div className="mt-10 border-t border-slate-200/80 pt-6">
               <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} variant="inline" />
             </div>
           ) : null}
@@ -167,7 +167,7 @@ export function KnowledgeSectionRenderer({
     <section
       id={anchorId ?? undefined}
       className={cn(
-        'scroll-mt-24 space-y-5 md:scroll-mt-28',
+        'scroll-mt-24 space-y-6 md:scroll-mt-28',
         section.sectionType === 'SUMMARY' && 'border-t border-slate-200/80 pt-8',
         section.sectionType === 'TOOL_EMBED' && 'rounded-[24px] border border-slate-200/80 bg-slate-50/60 px-5 py-5 md:px-6'
       )}
@@ -190,12 +190,12 @@ export function KnowledgeSectionRenderer({
       ) : null}
       <BodyCopy body={section.body} intro={section.sectionType === 'INTRO'} />
       {toolLinks.length > 0 ? (
-        <div className="border-t border-slate-200/80 pt-4">
+        <div className="mt-10 border-t border-slate-200/80 pt-6">
           <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} variant="inline" />
         </div>
       ) : null}
       {ctas.length > 0 ? (
-        <div className="border-t border-slate-200/80 pt-4">
+        <div className="mt-10 border-t border-slate-200/80 pt-6">
           <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} variant="inline" />
         </div>
       ) : null}

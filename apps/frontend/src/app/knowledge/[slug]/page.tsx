@@ -78,9 +78,24 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
     (toolLink) => toolLink.id !== heroToolLink?.id && !inlineToolLinks.some((inlineToolLink) => inlineToolLink.id === toolLink.id)
   );
   const deferredCtas = article.ctaLinks.filter((cta) => !inlineCtas.some((inlineCta) => inlineCta.id === cta.id));
-  const endToolLinks = deferredToolLinks.slice(0, 2);
-  const primaryEndCta = deferredCtas[0] || null;
-  const remainingEndCtas = primaryEndCta ? deferredCtas.slice(1, 2) : [];
+  const endActionCandidates = [
+    ...deferredToolLinks.map((toolLink) => ({
+      kind: 'tool' as const,
+      id: `tool-${toolLink.id}`,
+      priority: toolLink.priority,
+      isPrimary: toolLink.isPrimary,
+      toolLink,
+    })),
+    ...deferredCtas.map((cta) => ({
+      kind: 'cta' as const,
+      id: `cta-${cta.id}`,
+      priority: cta.priority,
+      isPrimary: false,
+      cta,
+    })),
+  ].sort((left, right) => Number(right.isPrimary) - Number(left.isPrimary) || left.priority - right.priority);
+  const primaryEndAction = endActionCandidates[0] ?? null;
+  const secondaryEndActions = endActionCandidates.slice(1, 4);
   const headerTags = article.tags.slice(0, 4);
   const railTags = article.tags.slice(4, 8);
   const nextRecommendedRead = article.relatedArticles[0] || null;
@@ -122,6 +137,12 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                 </h1>
                 {article.subtitle ? (
                   <p className="max-w-[56rem] text-[1.02rem] leading-8 text-slate-600 md:text-[1.12rem]">{article.subtitle}</p>
+                ) : null}
+                {propertyId ? (
+                  <p className="max-w-[54rem] text-[14px] leading-7 text-slate-500 md:text-[15px]">
+                    If you&apos;ve added your home to Contract-to-Cozy, your Home Score report evaluates these same
+                    factors against your systems, maintenance history, and climate exposure.
+                  </p>
                 ) : null}
                 {article.excerpt ? (
                   <p className="max-w-[56rem] text-[15px] leading-7 text-slate-600">{article.excerpt}</p>
@@ -165,7 +186,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
         ) : null}
 
         <div className={`${articlePageFrameClass} grid gap-10 lg:grid-cols-[minmax(0,51.75rem)_13rem] lg:items-start lg:gap-8`}>
-          <div className="space-y-10">
+          <div className="space-y-12 md:space-y-[4.5rem]">
             {tocItems.length > 0 ? (
               <div className="lg:hidden">
                 <KnowledgeArticleToc items={tocItems} variant="mobile" />
@@ -189,7 +210,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
               </div>
             )}
 
-            {primaryEndCta || endToolLinks.length > 0 || remainingEndCtas.length > 0 ? (
+            {primaryEndAction || secondaryEndActions.length > 0 ? (
               <section className="space-y-5 border-t border-slate-200/80 pt-10">
                 <div className="space-y-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Put this into motion</p>
@@ -199,19 +220,24 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                     that reduces uncertainty or gets your home data into better shape.
                   </p>
                 </div>
-                {primaryEndCta ? <KnowledgeCtaCard cta={primaryEndCta} propertyId={propertyId} variant="feature" /> : null}
-                {endToolLinks.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {endToolLinks.map((toolLink) => (
-                      <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
-                    ))}
-                  </div>
+                {primaryEndAction?.kind === 'tool' ? (
+                  <KnowledgeToolCard toolLink={primaryEndAction.toolLink} propertyId={propertyId} variant="feature" />
                 ) : null}
-                {remainingEndCtas.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {remainingEndCtas.map((cta) => (
-                      <KnowledgeCtaCard key={cta.id} cta={cta} propertyId={propertyId} />
-                    ))}
+                {primaryEndAction?.kind === 'cta' ? (
+                  <KnowledgeCtaCard cta={primaryEndAction.cta} propertyId={propertyId} variant="feature" />
+                ) : null}
+                {secondaryEndActions.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Other ways to explore</p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {secondaryEndActions.map((action) =>
+                        action.kind === 'tool' ? (
+                          <KnowledgeToolCard key={action.id} toolLink={action.toolLink} propertyId={propertyId} />
+                        ) : (
+                          <KnowledgeCtaCard key={action.id} cta={action.cta} propertyId={propertyId} />
+                        )
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </section>

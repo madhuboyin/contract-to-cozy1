@@ -13,13 +13,34 @@ type KnowledgeToolCardProps = {
   variant?: 'feature' | 'compact' | 'rail' | 'inline';
 };
 
+function getDefaultButtonLabel(toolLink: KnowledgeArticleToolLink) {
+  const tool = toolLink.productTool;
+  const isHomeScoreTool = tool.slug === 'home-score-report' || /home score/i.test(tool.name);
+
+  if (toolLink.ctaLabel) {
+    return toolLink.ctaLabel;
+  }
+
+  if (isHomeScoreTool) {
+    if (toolLink.placement === 'HERO') return 'Run your Home Score';
+    if (toolLink.placement === 'INLINE') return 'Open Home Score';
+    if (toolLink.placement === 'END_OF_ARTICLE') return 'Get your Home Score';
+  }
+
+  if (toolLink.placement === 'INLINE') {
+    return `Explore ${tool.name}`;
+  }
+
+  return `Open ${tool.name}`;
+}
+
 export function KnowledgeToolCard({ toolLink, propertyId, variant = 'compact' }: KnowledgeToolCardProps) {
   const tool = toolLink.productTool;
   const ToolIcon = resolveIcon(tool.iconName, Sparkles);
   const action = resolveKnowledgeActionHref(tool.routePath, propertyId);
   const title = toolLink.customTitle || tool.name;
   const body = toolLink.customBody || tool.shortDescription || 'Explore the tool inside Contract-to-Cozy.';
-  const buttonLabel = toolLink.ctaLabel || 'Open tool';
+  const buttonLabel = getDefaultButtonLabel(toolLink);
   const isFeature = variant === 'feature';
   const isRail = variant === 'rail';
   const isInline = variant === 'inline';
