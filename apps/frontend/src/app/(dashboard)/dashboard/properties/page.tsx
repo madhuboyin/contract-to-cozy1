@@ -72,6 +72,7 @@ export default function PropertiesPage() {
     'tool:property-tax': 'Home Tools > Property Tax',
     'tool:cost-growth': 'Home Tools > Cost Growth',
     'tool:insurance-trend': 'Home Tools > Insurance Trend',
+    'tool:negotiation-shield': 'Home Tools > Negotiation Shield',
     'tool:cost-explainer': 'Home Tools > Cost Explainer',
     'tool:true-cost': 'Home Tools > True Cost',
     'tool:sell-hold-rent': 'Home Tools > Sell / Hold / Rent',

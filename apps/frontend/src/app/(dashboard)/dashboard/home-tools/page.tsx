@@ -29,6 +29,12 @@ function buildPropertyAwareHref(
 
 const HOME_TOOL_GROUPS = [
   {
+    key: 'negotiation',
+    title: 'Negotiation + Review',
+    summary: 'Quote and premium review with response-ready guidance',
+    toolKeys: ['negotiation-shield'],
+  },
+  {
     key: 'ownership',
     title: 'Ownership Strategy',
     summary: 'Tax, cost, and hold/sell/rent planning',
@@ -55,6 +61,7 @@ const HOME_TOOL_TILE_META: Record<string, { subtitle: string }> = {
   'property-tax': { subtitle: 'Forecast annual tax drag' },
   'cost-growth': { subtitle: 'Model ownership cost trend' },
   'insurance-trend': { subtitle: 'Track premium pressure' },
+  'negotiation-shield': { subtitle: 'Review quotes and premium increases' },
   'cost-explainer': { subtitle: 'Understand what drives costs' },
   'true-cost': { subtitle: 'View full ownership cost' },
   'sell-hold-rent': { subtitle: 'Compare next-step scenarios' },

@@ -29,6 +29,7 @@ export const TOOL_ICON_MAP = {
     'property-tax': { concept: 'taxes', icon: 'landmark', category: 'home' },
     'cost-growth': { concept: 'expenses', icon: 'dollar-sign', category: 'home' },
     'insurance-trend': { concept: 'insurance', icon: 'shield', category: 'home' },
+    'negotiation-shield': { concept: 'coverage', icon: 'shield-check', category: 'home' },
     'cost-explainer': { concept: 'recommendations', icon: 'lightbulb', category: 'home' },
     'true-cost': { concept: 'expenses', icon: 'dollar-sign', category: 'home' },
     'sell-hold-rent': { concept: 'recommendations', icon: 'lightbulb', category: 'home' },
@@ -46,4 +47,3 @@ export const TOOL_ICON_MAP = {
 } as const satisfies Record<string, Record<string, ToolIconDefinition>>;
 
 export type ToolIconMap = typeof TOOL_ICON_MAP;
-

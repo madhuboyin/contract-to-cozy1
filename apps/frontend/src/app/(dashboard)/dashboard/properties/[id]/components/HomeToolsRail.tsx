@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale, Activity, Target, Calendar} from 'lucide-react';
+import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale, Activity, Target, Calendar, ShieldCheck } from 'lucide-react';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -52,6 +52,13 @@ const HOME_TOOLS: ToolDef[] = [
     href: (id) => `/dashboard/properties/${id}/tools/insurance-trend`,
     Icon: Shield,
     tooltip: 'See insurance cost growth vs state average and localized climate pressure.',
+  },
+  {
+    key: 'negotiation-shield',
+    label: 'Negotiation Shield',
+    href: (id) => `/dashboard/properties/${id}/tools/negotiation-shield`,
+    Icon: ShieldCheck,
+    tooltip: 'Review contractor quotes or premium increases and prepare evidence-backed responses.',
   },
   {
     key: 'cost-explainer',

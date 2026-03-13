@@ -122,6 +122,14 @@ const HOME_TOOL_LINKS: PropertyToolLink[] = [
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/insurance-trend(\/|$)/.test(pathname),
   },
   {
+    key: 'negotiation-shield',
+    name: 'Negotiation Shield',
+    hrefSuffix: 'tools/negotiation-shield',
+    navTarget: 'tool:negotiation-shield',
+    icon: resolveToolIcon('home', 'negotiation-shield', ShieldCheck),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/negotiation-shield(\/|$)/.test(pathname),
+  },
+  {
     key: 'cost-explainer',
     name: 'Cost Explainer',
     hrefSuffix: 'tools/cost-explainer',

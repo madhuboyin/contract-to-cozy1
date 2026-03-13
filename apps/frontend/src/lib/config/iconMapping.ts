@@ -208,6 +208,7 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   PROPERTY_TAX: 'Receipt',
   COST_GROWTH: 'BarChart2',
   INSURANCE_TREND: 'Shield',
+  NEGOTIATION_SHIELD: 'ShieldCheck',
   COST_EXPLAINER: 'BarChart2',
   TRUE_COST: 'Receipt',
   SELL_HOLD_RENT: 'BarChart2',
