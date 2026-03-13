@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 type KnowledgeCtaCardProps = {
   cta: KnowledgeArticleCta;
   propertyId?: string | null;
-  variant?: 'feature' | 'compact' | 'rail';
+  variant?: 'feature' | 'compact' | 'rail' | 'inline';
 };
 
 export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: KnowledgeCtaCardProps) {
@@ -23,12 +23,14 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
         : 'Next step';
   const isFeature = variant === 'feature';
   const isRail = variant === 'rail';
+  const isInline = variant === 'inline';
 
   return (
     <div
       className={cn(
         'rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98))] p-4 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.4)]',
-        isFeature && 'rounded-[28px] border-slate-200 bg-white p-6 md:p-7',
+        isFeature && 'rounded-[28px] border-slate-200 bg-white p-6 shadow-[0_28px_80px_-62px_rgba(15,23,42,0.45)] md:p-7',
+        isInline && 'rounded-[22px] border-slate-200/70 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98))] p-4 shadow-none',
         isRail && 'rounded-2xl border-slate-200/70 bg-slate-50/80 p-4 shadow-none'
       )}
     >
@@ -38,7 +40,8 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
             variant="outline"
             className={cn(
               'rounded-full border-slate-200 bg-white/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600',
-              isFeature && 'bg-transparent'
+              isFeature && 'bg-transparent',
+              isInline && 'bg-white/80'
             )}
           >
             {eyebrow}
@@ -54,7 +57,7 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
             {cta.title}
           </h3>
           {cta.description ? (
-            <p className={cn('text-sm leading-6 text-slate-600', isFeature && 'max-w-2xl text-[15px] leading-7')}>
+            <p className={cn('text-sm leading-6 text-slate-600', isFeature && 'max-w-2xl text-[15px] leading-7', isInline && 'text-[14px] leading-6')}>
               {cta.description}
             </p>
           ) : null}
@@ -76,7 +79,8 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
             variant={isFeature ? 'default' : 'ghost'}
             className={cn(
               'h-auto rounded-full px-0 py-0 text-sm font-semibold text-teal-700 hover:bg-transparent hover:text-teal-800',
-              isFeature && 'h-11 px-5 py-2 text-white hover:bg-primary/90 hover:text-white'
+              isFeature && 'h-11 px-5 py-2 text-white hover:bg-primary/90 hover:text-white',
+              isInline && 'text-slate-900 hover:text-teal-700'
             )}
           >
             <Link href={action.href}>

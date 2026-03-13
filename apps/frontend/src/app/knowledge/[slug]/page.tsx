@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -47,122 +47,107 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
     notFound();
   }
 
-  const sectionOrder = new Map(article.sections.map((section) => [section.id, section.sortOrder]));
+  const orderedSections = [...article.sections].sort((left, right) => left.sortOrder - right.sortOrder);
+  const sectionIndex = new Map(orderedSections.map((section, index) => [section.id, index]));
   const heroToolLink = article.toolLinks.find((toolLink) => toolLink.placement === 'HERO') || null;
   const anchoredToolLinks = article.toolLinks.filter((toolLink) => toolLink.anchorSectionId);
   const anchoredCtas = article.ctaLinks.filter((cta) => cta.sectionId);
-  const inlineCandidates = [
+  const midpoint = Math.max((orderedSections.length - 1) / 2, 0);
+  const contextualCandidates = [
     ...anchoredToolLinks.map((toolLink) => ({
       kind: 'tool' as const,
       id: toolLink.id,
       sectionId: toolLink.anchorSectionId!,
-      order: sectionOrder.get(toolLink.anchorSectionId!) ?? Number.MAX_SAFE_INTEGER,
+      order: sectionIndex.get(toolLink.anchorSectionId!) ?? Number.MAX_SAFE_INTEGER,
       priority: toolLink.priority,
     })),
     ...anchoredCtas.map((cta) => ({
       kind: 'cta' as const,
       id: cta.id,
       sectionId: cta.sectionId!,
-      order: sectionOrder.get(cta.sectionId!) ?? Number.MAX_SAFE_INTEGER,
+      order: sectionIndex.get(cta.sectionId!) ?? Number.MAX_SAFE_INTEGER,
       priority: cta.priority,
     })),
-  ].sort((left, right) => left.order - right.order || left.priority - right.priority);
-  const inlineSectionId = inlineCandidates[0]?.sectionId ?? null;
-  const inlineToolLinks = inlineSectionId
-    ? anchoredToolLinks.filter((toolLink) => toolLink.anchorSectionId === inlineSectionId).slice(0, 1)
+  ].sort(
+    (left, right) =>
+      Math.abs(left.order - midpoint) - Math.abs(right.order - midpoint) ||
+      left.order - right.order ||
+      left.priority - right.priority
+  );
+  const contextualSectionId = contextualCandidates[0]?.sectionId ?? null;
+  const contextualToolLinks = contextualSectionId
+    ? anchoredToolLinks.filter((toolLink) => toolLink.anchorSectionId === contextualSectionId).slice(0, 1)
     : [];
-  const inlineCtas = inlineSectionId
-    ? anchoredCtas.filter((cta) => cta.sectionId === inlineSectionId).slice(0, inlineToolLinks.length > 0 ? 0 : 1)
+  const contextualCtas = contextualSectionId
+    ? anchoredCtas.filter((cta) => cta.sectionId === contextualSectionId).slice(0, contextualToolLinks.length > 0 ? 0 : 1)
     : [];
   const deferredToolLinks = article.toolLinks.filter(
-    (toolLink) => toolLink.id !== heroToolLink?.id && !inlineToolLinks.some((inlineToolLink) => inlineToolLink.id === toolLink.id)
+    (toolLink) => toolLink.id !== heroToolLink?.id && !contextualToolLinks.some((inlineToolLink) => inlineToolLink.id === toolLink.id)
   );
-  const railToolLink = !heroToolLink ? deferredToolLinks[0] || null : null;
-  const deferredCtas = article.ctaLinks.filter((cta) => !inlineCtas.some((inlineCta) => inlineCta.id === cta.id));
-  const endToolLinks = deferredToolLinks.filter((toolLink) => toolLink.id !== railToolLink?.id).slice(0, 2);
-  const primaryEndCta = deferredCtas[0] || null;
-  const remainingEndCtas = primaryEndCta ? deferredCtas.slice(1, 2) : [];
-  const headerTags = article.tags.slice(0, 4);
-  const railTags = article.tags.slice(4);
+  const deferredCtas = article.ctaLinks.filter((cta) => !contextualCtas.some((inlineCta) => inlineCta.id === cta.id));
+  const nextRecommendedRead = article.relatedArticles[0] || null;
+  const railTags = article.tags.slice(0, 6);
   const tocItems = buildKnowledgeArticleToc(article.sections);
   const sectionAnchorMap = new Map(tocItems.map((item) => [item.sectionId, item.id]));
+  const endAction =
+    heroToolLink
+      ? { kind: 'tool' as const, toolLink: heroToolLink }
+      : deferredCtas[0]
+        ? { kind: 'cta' as const, cta: deferredCtas[0] }
+        : deferredToolLinks[0]
+          ? { kind: 'tool' as const, toolLink: deferredToolLinks[0] }
+          : null;
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_22%,#ffffff_100%)]">
-      <DashboardShell className="space-y-12 py-10 md:space-y-14 md:py-16">
-        <div className="space-y-6">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fbfdff_0%,#ffffff_16%,#f8fafc_100%)]">
+      <DashboardShell className="space-y-10 py-10 md:space-y-12 md:py-14">
+        <div className="space-y-5 border-b border-slate-200/80 pb-8 md:pb-10">
           <Link href={withKnowledgeProperty('/knowledge', propertyId)} className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-800">
             <ArrowLeft className="h-4 w-4" />
             Back to Knowledge Hub
           </Link>
 
-          <section className="relative overflow-hidden rounded-[36px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,rgba(226,232,240,0.5),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] px-7 py-8 shadow-[0_34px_120px_-90px_rgba(15,23,42,0.32)] md:px-10 md:py-12">
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center gap-2.5">
-                {article.featured ? (
-                  <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white hover:bg-slate-950">
-                    Featured article
-                  </Badge>
-                ) : null}
-                {article.categories.map((category) => (
-                  <Badge
-                    key={category.slug}
-                    variant="outline"
-                    className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500"
-                  >
-                    {category.name}
-                  </Badge>
-                ))}
-              </div>
+          <section className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {article.featured ? (
+                <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white hover:bg-slate-950">
+                  Featured article
+                </Badge>
+              ) : null}
+              {article.categories.map((category) => (
+                <Badge
+                  key={category.slug}
+                  variant="outline"
+                  className="rounded-full border-slate-200 bg-white/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                >
+                  {category.name}
+                </Badge>
+              ))}
+            </div>
 
-              <div className="space-y-5">
-                <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 md:text-[4rem] md:leading-[0.98]">
-                  {article.title}
-                </h1>
-                {article.subtitle ? (
-                  <p className="max-w-3xl text-lg leading-8 text-slate-600 md:text-[1.2rem]">{article.subtitle}</p>
-                ) : null}
-                {article.excerpt ? (
-                  <p className="max-w-3xl text-base leading-8 text-slate-600">{article.excerpt}</p>
-                ) : null}
-              </div>
-
-              <KnowledgeMetaRow
-                publishedAt={article.publishedAt}
-                readingMinutes={article.readingMinutes}
-                categories={[]}
-                className="pt-1"
-              />
-
-              {headerTags.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {headerTags.map((tag) => (
-                    <Badge
-                      key={tag.slug}
-                      variant="outline"
-                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500"
-                    >
-                      {tag.name}
-                    </Badge>
-                  ))}
-                </div>
+            <div className="space-y-4">
+              <h1 className="max-w-4xl text-[2.4rem] font-semibold tracking-tight text-slate-950 md:text-[3.65rem] md:leading-[1.02]">
+                {article.title}
+              </h1>
+              {article.subtitle ? (
+                <p className="max-w-3xl text-[1.05rem] leading-8 text-slate-600 md:text-[1.16rem]">{article.subtitle}</p>
+              ) : null}
+              {article.excerpt ? (
+                <p className="max-w-3xl text-[15px] leading-7 text-slate-600 md:text-base md:leading-8">{article.excerpt}</p>
               ) : null}
             </div>
+
+            <KnowledgeMetaRow
+              publishedAt={article.publishedAt}
+              readingMinutes={article.readingMinutes}
+              categories={[]}
+              className="pt-1"
+            />
           </section>
         </div>
 
-        {heroToolLink ? (
-          <section className="space-y-4">
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start here</p>
-              <h2 className="text-xl font-semibold tracking-tight text-slate-950">The clearest next step after reading</h2>
-            </div>
-            <KnowledgeToolCard toolLink={heroToolLink} propertyId={propertyId} variant="feature" />
-          </section>
-        ) : null}
-
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-start">
-          <div className="space-y-12">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start lg:gap-14">
+          <div className="max-w-3xl space-y-10">
             {tocItems.length > 0 ? (
               <div className="lg:hidden">
                 <KnowledgeArticleToc items={tocItems} variant="mobile" />
@@ -175,8 +160,8 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                   key={section.id}
                   section={section}
                   anchorId={sectionAnchorMap.get(section.id) ?? null}
-                  toolLinks={inlineSectionId === section.id ? inlineToolLinks : []}
-                  ctas={inlineSectionId === section.id ? inlineCtas : []}
+                  toolLinks={contextualSectionId === section.id ? contextualToolLinks : []}
+                  ctas={contextualSectionId === section.id ? contextualCtas : []}
                   propertyId={propertyId}
                 />
               ))
@@ -186,31 +171,21 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
               </div>
             )}
 
-            {primaryEndCta || endToolLinks.length > 0 || remainingEndCtas.length > 0 ? (
-              <section className="space-y-6 border-t border-slate-200/80 pt-10">
+            {endAction ? (
+              <section className="space-y-5 border-t border-slate-200/80 pt-10">
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Put this into motion</p>
-                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Turn the article into a useful next action</h2>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">When you&apos;re ready</p>
+                  <h2 className="text-[1.7rem] font-semibold tracking-tight text-slate-950 md:text-[1.95rem]">Turn the read into a useful next step</h2>
                   <p className="max-w-2xl text-sm leading-7 text-slate-600">
-                    Contract-to-Cozy works best when guidance connects to a practical next step. Start with one action
-                    that reduces uncertainty or gets your home data into better shape.
+                    Contract-to-Cozy works best when guidance connects to one practical action. Start with the step
+                    that reduces uncertainty fastest or gives this guidance a clearer place to land.
                   </p>
                 </div>
-                {primaryEndCta ? <KnowledgeCtaCard cta={primaryEndCta} propertyId={propertyId} variant="feature" /> : null}
-                {endToolLinks.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {endToolLinks.map((toolLink) => (
-                      <KnowledgeToolCard key={toolLink.id} toolLink={toolLink} propertyId={propertyId} />
-                    ))}
-                  </div>
-                ) : null}
-                {remainingEndCtas.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {remainingEndCtas.map((cta) => (
-                      <KnowledgeCtaCard key={cta.id} cta={cta} propertyId={propertyId} />
-                    ))}
-                  </div>
-                ) : null}
+                {endAction.kind === 'tool' ? (
+                  <KnowledgeToolCard toolLink={endAction.toolLink} propertyId={propertyId} variant="feature" />
+                ) : (
+                  <KnowledgeCtaCard cta={endAction.cta} propertyId={propertyId} variant="feature" />
+                )}
               </section>
             ) : null}
           </div>
@@ -222,28 +197,23 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
               </div>
             ) : null}
 
-            {article.relatedArticles.length > 0 ? (
+            {nextRecommendedRead ? (
               <section className="space-y-4 border-t border-slate-200/80 pt-6">
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Related reads</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Next recommended read</p>
                   <h2 className="text-sm font-medium text-slate-900">Keep reading</h2>
                 </div>
-                <div className="space-y-4">
-                  {article.relatedArticles.map((relatedArticle) => (
-                    <Link
-                      key={`${relatedArticle.relationType}-${relatedArticle.slug}`}
-                      href={buildKnowledgeArticleHref(relatedArticle.slug, propertyId)}
-                      className="block border-t border-slate-200/80 pt-4 first:border-t-0 first:pt-0"
-                    >
-                      <p className="font-semibold leading-6 text-slate-900 transition-colors hover:text-slate-700">
-                        {relatedArticle.title}
-                      </p>
-                      {relatedArticle.excerpt ? (
-                        <p className="mt-1.5 text-sm leading-6 text-slate-600">{relatedArticle.excerpt}</p>
-                      ) : null}
-                    </Link>
-                  ))}
-                </div>
+                <Link
+                  href={buildKnowledgeArticleHref(nextRecommendedRead.slug, propertyId)}
+                  className="block space-y-2 text-sm leading-6 text-slate-600 transition-colors hover:text-slate-700"
+                >
+                  <p className="font-semibold text-slate-900">{nextRecommendedRead.title}</p>
+                  {nextRecommendedRead.excerpt ? <p>{nextRecommendedRead.excerpt}</p> : null}
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
+                    Read next
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
+                </Link>
               </section>
             ) : null}
 
@@ -264,16 +234,6 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                     </Badge>
                   ))}
                 </div>
-              </section>
-            ) : null}
-
-            {railToolLink ? (
-              <section className="space-y-4 border-t border-slate-200/80 pt-6">
-                <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Useful tool</p>
-                  <h2 className="text-sm font-medium text-slate-900">A connected CtC workflow</h2>
-                </div>
-                <KnowledgeToolCard toolLink={railToolLink} propertyId={propertyId} variant="rail" />
               </section>
             ) : null}
           </aside>

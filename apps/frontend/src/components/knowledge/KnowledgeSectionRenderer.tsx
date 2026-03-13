@@ -73,29 +73,26 @@ export function KnowledgeSectionRenderer({
 
   if (section.sectionType === 'CHECKLIST') {
     return (
-      <section
-        id={anchorId ?? undefined}
-        className="scroll-mt-24 rounded-[28px] bg-slate-50/90 px-6 py-6 ring-1 ring-slate-200/80 md:scroll-mt-28 md:px-7 md:py-7"
-      >
+      <section id={anchorId ?? undefined} className="scroll-mt-24 space-y-5 md:scroll-mt-28">
         <div className="space-y-5">
           {section.title ? <h2 className="text-[1.65rem] font-semibold tracking-tight text-slate-950">{section.title}</h2> : null}
           {section.body ? <p className="max-w-3xl text-[15px] leading-7 text-slate-600">{section.body}</p> : null}
-          <div className="space-y-3">
+          <div className="space-y-0 border-y border-slate-200/80">
             {checklistItems.map((item) => (
-              <div key={item} className="flex items-start gap-3">
-                <CheckCircle2 className="mt-1 h-4 w-4 flex-none text-emerald-600" />
+              <div key={item} className="flex items-start gap-3 border-t border-slate-200/70 py-3.5 first:border-t-0">
+                <CheckCircle2 className="mt-1 h-4 w-4 flex-none text-teal-700" />
                 <p className="text-[15px] leading-7 text-slate-700">{item}</p>
               </div>
             ))}
           </div>
           {toolLinks.length > 0 ? (
-            <div className="border-t border-slate-200/80 pt-4">
-              <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} />
+            <div className="pt-1">
+              <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} variant="inline" />
             </div>
           ) : null}
           {ctas.length > 0 ? (
-            <div className="border-t border-slate-200/80 pt-4">
-              <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} />
+            <div className="pt-1">
+              <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} variant="inline" />
             </div>
           ) : null}
         </div>
@@ -107,7 +104,7 @@ export function KnowledgeSectionRenderer({
     return (
       <section
         id={anchorId ?? undefined}
-        className="scroll-mt-24 rounded-[28px] bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(255,255,255,0.98))] px-6 py-6 ring-1 ring-slate-200/80 md:scroll-mt-28 md:px-7 md:py-7"
+        className="scroll-mt-24 rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.86),rgba(255,255,255,0.98))] px-5 py-5 shadow-[0_18px_45px_-42px_rgba(15,23,42,0.25)] md:scroll-mt-28 md:px-6"
       >
         <div className="space-y-5">
           <div className="flex items-center gap-2">
@@ -129,12 +126,12 @@ export function KnowledgeSectionRenderer({
           ) : null}
           {toolLinks.length > 0 ? (
             <div className="border-t border-slate-200/80 pt-4">
-              <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} />
+              <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} variant="inline" />
             </div>
           ) : null}
           {ctas.length > 0 ? (
             <div className="border-t border-slate-200/80 pt-4">
-              <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} />
+              <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} variant="inline" />
             </div>
           ) : null}
         </div>
@@ -164,7 +161,7 @@ export function KnowledgeSectionRenderer({
       className={cn(
         'scroll-mt-24 space-y-5 md:scroll-mt-28',
         section.sectionType === 'SUMMARY' && 'border-t border-slate-200/80 pt-8',
-        section.sectionType === 'TOOL_EMBED' && 'rounded-[28px] bg-slate-50/80 px-6 py-6 ring-1 ring-slate-200/80 md:px-7'
+        section.sectionType === 'TOOL_EMBED' && 'border-y border-slate-200/80 py-6'
       )}
     >
       {section.title ? (
@@ -175,7 +172,7 @@ export function KnowledgeSectionRenderer({
             <h2
               className={cn(
                 'text-[1.8rem] font-semibold tracking-tight text-slate-950 md:text-[2rem]',
-                section.sectionType === 'INTRO' && 'text-[2rem] md:text-[2.25rem]'
+                section.sectionType === 'INTRO' && 'text-[1.95rem] md:text-[2.2rem]'
               )}
             >
               {section.title}
@@ -185,13 +182,13 @@ export function KnowledgeSectionRenderer({
       ) : null}
       <BodyCopy body={section.body} intro={section.sectionType === 'INTRO'} />
       {toolLinks.length > 0 ? (
-        <div className="border-t border-slate-200/80 pt-4">
-          <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} />
+        <div className="pt-1">
+          <KnowledgeToolCard toolLink={toolLinks[0]} propertyId={propertyId} variant="inline" />
         </div>
       ) : null}
       {ctas.length > 0 ? (
-        <div className="border-t border-slate-200/80 pt-4">
-          <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} />
+        <div className="pt-1">
+          <KnowledgeCtaCard cta={ctas[0]} propertyId={propertyId} variant="inline" />
         </div>
       ) : null}
     </section>
