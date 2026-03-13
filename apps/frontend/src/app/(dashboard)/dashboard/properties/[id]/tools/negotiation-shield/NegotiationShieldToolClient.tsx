@@ -258,6 +258,10 @@ function countMeaningfulFields(data: Record<string, unknown>) {
   return Object.entries(data).filter(([key, value]) => key !== '_meta' && hasMeaningfulValue(value)).length;
 }
 
+function hasMeaningfulText(value: string | null | undefined, minLength = 20) {
+  return typeof value === 'string' && value.trim().length >= minLength;
+}
+
 function toNumber(value: string): number | undefined {
   if (!value.trim()) return undefined;
   const parsed = Number(value);
