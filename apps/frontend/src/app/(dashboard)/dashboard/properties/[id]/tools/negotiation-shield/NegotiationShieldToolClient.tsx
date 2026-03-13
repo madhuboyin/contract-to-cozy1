@@ -57,7 +57,12 @@ import {
   type SaveNegotiationShieldInputPayload,
 } from './negotiationShieldApi';
 
-type ScenarioRouteValue = 'contractor-quote-review' | 'insurance-premium-increase';
+type ScenarioRouteValue =
+  | 'contractor-quote-review'
+  | 'insurance-premium-increase'
+  | 'insurance-claim-settlement'
+  | 'buyer-inspection-negotiation'
+  | 'contractor-urgency-pressure';
 type ContractorFormValues = {
   contractorName: string;
   quoteAmount: string;
@@ -74,6 +79,35 @@ type InsuranceFormValues = {
   newPremium: string;
   renewalDate: string;
   reasonProvided: string;
+  notes: string;
+  rawText: string;
+};
+type ClaimSettlementFormValues = {
+  insurerName: string;
+  claimType: string;
+  settlementAmount: string;
+  estimateAmount: string;
+  claimDate: string;
+  reasonProvided: string;
+  notes: string;
+  rawText: string;
+};
+type BuyerInspectionFormValues = {
+  requestedConcessionAmount: string;
+  inspectionIssuesSummary: string;
+  requestedRepairs: string;
+  recentUpgradeNotes: string;
+  reportDate: string;
+  notes: string;
+  rawText: string;
+};
+type ContractorUrgencyFormValues = {
+  contractorName: string;
+  recommendedWork: string;
+  urgencyClaimed: 'unknown' | 'yes' | 'no';
+  sameDayPressure: 'unknown' | 'yes' | 'no';
+  quoteAmount: string;
+  repairOptionMentioned: 'unknown' | 'yes' | 'no';
   notes: string;
   rawText: string;
 };
@@ -101,6 +135,24 @@ const SCENARIO_OPTIONS: Array<{
     label: 'Insurance premium increase',
     shortDescription: 'Review a renewal jump, identify property-backed leverage, and prepare a firm request for review.',
   },
+  {
+    routeValue: 'insurance-claim-settlement',
+    scenarioType: 'INSURANCE_CLAIM_SETTLEMENT',
+    label: 'Insurance claim settlement',
+    shortDescription: 'Compare a settlement against your repair estimate, surface leverage, and draft a review request.',
+  },
+  {
+    routeValue: 'buyer-inspection-negotiation',
+    scenarioType: 'BUYER_INSPECTION_NEGOTIATION',
+    label: 'Buyer inspection negotiation',
+    shortDescription: 'Review inspection-driven concession requests and prepare a calm, specific counter-response.',
+  },
+  {
+    routeValue: 'contractor-urgency-pressure',
+    scenarioType: 'CONTRACTOR_URGENCY_PRESSURE',
+    label: 'Contractor urgency pressure',
+    shortDescription: 'Review same-day pressure, request evidence, and prepare a careful response before approving work.',
+  },
 ];
 
 const DOCUMENT_TYPE_OPTIONS: Array<{
@@ -109,6 +161,12 @@ const DOCUMENT_TYPE_OPTIONS: Array<{
 }> = [
   { value: 'QUOTE', label: 'Quote or estimate' },
   { value: 'PREMIUM_NOTICE', label: 'Premium notice' },
+  { value: 'CLAIM_SETTLEMENT_NOTICE', label: 'Claim settlement notice' },
+  { value: 'CLAIM_ESTIMATE', label: 'Repair estimate' },
+  { value: 'INSPECTION_REPORT', label: 'Inspection report' },
+  { value: 'BUYER_REQUEST', label: 'Buyer request' },
+  { value: 'CONTRACTOR_RECOMMENDATION', label: 'Contractor recommendation' },
+  { value: 'CONTRACTOR_ESTIMATE', label: 'Contractor estimate' },
   { value: 'SUPPORTING_DOCUMENT', label: 'Supporting document' },
 ];
 
@@ -129,6 +187,38 @@ const INSURANCE_DEFAULTS: InsuranceFormValues = {
   newPremium: '',
   renewalDate: '',
   reasonProvided: '',
+  notes: '',
+  rawText: '',
+};
+
+const CLAIM_SETTLEMENT_DEFAULTS: ClaimSettlementFormValues = {
+  insurerName: '',
+  claimType: '',
+  settlementAmount: '',
+  estimateAmount: '',
+  claimDate: '',
+  reasonProvided: '',
+  notes: '',
+  rawText: '',
+};
+
+const BUYER_INSPECTION_DEFAULTS: BuyerInspectionFormValues = {
+  requestedConcessionAmount: '',
+  inspectionIssuesSummary: '',
+  requestedRepairs: '',
+  recentUpgradeNotes: '',
+  reportDate: '',
+  notes: '',
+  rawText: '',
+};
+
+const CONTRACTOR_URGENCY_DEFAULTS: ContractorUrgencyFormValues = {
+  contractorName: '',
+  recommendedWork: '',
+  urgencyClaimed: 'unknown',
+  sameDayPressure: 'unknown',
+  quoteAmount: '',
+  repairOptionMentioned: 'unknown',
   notes: '',
   rawText: '',
 };
@@ -291,9 +381,16 @@ function upsertCaseSummary(
 function mapCaseDocumentToUploadType(documentType: NegotiationShieldDocumentType): DocumentType {
   switch (documentType) {
     case 'QUOTE':
+    case 'CLAIM_ESTIMATE':
+    case 'CONTRACTOR_ESTIMATE':
       return 'ESTIMATE';
     case 'PREMIUM_NOTICE':
+    case 'CLAIM_SETTLEMENT_NOTICE':
       return 'INSURANCE_CERTIFICATE';
+    case 'INSPECTION_REPORT':
+      return 'INSPECTION_REPORT';
+    case 'BUYER_REQUEST':
+    case 'CONTRACTOR_RECOMMENDATION':
     case 'SUPPORTING_DOCUMENT':
       return 'OTHER';
     default:
@@ -302,17 +399,124 @@ function mapCaseDocumentToUploadType(documentType: NegotiationShieldDocumentType
 }
 
 function getInputTypeForScenario(scenarioType: NegotiationShieldCaseScenarioType): NegotiationShieldInputType {
-  return scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'CONTRACTOR_QUOTE' : 'INSURANCE_PREMIUM';
+  switch (scenarioType) {
+    case 'CONTRACTOR_QUOTE_REVIEW':
+      return 'CONTRACTOR_QUOTE';
+    case 'INSURANCE_PREMIUM_INCREASE':
+      return 'INSURANCE_PREMIUM';
+    case 'INSURANCE_CLAIM_SETTLEMENT':
+      return 'INSURANCE_CLAIM_SETTLEMENT';
+    case 'BUYER_INSPECTION_NEGOTIATION':
+      return 'BUYER_INSPECTION';
+    case 'CONTRACTOR_URGENCY_PRESSURE':
+      return 'CONTRACTOR_URGENCY';
+    default:
+      return 'CONTRACTOR_QUOTE';
+  }
+}
+
+function getDefaultDocumentTypeForScenario(
+  scenarioType: NegotiationShieldCaseScenarioType
+): NegotiationShieldDocumentType {
+  switch (scenarioType) {
+    case 'CONTRACTOR_QUOTE_REVIEW':
+      return 'QUOTE';
+    case 'INSURANCE_PREMIUM_INCREASE':
+      return 'PREMIUM_NOTICE';
+    case 'INSURANCE_CLAIM_SETTLEMENT':
+      return 'CLAIM_SETTLEMENT_NOTICE';
+    case 'BUYER_INSPECTION_NEGOTIATION':
+      return 'INSPECTION_REPORT';
+    case 'CONTRACTOR_URGENCY_PRESSURE':
+      return 'CONTRACTOR_RECOMMENDATION';
+    default:
+      return 'SUPPORTING_DOCUMENT';
+  }
 }
 
 function getAnalysisActionLabel(scenarioType: NegotiationShieldCaseScenarioType) {
-  return scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'Analyze quote' : 'Review premium increase';
+  switch (scenarioType) {
+    case 'CONTRACTOR_QUOTE_REVIEW':
+      return 'Analyze quote';
+    case 'INSURANCE_PREMIUM_INCREASE':
+      return 'Review premium increase';
+    case 'INSURANCE_CLAIM_SETTLEMENT':
+      return 'Review settlement';
+    case 'BUYER_INSPECTION_NEGOTIATION':
+      return 'Review buyer request';
+    case 'CONTRACTOR_URGENCY_PRESSURE':
+      return 'Check urgency pressure';
+    default:
+      return 'Run analysis';
+  }
 }
 
 function getEmptyStateDescription(scenarioType: NegotiationShieldCaseScenarioType) {
-  return scenarioType === 'CONTRACTOR_QUOTE_REVIEW'
-    ? 'Add quote details or upload the estimate to surface leverage before you reply.'
-    : 'Add renewal details or upload the notice to prepare a stronger review request.';
+  switch (scenarioType) {
+    case 'CONTRACTOR_QUOTE_REVIEW':
+      return 'Add quote details or upload the estimate to surface leverage before you reply.';
+    case 'INSURANCE_PREMIUM_INCREASE':
+      return 'Add renewal details or upload the notice to prepare a stronger review request.';
+    case 'INSURANCE_CLAIM_SETTLEMENT':
+      return 'Add settlement details or upload the letter and estimate to compare the numbers before you reply.';
+    case 'BUYER_INSPECTION_NEGOTIATION':
+      return 'Add the buyer request or upload the inspection report so you can narrow the response clearly.';
+    case 'CONTRACTOR_URGENCY_PRESSURE':
+      return 'Add the recommendation or upload the contractor write-up to evaluate the urgency before approving work.';
+    default:
+      return 'Add case details or upload a document to continue.';
+  }
+}
+
+function getCreateTitlePlaceholder(scenarioType: NegotiationShieldCaseScenarioType) {
+  switch (scenarioType) {
+    case 'CONTRACTOR_QUOTE_REVIEW':
+      return 'Example: Roof replacement estimate review';
+    case 'INSURANCE_PREMIUM_INCREASE':
+      return 'Example: Homeowners premium increase review';
+    case 'INSURANCE_CLAIM_SETTLEMENT':
+      return 'Example: Storm claim settlement review';
+    case 'BUYER_INSPECTION_NEGOTIATION':
+      return 'Example: Buyer inspection concession response';
+    case 'CONTRACTOR_URGENCY_PRESSURE':
+      return 'Example: Same-day roof replacement pressure';
+    default:
+      return 'Example: Negotiation review';
+  }
+}
+
+function getWorkspaceDescription(scenarioType: NegotiationShieldCaseScenarioType) {
+  switch (scenarioType) {
+    case 'CONTRACTOR_QUOTE_REVIEW':
+      return 'Attach the estimate, add any quote details you have, and use the analysis to push for itemization and scope clarity.';
+    case 'INSURANCE_PREMIUM_INCREASE':
+      return 'Attach the renewal notice, add the premium details you know, and prepare a stronger review request.';
+    case 'INSURANCE_CLAIM_SETTLEMENT':
+      return 'Compare the settlement against your estimate, surface documentation-backed leverage, and draft a reconsideration request.';
+    case 'BUYER_INSPECTION_NEGOTIATION':
+      return 'Capture the buyer request, narrow the issues that matter, and prepare a calm inspection response.';
+    case 'CONTRACTOR_URGENCY_PRESSURE':
+      return 'Slow down same-day pressure, ask for written evidence, and prepare a response before approving work.';
+    default:
+      return 'Use this workspace to gather context, run analysis, and prepare a response.';
+  }
+}
+
+function getDocumentSectionDescription(scenarioType: NegotiationShieldCaseScenarioType) {
+  switch (scenarioType) {
+    case 'CONTRACTOR_QUOTE_REVIEW':
+      return 'Attach the quote, estimate, or supporting screenshots using the existing upload flow.';
+    case 'INSURANCE_PREMIUM_INCREASE':
+      return 'Attach the renewal notice or supporting screenshots using the existing upload flow.';
+    case 'INSURANCE_CLAIM_SETTLEMENT':
+      return 'Attach the settlement letter, repair estimate, or supporting claim documents using the existing upload flow.';
+    case 'BUYER_INSPECTION_NEGOTIATION':
+      return 'Attach the inspection report, buyer request, or supporting notes using the existing upload flow.';
+    case 'CONTRACTOR_URGENCY_PRESSURE':
+      return 'Attach the recommendation, estimate, or supporting screenshots using the existing upload flow.';
+    default:
+      return 'Attach the relevant source documents using the existing upload flow.';
+  }
 }
 
 function getParsedMeta(input: NegotiationShieldInput) {
@@ -569,6 +773,65 @@ function buildInsuranceFormValues(caseDetail: NegotiationShieldCaseDetail): Insu
   };
 }
 
+function buildClaimSettlementFormValues(caseDetail: NegotiationShieldCaseDetail): ClaimSettlementFormValues {
+  const manualInput = mergeInputData(caseDetail).manualInput;
+  const data = manualInput ? asRecord(manualInput.structuredData) : {};
+
+  return {
+    insurerName: typeof data.insurerName === 'string' ? data.insurerName : '',
+    claimType: typeof data.claimType === 'string' ? data.claimType : '',
+    settlementAmount: formatNumberInput(data.settlementAmount),
+    estimateAmount: formatNumberInput(data.estimateAmount),
+    claimDate: formatDateInput(data.claimDate),
+    reasonProvided: typeof data.reasonProvided === 'string' ? data.reasonProvided : '',
+    notes: typeof data.notes === 'string' ? data.notes : '',
+    rawText: manualInput?.rawText ?? '',
+  };
+}
+
+function buildBuyerInspectionFormValues(caseDetail: NegotiationShieldCaseDetail): BuyerInspectionFormValues {
+  const manualInput = mergeInputData(caseDetail).manualInput;
+  const data = manualInput ? asRecord(manualInput.structuredData) : {};
+
+  return {
+    requestedConcessionAmount: formatNumberInput(data.requestedConcessionAmount),
+    inspectionIssuesSummary:
+      typeof data.inspectionIssuesSummary === 'string' ? data.inspectionIssuesSummary : '',
+    requestedRepairs: typeof data.requestedRepairs === 'string' ? data.requestedRepairs : '',
+    recentUpgradeNotes: typeof data.recentUpgradeNotes === 'string' ? data.recentUpgradeNotes : '',
+    reportDate: formatDateInput(data.reportDate),
+    notes: typeof data.notes === 'string' ? data.notes : '',
+    rawText: manualInput?.rawText ?? '',
+  };
+}
+
+function buildContractorUrgencyFormValues(caseDetail: NegotiationShieldCaseDetail): ContractorUrgencyFormValues {
+  const manualInput = mergeInputData(caseDetail).manualInput;
+  const data = manualInput ? asRecord(manualInput.structuredData) : {};
+
+  const normalizeBooleanSelect = (value: unknown): ContractorUrgencyFormValues['urgencyClaimed'] => {
+    if (value === true) return 'yes';
+    if (value === false) return 'no';
+    if (typeof value === 'string') {
+      const normalized = value.toLowerCase();
+      if (['yes', 'true', 'immediate', 'urgent'].includes(normalized)) return 'yes';
+      if (['no', 'false'].includes(normalized)) return 'no';
+    }
+    return 'unknown';
+  };
+
+  return {
+    contractorName: typeof data.contractorName === 'string' ? data.contractorName : '',
+    recommendedWork: typeof data.recommendedWork === 'string' ? data.recommendedWork : '',
+    urgencyClaimed: normalizeBooleanSelect(data.urgencyClaimed),
+    sameDayPressure: normalizeBooleanSelect(data.sameDayPressure),
+    quoteAmount: formatNumberInput(data.quoteAmount),
+    repairOptionMentioned: normalizeBooleanSelect(data.repairOptionMentioned),
+    notes: typeof data.notes === 'string' ? data.notes : '',
+    rawText: manualInput?.rawText ?? '',
+  };
+}
+
 function buildContractorPayload(values: ContractorFormValues, inputId?: string): SaveNegotiationShieldInputPayload {
   const structuredData: Record<string, unknown> = {};
 
@@ -602,6 +865,84 @@ function buildInsurancePayload(values: InsuranceFormValues, inputId?: string): S
   return {
     inputId,
     inputType: 'INSURANCE_PREMIUM',
+    rawText: values.rawText.trim() || null,
+    structuredData,
+  };
+}
+
+function buildClaimSettlementPayload(
+  values: ClaimSettlementFormValues,
+  inputId?: string
+): SaveNegotiationShieldInputPayload {
+  const structuredData: Record<string, unknown> = {};
+
+  if (values.insurerName.trim()) structuredData.insurerName = values.insurerName.trim();
+  if (values.claimType.trim()) structuredData.claimType = values.claimType.trim();
+  if (toNumber(values.settlementAmount) !== undefined) {
+    structuredData.settlementAmount = toNumber(values.settlementAmount);
+  }
+  if (toNumber(values.estimateAmount) !== undefined) {
+    structuredData.estimateAmount = toNumber(values.estimateAmount);
+  }
+  if (values.claimDate) structuredData.claimDate = values.claimDate;
+  if (values.reasonProvided.trim()) structuredData.reasonProvided = values.reasonProvided.trim();
+  if (values.notes.trim()) structuredData.notes = values.notes.trim();
+
+  return {
+    inputId,
+    inputType: 'INSURANCE_CLAIM_SETTLEMENT',
+    rawText: values.rawText.trim() || null,
+    structuredData,
+  };
+}
+
+function buildBuyerInspectionPayload(
+  values: BuyerInspectionFormValues,
+  inputId?: string
+): SaveNegotiationShieldInputPayload {
+  const structuredData: Record<string, unknown> = {};
+
+  if (toNumber(values.requestedConcessionAmount) !== undefined) {
+    structuredData.requestedConcessionAmount = toNumber(values.requestedConcessionAmount);
+  }
+  if (values.inspectionIssuesSummary.trim()) {
+    structuredData.inspectionIssuesSummary = values.inspectionIssuesSummary.trim();
+  }
+  if (values.requestedRepairs.trim()) structuredData.requestedRepairs = values.requestedRepairs.trim();
+  if (values.recentUpgradeNotes.trim()) {
+    structuredData.recentUpgradeNotes = values.recentUpgradeNotes.trim();
+  }
+  if (values.reportDate) structuredData.reportDate = values.reportDate;
+  if (values.notes.trim()) structuredData.notes = values.notes.trim();
+
+  return {
+    inputId,
+    inputType: 'BUYER_INSPECTION',
+    rawText: values.rawText.trim() || null,
+    structuredData,
+  };
+}
+
+function buildContractorUrgencyPayload(
+  values: ContractorUrgencyFormValues,
+  inputId?: string
+): SaveNegotiationShieldInputPayload {
+  const structuredData: Record<string, unknown> = {};
+
+  if (values.contractorName.trim()) structuredData.contractorName = values.contractorName.trim();
+  if (values.recommendedWork.trim()) structuredData.recommendedWork = values.recommendedWork.trim();
+  if (values.urgencyClaimed === 'yes') structuredData.urgencyClaimed = true;
+  if (values.urgencyClaimed === 'no') structuredData.urgencyClaimed = false;
+  if (values.sameDayPressure === 'yes') structuredData.sameDayPressure = true;
+  if (values.sameDayPressure === 'no') structuredData.sameDayPressure = false;
+  if (toNumber(values.quoteAmount) !== undefined) structuredData.quoteAmount = toNumber(values.quoteAmount);
+  if (values.repairOptionMentioned === 'yes') structuredData.repairOptionMentioned = true;
+  if (values.repairOptionMentioned === 'no') structuredData.repairOptionMentioned = false;
+  if (values.notes.trim()) structuredData.notes = values.notes.trim();
+
+  return {
+    inputId,
+    inputType: 'CONTRACTOR_URGENCY',
     rawText: values.rawText.trim() || null,
     structuredData,
   };
@@ -717,11 +1058,7 @@ function CreateCasePanel({
               id="negotiation-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder={
-                selectedScenario.scenarioType === 'CONTRACTOR_QUOTE_REVIEW'
-                  ? 'Example: Roof replacement estimate review'
-                  : 'Example: Homeowners premium increase review'
-              }
+              placeholder={getCreateTitlePlaceholder(selectedScenario.scenarioType)}
             />
           </div>
 
@@ -977,6 +1314,330 @@ function InsuranceManualInputSection({
   );
 }
 
+function ClaimSettlementManualInputSection({
+  caseDetail,
+  feedback,
+  isSaving,
+  onSave,
+}: {
+  caseDetail: NegotiationShieldCaseDetail;
+  feedback: InlineFeedbackState | null;
+  isSaving: boolean;
+  onSave: (payload: SaveNegotiationShieldInputPayload) => void;
+}) {
+  const [values, setValues] = useState<ClaimSettlementFormValues>(CLAIM_SETTLEMENT_DEFAULTS);
+  const parsedInputs = mergeInputData(caseDetail).parsedInputs;
+
+  useEffect(() => {
+    setValues(buildClaimSettlementFormValues(caseDetail));
+  }, [caseDetail]);
+
+  const manualInput = mergeInputData(caseDetail).manualInput;
+
+  return (
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
+        <CardTitle>Manual input</CardTitle>
+        <CardDescription>
+          Add the settlement, estimate, and claim context you already have.
+          {parsedInputs.length ? ' Parsed document fields are already available in the background and will fill gaps during analysis.' : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-5')}>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Field label="Insurer name">
+            <Input value={values.insurerName} onChange={(event) => setValues((current) => ({ ...current, insurerName: event.target.value }))} />
+          </Field>
+          <Field label="Claim type">
+            <Input value={values.claimType} onChange={(event) => setValues((current) => ({ ...current, claimType: event.target.value }))} />
+          </Field>
+          <Field label="Settlement amount">
+            <Input inputMode="decimal" value={values.settlementAmount} onChange={(event) => setValues((current) => ({ ...current, settlementAmount: event.target.value }))} />
+          </Field>
+          <Field label="Repair estimate amount">
+            <Input inputMode="decimal" value={values.estimateAmount} onChange={(event) => setValues((current) => ({ ...current, estimateAmount: event.target.value }))} />
+          </Field>
+          <Field label="Claim date">
+            <Input type="date" value={values.claimDate} onChange={(event) => setValues((current) => ({ ...current, claimDate: event.target.value }))} />
+          </Field>
+        </div>
+
+        <Field label="Reason provided">
+          <Textarea
+            value={values.reasonProvided}
+            onChange={(event) => setValues((current) => ({ ...current, reasonProvided: event.target.value }))}
+            placeholder="Any explanation the insurer gave for the settlement amount."
+            className="min-h-[96px] sm:min-h-[110px]"
+          />
+        </Field>
+
+        <Field label="Notes">
+          <Textarea
+            value={values.notes}
+            onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
+            placeholder="Anything else you want the review to keep in mind."
+            className="min-h-[96px] sm:min-h-[120px]"
+          />
+        </Field>
+
+        <Field label="Pasted settlement text">
+          <Textarea
+            value={values.rawText}
+            onChange={(event) => setValues((current) => ({ ...current, rawText: event.target.value }))}
+            placeholder="Paste settlement letter text, adjuster notes, or estimate language here."
+            className="min-h-[136px] sm:min-h-[180px]"
+          />
+        </Field>
+
+        <InlineFeedback feedback={feedback} />
+
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => onSave(buildClaimSettlementPayload(values, manualInput?.id ?? undefined))}
+            disabled={isSaving}
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {isSaving ? 'Saving input...' : 'Save input'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BuyerInspectionManualInputSection({
+  caseDetail,
+  feedback,
+  isSaving,
+  onSave,
+}: {
+  caseDetail: NegotiationShieldCaseDetail;
+  feedback: InlineFeedbackState | null;
+  isSaving: boolean;
+  onSave: (payload: SaveNegotiationShieldInputPayload) => void;
+}) {
+  const [values, setValues] = useState<BuyerInspectionFormValues>(BUYER_INSPECTION_DEFAULTS);
+  const parsedInputs = mergeInputData(caseDetail).parsedInputs;
+
+  useEffect(() => {
+    setValues(buildBuyerInspectionFormValues(caseDetail));
+  }, [caseDetail]);
+
+  const manualInput = mergeInputData(caseDetail).manualInput;
+
+  return (
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
+        <CardTitle>Manual input</CardTitle>
+        <CardDescription>
+          Capture the buyer request and the inspection issues that seem most relevant.
+          {parsedInputs.length ? ' Parsed document fields are already available in the background and will fill gaps during analysis.' : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-5')}>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Field label="Requested concession amount">
+            <Input inputMode="decimal" value={values.requestedConcessionAmount} onChange={(event) => setValues((current) => ({ ...current, requestedConcessionAmount: event.target.value }))} />
+          </Field>
+          <Field label="Inspection report date">
+            <Input type="date" value={values.reportDate} onChange={(event) => setValues((current) => ({ ...current, reportDate: event.target.value }))} />
+          </Field>
+        </div>
+
+        <Field label="Inspection issues summary">
+          <Textarea
+            value={values.inspectionIssuesSummary}
+            onChange={(event) => setValues((current) => ({ ...current, inspectionIssuesSummary: event.target.value }))}
+            placeholder="Summarize the main findings the buyer is relying on."
+            className="min-h-[96px] sm:min-h-[120px]"
+          />
+        </Field>
+
+        <Field label="Requested repairs">
+          <Textarea
+            value={values.requestedRepairs}
+            onChange={(event) => setValues((current) => ({ ...current, requestedRepairs: event.target.value }))}
+            placeholder="List the repairs or credits the buyer is asking for."
+            className="min-h-[96px] sm:min-h-[120px]"
+          />
+        </Field>
+
+        <Field label="Recent upgrade notes">
+          <Textarea
+            value={values.recentUpgradeNotes}
+            onChange={(event) => setValues((current) => ({ ...current, recentUpgradeNotes: event.target.value }))}
+            placeholder="Recent roof, HVAC, plumbing, electrical, or other work that may narrow the request."
+            className="min-h-[96px] sm:min-h-[120px]"
+          />
+        </Field>
+
+        <Field label="Pasted report or request text">
+          <Textarea
+            value={values.rawText}
+            onChange={(event) => setValues((current) => ({ ...current, rawText: event.target.value }))}
+            placeholder="Paste inspection report text, buyer repair requests, or agent notes here."
+            className="min-h-[136px] sm:min-h-[180px]"
+          />
+        </Field>
+
+        <Field label="Notes">
+          <Textarea
+            value={values.notes}
+            onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
+            placeholder="Anything else you want the response to keep in mind."
+            className="min-h-[96px] sm:min-h-[120px]"
+          />
+        </Field>
+
+        <InlineFeedback feedback={feedback} />
+
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => onSave(buildBuyerInspectionPayload(values, manualInput?.id ?? undefined))}
+            disabled={isSaving}
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {isSaving ? 'Saving input...' : 'Save input'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ContractorUrgencyManualInputSection({
+  caseDetail,
+  feedback,
+  isSaving,
+  onSave,
+}: {
+  caseDetail: NegotiationShieldCaseDetail;
+  feedback: InlineFeedbackState | null;
+  isSaving: boolean;
+  onSave: (payload: SaveNegotiationShieldInputPayload) => void;
+}) {
+  const [values, setValues] = useState<ContractorUrgencyFormValues>(CONTRACTOR_URGENCY_DEFAULTS);
+  const parsedInputs = mergeInputData(caseDetail).parsedInputs;
+
+  useEffect(() => {
+    setValues(buildContractorUrgencyFormValues(caseDetail));
+  }, [caseDetail]);
+
+  const manualInput = mergeInputData(caseDetail).manualInput;
+
+  return (
+    <Card className={SECTION_CARD_CLASS}>
+      <CardHeader className={SECTION_HEADER_CLASS}>
+        <CardTitle>Manual input</CardTitle>
+        <CardDescription>
+          Capture the recommendation, the urgency framing, and anything that feels pushy or unclear.
+          {parsedInputs.length ? ' Parsed document fields are already available in the background and will fill gaps during analysis.' : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-5')}>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Field label="Contractor name">
+            <Input value={values.contractorName} onChange={(event) => setValues((current) => ({ ...current, contractorName: event.target.value }))} />
+          </Field>
+          <Field label="Quote amount">
+            <Input inputMode="decimal" value={values.quoteAmount} onChange={(event) => setValues((current) => ({ ...current, quoteAmount: event.target.value }))} />
+          </Field>
+          <Field label="Recommended work">
+            <Input value={values.recommendedWork} onChange={(event) => setValues((current) => ({ ...current, recommendedWork: event.target.value }))} />
+          </Field>
+          <Field label="Urgency claimed">
+            <Select
+              value={values.urgencyClaimed}
+              onValueChange={(nextValue: ContractorUrgencyFormValues['urgencyClaimed']) =>
+                setValues((current) => ({ ...current, urgencyClaimed: nextValue }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select urgency" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unknown">Unclear</SelectItem>
+                <SelectItem value="yes">Yes, urgent</SelectItem>
+                <SelectItem value="no">No urgency claimed</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Same-day pressure">
+            <Select
+              value={values.sameDayPressure}
+              onValueChange={(nextValue: ContractorUrgencyFormValues['sameDayPressure']) =>
+                setValues((current) => ({ ...current, sameDayPressure: nextValue }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select pressure level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unknown">Unclear</SelectItem>
+                <SelectItem value="yes">Yes, same-day pressure</SelectItem>
+                <SelectItem value="no">No same-day pressure</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Repair option mentioned">
+            <Select
+              value={values.repairOptionMentioned}
+              onValueChange={(nextValue: ContractorUrgencyFormValues['repairOptionMentioned']) =>
+                setValues((current) => ({ ...current, repairOptionMentioned: nextValue }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select repair option" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unknown">Unclear</SelectItem>
+                <SelectItem value="yes">Yes, repair discussed</SelectItem>
+                <SelectItem value="no">No repair option discussed</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+
+        <Field label="Notes">
+          <Textarea
+            value={values.notes}
+            onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
+            placeholder="Anything that feels rushed, unsupported, or worth pushing back on."
+            className="min-h-[96px] sm:min-h-[120px]"
+          />
+        </Field>
+
+        <Field label="Pasted recommendation text">
+          <Textarea
+            value={values.rawText}
+            onChange={(event) => setValues((current) => ({ ...current, rawText: event.target.value }))}
+            placeholder="Paste contractor messages, recommendation language, or notes here."
+            className="min-h-[136px] sm:min-h-[180px]"
+          />
+        </Field>
+
+        <InlineFeedback feedback={feedback} />
+
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => onSave(buildContractorUrgencyPayload(values, manualInput?.id ?? undefined))}
+            disabled={isSaving}
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {isSaving ? 'Saving input...' : 'Save input'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function Field({
   label,
   children,
@@ -1071,9 +1732,16 @@ function AnalysisResultsSection({
           ordered
         />
 
-        {(pricingAssessment.summary || pricingAssessment.rationale?.length || pricingAssessment.increaseAmount || pricingAssessment.quoteAmount) ? (
+        {(pricingAssessment.summary ||
+          pricingAssessment.rationale?.length ||
+          pricingAssessment.increaseAmount ||
+          pricingAssessment.quoteAmount ||
+          pricingAssessment.settlementAmount ||
+          pricingAssessment.estimateAmount ||
+          pricingAssessment.gapAmount ||
+          pricingAssessment.requestedConcessionAmount) ? (
           <div className="rounded-2xl border border-border p-3.5 sm:p-4">
-            <p className="text-sm font-semibold text-foreground">Pricing assessment</p>
+            <p className="text-sm font-semibold text-foreground">Assessment</p>
             {pricingAssessment.summary ? <p className="mt-2 text-sm leading-6 text-foreground/85 sm:leading-7">{pricingAssessment.summary}</p> : null}
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1091,6 +1759,23 @@ function AnalysisResultsSection({
               ) : null}
               {typeof pricingAssessment.increasePercentage === 'number' ? (
                 <Badge variant="outline">Increase %: {Math.round(pricingAssessment.increasePercentage)}%</Badge>
+              ) : null}
+              {typeof pricingAssessment.settlementAmount === 'number' ? (
+                <Badge variant="outline">Settlement: {formatMoneyValue(pricingAssessment.settlementAmount)}</Badge>
+              ) : null}
+              {typeof pricingAssessment.estimateAmount === 'number' ? (
+                <Badge variant="outline">Estimate: {formatMoneyValue(pricingAssessment.estimateAmount)}</Badge>
+              ) : null}
+              {typeof pricingAssessment.gapAmount === 'number' ? (
+                <Badge variant="outline">Gap: {formatMoneyValue(pricingAssessment.gapAmount)}</Badge>
+              ) : null}
+              {typeof pricingAssessment.gapPercentage === 'number' ? (
+                <Badge variant="outline">Gap %: {Math.round(pricingAssessment.gapPercentage)}%</Badge>
+              ) : null}
+              {typeof pricingAssessment.requestedConcessionAmount === 'number' ? (
+                <Badge variant="outline">
+                  Concession request: {formatMoneyValue(pricingAssessment.requestedConcessionAmount)}
+                </Badge>
               ) : null}
             </div>
 
@@ -1262,7 +1947,7 @@ function CaseWorkspace({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState('');
   const [documentType, setDocumentType] = useState<NegotiationShieldDocumentType>(
-    caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'QUOTE' : 'PREMIUM_NOTICE'
+    getDefaultDocumentTypeForScenario(caseDetail.case.scenarioType)
   );
   const [manualFeedback, setManualFeedback] = useState<InlineFeedbackState | null>(null);
   const [documentFeedback, setDocumentFeedback] = useState<InlineFeedbackState | null>(null);
@@ -1273,7 +1958,7 @@ function CaseWorkspace({
     setSelectedFile(null);
     setDocumentName('');
     resetFileInputValue(fileInputRef.current);
-    setDocumentType(caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'QUOTE' : 'PREMIUM_NOTICE');
+    setDocumentType(getDefaultDocumentTypeForScenario(caseDetail.case.scenarioType));
     setManualFeedback(null);
     setDocumentFeedback(null);
     setAnalysisFeedback(null);
@@ -1555,7 +2240,7 @@ function CaseWorkspace({
                 <CardTitle className="text-xl leading-tight sm:text-2xl">{caseDetail.case.title}</CardTitle>
                 <CardDescription className="max-w-3xl">
                   {caseDetail.case.description ||
-                    `Use this workspace to gather context, run analysis, and prepare a response for ${property?.name || property?.address || 'this property'}.`}
+                    `${getWorkspaceDescription(caseDetail.case.scenarioType)} for ${property?.name || property?.address || 'this property'}.`}
                 </CardDescription>
               </div>
             </div>
@@ -1578,8 +2263,29 @@ function CaseWorkspace({
           isSaving={manualActionInFlight}
           onSave={(payload) => saveInputMutation.mutate(payload)}
         />
-      ) : (
+      ) : caseDetail.case.scenarioType === 'INSURANCE_PREMIUM_INCREASE' ? (
         <InsuranceManualInputSection
+          caseDetail={caseDetail}
+          feedback={manualFeedback}
+          isSaving={manualActionInFlight}
+          onSave={(payload) => saveInputMutation.mutate(payload)}
+        />
+      ) : caseDetail.case.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT' ? (
+        <ClaimSettlementManualInputSection
+          caseDetail={caseDetail}
+          feedback={manualFeedback}
+          isSaving={manualActionInFlight}
+          onSave={(payload) => saveInputMutation.mutate(payload)}
+        />
+      ) : caseDetail.case.scenarioType === 'BUYER_INSPECTION_NEGOTIATION' ? (
+        <BuyerInspectionManualInputSection
+          caseDetail={caseDetail}
+          feedback={manualFeedback}
+          isSaving={manualActionInFlight}
+          onSave={(payload) => saveInputMutation.mutate(payload)}
+        />
+      ) : (
+        <ContractorUrgencyManualInputSection
           caseDetail={caseDetail}
           feedback={manualFeedback}
           isSaving={manualActionInFlight}
@@ -1590,7 +2296,7 @@ function CaseWorkspace({
       <Card className={SECTION_CARD_CLASS}>
         <CardHeader className={SECTION_HEADER_CLASS}>
           <CardTitle>Documents</CardTitle>
-          <CardDescription>Attach the quote, renewal notice, or supporting screenshots using the existing upload flow.</CardDescription>
+          <CardDescription>{getDocumentSectionDescription(caseDetail.case.scenarioType)}</CardDescription>
         </CardHeader>
         <CardContent className={cn(SECTION_CONTENT_CLASS, 'space-y-4 sm:space-y-6')}>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] xl:items-end">
@@ -2017,7 +2723,7 @@ export default function NegotiationShieldToolClient() {
       <MobilePageIntro
         eyebrow="Home Tool"
         title="Negotiation Shield"
-        subtitle="Review quotes or premium increases and get a message you can actually send."
+        subtitle="Review quotes, insurance disputes, and buyer requests, then get a message you can actually send."
         action={introAction}
       />
 
@@ -2027,7 +2733,7 @@ export default function NegotiationShieldToolClient() {
             <div className="space-y-2">
               <p className="text-sm font-semibold text-foreground">Start a new review</p>
               <p className="text-sm leading-6 text-muted-foreground">
-                Create a case for a contractor quote or an insurance premium increase for {property?.name || property?.address || 'this property'}.
+                Create a case for a quote, insurance negotiation, buyer inspection response, or contractor pressure review for {property?.name || property?.address || 'this property'}.
               </p>
             </div>
             <ScenarioQuickStart onStart={(scenario) => openCreate(scenario)} />
@@ -2161,7 +2867,7 @@ export default function NegotiationShieldToolClient() {
                   <div className="space-y-4">
                     <EmptyStateCard
                       title="No reviews yet"
-                      description="Use Negotiation Shield when you want a second pass on a contractor quote or when your insurance renewal jumps and you need better leverage."
+                      description="Use Negotiation Shield when you want help with a contractor quote, insurance negotiation, buyer inspection response, or urgency-heavy recommendation."
                     />
                     <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
                       {SCENARIO_OPTIONS.map((option) => (

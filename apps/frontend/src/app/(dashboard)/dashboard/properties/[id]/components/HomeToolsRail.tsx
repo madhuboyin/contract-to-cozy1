@@ -58,7 +58,7 @@ const HOME_TOOLS: ToolDef[] = [
     label: 'Negotiation Shield',
     href: (id) => `/dashboard/properties/${id}/tools/negotiation-shield`,
     Icon: ShieldCheck,
-    tooltip: 'Review contractor quotes or premium increases and prepare evidence-backed responses.',
+    tooltip: 'Review quotes, claims, inspection asks, or urgency pressure and prepare evidence-backed responses.',
   },
   {
     key: 'cost-explainer',

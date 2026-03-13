@@ -1,6 +1,9 @@
 export const NEGOTIATION_SHIELD_SCENARIO_TYPES = [
   'CONTRACTOR_QUOTE_REVIEW',
   'INSURANCE_PREMIUM_INCREASE',
+  'INSURANCE_CLAIM_SETTLEMENT',
+  'BUYER_INSPECTION_NEGOTIATION',
+  'CONTRACTOR_URGENCY_PRESSURE',
 ] as const;
 
 export const NEGOTIATION_SHIELD_CASE_STATUSES = [
@@ -19,11 +22,20 @@ export const NEGOTIATION_SHIELD_SOURCE_TYPES = [
 export const NEGOTIATION_SHIELD_INPUT_TYPES = [
   'CONTRACTOR_QUOTE',
   'INSURANCE_PREMIUM',
+  'INSURANCE_CLAIM_SETTLEMENT',
+  'BUYER_INSPECTION',
+  'CONTRACTOR_URGENCY',
 ] as const;
 
 export const NEGOTIATION_SHIELD_DOCUMENT_TYPES = [
   'QUOTE',
   'PREMIUM_NOTICE',
+  'CLAIM_SETTLEMENT_NOTICE',
+  'CLAIM_ESTIMATE',
+  'INSPECTION_REPORT',
+  'BUYER_REQUEST',
+  'CONTRACTOR_RECOMMENDATION',
+  'CONTRACTOR_ESTIMATE',
   'SUPPORTING_DOCUMENT',
 ] as const;
 
@@ -41,6 +53,10 @@ export const NEGOTIATION_SHIELD_PRICING_ASSESSMENT_STATUSES = [
   'NEEDS_REVIEW',
   'DOCUMENTED_INCREASE',
   'LEVERAGE_PRESENT',
+  'SETTLEMENT_GAP_PRESENT',
+  'REQUEST_BROAD_OR_UNCLEAR',
+  'PARTIAL_CONCESSION_POSSIBLE',
+  'URGENCY_PRESSURE_PRESENT',
 ] as const;
 
 export type NegotiationShieldScenarioType =
@@ -104,6 +120,11 @@ export type NegotiationShieldPricingAssessment = {
   newPremium?: number | null;
   increaseAmount?: number | null;
   increasePercentage?: number | null;
+  settlementAmount?: number | null;
+  estimateAmount?: number | null;
+  gapAmount?: number | null;
+  gapPercentage?: number | null;
+  requestedConcessionAmount?: number | null;
 };
 
 export type NegotiationShieldGeneratedAnalysisResult = {
@@ -124,6 +145,9 @@ export type NegotiationShieldGeneratedAnalysisResult = {
 
 export type ContractorQuoteAnalysisResult = NegotiationShieldGeneratedAnalysisResult;
 export type InsurancePremiumIncreaseAnalysisResult = NegotiationShieldGeneratedAnalysisResult;
+export type InsuranceClaimSettlementAnalysisResult = NegotiationShieldGeneratedAnalysisResult;
+export type BuyerInspectionNegotiationAnalysisResult = NegotiationShieldGeneratedAnalysisResult;
+export type ContractorUrgencyPressureAnalysisResult = NegotiationShieldGeneratedAnalysisResult;
 
 export type NegotiationShieldCaseSummaryDTO = {
   id: string;

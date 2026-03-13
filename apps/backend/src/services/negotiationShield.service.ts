@@ -3,7 +3,10 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
   AttachNegotiationShieldDocumentPayload,
+  BuyerInspectionNegotiationAnalysisResult,
   CreateNegotiationShieldCaseInput,
+  ContractorUrgencyPressureAnalysisResult,
+  InsuranceClaimSettlementAnalysisResult,
   InsurancePremiumIncreaseAnalysisResult,
   NegotiationShieldAnalysisDTO,
   NegotiationShieldCaseDetailDTO,
@@ -16,8 +19,11 @@ import {
   NegotiationShieldSourceType,
   SaveNegotiationShieldInputPayload,
 } from './negotiationShield.types';
+import { generateBuyerInspectionNegotiationAnalysis } from './negotiationShieldBuyerInspection.service';
 import { generateContractorQuoteAnalysis } from './negotiationShieldContractorQuote.service';
+import { generateContractorUrgencyPressureAnalysis } from './negotiationShieldContractorUrgency.service';
 import { parseNegotiationShieldDocument } from './negotiationShieldDocumentParsing.service';
+import { generateInsuranceClaimSettlementAnalysis } from './negotiationShieldInsuranceClaimSettlement.service';
 import { generateInsurancePremiumIncreaseAnalysis } from './negotiationShieldInsurancePremium.service';
 
 const PARSED_DOCUMENT_INPUT_ORIGIN = 'PARSED_DOCUMENT';
@@ -308,7 +314,15 @@ export class NegotiationShieldService {
     return property;
   }
 
-  private buildMergedScenarioInput(record: any, expectedInputType: 'CONTRACTOR_QUOTE' | 'INSURANCE_PREMIUM') {
+  private buildMergedScenarioInput(
+    record: any,
+    expectedInputType:
+      | 'CONTRACTOR_QUOTE'
+      | 'INSURANCE_PREMIUM'
+      | 'INSURANCE_CLAIM_SETTLEMENT'
+      | 'BUYER_INSPECTION'
+      | 'CONTRACTOR_URGENCY'
+  ) {
     const allInputs = asArray<any>(record.inputs);
     const typedInputs = allInputs.filter((input) => input.inputType === expectedInputType);
     const relevantInputs = typedInputs.length > 0 ? typedInputs : allInputs;
@@ -751,9 +765,361 @@ export class NegotiationShieldService {
     };
   }
 
+  private buildInsuranceClaimSettlementContext(record: any, propertySignals: any) {
+    const { mergedStructuredData, latestRawText } = this.buildMergedScenarioInput(
+      record,
+      'INSURANCE_CLAIM_SETTLEMENT'
+    );
+
+    const notes = asTrimmedString(
+      firstPresent(mergedStructuredData, ['notes', 'note', 'description', 'settlementLetterText'])
+    );
+    const insurerName =
+      asTrimmedString(firstPresent(mergedStructuredData, ['insurerName', 'carrierName', 'providerName'])) ??
+      propertySignals.policyOnFile?.carrierName ??
+      null;
+    const claimType = asTrimmedString(
+      firstPresent(mergedStructuredData, ['claimType', 'lossType', 'coverageType'])
+    );
+    const settlementAmount = asNumber(
+      firstPresent(mergedStructuredData, ['settlementAmount', 'claimSettlementAmount', 'approvedAmount'])
+    );
+    const estimateAmount = asNumber(
+      firstPresent(mergedStructuredData, ['estimateAmount', 'repairEstimateAmount', 'contractorEstimateAmount'])
+    );
+    const providedGapAmount = asNumber(
+      firstPresent(mergedStructuredData, ['gapAmount', 'settlementGapAmount'])
+    );
+    const providedGapPercentage = asNumber(
+      firstPresent(mergedStructuredData, ['gapPercentage', 'settlementGapPercentage'])
+    );
+    const gapAmount =
+      providedGapAmount !== null
+        ? providedGapAmount
+        : settlementAmount !== null && estimateAmount !== null
+          ? Number((estimateAmount - settlementAmount).toFixed(2))
+          : null;
+    const gapPercentage =
+      providedGapPercentage !== null
+        ? providedGapPercentage
+        : settlementAmount !== null && estimateAmount !== null && settlementAmount > 0
+          ? Number((((estimateAmount - settlementAmount) / settlementAmount) * 100).toFixed(1))
+          : null;
+    const claimDate = asTrimmedString(
+      firstPresent(mergedStructuredData, ['claimDate', 'lossDate', 'settlementDate'])
+    );
+    const reasonProvided = asTrimmedString(
+      firstPresent(mergedStructuredData, ['reasonProvided', 'insurerReason', 'rationale', 'explanation'])
+    );
+
+    const documents = asArray<any>(record.documents);
+    const settlementNoticeDocumentCount = documents.filter(
+      (item) => item.documentType === 'CLAIM_SETTLEMENT_NOTICE'
+    ).length;
+    const estimateDocumentCount = documents.filter(
+      (item) => item.documentType === 'CLAIM_ESTIMATE'
+    ).length;
+    const supportingDocumentCount = documents.filter(
+      (item) => item.documentType === 'SUPPORTING_DOCUMENT'
+    ).length;
+
+    const meaningfulSignalKeys = [
+      'insurerName',
+      'carrierName',
+      'providerName',
+      'claimType',
+      'lossType',
+      'coverageType',
+      'settlementAmount',
+      'claimSettlementAmount',
+      'approvedAmount',
+      'estimateAmount',
+      'repairEstimateAmount',
+      'contractorEstimateAmount',
+      'gapAmount',
+      'settlementGapAmount',
+      'gapPercentage',
+      'settlementGapPercentage',
+      'claimDate',
+      'lossDate',
+      'settlementDate',
+      'reasonProvided',
+      'insurerReason',
+      'rationale',
+      'explanation',
+      'notes',
+      'note',
+      'description',
+      'settlementLetterText',
+    ];
+    const hasMeaningfulStructuredInput = meaningfulSignalKeys.some((key) => {
+      if (!(key in mergedStructuredData)) return false;
+      const value = mergedStructuredData[key];
+      if (typeof value === 'string') return value.trim().length > 0;
+      if (typeof value === 'number') return Number.isFinite(value);
+      if (typeof value === 'boolean') return true;
+      if (Array.isArray(value)) return value.length > 0;
+      return value !== null && value !== undefined;
+    });
+
+    const hasMeaningfulInput =
+      hasMeaningfulText(latestRawText, 20) ||
+      hasMeaningfulStructuredInput ||
+      settlementAmount !== null ||
+      estimateAmount !== null ||
+      gapAmount !== null ||
+      hasMeaningfulText(notes, 20);
+
+    return {
+      hasMeaningfulInput,
+      analysisInput: {
+        caseTitle: record.title,
+        caseDescription: record.description ?? null,
+        insurerName,
+        claimType,
+        settlementAmount,
+        estimateAmount,
+        gapAmount,
+        gapPercentage,
+        claimDate,
+        reasonProvided,
+        notes,
+        rawText: latestRawText,
+        hasAnyDocument: documents.length > 0,
+        settlementNoticeDocumentCount,
+        estimateDocumentCount,
+        supportingDocumentCount,
+        propertySignals,
+      },
+    };
+  }
+
+  private buildBuyerInspectionNegotiationContext(record: any, propertySignals: any) {
+    const { mergedStructuredData, latestRawText } = this.buildMergedScenarioInput(
+      record,
+      'BUYER_INSPECTION'
+    );
+
+    const requestedConcessionAmount = asNumber(
+      firstPresent(mergedStructuredData, ['requestedConcessionAmount', 'concessionAmount', 'buyerRequestAmount'])
+    );
+    const inspectionIssuesSummary = asTrimmedString(
+      firstPresent(mergedStructuredData, ['inspectionIssuesSummary', 'issueSummary', 'issues'])
+    );
+    const requestedRepairs = asTrimmedString(
+      firstPresent(mergedStructuredData, ['requestedRepairs', 'repairRequests', 'buyerRequestedRepairs'])
+    );
+    const recentUpgradeNotes = asTrimmedString(
+      firstPresent(mergedStructuredData, ['recentUpgradeNotes', 'upgradeNotes', 'sellerUpgradeNotes'])
+    );
+    const reportDate = asTrimmedString(
+      firstPresent(mergedStructuredData, ['reportDate', 'inspectionDate', 'buyerRequestDate'])
+    );
+    const notes = asTrimmedString(
+      firstPresent(mergedStructuredData, ['notes', 'note', 'description', 'buyerRequestText'])
+    );
+
+    const documents = asArray<any>(record.documents);
+    const inspectionReportDocumentCount = documents.filter(
+      (item) => item.documentType === 'INSPECTION_REPORT'
+    ).length;
+    const buyerRequestDocumentCount = documents.filter(
+      (item) => item.documentType === 'BUYER_REQUEST'
+    ).length;
+    const supportingDocumentCount = documents.filter(
+      (item) => item.documentType === 'SUPPORTING_DOCUMENT'
+    ).length;
+
+    const meaningfulSignalKeys = [
+      'requestedConcessionAmount',
+      'concessionAmount',
+      'buyerRequestAmount',
+      'inspectionIssuesSummary',
+      'issueSummary',
+      'issues',
+      'requestedRepairs',
+      'repairRequests',
+      'buyerRequestedRepairs',
+      'recentUpgradeNotes',
+      'upgradeNotes',
+      'sellerUpgradeNotes',
+      'reportDate',
+      'inspectionDate',
+      'buyerRequestDate',
+      'notes',
+      'note',
+      'description',
+      'buyerRequestText',
+    ];
+    const hasMeaningfulStructuredInput = meaningfulSignalKeys.some((key) => {
+      if (!(key in mergedStructuredData)) return false;
+      const value = mergedStructuredData[key];
+      if (typeof value === 'string') return value.trim().length > 0;
+      if (typeof value === 'number') return Number.isFinite(value);
+      if (typeof value === 'boolean') return true;
+      if (Array.isArray(value)) return value.length > 0;
+      return value !== null && value !== undefined;
+    });
+
+    const hasMeaningfulInput =
+      hasMeaningfulText(latestRawText, 20) ||
+      hasMeaningfulStructuredInput ||
+      requestedConcessionAmount !== null ||
+      hasMeaningfulText(inspectionIssuesSummary, 20) ||
+      hasMeaningfulText(requestedRepairs, 20) ||
+      hasMeaningfulText(notes, 20);
+
+    return {
+      hasMeaningfulInput,
+      analysisInput: {
+        caseTitle: record.title,
+        caseDescription: record.description ?? null,
+        requestedConcessionAmount,
+        inspectionIssuesSummary,
+        requestedRepairs,
+        recentUpgradeNotes,
+        reportDate,
+        notes,
+        rawText: latestRawText,
+        hasAnyDocument: documents.length > 0,
+        inspectionReportDocumentCount,
+        buyerRequestDocumentCount,
+        supportingDocumentCount,
+        propertySignals,
+      },
+    };
+  }
+
+  private buildContractorUrgencyPressureContext(record: any) {
+    const { mergedStructuredData, latestRawText } = this.buildMergedScenarioInput(
+      record,
+      'CONTRACTOR_URGENCY'
+    );
+
+    const notes = asTrimmedString(
+      firstPresent(mergedStructuredData, ['notes', 'note', 'description', 'recommendationText'])
+    );
+    const contractorName = asTrimmedString(
+      firstPresent(mergedStructuredData, ['contractorName', 'vendorName', 'companyName'])
+    );
+    const recommendedWork = asTrimmedString(
+      firstPresent(mergedStructuredData, ['recommendedWork', 'recommendedScope', 'workRecommendation'])
+    );
+    const urgencyClaimed = asBoolean(
+      firstPresent(mergedStructuredData, ['urgencyClaimed', 'urgent', 'immediate'])
+    );
+    const sameDayPressure = asBoolean(
+      firstPresent(mergedStructuredData, ['sameDayPressure', 'sameDay', 'sameDayApproval'])
+    );
+    const replacementRecommended = asBoolean(
+      firstPresent(mergedStructuredData, ['replacementRecommended', 'fullReplacementRecommended'])
+    );
+    const repairOptionMentioned = asBoolean(
+      firstPresent(mergedStructuredData, ['repairOptionMentioned', 'repairOptionDiscussed', 'repairPossible'])
+    );
+    const quoteAmount = asNumber(
+      firstPresent(mergedStructuredData, ['quoteAmount', 'amount', 'estimateAmount', 'totalAmount'])
+    );
+    const inspectionEvidenceProvided = asBoolean(
+      firstPresent(mergedStructuredData, ['inspectionEvidenceProvided', 'photosProvided', 'inspectionPhotosProvided'])
+    );
+    const itemizedExplanationProvided = asBoolean(
+      firstPresent(mergedStructuredData, ['itemizedExplanationProvided', 'lineItemBreakdownProvided', 'itemized'])
+    );
+
+    const documents = asArray<any>(record.documents);
+    const recommendationDocumentCount = documents.filter(
+      (item) => item.documentType === 'CONTRACTOR_RECOMMENDATION'
+    ).length;
+    const estimateDocumentCount = documents.filter(
+      (item) => item.documentType === 'CONTRACTOR_ESTIMATE'
+    ).length;
+    const supportingDocumentCount = documents.filter(
+      (item) => item.documentType === 'SUPPORTING_DOCUMENT'
+    ).length;
+
+    const meaningfulSignalKeys = [
+      'contractorName',
+      'vendorName',
+      'companyName',
+      'recommendedWork',
+      'recommendedScope',
+      'workRecommendation',
+      'urgencyClaimed',
+      'urgent',
+      'immediate',
+      'sameDayPressure',
+      'sameDay',
+      'sameDayApproval',
+      'replacementRecommended',
+      'fullReplacementRecommended',
+      'repairOptionMentioned',
+      'repairOptionDiscussed',
+      'repairPossible',
+      'quoteAmount',
+      'amount',
+      'estimateAmount',
+      'totalAmount',
+      'inspectionEvidenceProvided',
+      'photosProvided',
+      'inspectionPhotosProvided',
+      'itemizedExplanationProvided',
+      'lineItemBreakdownProvided',
+      'itemized',
+      'notes',
+      'note',
+      'description',
+      'recommendationText',
+    ];
+    const hasMeaningfulStructuredInput = meaningfulSignalKeys.some((key) => {
+      if (!(key in mergedStructuredData)) return false;
+      const value = mergedStructuredData[key];
+      if (typeof value === 'string') return value.trim().length > 0;
+      if (typeof value === 'number') return Number.isFinite(value);
+      if (typeof value === 'boolean') return true;
+      if (Array.isArray(value)) return value.length > 0;
+      return value !== null && value !== undefined;
+    });
+
+    const hasMeaningfulInput =
+      hasMeaningfulText(latestRawText, 20) ||
+      hasMeaningfulStructuredInput ||
+      hasMeaningfulText(recommendedWork, 12) ||
+      quoteAmount !== null ||
+      hasMeaningfulText(notes, 20);
+
+    return {
+      hasMeaningfulInput,
+      analysisInput: {
+        caseTitle: record.title,
+        caseDescription: record.description ?? null,
+        contractorName,
+        recommendedWork,
+        urgencyClaimed,
+        sameDayPressure,
+        replacementRecommended,
+        repairOptionMentioned,
+        quoteAmount,
+        notes,
+        rawText: latestRawText,
+        hasAnyDocument: documents.length > 0,
+        recommendationDocumentCount,
+        estimateDocumentCount,
+        supportingDocumentCount,
+        inspectionEvidenceProvided,
+        itemizedExplanationProvided,
+      },
+    };
+  }
+
   private async persistAnalysisResult(
     caseId: string,
-    scenarioType: 'CONTRACTOR_QUOTE_REVIEW' | 'INSURANCE_PREMIUM_INCREASE',
+    scenarioType:
+      | 'CONTRACTOR_QUOTE_REVIEW'
+      | 'INSURANCE_PREMIUM_INCREASE'
+      | 'INSURANCE_CLAIM_SETTLEMENT'
+      | 'BUYER_INSPECTION_NEGOTIATION'
+      | 'CONTRACTOR_URGENCY_PRESSURE',
     result: NegotiationShieldGeneratedAnalysisResult
   ) {
     const now = new Date();
@@ -1065,7 +1431,10 @@ export class NegotiationShieldService {
     const parentCase = await this.assertCaseBelongsToProperty(propertyId, caseId);
     const supportedScenario =
       parentCase.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ||
-      parentCase.scenarioType === 'INSURANCE_PREMIUM_INCREASE';
+      parentCase.scenarioType === 'INSURANCE_PREMIUM_INCREASE' ||
+      parentCase.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT' ||
+      parentCase.scenarioType === 'BUYER_INSPECTION_NEGOTIATION' ||
+      parentCase.scenarioType === 'CONTRACTOR_URGENCY_PRESSURE';
 
     if (!supportedScenario) {
       throw new APIError(
@@ -1269,6 +1638,140 @@ export class NegotiationShieldService {
     return this.getCaseDetail(propertyId, caseId);
   }
 
+  async analyzeInsuranceClaimSettlementCase(
+    propertyId: string,
+    caseId: string
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    const record = await this.models.caseModel.findFirst({
+      where: { id: caseId, propertyId },
+      include: {
+        inputs: {
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        },
+        documents: {
+          include: { document: true },
+          orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }],
+        },
+      },
+    });
+
+    if (!record) {
+      throw new APIError('Negotiation Shield case not found.', 404, 'NEGOTIATION_SHIELD_CASE_NOT_FOUND');
+    }
+
+    if (record.scenarioType !== 'INSURANCE_CLAIM_SETTLEMENT') {
+      throw new APIError(
+        'This case does not support insurance claim settlement analysis.',
+        400,
+        'NEGOTIATION_SHIELD_UNSUPPORTED_SCENARIO'
+      );
+    }
+
+    const propertySignals = await this.getInsurancePropertySignals(propertyId);
+    const context = this.buildInsuranceClaimSettlementContext(record, propertySignals);
+    if (!context.hasMeaningfulInput) {
+      throw new APIError(
+        'Add claim settlement details before running claim settlement analysis.',
+        400,
+        'NEGOTIATION_SHIELD_ANALYSIS_INPUT_REQUIRED'
+      );
+    }
+
+    const result: InsuranceClaimSettlementAnalysisResult =
+      generateInsuranceClaimSettlementAnalysis(context.analysisInput);
+    await this.persistAnalysisResult(caseId, 'INSURANCE_CLAIM_SETTLEMENT', result);
+    return this.getCaseDetail(propertyId, caseId);
+  }
+
+  async analyzeBuyerInspectionNegotiationCase(
+    propertyId: string,
+    caseId: string
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    const record = await this.models.caseModel.findFirst({
+      where: { id: caseId, propertyId },
+      include: {
+        inputs: {
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        },
+        documents: {
+          include: { document: true },
+          orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }],
+        },
+      },
+    });
+
+    if (!record) {
+      throw new APIError('Negotiation Shield case not found.', 404, 'NEGOTIATION_SHIELD_CASE_NOT_FOUND');
+    }
+
+    if (record.scenarioType !== 'BUYER_INSPECTION_NEGOTIATION') {
+      throw new APIError(
+        'This case does not support buyer inspection analysis.',
+        400,
+        'NEGOTIATION_SHIELD_UNSUPPORTED_SCENARIO'
+      );
+    }
+
+    const propertySignals = await this.getInsurancePropertySignals(propertyId);
+    const context = this.buildBuyerInspectionNegotiationContext(record, propertySignals);
+    if (!context.hasMeaningfulInput) {
+      throw new APIError(
+        'Add buyer inspection details before running buyer inspection analysis.',
+        400,
+        'NEGOTIATION_SHIELD_ANALYSIS_INPUT_REQUIRED'
+      );
+    }
+
+    const result: BuyerInspectionNegotiationAnalysisResult =
+      generateBuyerInspectionNegotiationAnalysis(context.analysisInput);
+    await this.persistAnalysisResult(caseId, 'BUYER_INSPECTION_NEGOTIATION', result);
+    return this.getCaseDetail(propertyId, caseId);
+  }
+
+  async analyzeContractorUrgencyPressureCase(
+    propertyId: string,
+    caseId: string
+  ): Promise<NegotiationShieldCaseDetailDTO> {
+    const record = await this.models.caseModel.findFirst({
+      where: { id: caseId, propertyId },
+      include: {
+        inputs: {
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        },
+        documents: {
+          include: { document: true },
+          orderBy: [{ uploadedAt: 'desc' }, { id: 'desc' }],
+        },
+      },
+    });
+
+    if (!record) {
+      throw new APIError('Negotiation Shield case not found.', 404, 'NEGOTIATION_SHIELD_CASE_NOT_FOUND');
+    }
+
+    if (record.scenarioType !== 'CONTRACTOR_URGENCY_PRESSURE') {
+      throw new APIError(
+        'This case does not support contractor urgency pressure analysis.',
+        400,
+        'NEGOTIATION_SHIELD_UNSUPPORTED_SCENARIO'
+      );
+    }
+
+    const context = this.buildContractorUrgencyPressureContext(record);
+    if (!context.hasMeaningfulInput) {
+      throw new APIError(
+        'Add contractor recommendation details before running urgency pressure analysis.',
+        400,
+        'NEGOTIATION_SHIELD_ANALYSIS_INPUT_REQUIRED'
+      );
+    }
+
+    const result: ContractorUrgencyPressureAnalysisResult =
+      generateContractorUrgencyPressureAnalysis(context.analysisInput);
+    await this.persistAnalysisResult(caseId, 'CONTRACTOR_URGENCY_PRESSURE', result);
+    return this.getCaseDetail(propertyId, caseId);
+  }
+
   async analyzeCase(propertyId: string, caseId: string): Promise<NegotiationShieldCaseDetailDTO> {
     const record = await this.assertCaseBelongsToProperty(propertyId, caseId);
 
@@ -1278,6 +1781,18 @@ export class NegotiationShieldService {
 
     if (record.scenarioType === 'INSURANCE_PREMIUM_INCREASE') {
       return this.analyzeInsurancePremiumIncreaseCase(propertyId, caseId);
+    }
+
+    if (record.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT') {
+      return this.analyzeInsuranceClaimSettlementCase(propertyId, caseId);
+    }
+
+    if (record.scenarioType === 'BUYER_INSPECTION_NEGOTIATION') {
+      return this.analyzeBuyerInspectionNegotiationCase(propertyId, caseId);
+    }
+
+    if (record.scenarioType === 'CONTRACTOR_URGENCY_PRESSURE') {
+      return this.analyzeContractorUrgencyPressureCase(propertyId, caseId);
     }
 
     throw new APIError(

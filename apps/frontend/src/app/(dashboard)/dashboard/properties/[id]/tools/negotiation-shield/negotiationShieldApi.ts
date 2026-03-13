@@ -2,7 +2,10 @@ import { api } from '@/lib/api/client';
 
 export type NegotiationShieldCaseScenarioType =
   | 'CONTRACTOR_QUOTE_REVIEW'
-  | 'INSURANCE_PREMIUM_INCREASE';
+  | 'INSURANCE_PREMIUM_INCREASE'
+  | 'INSURANCE_CLAIM_SETTLEMENT'
+  | 'BUYER_INSPECTION_NEGOTIATION'
+  | 'CONTRACTOR_URGENCY_PRESSURE';
 
 export type NegotiationShieldCaseStatus =
   | 'DRAFT'
@@ -17,11 +20,20 @@ export type NegotiationShieldSourceType =
 
 export type NegotiationShieldInputType =
   | 'CONTRACTOR_QUOTE'
-  | 'INSURANCE_PREMIUM';
+  | 'INSURANCE_PREMIUM'
+  | 'INSURANCE_CLAIM_SETTLEMENT'
+  | 'BUYER_INSPECTION'
+  | 'CONTRACTOR_URGENCY';
 
 export type NegotiationShieldDocumentType =
   | 'QUOTE'
   | 'PREMIUM_NOTICE'
+  | 'CLAIM_SETTLEMENT_NOTICE'
+  | 'CLAIM_ESTIMATE'
+  | 'INSPECTION_REPORT'
+  | 'BUYER_REQUEST'
+  | 'CONTRACTOR_RECOMMENDATION'
+  | 'CONTRACTOR_ESTIMATE'
   | 'SUPPORTING_DOCUMENT';
 
 export type NegotiationShieldDraftType = 'EMAIL' | 'MESSAGE';
@@ -58,6 +70,11 @@ export type NegotiationShieldPricingAssessment = {
   newPremium?: number | null;
   increaseAmount?: number | null;
   increasePercentage?: number | null;
+  settlementAmount?: number | null;
+  estimateAmount?: number | null;
+  gapAmount?: number | null;
+  gapPercentage?: number | null;
+  requestedConcessionAmount?: number | null;
 };
 
 export type NegotiationShieldCaseSummary = {

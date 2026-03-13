@@ -468,6 +468,143 @@ function parseInsurancePremiumText(text: string): Record<string, unknown> {
   return structuredData;
 }
 
+function parseInsuranceClaimSettlementText(text: string): Record<string, unknown> {
+  const structuredData: Record<string, unknown> = {};
+  const insurerName = extractLabeledValue(text, [
+    'carrier',
+    'insurer',
+    'insurance company',
+    'company',
+  ]);
+  const claimType = extractLabeledValue(text, [
+    'claim type',
+    'loss type',
+    'coverage',
+    'claim for',
+  ]);
+  const settlementAmount = extractAmountNearLabels(text, [
+    'settlement amount',
+    'claim payment',
+    'net payment',
+    'approved amount',
+    'amount paid',
+  ]);
+  const estimateAmount = extractAmountNearLabels(text, [
+    'estimate amount',
+    'repair estimate',
+    'contractor estimate',
+    'replacement cost',
+  ]);
+  const claimDate = extractDateNearLabels(text, [
+    'claim date',
+    'loss date',
+    'date of loss',
+    'settlement date',
+  ]);
+  const reasonProvided =
+    extractLabeledValue(text, ['reason', 'because', 'explanation', 'basis', 'settlement rationale'], 240) ??
+    null;
+  const notes = buildTextSummary(text);
+
+  if (insurerName) structuredData.insurerName = insurerName;
+  if (claimType) structuredData.claimType = claimType;
+  if (settlementAmount !== null) structuredData.settlementAmount = settlementAmount;
+  if (estimateAmount !== null) structuredData.estimateAmount = estimateAmount;
+  if (claimDate) structuredData.claimDate = claimDate;
+  if (reasonProvided) structuredData.reasonProvided = reasonProvided;
+  if (settlementAmount !== null && estimateAmount !== null) {
+    structuredData.gapAmount = Number((estimateAmount - settlementAmount).toFixed(2));
+    if (settlementAmount > 0) {
+      structuredData.gapPercentage = Number((((estimateAmount - settlementAmount) / settlementAmount) * 100).toFixed(1));
+    }
+  }
+  if (notes) structuredData.notes = notes;
+
+  return structuredData;
+}
+
+function parseBuyerInspectionText(text: string): Record<string, unknown> {
+  const structuredData: Record<string, unknown> = {};
+  const requestedConcessionAmount = extractAmountNearLabels(text, [
+    'credit requested',
+    'concession requested',
+    'requested concession',
+    'seller credit',
+    'buyer request',
+  ]);
+  const reportDate = extractDateNearLabels(text, [
+    'report date',
+    'inspection date',
+    'date',
+  ]);
+  const inspectionIssuesSummary =
+    extractLabeledValue(text, ['inspection summary', 'issue summary', 'findings', 'major findings'], 320) ??
+    null;
+  const requestedRepairs =
+    extractLabeledValue(text, ['requested repairs', 'repair request', 'repairs requested'], 320) ??
+    null;
+  const buyerRequestText =
+    extractLabeledValue(text, ['buyer request', 'buyer comments', 'buyer notes'], 320) ??
+    null;
+  const notes = buildTextSummary(text);
+
+  if (requestedConcessionAmount !== null) {
+    structuredData.requestedConcessionAmount = requestedConcessionAmount;
+  }
+  if (reportDate) structuredData.reportDate = reportDate;
+  if (inspectionIssuesSummary) structuredData.inspectionIssuesSummary = inspectionIssuesSummary;
+  if (requestedRepairs) structuredData.requestedRepairs = requestedRepairs;
+  if (buyerRequestText) structuredData.notes = buyerRequestText;
+  else if (notes) structuredData.notes = notes;
+
+  return structuredData;
+}
+
+function parseContractorUrgencyText(text: string): Record<string, unknown> {
+  const structuredData: Record<string, unknown> = {};
+  const contractorName = extractLabeledValue(text, [
+    'contractor',
+    'company',
+    'vendor',
+    'prepared by',
+    'estimate from',
+  ]);
+  const recommendedWork =
+    extractLabeledValue(text, ['recommended work', 'scope', 'recommendation', 'work recommended'], 220) ??
+    buildTextSummary(text, 2);
+  const quoteAmount =
+    extractAmountNearLabels(text, ['total', 'estimate', 'quote amount', 'proposal total']) ??
+    parseMoney(text.match(/\btotal\b[^\d$]{0,20}([$]?\s*[\d,]+(?:\.\d{2})?)/i)?.[1] ?? null);
+  const urgencyClaimed = /\b(urgent|immediate|emergency|critical|asap)\b/i.test(text) ? true : null;
+  const sameDayPressure = /\b(same day|same-day|today only|approve today|sign today)\b/i.test(text)
+    ? true
+    : null;
+  const replacementRecommended = /\b(full replacement|replace(?:ment)? recommended|needs replacement)\b/i.test(text)
+    ? true
+    : null;
+  const repairOptionMentioned = /\brepair\b/i.test(text) ? true : null;
+  const inspectionEvidenceProvided = /\b(photo|photos|inspection|image|evidence|moisture reading)\b/i.test(text)
+    ? true
+    : null;
+  const itemizedExplanationProvided = /\b(line item|itemized|materials|labor|scope)\b/i.test(text)
+    ? true
+    : null;
+  const notes = buildTextSummary(text);
+
+  if (contractorName) structuredData.contractorName = contractorName;
+  if (recommendedWork) structuredData.recommendedWork = recommendedWork;
+  if (quoteAmount !== null) structuredData.quoteAmount = quoteAmount;
+  if (urgencyClaimed !== null) structuredData.urgencyClaimed = urgencyClaimed;
+  if (sameDayPressure !== null) structuredData.sameDayPressure = sameDayPressure;
+  if (replacementRecommended !== null) structuredData.replacementRecommended = replacementRecommended;
+  if (repairOptionMentioned !== null) structuredData.repairOptionMentioned = repairOptionMentioned;
+  if (inspectionEvidenceProvided !== null) structuredData.inspectionEvidenceProvided = inspectionEvidenceProvided;
+  if (itemizedExplanationProvided !== null) structuredData.itemizedExplanationProvided = itemizedExplanationProvided;
+  if (notes) structuredData.notes = notes;
+
+  return structuredData;
+}
+
 export async function parseNegotiationShieldDocument(args: {
   scenarioType: NegotiationShieldScenarioType;
   source: ParsedDocumentSource;
@@ -486,13 +623,25 @@ export async function parseNegotiationShieldDocument(args: {
   const structuredData =
     args.scenarioType === 'CONTRACTOR_QUOTE_REVIEW'
       ? parseContractorQuoteText(rawText)
-      : parseInsurancePremiumText(rawText);
+      : args.scenarioType === 'INSURANCE_PREMIUM_INCREASE'
+        ? parseInsurancePremiumText(rawText)
+        : args.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT'
+          ? parseInsuranceClaimSettlementText(rawText)
+          : args.scenarioType === 'BUYER_INSPECTION_NEGOTIATION'
+            ? parseBuyerInspectionText(rawText)
+            : parseContractorUrgencyText(rawText);
 
   return {
     inputType:
       args.scenarioType === 'CONTRACTOR_QUOTE_REVIEW'
         ? 'CONTRACTOR_QUOTE'
-        : 'INSURANCE_PREMIUM',
+        : args.scenarioType === 'INSURANCE_PREMIUM_INCREASE'
+          ? 'INSURANCE_PREMIUM'
+          : args.scenarioType === 'INSURANCE_CLAIM_SETTLEMENT'
+            ? 'INSURANCE_CLAIM_SETTLEMENT'
+            : args.scenarioType === 'BUYER_INSPECTION_NEGOTIATION'
+              ? 'BUYER_INSPECTION'
+              : 'CONTRACTOR_URGENCY',
     rawText,
     structuredData,
     parserVersion: NEGOTIATION_SHIELD_PARSER_VERSION,
