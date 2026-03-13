@@ -1,4 +1,4 @@
-import { DocumentType, HomeEventType, MaintenanceTaskStatus } from '@prisma/client';
+import { DocumentType, HomeEventType, MaintenanceTaskStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -12,6 +12,7 @@ import {
   NegotiationShieldDraftDTO,
   NegotiationShieldGeneratedAnalysisResult,
   NegotiationShieldInputDTO,
+  NegotiationShieldEventInput,
   NegotiationShieldSourceType,
   SaveNegotiationShieldInputPayload,
 } from './negotiationShield.types';
@@ -292,6 +293,19 @@ export class NegotiationShieldService {
     ]);
 
     return { inputCount, documentCount };
+  }
+
+  private async assertPropertyExists(propertyId: string) {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { id: true },
+    });
+
+    if (!property) {
+      throw new APIError('Property not found.', 404, 'PROPERTY_NOT_FOUND');
+    }
+
+    return property;
   }
 
   private buildMergedScenarioInput(record: any, expectedInputType: 'CONTRACTOR_QUOTE' | 'INSURANCE_PREMIUM') {
@@ -1139,6 +1153,32 @@ export class NegotiationShieldService {
     }
 
     return this.getCaseDetail(propertyId, caseId);
+  }
+
+  async trackEvent(propertyId: string, userId: string, input: NegotiationShieldEventInput) {
+    await this.assertPropertyExists(propertyId);
+
+    const eventName = String(input.event || 'UNKNOWN')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_]/g, '_')
+      .slice(0, 80);
+    const section = input.section ? String(input.section).slice(0, 80) : null;
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: `NEGOTIATION_SHIELD_${eventName || 'UNKNOWN'}`,
+        entityType: 'PROPERTY',
+        entityId: propertyId,
+        newValues: {
+          section,
+          metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return { ok: true };
   }
 
   async analyzeContractorQuoteCase(

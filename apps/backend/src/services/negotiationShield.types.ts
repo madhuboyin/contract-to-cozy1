@@ -225,3 +225,9 @@ export type AttachNegotiationShieldDocumentPayload = {
   storageKey?: string | null;
   fileSizeBytes?: number | null;
 };
+
+export type NegotiationShieldEventInput = {
+  event: string;
+  section?: string;
+  metadata?: Record<string, unknown>;
+};

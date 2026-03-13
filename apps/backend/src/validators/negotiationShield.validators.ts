@@ -107,3 +107,9 @@ export const attachNegotiationShieldDocumentBodySchema = z.object({
     });
   }
 });
+
+export const trackNegotiationShieldEventBodySchema = z.object({
+  event: z.string().trim().min(1).max(80),
+  section: z.string().trim().min(1).max(80).optional(),
+  metadata: jsonObjectSchema.optional(),
+});

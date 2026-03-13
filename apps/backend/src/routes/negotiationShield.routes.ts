@@ -11,6 +11,7 @@ import {
   listNegotiationShieldCases,
   parseNegotiationShieldDocument,
   saveNegotiationShieldManualInput,
+  trackNegotiationShieldEvent,
 } from '../controllers/negotiationShield.controller';
 import {
   attachNegotiationShieldDocumentBodySchema,
@@ -19,6 +20,7 @@ import {
   negotiationShieldCaseDocumentParamsSchema,
   negotiationShieldPropertyParamsSchema,
   saveNegotiationShieldInputBodySchema,
+  trackNegotiationShieldEventBodySchema,
 } from '../validators/negotiationShield.validators';
 
 const router = Router();
@@ -31,6 +33,14 @@ router.get(
   propertyAuthMiddleware,
   validate(negotiationShieldPropertyParamsSchema),
   listNegotiationShieldCases
+);
+
+router.post(
+  '/properties/:propertyId/negotiation-shield/events',
+  propertyAuthMiddleware,
+  validate(negotiationShieldPropertyParamsSchema),
+  validateBody(trackNegotiationShieldEventBodySchema),
+  trackNegotiationShieldEvent
 );
 
 router.post(

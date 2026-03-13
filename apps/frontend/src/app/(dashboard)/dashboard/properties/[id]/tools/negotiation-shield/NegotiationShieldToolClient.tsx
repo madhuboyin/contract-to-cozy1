@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -76,6 +76,11 @@ type InsuranceFormValues = {
   reasonProvided: string;
   notes: string;
   rawText: string;
+};
+
+type InlineFeedbackState = {
+  tone: 'success' | 'error' | 'info';
+  message: string;
 };
 
 const SCENARIO_OPTIONS: Array<{
@@ -259,6 +264,26 @@ function toNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function getInputMode(sourceType: NegotiationShieldSourceType): 'manual' | 'upload' | 'hybrid' {
+  if (sourceType === 'HYBRID') return 'hybrid';
+  if (sourceType === 'DOCUMENT_UPLOAD') return 'upload';
+  return 'manual';
+}
+
+function upsertCaseSummary(
+  current: NegotiationShieldCaseDetail['case'][] | undefined,
+  nextCase: NegotiationShieldCaseDetail['case']
+) {
+  const existing = current ?? [];
+  const next = [...existing.filter((item) => item.id !== nextCase.id), nextCase];
+
+  return next.sort((left, right) => {
+    const leftTime = new Date(left.updatedAt || left.createdAt).getTime();
+    const rightTime = new Date(right.updatedAt || right.createdAt).getTime();
+    return rightTime - leftTime;
+  });
+}
+
 function mapCaseDocumentToUploadType(documentType: NegotiationShieldDocumentType): DocumentType {
   switch (documentType) {
     case 'QUOTE':
@@ -389,6 +414,87 @@ function formatConfidence(confidence: number | null | undefined) {
   return `${Math.round(normalized)}% confidence`;
 }
 
+function getErrorCode(error: unknown) {
+  if (!error || typeof error !== 'object') return null;
+
+  const payload = (error as { payload?: { code?: unknown } }).payload;
+  if (payload && typeof payload.code === 'string') {
+    return payload.code;
+  }
+
+  const status = (error as { status?: unknown }).status;
+  if (typeof status === 'string') return status;
+  if (typeof status === 'number') return String(status);
+
+  return null;
+}
+
+function getParseFailureMessage(error: unknown) {
+  const code = getErrorCode(error);
+  if (code === 'NEGOTIATION_SHIELD_DOCUMENT_PARSE_UNSUPPORTED') {
+    return 'This file type is not supported for parsing yet. You can still add manual input and continue.';
+  }
+  if (code === 'NEGOTIATION_SHIELD_DOCUMENT_PARSE_EMPTY') {
+    return 'No readable text was found in this file. Try a clearer PDF or image, or add manual input instead.';
+  }
+  if (code === 'NEGOTIATION_SHIELD_DOCUMENT_FETCH_FAILED') {
+    return 'We could not retrieve the file for parsing. Try attaching it again.';
+  }
+  return errorMessage(error, 'We could not parse this document right now.');
+}
+
+function getAnalysisFailureMessage(error: unknown) {
+  const code = getErrorCode(error);
+  if (code === 'NEGOTIATION_SHIELD_ANALYSIS_INPUT_REQUIRED') {
+    return 'Add manual details or parse a document before running analysis.';
+  }
+  if (code === 'NEGOTIATION_SHIELD_UNSUPPORTED_SCENARIO') {
+    return 'This case is not set up for the selected analysis path.';
+  }
+  return errorMessage(error, 'We could not analyze this case right now.');
+}
+
+function getFailureCategory(error: unknown) {
+  const code = getErrorCode(error);
+  if (code) return code;
+
+  const message = errorMessage(error, '').toLowerCase();
+  if (message.includes('network')) return 'NETWORK';
+  if (message.includes('support')) return 'UNSUPPORTED';
+  if (message.includes('input')) return 'INPUT_REQUIRED';
+  if (message.includes('property')) return 'PROPERTY';
+  return 'UNKNOWN';
+}
+
+function hasMeaningfulAnalysisInput(caseDetail: NegotiationShieldCaseDetail) {
+  const mergedInput = mergeInputData(caseDetail);
+  return (
+    countMeaningfulFields(mergedInput.effectiveStructured) > 0 ||
+    hasMeaningfulText(mergedInput.effectiveRawText, 20)
+  );
+}
+
+function InlineFeedback({
+  feedback,
+}: {
+  feedback: InlineFeedbackState | null;
+}) {
+  if (!feedback) return null;
+
+  const toneClass =
+    feedback.tone === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      : feedback.tone === 'error'
+      ? 'border-rose-200 bg-rose-50 text-rose-800'
+      : 'border-sky-200 bg-sky-50 text-sky-800';
+
+  return (
+    <div className={cn('rounded-2xl border px-3.5 py-3 text-sm leading-6', toneClass)}>
+      {feedback.message}
+    </div>
+  );
+}
+
 function buildContractorFormValues(caseDetail: NegotiationShieldCaseDetail): ContractorFormValues {
   const manualInput = mergeInputData(caseDetail).manualInput;
   const data = manualInput ? asRecord(manualInput.structuredData) : {};
@@ -517,13 +623,17 @@ function ScenarioQuickStart({
 
 function CreateCasePanel({
   initialScenario,
+  feedback,
   isSubmitting,
   onCancel,
+  onScenarioSelected,
   onSubmit,
 }: {
   initialScenario: NegotiationShieldCaseScenarioType;
+  feedback: InlineFeedbackState | null;
   isSubmitting: boolean;
   onCancel: () => void;
+  onScenarioSelected: (scenarioType: NegotiationShieldCaseScenarioType) => void;
   onSubmit: (payload: CreateNegotiationShieldCasePayload) => void;
 }) {
   const [scenarioType, setScenarioType] = useState<NegotiationShieldCaseScenarioType>(initialScenario);
@@ -552,7 +662,10 @@ function CreateCasePanel({
               <button
                 key={option.routeValue}
                 type="button"
-                onClick={() => setScenarioType(option.scenarioType)}
+                onClick={() => {
+                  setScenarioType(option.scenarioType);
+                  onScenarioSelected(option.scenarioType);
+                }}
                 className={cn(
                   'rounded-2xl border p-3.5 text-left transition-colors sm:p-4',
                   active ? 'border-foreground/20 bg-accent/50' : 'border-border bg-white hover:border-foreground/15 hover:bg-accent/30'
@@ -592,6 +705,8 @@ function CreateCasePanel({
           </div>
         </div>
 
+        <InlineFeedback feedback={feedback} />
+
         <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           <Button
             type="button"
@@ -620,10 +735,12 @@ function CreateCasePanel({
 
 function ContractorManualInputSection({
   caseDetail,
+  feedback,
   isSaving,
   onSave,
 }: {
   caseDetail: NegotiationShieldCaseDetail;
+  feedback: InlineFeedbackState | null;
   isSaving: boolean;
   onSave: (payload: SaveNegotiationShieldInputPayload) => void;
 }) {
@@ -708,6 +825,8 @@ function ContractorManualInputSection({
           />
         </Field>
 
+        <InlineFeedback feedback={feedback} />
+
         <div className="flex justify-end">
           <Button
             type="button"
@@ -716,7 +835,7 @@ function ContractorManualInputSection({
             disabled={isSaving}
           >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Save input
+            {isSaving ? 'Saving input...' : 'Save input'}
           </Button>
         </div>
       </CardContent>
@@ -726,10 +845,12 @@ function ContractorManualInputSection({
 
 function InsuranceManualInputSection({
   caseDetail,
+  feedback,
   isSaving,
   onSave,
 }: {
   caseDetail: NegotiationShieldCaseDetail;
+  feedback: InlineFeedbackState | null;
   isSaving: boolean;
   onSave: (payload: SaveNegotiationShieldInputPayload) => void;
 }) {
@@ -806,6 +927,8 @@ function InsuranceManualInputSection({
           />
         </Field>
 
+        <InlineFeedback feedback={feedback} />
+
         <div className="flex justify-end">
           <Button
             type="button"
@@ -814,7 +937,7 @@ function InsuranceManualInputSection({
             disabled={isSaving}
           >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Save input
+            {isSaving ? 'Saving input...' : 'Save input'}
           </Button>
         </div>
       </CardContent>
@@ -1005,20 +1128,34 @@ function ResultList({
 }
 
 function DraftSection({
+  caseId,
   draft,
+  feedback,
+  onCopy,
 }: {
+  caseId: string;
   draft: NegotiationShieldDraft | null;
+  feedback: InlineFeedbackState | null;
+  onCopy: (draft: NegotiationShieldDraft) => Promise<void>;
 }) {
-  const { toast } = useToast();
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied'>('idle');
+
+  useEffect(() => {
+    setCopyState('idle');
+  }, [caseId, draft?.id]);
 
   async function handleCopy() {
-    if (!draft) return;
+    if (!draft || copyState === 'copying') return;
 
+    setCopyState('copying');
     try {
-      await navigator.clipboard.writeText(buildCopyText(draft));
-      toast({ title: 'Draft copied', description: 'The latest message draft is ready to paste.' });
+      await onCopy(draft);
+      setCopyState('copied');
+      window.setTimeout(() => {
+        setCopyState('idle');
+      }, 2000);
     } catch {
-      toast({ title: 'Copy failed', description: 'Your browser blocked clipboard access.', variant: 'destructive' });
+      setCopyState('idle');
     }
   }
 
@@ -1031,14 +1168,15 @@ function DraftSection({
             <CardDescription>A homeowner-ready message generated from the latest analysis.</CardDescription>
           </div>
           {draft ? (
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleCopy}>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleCopy} disabled={copyState === 'copying'}>
               <Clipboard className="h-4 w-4" />
-              Copy draft
+              {copyState === 'copying' ? 'Copying...' : copyState === 'copied' ? 'Copied' : 'Copy draft'}
             </Button>
           ) : null}
         </div>
       </CardHeader>
       <CardContent className={SECTION_CONTENT_CLASS}>
+        <InlineFeedback feedback={feedback} />
         {!draft ? (
           <EmptyStateCard
             title="No draft yet"
@@ -1071,11 +1209,13 @@ function CaseWorkspace({
   property,
   caseDetail,
   onBack,
+  trackEvent,
 }: {
   propertyId: string;
   property: Property | undefined;
   caseDetail: NegotiationShieldCaseDetail;
   onBack: () => void;
+  trackEvent: (event: string, section?: string, metadata?: Record<string, unknown>) => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1084,11 +1224,19 @@ function CaseWorkspace({
   const [documentType, setDocumentType] = useState<NegotiationShieldDocumentType>(
     caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'QUOTE' : 'PREMIUM_NOTICE'
   );
+  const [manualFeedback, setManualFeedback] = useState<InlineFeedbackState | null>(null);
+  const [documentFeedback, setDocumentFeedback] = useState<InlineFeedbackState | null>(null);
+  const [analysisFeedback, setAnalysisFeedback] = useState<InlineFeedbackState | null>(null);
+  const [draftFeedback, setDraftFeedback] = useState<InlineFeedbackState | null>(null);
 
   useEffect(() => {
     setSelectedFile(null);
     setDocumentName('');
     setDocumentType(caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? 'QUOTE' : 'PREMIUM_NOTICE');
+    setManualFeedback(null);
+    setDocumentFeedback(null);
+    setAnalysisFeedback(null);
+    setDraftFeedback(null);
   }, [caseDetail.case.id, caseDetail.case.scenarioType]);
 
   const detailQueryKey = ['negotiation-shield-case', propertyId, caseDetail.case.id];
@@ -1096,16 +1244,40 @@ function CaseWorkspace({
 
   function syncCaseDetail(nextDetail: NegotiationShieldCaseDetail) {
     queryClient.setQueryData(detailQueryKey, nextDetail);
-    queryClient.invalidateQueries({ queryKey: listQueryKey });
+    queryClient.setQueryData<NegotiationShieldCaseDetail['case'][] | undefined>(listQueryKey, (current) =>
+      upsertCaseSummary(current, nextDetail.case)
+    );
   }
 
   const saveInputMutation = useMutation({
     mutationFn: (payload: SaveNegotiationShieldInputPayload) => saveNegotiationShieldInput(propertyId, caseDetail.case.id, payload),
+    onMutate: () => {
+      setManualFeedback({
+        tone: 'info',
+        message: 'Saving your latest manual input...',
+      });
+    },
     onSuccess: (nextDetail) => {
       syncCaseDetail(nextDetail);
+      setManualFeedback({
+        tone: 'success',
+        message: 'Manual input saved. The latest case details are now ready for analysis.',
+      });
+      trackEvent('MANUAL_INPUT_SAVED', 'manual-input', {
+        caseId: nextDetail.case.id,
+        scenarioType: nextDetail.case.scenarioType,
+        sourceType: nextDetail.case.sourceType,
+        inputMode: getInputMode(nextDetail.case.sourceType),
+        hasDocument: nextDetail.documents.length > 0,
+        status: nextDetail.case.status,
+      });
       toast({ title: 'Input saved', description: 'Your case details were updated.' });
     },
     onError: (error) => {
+      setManualFeedback({
+        tone: 'error',
+        message: errorMessage(error, 'Unable to save case input. Your edits are still on screen, so you can try again.'),
+      });
       toast({ title: 'Save failed', description: errorMessage(error, 'Unable to save case input.'), variant: 'destructive' });
     },
   });
@@ -1131,41 +1303,196 @@ function CaseWorkspace({
         documentId: uploadResponse.data.id,
       });
     },
+    onMutate: () => {
+      setDocumentFeedback({
+        tone: 'info',
+        message: 'Attaching your selected document to this case...',
+      });
+    },
     onSuccess: (nextDetail) => {
       syncCaseDetail(nextDetail);
       setSelectedFile(null);
       setDocumentName('');
+      setDocumentFeedback({
+        tone: 'success',
+        message: 'Document attached. Parse it when you want Negotiation Shield to pull details into the case.',
+      });
+      trackEvent('DOCUMENT_ATTACHED', 'documents', {
+        caseId: nextDetail.case.id,
+        scenarioType: nextDetail.case.scenarioType,
+        sourceType: nextDetail.case.sourceType,
+        inputMode: getInputMode(nextDetail.case.sourceType),
+        hasDocument: nextDetail.documents.length > 0,
+        documentCount: nextDetail.documents.length,
+      });
       toast({ title: 'Document attached', description: 'The file is now available inside this review.' });
     },
     onError: (error) => {
+      setDocumentFeedback({
+        tone: 'error',
+        message: errorMessage(error, 'Unable to upload and attach this document. Your selected file is still available so you can try again.'),
+      });
       toast({ title: 'Upload failed', description: errorMessage(error, 'Unable to upload and attach this document.'), variant: 'destructive' });
     },
   });
 
   const parseDocumentMutation = useMutation({
-    mutationFn: (caseDocumentId: string) => parseNegotiationShieldCaseDocument(propertyId, caseDetail.case.id, caseDocumentId),
+    mutationFn: (caseDocumentId: string) => {
+      const targetDocument = caseDetail.documents.find((document) => document.id === caseDocumentId);
+      trackEvent('DOCUMENT_PARSE_TRIGGERED', 'documents', {
+        caseId: caseDetail.case.id,
+        scenarioType: caseDetail.case.scenarioType,
+        sourceType: caseDetail.case.sourceType,
+        inputMode: getInputMode(caseDetail.case.sourceType),
+        hasDocument: caseDetail.documents.length > 0,
+        caseDocumentId,
+        documentType: targetDocument?.documentType ?? null,
+      });
+      return parseNegotiationShieldCaseDocument(propertyId, caseDetail.case.id, caseDocumentId);
+    },
+    onMutate: () => {
+      setDocumentFeedback({
+        tone: 'info',
+        message: 'Parsing the document now. This can take a few seconds for larger files.',
+      });
+    },
     onSuccess: (nextDetail) => {
       syncCaseDetail(nextDetail);
+      const parsedDocument = nextDetail.documents.find((document) => document.id === parseDocumentMutation.variables);
+      setDocumentFeedback({
+        tone: 'success',
+        message: parsedDocument
+          ? `${parsedDocument.fileName} was parsed and is now available during analysis.`
+          : 'The document was parsed and its extracted content is now available during analysis.',
+      });
+      trackEvent('DOCUMENT_PARSE_SUCCEEDED', 'documents', {
+        caseId: nextDetail.case.id,
+        scenarioType: nextDetail.case.scenarioType,
+        sourceType: nextDetail.case.sourceType,
+        inputMode: getInputMode(nextDetail.case.sourceType),
+        hasDocument: nextDetail.documents.length > 0,
+        caseDocumentId: parseDocumentMutation.variables ?? null,
+        parsedDocumentCount: nextDetail.documents.filter((document) => getDocumentParseInfo(document, nextDetail.inputs).isParsed).length,
+      });
       toast({ title: 'Document parsed', description: 'Parsed content is now available to the analysis flow.' });
     },
     onError: (error) => {
-      toast({ title: 'Parse failed', description: errorMessage(error, 'Unable to parse this document.'), variant: 'destructive' });
+      const failureMessage = getParseFailureMessage(error);
+      setDocumentFeedback({
+        tone: 'error',
+        message: failureMessage,
+      });
+      trackEvent('DOCUMENT_PARSE_FAILED', 'documents', {
+        caseId: caseDetail.case.id,
+        scenarioType: caseDetail.case.scenarioType,
+        sourceType: caseDetail.case.sourceType,
+        inputMode: getInputMode(caseDetail.case.sourceType),
+        hasDocument: caseDetail.documents.length > 0,
+        caseDocumentId: parseDocumentMutation.variables ?? null,
+        parseResult: getFailureCategory(error),
+      });
+      toast({ title: 'Parse failed', description: failureMessage, variant: 'destructive' });
     },
   });
 
   const analyzeCaseMutation = useMutation({
-    mutationFn: () => analyzeNegotiationShieldCase(propertyId, caseDetail.case.id),
+    mutationFn: () => {
+      trackEvent('ANALYSIS_TRIGGERED', 'analysis', {
+        caseId: caseDetail.case.id,
+        scenarioType: caseDetail.case.scenarioType,
+        sourceType: caseDetail.case.sourceType,
+        inputMode: getInputMode(caseDetail.case.sourceType),
+        hasDocument: caseDetail.documents.length > 0,
+        analysisType: caseDetail.case.scenarioType,
+      });
+      return analyzeNegotiationShieldCase(propertyId, caseDetail.case.id);
+    },
+    onMutate: () => {
+      setAnalysisFeedback({
+        tone: 'info',
+        message: 'Analyzing the latest case input and generating updated guidance...',
+      });
+    },
     onSuccess: (nextDetail) => {
       syncCaseDetail(nextDetail);
+      setAnalysisFeedback({
+        tone: 'success',
+        message: 'Analysis updated. Review the summary, leverage points, and draft message below.',
+      });
+      trackEvent('ANALYSIS_SUCCEEDED', 'analysis', {
+        caseId: nextDetail.case.id,
+        scenarioType: nextDetail.case.scenarioType,
+        sourceType: nextDetail.case.sourceType,
+        inputMode: getInputMode(nextDetail.case.sourceType),
+        hasDocument: nextDetail.documents.length > 0,
+        status: nextDetail.case.status,
+        analysisType: nextDetail.case.scenarioType,
+      });
       toast({ title: 'Analysis complete', description: 'Negotiation guidance and a draft message are ready.' });
     },
     onError: (error) => {
-      toast({ title: 'Analysis failed', description: errorMessage(error, 'Unable to analyze this case yet.'), variant: 'destructive' });
+      const failureMessage = getAnalysisFailureMessage(error);
+      setAnalysisFeedback({
+        tone: 'error',
+        message: failureMessage,
+      });
+      trackEvent('ANALYSIS_FAILED', 'analysis', {
+        caseId: caseDetail.case.id,
+        scenarioType: caseDetail.case.scenarioType,
+        sourceType: caseDetail.case.sourceType,
+        inputMode: getInputMode(caseDetail.case.sourceType),
+        hasDocument: caseDetail.documents.length > 0,
+        analysisType: caseDetail.case.scenarioType,
+        parseResult: getFailureCategory(error),
+      });
+      toast({ title: 'Analysis failed', description: failureMessage, variant: 'destructive' });
     },
   });
 
   const parsedDocumentsCount = caseDetail.documents.filter((document) => getDocumentParseInfo(document, caseDetail.inputs).isParsed).length;
   const needsDocumentParseReminder = caseDetail.documents.length > 0 && parsedDocumentsCount === 0;
+  const hasUsableInput = hasMeaningfulAnalysisInput(caseDetail);
+  const manualActionInFlight =
+    saveInputMutation.isPending || parseDocumentMutation.isPending || analyzeCaseMutation.isPending;
+  const documentActionInFlight =
+    uploadDocumentMutation.isPending || parseDocumentMutation.isPending || analyzeCaseMutation.isPending;
+  const actionInFlight =
+    manualActionInFlight || documentActionInFlight;
+  const analyzeBlockedReason =
+    parseDocumentMutation.isPending
+      ? 'Document parsing is still running. Wait for it to finish before analyzing.'
+      : !hasUsableInput && caseDetail.documents.length > 0 && parsedDocumentsCount === 0
+      ? 'Parse an attached document or add manual input before analyzing.'
+      : !hasUsableInput
+      ? 'Add manual input or a parsed document before analyzing this case.'
+      : null;
+  const canAnalyze = !actionInFlight && !analyzeBlockedReason;
+
+  async function handleDraftCopy(draft: NegotiationShieldDraft) {
+    try {
+      await navigator.clipboard.writeText(buildCopyText(draft));
+      setDraftFeedback({
+        tone: 'success',
+        message: 'Draft copied. You can paste it into an email or portal message now.',
+      });
+      trackEvent('DRAFT_COPIED', 'draft', {
+        caseId: caseDetail.case.id,
+        scenarioType: caseDetail.case.scenarioType,
+        sourceType: caseDetail.case.sourceType,
+        inputMode: getInputMode(caseDetail.case.sourceType),
+        draftType: draft.draftType,
+        hasDocument: caseDetail.documents.length > 0,
+      });
+      toast({ title: 'Draft copied', description: 'The latest message draft is ready to paste.' });
+    } catch {
+      setDraftFeedback({
+        tone: 'error',
+        message: 'Clipboard access was blocked. You can still select and copy the message manually.',
+      });
+      toast({ title: 'Copy failed', description: 'Your browser blocked clipboard access.', variant: 'destructive' });
+      throw new Error('clipboard-copy-failed');
+    }
+  }
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -1205,13 +1532,15 @@ function CaseWorkspace({
       {caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' ? (
         <ContractorManualInputSection
           caseDetail={caseDetail}
-          isSaving={saveInputMutation.isPending}
+          feedback={manualFeedback}
+          isSaving={manualActionInFlight}
           onSave={(payload) => saveInputMutation.mutate(payload)}
         />
       ) : (
         <InsuranceManualInputSection
           caseDetail={caseDetail}
-          isSaving={saveInputMutation.isPending}
+          feedback={manualFeedback}
+          isSaving={manualActionInFlight}
           onSave={(payload) => saveInputMutation.mutate(payload)}
         />
       )}
@@ -1228,10 +1557,15 @@ function CaseWorkspace({
                 value={documentName}
                 onChange={(event) => setDocumentName(event.target.value)}
                 placeholder={selectedFile?.name || 'Use the original filename or add a cleaner label'}
+                disabled={documentActionInFlight}
               />
             </Field>
             <Field label="Document type">
-              <Select value={documentType} onValueChange={(nextValue: NegotiationShieldDocumentType) => setDocumentType(nextValue)}>
+              <Select
+                value={documentType}
+                onValueChange={(nextValue: NegotiationShieldDocumentType) => setDocumentType(nextValue)}
+                disabled={documentActionInFlight}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a document type" />
                 </SelectTrigger>
@@ -1248,6 +1582,7 @@ function CaseWorkspace({
               <Input
                 type="file"
                 accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt"
+                disabled={documentActionInFlight}
                 onChange={(event) => {
                   const file = event.target.files?.[0] ?? null;
                   setSelectedFile(file);
@@ -1264,15 +1599,17 @@ function CaseWorkspace({
               type="button"
               className="w-full sm:w-auto"
               onClick={() => uploadDocumentMutation.mutate()}
-              disabled={uploadDocumentMutation.isPending || !selectedFile}
+              disabled={documentActionInFlight || !selectedFile}
             >
               {uploadDocumentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              Upload and attach
+              {uploadDocumentMutation.isPending ? 'Attaching document...' : 'Upload and attach'}
             </Button>
             <p className="text-sm leading-6 text-muted-foreground">
               Attach the source document first, then parse it to pull useful text into the case.
             </p>
           </div>
+
+          <InlineFeedback feedback={documentFeedback} />
 
           <Separator />
 
@@ -1332,10 +1669,10 @@ function CaseWorkspace({
                           variant="outline"
                           className="w-full sm:w-auto"
                           onClick={() => parseDocumentMutation.mutate(document.id)}
-                          disabled={isParsingThisDocument}
+                          disabled={documentActionInFlight}
                         >
                           {isParsingThisDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-                          {parseInfo.isParsed ? 'Re-parse' : 'Parse'}
+                          {isParsingThisDocument ? 'Parsing...' : parseInfo.isParsed ? 'Re-parse' : 'Parse'}
                         </Button>
                       </div>
                     </div>
@@ -1360,14 +1697,20 @@ function CaseWorkspace({
               You can analyze with manual input only, but parsing your uploaded document first usually gives the review more context.
             </div>
           ) : null}
+          {analyzeBlockedReason ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3.5 py-3 text-sm leading-6 text-slate-700">
+              {analyzeBlockedReason}
+            </div>
+          ) : null}
+          <InlineFeedback feedback={analysisFeedback} />
           <Button
             type="button"
             className="w-full sm:w-auto"
             onClick={() => analyzeCaseMutation.mutate()}
-            disabled={analyzeCaseMutation.isPending}
+            disabled={!canAnalyze}
           >
             {analyzeCaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {getAnalysisActionLabel(caseDetail.case.scenarioType)}
+            {analyzeCaseMutation.isPending ? 'Analyzing...' : getAnalysisActionLabel(caseDetail.case.scenarioType)}
           </Button>
           <p className="text-sm leading-6 text-muted-foreground">
             Manual details always take priority. Parsed document fields fill in gaps when available.
@@ -1376,7 +1719,7 @@ function CaseWorkspace({
       </Card>
 
       <AnalysisResultsSection analysis={caseDetail.latestAnalysis} />
-      <DraftSection draft={caseDetail.latestDraft} />
+      <DraftSection caseId={caseDetail.case.id} draft={caseDetail.latestDraft} feedback={draftFeedback} onCopy={handleDraftCopy} />
     </div>
   );
 }
@@ -1389,10 +1732,17 @@ export default function NegotiationShieldToolClient() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const openedViewRef = useRef<string | null>(null);
+  const [createFeedback, setCreateFeedback] = useState<InlineFeedbackState | null>(null);
 
   const caseId = searchParams.get('caseId');
   const createMode = searchParams.get('create') === '1';
   const initialCreateScenario = getScenarioOptionByRouteValue(searchParams.get('scenario')).scenarioType;
+
+  function trackNegotiationEvent(event: string, section?: string, metadata?: Record<string, unknown>) {
+    if (!propertyId) return;
+    api.trackNegotiationShieldEvent(propertyId, { event, section, metadata }).catch(() => undefined);
+  }
 
   function updateSearch(nextValues: Record<string, string | null | undefined>) {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -1410,6 +1760,16 @@ export default function NegotiationShieldToolClient() {
   }
 
   function openCreate(routeValue?: ScenarioRouteValue) {
+    setCreateFeedback(null);
+    if (routeValue) {
+      const scenarioType = getScenarioOptionByRouteValue(routeValue).scenarioType;
+      trackNegotiationEvent('SCENARIO_SELECTED', 'entry', {
+        scenarioType,
+        source: 'entry',
+        view: caseId ? 'detail' : createMode ? 'create' : 'list',
+      });
+    }
+
     updateSearch({
       caseId: null,
       create: '1',
@@ -1418,6 +1778,7 @@ export default function NegotiationShieldToolClient() {
   }
 
   function openCase(nextCaseId: string) {
+    setCreateFeedback(null);
     updateSearch({
       caseId: nextCaseId,
       create: null,
@@ -1426,6 +1787,7 @@ export default function NegotiationShieldToolClient() {
   }
 
   function goToList() {
+    setCreateFeedback(null);
     updateSearch({
       caseId: null,
       create: null,
@@ -1456,13 +1818,37 @@ export default function NegotiationShieldToolClient() {
 
   const createCaseMutation = useMutation({
     mutationFn: (payload: CreateNegotiationShieldCasePayload) => createNegotiationShieldCase(propertyId, payload),
+    onMutate: () => {
+      setCreateFeedback({
+        tone: 'info',
+        message: 'Creating your review workspace...',
+      });
+    },
     onSuccess: (nextDetail) => {
       queryClient.setQueryData(['negotiation-shield-case', propertyId, nextDetail.case.id], nextDetail);
-      queryClient.invalidateQueries({ queryKey: ['negotiation-shield-cases', propertyId] });
+      queryClient.setQueryData<NegotiationShieldCaseDetail['case'][] | undefined>(
+        ['negotiation-shield-cases', propertyId],
+        (current) => upsertCaseSummary(current, nextDetail.case)
+      );
+      setCreateFeedback({
+        tone: 'success',
+        message: 'Case created. You can start adding input right away.',
+      });
+      trackNegotiationEvent('CASE_CREATED', 'create', {
+        caseId: nextDetail.case.id,
+        scenarioType: nextDetail.case.scenarioType,
+        sourceType: nextDetail.case.sourceType,
+        inputMode: getInputMode(nextDetail.case.sourceType),
+        status: nextDetail.case.status,
+      });
       toast({ title: 'Case created', description: 'You can start adding input right away.' });
       openCase(nextDetail.case.id);
     },
     onError: (error) => {
+      setCreateFeedback({
+        tone: 'error',
+        message: errorMessage(error, 'We could not create the case yet. Your selections are still here, so you can try again.'),
+      });
       toast({ title: 'Unable to create case', description: errorMessage(error, 'Please try again.'), variant: 'destructive' });
     },
   });
@@ -1476,6 +1862,86 @@ export default function NegotiationShieldToolClient() {
       Start new review
     </Button>
   );
+
+  useEffect(() => {
+    if (!propertyId) return;
+
+    const viewKey = `${propertyId}:${caseId ? 'detail' : createMode ? 'create' : 'list'}`;
+    if (openedViewRef.current === viewKey) return;
+    openedViewRef.current = viewKey;
+
+    trackNegotiationEvent('OPENED', 'page', {
+      view: caseId ? 'detail' : createMode ? 'create' : 'list',
+      hasCaseSelection: Boolean(caseId),
+      propertyLoaded: Boolean(property),
+    });
+  }, [caseId, createMode, property, propertyId]);
+
+  if (!propertyId) {
+    return (
+      <MobilePageContainer className="space-y-4 sm:space-y-5">
+        <MobilePageIntro
+          eyebrow="Home Tool"
+          title="Negotiation Shield"
+          subtitle="This route is missing the property context Negotiation Shield needs."
+        />
+        <Card className={SECTION_CARD_CLASS}>
+          <CardHeader className={SECTION_HEADER_CLASS}>
+            <CardTitle>Property context missing</CardTitle>
+            <CardDescription>Return to your properties and reopen Negotiation Shield from the correct home.</CardDescription>
+          </CardHeader>
+          <CardContent className={SECTION_CONTENT_CLASS}>
+            <Button type="button" className="w-full sm:w-auto" onClick={() => router.push('/dashboard/properties')}>
+              Return to properties
+            </Button>
+          </CardContent>
+        </Card>
+      </MobilePageContainer>
+    );
+  }
+
+  if (propertyQuery.isLoading && !property) {
+    return (
+      <MobilePageContainer className="space-y-4 sm:space-y-5">
+        <HomeToolsRail propertyId={propertyId} />
+        <MobilePageIntro
+          eyebrow="Home Tool"
+          title="Negotiation Shield"
+          subtitle="Loading the property context for this review..."
+        />
+        <DetailSkeleton />
+      </MobilePageContainer>
+    );
+  }
+
+  if (propertyQuery.isError && !property) {
+    return (
+      <MobilePageContainer className="space-y-4 sm:space-y-5">
+        <HomeToolsRail propertyId={propertyId} />
+        <MobilePageIntro
+          eyebrow="Home Tool"
+          title="Negotiation Shield"
+          subtitle="We could not load the property context for this tool."
+        />
+        <Card className={SECTION_CARD_CLASS}>
+          <CardHeader className={SECTION_HEADER_CLASS}>
+            <CardTitle>Property unavailable</CardTitle>
+            <CardDescription>
+              This property may be unavailable or you may not have access to it right now.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className={cn(SECTION_CONTENT_CLASS, 'flex flex-col gap-2.5 sm:flex-row sm:flex-wrap')}>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => propertyQuery.refetch()}>
+              Try again
+            </Button>
+            <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => router.push('/dashboard/properties')}>
+              Return to properties
+            </Button>
+          </CardContent>
+        </Card>
+      </MobilePageContainer>
+    );
+  }
 
   return (
     <MobilePageContainer className="space-y-4 sm:space-y-5">
@@ -1510,6 +1976,15 @@ export default function NegotiationShieldToolClient() {
                 <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading cases...
+                </div>
+              ) : casesQuery.isError ? (
+                <div className="space-y-3 py-1">
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    We could not load the latest reviews for this property.
+                  </p>
+                  <Button type="button" variant="outline" className="w-full" onClick={() => casesQuery.refetch()}>
+                    Try again
+                  </Button>
                 </div>
               ) : cases.length === 0 ? (
                 <p className="text-sm leading-6 text-muted-foreground">No cases yet. Start with the scenario that matches what you need reviewed.</p>
@@ -1547,14 +2022,25 @@ export default function NegotiationShieldToolClient() {
           {selectedCaseQuery.isLoading ? (
             <DetailSkeleton />
           ) : selectedCaseQuery.data ? (
-            <CaseWorkspace propertyId={propertyId} property={property} caseDetail={selectedCaseQuery.data} onBack={goToList} />
+            <CaseWorkspace
+              propertyId={propertyId}
+              property={property}
+              caseDetail={selectedCaseQuery.data}
+              onBack={goToList}
+              trackEvent={trackNegotiationEvent}
+            />
           ) : caseId && selectedCaseQuery.isError ? (
             <Card className={SECTION_CARD_CLASS}>
               <CardHeader className={SECTION_HEADER_CLASS}>
                 <CardTitle>Unable to load this case</CardTitle>
-                <CardDescription>{errorMessage(selectedCaseQuery.error, 'The case may have been removed or you may not have access to it.')}</CardDescription>
+                <CardDescription>
+                  This case may have moved, been removed, or be unavailable for the current property.
+                </CardDescription>
               </CardHeader>
-              <CardContent className={SECTION_CONTENT_CLASS}>
+              <CardContent className={cn(SECTION_CONTENT_CLASS, 'flex flex-col gap-2.5 sm:flex-row sm:flex-wrap')}>
+                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => selectedCaseQuery.refetch()}>
+                  Try again
+                </Button>
                 <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={goToList}>
                   Return to case list
                 </Button>
@@ -1563,8 +2049,15 @@ export default function NegotiationShieldToolClient() {
           ) : createMode ? (
             <CreateCasePanel
               initialScenario={initialCreateScenario}
+              feedback={createFeedback}
               isSubmitting={createCaseMutation.isPending}
               onCancel={goToList}
+              onScenarioSelected={(scenarioType) =>
+                trackNegotiationEvent('SCENARIO_SELECTED', 'create', {
+                  scenarioType,
+                  source: 'create-panel',
+                })
+              }
               onSubmit={(payload) => createCaseMutation.mutate(payload)}
             />
           ) : (
@@ -1582,8 +2075,21 @@ export default function NegotiationShieldToolClient() {
                     Start new review
                   </Button>
                 </div>
-                {casesQuery.isError ? (
-                  <EmptyStateCard title="Unable to load cases" description={errorMessage(casesQuery.error, 'Try refreshing the page.')} />
+                {casesQuery.isLoading ? (
+                  <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-8 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading your recent reviews...
+                  </div>
+                ) : casesQuery.isError ? (
+                  <div className="space-y-3">
+                    <EmptyStateCard
+                      title="Unable to load cases"
+                      description="We could not load the latest reviews for this property."
+                    />
+                    <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => casesQuery.refetch()}>
+                      Try again
+                    </Button>
+                  </div>
                 ) : cases.length === 0 ? (
                   <div className="space-y-4">
                     <EmptyStateCard

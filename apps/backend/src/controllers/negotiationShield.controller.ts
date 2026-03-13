@@ -4,6 +4,7 @@ import { APIError } from '../middleware/error.middleware';
 import {
   AttachNegotiationShieldDocumentPayload,
   CreateNegotiationShieldCaseInput,
+  NegotiationShieldEventInput,
   SaveNegotiationShieldInputPayload,
 } from '../services/negotiationShield.types';
 import { NegotiationShieldService } from '../services/negotiationShield.service';
@@ -133,6 +134,21 @@ export async function analyzeNegotiationShieldCase(
       req.params.caseId
     );
     res.status(201).json({ success: true, data: detail });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function trackNegotiationShieldEvent(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { userId } = requireUser(req);
+    const payload = req.body as NegotiationShieldEventInput;
+    const result = await service.trackEvent(req.params.propertyId, userId, payload);
+    res.status(201).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
