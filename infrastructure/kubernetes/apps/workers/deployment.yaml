@@ -68,11 +68,11 @@ spec:
             - name: RADAR_DUMMY_TARGET_ZIPS
               value: "08536,10019"
             - name: HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED
-              value: "false"
+              value: "true"
             - name: HOME_RISK_REPLAY_DUMMY_INGEST_CRON
               value: "15 */6 * * *"
             - name: HOME_RISK_REPLAY_DUMMY_INGEST_RUN_ON_STARTUP
-              value: "false"
+              value: "true"
             - name: HOME_RISK_REPLAY_DUMMY_FIXTURE_SET
               value: "zip_scoped"
             - name: HOME_RISK_REPLAY_DUMMY_TARGET_ZIPS
