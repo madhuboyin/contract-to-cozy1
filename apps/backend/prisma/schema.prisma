@@ -1183,7 +1183,8 @@ model User {
   propertyNarrativeRuns    PropertyNarrativeRun[]
   knowledgeArticleEvents KnowledgeArticleEvent[]
   negotiationShieldCasesCreated NegotiationShieldCase[] @relation("NegotiationShieldCaseCreatedBy")
-  
+  radarStates    PropertyRadarState[]
+
   @@index([email])
   @@index([role])
   
@@ -1694,6 +1695,7 @@ model Property {
   insightSnapshots PropertyInsightSnapshot[]
   narrativeRuns    PropertyNarrativeRun[]
   knowledgeArticleEvents KnowledgeArticleEvent[]
+  radarMatches     PropertyRadarMatch[]
 
   estimatedMaintenancePremiumCents Int @default(0)
   isEquityVerified      Boolean @default(false)
@@ -6209,4 +6211,209 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
   
   @@map("system_settings")
+}
+
+// ============================================================================
+// HOME EVENT RADAR — ENUMS
+// Note: Names use "Radar" prefix to avoid collision with existing HomeEventType
+// and HomeEvent models (which belong to the home timeline feature).
+// ============================================================================
+
+enum RadarEventType {
+  weather
+  insurance_market
+  utility_outage
+  utility_rate_change
+  tax_reassessment
+  tax_rate_change
+  air_quality
+  wildfire_smoke
+  flood_risk
+  heat_wave
+  freeze
+  hail
+  heavy_rain
+  wind
+  power_surge_risk
+  nearby_construction
+  other
+}
+
+enum RadarEventSourceType {
+  weather_provider
+  insurance_market_feed
+  utility_feed
+  tax_assessor_feed
+  internal_derived
+  manual_import
+}
+
+enum RadarEventSeverity {
+  info
+  low
+  medium
+  high
+  critical
+}
+
+enum RadarEventLocationType {
+  property
+  zip
+  city
+  county
+  state
+  polygon
+}
+
+enum RadarEventStatus {
+  active
+  resolved
+  archived
+}
+
+enum PropertyRadarImpactLevel {
+  none
+  watch
+  moderate
+  high
+}
+
+enum PropertyRadarUserState {
+  new
+  seen
+  saved
+  dismissed
+  acted_on
+}
+
+enum PropertyRadarActionType {
+  open_event
+  expand_details
+  view_recommendation
+  save_event
+  dismiss_event
+  mark_checked
+  open_related_system
+  open_related_tool
+  share
+}
+
+// ============================================================================
+// HOME EVENT RADAR — MODELS
+// ============================================================================
+
+// Canonical external event record, independent of any single property.
+model RadarEvent {
+  id            String               @id @default(uuid())
+  eventType     RadarEventType
+  eventSubType  String?
+  title         String
+  summary       String?
+  sourceType    RadarEventSourceType
+  sourceRef     String?
+  severity      RadarEventSeverity
+  startAt       DateTime
+  endAt         DateTime?
+  locationType  RadarEventLocationType
+  locationKey   String
+  geoJson       Json?
+  payloadJson   Json?
+  dedupeKey     String               @unique
+  status        RadarEventStatus     @default(active)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  propertyMatches PropertyRadarMatch[]
+
+  @@index([eventType, startAt])
+  @@index([sourceType])
+  @@index([severity])
+  @@index([status])
+  @@index([locationType, locationKey])
+  @@map("radar_events")
+}
+
+// Maps a canonical RadarEvent to a specific property and captures
+// property-specific relevance and recommended actions.
+model PropertyRadarMatch {
+  id                     String                   @id @default(uuid())
+  propertyId             String
+  radarEventId           String
+  matchScore             Decimal?                 @db.Decimal(5, 4)
+  impactLevel            PropertyRadarImpactLevel
+  impactSummary          String?
+  impactFactorsJson      Json?
+  recommendedActionsJson Json?
+  matchedSystemsJson     Json?
+  isVisible              Boolean                  @default(true)
+  visibleFrom            DateTime?
+  visibleUntil           DateTime?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  property    Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  radarEvent  RadarEvent  @relation(fields: [radarEventId], references: [id], onDelete: Cascade)
+
+  states  PropertyRadarState[]
+  actions PropertyRadarAction[]
+
+  @@unique([propertyId, radarEventId])
+  @@index([propertyId])
+  @@index([radarEventId])
+  @@index([impactLevel])
+  @@index([isVisible, visibleFrom])
+  @@index([createdAt])
+  @@map("property_radar_matches")
+}
+
+// Per-user interaction state on a property-event match.
+model PropertyRadarState {
+  id                   String                 @id @default(uuid())
+  propertyRadarMatchId String
+  userId               String
+  state                PropertyRadarUserState
+  stateMetaJson        Json?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  propertyRadarMatch PropertyRadarMatch @relation(fields: [propertyRadarMatchId], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyRadarMatchId, userId])
+  @@index([propertyRadarMatchId])
+  @@index([state])
+  @@index([updatedAt])
+  @@map("property_radar_states")
+}
+
+// Post-open user actions taken from Home Event Radar.
+model PropertyRadarAction {
+  id                   String                  @id @default(uuid())
+  propertyRadarMatchId String
+  actionType           PropertyRadarActionType
+  actionMetaJson       Json?
+  createdAt            DateTime                @default(now())
+
+  propertyRadarMatch PropertyRadarMatch @relation(fields: [propertyRadarMatchId], references: [id], onDelete: Cascade)
+
+  @@index([propertyRadarMatchId])
+  @@index([actionType])
+  @@index([createdAt])
+  @@map("property_radar_actions")
+}
+
+// Source/provider configuration and ingest bookkeeping.
+model RadarSourceConfig {
+  id             String               @id @default(uuid())
+  sourceType     RadarEventSourceType
+  sourceLabel    String
+  isEnabled      Boolean              @default(true)
+  lastIngestedAt DateTime?
+  configJson     Json?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([sourceType])
+  @@index([isEnabled])
+  @@map("radar_source_configs")
 }
