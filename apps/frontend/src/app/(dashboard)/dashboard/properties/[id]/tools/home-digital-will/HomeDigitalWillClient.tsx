@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   BookOpen,
+  Check,
   ChevronRight,
   ClipboardList,
   FileText,
@@ -19,10 +20,12 @@ import {
   Pin,
   Plus,
   Shield,
+  Siren,
   Star,
   Trash2,
   Users,
   Wrench,
+  X,
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -207,16 +210,8 @@ const ACCESS_LEVEL_CONFIG: Record<
   TrustedContactAccessLevel,
   { label: string; description: string; tone: 'good' | 'elevated' | 'danger' | 'info' }
 > = {
-  VIEW: {
-    label: 'Can view',
-    description: 'Can view the full digital will',
-    tone: 'info',
-  },
-  EDIT: {
-    label: 'Can edit',
-    description: 'Can help update and maintain the will',
-    tone: 'good',
-  },
+  VIEW: { label: 'Can view', description: 'Can view the full digital will', tone: 'info' },
+  EDIT: { label: 'Can edit', description: 'Can help update and maintain the will', tone: 'good' },
   EMERGENCY_ONLY: {
     label: 'Emergency only',
     description: 'Intended for emergency reference only',
@@ -247,6 +242,29 @@ const ACCESS_LEVEL_OPTIONS: { value: TrustedContactAccessLevel; label: string }[
   { value: 'EDIT', label: 'Can edit — help update and maintain the will' },
   { value: 'EMERGENCY_ONLY', label: 'Emergency only — for urgent situations' },
 ];
+
+// ─── Utility ──────────────────────────────────────────────────────────────────
+
+function formatDate(
+  dateString: string | null | undefined,
+  style: 'short' | 'long' = 'short',
+): string {
+  if (!dateString) return 'Never';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return 'Invalid date';
+  if (style === 'long') {
+    return d.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -307,6 +325,222 @@ function WillEmptyState({
   );
 }
 
+// ─── Delete confirm button ────────────────────────────────────────────────────
+
+function DeleteConfirmButton({
+  onConfirm,
+  isDeleting,
+  confirmLabel = 'Delete',
+}: {
+  onConfirm: () => void;
+  isDeleting: boolean;
+  confirmLabel?: string;
+}) {
+  const [confirming, setConfirming] = React.useState(false);
+
+  if (isDeleting) {
+    return (
+      <div className="flex h-8 w-8 items-center justify-center">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-2 py-1">
+        <button
+          onClick={() => setConfirming(false)}
+          className="rounded px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-100"
+        >
+          No
+        </button>
+        <span className="text-xs text-gray-300">·</span>
+        <button
+          onClick={() => {
+            setConfirming(false);
+            onConfirm();
+          }}
+          className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50"
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      onClick={() => setConfirming(true)}
+    >
+      <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
+    </Button>
+  );
+}
+
+// ─── Setup checklist ──────────────────────────────────────────────────────────
+
+interface SetupStep {
+  id: string;
+  label: string;
+  description: string;
+  done: boolean;
+  action?: () => void;
+}
+
+function SetupChecklist({
+  will,
+  onSelectSection,
+  onOpenContacts,
+  onEditMetadata,
+  onDismiss,
+}: {
+  will: DigitalWill;
+  onSelectSection: (sectionId: string) => void;
+  onOpenContacts: () => void;
+  onEditMetadata: () => void;
+  onDismiss: () => void;
+}) {
+  const emergencySection = will.sections.find((s) => s.type === 'EMERGENCY');
+  const utilitiesSection = will.sections.find((s) => s.type === 'UTILITIES');
+  const hasEmergencyEntries = (emergencySection?.entries.length ?? 0) > 0;
+  const hasContact = will.trustedContacts.length > 0;
+  const hasPrimary = will.trustedContacts.some((c) => c.isPrimary);
+  const hasUtilityEntries = (utilitiesSection?.entries.length ?? 0) > 0;
+  const isInProgress =
+    will.readiness === 'IN_PROGRESS' || will.readiness === 'READY';
+
+  const steps: SetupStep[] = [
+    {
+      id: 'emergency',
+      label: 'Add emergency instructions',
+      description: 'Steps for urgent home situations',
+      done: hasEmergencyEntries,
+      action: emergencySection
+        ? () => onSelectSection(emergencySection.id)
+        : undefined,
+    },
+    {
+      id: 'contact',
+      label: 'Add a trusted contact',
+      description: 'Someone who can access this home',
+      done: hasContact,
+      action: onOpenContacts,
+    },
+    {
+      id: 'primary',
+      label: 'Set a primary contact',
+      description: 'The first person to reach in an emergency',
+      done: hasPrimary,
+      action: onOpenContacts,
+    },
+    {
+      id: 'utilities',
+      label: 'Add utility information',
+      description: 'Providers, shutoffs, and account details',
+      done: hasUtilityEntries,
+      action: utilitiesSection
+        ? () => onSelectSection(utilitiesSection.id)
+        : undefined,
+    },
+    {
+      id: 'readiness',
+      label: 'Mark will as in progress',
+      description: 'Let trusted contacts know it\'s being maintained',
+      done: isInProgress,
+      action: onEditMetadata,
+    },
+  ];
+
+  const doneCount = steps.filter((s) => s.done).length;
+  const allDone = doneCount === steps.length;
+
+  if (allDone) return null;
+
+  return (
+    <div className={cn(MOBILE_CARD_RADIUS, 'border border-blue-100 bg-blue-50/40 p-4')}>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'text-gray-900')}>
+            Start with the essentials
+          </p>
+          <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mt-0.5 text-gray-500')}>
+            {doneCount} of {steps.length} complete
+          </p>
+        </div>
+        <button
+          onClick={onDismiss}
+          className="rounded-full p-1 text-gray-400 hover:text-gray-600"
+          aria-label="Dismiss setup guide"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mb-3 h-1 overflow-hidden rounded-full bg-blue-100">
+        <div
+          className="h-1 rounded-full bg-blue-500 transition-all duration-300"
+          style={{ width: `${(doneCount / steps.length) * 100}%` }}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        {steps.map((step) => (
+          <button
+            key={step.id}
+            onClick={!step.done && step.action ? step.action : undefined}
+            disabled={step.done || !step.action}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+              step.done
+                ? 'cursor-default'
+                : step.action
+                ? 'bg-white hover:bg-gray-50'
+                : 'cursor-default bg-white',
+            )}
+          >
+            <div
+              className={cn(
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+                step.done ? 'bg-green-100' : 'bg-gray-100',
+              )}
+            >
+              {step.done ? (
+                <Check className="h-3 w-3 text-green-600" />
+              ) : (
+                <div className="h-2 w-2 rounded-full bg-gray-300" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p
+                className={cn(
+                  MOBILE_TYPE_TOKENS.body,
+                  'font-medium',
+                  step.done ? 'text-gray-400 line-through' : 'text-gray-800',
+                )}
+              >
+                {step.label}
+              </p>
+              {!step.done && (
+                <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
+                  {step.description}
+                </p>
+              )}
+            </div>
+            {!step.done && step.action && (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-300" />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Readiness nudges ─────────────────────────────────────────────────────────
 
 function ReadinessNudges({
@@ -321,7 +555,12 @@ function ReadinessNudges({
   const hasContacts = will.trustedContacts.length > 0;
   const hasPrimary = will.trustedContacts.some((c) => c.isPrimary);
 
-  const nudges: { icon: React.ElementType; text: string; action?: () => void; actionLabel?: string }[] = [];
+  const nudges: {
+    icon: React.ElementType;
+    text: string;
+    action?: () => void;
+    actionLabel?: string;
+  }[] = [];
 
   if (!hasEmergencyEntries) {
     nudges.push({
@@ -375,20 +614,18 @@ function ReadinessNudges({
 function WillHeader({
   will,
   onEditMetadata,
+  onOpenEmergencyView,
 }: {
   will: DigitalWill;
   onEditMetadata: () => void;
+  onOpenEmergencyView: () => void;
 }) {
   const readinessTone = READINESS_TONE[will.readiness] ?? 'info';
   const readinessLabel = READINESS_LABEL[will.readiness] ?? will.readiness;
-  const lastReviewed = will.lastReviewedAt
-    ? new Date(will.lastReviewedAt).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null;
+  const lastReviewed = will.lastReviewedAt ? formatDate(will.lastReviewedAt) : null;
   const primaryContact = will.trustedContacts.find((c) => c.isPrimary);
+  const hasContent =
+    will.counts.entryCount > 0 || will.trustedContacts.length > 0;
 
   return (
     <MobileCard className={cn(MOBILE_CARD_RADIUS, 'border border-gray-200 bg-white p-5')}>
@@ -407,7 +644,8 @@ function WillHeader({
             <StatusChip tone={readinessTone}>{readinessLabel}</StatusChip>
             {will.counts.entryCount > 0 && (
               <StatusChip tone="good">
-                {will.counts.entryCount} {will.counts.entryCount === 1 ? 'entry' : 'entries'}
+                {will.counts.entryCount}{' '}
+                {will.counts.entryCount === 1 ? 'entry' : 'entries'}
               </StatusChip>
             )}
             {will.trustedContacts.length > 0 && (
@@ -431,9 +669,23 @@ function WillHeader({
             </div>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={onEditMetadata} className="mt-1 shrink-0">
-          <Pencil className="h-4 w-4" />
-        </Button>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <Button variant="ghost" size="sm" onClick={onEditMetadata}>
+            <Pencil className="h-4 w-4" />
+          </Button>
+          {hasContent && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenEmergencyView}
+              className="gap-1.5 border-amber-200 text-amber-700 hover:border-amber-300 hover:bg-amber-50"
+            >
+              <Siren className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Emergency</span>
+              <span className="sm:hidden">View</span>
+            </Button>
+          )}
+        </div>
       </div>
     </MobileCard>
   );
@@ -473,10 +725,7 @@ function SectionCard({
           )}
         >
           <Icon
-            className={cn(
-              'h-4.5 w-4.5',
-              isSelected ? 'text-white' : config.iconColor,
-            )}
+            className={cn('h-4.5 w-4.5', isSelected ? 'text-white' : config.iconColor)}
           />
         </div>
         <div className="min-w-0 flex-1">
@@ -512,7 +761,10 @@ function SectionCard({
           )}
         </div>
         <ChevronRight
-          className={cn('h-4 w-4 shrink-0', isSelected ? 'text-gray-400' : 'text-gray-300')}
+          className={cn(
+            'h-4 w-4 shrink-0',
+            isSelected ? 'text-gray-400' : 'text-gray-300',
+          )}
         />
       </div>
     </button>
@@ -549,9 +801,7 @@ function TrustedContactsNavCard({
             isSelected ? 'bg-white/15' : 'bg-blue-50',
           )}
         >
-          <Users
-            className={cn('h-4.5 w-4.5', isSelected ? 'text-white' : 'text-blue-600')}
-          />
+          <Users className={cn('h-4.5 w-4.5', isSelected ? 'text-white' : 'text-blue-600')} />
         </div>
         <div className="min-w-0 flex-1">
           <p
@@ -647,19 +897,10 @@ function EntryCard({
           >
             <Pencil className="h-3.5 w-3.5 text-gray-400" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => onDelete(entry.id)}
-            disabled={isDeleting}
-          >
-            {isDeleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
-            )}
-          </Button>
+          <DeleteConfirmButton
+            onConfirm={() => onDelete(entry.id)}
+            isDeleting={isDeleting}
+          />
         </div>
       </div>
     </div>
@@ -851,19 +1092,10 @@ function ContactItem({
             >
               <Pencil className="h-3.5 w-3.5 text-gray-400" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => onDelete(contact.id)}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
-              )}
-            </Button>
+            <DeleteConfirmButton
+              onConfirm={() => onDelete(contact.id)}
+              isDeleting={isDeleting}
+            />
           </div>
           {!contact.isPrimary && (
             <Button
@@ -921,8 +1153,6 @@ function ContactsDetailPanel({
           <ArrowLeft className="h-3.5 w-3.5" />
           Sections
         </Button>
-
-        {/* Desktop title */}
         <div className="hidden items-center gap-3 lg:flex">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
             <Users className="h-4.5 w-4.5 text-blue-600" />
@@ -977,18 +1207,26 @@ function ContactsDetailPanel({
 
       {/* Access level legend */}
       <div className="space-y-2">
-        <p className={cn(MOBILE_TYPE_TOKENS.caption, 'font-semibold uppercase tracking-wider text-gray-400')}>
+        <p
+          className={cn(
+            MOBILE_TYPE_TOKENS.caption,
+            'font-semibold uppercase tracking-wider text-gray-400',
+          )}
+        >
           Access levels
         </p>
         <div className="space-y-1.5">
-          {(Object.entries(ACCESS_LEVEL_CONFIG) as [TrustedContactAccessLevel, typeof ACCESS_LEVEL_CONFIG[TrustedContactAccessLevel]][]).map(
-            ([, cfg]) => (
-              <div key={cfg.label} className="flex items-center gap-2">
-                <StatusChip tone={cfg.tone}>{cfg.label}</StatusChip>
-                <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{cfg.description}</p>
-              </div>
-            ),
-          )}
+          {(
+            Object.entries(ACCESS_LEVEL_CONFIG) as [
+              TrustedContactAccessLevel,
+              (typeof ACCESS_LEVEL_CONFIG)[TrustedContactAccessLevel],
+            ][]
+          ).map(([, cfg]) => (
+            <div key={cfg.label} className="flex items-center gap-2">
+              <StatusChip tone={cfg.tone}>{cfg.label}</StatusChip>
+              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{cfg.description}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1020,6 +1258,338 @@ function ContactsDetailPanel({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Emergency view sub-components ───────────────────────────────────────────
+
+function EmergencyEntryCard({ entry }: { entry: DigitalWillEntry }) {
+  return (
+    <div className={cn(MOBILE_CARD_RADIUS, 'border border-gray-200 bg-white p-4')}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {entry.isEmergency && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+            <AlertTriangle className="h-3 w-3" />
+            Emergency
+          </span>
+        )}
+        {entry.isPinned && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+            <Pin className="h-3 w-3" />
+            Pinned
+          </span>
+        )}
+        {entry.priority === 'CRITICAL' && (
+          <StatusChip tone="danger">Critical</StatusChip>
+        )}
+      </div>
+      <p className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'mt-2 text-gray-900')}>{entry.title}</p>
+      {(entry.content || entry.summary) && (
+        <p className={cn(MOBILE_TYPE_TOKENS.body, 'mt-1 text-gray-600')}>
+          {entry.content || entry.summary}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function EmergencyContactCard({
+  contact,
+  isPrimary = false,
+}: {
+  contact: TrustedContact;
+  isPrimary?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        MOBILE_CARD_RADIUS,
+        'border p-4',
+        isPrimary ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-white',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-semibold',
+            isPrimary ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600',
+          )}
+        >
+          {contact.name.charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isPrimary && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                <Star className="h-3 w-3" />
+                Primary
+              </span>
+            )}
+            <span className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-400')}>
+              {ROLE_LABELS[contact.role]}
+            </span>
+          </div>
+          <p className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'mt-1 text-gray-900')}>{contact.name}</p>
+          {contact.relationship && (
+            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{contact.relationship}</p>
+          )}
+          <div className="mt-2 flex flex-col gap-1.5">
+            {contact.phone && (
+              <a
+                href={`tel:${contact.phone}`}
+                className={cn(
+                  MOBILE_TYPE_TOKENS.body,
+                  'flex items-center gap-2 font-medium text-blue-600 hover:text-blue-700',
+                )}
+              >
+                <Phone className="h-4 w-4 shrink-0" />
+                {contact.phone}
+              </a>
+            )}
+            {contact.email && (
+              <a
+                href={`mailto:${contact.email}`}
+                className={cn(
+                  MOBILE_TYPE_TOKENS.caption,
+                  'flex items-center gap-2 text-gray-500 hover:text-gray-700',
+                )}
+              >
+                <Mail className="h-3.5 w-3.5 shrink-0" />
+                {contact.email}
+              </a>
+            )}
+          </div>
+          {contact.notes && (
+            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mt-2 text-gray-400')}>
+              {contact.notes}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmergencyViewSection({
+  title,
+  icon: Icon,
+  iconColor,
+  iconBg,
+  entries,
+  emptyMessage,
+}: {
+  title: string;
+  icon: React.ElementType;
+  iconColor: string;
+  iconBg: string;
+  entries: DigitalWillEntry[];
+  emptyMessage: string;
+}) {
+  if (entries.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2.5">
+          <div className={cn('flex h-8 w-8 items-center justify-center rounded-xl', iconBg)}>
+            <Icon className={cn('h-4 w-4', iconColor)} />
+          </div>
+          <p className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'text-gray-900')}>{title}</p>
+        </div>
+        <p className={cn(MOBILE_TYPE_TOKENS.caption, 'pl-11 text-gray-400')}>{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <div className={cn('flex h-8 w-8 items-center justify-center rounded-xl', iconBg)}>
+          <Icon className={cn('h-4 w-4', iconColor)} />
+        </div>
+        <p className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'text-gray-900')}>{title}</p>
+      </div>
+      <div className="space-y-2.5">
+        {entries.map((entry) => (
+          <EmergencyEntryCard key={entry.id} entry={entry} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Emergency view ───────────────────────────────────────────────────────────
+
+function EmergencyView({
+  will,
+  onExit,
+}: {
+  will: DigitalWill;
+  onExit: () => void;
+}) {
+  const emergencySection = will.sections.find((s) => s.type === 'EMERGENCY');
+  const utilitiesSection = will.sections.find((s) => s.type === 'UTILITIES');
+  const criticalInfoSection = will.sections.find((s) => s.type === 'CRITICAL_INFO');
+  const primaryContact = will.trustedContacts.find((c) => c.isPrimary);
+  const otherContacts = will.trustedContacts.filter((c) => !c.isPrimary);
+
+  // Collect critical/pinned/emergency entries from other sections
+  const otherCriticalEntries = will.sections
+    .filter((s) => s.type !== 'EMERGENCY' && s.type !== 'UTILITIES')
+    .flatMap((s) =>
+      s.entries.filter(
+        (e) => e.isEmergency || e.isPinned || e.priority === 'CRITICAL',
+      ),
+    )
+    .sort((a, b) => {
+      if (a.isEmergency && !b.isEmergency) return -1;
+      if (!a.isEmergency && b.isEmergency) return 1;
+      if (a.priority === 'CRITICAL' && b.priority !== 'CRITICAL') return -1;
+      if (a.priority !== 'CRITICAL' && b.priority === 'CRITICAL') return 1;
+      return 0;
+    });
+
+  const criticalInfoEntries = criticalInfoSection?.entries ?? [];
+
+  return (
+    <MobilePageContainer className="space-y-5 py-3 lg:max-w-3xl lg:px-8 lg:pb-10">
+      {/* Emergency banner */}
+      <div className={cn(MOBILE_CARD_RADIUS, 'border border-amber-200 bg-amber-50 px-4 py-3')}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Siren className="h-4.5 w-4.5 shrink-0 text-amber-600" />
+            <div>
+              <p className={cn(MOBILE_TYPE_TOKENS.body, 'font-semibold text-amber-900')}>
+                Emergency View
+              </p>
+              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-amber-700')}>
+                Read-only · Essential information first
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onExit}
+            className="shrink-0 gap-1.5 border-amber-200 text-amber-800 hover:border-amber-300 hover:bg-amber-100"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Exit
+          </Button>
+        </div>
+      </div>
+
+      {/* Emergency instructions */}
+      {emergencySection && (
+        <EmergencyViewSection
+          title="Emergency Instructions"
+          icon={AlertTriangle}
+          iconColor="text-red-600"
+          iconBg="bg-red-50"
+          entries={emergencySection.entries}
+          emptyMessage="No emergency instructions added yet. Exit this view to add them."
+        />
+      )}
+
+      {/* Primary trusted contact */}
+      {primaryContact && (
+        <div className="space-y-3">
+          <p
+            className={cn(
+              MOBILE_TYPE_TOKENS.caption,
+              'font-semibold uppercase tracking-wider text-gray-400',
+            )}
+          >
+            Primary contact
+          </p>
+          <EmergencyContactCard contact={primaryContact} isPrimary />
+        </div>
+      )}
+
+      {/* Other trusted contacts */}
+      {otherContacts.length > 0 && (
+        <div className="space-y-3">
+          <p
+            className={cn(
+              MOBILE_TYPE_TOKENS.caption,
+              'font-semibold uppercase tracking-wider text-gray-400',
+            )}
+          >
+            Other trusted contacts
+          </p>
+          <div className="space-y-2.5">
+            {otherContacts.map((c) => (
+              <EmergencyContactCard key={c.id} contact={c} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* No contacts fallback */}
+      {will.trustedContacts.length === 0 && (
+        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+          <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
+            No trusted contacts added. Exit this view to add them.
+          </p>
+        </div>
+      )}
+
+      {/* Utilities */}
+      {utilitiesSection && (
+        <EmergencyViewSection
+          title="Utilities"
+          icon={Zap}
+          iconColor="text-yellow-600"
+          iconBg="bg-yellow-50"
+          entries={utilitiesSection.entries}
+          emptyMessage="No utility information added yet."
+        />
+      )}
+
+      {/* Critical info */}
+      {criticalInfoEntries.length > 0 && (
+        <EmergencyViewSection
+          title="Critical Information"
+          icon={Info}
+          iconColor="text-orange-600"
+          iconBg="bg-orange-50"
+          entries={criticalInfoEntries}
+          emptyMessage=""
+        />
+      )}
+
+      {/* Other pinned/critical entries */}
+      {otherCriticalEntries.length > 0 && (
+        <div className="space-y-3">
+          <p
+            className={cn(
+              MOBILE_TYPE_TOKENS.caption,
+              'font-semibold uppercase tracking-wider text-gray-400',
+            )}
+          >
+            Other important notes
+          </p>
+          <div className="space-y-2.5">
+            {otherCriticalEntries.map((entry) => (
+              <EmergencyEntryCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-center">
+        <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
+          {will.title} · Last reviewed {formatDate(will.lastReviewedAt)}
+        </p>
+        <button
+          onClick={onExit}
+          className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          Return to full view to edit
+        </button>
+      </div>
+
+      <BottomSafeAreaReserve size="chatAware" />
+    </MobilePageContainer>
   );
 }
 
@@ -1098,8 +1668,12 @@ function EntryEditorSheet({
       title: form.title.trim(),
       content: form.content?.trim() || null,
       summary: form.summary?.trim() || null,
-      effectiveFrom: form.effectiveFrom ? new Date(form.effectiveFrom).toISOString() : null,
-      effectiveTo: form.effectiveTo ? new Date(form.effectiveTo).toISOString() : null,
+      effectiveFrom: form.effectiveFrom
+        ? new Date(form.effectiveFrom).toISOString()
+        : null,
+      effectiveTo: form.effectiveTo
+        ? new Date(form.effectiveTo).toISOString()
+        : null,
     });
   };
 
@@ -1155,7 +1729,9 @@ function EntryEditorSheet({
                 <Textarea
                   id="entry-content"
                   value={form.content ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value || null }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, content: e.target.value || null }))
+                  }
                   placeholder="Detailed instructions, location, notes…"
                   rows={4}
                   className="resize-none"
@@ -1169,7 +1745,9 @@ function EntryEditorSheet({
                 <Input
                   id="entry-summary"
                   value={form.summary ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value || null }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, summary: e.target.value || null }))
+                  }
                   placeholder="One-line summary for quick reference"
                 />
               </div>
@@ -1185,7 +1763,9 @@ function EntryEditorSheet({
                 <Label htmlFor="entry-priority">Priority</Label>
                 <Select
                   value={form.priority ?? 'MEDIUM'}
-                  onValueChange={(v) => setForm((f) => ({ ...f, priority: v as EntryPriority }))}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, priority: v as EntryPriority }))
+                  }
                 >
                   <SelectTrigger id="entry-priority">
                     <SelectValue />
@@ -1226,7 +1806,8 @@ function EntryEditorSheet({
             {/* Timing */}
             <div className="space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Timing <span className="font-normal normal-case text-gray-400">(optional)</span>
+                Timing{' '}
+                <span className="font-normal normal-case text-gray-400">(optional)</span>
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -1315,7 +1896,9 @@ function WillMetadataSheet({
       title: form.title.trim() || undefined,
       status: form.status as UpdateWillInput['status'],
       readiness: form.readiness as UpdateWillInput['readiness'],
-      lastReviewedAt: form.lastReviewedAt ? new Date(form.lastReviewedAt).toISOString() : null,
+      lastReviewedAt: form.lastReviewedAt
+        ? new Date(form.lastReviewedAt).toISOString()
+        : null,
     });
   };
 
@@ -1379,7 +1962,9 @@ function WillMetadataSheet({
                 id="will-reviewed"
                 type="date"
                 value={form.lastReviewedAt}
-                onChange={(e) => setForm((f) => ({ ...f, lastReviewedAt: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, lastReviewedAt: e.target.value }))
+                }
               />
             </div>
           </div>
@@ -1408,15 +1993,15 @@ interface ContactEditorState {
   contact?: TrustedContact;
 }
 
-const EMPTY_CONTACT_FORM: CreateTrustedContactInput = {
+const EMPTY_CONTACT_FORM = {
   name: '',
-  email: null,
-  phone: null,
-  relationship: null,
-  role: 'OTHER',
-  accessLevel: 'VIEW',
+  email: null as string | null,
+  phone: null as string | null,
+  relationship: null as string | null,
+  role: 'OTHER' as TrustedContactRole,
+  accessLevel: 'VIEW' as TrustedContactAccessLevel,
   isPrimary: false,
-  notes: null,
+  notes: null as string | null,
 };
 
 function ContactEditorSheet({
@@ -1430,7 +2015,7 @@ function ContactEditorSheet({
   onSave: (data: CreateTrustedContactInput | UpdateTrustedContactInput) => void;
   isSaving: boolean;
 }) {
-  const [form, setForm] = React.useState<CreateTrustedContactInput>(EMPTY_CONTACT_FORM);
+  const [form, setForm] = React.useState(EMPTY_CONTACT_FORM);
 
   React.useEffect(() => {
     if (!state) return;
@@ -1510,7 +2095,9 @@ function ContactEditorSheet({
                 <Label htmlFor="contact-role">Role</Label>
                 <Select
                   value={form.role}
-                  onValueChange={(v) => setForm((f) => ({ ...f, role: v as TrustedContactRole }))}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, role: v as TrustedContactRole }))
+                  }
                 >
                   <SelectTrigger id="contact-role">
                     <SelectValue />
@@ -1570,7 +2157,8 @@ function ContactEditorSheet({
             {/* Contact details */}
             <div className="space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Contact details <span className="font-normal normal-case text-gray-400">(optional)</span>
+                Contact details{' '}
+                <span className="font-normal normal-case text-gray-400">(optional)</span>
               </h3>
 
               <div className="space-y-1.5">
@@ -1579,7 +2167,9 @@ function ContactEditorSheet({
                   id="contact-email"
                   type="email"
                   value={form.email ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value || null }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, email: e.target.value || null }))
+                  }
                   placeholder="jane@example.com"
                 />
               </div>
@@ -1590,7 +2180,9 @@ function ContactEditorSheet({
                   id="contact-phone"
                   type="tel"
                   value={form.phone ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value || null }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, phone: e.target.value || null }))
+                  }
                   placeholder="+1 555 000 0000"
                 />
               </div>
@@ -1599,7 +2191,8 @@ function ContactEditorSheet({
             {/* Notes */}
             <div className="space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Notes <span className="font-normal normal-case text-gray-400">(optional)</span>
+                Notes{' '}
+                <span className="font-normal normal-case text-gray-400">(optional)</span>
               </h3>
 
               <div className="space-y-1.5">
@@ -1607,7 +2200,9 @@ function ContactEditorSheet({
                 <Textarea
                   id="contact-notes"
                   value={form.notes ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value || null }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, notes: e.target.value || null }))
+                  }
                   placeholder="Any context about this person's role or how to reach them…"
                   rows={3}
                   className="resize-none"
@@ -1644,14 +2239,19 @@ export default function HomeDigitalWillClient() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Panel navigation state
+  // Navigation state
   const [selectedSectionId, setSelectedSectionId] = React.useState<string | null>(null);
   const [showContactsPanel, setShowContactsPanel] = React.useState(false);
+
+  // View mode state
+  const [emergencyMode, setEmergencyMode] = React.useState(false);
+  const [setupDismissed, setSetupDismissed] = React.useState(false);
 
   // Editor sheet state
   const [entryEditorState, setEntryEditorState] = React.useState<EntryEditorState | null>(null);
   const [metadataEditorOpen, setMetadataEditorOpen] = React.useState(false);
-  const [contactEditorState, setContactEditorState] = React.useState<ContactEditorState | null>(null);
+  const [contactEditorState, setContactEditorState] =
+    React.useState<ContactEditorState | null>(null);
 
   // Mutation-in-progress tracking
   const [deletingEntryId, setDeletingEntryId] = React.useState<string | null>(null);
@@ -1681,13 +2281,28 @@ export default function HomeDigitalWillClient() {
       ? will?.sections.find((s) => s.id === selectedSectionId) ?? null
       : null;
 
+  // Derived: is setup incomplete?
+  const hasIncompleteSetup = React.useMemo(() => {
+    if (!will) return false;
+    const emergencySection = will.sections.find((s) => s.type === 'EMERGENCY');
+    const hasEmergency = (emergencySection?.entries.length ?? 0) > 0;
+    const hasContact = will.trustedContacts.length > 0;
+    const hasPrimary = will.trustedContacts.some((c) => c.isPrimary);
+    return !hasEmergency || !hasContact || !hasPrimary;
+  }, [will]);
+
+  const showSetupChecklist = hasIncompleteSetup && !setupDismissed;
+
   // ─── Entry mutations ───────────────────────────────────────────────────────
 
   const initWillMutation = useMutation({
     mutationFn: () => getOrCreateDigitalWill(propertyId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
-      toast({ title: 'Home Digital Will created', description: 'Your will has been set up with default sections.' });
+      toast({
+        title: 'Home Digital Will created',
+        description: 'Your will has been set up with default sections.',
+      });
     },
     onError: () => {
       toast({ title: 'Failed to create will', variant: 'destructive' });
@@ -1707,7 +2322,8 @@ export default function HomeDigitalWillClient() {
   });
 
   const createEntryMutation = useMutation({
-    mutationFn: (data: CreateEntryInput) => createEntry(entryEditorState!.sectionId, data),
+    mutationFn: (data: CreateEntryInput) =>
+      createEntry(entryEditorState!.sectionId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       setEntryEditorState(null);
@@ -1719,7 +2335,8 @@ export default function HomeDigitalWillClient() {
   });
 
   const updateEntryMutation = useMutation({
-    mutationFn: (data: UpdateEntryInput) => updateEntry(entryEditorState!.entry!.id, data),
+    mutationFn: (data: UpdateEntryInput) =>
+      updateEntry(entryEditorState!.entry!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       setEntryEditorState(null);
@@ -1746,7 +2363,8 @@ export default function HomeDigitalWillClient() {
   // ─── Contact mutations ─────────────────────────────────────────────────────
 
   const createContactMutation = useMutation({
-    mutationFn: (data: CreateTrustedContactInput) => createTrustedContact(will!.id, data),
+    mutationFn: (data: CreateTrustedContactInput) =>
+      createTrustedContact(will!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       setContactEditorState(null);
@@ -1758,8 +2376,13 @@ export default function HomeDigitalWillClient() {
   });
 
   const updateContactMutation = useMutation({
-    mutationFn: ({ contactId, data }: { contactId: string; data: UpdateTrustedContactInput }) =>
-      updateTrustedContact(contactId, data),
+    mutationFn: ({
+      contactId,
+      data,
+    }: {
+      contactId: string;
+      data: UpdateTrustedContactInput;
+    }) => updateTrustedContact(contactId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       setContactEditorState(null);
@@ -1800,9 +2423,14 @@ export default function HomeDigitalWillClient() {
     }
   };
 
-  const handleSaveContact = (data: CreateTrustedContactInput | UpdateTrustedContactInput) => {
+  const handleSaveContact = (
+    data: CreateTrustedContactInput | UpdateTrustedContactInput,
+  ) => {
     if (contactEditorState?.mode === 'edit' && contactEditorState.contact) {
-      updateContactMutation.mutate({ contactId: contactEditorState.contact.id, data });
+      updateContactMutation.mutate({
+        contactId: contactEditorState.contact.id,
+        data,
+      });
     } else {
       createContactMutation.mutate(data as CreateTrustedContactInput);
     }
@@ -1828,8 +2456,10 @@ export default function HomeDigitalWillClient() {
     setSelectedSectionId(null);
   };
 
-  const isSavingEntry = createEntryMutation.isPending || updateEntryMutation.isPending;
-  const isSavingContact = createContactMutation.isPending || updateContactMutation.isPending;
+  const isSavingEntry =
+    createEntryMutation.isPending || updateEntryMutation.isPending;
+  const isSavingContact =
+    createContactMutation.isPending || updateContactMutation.isPending;
 
   // ─── Render states ─────────────────────────────────────────────────────────
 
@@ -1874,10 +2504,22 @@ export default function HomeDigitalWillClient() {
     );
   }
 
+  // ─── Emergency mode ────────────────────────────────────────────────────────
+
+  if (emergencyMode) {
+    return (
+      <>
+        <EmergencyView will={will} onExit={() => setEmergencyMode(false)} />
+        {/* Sheets still available if user exits back */}
+      </>
+    );
+  }
+
   // ─── Main UI ───────────────────────────────────────────────────────────────
 
   const showSectionList = !selectedSectionId && !showContactsPanel;
-  const showSectionDetail = !!selectedSectionId && !!selectedSection && !showContactsPanel;
+  const showSectionDetail =
+    !!selectedSectionId && !!selectedSection && !showContactsPanel;
   const showContactsDetailMobile = showContactsPanel;
 
   return (
@@ -1893,14 +2535,36 @@ export default function HomeDigitalWillClient() {
           </Link>
         </div>
 
-        {/* Header: always visible on desktop; visible on mobile only when not inside a section detail */}
+        {/* Header: always on desktop, hidden on mobile during section detail */}
         <div
           className={cn(
             selectedSectionId && !showContactsPanel ? 'hidden lg:block' : '',
           )}
         >
-          <WillHeader will={will} onEditMetadata={() => setMetadataEditorOpen(true)} />
-          <ReadinessNudges will={will} onOpenContacts={handleOpenContacts} />
+          <WillHeader
+            will={will}
+            onEditMetadata={() => setMetadataEditorOpen(true)}
+            onOpenEmergencyView={() => setEmergencyMode(true)}
+          />
+        </div>
+
+        {/* Setup checklist OR readiness nudges — shown below header on section list */}
+        <div
+          className={cn(
+            selectedSectionId && !showContactsPanel ? 'hidden lg:block' : '',
+          )}
+        >
+          {showSetupChecklist ? (
+            <SetupChecklist
+              will={will}
+              onSelectSection={handleSelectSection}
+              onOpenContacts={handleOpenContacts}
+              onEditMetadata={() => setMetadataEditorOpen(true)}
+              onDismiss={() => setSetupDismissed(true)}
+            />
+          ) : (
+            <ReadinessNudges will={will} onOpenContacts={handleOpenContacts} />
+          )}
         </div>
 
         {/* Desktop: two-column layout */}
@@ -1915,7 +2579,9 @@ export default function HomeDigitalWillClient() {
               <SectionCard
                 key={section.id}
                 section={section}
-                isSelected={selectedSectionId === section.id && !showContactsPanel}
+                isSelected={
+                  selectedSectionId === section.id && !showContactsPanel
+                }
                 onClick={() => handleSelectSection(section.id)}
               />
             ))}
@@ -1946,10 +2612,17 @@ export default function HomeDigitalWillClient() {
                 section={selectedSection}
                 onBack={() => setSelectedSectionId(null)}
                 onAddEntry={() =>
-                  setEntryEditorState({ mode: 'create', sectionId: selectedSection.id })
+                  setEntryEditorState({
+                    mode: 'create',
+                    sectionId: selectedSection.id,
+                  })
                 }
                 onEditEntry={(entry) =>
-                  setEntryEditorState({ mode: 'edit', sectionId: selectedSection.id, entry })
+                  setEntryEditorState({
+                    mode: 'edit',
+                    sectionId: selectedSection.id,
+                    entry,
+                  })
                 }
                 onDeleteEntry={handleDeleteEntry}
                 deletingEntryId={deletingEntryId}
@@ -1996,10 +2669,17 @@ export default function HomeDigitalWillClient() {
                 section={selectedSection}
                 onBack={() => setSelectedSectionId(null)}
                 onAddEntry={() =>
-                  setEntryEditorState({ mode: 'create', sectionId: selectedSection.id })
+                  setEntryEditorState({
+                    mode: 'create',
+                    sectionId: selectedSection.id,
+                  })
                 }
                 onEditEntry={(entry) =>
-                  setEntryEditorState({ mode: 'edit', sectionId: selectedSection.id, entry })
+                  setEntryEditorState({
+                    mode: 'edit',
+                    sectionId: selectedSection.id,
+                    entry,
+                  })
                 }
                 onDeleteEntry={handleDeleteEntry}
                 deletingEntryId={deletingEntryId}
