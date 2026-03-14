@@ -1696,6 +1696,8 @@ model Property {
   narrativeRuns    PropertyNarrativeRun[]
   knowledgeArticleEvents KnowledgeArticleEvent[]
   radarMatches     PropertyRadarMatch[]
+  homeRiskReplayRuns         HomeRiskReplayRun[]
+  homeRiskReplayEventMatches HomeRiskReplayEventMatch[]
 
   estimatedMaintenancePremiumCents Int @default(0)
   isEquityVerified      Boolean @default(false)
@@ -6416,4 +6418,132 @@ model RadarSourceConfig {
   @@index([sourceType])
   @@index([isEnabled])
   @@map("radar_source_configs")
+}
+
+// ============================================================================
+// HOME RISK REPLAY — ENUMS
+// Note: Names use "HomeRisk" prefix to distinguish from the Home Event Radar
+// feature (RadarEvent*) and the home timeline (HomeEvent*).
+// ============================================================================
+
+enum HomeRiskEventType {
+  hail
+  freeze
+  heavy_rain
+  flood_risk
+  wind
+  heat_wave
+  wildfire_smoke
+  air_quality
+  power_outage
+  power_surge_risk
+  drought
+  extreme_weather
+  other
+}
+
+enum HomeRiskEventSeverity {
+  info
+  low
+  moderate
+  high
+  severe
+}
+
+enum HomeRiskReplayStatus {
+  pending
+  completed
+  failed
+}
+
+enum HomeRiskReplayWindowType {
+  since_built
+  last_5_years
+  custom_range
+}
+
+// ============================================================================
+// HOME RISK REPLAY — MODELS
+// ============================================================================
+
+// Canonical environmental event that may affect multiple properties.
+model HomeRiskEvent {
+  id            String                @id @default(uuid())
+  eventType     HomeRiskEventType
+  eventSubType  String?
+  title         String
+  summary       String?
+  severity      HomeRiskEventSeverity
+  startAt       DateTime
+  endAt         DateTime?
+  locationType  String
+  locationKey   String
+  geoJson       Json?
+  payloadJson   Json?
+  dedupeKey     String                @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  replayEventMatches HomeRiskReplayEventMatch[]
+
+  @@index([eventType, startAt])
+  @@index([severity])
+  @@index([locationType, locationKey])
+  @@map("home_risk_events")
+}
+
+// Snapshot of one generated replay timeline for a property.
+model HomeRiskReplayRun {
+  id                   String                   @id @default(uuid())
+  propertyId           String
+  windowType           HomeRiskReplayWindowType
+  windowStart          DateTime?
+  windowEnd            DateTime?
+  status               HomeRiskReplayStatus     @default(pending)
+  totalEvents          Int?
+  highImpactEvents     Int?
+  moderateImpactEvents Int?
+  summaryText          String?
+  summaryJson          Json?
+  propertySnapshotJson Json?
+  engineVersion        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property     Property                   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  eventMatches HomeRiskReplayEventMatch[]
+
+  @@index([propertyId, createdAt])
+  @@index([status])
+  @@map("home_risk_replay_runs")
+}
+
+// Maps a canonical HomeRiskEvent to a property within a replay run.
+model HomeRiskReplayEventMatch {
+  id                  String                @id @default(uuid())
+  homeRiskReplayRunId String
+  homeRiskEventId     String
+  propertyId          String
+  matchScore          Decimal?              @db.Decimal(5, 4)
+  impactLevel         HomeRiskEventSeverity
+  impactSummary       String?
+  impactFactorsJson   Json?
+  recommendedActionsJson Json?
+  matchedSystemsJson  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeRiskReplayRun HomeRiskReplayRun @relation(fields: [homeRiskReplayRunId], references: [id], onDelete: Cascade)
+  homeRiskEvent     HomeRiskEvent     @relation(fields: [homeRiskEventId], references: [id], onDelete: Cascade)
+  property          Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, homeRiskEventId, homeRiskReplayRunId])
+  @@index([propertyId])
+  @@index([homeRiskReplayRunId])
+  @@index([homeRiskEventId])
+  @@index([impactLevel])
+  @@map("home_risk_replay_event_matches")
 }
