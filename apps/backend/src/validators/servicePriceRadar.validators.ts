@@ -5,6 +5,8 @@ import {
   SERVICE_RADAR_QUOTE_SOURCE_VALUES,
 } from '../services/servicePriceRadar.types';
 
+const MAX_SERVICE_PRICE_RADAR_QUOTE_AMOUNT = 250000;
+
 function normalizeLooseToken(value: string): string {
   return value
     .trim()
@@ -46,6 +48,13 @@ const positiveAmountSchema = z.union([z.number(), z.string().trim()]).transform(
     });
     return z.NEVER;
   }
+  if (numeric > MAX_SERVICE_PRICE_RADAR_QUOTE_AMOUNT) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `quoteAmount must be less than or equal to ${MAX_SERVICE_PRICE_RADAR_QUOTE_AMOUNT}`,
+    });
+    return z.NEVER;
+  }
   return Math.round(numeric * 100) / 100;
 });
 
@@ -58,6 +67,7 @@ export const createServicePriceRadarBodySchema = z.object({
     .string()
     .trim()
     .length(3)
+    .regex(/^[A-Za-z]{3}$/, 'quoteCurrency must be a 3-letter currency code')
     .optional()
     .transform((value) => value?.toUpperCase()),
   quoteVendorName: optionalTrimmedString(120),

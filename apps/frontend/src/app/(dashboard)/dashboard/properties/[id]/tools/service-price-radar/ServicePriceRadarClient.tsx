@@ -56,6 +56,12 @@ import {
   type ServiceRadarLinkedEntityType,
   type ServiceRadarVerdict,
 } from './servicePriceRadarApi';
+import {
+  MAX_SERVICE_PRICE_RADAR_QUOTE_AMOUNT,
+  buildServicePriceRadarGuardrail,
+  buildServicePriceRadarValidationErrors,
+  getServicePriceRadarUserMessage,
+} from './servicePriceRadarUi';
 
 type FormState = {
   serviceCategory: ServiceRadarCategory | '';
@@ -115,7 +121,7 @@ function asArray(value: JsonValue): JsonValue[] {
 }
 
 function toCurrency(value: number | null | undefined, currency = 'USD'): string {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency,
@@ -159,17 +165,10 @@ function verdictMeta(verdict: ServiceRadarVerdict | null): {
 }
 
 function buildValidationErrors(form: FormState): ValidationErrors {
-  const errors: ValidationErrors = {};
-  if (!form.serviceCategory) {
-    errors.serviceCategory = 'Choose the service type first.';
-  }
-
-  const amount = Number(form.quoteAmount);
-  if (!form.quoteAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
-    errors.quoteAmount = 'Enter the quote amount you want to check.';
-  }
-
-  return errors;
+  return buildServicePriceRadarValidationErrors({
+    serviceCategory: form.serviceCategory,
+    quoteAmount: form.quoteAmount,
+  });
 }
 
 function optionLabel(value: string | null | undefined): string {
@@ -179,7 +178,11 @@ function optionLabel(value: string | null | undefined): string {
 
 function propertyLabel(property: Property | null): string {
   if (!property) return 'Property';
-  return property.name?.trim() || `${property.address}, ${property.city}`;
+  return (
+    property.name?.trim() ||
+    [property.address, property.city].filter(Boolean).join(', ') ||
+    'Property'
+  );
 }
 
 function propertyContextLine(property: Property | null): string {
@@ -407,8 +410,11 @@ function QuoteComparisonMeter({
 
 function ResultSkeleton() {
   return (
-    <ScenarioInputCard title="Checking quote" subtitle="Using your home details and available price context.">
-      <div className="space-y-3">
+    <ScenarioInputCard
+      title="Checking quote"
+      subtitle="Using your home details and available price context."
+    >
+      <div role="status" aria-live="polite" aria-label="Checking quote" className="space-y-3">
         <div className="h-6 w-28 animate-pulse rounded-full bg-slate-100" />
         <div className="h-12 animate-pulse rounded-2xl bg-slate-100" />
         <div className="h-20 animate-pulse rounded-2xl bg-slate-100" />
@@ -461,8 +467,8 @@ function RecentCheckRow({
   const verdict = verdictMeta(item.verdict);
   const rangeLabel =
     item.expectedLow !== null && item.expectedHigh !== null
-      ? `${toCurrency(item.expectedLow, item.quoteCurrency)}-${toCurrency(item.expectedHigh, item.quoteCurrency)}`
-      : 'Range pending';
+      ? `${toCurrency(item.expectedLow, item.quoteCurrency)} to ${toCurrency(item.expectedHigh, item.quoteCurrency)}`
+      : 'Broad range only';
 
   return (
     <button
@@ -476,23 +482,25 @@ function RecentCheckRow({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+          <p className="mb-0 line-clamp-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
             {resolveCategoryOption(item.serviceCategory)?.label ?? optionLabel(item.serviceCategory)}
           </p>
-          <p className="mb-0 mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
+          <p className="mb-0 mt-0.5 line-clamp-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
             {[item.serviceSubcategory ? optionLabel(item.serviceSubcategory) : null, compactDate(item.createdAt)]
               .filter(Boolean)
               .join(' • ')}
           </p>
         </div>
-        <StatusChip tone={verdict.tone}>{verdict.label}</StatusChip>
+        <div className="shrink-0">
+          <StatusChip tone={verdict.tone}>{verdict.label}</StatusChip>
+        </div>
       </div>
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
           <p className="mb-0 text-[11px] uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
             Quote
           </p>
-          <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+          <p className="mb-0 text-sm font-semibold tabular-nums text-[hsl(var(--mobile-text-primary))]">
             {toCurrency(item.quoteAmount, item.quoteCurrency)}
           </p>
         </div>
@@ -500,11 +508,13 @@ function RecentCheckRow({
           <p className="mb-0 text-[11px] uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
             Expected
           </p>
-          <p className="mb-0 text-sm text-[hsl(var(--mobile-text-primary))]">{rangeLabel}</p>
+          <p className="mb-0 text-sm tabular-nums text-[hsl(var(--mobile-text-primary))]">{rangeLabel}</p>
         </div>
       </div>
       {item.explanationShort ? (
-        <p className="mb-0 mt-2 text-xs text-[hsl(var(--mobile-text-secondary))]">{item.explanationShort}</p>
+        <p className="mb-0 mt-2 line-clamp-2 text-xs text-[hsl(var(--mobile-text-secondary))]">
+          {item.explanationShort}
+        </p>
       ) : null}
       {loading ? (
         <p className="mb-0 mt-2 text-xs font-medium text-[hsl(var(--mobile-brand-strong))]">Opening details…</p>
@@ -583,6 +593,19 @@ export default function ServicePriceRadarClient() {
   const currentReasons = currentCheck ? extractReasons(currentCheck) : [];
   const adjustmentRows = currentCheck ? extractAdjustmentRows(currentCheck) : [];
   const factorChips = currentCheck ? extractFactorChips(currentCheck) : [];
+  const currentLinkedEntities = currentCheck?.linkedEntities ?? [];
+  const currentBenchmarkMeta = currentCheck
+    ? extractBenchmarkMeta(currentCheck)
+    : { benchmarkMatched: false, estimationMode: 'fallback' as const };
+  const currentGuardrail = currentCheck
+    ? buildServicePriceRadarGuardrail({
+        verdict: currentCheck.verdict,
+        confidenceScore: currentCheck.confidenceScore,
+        benchmarkMatched: currentBenchmarkMeta.benchmarkMatched,
+        expectedLow: currentCheck.expectedLow,
+        expectedHigh: currentCheck.expectedHigh,
+      })
+    : null;
   const hadPrefill = Boolean(
     prefilledCategoryValue ||
       searchParams.get('subcategory') ||
@@ -738,11 +761,7 @@ export default function ServicePriceRadarClient() {
       setPropertyError(null);
     } else {
       setProperty(null);
-      setPropertyError(
-        propertyResult.reason instanceof Error
-          ? propertyResult.reason.message
-          : 'Unable to load property context.'
-      );
+      setPropertyError(getServicePriceRadarUserMessage(propertyResult.reason, 'property').message);
     }
     setPropertyLoading(false);
 
@@ -763,7 +782,7 @@ export default function ServicePriceRadarClient() {
         } catch (error) {
           if (requestId !== loadRef.current) return;
           trackRadarError('detail', error, { source: 'initial_latest_check' });
-          setToolError(error instanceof Error ? error.message : 'Unable to load the latest quote check.');
+          setToolError(getServicePriceRadarUserMessage(error, 'detail').message);
         }
       } else {
         setCurrentCheck(null);
@@ -772,11 +791,7 @@ export default function ServicePriceRadarClient() {
       trackRadarError('list', checksResult.reason);
       setRecentChecks([]);
       setChecksLoading(false);
-      setToolError(
-        checksResult.reason instanceof Error
-          ? checksResult.reason.message
-          : 'Unable to load recent quote checks.'
-      );
+      setToolError(getServicePriceRadarUserMessage(checksResult.reason, 'list').message);
     }
   }
 
@@ -896,7 +911,7 @@ export default function ServicePriceRadarClient() {
   }
 
   async function openCheck(checkId: string) {
-    if (!propertyId) return;
+    if (!propertyId || loadingCheckId === checkId || submitting) return;
     setLoadingCheckId(checkId);
     setToolError(null);
 
@@ -916,19 +931,33 @@ export default function ServicePriceRadarClient() {
       revealResultSoon();
     } catch (error) {
       trackRadarError('detail', error, { source: 'history_open' });
-      setToolError(error instanceof Error ? error.message : 'Unable to load quote details.');
+      setToolError(getServicePriceRadarUserMessage(error, 'detail').message);
     } finally {
       setLoadingCheckId(null);
     }
   }
 
-  async function refreshRecentChecks() {
+  async function refreshRecentChecks(options?: { afterSubmit?: boolean }) {
     if (!propertyId) return;
-    const items = await listServicePriceRadarChecks(propertyId, 12);
-    setRecentChecks(items);
+    try {
+      const items = await listServicePriceRadarChecks(propertyId, 12);
+      setRecentChecks(items);
+      return true;
+    } catch (error) {
+      trackRadarError('list', error, { source: 'refresh_recent_checks' });
+      setToolError((current) => {
+        if (current) return current;
+        if (options?.afterSubmit) {
+          return 'Quote checked. Recent history may take a moment to refresh.';
+        }
+        return getServicePriceRadarUserMessage(error, 'list').message;
+      });
+      return false;
+    }
   }
 
   async function handleSubmit() {
+    if (submitting) return;
     setSubmitAttempted(true);
     ensureStarted('submit');
     const errors = buildValidationErrors(form);
@@ -952,11 +981,19 @@ export default function ServicePriceRadarClient() {
       const payload = buildPayload(form, linkedOptions, prefilledLinkedOption);
       const detail = await createServicePriceRadarCheck(propertyId, payload);
       setCurrentCheck(detail);
-      await refreshRecentChecks();
+      await refreshRecentChecks({ afterSubmit: true });
       revealResultSoon();
     } catch (error) {
       trackRadarError('submit', error);
-      setToolError(error instanceof Error ? error.message : 'Unable to check this quote right now.');
+      const nextError = getServicePriceRadarUserMessage(error, 'submit');
+      if (nextError.clearLinkedEntity) {
+        setAdvancedOpen(true);
+        setForm((current) => ({
+          ...current,
+          linkedEntityKey: '',
+        }));
+      }
+      setToolError(nextError.message);
     } finally {
       setSubmitting(false);
     }
@@ -1023,7 +1060,11 @@ export default function ServicePriceRadarClient() {
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >
       {toolError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+        <div
+          role="alert"
+          aria-live="polite"
+          className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+        >
           {toolError}
         </div>
       ) : null}
@@ -1067,7 +1108,16 @@ export default function ServicePriceRadarClient() {
                   </Button>
                 }
                 secondaryActions={
-                  <Button variant="ghost" onClick={() => setForm(EMPTY_FORM)} disabled={submitting}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setForm(EMPTY_FORM);
+                      setValidationErrors({});
+                      setSubmitAttempted(false);
+                      setToolError(null);
+                    }}
+                    disabled={submitting}
+                  >
                     Reset
                   </Button>
                 }
@@ -1083,7 +1133,9 @@ export default function ServicePriceRadarClient() {
                 },
                 {
                   label: 'Location',
-                  value: property ? `${property.city}, ${property.state} ${property.zipCode}` : 'Loading…',
+                  value: property
+                    ? [property.city, property.state, property.zipCode].filter(Boolean).join(' ') || 'On file'
+                    : 'Loading…',
                 },
               ]}
             />
@@ -1092,6 +1144,10 @@ export default function ServicePriceRadarClient() {
               <label className="space-y-1 text-xs font-medium text-[hsl(var(--mobile-text-secondary))]">
                 <span>Service category</span>
                 <select
+                  aria-invalid={Boolean(validationErrors.serviceCategory)}
+                  aria-describedby={
+                    validationErrors.serviceCategory ? 'service-price-radar-category-error' : undefined
+                  }
                   className={`${INPUT_BASE_CLASS} w-full`}
                   value={form.serviceCategory}
                   onChange={(event) => updateForm('serviceCategory', event.target.value as ServiceRadarCategory | '')}
@@ -1105,7 +1161,9 @@ export default function ServicePriceRadarClient() {
                 </select>
               </label>
               {validationErrors.serviceCategory ? (
-                <p className="mb-0 text-xs text-rose-600">{validationErrors.serviceCategory}</p>
+                <p id="service-price-radar-category-error" className="mb-0 text-xs text-rose-600">
+                  {validationErrors.serviceCategory}
+                </p>
               ) : null}
 
               <MobileHorizontalScroller className="-mx-1 px-1">
@@ -1140,6 +1198,7 @@ export default function ServicePriceRadarClient() {
                 <span>Service detail</span>
                 <Input
                   className={INPUT_BASE_CLASS}
+                  maxLength={120}
                   value={form.serviceSubcategory}
                   onChange={(event) => updateForm('serviceSubcategory', event.target.value)}
                   placeholder="Repair, replacement, leak fix, panel upgrade…"
@@ -1150,8 +1209,15 @@ export default function ServicePriceRadarClient() {
                 <Input
                   type="number"
                   min={0}
+                  max={MAX_SERVICE_PRICE_RADAR_QUOTE_AMOUNT}
                   step="0.01"
                   inputMode="decimal"
+                  aria-invalid={Boolean(validationErrors.quoteAmount)}
+                  aria-describedby={
+                    validationErrors.quoteAmount
+                      ? 'service-price-radar-amount-error'
+                      : 'service-price-radar-amount-help'
+                  }
                   className={`${INPUT_BASE_CLASS} text-lg font-semibold`}
                   value={form.quoteAmount}
                   onChange={(event) => updateForm('quoteAmount', event.target.value)}
@@ -1159,8 +1225,13 @@ export default function ServicePriceRadarClient() {
                 />
               </label>
             </div>
+            <p id="service-price-radar-amount-help" className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+              Enter the full quoted amount in USD. For unusually large projects, use the closest phase or line item.
+            </p>
             {validationErrors.quoteAmount ? (
-              <p className="mb-0 text-xs text-rose-600">{validationErrors.quoteAmount}</p>
+              <p id="service-price-radar-amount-error" className="mb-0 text-xs text-rose-600">
+                {validationErrors.quoteAmount}
+              </p>
             ) : null}
 
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
@@ -1184,6 +1255,7 @@ export default function ServicePriceRadarClient() {
                   <span>Vendor name</span>
                   <Input
                     className={INPUT_BASE_CLASS}
+                    maxLength={120}
                     value={form.quoteVendorName}
                     onChange={(event) => updateForm('quoteVendorName', event.target.value)}
                     placeholder="ABC Mechanical"
@@ -1194,6 +1266,7 @@ export default function ServicePriceRadarClient() {
                   <span>Raw quote label or description</span>
                   <Textarea
                     className="min-h-[108px] rounded-2xl border-[hsl(var(--mobile-border-subtle))] bg-white/90 text-sm shadow-none focus-visible:ring-[hsl(var(--mobile-brand-strong))]"
+                    maxLength={200}
                     value={form.serviceLabelRaw}
                     onChange={(event) => updateForm('serviceLabelRaw', event.target.value)}
                     placeholder="Example: Replace 50-gallon gas water heater with permit, haul-away, and expansion tank."
@@ -1212,7 +1285,11 @@ export default function ServicePriceRadarClient() {
         </div>
 
         {hasResult || submitting || loadingCheckId ? (
-          <div ref={resultRef} className="space-y-4 xl:sticky xl:top-6 xl:col-start-2 xl:row-span-2">
+          <div
+            ref={resultRef}
+            className="space-y-4 scroll-mt-24 xl:sticky xl:top-6 xl:col-start-2 xl:row-span-2"
+            aria-live="polite"
+          >
             {submitting || loadingCheckId ? (
               <ResultSkeleton />
             ) : currentCheck ? (
@@ -1222,19 +1299,42 @@ export default function ServicePriceRadarClient() {
                   title={currentVerdict.title}
                   value={toCurrency(currentCheck.quoteAmount, currentCheck.quoteCurrency)}
                   status={<StatusChip tone={currentVerdict.tone}>{currentVerdict.label}</StatusChip>}
-                  summary={currentCheck.explanationShort ?? 'We compared your quote against an expected range for this home.'}
+                  summary={
+                    currentCheck.explanationShort ??
+                    'We compared your quote against an expected range for this home.'
+                  }
                   highlights={[
                     currentCheck.expectedLow !== null && currentCheck.expectedHigh !== null
-                      ? `Expected range: ${toCurrency(currentCheck.expectedLow, currentCheck.quoteCurrency)}-${toCurrency(currentCheck.expectedHigh, currentCheck.quoteCurrency)}`
+                      ? `Expected range: ${toCurrency(currentCheck.expectedLow, currentCheck.quoteCurrency)} to ${toCurrency(currentCheck.expectedHigh, currentCheck.quoteCurrency)}`
                       : 'Expected range still needs more context',
                     `Confidence: ${currentConfidence.label}`,
                     `Checked ${formatDate(currentCheck.createdAt)}`,
                   ]}
                 />
 
+                {currentGuardrail ? (
+                  <MobileCard
+                    variant="compact"
+                    className={`border ${
+                      currentGuardrail.tone === 'elevated'
+                        ? 'border-amber-200 bg-amber-50/80'
+                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white/90'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                        {currentGuardrail.title}
+                      </p>
+                      <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                        {currentGuardrail.description}
+                      </p>
+                    </div>
+                  </MobileCard>
+                ) : null}
+
                 <ScenarioInputCard
                   title="Quote result"
-                  subtitle="Your quote and the expected range are shown separately so the verdict is easy to scan."
+                  subtitle="Your quote and the expected range are shown separately so the result stays easy to scan."
                   badge={<StatusChip tone={currentConfidence.tone}>{currentConfidence.label}</StatusChip>}
                 >
                   <QuoteComparisonMeter
@@ -1254,13 +1354,16 @@ export default function ServicePriceRadarClient() {
                         label: 'Expected range',
                         value:
                           currentCheck.expectedLow !== null && currentCheck.expectedHigh !== null
-                            ? `${toCurrency(currentCheck.expectedLow, currentCheck.quoteCurrency)}-${toCurrency(currentCheck.expectedHigh, currentCheck.quoteCurrency)}`
-                            : 'Not available',
+                            ? `${toCurrency(currentCheck.expectedLow, currentCheck.quoteCurrency)} to ${toCurrency(currentCheck.expectedHigh, currentCheck.quoteCurrency)}`
+                            : 'Broad estimate only',
                         emphasize: true,
                       },
                       {
                         label: 'Expected median',
-                        value: toCurrency(currentCheck.expectedMedian, currentCheck.quoteCurrency),
+                        value:
+                          currentCheck.expectedMedian !== null
+                            ? toCurrency(currentCheck.expectedMedian, currentCheck.quoteCurrency)
+                            : 'Not enough context',
                       },
                       {
                         label: 'Service',
@@ -1275,6 +1378,15 @@ export default function ServicePriceRadarClient() {
                     ]}
                     columns={2}
                   />
+                  <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                    {currentGuardrail?.tone === 'elevated'
+                      ? 'Consider this a directional read, then compare it with another quote or more system detail.'
+                      : currentCheck.verdict === 'VERY_HIGH'
+                        ? 'If this quote still feels high after a second opinion, you can use Negotiation Shield for a calm response draft.'
+                        : currentCheck.verdict === 'INSUFFICIENT_DATA'
+                          ? 'Adding a linked system, room, or clearer service scope can improve the next estimate.'
+                          : 'This range is a homeowner guide, not a guaranteed market price.'}
+                  </p>
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button asChild variant="outline" className="min-h-[40px] rounded-xl">
                       <Link
@@ -1311,7 +1423,7 @@ export default function ServicePriceRadarClient() {
                     badge={
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" className="h-9 rounded-full px-3 text-xs">
-                          Expand details
+                          {explanationOpen ? 'Hide details' : 'Expand details'}
                         </Button>
                       </CollapsibleTrigger>
                     }
@@ -1329,7 +1441,11 @@ export default function ServicePriceRadarClient() {
                           ))}
                         </div>
                       </div>
-                    ) : null}
+                    ) : (
+                      <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                        We used the available property details, service type, and pricing context for this estimate.
+                      </p>
+                    )}
 
                     <CollapsibleContent className="space-y-4 pt-1">
                       {factorChips.length > 0 ? (
@@ -1345,7 +1461,11 @@ export default function ServicePriceRadarClient() {
                             ))}
                           </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                          Property details on file were limited, so this estimate leaned more on service and region assumptions.
+                        </p>
+                      )}
 
                       <ReadOnlySummaryBlock
                         title="Pricing context"
@@ -1360,7 +1480,7 @@ export default function ServicePriceRadarClient() {
                                 typeof region?.state === 'string' ? region.state : null,
                                 typeof region?.zipPrefix === 'string' ? `ZIP ${region.zipPrefix}` : null,
                               ].filter(Boolean);
-                              return parts.length ? parts.join(' • ') : 'Regional fallback';
+                              return parts.length ? parts.join(' • ') : 'Fallback regional context';
                             })(),
                           },
                           {
@@ -1369,8 +1489,12 @@ export default function ServicePriceRadarClient() {
                               const pricing = asRecord(currentCheck.pricingFactorsJson);
                               const benchmark = asRecord(pricing?.benchmark ?? null);
                               const matched = benchmark?.matched === true;
-                              return matched ? 'Matched benchmark' : 'Fallback estimate';
+                              return matched ? 'Matched benchmark' : 'Fallback assumptions';
                             })(),
+                          },
+                          {
+                            label: 'Confidence',
+                            value: currentConfidence.label,
                           },
                           {
                             label: 'Engine version',
@@ -1380,13 +1504,13 @@ export default function ServicePriceRadarClient() {
                         columns={2}
                       />
 
-                      {currentCheck.linkedEntities.length > 0 ? (
+                      {currentLinkedEntities.length > 0 ? (
                         <div className="space-y-2">
                           <p className="mb-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
                             Linked context
                           </p>
                           <div className="space-y-2">
-                            {currentCheck.linkedEntities.map((entity) => (
+                            {currentLinkedEntities.map((entity) => (
                               <CompactEntityRow
                                 key={`${entity.linkedEntityType}:${entity.linkedEntityId}`}
                                 title={entity.label}
@@ -1407,7 +1531,11 @@ export default function ServicePriceRadarClient() {
                             ))}
                           </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                          No linked systems, rooms, or documents were used for this estimate.
+                        </p>
+                      )}
 
                       {adjustmentRows.length > 0 ? (
                         <div className="space-y-2">
@@ -1418,7 +1546,7 @@ export default function ServicePriceRadarClient() {
                             {adjustmentRows.map((row) => (
                               <CompactEntityRow
                                 key={`${row.code}-${row.note}`}
-                                title={row.code}
+                                title={optionLabel(row.code)}
                                 subtitle={row.note}
                                 status={
                                   <StatusChip
@@ -1441,7 +1569,11 @@ export default function ServicePriceRadarClient() {
                             ))}
                           </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <p className="mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                          No additional estimate adjustments were applied beyond the base service and region logic.
+                        </p>
+                      )}
                     </CollapsibleContent>
                   </ScenarioInputCard>
                 </Collapsible>
@@ -1465,7 +1597,11 @@ export default function ServicePriceRadarClient() {
 
             {checksLoading ? (
               <ScenarioInputCard title="Loading recent checks" subtitle="Pulling your latest quote history.">
-                <div className="flex items-center gap-3 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex items-center gap-3 text-sm text-[hsl(var(--mobile-text-secondary))]"
+                >
                   <Loader2 className="h-4 w-4 animate-spin text-[hsl(var(--mobile-brand-strong))]" />
                   Loading history…
                 </div>

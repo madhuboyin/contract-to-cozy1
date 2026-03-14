@@ -309,38 +309,55 @@ function determineVerdict(quoteAmount: number, low: number | null, high: number 
   return 'VERY_HIGH';
 }
 
+function confidenceBand(confidence: number | null): 'low' | 'medium' | 'high' | 'unknown' {
+  if (confidence === null || confidence === undefined) return 'unknown';
+  if (confidence >= 0.72) return 'high';
+  if (confidence >= 0.5) return 'medium';
+  return 'low';
+}
+
 function buildExplanationShort(
   verdict: ServiceRadarVerdictValue,
   quoteAmount: number,
   low: number | null,
   high: number | null,
-  category: ServiceCategoryValue
+  category: ServiceCategoryValue,
+  confidence: number | null,
+  benchmarkMatched: boolean
 ): string {
   const categoryLabel = sentenceCase(category.toLowerCase().replace(/[^a-z0-9]+/g, '_'));
-  if (!low || !high) {
-    return `We could not confidently estimate a fair ${categoryLabel} range for this quote yet.`;
+  const lowConfidence = confidence !== null && confidence < 0.5;
+
+  if (!low || !high || verdict === 'INSUFFICIENT_DATA') {
+    if (!benchmarkMatched) {
+      return `We could only estimate a broad ${categoryLabel} range based on limited property and pricing context.`;
+    }
+
+    return `We could only estimate a broad ${categoryLabel} range for this home with the context available.`;
   }
 
   const range = `$${round(low).toLocaleString()}-$${round(high).toLocaleString()}`;
   const amount = `$${round(quoteAmount).toLocaleString()}`;
+  const fallbackSuffix = !benchmarkMatched ? ' This result uses fallback regional assumptions.' : '';
+  const directionalPrefix = lowConfidence ? 'Directional result: ' : '';
 
   if (verdict === 'FAIR') {
-    return `${amount} looks within the expected ${categoryLabel} range of ${range} for this property.`;
+    return `${directionalPrefix}${amount} looks within the expected ${categoryLabel} range of ${range} for this property.${fallbackSuffix}`;
   }
 
   if (verdict === 'HIGH') {
-    return `${amount} looks somewhat above the expected ${categoryLabel} range of ${range} for this property.`;
+    return `${directionalPrefix}${amount} looks somewhat above the expected ${categoryLabel} range of ${range} for this property.${fallbackSuffix}`;
   }
 
   if (verdict === 'VERY_HIGH') {
-    return `${amount} looks well above the expected ${categoryLabel} range of ${range} for this property.`;
+    return `${directionalPrefix}${amount} looks well above the expected ${categoryLabel} range of ${range} for this property.${fallbackSuffix}`;
   }
 
   if (verdict === 'UNDERPRICED') {
-    return `${amount} looks meaningfully below the expected ${categoryLabel} range of ${range} for this property.`;
+    return `${directionalPrefix}${amount} looks meaningfully below the expected ${categoryLabel} range of ${range} for this property.${fallbackSuffix}`;
   }
 
-  return `We could not confidently estimate a fair ${categoryLabel} range for this property.`;
+  return `We could only estimate a broad ${categoryLabel} range for this property.`;
 }
 
 export class ServicePriceRadarEngine {
@@ -416,7 +433,18 @@ export class ServicePriceRadarEngine {
     confidence = round(clamp(confidence, 0.18, 0.92), 4);
 
     const verdict = determineVerdict(input.quoteAmount, low, high, confidence);
-    const explanationShort = buildExplanationShort(verdict, input.quoteAmount, low, high, input.serviceCategory);
+    const lowConfidence = confidence !== null && confidence < 0.5;
+    const explanationShort = buildExplanationShort(
+      verdict,
+      input.quoteAmount,
+      low,
+      high,
+      input.serviceCategory,
+      confidence,
+      benchmarkMatch.matched
+    );
+    const mode = benchmarkMatch.matched ? 'benchmark' : 'fallback';
+    const confidenceLabel = confidenceBand(confidence);
 
     const propertySnapshotJson = {
       propertyId: property.propertyId,
@@ -456,6 +484,11 @@ export class ServicePriceRadarEngine {
         regionKey: benchmarkMatch.benchmark?.regionKey ?? null,
         sourceLabel: benchmarkMatch.benchmark?.sourceLabel ?? null,
       },
+      confidence: {
+        score: confidence,
+        band: confidenceLabel,
+      },
+      estimationMode: mode,
       linkedEntities: linkedEntities.map((entity) => ({
         linkedEntityType: entity.linkedEntityType,
         linkedEntityId: entity.linkedEntityId,
@@ -469,6 +502,14 @@ export class ServicePriceRadarEngine {
       summary: explanationShort,
       reasonCodes: Array.from(reasonCodes),
       notes,
+      limitations:
+        verdict === 'INSUFFICIENT_DATA'
+          ? ['Estimate is broad because the available property or pricing context was limited.']
+          : !benchmarkMatch.matched
+            ? ['Direct benchmark data was unavailable, so fallback regional assumptions were used.']
+            : lowConfidence
+              ? ['Estimate confidence is limited, so treat the result as directional rather than exact.']
+              : [],
     };
 
     return {
