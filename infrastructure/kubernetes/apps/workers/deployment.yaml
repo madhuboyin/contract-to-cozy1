@@ -58,11 +58,11 @@ spec:
                   name: app-config
                   key: CPSC_RECALL_FEED_URL
             - name: RADAR_DUMMY_INGEST_ENABLED
-              value: "false"
+              value: "true"
             - name: RADAR_DUMMY_INGEST_CRON
               value: "*/30 * * * *"
             - name: RADAR_DUMMY_INGEST_RUN_ON_STARTUP
-              value: "false"
+              value: "true"
             - name: RADAR_DUMMY_FIXTURE_SET
               value: "zip_scoped"
             - name: RADAR_DUMMY_TARGET_ZIPS
