@@ -21,6 +21,14 @@ export type EntryType =
   | 'ACCESS_NOTE'
   | 'GENERAL_NOTE';
 export type EntryPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type TrustedContactRole =
+  | 'SPOUSE'
+  | 'FAMILY_MEMBER'
+  | 'PROPERTY_MANAGER'
+  | 'EMERGENCY_CONTACT'
+  | 'CARETAKER'
+  | 'OTHER';
+export type TrustedContactAccessLevel = 'VIEW' | 'EDIT' | 'EMERGENCY_ONLY';
 
 export interface DigitalWillEntry {
   id: string;
@@ -52,6 +60,21 @@ export interface DigitalWillSection {
   updatedAt: string;
 }
 
+export interface TrustedContact {
+  id: string;
+  digitalWillId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  relationship: string | null;
+  role: TrustedContactRole;
+  accessLevel: TrustedContactAccessLevel;
+  isPrimary: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DigitalWillCounts {
   sectionCount: number;
   entryCount: number;
@@ -70,7 +93,7 @@ export interface DigitalWill {
   lastReviewedAt: string | null;
   publishedAt: string | null;
   sections: DigitalWillSection[];
-  trustedContacts: unknown[];
+  trustedContacts: TrustedContact[];
   counts: DigitalWillCounts;
   createdAt: string;
   updatedAt: string;
@@ -106,4 +129,26 @@ export interface UpdateWillInput {
   readiness?: DigitalWillReadiness;
   lastReviewedAt?: string | null;
   publishedAt?: string | null;
+}
+
+export interface CreateTrustedContactInput {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  relationship?: string | null;
+  role: TrustedContactRole;
+  accessLevel: TrustedContactAccessLevel;
+  isPrimary?: boolean;
+  notes?: string | null;
+}
+
+export interface UpdateTrustedContactInput {
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+  relationship?: string | null;
+  role?: TrustedContactRole;
+  accessLevel?: TrustedContactAccessLevel;
+  isPrimary?: boolean;
+  notes?: string | null;
 }

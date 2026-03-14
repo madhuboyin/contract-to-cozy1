@@ -13,11 +13,15 @@ import {
   FileText,
   Info,
   Loader2,
+  Mail,
   Pencil,
+  Phone,
   Pin,
   Plus,
   Shield,
+  Star,
   Trash2,
+  Users,
   Wrench,
   Zap,
 } from 'lucide-react';
@@ -45,7 +49,6 @@ import { useToast } from '@/components/ui/use-toast';
 import {
   BottomSafeAreaReserve,
   EmptyStateCard,
-  IconBadge,
   MobileCard,
   MobilePageContainer,
   MobileSection,
@@ -56,21 +59,29 @@ import { MOBILE_CARD_RADIUS, MOBILE_TYPE_TOKENS } from '@/components/mobile/dash
 import RelatedTools from '@/components/tools/RelatedTools';
 import {
   createEntry,
+  createTrustedContact,
   deleteEntry,
+  deleteTrustedContact,
   getDigitalWill,
   getOrCreateDigitalWill,
   updateDigitalWill,
   updateEntry,
+  updateTrustedContact,
 } from './homeDigitalWillApi';
 import type {
   CreateEntryInput,
+  CreateTrustedContactInput,
   DigitalWill,
   DigitalWillEntry,
   DigitalWillSection,
   EntryPriority,
   EntryType,
   SectionType,
+  TrustedContact,
+  TrustedContactAccessLevel,
+  TrustedContactRole,
   UpdateEntryInput,
+  UpdateTrustedContactInput,
   UpdateWillInput,
 } from './types';
 
@@ -153,10 +164,7 @@ const SECTION_CONFIG: Record<
   },
 };
 
-const READINESS_TONE: Record<
-  string,
-  'good' | 'elevated' | 'danger' | 'info'
-> = {
+const READINESS_TONE: Record<string, 'good' | 'elevated' | 'danger' | 'info'> = {
   NOT_STARTED: 'elevated',
   IN_PROGRESS: 'info',
   READY: 'good',
@@ -193,6 +201,51 @@ const PRIORITY_OPTIONS: { value: EntryPriority; label: string }[] = [
   { value: 'MEDIUM', label: 'Medium' },
   { value: 'HIGH', label: 'High' },
   { value: 'CRITICAL', label: 'Critical' },
+];
+
+const ACCESS_LEVEL_CONFIG: Record<
+  TrustedContactAccessLevel,
+  { label: string; description: string; tone: 'good' | 'elevated' | 'danger' | 'info' }
+> = {
+  VIEW: {
+    label: 'Can view',
+    description: 'Can view the full digital will',
+    tone: 'info',
+  },
+  EDIT: {
+    label: 'Can edit',
+    description: 'Can help update and maintain the will',
+    tone: 'good',
+  },
+  EMERGENCY_ONLY: {
+    label: 'Emergency only',
+    description: 'Intended for emergency reference only',
+    tone: 'elevated',
+  },
+};
+
+const ROLE_LABELS: Record<TrustedContactRole, string> = {
+  SPOUSE: 'Spouse',
+  FAMILY_MEMBER: 'Family Member',
+  PROPERTY_MANAGER: 'Property Manager',
+  EMERGENCY_CONTACT: 'Emergency Contact',
+  CARETAKER: 'Caretaker',
+  OTHER: 'Other',
+};
+
+const ROLE_OPTIONS: { value: TrustedContactRole; label: string }[] = [
+  { value: 'SPOUSE', label: 'Spouse' },
+  { value: 'FAMILY_MEMBER', label: 'Family Member' },
+  { value: 'PROPERTY_MANAGER', label: 'Property Manager' },
+  { value: 'EMERGENCY_CONTACT', label: 'Emergency Contact' },
+  { value: 'CARETAKER', label: 'Caretaker' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const ACCESS_LEVEL_OPTIONS: { value: TrustedContactAccessLevel; label: string }[] = [
+  { value: 'VIEW', label: 'Can view — read the full digital will' },
+  { value: 'EDIT', label: 'Can edit — help update and maintain the will' },
+  { value: 'EMERGENCY_ONLY', label: 'Emergency only — for urgent situations' },
 ];
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -254,6 +307,69 @@ function WillEmptyState({
   );
 }
 
+// ─── Readiness nudges ─────────────────────────────────────────────────────────
+
+function ReadinessNudges({
+  will,
+  onOpenContacts,
+}: {
+  will: DigitalWill;
+  onOpenContacts: () => void;
+}) {
+  const emergencySection = will.sections.find((s) => s.type === 'EMERGENCY');
+  const hasEmergencyEntries = emergencySection && emergencySection.entries.length > 0;
+  const hasContacts = will.trustedContacts.length > 0;
+  const hasPrimary = will.trustedContacts.some((c) => c.isPrimary);
+
+  const nudges: { icon: React.ElementType; text: string; action?: () => void; actionLabel?: string }[] = [];
+
+  if (!hasEmergencyEntries) {
+    nudges.push({
+      icon: AlertTriangle,
+      text: 'Emergency instructions are empty — add steps for urgent situations.',
+    });
+  }
+  if (!hasContacts) {
+    nudges.push({
+      icon: Users,
+      text: 'Add a trusted contact so others can access critical home knowledge when needed.',
+      action: onOpenContacts,
+      actionLabel: 'Add contact',
+    });
+  } else if (!hasPrimary) {
+    nudges.push({
+      icon: Star,
+      text: 'No primary contact set — mark one contact as primary.',
+      action: onOpenContacts,
+      actionLabel: 'Set primary',
+    });
+  }
+
+  if (nudges.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {nudges.map((nudge, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-2.5"
+        >
+          <nudge.icon className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <p className={cn(MOBILE_TYPE_TOKENS.caption, 'flex-1 text-gray-600')}>{nudge.text}</p>
+          {nudge.action && (
+            <button
+              onClick={nudge.action}
+              className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-700"
+            >
+              {nudge.actionLabel}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Will header ──────────────────────────────────────────────────────────────
 
 function WillHeader({
@@ -272,11 +388,10 @@ function WillHeader({
         year: 'numeric',
       })
     : null;
+  const primaryContact = will.trustedContacts.find((c) => c.isPrimary);
 
   return (
-    <MobileCard
-      className={cn(MOBILE_CARD_RADIUS, 'border border-gray-200 bg-white p-5')}
-    >
+    <MobileCard className={cn(MOBILE_CARD_RADIUS, 'border border-gray-200 bg-white p-5')}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mb-1 text-gray-500')}>
@@ -295,12 +410,26 @@ function WillHeader({
                 {will.counts.entryCount} {will.counts.entryCount === 1 ? 'entry' : 'entries'}
               </StatusChip>
             )}
+            {will.trustedContacts.length > 0 && (
+              <StatusChip tone="info">
+                {will.trustedContacts.length}{' '}
+                {will.trustedContacts.length === 1 ? 'contact' : 'contacts'}
+              </StatusChip>
+            )}
             {lastReviewed && (
               <span className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-400')}>
                 Reviewed {lastReviewed}
               </span>
             )}
           </div>
+          {primaryContact && (
+            <div className="mt-2 flex items-center gap-1.5">
+              <Star className="h-3 w-3 shrink-0 text-blue-500" />
+              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
+                {primaryContact.name} is your primary contact
+              </p>
+            </div>
+          )}
         </div>
         <Button variant="ghost" size="sm" onClick={onEditMetadata} className="mt-1 shrink-0">
           <Pencil className="h-4 w-4" />
@@ -390,6 +519,80 @@ function SectionCard({
   );
 }
 
+// ─── Trusted contacts nav card ────────────────────────────────────────────────
+
+function TrustedContactsNavCard({
+  contacts,
+  isSelected,
+  onClick,
+}: {
+  contacts: TrustedContact[];
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const primary = contacts.find((c) => c.isPrimary);
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full rounded-[22px] border p-4 text-left transition-colors',
+        isSelected
+          ? 'border-gray-900 bg-gray-900 text-white'
+          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+            isSelected ? 'bg-white/15' : 'bg-blue-50',
+          )}
+        >
+          <Users
+            className={cn('h-4.5 w-4.5', isSelected ? 'text-white' : 'text-blue-600')}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              MOBILE_TYPE_TOKENS.cardTitle,
+              isSelected ? 'text-white' : 'text-gray-900',
+            )}
+          >
+            Trusted Contacts
+          </p>
+          {contacts.length > 0 ? (
+            <p
+              className={cn(
+                MOBILE_TYPE_TOKENS.caption,
+                'mt-0.5',
+                isSelected ? 'text-gray-300' : 'text-gray-500',
+              )}
+            >
+              {contacts.length} {contacts.length === 1 ? 'contact' : 'contacts'}
+              {primary && ` · ${primary.name} primary`}
+            </p>
+          ) : (
+            <p
+              className={cn(
+                MOBILE_TYPE_TOKENS.caption,
+                'mt-0.5',
+                isSelected ? 'text-gray-400' : 'text-gray-400',
+              )}
+            >
+              No contacts added
+            </p>
+          )}
+        </div>
+        <ChevronRight
+          className={cn('h-4 w-4 shrink-0', isSelected ? 'text-gray-400' : 'text-gray-300')}
+        />
+      </div>
+    </button>
+  );
+}
+
 // ─── Entry card ───────────────────────────────────────────────────────────────
 
 function EntryCard({
@@ -426,21 +629,11 @@ function EntryCard({
               </StatusChip>
             )}
           </div>
-          <p
-            className={cn(
-              MOBILE_TYPE_TOKENS.cardTitle,
-              'mt-1.5 text-gray-900',
-            )}
-          >
+          <p className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'mt-1.5 text-gray-900')}>
             {entry.title}
           </p>
           {(entry.summary || entry.content) && (
-            <p
-              className={cn(
-                MOBILE_TYPE_TOKENS.body,
-                'mt-1 line-clamp-2 text-gray-500',
-              )}
-            >
+            <p className={cn(MOBILE_TYPE_TOKENS.body, 'mt-1 line-clamp-2 text-gray-500')}>
               {entry.summary || entry.content}
             </p>
           )}
@@ -506,17 +699,8 @@ function SectionDetailPanel({
           <ArrowLeft className="h-3.5 w-3.5" />
           Sections
         </Button>
-        <div
-          className={cn(
-            'hidden items-center gap-3 lg:flex',
-          )}
-        >
-          <div
-            className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-xl',
-              config.iconBg,
-            )}
-          >
+        <div className="hidden items-center gap-3 lg:flex">
+          <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', config.iconBg)}>
             <Icon className={cn('h-4.5 w-4.5', config.iconColor)} />
           </div>
           <div>
@@ -524,9 +708,7 @@ function SectionDetailPanel({
               {config.label}
             </h2>
             {config.hint && (
-              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
-                {config.hint}
-              </p>
+              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{config.hint}</p>
             )}
           </div>
         </div>
@@ -535,21 +717,12 @@ function SectionDetailPanel({
       {/* Mobile section title */}
       <div className="lg:hidden">
         <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-xl',
-              config.iconBg,
-            )}
-          >
+          <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', config.iconBg)}>
             <Icon className={cn('h-4.5 w-4.5', config.iconColor)} />
           </div>
           <div>
-            <h2 className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'text-gray-900')}>
-              {config.label}
-            </h2>
-            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
-              {config.hint}
-            </p>
+            <h2 className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'text-gray-900')}>{config.label}</h2>
+            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{config.hint}</p>
           </div>
         </div>
       </div>
@@ -571,12 +744,7 @@ function SectionDetailPanel({
           title="No entries yet"
           description="Add instructions, notes, contacts, and other important information for this section."
           action={
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2 gap-2"
-              onClick={onAddEntry}
-            >
+            <Button variant="outline" size="sm" className="mt-2 gap-2" onClick={onAddEntry}>
               <Plus className="h-4 w-4" />
               Add first entry
             </Button>
@@ -591,6 +759,262 @@ function SectionDetailPanel({
               onEdit={onEditEntry}
               onDelete={onDeleteEntry}
               isDeleting={deletingEntryId === entry.id}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Contact item ─────────────────────────────────────────────────────────────
+
+function ContactItem({
+  contact,
+  onEdit,
+  onDelete,
+  onMakePrimary,
+  isDeleting,
+  isUpdating,
+}: {
+  contact: TrustedContact;
+  onEdit: (c: TrustedContact) => void;
+  onDelete: (id: string) => void;
+  onMakePrimary: (id: string) => void;
+  isDeleting: boolean;
+  isUpdating: boolean;
+}) {
+  const accessCfg = ACCESS_LEVEL_CONFIG[contact.accessLevel];
+
+  return (
+    <div
+      className={cn(
+        MOBILE_CARD_RADIUS,
+        'border bg-white p-4',
+        contact.isPrimary ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200',
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {contact.isPrimary && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                <Star className="h-3 w-3" />
+                Primary
+              </span>
+            )}
+            <StatusChip tone={accessCfg.tone}>{accessCfg.label}</StatusChip>
+            <span className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-400')}>
+              {ROLE_LABELS[contact.role]}
+            </span>
+          </div>
+
+          <p className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'mt-1.5 text-gray-900')}>
+            {contact.name}
+          </p>
+
+          {contact.relationship && (
+            <p className={cn(MOBILE_TYPE_TOKENS.body, 'mt-0.5 text-gray-500')}>
+              {contact.relationship}
+            </p>
+          )}
+
+          <div className="mt-1.5 space-y-0.5">
+            {contact.email && (
+              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'flex items-center gap-1.5 text-gray-500')}>
+                <Mail className="h-3 w-3 shrink-0" />
+                {contact.email}
+              </p>
+            )}
+            {contact.phone && (
+              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'flex items-center gap-1.5 text-gray-500')}>
+                <Phone className="h-3 w-3 shrink-0" />
+                {contact.phone}
+              </p>
+            )}
+          </div>
+
+          {contact.notes && (
+            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mt-1.5 line-clamp-1 text-gray-400')}>
+              {contact.notes}
+            </p>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onEdit(contact)}
+            >
+              <Pencil className="h-3.5 w-3.5 text-gray-400" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onDelete(contact.id)}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
+              )}
+            </Button>
+          </div>
+          {!contact.isPrimary && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs text-blue-600 hover:text-blue-700"
+              onClick={() => onMakePrimary(contact.id)}
+              disabled={isUpdating}
+            >
+              {isUpdating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Star className="h-3 w-3" />
+              )}
+              Set primary
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Contacts detail panel ────────────────────────────────────────────────────
+
+function ContactsDetailPanel({
+  contacts,
+  onBack,
+  onAdd,
+  onEdit,
+  onDelete,
+  onMakePrimary,
+  deletingContactId,
+  updatingContactId,
+}: {
+  contacts: TrustedContact[];
+  onBack: () => void;
+  onAdd: () => void;
+  onEdit: (c: TrustedContact) => void;
+  onDelete: (id: string) => void;
+  onMakePrimary: (id: string) => void;
+  deletingContactId: string | null;
+  updatingContactId: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Back button (mobile) */}
+      <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0 gap-1.5 lg:hidden"
+          onClick={onBack}
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Sections
+        </Button>
+
+        {/* Desktop title */}
+        <div className="hidden items-center gap-3 lg:flex">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
+            <Users className="h-4.5 w-4.5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className={cn(MOBILE_TYPE_TOKENS.sectionTitle, 'text-gray-900')}>
+              Trusted Contacts
+            </h2>
+            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
+              People who can access critical home knowledge
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile title */}
+      <div className="lg:hidden">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
+            <Users className="h-4.5 w-4.5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'text-gray-900')}>
+              Trusted Contacts
+            </h2>
+            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
+              People who can access critical home knowledge
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Explanation */}
+      <div className="rounded-xl bg-gray-50 px-4 py-3">
+        <p className={cn(MOBILE_TYPE_TOKENS.body, 'text-gray-600')}>
+          Trusted contacts can access critical home knowledge when needed — during an emergency,
+          a transition, or when you're unavailable. Choose each person's access level based on
+          their role.
+        </p>
+      </div>
+
+      {/* Add button */}
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full justify-start gap-2 rounded-xl border-dashed"
+        onClick={onAdd}
+      >
+        <Plus className="h-4 w-4" />
+        Add trusted contact
+      </Button>
+
+      {/* Access level legend */}
+      <div className="space-y-2">
+        <p className={cn(MOBILE_TYPE_TOKENS.caption, 'font-semibold uppercase tracking-wider text-gray-400')}>
+          Access levels
+        </p>
+        <div className="space-y-1.5">
+          {(Object.entries(ACCESS_LEVEL_CONFIG) as [TrustedContactAccessLevel, typeof ACCESS_LEVEL_CONFIG[TrustedContactAccessLevel]][]).map(
+            ([, cfg]) => (
+              <div key={cfg.label} className="flex items-center gap-2">
+                <StatusChip tone={cfg.tone}>{cfg.label}</StatusChip>
+                <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{cfg.description}</p>
+              </div>
+            ),
+          )}
+        </div>
+      </div>
+
+      {/* Contacts list */}
+      {contacts.length === 0 ? (
+        <EmptyStateCard
+          title="No trusted contacts yet"
+          description="Add someone your family or support network can rely on — a spouse, caretaker, property manager, or emergency contact."
+          action={
+            <Button variant="outline" size="sm" className="mt-2 gap-2" onClick={onAdd}>
+              <Plus className="h-4 w-4" />
+              Add first contact
+            </Button>
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {contacts.map((contact) => (
+            <ContactItem
+              key={contact.id}
+              contact={contact}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onMakePrimary={onMakePrimary}
+              isDeleting={deletingContactId === contact.id}
+              isUpdating={updatingContactId === contact.id}
             />
           ))}
         </div>
@@ -674,12 +1098,8 @@ function EntryEditorSheet({
       title: form.title.trim(),
       content: form.content?.trim() || null,
       summary: form.summary?.trim() || null,
-      effectiveFrom: form.effectiveFrom
-        ? new Date(form.effectiveFrom).toISOString()
-        : null,
-      effectiveTo: form.effectiveTo
-        ? new Date(form.effectiveTo).toISOString()
-        : null,
+      effectiveFrom: form.effectiveFrom ? new Date(form.effectiveFrom).toISOString() : null,
+      effectiveTo: form.effectiveTo ? new Date(form.effectiveTo).toISOString() : null,
     });
   };
 
@@ -735,9 +1155,7 @@ function EntryEditorSheet({
                 <Textarea
                   id="entry-content"
                   value={form.content ?? ''}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, content: e.target.value || null }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value || null }))}
                   placeholder="Detailed instructions, location, notes…"
                   rows={4}
                   className="resize-none"
@@ -751,9 +1169,7 @@ function EntryEditorSheet({
                 <Input
                   id="entry-summary"
                   value={form.summary ?? ''}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, summary: e.target.value || null }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value || null }))}
                   placeholder="One-line summary for quick reference"
                 />
               </div>
@@ -769,9 +1185,7 @@ function EntryEditorSheet({
                 <Label htmlFor="entry-priority">Priority</Label>
                 <Select
                   value={form.priority ?? 'MEDIUM'}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, priority: v as EntryPriority }))
-                  }
+                  onValueChange={(v) => setForm((f) => ({ ...f, priority: v as EntryPriority }))}
                 >
                   <SelectTrigger id="entry-priority">
                     <SelectValue />
@@ -814,7 +1228,6 @@ function EntryEditorSheet({
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Timing <span className="font-normal normal-case text-gray-400">(optional)</span>
               </h3>
-
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="entry-from">Effective from</Label>
@@ -844,12 +1257,7 @@ function EntryEditorSheet({
 
           <SheetFooter className="mt-auto border-t px-5 py-4">
             <div className="flex w-full gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={onClose}
-              >
+              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
                 Cancel
               </Button>
               <Button
@@ -868,7 +1276,7 @@ function EntryEditorSheet({
   );
 }
 
-// ─── Metadata editor sheet ────────────────────────────────────────────────────
+// ─── Will metadata editor sheet ───────────────────────────────────────────────
 
 function WillMetadataSheet({
   will,
@@ -896,9 +1304,7 @@ function WillMetadataSheet({
         title: will.title,
         status: will.status,
         readiness: will.readiness,
-        lastReviewedAt: will.lastReviewedAt
-          ? will.lastReviewedAt.slice(0, 10)
-          : '',
+        lastReviewedAt: will.lastReviewedAt ? will.lastReviewedAt.slice(0, 10) : '',
       });
     }
   }, [will, open]);
@@ -909,9 +1315,7 @@ function WillMetadataSheet({
       title: form.title.trim() || undefined,
       status: form.status as UpdateWillInput['status'],
       readiness: form.readiness as UpdateWillInput['readiness'],
-      lastReviewedAt: form.lastReviewedAt
-        ? new Date(form.lastReviewedAt).toISOString()
-        : null,
+      lastReviewedAt: form.lastReviewedAt ? new Date(form.lastReviewedAt).toISOString() : null,
     });
   };
 
@@ -975,9 +1379,7 @@ function WillMetadataSheet({
                 id="will-reviewed"
                 type="date"
                 value={form.lastReviewedAt}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, lastReviewedAt: e.target.value }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, lastReviewedAt: e.target.value }))}
               />
             </div>
           </div>
@@ -999,20 +1401,239 @@ function WillMetadataSheet({
   );
 }
 
-// ─── Trusted contacts placeholder ─────────────────────────────────────────────
+// ─── Contact editor sheet ─────────────────────────────────────────────────────
 
-function TrustedContactsPlaceholder() {
+interface ContactEditorState {
+  mode: 'create' | 'edit';
+  contact?: TrustedContact;
+}
+
+const EMPTY_CONTACT_FORM: CreateTrustedContactInput = {
+  name: '',
+  email: null,
+  phone: null,
+  relationship: null,
+  role: 'OTHER',
+  accessLevel: 'VIEW',
+  isPrimary: false,
+  notes: null,
+};
+
+function ContactEditorSheet({
+  state,
+  onClose,
+  onSave,
+  isSaving,
+}: {
+  state: ContactEditorState | null;
+  onClose: () => void;
+  onSave: (data: CreateTrustedContactInput | UpdateTrustedContactInput) => void;
+  isSaving: boolean;
+}) {
+  const [form, setForm] = React.useState<CreateTrustedContactInput>(EMPTY_CONTACT_FORM);
+
+  React.useEffect(() => {
+    if (!state) return;
+    if (state.mode === 'edit' && state.contact) {
+      setForm({
+        name: state.contact.name,
+        email: state.contact.email,
+        phone: state.contact.phone,
+        relationship: state.contact.relationship,
+        role: state.contact.role,
+        accessLevel: state.contact.accessLevel,
+        isPrimary: state.contact.isPrimary,
+        notes: state.contact.notes,
+      });
+    } else {
+      setForm(EMPTY_CONTACT_FORM);
+    }
+  }, [state]);
+
+  const isOpen = state !== null;
+  const sheetTitle = state?.mode === 'edit' ? 'Edit Contact' : 'Add Trusted Contact';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    onSave({
+      ...form,
+      name: form.name.trim(),
+      email: form.email?.trim() || null,
+      phone: form.phone?.trim() || null,
+      relationship: form.relationship?.trim() || null,
+      notes: form.notes?.trim() || null,
+    });
+  };
+
   return (
-    <div
-      className={cn(
-        MOBILE_CARD_RADIUS,
-        'border border-dashed border-gray-200 bg-gray-50 p-4 text-center',
-      )}
-    >
-      <p className={cn(MOBILE_TYPE_TOKENS.body, 'text-gray-500')}>
-        Trusted contacts coming soon — store who can access and operate this home.
-      </p>
-    </div>
+    <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
+        <SheetHeader className="border-b px-5 py-4">
+          <SheetTitle>{sheetTitle}</SheetTitle>
+        </SheetHeader>
+
+        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
+          <div className="flex flex-col gap-5 px-5 py-5">
+            {/* Identity */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Identity
+              </h3>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="contact-name">Name *</Label>
+                <Input
+                  id="contact-name"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Jane Smith"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="contact-relationship">
+                  Relationship <span className="text-gray-400">(optional)</span>
+                </Label>
+                <Input
+                  id="contact-relationship"
+                  value={form.relationship ?? ''}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, relationship: e.target.value || null }))
+                  }
+                  placeholder="e.g. Sister, neighbor, property manager…"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="contact-role">Role</Label>
+                <Select
+                  value={form.role}
+                  onValueChange={(v) => setForm((f) => ({ ...f, role: v as TrustedContactRole }))}
+                >
+                  <SelectTrigger id="contact-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Access */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Access
+              </h3>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="contact-access">Access level</Label>
+                <Select
+                  value={form.accessLevel}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, accessLevel: v as TrustedContactAccessLevel }))
+                  }
+                >
+                  <SelectTrigger id="contact-access">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCESS_LEVEL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Primary contact</p>
+                  <p className="text-xs text-gray-500">
+                    Designate as the main person to reach first
+                  </p>
+                </div>
+                <Switch
+                  checked={form.isPrimary ?? false}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, isPrimary: v }))}
+                />
+              </div>
+            </div>
+
+            {/* Contact details */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Contact details <span className="font-normal normal-case text-gray-400">(optional)</span>
+              </h3>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="contact-email">Email</Label>
+                <Input
+                  id="contact-email"
+                  type="email"
+                  value={form.email ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value || null }))}
+                  placeholder="jane@example.com"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="contact-phone">Phone</Label>
+                <Input
+                  id="contact-phone"
+                  type="tel"
+                  value={form.phone ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value || null }))}
+                  placeholder="+1 555 000 0000"
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                Notes <span className="font-normal normal-case text-gray-400">(optional)</span>
+              </h3>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="contact-notes">Additional notes</Label>
+                <Textarea
+                  id="contact-notes"
+                  value={form.notes ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value || null }))}
+                  placeholder="Any context about this person's role or how to reach them…"
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <SheetFooter className="mt-auto border-t px-5 py-4">
+            <div className="flex w-full gap-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1 gap-2"
+                disabled={isSaving || !form.name.trim()}
+              >
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {state?.mode === 'edit' ? 'Save changes' : 'Add contact'}
+              </Button>
+            </div>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -1023,13 +1644,21 @@ export default function HomeDigitalWillClient() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Panel navigation state
   const [selectedSectionId, setSelectedSectionId] = React.useState<string | null>(null);
-  const [entryEditorState, setEntryEditorState] =
-    React.useState<EntryEditorState | null>(null);
-  const [metadataEditorOpen, setMetadataEditorOpen] = React.useState(false);
-  const [deletingEntryId, setDeletingEntryId] = React.useState<string | null>(null);
+  const [showContactsPanel, setShowContactsPanel] = React.useState(false);
 
-  // ─── Queries ───────────────────────────────────────────────────────────────
+  // Editor sheet state
+  const [entryEditorState, setEntryEditorState] = React.useState<EntryEditorState | null>(null);
+  const [metadataEditorOpen, setMetadataEditorOpen] = React.useState(false);
+  const [contactEditorState, setContactEditorState] = React.useState<ContactEditorState | null>(null);
+
+  // Mutation-in-progress tracking
+  const [deletingEntryId, setDeletingEntryId] = React.useState<string | null>(null);
+  const [deletingContactId, setDeletingContactId] = React.useState<string | null>(null);
+  const [updatingContactId, setUpdatingContactId] = React.useState<string | null>(null);
+
+  // ─── Query ─────────────────────────────────────────────────────────────────
 
   const willQuery = useQuery({
     queryKey: ['home-digital-will', propertyId],
@@ -1040,16 +1669,19 @@ export default function HomeDigitalWillClient() {
 
   const will = willQuery.data ?? null;
 
-  // Auto-select the first section once loaded (desktop)
+  // Auto-select the first section on desktop when loaded
   React.useEffect(() => {
-    if (will && !selectedSectionId && will.sections.length > 0) {
+    if (will && !selectedSectionId && !showContactsPanel && will.sections.length > 0) {
       setSelectedSectionId(will.sections[0].id);
     }
-  }, [will, selectedSectionId]);
+  }, [will, selectedSectionId, showContactsPanel]);
 
-  const selectedSection = will?.sections.find((s) => s.id === selectedSectionId) ?? null;
+  const selectedSection =
+    selectedSectionId && !showContactsPanel
+      ? will?.sections.find((s) => s.id === selectedSectionId) ?? null
+      : null;
 
-  // ─── Mutations ────────────────────────────────────────────────────────────
+  // ─── Entry mutations ───────────────────────────────────────────────────────
 
   const initWillMutation = useMutation({
     mutationFn: () => getOrCreateDigitalWill(propertyId),
@@ -1075,8 +1707,7 @@ export default function HomeDigitalWillClient() {
   });
 
   const createEntryMutation = useMutation({
-    mutationFn: (data: CreateEntryInput) =>
-      createEntry(entryEditorState!.sectionId, data),
+    mutationFn: (data: CreateEntryInput) => createEntry(entryEditorState!.sectionId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       setEntryEditorState(null);
@@ -1088,8 +1719,7 @@ export default function HomeDigitalWillClient() {
   });
 
   const updateEntryMutation = useMutation({
-    mutationFn: (data: UpdateEntryInput) =>
-      updateEntry(entryEditorState!.entry!.id, data),
+    mutationFn: (data: UpdateEntryInput) => updateEntry(entryEditorState!.entry!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
       setEntryEditorState(null);
@@ -1113,6 +1743,48 @@ export default function HomeDigitalWillClient() {
     },
   });
 
+  // ─── Contact mutations ─────────────────────────────────────────────────────
+
+  const createContactMutation = useMutation({
+    mutationFn: (data: CreateTrustedContactInput) => createTrustedContact(will!.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
+      setContactEditorState(null);
+      toast({ title: 'Contact added' });
+    },
+    onError: () => {
+      toast({ title: 'Failed to add contact', variant: 'destructive' });
+    },
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: ({ contactId, data }: { contactId: string; data: UpdateTrustedContactInput }) =>
+      updateTrustedContact(contactId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
+      setContactEditorState(null);
+      setUpdatingContactId(null);
+      toast({ title: 'Contact updated' });
+    },
+    onError: () => {
+      setUpdatingContactId(null);
+      toast({ title: 'Failed to update contact', variant: 'destructive' });
+    },
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: (contactId: string) => deleteTrustedContact(contactId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['home-digital-will', propertyId] });
+      setDeletingContactId(null);
+      toast({ title: 'Contact removed' });
+    },
+    onError: () => {
+      setDeletingContactId(null);
+      toast({ title: 'Failed to remove contact', variant: 'destructive' });
+    },
+  });
+
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const handleDeleteEntry = (entryId: string) => {
@@ -1128,8 +1800,36 @@ export default function HomeDigitalWillClient() {
     }
   };
 
-  const isSavingEntry =
-    createEntryMutation.isPending || updateEntryMutation.isPending;
+  const handleSaveContact = (data: CreateTrustedContactInput | UpdateTrustedContactInput) => {
+    if (contactEditorState?.mode === 'edit' && contactEditorState.contact) {
+      updateContactMutation.mutate({ contactId: contactEditorState.contact.id, data });
+    } else {
+      createContactMutation.mutate(data as CreateTrustedContactInput);
+    }
+  };
+
+  const handleDeleteContact = (contactId: string) => {
+    setDeletingContactId(contactId);
+    deleteContactMutation.mutate(contactId);
+  };
+
+  const handleMakePrimary = (contactId: string) => {
+    setUpdatingContactId(contactId);
+    updateContactMutation.mutate({ contactId, data: { isPrimary: true } });
+  };
+
+  const handleSelectSection = (sectionId: string) => {
+    setSelectedSectionId(sectionId);
+    setShowContactsPanel(false);
+  };
+
+  const handleOpenContacts = () => {
+    setShowContactsPanel(true);
+    setSelectedSectionId(null);
+  };
+
+  const isSavingEntry = createEntryMutation.isPending || updateEntryMutation.isPending;
+  const isSavingContact = createContactMutation.isPending || updateContactMutation.isPending;
 
   // ─── Render states ─────────────────────────────────────────────────────────
 
@@ -1176,8 +1876,9 @@ export default function HomeDigitalWillClient() {
 
   // ─── Main UI ───────────────────────────────────────────────────────────────
 
-  const showSectionList = !selectedSectionId;
-  const showSectionDetail = !!selectedSectionId && !!selectedSection;
+  const showSectionList = !selectedSectionId && !showContactsPanel;
+  const showSectionDetail = !!selectedSectionId && !!selectedSection && !showContactsPanel;
+  const showContactsDetailMobile = showContactsPanel;
 
   return (
     <>
@@ -1192,12 +1893,19 @@ export default function HomeDigitalWillClient() {
           </Link>
         </div>
 
-        {/* Header card — always visible */}
-        <WillHeader will={will} onEditMetadata={() => setMetadataEditorOpen(true)} />
+        {/* Header: always visible on desktop; visible on mobile only when not inside a section detail */}
+        <div
+          className={cn(
+            selectedSectionId && !showContactsPanel ? 'hidden lg:block' : '',
+          )}
+        >
+          <WillHeader will={will} onEditMetadata={() => setMetadataEditorOpen(true)} />
+          <ReadinessNudges will={will} onOpenContacts={handleOpenContacts} />
+        </div>
 
         {/* Desktop: two-column layout */}
         <div className="hidden lg:flex lg:gap-6">
-          {/* Left: section nav */}
+          {/* Left: nav list */}
           <div className="w-72 shrink-0 space-y-2">
             <MobileSectionHeader
               title="Sections"
@@ -1207,31 +1915,41 @@ export default function HomeDigitalWillClient() {
               <SectionCard
                 key={section.id}
                 section={section}
-                isSelected={selectedSectionId === section.id}
-                onClick={() => setSelectedSectionId(section.id)}
+                isSelected={selectedSectionId === section.id && !showContactsPanel}
+                onClick={() => handleSelectSection(section.id)}
               />
             ))}
-            <TrustedContactsPlaceholder />
+            <div className="pt-1">
+              <TrustedContactsNavCard
+                contacts={will.trustedContacts}
+                isSelected={showContactsPanel}
+                onClick={handleOpenContacts}
+              />
+            </div>
           </div>
 
-          {/* Right: section detail */}
+          {/* Right: detail panel */}
           <div className="min-w-0 flex-1">
-            {selectedSection ? (
+            {showContactsPanel ? (
+              <ContactsDetailPanel
+                contacts={will.trustedContacts}
+                onBack={() => setShowContactsPanel(false)}
+                onAdd={() => setContactEditorState({ mode: 'create' })}
+                onEdit={(c) => setContactEditorState({ mode: 'edit', contact: c })}
+                onDelete={handleDeleteContact}
+                onMakePrimary={handleMakePrimary}
+                deletingContactId={deletingContactId}
+                updatingContactId={updatingContactId}
+              />
+            ) : selectedSection ? (
               <SectionDetailPanel
                 section={selectedSection}
                 onBack={() => setSelectedSectionId(null)}
                 onAddEntry={() =>
-                  setEntryEditorState({
-                    mode: 'create',
-                    sectionId: selectedSection.id,
-                  })
+                  setEntryEditorState({ mode: 'create', sectionId: selectedSection.id })
                 }
                 onEditEntry={(entry) =>
-                  setEntryEditorState({
-                    mode: 'edit',
-                    sectionId: selectedSection.id,
-                    entry,
-                  })
+                  setEntryEditorState({ mode: 'edit', sectionId: selectedSection.id, entry })
                 }
                 onDeleteEntry={handleDeleteEntry}
                 deletingEntryId={deletingEntryId}
@@ -1244,7 +1962,7 @@ export default function HomeDigitalWillClient() {
           </div>
         </div>
 
-        {/* Mobile: stacked — section list OR section detail */}
+        {/* Mobile: stacked views */}
         <div className="lg:hidden">
           {showSectionList && (
             <MobileSection>
@@ -1258,12 +1976,16 @@ export default function HomeDigitalWillClient() {
                     key={section.id}
                     section={section}
                     isSelected={false}
-                    onClick={() => setSelectedSectionId(section.id)}
+                    onClick={() => handleSelectSection(section.id)}
                   />
                 ))}
               </div>
-              <div className="mt-4">
-                <TrustedContactsPlaceholder />
+              <div className="mt-2.5">
+                <TrustedContactsNavCard
+                  contacts={will.trustedContacts}
+                  isSelected={false}
+                  onClick={handleOpenContacts}
+                />
               </div>
             </MobileSection>
           )}
@@ -1274,20 +1996,28 @@ export default function HomeDigitalWillClient() {
                 section={selectedSection}
                 onBack={() => setSelectedSectionId(null)}
                 onAddEntry={() =>
-                  setEntryEditorState({
-                    mode: 'create',
-                    sectionId: selectedSection.id,
-                  })
+                  setEntryEditorState({ mode: 'create', sectionId: selectedSection.id })
                 }
                 onEditEntry={(entry) =>
-                  setEntryEditorState({
-                    mode: 'edit',
-                    sectionId: selectedSection.id,
-                    entry,
-                  })
+                  setEntryEditorState({ mode: 'edit', sectionId: selectedSection.id, entry })
                 }
                 onDeleteEntry={handleDeleteEntry}
                 deletingEntryId={deletingEntryId}
+              />
+            </MobileSection>
+          )}
+
+          {showContactsDetailMobile && (
+            <MobileSection>
+              <ContactsDetailPanel
+                contacts={will.trustedContacts}
+                onBack={() => setShowContactsPanel(false)}
+                onAdd={() => setContactEditorState({ mode: 'create' })}
+                onEdit={(c) => setContactEditorState({ mode: 'edit', contact: c })}
+                onDelete={handleDeleteContact}
+                onMakePrimary={handleMakePrimary}
+                deletingContactId={deletingContactId}
+                updatingContactId={updatingContactId}
               />
             </MobileSection>
           )}
@@ -1311,6 +2041,13 @@ export default function HomeDigitalWillClient() {
         onClose={() => setMetadataEditorOpen(false)}
         onSave={(data) => updateWillMutation.mutate(data)}
         isSaving={updateWillMutation.isPending}
+      />
+
+      <ContactEditorSheet
+        state={contactEditorState}
+        onClose={() => setContactEditorState(null)}
+        onSave={handleSaveContact}
+        isSaving={isSavingContact}
       />
     </>
   );

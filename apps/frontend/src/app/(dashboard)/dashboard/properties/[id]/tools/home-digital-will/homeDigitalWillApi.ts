@@ -4,6 +4,9 @@ import type {
   CreateEntryInput,
   UpdateEntryInput,
   UpdateWillInput,
+  TrustedContact,
+  CreateTrustedContactInput,
+  UpdateTrustedContactInput,
 } from './types';
 
 export async function getDigitalWill(propertyId: string): Promise<DigitalWill | null> {
@@ -67,4 +70,30 @@ export async function updateSection(
     data,
   );
   return res.data?.section ?? res.data;
+}
+
+export async function createTrustedContact(
+  willId: string,
+  data: CreateTrustedContactInput,
+): Promise<TrustedContact> {
+  const res = await api.post(
+    `/api/home-digital-wills/${willId}/trusted-contacts`,
+    data,
+  );
+  return res.data?.contact ?? res.data;
+}
+
+export async function updateTrustedContact(
+  contactId: string,
+  data: UpdateTrustedContactInput,
+): Promise<TrustedContact> {
+  const res = await api.patch(
+    `/api/home-digital-will-trusted-contacts/${contactId}`,
+    data,
+  );
+  return res.data?.contact ?? res.data;
+}
+
+export async function deleteTrustedContact(contactId: string): Promise<void> {
+  await api.delete(`/api/home-digital-will-trusted-contacts/${contactId}`);
 }
