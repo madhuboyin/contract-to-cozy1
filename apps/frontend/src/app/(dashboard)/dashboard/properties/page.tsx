@@ -90,6 +90,10 @@ export default function PropertiesPage() {
     if (navTarget === 'home-score') return `/dashboard/properties/${propertyId}/home-score`;
     if (navTarget === 'reports') return `/dashboard/properties/${propertyId}/reports`;
     if (navTarget.startsWith('tool:')) {
+      const matchedTool = MOBILE_HOME_TOOL_LINKS.find((tool) => tool.navTarget === navTarget);
+      if (matchedTool) {
+        return `/dashboard/properties/${propertyId}/${matchedTool.hrefSuffix}`;
+      }
       const toolSlug = navTarget.replace('tool:', '');
       return `/dashboard/properties/${propertyId}/tools/${toolSlug}`;
     }

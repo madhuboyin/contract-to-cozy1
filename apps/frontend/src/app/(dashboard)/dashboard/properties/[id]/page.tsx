@@ -63,7 +63,10 @@ import {
 } from "@/components/mobile/dashboard/MobilePrimitives";
 import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
-import { listHomeRiskReplayRuns } from './tools/home-risk-replay/homeRiskReplayApi';
+import {
+  listHomeRiskReplayRuns,
+  trackHomeRiskReplayEvent,
+} from './tools/home-risk-replay/homeRiskReplayApi';
 import {
   listServicePriceRadarChecks,
   type ServicePriceRadarCheckSummary,
@@ -1248,6 +1251,19 @@ export default function PropertyDetailPage() {
   }
 
   const propertyHubSubtitle = [property.city, property.state].filter(Boolean).join(", ");
+  const trackReplayEntryClick = () => {
+    trackHomeRiskReplayEvent(property.id, {
+      event: 'CONTEXTUAL_ENTRY_CLICKED',
+      section: 'entry',
+      metadata: {
+        tool_name: 'home_risk_replay',
+        property_id: property.id,
+        launch_surface: 'property_hub',
+        suggested_focus_type: null,
+        linked_system_type: null,
+      },
+    }).catch(() => undefined);
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
@@ -1378,7 +1394,9 @@ export default function PropertyDetailPage() {
               href={buildHomeRiskReplayHref({
                 propertyId: property.id,
                 runId: latestRiskReplayQuery.data?.id ?? null,
+                launchSurface: 'property_hub',
               })}
+              onClick={trackReplayEntryClick}
             >
               {latestRiskReplayQuery.data ? 'View replay' : 'Replay home history'}
             </Link>

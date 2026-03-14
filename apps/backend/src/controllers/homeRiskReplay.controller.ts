@@ -2,6 +2,7 @@ import { NextFunction, Response } from 'express';
 import { APIError } from '../middleware/error.middleware';
 import { CustomRequest } from '../types';
 import { HomeRiskReplayService } from '../services/homeRiskReplay.service';
+import { TrackHomeRiskReplayEventBody } from '../validators/homeRiskReplay.validators';
 
 const service = new HomeRiskReplayService();
 
@@ -59,6 +60,22 @@ export async function getHomeRiskReplayDetail(req: CustomRequest, res: Response,
       data: {
         replay,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function trackHomeRiskReplayEvent(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { userId } = requireUser(req);
+    const { propertyId } = req.params;
+    const payload = req.body as TrackHomeRiskReplayEventBody;
+    const result = await service.trackEvent(propertyId, userId, payload);
+
+    res.status(201).json({
+      success: true,
+      data: result,
     });
   } catch (error) {
     next(error);

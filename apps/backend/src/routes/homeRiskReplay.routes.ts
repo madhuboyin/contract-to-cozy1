@@ -7,12 +7,14 @@ import {
   generateHomeRiskReplay,
   getHomeRiskReplayDetail,
   listHomeRiskReplayRuns,
+  trackHomeRiskReplayEvent,
 } from '../controllers/homeRiskReplay.controller';
 import {
   generateHomeRiskReplayBodySchema,
   homeRiskReplayPropertyParamsSchema,
   homeRiskReplayRunParamsSchema,
   listHomeRiskReplayRunsQuerySchema,
+  trackHomeRiskReplayEventBodySchema,
 } from '../validators/homeRiskReplay.validators';
 
 const router = Router();
@@ -42,6 +44,14 @@ router.get(
   validate(homeRiskReplayRunParamsSchema),
   propertyAuthMiddleware,
   getHomeRiskReplayDetail,
+);
+
+router.post(
+  '/properties/:propertyId/risk-replay/events',
+  validate(homeRiskReplayPropertyParamsSchema),
+  propertyAuthMiddleware,
+  validateBody(trackHomeRiskReplayEventBodySchema),
+  trackHomeRiskReplayEvent,
 );
 
 export default router;

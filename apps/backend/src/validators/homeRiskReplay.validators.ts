@@ -68,3 +68,11 @@ export const generateHomeRiskReplayBodySchema = z.object({
 export const listHomeRiskReplayRunsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 });
+
+export const trackHomeRiskReplayEventBodySchema = z.object({
+  event: z.string().trim().min(1).max(80),
+  section: z.string().trim().min(1).max(80).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type TrackHomeRiskReplayEventBody = z.infer<typeof trackHomeRiskReplayEventBodySchema>;

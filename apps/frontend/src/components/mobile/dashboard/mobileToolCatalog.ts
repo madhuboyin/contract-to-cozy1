@@ -278,7 +278,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     key: 'home-risk-replay',
     name: 'Home Risk Replay',
     description: 'See what your home has already been through',
-    hrefSuffix: 'tools/home-risk-replay',
+    hrefSuffix: 'tools/home-risk-replay?launchSurface=home_tools',
     navTarget: 'tool:home-risk-replay',
     icon: resolveToolIcon('home', 'home-risk-replay'),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-risk-replay(\/|$)/.test(pathname),

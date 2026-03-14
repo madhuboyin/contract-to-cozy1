@@ -54,7 +54,9 @@ import type {
 import {
   generateHomeRiskReplay,
   getHomeRiskReplayDetail,
+  type HomeRiskReplayLaunchSurface,
   listHomeRiskReplayRuns,
+  trackHomeRiskReplayEvent,
 } from './homeRiskReplayApi';
 
 type WindowOption = {
@@ -83,6 +85,56 @@ const WINDOW_OPTIONS: WindowOption[] = [
 
 function isWindowType(value: string | null): value is HomeRiskReplayWindowType {
   return value === 'since_built' || value === 'last_5_years' || value === 'custom_range';
+}
+
+function normalizeLaunchSurface(value: string | null): HomeRiskReplayLaunchSurface {
+  switch (value) {
+    case 'home_tools':
+    case 'property_hub':
+    case 'property_summary':
+    case 'roof_page':
+    case 'plumbing_page':
+    case 'electrical_page':
+    case 'insights_strip':
+    case 'system_detail':
+      return value;
+    default:
+      return 'unknown';
+  }
+}
+
+function bucketTotalEvents(value: number): '0' | '1' | '2_5' | '6_10' | '10_plus' {
+  if (value <= 0) return '0';
+  if (value === 1) return '1';
+  if (value <= 5) return '2_5';
+  if (value <= 10) return '6_10';
+  return '10_plus';
+}
+
+function bucketImpactEvents(value: number): '0' | '1' | '2_5' | '6_plus' {
+  if (value <= 0) return '0';
+  if (value === 1) return '1';
+  if (value <= 5) return '2_5';
+  return '6_plus';
+}
+
+function classifyReplayError(error: unknown): 'network' | 'validation' | 'unauthorized' | 'unknown' {
+  const status = typeof error === 'object' && error !== null && 'status' in error
+    ? Number((error as { status?: number | string }).status)
+    : NaN;
+  const payloadCode = typeof error === 'object' && error !== null
+    ? String(((error as { payload?: { error?: { code?: string } } }).payload?.error?.code ?? '')).toUpperCase()
+    : '';
+
+  if (status === 401 || payloadCode === 'AUTH_REQUIRED' || payloadCode === 'INVALID_TOKEN') return 'unauthorized';
+  if (status === 400 || payloadCode === 'VALIDATION_ERROR') return 'validation';
+  if (status === 0 || status === 502 || status === 503 || payloadCode === 'NETWORK_ERROR') return 'network';
+  return 'unknown';
+}
+
+function deviceContext(): 'mobile' | 'desktop' {
+  if (typeof window === 'undefined') return 'desktop';
+  return window.matchMedia('(max-width: 767px)').matches ? 'mobile' : 'desktop';
 }
 
 function compactPropertyLabel(property: Property | null | undefined): string {
@@ -326,7 +378,7 @@ function TimelineSection({
   onOpenEvent,
 }: {
   replay: HomeRiskReplayDetail;
-  onOpenEvent: (event: HomeRiskReplayTimelineEvent) => void;
+  onOpenEvent: (event: HomeRiskReplayTimelineEvent, index: number) => void;
 }) {
   if (replay.totalEvents === 0) {
     return (
@@ -344,7 +396,7 @@ function TimelineSection({
           key={event.id}
           event={event}
           isLast={index === replay.timelineEvents.length - 1}
-          onOpen={onOpenEvent}
+          onOpen={(nextEvent) => onOpenEvent(nextEvent, index)}
         />
       ))}
     </div>
@@ -359,7 +411,7 @@ function HistorySection({
 }: {
   runs: HomeRiskReplayRunSummary[];
   activeRunId: string | null;
-  onSelect: (runId: string) => void;
+  onSelect: (run: HomeRiskReplayRunSummary, index: number) => void;
   isLoading: boolean;
 }) {
   if (isLoading && runs.length === 0) {
@@ -383,11 +435,11 @@ function HistorySection({
 
   return (
     <div className="space-y-2.5">
-      {runs.map((run) => (
+      {runs.map((run, index) => (
         <button
           key={run.id}
           type="button"
-          onClick={() => onSelect(run.id)}
+          onClick={() => onSelect(run, index)}
           className={cn(
             'w-full rounded-2xl border px-3.5 py-3 text-left transition-colors',
             run.id === activeRunId
@@ -435,10 +487,18 @@ export default function HomeRiskReplayClient() {
   const searchParams = useSearchParams();
   const propertyId = params.id;
   const queryClient = useQueryClient();
+  const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
+  const prefilledWindowType = searchParams.get('windowType');
+  const contextualFocus = searchParams.get('focus');
+  const openedScreenKeyRef = React.useRef<string | null>(null);
+  const viewedRunIdsRef = React.useRef<Set<string>>(new Set());
+  const emptyViewedRunIdsRef = React.useRef<Set<string>>(new Set());
+  const trackedDetailErrorsRef = React.useRef<Set<string>>(new Set());
+  const trackedHistoryErrorsRef = React.useRef<Set<string>>(new Set());
+  const trackedOpenErrorsRef = React.useRef<Set<string>>(new Set());
 
   const [windowType, setWindowType] = React.useState<HomeRiskReplayWindowType>(() => {
-    const requestedWindowType = searchParams.get('windowType');
-    return isWindowType(requestedWindowType) ? requestedWindowType : 'since_built';
+    return isWindowType(prefilledWindowType) ? prefilledWindowType : 'since_built';
   });
   const [windowStart, setWindowStart] = React.useState('');
   const [windowEnd, setWindowEnd] = React.useState('');
@@ -474,6 +534,25 @@ export default function HomeRiskReplayClient() {
     staleTime: 60 * 1000,
   });
 
+  const trackReplayEvent = React.useCallback((
+    event: string,
+    section?: string,
+    metadata?: Record<string, unknown>,
+  ) => {
+    if (!propertyId) return;
+    trackHomeRiskReplayEvent(propertyId, {
+      event,
+      section,
+      metadata: {
+        tool_name: 'home_risk_replay',
+        property_id: propertyId,
+        launch_surface: launchSurface,
+        contextual_focus_present: Boolean(contextualFocus),
+        ...metadata,
+      },
+    }).catch(() => undefined);
+  }, [contextualFocus, launchSurface, propertyId]);
+
   const generateMutation = useMutation({
     mutationFn: async (options: { forceRegenerate?: boolean }) => generateHomeRiskReplay(propertyId, {
       windowType,
@@ -487,6 +566,13 @@ export default function HomeRiskReplayClient() {
       queryClient.setQueryData(['home-risk-replay-detail', propertyId, replay.id], replay);
       await queryClient.invalidateQueries({ queryKey: ['home-risk-replay-runs', propertyId] });
     },
+    onError: (error) => {
+      trackReplayEvent('ERROR', 'controls', {
+        stage: 'generate',
+        error_type: classifyReplayError(error),
+        window_type: windowType,
+      });
+    },
   });
 
   const currentReplay = detailQuery.data ?? null;
@@ -494,6 +580,7 @@ export default function HomeRiskReplayClient() {
     if (!activeRunId) return null;
     return historyQuery.data?.find((run) => run.id === activeRunId) ?? null;
   }, [activeRunId, historyQuery.data]);
+  const property = propertyQuery.data;
 
   React.useEffect(() => {
     const requestedRunId = searchParams.get('runId');
@@ -506,6 +593,88 @@ export default function HomeRiskReplayClient() {
       setWindowType((current) => (current === requestedWindowType ? current : requestedWindowType));
     }
   }, [searchParams]);
+
+  React.useEffect(() => {
+    if (!propertyId || propertyQuery.isLoading) return;
+
+    const openKey = `${propertyId}:${launchSurface}:${prefilledWindowType ?? 'none'}`;
+    if (openedScreenKeyRef.current === openKey) return;
+
+    openedScreenKeyRef.current = openKey;
+    trackReplayEvent('OPENED', 'page', {
+      has_property_context: Boolean(property),
+      prefilled_window_type: isWindowType(prefilledWindowType) ? prefilledWindowType : null,
+      device_context: deviceContext(),
+    });
+  }, [launchSurface, prefilledWindowType, property, propertyId, propertyQuery.isLoading, trackReplayEvent]);
+
+  React.useEffect(() => {
+    if (!propertyQuery.isError) return;
+
+    const errorKey = `${propertyId}:open`;
+    if (trackedOpenErrorsRef.current.has(errorKey)) return;
+
+    trackedOpenErrorsRef.current.add(errorKey);
+    trackReplayEvent('ERROR', 'page', {
+      stage: 'open',
+      error_type: classifyReplayError(propertyQuery.error),
+      window_type: windowType,
+    });
+  }, [propertyId, propertyQuery.error, propertyQuery.isError, trackReplayEvent, windowType]);
+
+  React.useEffect(() => {
+    if (!historyQuery.isError) return;
+
+    const errorKey = `${propertyId}:history`;
+    if (trackedHistoryErrorsRef.current.has(errorKey)) return;
+
+    trackedHistoryErrorsRef.current.add(errorKey);
+    trackReplayEvent('ERROR', 'history', {
+      stage: 'history',
+      error_type: classifyReplayError(historyQuery.error),
+      window_type: windowType,
+    });
+  }, [historyQuery.error, historyQuery.isError, propertyId, trackReplayEvent, windowType]);
+
+  React.useEffect(() => {
+    if (!detailQuery.isError || !activeRunId) return;
+
+    const errorKey = `${propertyId}:${activeRunId}`;
+    if (trackedDetailErrorsRef.current.has(errorKey)) return;
+
+    trackedDetailErrorsRef.current.add(errorKey);
+    trackReplayEvent('ERROR', 'detail', {
+      stage: 'detail',
+      error_type: classifyReplayError(detailQuery.error),
+      replay_run_id: activeRunId,
+      window_type: activeRunSummary?.windowType ?? windowType,
+    });
+  }, [activeRunId, activeRunSummary?.windowType, detailQuery.error, detailQuery.isError, propertyId, trackReplayEvent, windowType]);
+
+  React.useEffect(() => {
+    if (!currentReplay) return;
+    if (viewedRunIdsRef.current.has(currentReplay.id)) return;
+
+    viewedRunIdsRef.current.add(currentReplay.id);
+    trackReplayEvent('VIEWED', 'summary', {
+      replay_run_id: currentReplay.id,
+      window_type: currentReplay.windowType,
+      total_events_bucket: bucketTotalEvents(currentReplay.totalEvents),
+      high_impact_events_bucket: bucketImpactEvents(currentReplay.highImpactEvents),
+      moderate_impact_events_bucket: bucketImpactEvents(currentReplay.moderateImpactEvents),
+      has_events: currentReplay.totalEvents > 0,
+      has_high_impact_events: currentReplay.highImpactEvents > 0,
+      engine_version: currentReplay.engineVersion ?? null,
+    });
+
+    if (currentReplay.totalEvents === 0 && !emptyViewedRunIdsRef.current.has(currentReplay.id)) {
+      emptyViewedRunIdsRef.current.add(currentReplay.id);
+      trackReplayEvent('EMPTY_VIEWED', 'timeline', {
+        replay_run_id: currentReplay.id,
+        window_type: currentReplay.windowType,
+      });
+    }
+  }, [currentReplay, trackReplayEvent]);
 
   function validateInputs(): boolean {
     if (windowType !== 'custom_range') {
@@ -529,10 +698,41 @@ export default function HomeRiskReplayClient() {
 
   function handleGenerate(forceRegenerate = false) {
     if (!validateInputs()) return;
+    trackReplayEvent('GENERATION_STARTED', 'controls', {
+      window_type: windowType,
+      custom_range_used: windowType === 'custom_range',
+    });
     generateMutation.mutate({ forceRegenerate });
   }
 
-  const property = propertyQuery.data;
+  function handleSelectHistoryRun(run: HomeRiskReplayRunSummary, index: number) {
+    if (run.id !== activeRunId) {
+      trackReplayEvent('HISTORY_ITEM_OPENED', 'history', {
+        replay_run_id: run.id,
+        window_type: run.windowType,
+        total_events_bucket: bucketTotalEvents(run.totalEvents),
+        high_impact_events_bucket: bucketImpactEvents(run.highImpactEvents),
+        source_list_position: index + 1,
+      });
+    }
+
+    setSelectedRunId(run.id);
+  }
+
+  function handleOpenTimelineEvent(event: HomeRiskReplayTimelineEvent, index: number) {
+    trackReplayEvent('EVENT_OPENED', 'timeline', {
+      replay_run_id: currentReplay?.id ?? activeRunId,
+      replay_event_match_id: event.id,
+      risk_event_id: event.homeRiskEventId,
+      event_type: event.eventType,
+      severity: event.severity,
+      impact_level: event.impactLevel,
+      opened_from: 'timeline',
+      event_position: index + 1,
+    });
+    setSelectedEvent(event);
+  }
+
   const propertyMissing = !propertyQuery.isLoading && !property;
 
   return (
@@ -636,12 +836,25 @@ export default function HomeRiskReplayClient() {
               title="Prior replay runs"
               subtitle="Open an earlier replay when you want to compare windows or rerun history."
             />
-            <HistorySection
-              runs={historyQuery.data ?? []}
-              activeRunId={activeRunId}
-              onSelect={(runId) => setSelectedRunId(runId)}
-              isLoading={historyQuery.isLoading}
-            />
+            {historyQuery.isError ? (
+              <Alert variant="destructive" className="mb-3">
+                <AlertTitle>Could not load replay history</AlertTitle>
+                <AlertDescription className="flex items-center justify-between gap-3">
+                  <span>{(historyQuery.error as Error)?.message || 'Replay history is unavailable right now.'}</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => historyQuery.refetch()}>
+                    Try again
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {!historyQuery.isError ? (
+              <HistorySection
+                runs={historyQuery.data ?? []}
+                activeRunId={activeRunId}
+                onSelect={handleSelectHistoryRun}
+                isLoading={historyQuery.isLoading}
+              />
+            ) : null}
           </MobileSection>
         </div>
 
@@ -732,7 +945,7 @@ export default function HomeRiskReplayClient() {
                   </StatusChip>
                 }
               />
-              <TimelineSection replay={currentReplay} onOpenEvent={setSelectedEvent} />
+              <TimelineSection replay={currentReplay} onOpenEvent={handleOpenTimelineEvent} />
             </MobileSection>
           ) : null}
         </div>

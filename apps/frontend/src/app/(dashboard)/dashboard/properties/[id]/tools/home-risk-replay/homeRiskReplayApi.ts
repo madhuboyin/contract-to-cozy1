@@ -12,6 +12,17 @@ export interface GenerateHomeRiskReplayInput {
   forceRegenerate?: boolean;
 }
 
+export type HomeRiskReplayLaunchSurface =
+  | 'home_tools'
+  | 'property_hub'
+  | 'property_summary'
+  | 'roof_page'
+  | 'plumbing_page'
+  | 'electrical_page'
+  | 'insights_strip'
+  | 'system_detail'
+  | 'unknown';
+
 export async function listHomeRiskReplayRuns(propertyId: string, limit = 12) {
   const res = await api.get(`/api/properties/${propertyId}/risk-replay/runs?limit=${limit}`);
   return (res.data?.runs ?? []) as HomeRiskReplayRunSummary[];
@@ -42,3 +53,13 @@ export async function generateHomeRiskReplay(propertyId: string, input: Generate
   };
 }
 
+export async function trackHomeRiskReplayEvent(
+  propertyId: string,
+  payload: {
+    event: string;
+    section?: string;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  await api.trackHomeRiskReplayEvent(propertyId, payload);
+}

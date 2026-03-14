@@ -65,6 +65,7 @@ import {
   inferServicePriceRadarCategoryFromInventoryItem,
 } from '@/lib/routes/servicePriceRadar';
 import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
+import { trackHomeRiskReplayEvent } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-risk-replay/homeRiskReplayApi';
 
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
 
@@ -161,6 +162,16 @@ function getReplayLabelForInventoryItem(item: Pick<InventoryItem, 'category' | '
   if (/(electric|panel|breaker|outlet|wiring|generator|surge)/.test(text)) return 'Outage history';
   if (/(hvac|furnace|heat pump|ac\b|air conditioning|thermostat)/.test(text)) return 'Heat stress';
   return 'Replay history';
+}
+
+function getReplayLinkedSystemType(item: Pick<InventoryItem, 'category' | 'name'>): string {
+  const text = `${item.category || ''} ${item.name || ''}`.toLowerCase();
+
+  if (/(roof|shingle|gutter|exterior|siding|flashing)/.test(text)) return 'roof';
+  if (/(plumb|pipe|drain|water heater|leak|sump|basement|sewer)/.test(text)) return 'plumbing';
+  if (/(electric|panel|breaker|outlet|wiring|generator|surge)/.test(text)) return 'electrical';
+  if (/(hvac|furnace|heat pump|ac\b|air conditioning|thermostat)/.test(text)) return 'hvac';
+  return String(item.category || 'system').toLowerCase();
 }
 
 export default function InventoryItemDrawer(props: {
@@ -926,10 +937,22 @@ useEffect(() => {
   function openHomeRiskReplay() {
     if (!props.initialItem) return;
     props.onClose();
+    trackHomeRiskReplayEvent(props.propertyId, {
+      event: 'CONTEXTUAL_ENTRY_CLICKED',
+      section: 'entry',
+      metadata: {
+        tool_name: 'home_risk_replay',
+        property_id: props.propertyId,
+        launch_surface: 'system_detail',
+        suggested_focus_type: null,
+        linked_system_type: getReplayLinkedSystemType(props.initialItem),
+      },
+    }).catch(() => undefined);
     router.push(
       buildHomeRiskReplayHref({
         propertyId: props.propertyId,
         windowType: inferReplayWindowFromInventoryItem(props.initialItem),
+        launchSurface: 'system_detail',
       })
     );
   }
