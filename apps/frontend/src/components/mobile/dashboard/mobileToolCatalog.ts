@@ -409,4 +409,13 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     icon: resolveToolIcon('home', 'status-board'),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/status-board(\/|$)/.test(pathname),
   },
+  {
+    key: 'home-digital-will',
+    name: 'Home Digital Will',
+    description: 'Store critical home knowledge for trusted parties',
+    hrefSuffix: 'tools/home-digital-will',
+    navTarget: 'tool:home-digital-will',
+    icon: resolveToolIcon('home', 'home-digital-will'),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-will(\/|$)/.test(pathname),
+  },
 ];

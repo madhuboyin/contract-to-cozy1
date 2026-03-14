@@ -21,6 +21,7 @@ export const TOOL_IDS = [
   'seller-prep',
   'home-timeline',
   'status-board',
+  'home-digital-will',
 ] as const;
 
 export type ToolId = (typeof TOOL_IDS)[number];

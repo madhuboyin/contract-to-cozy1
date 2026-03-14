@@ -47,4 +47,5 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   claims: ['home-event-radar', 'home-risk-replay', 'negotiation-shield'],
   insurance: ['insurance-trend', 'home-risk-replay', 'status-board'],
   dashboard: ['home-event-radar', 'status-board', 'home-risk-replay'],
+  'home-digital-will': ['home-event-radar', 'home-risk-replay', 'status-board'],
 };

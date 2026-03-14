@@ -219,6 +219,7 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   SELLER_PREP: 'Home',
   HOME_TIMELINE: 'CalendarClock',
   STATUS_BOARD: 'Activity',
+  HOME_DIGITAL_WILL: 'BookOpen',
 };
 
 const CORE_NAV_ALIASES: Record<string, CoreNavKey> = {

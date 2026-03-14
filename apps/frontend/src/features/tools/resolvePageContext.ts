@@ -18,6 +18,7 @@ const ROUTE_CONTEXT_PATTERNS: Array<{ context: PageContextId; pattern: RegExp }>
   { context: 'capital-timeline', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/capital-timeline(?:\/|$)/ },
   { context: 'insurance-trend', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/insurance-trend(?:\/|$)/ },
   { context: 'home-risk-replay', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/home-risk-replay(?:\/|$)/ },
+  { context: 'home-digital-will', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-will(?:\/|$)/ },
   { context: 'home-event-radar', pattern: /^\/dashboard\/(?:home-event-radar|properties\/[^/]+\/tools\/home-event-radar)(?:\/|$)/ },
   { context: 'status-board', pattern: /^\/dashboard\/properties\/[^/]+\/status-board(?:\/|$)/ },
   { context: 'seller-prep', pattern: /^\/dashboard\/properties\/[^/]+\/seller-prep(?:\/|$)/ },
