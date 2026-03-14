@@ -116,26 +116,18 @@ export default function RelatedTools({
   return (
     <section
       aria-labelledby={titleId}
-      className={cn(
-        'rounded-[20px] border border-slate-200/65 bg-[linear-gradient(180deg,rgba(255,255,255,0.74),rgba(255,255,255,0.58))] px-4 py-3 shadow-[0_10px_28px_-24px_rgba(15,23,42,0.28)] backdrop-blur-sm',
-        className,
-      )}
+      className={cn('space-y-2', className)}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2
-            id={titleId}
-            className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
-          >
-            {title}
-          </h2>
-          <p className="mt-1 text-xs text-slate-500/90">
-            Nearby decisions and follow-ups.
-          </p>
-        </div>
+      <div className="min-w-0">
+        <h2
+          id={titleId}
+          className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+        >
+          {title}
+        </h2>
       </div>
 
-      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+      <div className="flex flex-wrap gap-2">
         {items.map((item, index) => {
           const Icon = item.icon;
 
@@ -143,7 +135,7 @@ export default function RelatedTools({
             <Link
               key={item.id}
               href={item.href}
-              className="group flex min-w-0 items-center gap-2.5 rounded-[18px] border border-slate-200/70 bg-white/78 px-3 py-2.5 text-left transition-colors duration-150 hover:border-slate-300 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
+              className="group inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-slate-200/80 bg-white/72 px-3 py-2 text-left text-sm font-medium text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all duration-150 hover:border-slate-300 hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
               onClick={() => {
                 void trackRelatedToolsEvent('related_tools_click', {
                   propertyId,
@@ -155,17 +147,11 @@ export default function RelatedTools({
                 }).catch(() => undefined);
               }}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-slate-200/75 bg-slate-50/85 text-slate-600 transition-colors group-hover:border-teal-200/80 group-hover:bg-teal-50/80 group-hover:text-teal-700">
-                <Icon className="h-[15px] w-[15px]" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5 text-[15px] font-semibold text-slate-900">
-                  <span className="truncate">{item.label}</span>
-                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
-                </span>
-                <span className="mt-0.5 block truncate text-[12px] text-slate-500">
-                  {item.description}
-                </span>
+              <Icon className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-teal-700" />
+              <span className="truncate">{item.label}</span>
+              <span className="sr-only">{item.description}</span>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-300 transition-colors group-hover:bg-slate-100 group-hover:text-slate-500">
+                <ArrowUpRight className="h-3 w-3" />
               </span>
             </Link>
           );
