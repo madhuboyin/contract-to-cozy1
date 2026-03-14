@@ -665,11 +665,27 @@ enum ServiceCategory {
   INSPECTION    
   // HOME_BUYER primary
   HANDYMAN           // Both segments
+  GENERAL_HANDYMAN
   PLUMBING           // EXISTING_OWNER primary
   ELECTRICAL       
   // EXISTING_OWNER primary
   HVAC               // Both segments
+  ROOFING
+  WATER_HEATER
+  FOUNDATION
+  WINDOWS_DOORS
+  INSULATION
   LANDSCAPING        // EXISTING_OWNER primary
+  LANDSCAPING_DRAINAGE
+  GUTTERS
+  SOLAR
+  FLOORING
+  PAINTING
+  SIDING
+  MOLD_REMEDIATION
+  APPLIANCE_REPAIR
+  APPLIANCE_REPLACEMENT
+  SECURITY_SAFETY
   CLEANING           // Both segments (move-in for 
   // buyers, maintenance for owners)
   MOVING             // HOME_BUYER primary
@@ -682,6 +698,57 @@ enum ServiceCategory {
   WARRANTY           // EXISTING_OWNER - Warranty renewals
   ADMIN           
   // EXISTING_OWNER - Administrative reminders
+  OTHER
+}
+
+enum ServiceRadarQuoteSource {
+  MANUAL
+  PASTED_TEXT
+  UPLOADED_QUOTE
+  SYSTEM_LINKED
+}
+
+enum ServiceRadarStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum ServiceRadarVerdict {
+  UNDERPRICED
+  FAIR
+  HIGH
+  VERY_HIGH
+  INSUFFICIENT_DATA
+}
+
+enum ServiceRadarLinkedEntityType {
+  SYSTEM
+  APPLIANCE
+  DOCUMENT
+  INCIDENT
+  ROOM
+  OTHER
+}
+
+enum ServiceRadarActionType {
+  VIEW_RESULT
+  EXPAND_FACTORS
+  RETRY_CATEGORY
+  SAVE_CHECK
+  OPEN_NEGOTIATION_SHIELD
+  MARK_QUOTE_ACCEPTED
+  MARK_QUOTE_REJECTED
+  SHARE
+  DISMISS
+}
+
+enum ServiceBenchmarkRegionType {
+  COUNTRY
+  STATE
+  METRO
+  ZIP_PREFIX
+  COUNTY
 }
 
 enum InspectionType {
@@ -1181,12 +1248,110 @@ model Property {
 
   inventoryOcrSessions InventoryOcrSession[]
   inventoryDraftItems  InventoryDraftItem[]
+  serviceRadarChecks   ServiceRadarCheck[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   @@index([homeownerProfileId])
   @@map("properties")
+}
+
+// ============================================================================
+// SERVICE PRICE RADAR
+// ============================================================================
+
+model ServiceRadarCheck {
+  id                   String                   @id @default(uuid())
+  propertyId           String
+  serviceCategory      ServiceCategory
+  serviceSubcategory   String?
+  serviceLabelRaw      String?
+  quoteAmount          Decimal                  @db.Decimal(12, 2)
+  quoteCurrency        String                   @default("USD")
+  quoteVendorName      String?
+  quoteSource          ServiceRadarQuoteSource
+  status               ServiceRadarStatus       @default(PENDING)
+  verdict              ServiceRadarVerdict?
+  expectedLow          Decimal?                 @db.Decimal(12, 2)
+  expectedHigh         Decimal?                 @db.Decimal(12, 2)
+  expectedMedian       Decimal?                 @db.Decimal(12, 2)
+  confidenceScore      Decimal?                 @db.Decimal(5, 4)
+  explanationShort     String?
+  explanationJson      Json?
+  propertySnapshotJson Json?
+  pricingFactorsJson   Json?
+  engineVersion        String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  property             Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  systemLinks          ServiceRadarCheckSystemLink[]
+  userActions          ServiceRadarUserAction[]
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([serviceCategory, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([verdict])
+  @@map("service_radar_checks")
+}
+
+model ServiceRadarCheckSystemLink {
+  id                   String                      @id @default(uuid())
+  serviceRadarCheckId  String
+  linkedEntityType     ServiceRadarLinkedEntityType
+  linkedEntityId       String
+  relevanceScore       Decimal?                    @db.Decimal(5, 4)
+  createdAt            DateTime                    @default(now())
+
+  serviceRadarCheck    ServiceRadarCheck           @relation(fields: [serviceRadarCheckId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRadarCheckId])
+  @@index([linkedEntityType, linkedEntityId])
+  @@map("service_radar_check_system_links")
+}
+
+model ServicePriceBenchmark {
+  id                   String                     @id @default(uuid())
+  serviceCategory      ServiceCategory
+  serviceSubcategory   String?
+  regionType           ServiceBenchmarkRegionType
+  regionKey            String
+  homeType             String?
+  sizeBand             String?
+  baseLow              Decimal                    @db.Decimal(12, 2)
+  baseHigh             Decimal                    @db.Decimal(12, 2)
+  baseMedian           Decimal?                   @db.Decimal(12, 2)
+  laborFactor          Decimal?                   @db.Decimal(6, 3)
+  materialFactor       Decimal?                   @db.Decimal(6, 3)
+  complexityFactorJson Json?
+  effectiveFrom        DateTime
+  effectiveTo          DateTime?
+  sourceLabel          String?
+  isActive             Boolean                    @default(true)
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@index([serviceCategory, regionType, regionKey])
+  @@index([isActive])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@map("service_price_benchmarks")
+}
+
+model ServiceRadarUserAction {
+  id                  String                  @id @default(uuid())
+  serviceRadarCheckId String
+  actionType          ServiceRadarActionType
+  actionMetaJson      Json?
+  createdAt           DateTime                @default(now())
+
+  serviceRadarCheck   ServiceRadarCheck       @relation(fields: [serviceRadarCheckId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRadarCheckId])
+  @@index([actionType])
+  @@index([createdAt(sort: Desc)])
+  @@map("service_radar_user_actions")
 }
 
 // ============================================================================
