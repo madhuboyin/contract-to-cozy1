@@ -30,6 +30,7 @@ import { recallMatchJob, RECALL_MATCH_JOB } from './jobs/recallMatch.job';
 import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
 import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
+import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { prisma } from './lib/prisma';
 
 // =============================================================================
@@ -1027,6 +1028,31 @@ console.log('[COVERAGE-LAPSE] Coverage Lapse Incidents job scheduled for 8:00 AM
 // =============================================================================
 cron.schedule('0 9 * * *', freezeRiskIncidentsJob, { timezone: 'America/New_York' });
 console.log('[FREEZE-RISK] Freeze Risk Incidents job scheduled for 9:00 AM EST');
+
+// =============================================================================
+// DUMMY RADAR INGEST (QA / E2E)
+// =============================================================================
+const radarDummyIngestEnabled = process.env.RADAR_DUMMY_INGEST_ENABLED === 'true';
+const radarDummyIngestCron = process.env.RADAR_DUMMY_INGEST_CRON || '*/30 * * * *';
+
+if (radarDummyIngestEnabled) {
+  cron.schedule(radarDummyIngestCron, async () => {
+    try {
+      console.log('[RADAR-DUMMY-INGEST] Running dummy radar ingest job...');
+      await ingestRadarSignalsJob();
+    } catch (err) {
+      console.error('[RADAR-DUMMY-INGEST] Job failed:', err);
+    }
+  }, { timezone: 'America/New_York' });
+
+  console.log(`[RADAR-DUMMY-INGEST] Dummy radar ingest scheduled for: ${radarDummyIngestCron} America/New_York`);
+
+  if (process.env.RADAR_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
+    void ingestRadarSignalsJob().catch((err) => {
+      console.error('[RADAR-DUMMY-INGEST] Startup run failed:', err);
+    });
+  }
+}
 
 // =============================================================================
 // INVENTORY DRAFT CLEANUP (Phase 3 hardening)

@@ -25,6 +25,7 @@ RUN npm ci
 # Copy shared backend source files into worker source tree
 RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/config \
+             src/shared/backend/services \
              src/shared/backend/services/storage \
              src/shared/backend/services/pdf/templates \
              src/shared/backend/services/domainEvents \
@@ -35,6 +36,7 @@ RUN mkdir -p src/shared/backend/utils \
 COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
+COPY apps/backend/src/services/homeEventRadarMatcher.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/storage/reportStorage.ts src/shared/backend/services/storage/
 COPY apps/backend/src/services/storage/s3Client.ts src/shared/backend/services/storage/
 COPY apps/backend/src/services/pdf/renderHomeReportPackPdf.ts src/shared/backend/services/pdf/
@@ -61,6 +63,7 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/risk-constants/\.\/shared\/backend\/config\/risk-constants/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateHomeReportExport.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/pdf\/renderHomeReportPackPdf/\.\.\/shared\/backend\/services\/pdf\/renderHomeReportPackPdf/g' src/jobs/generateHomeReportExport.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeEventRadarMatcher\.service/\.\.\/shared\/backend\/services\/homeEventRadarMatcher\.service/g' src/jobs/ingestRadarSignals.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/domainEvents\/domainEvents\.service/\.\/shared\/backend\/services\/domainEvents\/domainEvents\.service/g' src/runners/claimFollowUpDue.poller.ts && \
     # This ensures the domainEvents service can find the prisma lib in its new shared relative path
     sed -i 's/\.\.\/\.\.\/lib\/prisma/\.\.\/\.\.\/lib\/prisma/g' src/shared/backend/services/domainEvents/domainEvents.service.ts && \

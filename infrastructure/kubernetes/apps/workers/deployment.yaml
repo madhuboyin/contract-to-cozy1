@@ -57,6 +57,12 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: CPSC_RECALL_FEED_URL
+            - name: RADAR_DUMMY_INGEST_ENABLED
+              value: "false"
+            - name: RADAR_DUMMY_INGEST_CRON
+              value: "*/30 * * * *"
+            - name: RADAR_DUMMY_INGEST_RUN_ON_STARTUP
+              value: "false"
             - name: SMTP_HOST
               value: smtp-relay.brevo.com
             - name: SMTP_PORT
