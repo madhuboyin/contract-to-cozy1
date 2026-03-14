@@ -25,6 +25,7 @@ import {
   severityLabel,
   SEVERITY_TONE,
 } from './ReplayUtils';
+import { buildEventLocationNote } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-risk-replay/homeRiskReplayUi';
 
 function Chip({
   children,
@@ -180,6 +181,8 @@ export function ReplayDetailSheet({ event, onClose }: Props) {
   const actions = event?.recommendedActionsJson?.actions ?? [];
   const systems = event?.matchedSystemsJson?.systems ?? [];
   const drivers = event?.impactFactorsJson?.drivers ?? [];
+  const eventLocationNote = event ? buildEventLocationNote(event) : null;
+  const eventTitle = event?.title?.trim() || (event ? formatEventType(event.eventType) : 'Historical event');
 
   return (
     <Sheet open={event !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -200,7 +203,7 @@ export function ReplayDetailSheet({ event, onClose }: Props) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <SheetTitle className="text-base font-semibold leading-snug text-[hsl(var(--mobile-text-primary))]">
-                    {event.title}
+                    {eventTitle}
                   </SheetTitle>
                   <SheetDescription className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
                     {formatReplayDateRange(event.startAt, event.endAt)}
@@ -232,6 +235,11 @@ export function ReplayDetailSheet({ event, onClose }: Props) {
                   <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
                     {event.summary || 'This replay event was matched from historical location-based risk records.'}
                   </p>
+                  {eventLocationNote ? (
+                    <p className={cn('mb-0 mt-2 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+                      {eventLocationNote}
+                    </p>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {event.eventSubType ? (
                       <Chip className="border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-primary))]">
@@ -302,4 +310,3 @@ export function ReplayDetailSheet({ event, onClose }: Props) {
     </Sheet>
   );
 }
-

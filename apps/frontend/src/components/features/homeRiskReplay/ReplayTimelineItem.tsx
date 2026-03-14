@@ -8,6 +8,7 @@ import type { HomeRiskReplayTimelineEvent } from './types';
 import {
   eventTypeIcon,
   formatEventType,
+  formatMatchBasis,
   formatReplayDateRange,
   IMPACT_TONE,
   severityLabel,
@@ -42,6 +43,10 @@ function Chip({
 }
 
 export function ReplayTimelineItem({ event, isLast, onOpen }: Props) {
+  const title = event.title?.trim() || formatEventType(event.eventType) || 'Historical event';
+  const summary = event.impactSummary || event.summary || 'Matched historical event details are available for this property.';
+  const matchBasis = event.impactFactorsJson?.locationMatch?.basis;
+
   return (
     <div className="grid grid-cols-[18px_minmax(0,1fr)] gap-3">
       <div className="flex flex-col items-center">
@@ -54,6 +59,7 @@ export function ReplayTimelineItem({ event, isLast, onOpen }: Props) {
       <button
         type="button"
         onClick={() => onOpen(event)}
+        aria-label={`${title}. ${formatReplayDateRange(event.startAt, event.endAt)}. Severity ${severityLabel(event.severity)}. Impact ${severityLabel(event.impactLevel)}.`}
         className={cn(
           'w-full text-left transition-transform active:scale-[0.995]',
           MOBILE_CARD_RADIUS,
@@ -70,7 +76,7 @@ export function ReplayTimelineItem({ event, isLast, onOpen }: Props) {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className={cn('mb-0 line-clamp-2 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>
-                  {event.title}
+                  {title}
                 </p>
                 <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
                   {formatReplayDateRange(event.startAt, event.endAt)}
@@ -89,10 +95,15 @@ export function ReplayTimelineItem({ event, isLast, onOpen }: Props) {
               <Chip className={IMPACT_TONE[event.impactLevel]}>
                 Impact: {severityLabel(event.impactLevel)}
               </Chip>
+              {matchBasis ? (
+                <Chip className="border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))]">
+                  {formatMatchBasis(matchBasis)}
+                </Chip>
+              ) : null}
             </div>
 
             <p className={cn('mb-0 mt-2 line-clamp-2 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
-              {event.impactSummary || event.summary || 'Replay details available for this event.'}
+              {summary}
             </p>
           </div>
         </div>
@@ -100,4 +111,3 @@ export function ReplayTimelineItem({ event, isLast, onOpen }: Props) {
     </div>
   );
 }
-

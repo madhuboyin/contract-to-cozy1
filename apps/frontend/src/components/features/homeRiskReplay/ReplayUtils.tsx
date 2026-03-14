@@ -26,18 +26,24 @@ export function formatWindowType(windowType: HomeRiskReplayWindowType): string {
 
 export function formatReplayDate(value: string | null | undefined): string {
   if (!value) return 'Unknown date';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
 
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function formatReplayDateRange(startAt: string | null | undefined, endAt: string | null | undefined): string {
-  if (!startAt) return 'Unknown date';
-  if (!endAt || startAt === endAt) return formatReplayDate(startAt);
-  return `${formatReplayDate(startAt)} - ${formatReplayDate(endAt)}`;
+  const startLabel = formatReplayDate(startAt);
+  const endLabel = formatReplayDate(endAt);
+
+  if (startLabel === 'Unknown date' && endLabel === 'Unknown date') return 'Date unavailable';
+  if (startLabel === 'Unknown date') return `Ended ${endLabel}`;
+  if (!endAt || startAt === endAt || endLabel === 'Unknown date') return startLabel;
+  return `${startLabel} - ${endLabel}`;
 }
 
 export function formatEventType(eventType: string): string {
@@ -144,4 +150,3 @@ export function timelineAccent(event: HomeRiskReplayTimelineEvent): string {
   if (event.severity === 'low') return 'bg-emerald-500';
   return 'bg-slate-400';
 }
-

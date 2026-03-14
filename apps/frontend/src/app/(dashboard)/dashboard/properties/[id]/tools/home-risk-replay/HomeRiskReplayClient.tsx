@@ -58,6 +58,12 @@ import {
   listHomeRiskReplayRuns,
   trackHomeRiskReplayEvent,
 } from './homeRiskReplayApi';
+import {
+  buildEventLocationNote,
+  buildHomeRiskReplayGuardrail,
+  buildHomeRiskReplayValidationErrors,
+  getHomeRiskReplayUserMessage,
+} from './homeRiskReplayUi';
 
 type WindowOption = {
   key: HomeRiskReplayWindowType;
@@ -266,6 +272,8 @@ function WindowPicker({
             key={option.key}
             type="button"
             onClick={() => onChange(option.key)}
+            role="radio"
+            aria-checked={isActive}
             className={cn(
               'w-full rounded-2xl border px-3.5 py-3 text-left transition-colors',
               isActive
@@ -298,7 +306,16 @@ function SummaryCard({
   replay: HomeRiskReplayDetail;
   activeRunSummary: HomeRiskReplayRunSummary | null;
 }) {
+  const totalEvents = Math.max(0, Number(replay.totalEvents ?? 0));
+  const highImpactEvents = Math.max(0, Number(replay.highImpactEvents ?? 0));
+  const moderateImpactEvents = Math.max(0, Number(replay.moderateImpactEvents ?? 0));
   const topDrivers = replay.summaryJson?.topDrivers ?? [];
+  const guardrail = buildHomeRiskReplayGuardrail(replay);
+  const summaryText = replay.status === 'failed'
+    ? 'This replay did not finish successfully. You can review prior runs or try a fresh run.'
+    : totalEvents === 0
+    ? 'We found no significant historical events for this property in the selected period.'
+    : replay.summaryText || replay.summaryJson?.timelineSummary || 'Replay results are ready for review.';
 
   return (
     <MobileCard className="space-y-4">
@@ -323,20 +340,20 @@ function SummaryCard({
       <MobileKpiStrip className="sm:grid-cols-3">
         <MobileKpiTile
           label="Total events"
-          value={replay.totalEvents}
+          value={totalEvents}
           hint="Matched historical events"
         />
         <MobileKpiTile
           label="High impact"
-          value={replay.highImpactEvents}
+          value={highImpactEvents}
           hint="Strong stress signals"
-          tone={replay.highImpactEvents > 0 ? 'danger' : 'neutral'}
+          tone={highImpactEvents > 0 ? 'danger' : 'neutral'}
         />
         <MobileKpiTile
           label="Moderate impact"
-          value={replay.moderateImpactEvents}
+          value={moderateImpactEvents}
           hint="Worth reviewing"
-          tone={replay.moderateImpactEvents > 0 ? 'warning' : 'neutral'}
+          tone={moderateImpactEvents > 0 ? 'warning' : 'neutral'}
         />
       </MobileKpiStrip>
 
@@ -349,10 +366,29 @@ function SummaryCard({
         <div className="flex items-start gap-2">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mobile-brand-strong))]" />
           <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
-            {replay.summaryText || replay.summaryJson?.timelineSummary || 'Replay results are ready for review.'}
+            {summaryText}
           </p>
         </div>
       </div>
+
+      {guardrail ? (
+        <div
+          className={cn(
+            MOBILE_CARD_RADIUS,
+            'border px-4 py-3',
+            guardrail.tone === 'good'
+              ? 'border-emerald-200 bg-emerald-50/70'
+              : 'border-slate-200 bg-slate-50'
+          )}
+        >
+          <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+            {guardrail.title}
+          </p>
+          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+            {guardrail.description}
+          </p>
+        </div>
+      ) : null}
 
       {topDrivers.length > 0 ? (
         <div className="flex flex-wrap gap-2">
@@ -383,8 +419,8 @@ function TimelineSection({
   if (replay.totalEvents === 0) {
     return (
       <EmptyStateCard
-        title="No matched events in this window"
-        description="Try a longer replay window or generate a fresh run if you want to look for older stress history."
+        title="No significant events found in this window"
+        description="We found no significant historical events for this property in the selected period. You can still try a longer window if you want broader context."
       />
     );
   }
@@ -452,9 +488,9 @@ function HistorySection({
               <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
                 {formatWindowType(run.windowType)}
               </p>
-              <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-                {formatReplayDate(run.createdAt)} • {formatReplayDateRange(run.windowStart, run.windowEnd)}
-              </p>
+          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+            {formatReplayDate(run.createdAt)} • {formatReplayDateRange(run.windowStart, run.windowEnd)}
+          </p>
             </div>
             <StatusChip tone={runStatusTone(run.status)}>
               {historyButtonLabel(run, activeRunId)}
@@ -474,6 +510,10 @@ function HistorySection({
           {run.summaryText ? (
             <p className={cn('mb-0 mt-2 line-clamp-2 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
               {run.summaryText}
+            </p>
+          ) : run.status === 'failed' ? (
+            <p className={cn('mb-0 mt-2 line-clamp-2 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+              This replay did not finish successfully. Open it to retry or review the saved state.
             </p>
           ) : null}
         </button>
@@ -595,6 +635,14 @@ export default function HomeRiskReplayClient() {
   }, [searchParams]);
 
   React.useEffect(() => {
+    if (!historyQuery.data) return;
+    if (!selectedRunId) return;
+    if (historyQuery.data.some((run) => run.id === selectedRunId)) return;
+
+    setSelectedRunId(historyQuery.data[0]?.id ?? null);
+  }, [historyQuery.data, selectedRunId]);
+
+  React.useEffect(() => {
     if (!propertyId || propertyQuery.isLoading) return;
 
     const openKey = `${propertyId}:${launchSurface}:${prefilledWindowType ?? 'none'}`;
@@ -677,23 +725,15 @@ export default function HomeRiskReplayClient() {
   }, [currentReplay, trackReplayEvent]);
 
   function validateInputs(): boolean {
-    if (windowType !== 'custom_range') {
-      setFormError(null);
-      return true;
-    }
+    const errors = buildHomeRiskReplayValidationErrors({
+      windowType,
+      windowStart,
+      windowEnd,
+    });
 
-    if (!windowStart || !windowEnd) {
-      setFormError('Choose both a start date and end date for a custom replay window.');
-      return false;
-    }
-
-    if (windowStart > windowEnd) {
-      setFormError('Start date must be on or before the end date.');
-      return false;
-    }
-
-    setFormError(null);
-    return true;
+    const nextError = errors.windowStart || errors.windowEnd || null;
+    setFormError(nextError);
+    return !nextError;
   }
 
   function handleGenerate(forceRegenerate = false) {
@@ -734,6 +774,26 @@ export default function HomeRiskReplayClient() {
   }
 
   const propertyMissing = !propertyQuery.isLoading && !property;
+  const generationErrorMessage = generateMutation.isError
+    ? getHomeRiskReplayUserMessage(generateMutation.error, 'generate')
+    : null;
+  const historyErrorMessage = historyQuery.isError
+    ? getHomeRiskReplayUserMessage(historyQuery.error, 'history')
+    : null;
+  const detailErrorMessage = detailQuery.isError
+    ? getHomeRiskReplayUserMessage(detailQuery.error, 'detail')
+    : null;
+  const propertyErrorMessage = propertyQuery.isError
+    ? getHomeRiskReplayUserMessage(propertyQuery.error, 'open')
+    : null;
+  const noPropertyContextMessage = propertyQuery.isLoading
+    ? 'Loading the property context used for this replay.'
+    : propertyErrorMessage || 'Home Risk Replay needs a property context before it can build a historical stress timeline.';
+  const replayMethodNote = currentReplay && currentReplay.totalEvents > 0
+    ? buildEventLocationNote({
+        impactFactorsJson: currentReplay.timelineEvents?.[0]?.impactFactorsJson ?? null,
+      })
+    : null;
 
   return (
     <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -760,26 +820,37 @@ export default function HomeRiskReplayClient() {
               subtitle="Choose how far back to look, then generate or reload a replay."
             />
             <MobileFilterSurface>
-              <WindowPicker value={windowType} onChange={(nextValue) => {
-                setWindowType(nextValue);
-                setFormError(null);
-              }} />
+              <div role="radiogroup" aria-label="Replay window">
+                <WindowPicker value={windowType} onChange={(nextValue) => {
+                  setWindowType(nextValue);
+                  setFormError(null);
+                }} />
+              </div>
 
               {windowType === 'custom_range' ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1.5">
+                <div
+                  className="grid gap-3 sm:grid-cols-2"
+                  aria-describedby={formError ? 'home-risk-replay-form-error' : undefined}
+                >
+                  <label htmlFor="home-risk-replay-start" className="space-y-1.5">
                     <span className={cn('text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>Start date</span>
                     <Input
+                      id="home-risk-replay-start"
                       type="date"
                       value={windowStart}
+                      aria-invalid={Boolean(formError)}
+                      aria-describedby={formError ? 'home-risk-replay-form-error' : undefined}
                       onChange={(event) => setWindowStart(event.target.value)}
                     />
                   </label>
-                  <label className="space-y-1.5">
+                  <label htmlFor="home-risk-replay-end" className="space-y-1.5">
                     <span className={cn('text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>End date</span>
                     <Input
+                      id="home-risk-replay-end"
                       type="date"
                       value={windowEnd}
+                      aria-invalid={Boolean(formError)}
+                      aria-describedby={formError ? 'home-risk-replay-form-error' : undefined}
                       onChange={(event) => setWindowEnd(event.target.value)}
                     />
                   </label>
@@ -787,12 +858,14 @@ export default function HomeRiskReplayClient() {
               ) : null}
 
               {formError ? (
-                <p className="mb-0 text-sm text-rose-600">{formError}</p>
+                <p id="home-risk-replay-form-error" className="mb-0 text-sm text-rose-600" role="alert">
+                  {formError}
+                </p>
               ) : (
                 <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
                   {windowType === 'since_built'
                     ? property?.yearBuilt
-                      ? `Starts from ${property.yearBuilt} using your property year built.`
+                      ? `Starts from ${property.yearBuilt} using the property year built as a reference point.`
                       : 'Uses a safe fallback lookback when year built is missing.'
                     : windowType === 'last_5_years'
                     ? 'A compact view for recent stress history.'
@@ -805,6 +878,7 @@ export default function HomeRiskReplayClient() {
                   type="button"
                   className="min-h-[46px] flex-1"
                   disabled={generateMutation.isPending || propertyMissing}
+                  aria-busy={generateMutation.isPending}
                   onClick={() => handleGenerate(false)}
                 >
                   {generateMutation.isPending ? (
@@ -812,7 +886,7 @@ export default function HomeRiskReplayClient() {
                   ) : (
                     <Play className="h-4 w-4" />
                   )}
-                  Replay history
+                  {generateMutation.isPending ? 'Generating replay...' : 'Replay history'}
                 </Button>
 
                 {currentReplay ? (
@@ -828,6 +902,11 @@ export default function HomeRiskReplayClient() {
                   </Button>
                 ) : null}
               </MobileActionRow>
+              {generateMutation.isPending ? (
+                <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)} role="status" aria-live="polite">
+                  Building a replay from historical events and the details already recorded for this property.
+                </p>
+              ) : null}
             </MobileFilterSurface>
           </MobileSection>
 
@@ -840,7 +919,7 @@ export default function HomeRiskReplayClient() {
               <Alert variant="destructive" className="mb-3">
                 <AlertTitle>Could not load replay history</AlertTitle>
                 <AlertDescription className="flex items-center justify-between gap-3">
-                  <span>{(historyQuery.error as Error)?.message || 'Replay history is unavailable right now.'}</span>
+                  <span>{historyErrorMessage}</span>
                   <Button type="button" size="sm" variant="outline" onClick={() => historyQuery.refetch()}>
                     Try again
                   </Button>
@@ -862,15 +941,18 @@ export default function HomeRiskReplayClient() {
           {propertyMissing ? (
             <EmptyStateCard
               title="Property not available"
-              description="Home Risk Replay needs a property context before it can build a historical stress timeline."
+              description={noPropertyContextMessage}
             />
           ) : null}
 
           {generateMutation.isError ? (
             <Alert variant="destructive">
               <AlertTitle>Replay generation failed</AlertTitle>
-              <AlertDescription>
-                {(generateMutation.error as Error)?.message || 'Something went wrong while generating the replay.'}
+              <AlertDescription className="flex items-center justify-between gap-3">
+                <span>{generationErrorMessage}</span>
+                <Button type="button" size="sm" variant="outline" onClick={() => handleGenerate(false)}>
+                  Try again
+                </Button>
               </AlertDescription>
             </Alert>
           ) : null}
@@ -880,7 +962,7 @@ export default function HomeRiskReplayClient() {
               title={historyQuery.data?.length ? 'Choose a replay to review' : 'Generate your first replay'}
               description={historyQuery.data?.length
                 ? 'Your prior replay runs are ready below. Open one, or generate a new window above.'
-                : 'Home Risk Replay builds a historical timeline from matched risk events and the details already recorded for this property.'}
+                : 'Home Risk Replay builds a calm historical timeline from matched risk events and the details already recorded for this property.'}
               action={
                 historyQuery.data?.length ? undefined : (
                   <Button type="button" onClick={() => handleGenerate(false)} disabled={generateMutation.isPending || propertyQuery.isLoading}>
@@ -893,7 +975,7 @@ export default function HomeRiskReplayClient() {
           ) : null}
 
           {detailQuery.isLoading && activeRunId ? (
-            <MobileCard className="space-y-4 animate-pulse">
+            <MobileCard className="space-y-4 animate-pulse" aria-hidden="true">
               <div className="h-3 w-28 rounded-full bg-slate-200" />
               <div className="h-5 w-52 rounded-full bg-slate-200" />
               <div className="grid grid-cols-3 gap-2">
@@ -909,7 +991,7 @@ export default function HomeRiskReplayClient() {
             <Alert variant="destructive">
               <AlertTitle>Could not load replay detail</AlertTitle>
               <AlertDescription className="flex items-center justify-between gap-3">
-                <span>{(detailQuery.error as Error)?.message || 'The selected replay could not be opened.'}</span>
+                <span>{detailErrorMessage}</span>
                 <Button type="button" size="sm" variant="outline" onClick={() => detailQuery.refetch()}>
                   Try again
                 </Button>
@@ -921,7 +1003,7 @@ export default function HomeRiskReplayClient() {
             <MobileSection>
               <MobileSectionHeader
                 title="Replay summary"
-                subtitle="A compact read on what this property may have already absorbed."
+                subtitle="A compact read on the historical stress signals we found for this property."
                 action={
                   <StatusChip tone="info">
                     <Clock3 className="mr-1 h-3.5 w-3.5" />
@@ -930,6 +1012,11 @@ export default function HomeRiskReplayClient() {
                 }
               />
               <SummaryCard replay={currentReplay} activeRunSummary={activeRunSummary} />
+              {replayMethodNote ? (
+                <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+                  {replayMethodNote}
+                </p>
+              ) : null}
             </MobileSection>
           ) : null}
 
@@ -937,7 +1024,7 @@ export default function HomeRiskReplayClient() {
             <MobileSection>
               <MobileSectionHeader
                 title="Historical timeline"
-                subtitle="Newest events first, with property-specific impact notes and detail on tap."
+                subtitle="Newest events first, with explainable property notes and details on tap."
                 action={
                   <StatusChip tone="good">
                     <ShieldCheck className="mr-1 h-3.5 w-3.5" />
@@ -952,7 +1039,7 @@ export default function HomeRiskReplayClient() {
       </div>
 
       <p className={cn('mb-0 text-center text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-        This replay is based on historical event matches for your property location and recorded home details.
+        This replay is based on historical events matched to your property location and recorded home details.
       </p>
 
       <ReplayDetailSheet
