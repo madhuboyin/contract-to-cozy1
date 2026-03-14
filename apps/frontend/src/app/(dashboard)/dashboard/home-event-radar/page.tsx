@@ -6,7 +6,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -108,6 +108,7 @@ function FilterChips({
         <button
           key={opt.key}
           type="button"
+          aria-pressed={active === opt.key}
           onClick={() => onChange(opt.key)}
           className={cn(
             'snap-start shrink-0 inline-flex items-center rounded-full border px-3 py-1.5 transition-colors',
@@ -212,8 +213,6 @@ export default function HomeEventRadarPage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
   const propertyId = selectedPropertyId ?? searchParams.get('propertyId') ?? undefined;
-
-  const queryClient = useQueryClient();
 
   const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
 

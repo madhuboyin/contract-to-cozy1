@@ -8,26 +8,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bookmark, BookmarkCheck, X, CheckCircle2, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
-
-// ---------------------------------------------------------------------------
-// Analytics helpers (local to sheet)
-// ---------------------------------------------------------------------------
-
-function trackRadarSheetEvent(
-  propertyId: string,
-  event: string,
-  metadata?: Record<string, unknown>,
-) {
-  void api.trackHomeEventRadarEvent(propertyId, {
-    event,
-    section: 'detail_sheet',
-    metadata: {
-      tool_name: 'home_event_radar',
-      property_id: propertyId,
-      ...metadata,
-    },
-  }).catch(() => undefined);
-}
 import {
   Sheet,
   SheetContent,
@@ -50,6 +30,26 @@ import {
   ACTION_PRIORITY_COLOR,
   ACTION_PRIORITY_LABEL,
 } from './RadarUtils';
+
+// ---------------------------------------------------------------------------
+// Analytics helpers (local to sheet)
+// ---------------------------------------------------------------------------
+
+function trackRadarSheetEvent(
+  propertyId: string,
+  event: string,
+  metadata?: Record<string, unknown>,
+) {
+  void api.trackHomeEventRadarEvent(propertyId, {
+    event,
+    section: 'detail_sheet',
+    metadata: {
+      tool_name: 'home_event_radar',
+      property_id: propertyId,
+      ...metadata,
+    },
+  }).catch(() => undefined);
+}
 
 interface Props {
   item: RadarFeedItem | null;
@@ -163,6 +163,7 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
       if (!item) return;
       queryClient.invalidateQueries({ queryKey: ['radar-feed', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['radar-match-detail', propertyId, item.propertyRadarMatchId] });
+      if (newState === 'dismissed') onClose();
       onStateChange?.(item.propertyRadarMatchId, newState);
       // Analytics: STATE_CHANGED
       trackRadarSheetEvent(propertyId, 'STATE_CHANGED', {
@@ -191,7 +192,7 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
 
   function handleDismiss() {
     stateMutation.mutate('dismissed');
-    onClose();
+    // Sheet closes on success (via onSuccess handler above)
   }
 
   function handleMarkActed() {
@@ -266,7 +267,11 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
                   )}
                 >
                   <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
-                    {item.impactSummary ?? event?.summary ?? 'This event may affect your property.'}
+                    {item.impactSummary ?? event?.summary ?? (
+                    item.impactLevel === 'watch' || item.impactLevel === 'none'
+                      ? 'This event has been flagged for your awareness. Direct impact on your property may be limited based on current data.'
+                      : 'Impact details for your property are being assessed.'
+                  )}
                   </p>
                 </div>
               </DetailSection>
@@ -362,6 +367,7 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
+                    aria-pressed={isSaved}
                     disabled={stateMutation.isPending}
                     onClick={handleSave}
                     className={cn(
@@ -382,6 +388,7 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
 
                   <button
                     type="button"
+                    aria-pressed={isActedOn}
                     disabled={stateMutation.isPending || isActedOn}
                     onClick={handleMarkActed}
                     className={cn(
@@ -407,6 +414,13 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
                     <span className="text-[11px] font-medium leading-none">Dismiss</span>
                   </button>
                 </div>
+
+                {/* Mutation error feedback */}
+                {stateMutation.isError && (
+                  <p className="mt-2 text-center text-xs text-rose-600">
+                    Could not save changes. Please try again.
+                  </p>
+                )}
               </div>
 
             </div>

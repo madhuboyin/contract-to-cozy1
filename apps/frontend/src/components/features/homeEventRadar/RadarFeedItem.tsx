@@ -31,6 +31,7 @@ export function RadarFeedItem({ item, onClick }: Props) {
   return (
     <button
       type="button"
+      aria-label={item.title ?? 'View event details'}
       onClick={() => onClick(item)}
       className={cn(
         'w-full text-left block',
