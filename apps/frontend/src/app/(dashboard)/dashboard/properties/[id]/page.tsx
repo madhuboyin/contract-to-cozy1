@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   Home,
   Calendar,
+  History,
   Ruler,
   DollarSign,
   Wrench,
@@ -60,7 +61,9 @@ import {
   MobileSectionHeader,
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
+import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
+import { listHomeRiskReplayRuns } from './tools/home-risk-replay/homeRiskReplayApi';
 import {
   listServicePriceRadarChecks,
   type ServicePriceRadarCheckSummary,
@@ -1145,6 +1148,14 @@ export default function PropertyDetailPage() {
     },
     enabled: Boolean(propertyId),
   });
+  const latestRiskReplayQuery = useQuery({
+    queryKey: ['home-risk-replay-latest', propertyId],
+    queryFn: async () => {
+      const items = await listHomeRiskReplayRuns(propertyId, 1);
+      return items[0] ?? null;
+    },
+    enabled: Boolean(propertyId),
+  });
 
   const selectedNudgeConfig = useMemo(
     () => (nudgeFieldKey ? NARRATIVE_NUDGE_CONFIG[nudgeFieldKey] : null),
@@ -1343,6 +1354,72 @@ export default function PropertyDetailPage() {
             ) : null}
           </div>
         ) : null}
+      </div>
+
+      <div className="rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700">
+                <History className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="mb-0 text-sm font-semibold text-slate-900">Home Risk Replay</p>
+                <p className="mb-0 text-xs text-slate-500">See what your home has already been through</p>
+              </div>
+            </div>
+            <p className="mb-0 text-sm text-slate-600">
+              Replay historical weather and stress events matched to this property and its home details.
+            </p>
+          </div>
+
+          <Button asChild variant="outline" className="min-h-[44px] md:shrink-0">
+            <Link
+              href={buildHomeRiskReplayHref({
+                propertyId: property.id,
+                runId: latestRiskReplayQuery.data?.id ?? null,
+              })}
+            >
+              {latestRiskReplayQuery.data ? 'View replay' : 'Replay home history'}
+            </Link>
+          </Button>
+        </div>
+
+        {latestRiskReplayQuery.data ? (
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500">Latest replay</p>
+                <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">
+                  {latestRiskReplayQuery.data.totalEvents} matched historical events
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <StatusChip tone={latestRiskReplayQuery.data.highImpactEvents > 0 ? 'danger' : 'info'}>
+                  {latestRiskReplayQuery.data.highImpactEvents} high impact
+                </StatusChip>
+                <StatusChip tone={latestRiskReplayQuery.data.moderateImpactEvents > 0 ? 'elevated' : 'info'}>
+                  {latestRiskReplayQuery.data.moderateImpactEvents} moderate
+                </StatusChip>
+              </div>
+            </div>
+            {latestRiskReplayQuery.data.summaryText ? (
+              <p className="mb-0 mt-2 text-xs text-slate-600">
+                {latestRiskReplayQuery.data.summaryText}
+              </p>
+            ) : (
+              <p className="mb-0 mt-2 text-xs text-slate-600">
+                Historical stress history is available for this property.
+              </p>
+            )}
+          </div>
+        ) : latestRiskReplayQuery.isLoading ? (
+          <div className="mt-3 h-16 animate-pulse rounded-2xl bg-slate-100" />
+        ) : (
+          <p className="mb-0 mt-3 text-xs text-slate-500">
+            No replay has been saved yet for this property.
+          </p>
+        )}
       </div>
 
       <div className="md:hidden">

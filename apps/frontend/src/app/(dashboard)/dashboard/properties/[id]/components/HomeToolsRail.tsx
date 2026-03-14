@@ -5,7 +5,8 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen, Calculator, Scale, Activity, Target, Calendar, ShieldCheck, Radar, Radio } from 'lucide-react';
+import { PanelBottomOpen } from 'lucide-react';
+import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -27,96 +28,17 @@ type ToolDef = {
   key: string;
   label: string;
   href: (propertyId: string) => string;
-  Icon: React.ComponentType<{ className?: string }>;
+  Icon: React.ElementType;
   tooltip: string;
 };
 
-const HOME_TOOLS: ToolDef[] = [
-  {
-    key: 'home-event-radar',
-    label: 'Home Event Radar',
-    href: (id) => `/dashboard/properties/${id}/tools/home-event-radar`,
-    Icon: Radio,
-    tooltip: 'See weather, insurance, utility, and tax events matched to your specific home.',
-  },
-  {
-    key: 'service-price-radar',
-    label: 'Service Price Radar',
-    href: (id) => `/dashboard/properties/${id}/tools/service-price-radar?launchSurface=home_tools`,
-    Icon: Radar,
-    tooltip: 'Know if a quote is fair for your home before you book the work.',
-  },
-  {
-    key: 'property-tax',
-    label: 'Property Tax',
-    href: (id) => `/dashboard/properties/${id}/tools/property-tax`,
-    Icon: DollarSign,
-    tooltip: 'Estimate tax trend and reassessment drivers for your state/ZIP.',
-  },
-  {
-    key: 'cost-growth',
-    label: 'Cost Growth',
-    href: (id) => `/dashboard/properties/${id}/tools/cost-growth`,
-    Icon: TrendingUp,
-    tooltip: 'Compare appreciation vs expenses to understand net ownership cost trend.',
-  },
-  {
-    key: 'insurance-trend',
-    label: 'Insurance Trend',
-    href: (id) => `/dashboard/properties/${id}/tools/insurance-trend`,
-    Icon: Shield,
-    tooltip: 'See insurance cost growth vs state average and localized climate pressure.',
-  },
-  {
-    key: 'negotiation-shield',
-    label: 'Negotiation Shield',
-    href: (id) => `/dashboard/properties/${id}/tools/negotiation-shield`,
-    Icon: ShieldCheck,
-    tooltip: 'Review quotes, claims, inspection asks, or urgency pressure and prepare evidence-backed responses.',
-  },
-  {
-    key: 'cost-explainer',
-    label: 'Cost Explainer',
-    href: (id) => `/dashboard/properties/${id}/tools/cost-explainer`,
-    Icon: Info,
-    tooltip: 'Plain-English reasons why taxes/insurance/maintenance are rising.',
-  },
-  {
-    key: 'true-cost',
-    label: 'True Cost',
-    href: (id) => `/dashboard/properties/${id}/tools/true-cost`,
-    Icon: Calculator,
-    tooltip: '5-year total ownership cost projection: tax + insurance + maintenance + utilities.',
-  },
-  {
-    key: 'sell-hold-rent',
-    label: 'Sell / Hold / Rent',
-    href: (id) => `/dashboard/properties/${id}/tools/sell-hold-rent`,
-    Icon: Scale,
-    tooltip: 'Compare Sell vs Hold vs Rent outcomes over 5y or 10y using appreciation, ownership costs, and rent assumptions.',
-  },  
-  {
-    key: 'cost-volatility',
-    label: 'Volatility',
-    href: (id) => `/dashboard/properties/${id}/tools/cost-volatility`,
-    Icon: Activity,
-    tooltip: 'How unpredictable your costs are year-to-year.',
-  },
-  {
-    key: 'break-even',
-    label: 'Break-Even',
-    href: (id) => `/dashboard/properties/${id}/tools/break-even`,
-    Icon: Target,
-    tooltip: 'Find the year when appreciation outweighs cumulative ownership costs.',
-  },
-  {
-    key: 'capital-timeline',
-    label: 'Capital Timeline',
-    href: (id) => `/dashboard/properties/${id}/tools/capital-timeline`,
-    Icon: Calendar,
-    tooltip: 'Predict when major home systems will need replacement and estimated costs.',
-  },
-];
+const HOME_TOOLS: ToolDef[] = MOBILE_HOME_TOOL_LINKS.map((tool) => ({
+  key: tool.key,
+  label: tool.name,
+  href: (propertyId) => `/dashboard/properties/${propertyId}/${tool.hrefSuffix}`,
+  Icon: tool.icon,
+  tooltip: tool.description,
+}));
 
 function isActivePath(pathname: string, href: string) {
   // Active if you’re on the tool route or any nested sub-route

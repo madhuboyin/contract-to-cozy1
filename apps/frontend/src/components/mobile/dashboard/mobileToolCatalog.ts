@@ -257,6 +257,7 @@ export const MOBILE_HOME_AI_TILE_KEYS: MobileAiToolKey[] = [
 export type MobilePropertyToolLink = {
   key: string;
   name: string;
+  description: string;
   hrefSuffix: string;
   navTarget: string;
   icon: ElementType;
@@ -267,14 +268,25 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-event-radar',
     name: 'Home Event Radar',
+    description: 'Track current signals affecting your home',
     hrefSuffix: 'tools/home-event-radar',
     navTarget: 'tool:home-event-radar',
     icon: resolveToolIcon('home', 'home-event-radar'),
     isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-event-radar|home-event-radar)(\/|$)/.test(pathname),
   },
   {
+    key: 'home-risk-replay',
+    name: 'Home Risk Replay',
+    description: 'See what your home has already been through',
+    hrefSuffix: 'tools/home-risk-replay',
+    navTarget: 'tool:home-risk-replay',
+    icon: resolveToolIcon('home', 'home-risk-replay'),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-risk-replay(\/|$)/.test(pathname),
+  },
+  {
     key: 'service-price-radar',
     name: 'Service Price Radar',
+    description: 'Know if a quote is fair for your home',
     hrefSuffix: 'tools/service-price-radar?launchSurface=home_tools',
     navTarget: 'tool:service-price-radar',
     icon: resolveToolIcon('home', 'service-price-radar'),
@@ -283,6 +295,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'property-tax',
     name: 'Property Tax',
+    description: 'Forecast annual tax drag',
     hrefSuffix: 'tools/property-tax',
     navTarget: 'tool:property-tax',
     icon: resolveToolIcon('home', 'property-tax'),
@@ -291,6 +304,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'cost-growth',
     name: 'Cost Growth',
+    description: 'Model ownership cost trend',
     hrefSuffix: 'tools/cost-growth',
     navTarget: 'tool:cost-growth',
     icon: resolveToolIcon('home', 'cost-growth'),
@@ -299,6 +313,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'insurance-trend',
     name: 'Insurance Trend',
+    description: 'Track premium pressure',
     hrefSuffix: 'tools/insurance-trend',
     navTarget: 'tool:insurance-trend',
     icon: resolveToolIcon('home', 'insurance-trend'),
@@ -307,6 +322,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'negotiation-shield',
     name: 'Negotiation Shield',
+    description: 'Review quotes, claims, and inspection asks',
     hrefSuffix: 'tools/negotiation-shield',
     navTarget: 'tool:negotiation-shield',
     icon: resolveToolIcon('home', 'negotiation-shield'),
@@ -315,6 +331,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'cost-explainer',
     name: 'Cost Explainer',
+    description: 'Understand what drives costs',
     hrefSuffix: 'tools/cost-explainer',
     navTarget: 'tool:cost-explainer',
     icon: resolveToolIcon('home', 'cost-explainer'),
@@ -323,6 +340,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'true-cost',
     name: 'True Cost',
+    description: 'View full ownership cost',
     hrefSuffix: 'tools/true-cost',
     navTarget: 'tool:true-cost',
     icon: resolveToolIcon('home', 'true-cost'),
@@ -331,6 +349,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'sell-hold-rent',
     name: 'Sell / Hold / Rent',
+    description: 'Compare next-step scenarios',
     hrefSuffix: 'tools/sell-hold-rent',
     navTarget: 'tool:sell-hold-rent',
     icon: resolveToolIcon('home', 'sell-hold-rent'),
@@ -339,6 +358,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'cost-volatility',
     name: 'Volatility',
+    description: 'Measure cost variability',
     hrefSuffix: 'tools/cost-volatility',
     navTarget: 'tool:cost-volatility',
     icon: resolveToolIcon('home', 'cost-volatility'),
@@ -347,6 +367,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'break-even',
     name: 'Break-Even',
+    description: 'Estimate decision break-even',
     hrefSuffix: 'tools/break-even',
     navTarget: 'tool:break-even',
     icon: resolveToolIcon('home', 'break-even'),
@@ -355,6 +376,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'capital-timeline',
     name: 'Home Capital Timeline',
+    description: 'Plan major capital events',
     hrefSuffix: 'tools/capital-timeline',
     navTarget: 'tool:capital-timeline',
     icon: resolveToolIcon('home', 'capital-timeline'),
@@ -363,6 +385,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'seller-prep',
     name: 'Seller Prep',
+    description: 'Prep high-ROI improvements',
     hrefSuffix: 'seller-prep',
     navTarget: 'seller-prep',
     icon: resolveToolIcon('home', 'seller-prep'),
@@ -371,6 +394,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-timeline',
     name: 'Home Timeline',
+    description: 'Track milestones over time',
     hrefSuffix: 'timeline',
     navTarget: 'home-timeline',
     icon: resolveToolIcon('home', 'home-timeline'),
@@ -379,6 +403,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'status-board',
     name: 'Status Board',
+    description: 'Monitor home status signals',
     hrefSuffix: 'status-board',
     navTarget: 'status-board',
     icon: resolveToolIcon('home', 'status-board'),

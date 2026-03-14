@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -80,6 +80,10 @@ const WINDOW_OPTIONS: WindowOption[] = [
     description: 'Choose exact dates for a focused historical replay.',
   },
 ];
+
+function isWindowType(value: string | null): value is HomeRiskReplayWindowType {
+  return value === 'since_built' || value === 'last_5_years' || value === 'custom_range';
+}
 
 function compactPropertyLabel(property: Property | null | undefined): string {
   if (!property) return 'Property unavailable';
@@ -428,10 +432,14 @@ function HistorySection({
 
 export default function HomeRiskReplayClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
   const queryClient = useQueryClient();
 
-  const [windowType, setWindowType] = React.useState<HomeRiskReplayWindowType>('since_built');
+  const [windowType, setWindowType] = React.useState<HomeRiskReplayWindowType>(() => {
+    const requestedWindowType = searchParams.get('windowType');
+    return isWindowType(requestedWindowType) ? requestedWindowType : 'since_built';
+  });
   const [windowStart, setWindowStart] = React.useState('');
   const [windowEnd, setWindowEnd] = React.useState('');
   const [selectedRunId, setSelectedRunId] = React.useState<string | null>(null);
@@ -486,6 +494,18 @@ export default function HomeRiskReplayClient() {
     if (!activeRunId) return null;
     return historyQuery.data?.find((run) => run.id === activeRunId) ?? null;
   }, [activeRunId, historyQuery.data]);
+
+  React.useEffect(() => {
+    const requestedRunId = searchParams.get('runId');
+    if (requestedRunId) {
+      setSelectedRunId((current) => (current === requestedRunId ? current : requestedRunId));
+    }
+
+    const requestedWindowType = searchParams.get('windowType');
+    if (isWindowType(requestedWindowType)) {
+      setWindowType((current) => (current === requestedWindowType ? current : requestedWindowType));
+    }
+  }, [searchParams]);
 
   function validateInputs(): boolean {
     if (windowType !== 'custom_range') {

@@ -35,6 +35,12 @@ const HOME_TOOL_GROUPS = [
     toolKeys: ['home-event-radar'],
   },
   {
+    key: 'history',
+    title: 'History + Replay',
+    summary: 'See what your home has already been through',
+    toolKeys: ['home-risk-replay'],
+  },
+  {
     key: 'negotiation',
     title: 'Negotiation + Review',
     summary: 'Quote and premium review with response-ready guidance',
@@ -62,24 +68,6 @@ const HOME_TOOL_GROUPS = [
     toolKeys: ['capital-timeline', 'seller-prep', 'home-timeline', 'status-board'],
   },
 ] as const;
-
-const HOME_TOOL_TILE_META: Record<string, { subtitle: string }> = {
-  'home-event-radar': { subtitle: 'See events that may affect your home' },
-  'service-price-radar': { subtitle: 'Know if a quote is fair for your home' },
-  'property-tax': { subtitle: 'Forecast annual tax drag' },
-  'cost-growth': { subtitle: 'Model ownership cost trend' },
-  'insurance-trend': { subtitle: 'Track premium pressure' },
-  'negotiation-shield': { subtitle: 'Review quotes, claims, and inspection asks' },
-  'cost-explainer': { subtitle: 'Understand what drives costs' },
-  'true-cost': { subtitle: 'View full ownership cost' },
-  'sell-hold-rent': { subtitle: 'Compare next-step scenarios' },
-  'cost-volatility': { subtitle: 'Measure cost variability' },
-  'break-even': { subtitle: 'Estimate decision break-even' },
-  'capital-timeline': { subtitle: 'Plan major capital events' },
-  'seller-prep': { subtitle: 'Prep high-ROI improvements' },
-  'home-timeline': { subtitle: 'Track milestones over time' },
-  'status-board': { subtitle: 'Monitor home status signals' },
-};
 
 export default function HomeToolsPage() {
   const searchParams = useSearchParams();
@@ -111,13 +99,12 @@ export default function HomeToolsPage() {
           >
             <QuickActionGrid className="gap-2.5">
               {group.items.map((tool) => {
-                const meta = HOME_TOOL_TILE_META[tool.key];
                 const ToolIcon = tool.icon;
                 return (
                   <QuickActionTile
                     key={tool.key}
                     title={tool.name}
-                    subtitle={meta?.subtitle || 'Open tool'}
+                    subtitle={tool.description || 'Open tool'}
                     icon={<ToolIcon className="h-5 w-5" />}
                     trailingIcon={<ToolIcon className="h-5 w-5" />}
                     href={buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget)}

@@ -354,18 +354,12 @@ export default function MobileDashboardHome({
   const homeToolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));
   const homeToolsPinnedKeys = ['property-tax', 'sell-hold-rent', 'seller-prep', 'home-timeline'] as const;
   const homeToolsPageHref = `/dashboard/home-tools${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ''}`;
-  const homeToolsTileMeta: Record<string, { subtitle: string }> = {
-    'property-tax': { subtitle: 'Forecast annual tax drag' },
-    'sell-hold-rent': { subtitle: 'Model next property move' },
-    'seller-prep': { subtitle: 'Prep high-ROI improvements' },
-    'home-timeline': { subtitle: 'Track milestones over time' },
-  };
   const homeToolTiles = homeToolsPinnedKeys
     .map((key) => homeToolByKey.get(key))
     .filter((tool): tool is (typeof MOBILE_HOME_TOOL_LINKS)[number] => Boolean(tool))
     .map((tool) => ({
       title: tool.name,
-      subtitle: homeToolsTileMeta[tool.key]?.subtitle || 'Open tool',
+      subtitle: tool.description || 'Open tool',
       icon: React.createElement(tool.icon, { className: 'h-5 w-5' }),
       trailingIcon: React.createElement(tool.icon, { className: 'h-5 w-5' }),
       href: buildPropertyAwareHref(propertyId, tool.hrefSuffix, tool.navTarget),

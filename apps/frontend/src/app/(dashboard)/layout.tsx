@@ -61,6 +61,10 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 // Mobile-first imports
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
+import {
+  MOBILE_HOME_TOOL_LINKS,
+  type MobilePropertyToolLink,
+} from '@/components/mobile/dashboard/mobileToolCatalog';
 import { Input } from '@/components/ui/input';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
 import {
@@ -78,14 +82,7 @@ interface NavLink {
   icon: React.ElementType;
 }
 
-interface PropertyToolLink {
-  key: string;
-  name: string;
-  hrefSuffix: string;
-  navTarget: string;
-  icon: React.ElementType;
-  isActive: (pathname: string) => boolean;
-}
+type PropertyToolLink = MobilePropertyToolLink;
 
 interface AIToolLink {
   key: string;
@@ -97,120 +94,7 @@ interface AIToolLink {
 
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
 
-const HOME_TOOL_LINKS: PropertyToolLink[] = [
-  {
-    key: 'service-price-radar',
-    name: 'Service Price Radar',
-    hrefSuffix: 'tools/service-price-radar?launchSurface=home_tools',
-    navTarget: 'tool:service-price-radar',
-    icon: resolveToolIcon('home', 'service-price-radar', Radar),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/service-price-radar(\/|$)/.test(pathname),
-  },
-  {
-    key: 'property-tax',
-    name: 'Property Tax',
-    hrefSuffix: 'tools/property-tax',
-    navTarget: 'tool:property-tax',
-    icon: resolveToolIcon('home', 'property-tax', DollarSign),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/property-tax(\/|$)/.test(pathname),
-  },
-  {
-    key: 'cost-growth',
-    name: 'Cost Growth',
-    hrefSuffix: 'tools/cost-growth',
-    navTarget: 'tool:cost-growth',
-    icon: resolveToolIcon('home', 'cost-growth', TrendingUp),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-growth(\/|$)/.test(pathname),
-  },
-  {
-    key: 'insurance-trend',
-    name: 'Insurance Trend',
-    hrefSuffix: 'tools/insurance-trend',
-    navTarget: 'tool:insurance-trend',
-    icon: resolveToolIcon('home', 'insurance-trend', Shield),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/insurance-trend(\/|$)/.test(pathname),
-  },
-  {
-    key: 'negotiation-shield',
-    name: 'Negotiation Shield',
-    hrefSuffix: 'tools/negotiation-shield',
-    navTarget: 'tool:negotiation-shield',
-    icon: resolveToolIcon('home', 'negotiation-shield', ShieldCheck),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/negotiation-shield(\/|$)/.test(pathname),
-  },
-  {
-    key: 'cost-explainer',
-    name: 'Cost Explainer',
-    hrefSuffix: 'tools/cost-explainer',
-    navTarget: 'tool:cost-explainer',
-    icon: resolveToolIcon('home', 'cost-explainer', Info),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-explainer(\/|$)/.test(pathname),
-  },
-  {
-    key: 'true-cost',
-    name: 'True Cost',
-    hrefSuffix: 'tools/true-cost',
-    navTarget: 'tool:true-cost',
-    icon: resolveToolIcon('home', 'true-cost', Calculator),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/true-cost(\/|$)/.test(pathname),
-  },
-  {
-    key: 'sell-hold-rent',
-    name: 'Sell / Hold / Rent',
-    hrefSuffix: 'tools/sell-hold-rent',
-    navTarget: 'tool:sell-hold-rent',
-    icon: resolveToolIcon('home', 'sell-hold-rent', Scale),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/sell-hold-rent(\/|$)/.test(pathname),
-  },
-  {
-    key: 'cost-volatility',
-    name: 'Volatility',
-    hrefSuffix: 'tools/cost-volatility',
-    navTarget: 'tool:cost-volatility',
-    icon: resolveToolIcon('home', 'cost-volatility', Activity),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-volatility(\/|$)/.test(pathname),
-  },
-  {
-    key: 'break-even',
-    name: 'Break-Even',
-    hrefSuffix: 'tools/break-even',
-    navTarget: 'tool:break-even',
-    icon: resolveToolIcon('home', 'break-even', Target),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/break-even(\/|$)/.test(pathname),
-  },
-  {
-    key: 'capital-timeline',
-    name: 'Home Capital Timeline',
-    hrefSuffix: 'tools/capital-timeline',
-    navTarget: 'tool:capital-timeline',
-    icon: resolveToolIcon('home', 'capital-timeline', Calendar),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/capital-timeline(\/|$)/.test(pathname),
-  },
-  {
-    key: 'seller-prep',
-    name: 'Seller Prep',
-    hrefSuffix: 'seller-prep',
-    navTarget: 'seller-prep',
-    icon: resolveToolIcon('home', 'seller-prep', TrendingUp),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/seller-prep(\/|$)/.test(pathname),
-  },
-  {
-    key: 'home-timeline',
-    name: 'Home Timeline',
-    hrefSuffix: 'timeline',
-    navTarget: 'home-timeline',
-    icon: resolveToolIcon('home', 'home-timeline', Calendar),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/timeline(\/|$)/.test(pathname),
-  },
-  {
-    key: 'status-board',
-    name: 'Status Board',
-    hrefSuffix: 'status-board',
-    navTarget: 'status-board',
-    icon: resolveToolIcon('home', 'status-board', LayoutGrid),
-    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/status-board(\/|$)/.test(pathname),
-  },
-];
+const HOME_TOOL_LINKS: PropertyToolLink[] = MOBILE_HOME_TOOL_LINKS;
 
 const AI_TOOL_LINKS: AIToolLink[] = [
   {

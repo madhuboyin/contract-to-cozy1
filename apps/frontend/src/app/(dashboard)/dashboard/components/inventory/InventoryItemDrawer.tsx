@@ -21,6 +21,7 @@ import {
   BadgeCheck,
   CheckCircle2,
   Circle,
+  History,
   Loader2,
   ScanLine,
   Shield,
@@ -63,6 +64,7 @@ import {
   buildServicePriceRadarHref,
   inferServicePriceRadarCategoryFromInventoryItem,
 } from '@/lib/routes/servicePriceRadar';
+import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
 
@@ -141,6 +143,24 @@ function unwrapOcrResponse(raw: any): any {
 function pct(n?: number) {
   const v = typeof n === 'number' ? n : 0;
   return `${Math.round(v * 100)}%`;
+}
+
+function inferReplayWindowFromInventoryItem(item: Pick<InventoryItem, 'category' | 'name'>): 'since_built' | 'last_5_years' {
+  const text = `${item.category || ''} ${item.name || ''}`.toLowerCase();
+  if (/(electric|panel|breaker|outlet|wiring|generator|surge|hvac|furnace|heat pump|ac\b|air conditioning|thermostat)/.test(text)) {
+    return 'last_5_years';
+  }
+  return 'since_built';
+}
+
+function getReplayLabelForInventoryItem(item: Pick<InventoryItem, 'category' | 'name'>): string {
+  const text = `${item.category || ''} ${item.name || ''}`.toLowerCase();
+
+  if (/(roof|shingle|gutter|exterior|siding|flashing)/.test(text)) return 'Roof history';
+  if (/(plumb|pipe|drain|water heater|leak|sump|basement|flood|sewer)/.test(text)) return 'Water stress';
+  if (/(electric|panel|breaker|outlet|wiring|generator|surge)/.test(text)) return 'Outage history';
+  if (/(hvac|furnace|heat pump|ac\b|air conditioning|thermostat)/.test(text)) return 'Heat stress';
+  return 'Replay history';
 }
 
 export default function InventoryItemDrawer(props: {
@@ -903,6 +923,17 @@ useEffect(() => {
     );
   }
 
+  function openHomeRiskReplay() {
+    if (!props.initialItem) return;
+    props.onClose();
+    router.push(
+      buildHomeRiskReplayHref({
+        propertyId: props.propertyId,
+        windowType: inferReplayWindowFromInventoryItem(props.initialItem),
+      })
+    );
+  }
+
   const isUnverified = Boolean(isEdit && props.initialItem && !(props.initialItem as any).isVerified);
   const identifierFields = [
     { label: 'Manufacturer', value: manufacturer.trim() },
@@ -1397,7 +1428,17 @@ useEffect(() => {
                   <h3 className="text-sm font-semibold text-gray-800">Coverage links</h3>
                   <p className="mt-0.5 text-xs text-gray-500">Link this item to warranty and/or insurance.</p>
                 </div>
-                <div className="flex flex-shrink-0 items-center gap-2">
+                <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={openHomeRiskReplay}
+                    disabled={!isEdit}
+                    title={!isEdit ? 'Save this item first to view matched history' : undefined}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    {props.initialItem ? getReplayLabelForInventoryItem(props.initialItem) : 'Replay history'}
+                  </button>
                   <button
                     type="button"
                     onClick={openServicePriceRadar}

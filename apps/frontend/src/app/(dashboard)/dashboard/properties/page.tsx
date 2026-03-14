@@ -14,6 +14,7 @@ import {
   MobilePageIntro,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { cn } from '@/lib/utils';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
@@ -26,6 +27,9 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
 };
 
 const MAX_PROPERTIES = 10;
+const HOME_TOOL_NAV_LABELS = Object.fromEntries(
+  MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.navTarget, `Home Tools > ${tool.name}`])
+);
 
 function openCozyChat() {
   if (typeof window === 'undefined') return;
@@ -69,17 +73,7 @@ export default function PropertiesPage() {
     'status-board': 'Home Tools > Status Board',
     'home-score': 'Reports > Home Score Report',
     reports: 'Home Admin > Reports',
-    'tool:service-price-radar': 'Home Tools > Service Price Radar',
-    'tool:property-tax': 'Home Tools > Property Tax',
-    'tool:cost-growth': 'Home Tools > Cost Growth',
-    'tool:insurance-trend': 'Home Tools > Insurance Trend',
-    'tool:negotiation-shield': 'Home Tools > Negotiation Shield',
-    'tool:cost-explainer': 'Home Tools > Cost Explainer',
-    'tool:true-cost': 'Home Tools > True Cost',
-    'tool:sell-hold-rent': 'Home Tools > Sell / Hold / Rent',
-    'tool:cost-volatility': 'Home Tools > Volatility',
-    'tool:break-even': 'Home Tools > Break-Even',
-    'tool:capital-timeline': 'Home Tools > Home Capital Timeline',
+    ...HOME_TOOL_NAV_LABELS,
   };
 
   const navTargetLabel = navTarget ? navTargetLabelMap[navTarget] || 'selected section' : null;
