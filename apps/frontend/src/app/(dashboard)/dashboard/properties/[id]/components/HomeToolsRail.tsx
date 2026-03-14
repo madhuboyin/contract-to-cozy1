@@ -42,7 +42,7 @@ const HOME_TOOLS: ToolDef[] = [
   {
     key: 'service-price-radar',
     label: 'Service Price Radar',
-    href: (id) => `/dashboard/properties/${id}/tools/service-price-radar`,
+    href: (id) => `/dashboard/properties/${id}/tools/service-price-radar?launchSurface=home_tools`,
     Icon: Radar,
     tooltip: 'Know if a quote is fair for your home before you book the work.',
   },

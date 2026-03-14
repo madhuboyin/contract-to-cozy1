@@ -7,8 +7,12 @@ import {
   createServicePriceRadarCheck,
   getServicePriceRadarCheckDetail,
   listServicePriceRadarChecks,
+  trackServicePriceRadarEvent,
 } from '../controllers/servicePriceRadar.controller';
-import { createServicePriceRadarBodySchema } from '../validators/servicePriceRadar.validators';
+import {
+  createServicePriceRadarBodySchema,
+  trackServicePriceRadarEventBodySchema,
+} from '../validators/servicePriceRadar.validators';
 
 const router = Router();
 
@@ -25,6 +29,13 @@ router.get(
   '/properties/:propertyId/service-price-radar/checks/:checkId',
   propertyAuthMiddleware,
   getServicePriceRadarCheckDetail
+);
+
+router.post(
+  '/properties/:propertyId/service-price-radar/events',
+  propertyAuthMiddleware,
+  validateBody(trackServicePriceRadarEventBodySchema),
+  trackServicePriceRadarEvent
 );
 
 router.post(

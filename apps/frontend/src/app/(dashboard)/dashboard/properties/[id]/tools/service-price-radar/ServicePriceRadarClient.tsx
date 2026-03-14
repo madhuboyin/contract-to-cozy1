@@ -46,10 +46,12 @@ import {
   getServicePriceRadarCheck,
   listServicePriceRadarChecks,
   SERVICE_PRICE_RADAR_CATEGORY_OPTIONS,
+  trackServicePriceRadarEvent,
   type CreateServicePriceRadarCheckPayload,
   type JsonValue,
   type ServicePriceRadarCheckDetail,
   type ServicePriceRadarCheckSummary,
+  type ServicePriceRadarLaunchSurface,
   type ServiceRadarCategory,
   type ServiceRadarLinkedEntityType,
   type ServiceRadarVerdict,
@@ -196,6 +198,59 @@ function resolveCategoryOption(value: ServiceRadarCategory | '') {
   return SERVICE_PRICE_RADAR_CATEGORY_OPTIONS.find((option) => option.value === value) ?? null;
 }
 
+function normalizeLaunchSurface(value: string | null): ServicePriceRadarLaunchSurface {
+  if (
+    value === 'home_tools' ||
+    value === 'property_hub' ||
+    value === 'system_detail' ||
+    value === 'incident_card' ||
+    value === 'maintenance_card'
+  ) {
+    return value;
+  }
+  return 'unknown';
+}
+
+function quoteAmountBand(value: number): string {
+  if (value < 500) return 'under_500';
+  if (value < 1500) return '500_1500';
+  if (value < 5000) return '1500_5000';
+  if (value < 10000) return '5000_10000';
+  if (value < 20000) return '10000_20000';
+  return 'over_20000';
+}
+
+function confidenceBand(score: number | null | undefined): 'low' | 'medium' | 'high' | 'unknown' {
+  if (score === null || score === undefined) return 'unknown';
+  if (score >= 0.72) return 'high';
+  if (score >= 0.5) return 'medium';
+  return 'low';
+}
+
+function deviceContext(): 'mobile' | 'desktop' {
+  if (typeof window === 'undefined') return 'desktop';
+  return window.matchMedia('(max-width: 767px)').matches ? 'mobile' : 'desktop';
+}
+
+function errorType(error: unknown): 'network' | 'validation' | 'unauthorized' | 'unknown' {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error ?? '').toLowerCase();
+  if (message.includes('network') || message.includes('fetch') || message.includes('timeout')) return 'network';
+  if (message.includes('validation') || message.includes('invalid') || message.includes('required')) return 'validation';
+  if (message.includes('auth') || message.includes('unauthorized') || message.includes('access denied')) return 'unauthorized';
+  return 'unknown';
+}
+
+function selectedLinkedEntityType(
+  form: FormState,
+  linkedOptions: LinkedEntityOption[],
+  prefilledLinkedOption?: LinkedEntityOption | null
+): ServiceRadarLinkedEntityType | null {
+  const selected =
+    linkedOptions.find((option) => option.key === form.linkedEntityKey) ??
+    (prefilledLinkedOption?.key === form.linkedEntityKey ? prefilledLinkedOption : null);
+  return selected?.linkedEntityType ?? null;
+}
+
 function buildPayload(
   form: FormState,
   linkedOptions: LinkedEntityOption[],
@@ -294,6 +349,19 @@ function extractFactorChips(check: ServicePriceRadarCheckDetail): string[] {
   }
 
   return chips;
+}
+
+function extractBenchmarkMeta(check: ServicePriceRadarCheckDetail): {
+  benchmarkMatched: boolean;
+  estimationMode: 'benchmark' | 'fallback';
+} {
+  const pricing = asRecord(check.pricingFactorsJson);
+  const benchmark = asRecord(pricing?.benchmark ?? null);
+  const benchmarkMatched = benchmark?.matched === true;
+  return {
+    benchmarkMatched,
+    estimationMode: benchmarkMatched ? 'benchmark' : 'fallback',
+  };
 }
 
 function QuoteComparisonMeter({
@@ -452,6 +520,10 @@ export default function ServicePriceRadarClient() {
   const resultRef = useRef<HTMLDivElement | null>(null);
   const loadRef = useRef(0);
   const appliedPrefillSignatureRef = useRef<string | null>(null);
+  const openedSessionRef = useRef<string | null>(null);
+  const startedSessionRef = useRef<string | null>(null);
+  const viewedResultIdsRef = useRef<Set<string>>(new Set());
+  const explanationExpandedIdsRef = useRef<Set<string>>(new Set());
 
   const [property, setProperty] = useState<Property | null>(null);
   const [propertyLoading, setPropertyLoading] = useState(true);
@@ -461,6 +533,7 @@ export default function ServicePriceRadarClient() {
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [explanationOpen, setExplanationOpen] = useState(false);
 
   const [currentCheck, setCurrentCheck] = useState<ServicePriceRadarCheckDetail | null>(null);
   const [recentChecks, setRecentChecks] = useState<ServicePriceRadarCheckSummary[]>([]);
@@ -473,6 +546,7 @@ export default function ServicePriceRadarClient() {
   const [linkedOptionsLoading, setLinkedOptionsLoading] = useState(false);
   const [linkedOptionsLoaded, setLinkedOptionsLoaded] = useState(false);
 
+  const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
   const prefilledCategoryValue = searchParams.get('category');
   const prefilledQuoteAmount = searchParams.get('quoteAmount');
   const prefilledLinkedEntityType = searchParams.get('linkedEntityType');
@@ -493,6 +567,7 @@ export default function ServicePriceRadarClient() {
         }
       : null;
   const prefillSignature = [
+    launchSurface,
     prefilledCategoryValue || '',
     searchParams.get('subcategory') || '',
     searchParams.get('label') || '',
@@ -508,6 +583,92 @@ export default function ServicePriceRadarClient() {
   const currentReasons = currentCheck ? extractReasons(currentCheck) : [];
   const adjustmentRows = currentCheck ? extractAdjustmentRows(currentCheck) : [];
   const factorChips = currentCheck ? extractFactorChips(currentCheck) : [];
+  const hadPrefill = Boolean(
+    prefilledCategoryValue ||
+      searchParams.get('subcategory') ||
+      searchParams.get('label') ||
+      prefilledQuoteAmount ||
+      searchParams.get('vendor') ||
+      prefilledLinkedEntityType ||
+      prefilledLinkedEntityId
+  );
+
+  // Tracking map:
+  // OPENED -> tool screen entered
+  // STARTED -> first meaningful form interaction
+  // SUBMITTED / RESULT_VIEWED / ERROR -> core funnel
+  // EXPLANATION_EXPANDED / HISTORY_ITEM_OPENED / NEGOTIATION_HANDOFF_CLICKED -> engagement
+  function trackRadarEvent(event: string, section?: string, metadata?: Record<string, unknown>) {
+    if (!propertyId) return;
+
+    void trackServicePriceRadarEvent(propertyId, {
+      event,
+      section,
+      metadata: {
+        tool_name: 'service_price_radar',
+        property_id: propertyId,
+        property_has_context: Boolean(propertyId),
+        launch_surface: launchSurface,
+        ...metadata,
+      },
+    }).catch(() => undefined);
+  }
+
+  function trackRadarError(
+    stage: 'submit' | 'list' | 'detail',
+    error: unknown,
+    extra?: Record<string, unknown>
+  ) {
+    trackRadarEvent('ERROR', stage, {
+      stage,
+      error_type: errorType(error),
+      service_category: form.serviceCategory || undefined,
+      ...extra,
+    });
+  }
+
+  function ensureStarted(source: 'edit' | 'submit') {
+    if (!propertyId || startedSessionRef.current === prefillSignature) return;
+    startedSessionRef.current = prefillSignature;
+    trackRadarEvent('STARTED', 'form', {
+      source,
+      had_prefill: hadPrefill,
+      service_category_initial: form.serviceCategory || prefilledCategoryValue || undefined,
+    });
+  }
+
+  useEffect(() => {
+    if (!propertyId || openedSessionRef.current === prefillSignature) return;
+    openedSessionRef.current = prefillSignature;
+    startedSessionRef.current = null;
+    viewedResultIdsRef.current = new Set();
+    explanationExpandedIdsRef.current = new Set();
+
+    trackRadarEvent('OPENED', 'page', {
+      prefilled_category: prefilledCategoryValue || undefined,
+      prefilled_linked_entity_type: prefilledLinkedEntityType || undefined,
+      device_context: deviceContext(),
+      has_property_context: true,
+    });
+  }, [launchSurface, prefillSignature, prefilledCategoryValue, prefilledLinkedEntityType, propertyId]);
+
+  useEffect(() => {
+    setExplanationOpen(false);
+  }, [currentCheck?.id]);
+
+  useEffect(() => {
+    if (!currentCheck || viewedResultIdsRef.current.has(currentCheck.id)) return;
+    viewedResultIdsRef.current.add(currentCheck.id);
+
+    const benchmarkMeta = extractBenchmarkMeta(currentCheck);
+    trackRadarEvent('RESULT_VIEWED', 'result', {
+      service_category: currentCheck.serviceCategory,
+      verdict: currentCheck.verdict || undefined,
+      confidence_band: confidenceBand(currentCheck.confidenceScore),
+      benchmark_matched: benchmarkMeta.benchmarkMatched,
+      estimation_mode: benchmarkMeta.estimationMode,
+    });
+  }, [currentCheck]);
 
   useEffect(() => {
     if (appliedPrefillSignatureRef.current === prefillSignature) return;
@@ -601,12 +762,14 @@ export default function ServicePriceRadarClient() {
           );
         } catch (error) {
           if (requestId !== loadRef.current) return;
+          trackRadarError('detail', error, { source: 'initial_latest_check' });
           setToolError(error instanceof Error ? error.message : 'Unable to load the latest quote check.');
         }
       } else {
         setCurrentCheck(null);
       }
     } else {
+      trackRadarError('list', checksResult.reason);
       setRecentChecks([]);
       setChecksLoading(false);
       setToolError(
@@ -715,8 +878,12 @@ export default function ServicePriceRadarClient() {
   }
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
+    const previousValue = form[key];
     const nextForm = { ...form, [key]: value };
     setForm(nextForm);
+    if (previousValue !== value) {
+      ensureStarted('edit');
+    }
     if (submitAttempted) {
       syncValidation(nextForm);
     }
@@ -740,8 +907,15 @@ export default function ServicePriceRadarClient() {
         ...current,
         ...buildFormFromCheck(detail),
       }));
+      const openedIndex = recentChecks.findIndex((item) => item.id === checkId);
+      trackRadarEvent('HISTORY_ITEM_OPENED', 'history', {
+        service_category: detail.serviceCategory,
+        verdict: detail.verdict || undefined,
+        source_list_position: openedIndex >= 0 ? openedIndex + 1 : undefined,
+      });
       revealResultSoon();
     } catch (error) {
+      trackRadarError('detail', error, { source: 'history_open' });
       setToolError(error instanceof Error ? error.message : 'Unable to load quote details.');
     } finally {
       setLoadingCheckId(null);
@@ -756,6 +930,7 @@ export default function ServicePriceRadarClient() {
 
   async function handleSubmit() {
     setSubmitAttempted(true);
+    ensureStarted('submit');
     const errors = buildValidationErrors(form);
     setValidationErrors(errors);
     if (Object.keys(errors).length > 0 || !propertyId) return;
@@ -764,12 +939,23 @@ export default function ServicePriceRadarClient() {
     setToolError(null);
 
     try {
+      const linkedEntityType = selectedLinkedEntityType(form, linkedOptions, prefilledLinkedOption);
+      trackRadarEvent('SUBMITTED', 'form', {
+        service_category: form.serviceCategory || undefined,
+        service_subcategory_present: Boolean(form.serviceSubcategory.trim()),
+        quote_amount_band: quoteAmountBand(Number(form.quoteAmount)),
+        quote_source: 'MANUAL',
+        linked_entity_present: Boolean(linkedEntityType),
+        linked_entity_type: linkedEntityType || undefined,
+        had_vendor_name: Boolean(form.quoteVendorName.trim()),
+      });
       const payload = buildPayload(form, linkedOptions, prefilledLinkedOption);
       const detail = await createServicePriceRadarCheck(propertyId, payload);
       setCurrentCheck(detail);
       await refreshRecentChecks();
       revealResultSoon();
     } catch (error) {
+      trackRadarError('submit', error);
       setToolError(error instanceof Error ? error.message : 'Unable to check this quote right now.');
     } finally {
       setSubmitting(false);
@@ -1091,14 +1277,34 @@ export default function ServicePriceRadarClient() {
                   />
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button asChild variant="outline" className="min-h-[40px] rounded-xl">
-                      <Link href={buildNegotiationShieldHref(propertyId, currentCheck)}>
+                      <Link
+                        href={buildNegotiationShieldHref(propertyId, currentCheck)}
+                        onClick={() =>
+                          trackRadarEvent('NEGOTIATION_HANDOFF_CLICKED', 'handoff', {
+                            service_category: currentCheck.serviceCategory,
+                            verdict: currentCheck.verdict || undefined,
+                          })
+                        }
+                      >
                         Need help responding?
                       </Link>
                     </Button>
                   </div>
                 </ScenarioInputCard>
 
-                <Collapsible defaultOpen={false}>
+                <Collapsible
+                  open={explanationOpen}
+                  onOpenChange={(open) => {
+                    setExplanationOpen(open);
+                    if (open && currentCheck && !explanationExpandedIdsRef.current.has(currentCheck.id)) {
+                      explanationExpandedIdsRef.current.add(currentCheck.id);
+                      trackRadarEvent('EXPLANATION_EXPANDED', 'explanation', {
+                        service_category: currentCheck.serviceCategory,
+                        verdict: currentCheck.verdict || undefined,
+                      });
+                    }
+                  }}
+                >
                   <ScenarioInputCard
                     title="Why we think this"
                     subtitle="A compact view of the property, region, and pricing context used."

@@ -171,6 +171,7 @@ export default function IncidentDetailClient() {
                   <Link
                     href={buildServicePriceRadarHref({
                       propertyId,
+                      launchSurface: 'incident_card',
                       serviceCategory: inferServicePriceRadarCategoryFromIncident(incident),
                       serviceLabelRaw: incident.title,
                       linkedEntityType: 'INCIDENT',

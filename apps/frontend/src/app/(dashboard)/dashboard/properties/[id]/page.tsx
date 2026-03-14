@@ -155,6 +155,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
           <Link
             href={buildServicePriceRadarHref({
               propertyId,
+              launchSurface: 'maintenance_card',
               serviceCategory: category,
               serviceLabelRaw: insight.factor,
             })}
@@ -484,6 +485,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
             <Link
               href={buildServicePriceRadarHref({
                 propertyId: property.id,
+                launchSurface: 'property_hub',
                 serviceCategory: 'HVAC',
                 serviceLabelRaw: 'HVAC service quote',
               })}
@@ -494,6 +496,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
             <Link
               href={buildServicePriceRadarHref({
                 propertyId: property.id,
+                launchSurface: 'property_hub',
                 serviceCategory: 'WATER_HEATER',
                 serviceLabelRaw: 'Water heater service quote',
               })}
@@ -504,6 +507,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
             <Link
               href={buildServicePriceRadarHref({
                 propertyId: property.id,
+                launchSurface: 'property_hub',
                 serviceCategory: 'ROOFING',
                 serviceLabelRaw: 'Roof service quote',
               })}
@@ -687,6 +691,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
                 <Link
                   href={buildServicePriceRadarHref({
                     propertyId: property.id,
+                    launchSurface: 'property_hub',
                     serviceCategory: 'HVAC',
                     serviceLabelRaw: 'HVAC service quote',
                   })}
@@ -698,6 +703,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
                 <Link
                   href={buildServicePriceRadarHref({
                     propertyId: property.id,
+                    launchSurface: 'property_hub',
                     serviceCategory: 'WATER_HEATER',
                     serviceLabelRaw: 'Water heater service quote',
                   })}
@@ -709,6 +715,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
                 <Link
                   href={buildServicePriceRadarHref({
                     propertyId: property.id,
+                    launchSurface: 'property_hub',
                     serviceCategory: 'ROOFING',
                     serviceLabelRaw: 'Roof service quote',
                   })}
@@ -1299,7 +1306,7 @@ export default function PropertyDetailPage() {
           </div>
 
           <Button asChild className="min-h-[44px] md:shrink-0">
-            <Link href={buildServicePriceRadarHref({ propertyId: property.id })}>Check quote</Link>
+            <Link href={buildServicePriceRadarHref({ propertyId: property.id, launchSurface: 'property_hub' })}>Check quote</Link>
           </Button>
         </div>
 

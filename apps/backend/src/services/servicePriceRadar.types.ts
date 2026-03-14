@@ -145,6 +145,12 @@ export type ServiceRadarDetailResponseDTO = {
   check: ServiceRadarDetailDTO;
 };
 
+export type ServicePriceRadarEventInput = {
+  event: string;
+  section?: string;
+  metadata?: Record<string, unknown>;
+};
+
 export type PropertyContext = {
   propertyId: string;
   homeownerProfileId: string;

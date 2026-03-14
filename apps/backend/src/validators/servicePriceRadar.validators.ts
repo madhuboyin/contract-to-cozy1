@@ -92,3 +92,13 @@ export const listServicePriceRadarQuerySchema = z.object({
 });
 
 export type ListServicePriceRadarQuery = z.infer<typeof listServicePriceRadarQuerySchema>;
+
+const jsonObjectSchema = z.record(z.string(), z.unknown());
+
+export const trackServicePriceRadarEventBodySchema = z.object({
+  event: z.string().trim().min(1).max(80),
+  section: z.string().trim().min(1).max(80).optional(),
+  metadata: jsonObjectSchema.optional(),
+});
+
+export type TrackServicePriceRadarEventBody = z.infer<typeof trackServicePriceRadarEventBodySchema>;

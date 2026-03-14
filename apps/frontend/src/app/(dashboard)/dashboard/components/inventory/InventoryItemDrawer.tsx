@@ -894,6 +894,7 @@ useEffect(() => {
     router.push(
       buildServicePriceRadarHref({
         propertyId: props.propertyId,
+        launchSurface: 'system_detail',
         serviceCategory: inferServicePriceRadarCategoryFromInventoryItem(props.initialItem),
         serviceLabelRaw: props.initialItem.name,
         linkedEntityType: 'SYSTEM',

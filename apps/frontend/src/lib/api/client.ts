@@ -1482,6 +1482,23 @@ class APIClient {
     );
   }
 
+  async trackServicePriceRadarEvent(
+    propertyId: string,
+    payload: {
+      event: string;
+      section?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<void> {
+    await this.request<{ ok: true }>(
+      `/api/properties/${propertyId}/service-price-radar/events`,
+      {
+        method: 'POST',
+        body: payload,
+      }
+    );
+  }
+
   /**
    * Fetches the full detailed FES report, queuing a new calculation if stale/missing.
    * @returns The FinancialEfficiencyReport object or the string 'QUEUED'.

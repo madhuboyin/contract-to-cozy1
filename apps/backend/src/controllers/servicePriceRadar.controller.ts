@@ -2,8 +2,11 @@ import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
 import { ServicePriceRadarService } from '../services/servicePriceRadar.service';
-import { CreateServicePriceRadarBody } from '../validators/servicePriceRadar.validators';
-import { listServicePriceRadarQuerySchema } from '../validators/servicePriceRadar.validators';
+import {
+  CreateServicePriceRadarBody,
+  listServicePriceRadarQuerySchema,
+  TrackServicePriceRadarEventBody,
+} from '../validators/servicePriceRadar.validators';
 
 const service = new ServicePriceRadarService();
 
@@ -59,6 +62,21 @@ export async function getServicePriceRadarCheckDetail(
     const userId = requireUserId(req);
     const result = await service.getCheckDetail(req.params.propertyId, req.params.checkId, userId);
     return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function trackServicePriceRadarEvent(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const userId = requireUserId(req);
+    const payload = req.body as TrackServicePriceRadarEventBody;
+    const result = await service.trackEvent(req.params.propertyId, userId, payload);
+    return res.status(201).json({ success: true, data: result });
   } catch (error) {
     return next(error);
   }

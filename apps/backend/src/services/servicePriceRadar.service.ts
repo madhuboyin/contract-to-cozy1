@@ -14,6 +14,7 @@ import {
   ServiceRadarCreateResponseDTO,
   ServiceRadarDetailDTO,
   ServiceRadarDetailResponseDTO,
+  ServicePriceRadarEventInput,
   ServiceRadarLinkedEntitySummaryDTO,
   ServiceRadarListQuery,
   ServiceRadarListResponseDTO,
@@ -775,5 +776,31 @@ export class ServicePriceRadarService {
     return {
       check: mapDetail(row, linkedEntities),
     };
+  }
+
+  async trackEvent(propertyId: string, userId: string, input: ServicePriceRadarEventInput) {
+    await assertPropertyForUser(propertyId, userId);
+
+    const eventName = String(input.event || 'UNKNOWN')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_]/g, '_')
+      .slice(0, 80);
+    const section = input.section ? String(input.section).slice(0, 80) : null;
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: `SERVICE_PRICE_RADAR_${eventName || 'UNKNOWN'}`,
+        entityType: 'PROPERTY',
+        entityId: propertyId,
+        newValues: {
+          section,
+          metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return { ok: true };
   }
 }

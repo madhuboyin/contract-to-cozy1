@@ -1,5 +1,13 @@
 import { api } from '@/lib/api/client';
 
+export type ServicePriceRadarLaunchSurface =
+  | 'home_tools'
+  | 'property_hub'
+  | 'system_detail'
+  | 'incident_card'
+  | 'maintenance_card'
+  | 'unknown';
+
 export type ServiceRadarCategory =
   | 'INSPECTION'
   | 'HANDYMAN'
@@ -187,4 +195,15 @@ export async function getServicePriceRadarCheck(
     `/api/properties/${propertyId}/service-price-radar/checks/${checkId}`
   );
   return res.data.check;
+}
+
+export async function trackServicePriceRadarEvent(
+  propertyId: string,
+  payload: {
+    event: string;
+    section?: string;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<void> {
+  await api.trackServicePriceRadarEvent(propertyId, payload);
 }

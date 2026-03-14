@@ -275,7 +275,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'service-price-radar',
     name: 'Service Price Radar',
-    hrefSuffix: 'tools/service-price-radar',
+    hrefSuffix: 'tools/service-price-radar?launchSurface=home_tools',
     navTarget: 'tool:service-price-radar',
     icon: resolveToolIcon('home', 'service-price-radar'),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/service-price-radar(\/|$)/.test(pathname),

@@ -3,6 +3,7 @@ import type { IncidentDTO } from '@/types/incidents.types';
 
 type ServicePriceRadarLaunchOptions = {
   propertyId: string;
+  launchSurface?: string | null;
   serviceCategory?: string | null;
   serviceSubcategory?: string | null;
   serviceLabelRaw?: string | null;
@@ -51,6 +52,7 @@ function inferCategoryFromText(input: string): string | null {
 
 export function buildServicePriceRadarHref({
   propertyId,
+  launchSurface,
   serviceCategory,
   serviceSubcategory,
   serviceLabelRaw,
@@ -60,6 +62,7 @@ export function buildServicePriceRadarHref({
   linkedEntityId,
 }: ServicePriceRadarLaunchOptions): string {
   const params = new URLSearchParams();
+  setParam(params, 'launchSurface', launchSurface);
   setParam(params, 'category', serviceCategory);
   setParam(params, 'subcategory', serviceSubcategory);
   setParam(params, 'label', serviceLabelRaw);
