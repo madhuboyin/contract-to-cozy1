@@ -87,6 +87,9 @@ import {
   InventoryImportBatch,
   PropertyDashboardBootstrap,
   PropertyNarrativeRun,
+  RadarFeedItem,
+  RadarMatchDetail,
+  RadarUserState,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -2839,6 +2842,45 @@ class APIClient {
       body: JSON.stringify({ password }),
     });
     return res.json() as Promise<APIResponse<import('@/types').VaultData>>;
+  }
+
+  // ==========================================================================
+  // HOME EVENT RADAR
+  // ==========================================================================
+
+  async getRadarFeed(
+    propertyId: string,
+    params?: { severity?: string; includeResolved?: boolean; limit?: number; cursor?: string }
+  ): Promise<{ items: RadarFeedItem[]; hasMore: boolean; nextCursor: string | null }> {
+    const query = new URLSearchParams();
+    if (params?.severity) query.set('severity', params.severity);
+    if (params?.includeResolved) query.set('includeResolved', 'true');
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.cursor) query.set('cursor', params.cursor);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const res = await this.get<{ items: RadarFeedItem[]; hasMore: boolean; nextCursor: string | null }>(
+      `/api/properties/${propertyId}/radar/feed${qs}`
+    );
+    return res.data ?? { items: [], hasMore: false, nextCursor: null };
+  }
+
+  async getRadarMatchDetail(propertyId: string, matchId: string): Promise<RadarMatchDetail | null> {
+    const res = await this.get<{ detail: RadarMatchDetail }>(
+      `/api/properties/${propertyId}/radar/matches/${matchId}`
+    );
+    return res.data?.detail ?? null;
+  }
+
+  async updateRadarMatchState(
+    propertyId: string,
+    matchId: string,
+    state: RadarUserState,
+    stateMetaJson?: Record<string, unknown>
+  ): Promise<void> {
+    await this.patch(`/api/properties/${propertyId}/radar/matches/${matchId}/state`, {
+      state,
+      stateMetaJson: stateMetaJson ?? null,
+    });
   }
 }
 

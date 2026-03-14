@@ -2195,4 +2195,85 @@ export interface VaultData {
   verifiedAssets: VaultAsset[];
   serviceTimeline: VaultServiceEntry[];
 }
+
+// =============================================================================
+// HOME EVENT RADAR
+// =============================================================================
+
+export type RadarUserState = 'new' | 'seen' | 'saved' | 'dismissed' | 'acted_on';
+export type RadarSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
+export type RadarImpactLevel = 'none' | 'watch' | 'moderate' | 'high';
+
+export interface RadarFeedItem {
+  propertyRadarMatchId: string;
+  radarEventId: string;
+  propertyId: string;
+  eventType: string;
+  eventSubType: string | null;
+  title: string;
+  summary: string | null;
+  severity: RadarSeverity;
+  startAt: string;
+  endAt: string | null;
+  impactLevel: RadarImpactLevel;
+  impactSummary: string | null;
+  isVisible: boolean;
+  state: RadarUserState;
+  createdAt: string;
+}
+
+export interface RadarRecommendedAction {
+  code: string;
+  label: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface RadarImpactDriver {
+  code: string;
+  effect: 'increase' | 'decrease' | 'neutral';
+  description: string;
+}
+
+export interface RadarMatchedSystem {
+  type: string;
+  relevance: 'high' | 'medium' | 'low';
+}
+
+export interface RadarMatchDetail {
+  propertyRadarMatchId: string;
+  radarEventId: string;
+  propertyId: string;
+  matchScore: number | null;
+  impactLevel: RadarImpactLevel;
+  impactSummary: string | null;
+  impactFactorsJson: {
+    property?: { yearBuilt?: number | null; squareFootage?: number | null; homeType?: string | null };
+    location?: { state?: string; city?: string; zip?: string };
+    event?: { eventType?: string; eventSubType?: string | null; severity?: string };
+    drivers?: RadarImpactDriver[];
+  } | null;
+  recommendedActionsJson: { actions?: RadarRecommendedAction[] } | null;
+  matchedSystemsJson: { systems?: RadarMatchedSystem[] } | null;
+  isVisible: boolean;
+  visibleFrom: string | null;
+  visibleUntil: string | null;
+  event: {
+    id: string;
+    eventType: string;
+    eventSubType: string | null;
+    title: string;
+    summary: string | null;
+    sourceType: string;
+    severity: RadarSeverity;
+    startAt: string;
+    endAt: string | null;
+    locationType: string;
+    locationKey: string;
+    status: string;
+  } | null;
+  state: RadarUserState;
+  stateMetaJson: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
 // =============================================================================
