@@ -21,6 +21,7 @@ import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dash
 import { RadarFeedItem } from '@/components/features/homeEventRadar/RadarFeedItem';
 import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFeedSkeleton';
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
+import RelatedTools from '@/components/tools/RelatedTools';
 import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -507,6 +508,13 @@ export default function HomeEventRadarPage() {
           <MobileSection>
             <RadarHero propertyAddress={propertyAddress || undefined} />
           </MobileSection>
+
+          <RelatedTools
+            context="home-event-radar"
+            currentToolId="home-event-radar"
+            propertyId={propertyId}
+            minViewport="lg"
+          />
 
           <MobileSection className="space-y-3 lg:space-y-4">
             <div className="lg:hidden">

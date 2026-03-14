@@ -173,7 +173,7 @@ export default function SellHoldRentClient() {
       />
 
       <MobileFilterSurface>
-        <HomeToolsRail propertyId={propertyId} />
+        <HomeToolsRail propertyId={propertyId} context="sell-hold-rent" currentToolId="sell-hold-rent" />
       </MobileFilterSurface>
 
       <div className="rounded-2xl border border-white/70 bg-white/65 p-3 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">

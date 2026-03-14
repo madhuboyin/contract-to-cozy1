@@ -230,7 +230,7 @@ export default function PropertyTaxClient() {
       />
 
       <MobileFilterSurface>
-        <HomeToolsRail propertyId={propertyId} />
+        <HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" />
       </MobileFilterSurface>
 
       {/* Controls */}

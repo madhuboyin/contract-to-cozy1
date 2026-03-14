@@ -21,6 +21,7 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from "@/components/mobile/dashboard/MobilePrimitives";
+import RelatedTools from "@/components/tools/RelatedTools";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
 import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
@@ -238,6 +239,15 @@ export default function SellerPrepPage() {
           </div>
         </div>
       </div>
+
+      {propertyId ? (
+        <RelatedTools
+          context="seller-prep"
+          currentToolId="seller-prep"
+          propertyId={propertyId as string}
+          minViewport="md"
+        />
+      ) : null}
 
       <SellerPrepDisclaimer />
 

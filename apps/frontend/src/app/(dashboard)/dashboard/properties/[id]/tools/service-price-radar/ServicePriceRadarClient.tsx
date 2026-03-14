@@ -1064,7 +1064,7 @@ export default function ServicePriceRadarClient() {
       }
       filters={
         <MobileFilterSurface>
-          <HomeToolsRail propertyId={propertyId} />
+          <HomeToolsRail propertyId={propertyId} context="service-price-radar" currentToolId="service-price-radar" />
         </MobileFilterSurface>
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}

@@ -2928,7 +2928,7 @@ export default function NegotiationShieldToolClient() {
   if (propertyQuery.isLoading && !property) {
     return (
       <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
-        <HomeToolsRail propertyId={propertyId} />
+        <HomeToolsRail propertyId={propertyId} context="negotiation-shield" currentToolId="negotiation-shield" />
         <MobilePageIntro
           eyebrow="Home Tool"
           title="Negotiation Shield"
@@ -2942,7 +2942,7 @@ export default function NegotiationShieldToolClient() {
   if (propertyQuery.isError && !property) {
     return (
       <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
-        <HomeToolsRail propertyId={propertyId} />
+        <HomeToolsRail propertyId={propertyId} context="negotiation-shield" currentToolId="negotiation-shield" />
         <MobilePageIntro
           eyebrow="Home Tool"
           title="Negotiation Shield"
@@ -2970,7 +2970,7 @@ export default function NegotiationShieldToolClient() {
 
   return (
     <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
-      <HomeToolsRail propertyId={propertyId} />
+      <HomeToolsRail propertyId={propertyId} context="negotiation-shield" currentToolId="negotiation-shield" />
 
       <MobilePageIntro
         eyebrow="Home Tool"

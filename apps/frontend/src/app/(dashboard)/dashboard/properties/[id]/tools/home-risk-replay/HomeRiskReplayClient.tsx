@@ -39,6 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ReplayDetailSheet } from '@/components/features/homeRiskReplay/ReplayDetailSheet';
 import { ReplayTimelineItem } from '@/components/features/homeRiskReplay/ReplayTimelineItem';
+import RelatedTools from '@/components/tools/RelatedTools';
 import {
   formatDriverCode,
   formatReplayDate,
@@ -811,6 +812,15 @@ export default function HomeRiskReplayClient() {
 
         <div className="lg:col-span-2">
           <PropertyContextStrip property={property} isLoading={propertyQuery.isLoading} />
+        </div>
+
+        <div className="hidden lg:col-span-2 lg:block">
+          <RelatedTools
+            context="home-risk-replay"
+            currentToolId="home-risk-replay"
+            propertyId={propertyId}
+            minViewport="lg"
+          />
         </div>
 
         <div className="space-y-5 lg:col-start-1">

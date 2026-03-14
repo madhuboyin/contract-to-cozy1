@@ -207,7 +207,7 @@ export default function CapitalTimelineClient() {
       />
 
       <MobileFilterSurface>
-        <HomeToolsRail propertyId={propertyId} />
+        <HomeToolsRail propertyId={propertyId} context="capital-timeline" currentToolId="capital-timeline" />
         <MobileActionRow className="justify-between">
           <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
             {([5, 10] as const).map((h) => (

@@ -128,7 +128,7 @@ export default function HomeCostGrowthClient() {
       />
 
       <MobileFilterSurface>
-        <HomeToolsRail propertyId={propertyId} />
+        <HomeToolsRail propertyId={propertyId} context="cost-growth" currentToolId="cost-growth" />
       </MobileFilterSurface>
 
       {/* Main Story Card */}

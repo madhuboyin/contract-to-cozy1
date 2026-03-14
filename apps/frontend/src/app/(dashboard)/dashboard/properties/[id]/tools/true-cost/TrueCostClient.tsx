@@ -80,7 +80,7 @@ export default function TrueCostClient() {
       />
 
       <MobileFilterSurface>
-        <HomeToolsRail propertyId={propertyId} />
+        <HomeToolsRail propertyId={propertyId} context="true-cost" currentToolId="true-cost" />
       </MobileFilterSurface>
 
       {error && (

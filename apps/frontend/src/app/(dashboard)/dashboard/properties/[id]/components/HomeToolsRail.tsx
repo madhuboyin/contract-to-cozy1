@@ -7,6 +7,9 @@ import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PanelBottomOpen } from 'lucide-react';
 import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
+import RelatedTools from '@/components/tools/RelatedTools';
+import type { PageContextId } from '@/features/tools/contextToolMappings';
+import type { ToolId } from '@/features/tools/toolRegistry';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -86,10 +89,12 @@ function ToolButton({
 
 export default function HomeToolsRail({
   propertyId,
-  showLabel = true,
+  context,
+  currentToolId,
 }: {
   propertyId: string;
-  showLabel?: boolean;
+  context?: PageContextId | null;
+  currentToolId?: ToolId | null;
 }) {
   const pathname = usePathname() || '';
 
@@ -102,24 +107,12 @@ export default function HomeToolsRail({
     <TooltipProvider delayDuration={120}>
       {/* Desktop rail */}
       <div className="hidden md:block">
-        {showLabel && (
-          <div className="text-xs uppercase tracking-wide text-black/60 mb-1">
-            Home Tools
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          {tools.map((t) => (
-            <ToolButton
-              key={t.key}
-              href={t.hrefResolved}
-              label={t.label}
-              Icon={t.Icon}
-              tooltip={t.tooltip}
-              active={t.active}
-            />
-          ))}
-        </div>
+        <RelatedTools
+          propertyId={propertyId}
+          context={context}
+          currentToolId={currentToolId}
+          minViewport="md"
+        />
       </div>
 
       {/* Mobile: hide rail, show bottom sheet */}

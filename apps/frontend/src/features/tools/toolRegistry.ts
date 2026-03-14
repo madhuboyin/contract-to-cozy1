@@ -1,0 +1,71 @@
+import type { ElementType } from 'react';
+import {
+  MOBILE_HOME_TOOL_LINKS,
+  type MobilePropertyToolLink,
+} from '@/components/mobile/dashboard/mobileToolCatalog';
+
+export const TOOL_IDS = [
+  'home-event-radar',
+  'home-risk-replay',
+  'service-price-radar',
+  'property-tax',
+  'cost-growth',
+  'insurance-trend',
+  'negotiation-shield',
+  'cost-explainer',
+  'true-cost',
+  'sell-hold-rent',
+  'cost-volatility',
+  'break-even',
+  'capital-timeline',
+  'seller-prep',
+  'home-timeline',
+  'status-board',
+] as const;
+
+export type ToolId = (typeof TOOL_IDS)[number];
+
+export type ToolDefinition = {
+  id: ToolId;
+  label: string;
+  description: string;
+  hrefSuffix: string;
+  navTarget: string;
+  icon: ElementType;
+};
+
+const TOOL_ID_SET = new Set<string>(TOOL_IDS);
+
+const HOME_TOOL_REGISTRY = Object.fromEntries(
+  MOBILE_HOME_TOOL_LINKS.filter(
+    (tool): tool is MobilePropertyToolLink & { key: ToolId } => TOOL_ID_SET.has(tool.key),
+  ).map((tool) => [
+    tool.key,
+    {
+      id: tool.key,
+      label: tool.name,
+      description: tool.description,
+      hrefSuffix: tool.hrefSuffix,
+      navTarget: tool.navTarget,
+      icon: tool.icon,
+    },
+  ]),
+) as Record<ToolId, ToolDefinition>;
+
+export function isToolId(value: string | null | undefined): value is ToolId {
+  return typeof value === 'string' && TOOL_ID_SET.has(value);
+}
+
+export function getToolDefinition(toolId: ToolId): ToolDefinition {
+  return HOME_TOOL_REGISTRY[toolId];
+}
+
+export function buildPropertyAwareToolHref(toolId: ToolId, propertyId?: string | null): string {
+  const definition = getToolDefinition(toolId);
+
+  if (propertyId) {
+    return `/dashboard/properties/${propertyId}/${definition.hrefSuffix}`;
+  }
+
+  return `/dashboard/properties?navTarget=${encodeURIComponent(definition.navTarget)}`;
+}

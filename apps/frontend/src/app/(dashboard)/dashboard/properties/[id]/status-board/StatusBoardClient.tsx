@@ -67,6 +67,7 @@ import humanizeActionType from "@/lib/utils/humanize";
 import InventoryItemDrawer from '../../../components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms } from '../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
+import RelatedTools from "@/components/tools/RelatedTools";
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -1295,6 +1296,13 @@ export default function StatusBoardClient() {
             </Button>
           </div>
         </div>
+
+        <RelatedTools
+          context="status-board"
+          currentToolId="status-board"
+          propertyId={propertyId}
+          minViewport="lg"
+        />
 
         {/* Summary strip */}
         {summary && (

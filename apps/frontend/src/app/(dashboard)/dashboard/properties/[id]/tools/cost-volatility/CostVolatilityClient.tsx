@@ -144,7 +144,7 @@ export default function CostVolatilityClient() {
       />
 
       <MobileFilterSurface>
-        <HomeToolsRail propertyId={propertyId} />
+        <HomeToolsRail propertyId={propertyId} context="cost-volatility" currentToolId="cost-volatility" />
       </MobileFilterSurface>
 
       {error && (

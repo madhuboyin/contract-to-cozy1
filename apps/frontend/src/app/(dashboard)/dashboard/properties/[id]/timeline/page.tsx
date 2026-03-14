@@ -17,6 +17,7 @@ import {
   ResultHeroCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import RelatedTools from '@/components/tools/RelatedTools';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -349,22 +350,30 @@ export default function Page() {
         />
       }
       summary={
-        <ResultHeroCard
-          eyebrow="Property History"
-          title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}
-          value={`${events.length} events`}
-          status={<StatusChip tone={isFetching ? 'info' : 'good'}>{isFetching ? 'Refreshing' : 'Synced'}</StatusChip>}
-          summary={
-            replayOn
-              ? `Replay ${replayRunning ? 'running' : 'paused'}${replayProgress ? ` • ${replayProgress}` : ''}`
-              : 'Replay is off'
-          }
-          highlights={[
-            typeLabel,
-            `Mode: ${mode === 'VISUAL' ? 'Visual replay' : 'List view'}`,
-            hasCustomLimit ? `Showing up to ${limit} events` : 'Showing default event volume',
-          ]}
-        />
+        <>
+          <ResultHeroCard
+            eyebrow="Property History"
+            title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}
+            value={`${events.length} events`}
+            status={<StatusChip tone={isFetching ? 'info' : 'good'}>{isFetching ? 'Refreshing' : 'Synced'}</StatusChip>}
+            summary={
+              replayOn
+                ? `Replay ${replayRunning ? 'running' : 'paused'}${replayProgress ? ` • ${replayProgress}` : ''}`
+                : 'Replay is off'
+            }
+            highlights={[
+              typeLabel,
+              `Mode: ${mode === 'VISUAL' ? 'Visual replay' : 'List view'}`,
+              hasCustomLimit ? `Showing up to ${limit} events` : 'Showing default event volume',
+            ]}
+          />
+          <RelatedTools
+            context="home-timeline"
+            currentToolId="home-timeline"
+            propertyId={propertyId}
+            minViewport="lg"
+          />
+        </>
       }
       filters={
         <MobileFilterStack

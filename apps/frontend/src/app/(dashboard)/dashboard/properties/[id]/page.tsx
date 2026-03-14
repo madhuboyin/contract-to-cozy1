@@ -1441,11 +1441,11 @@ export default function PropertyDetailPage() {
       </div>
 
       <div className="md:hidden">
-        <HomeToolsRail propertyId={property.id} />
+        <HomeToolsRail propertyId={property.id} context="property-hub" />
       </div>
 
       <div className="hidden md:block">
-        <HomeToolsRail propertyId={property.id} />
+        <HomeToolsRail propertyId={property.id} context="property-hub" />
       </div>
 
       {onboardingStatus && onboardingStatus.status !== "COMPLETED" && (
