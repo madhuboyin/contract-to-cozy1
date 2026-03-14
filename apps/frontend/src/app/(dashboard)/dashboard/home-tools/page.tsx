@@ -29,6 +29,12 @@ function buildPropertyAwareHref(
 
 const HOME_TOOL_GROUPS = [
   {
+    key: 'monitoring',
+    title: 'Monitoring + Awareness',
+    summary: 'Live events and signals matched to your specific home',
+    toolKeys: ['home-event-radar'],
+  },
+  {
     key: 'negotiation',
     title: 'Negotiation + Review',
     summary: 'Quote and premium review with response-ready guidance',
@@ -58,6 +64,7 @@ const HOME_TOOL_GROUPS = [
 ] as const;
 
 const HOME_TOOL_TILE_META: Record<string, { subtitle: string }> = {
+  'home-event-radar': { subtitle: 'See events that may affect your home' },
   'service-price-radar': { subtitle: 'Know if a quote is fair for your home' },
   'property-tax': { subtitle: 'Forecast annual tax drag' },
   'cost-growth': { subtitle: 'Model ownership cost trend' },

@@ -11,6 +11,7 @@ import {
   Flame,
   LayoutGrid,
   Package,
+  Radio,
   Sparkles,
   Shield,
   TrendingUp,
@@ -233,6 +234,16 @@ export default function MobileDashboardHome({
     staleTime: 5 * 60 * 1000,
   });
 
+  const radarFeedQuery = useQuery({
+    queryKey: ['mobile-radar-feed-summary', propertyId],
+    queryFn: async () => {
+      if (!propertyId) return null;
+      return api.getRadarFeed(propertyId, { limit: 20 });
+    },
+    enabled: !!propertyId,
+    staleTime: 3 * 60 * 1000,
+  });
+
   const homeScore = Math.round(homeScoreQuery.data?.homeScore ?? 0);
   const healthScore = Math.round(selectedProperty?.healthScore?.totalScore ?? 0);
   const riskScore = Math.round(riskSummaryQuery.data?.riskScore ?? 0);
@@ -362,6 +373,13 @@ export default function MobileDashboardHome({
       badgeLabel: '',
     }));
   const homeEquityDollars = Number(homeEquityQuery.data?.totalEquityWithMaintenanceCents || 0) / 100;
+
+  const radarItems = radarFeedQuery.data?.items ?? [];
+  const radarNewCount = radarItems.filter((i) => i.state === 'new').length;
+  const radarActiveCount = radarItems.filter((i) => i.state !== 'dismissed').length;
+  const radarHref = propertyId
+    ? `/dashboard/home-event-radar?propertyId=${encodeURIComponent(propertyId)}`
+    : '/dashboard/home-event-radar';
   const climateHeadline = weatherInsight
     ? String(weatherInsight).split(/[.!?]/)[0]
     : riskScore >= 80
@@ -650,6 +668,35 @@ export default function MobileDashboardHome({
                     Open Risk Radar
                   </Link>
                 </div>
+              </SummaryCard>
+            </MobileSection>
+
+            <MobileSection>
+              <SummaryCard
+                title="Home Event Radar"
+                subtitle={
+                  radarFeedQuery.isLoading
+                    ? 'Checking for matched events…'
+                    : radarActiveCount > 0
+                      ? `${radarActiveCount} active event${radarActiveCount === 1 ? '' : 's'} matched to your home`
+                      : 'No active events detected for your home'
+                }
+                action={
+                  radarNewCount > 0 ? (
+                    <StatusChip tone="needsAction">{radarNewCount} new</StatusChip>
+                  ) : (
+                    <IconBadge tone="info">
+                      <Radio className="h-4 w-4" />
+                    </IconBadge>
+                  )
+                }
+              >
+                <Link
+                  href={radarHref}
+                  className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                >
+                  Open Radar
+                </Link>
               </SummaryCard>
             </MobileSection>
 

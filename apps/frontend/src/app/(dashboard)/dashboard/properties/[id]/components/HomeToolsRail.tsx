@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen ,Calculator, Scale, Activity, Target, Calendar, ShieldCheck, Radar } from 'lucide-react';
+import { TrendingUp, Shield, DollarSign, Info, PanelBottomOpen, Calculator, Scale, Activity, Target, Calendar, ShieldCheck, Radar, Radio } from 'lucide-react';
 
 // shadcn/ui (already used elsewhere in your app)
 import {
@@ -32,6 +32,13 @@ type ToolDef = {
 };
 
 const HOME_TOOLS: ToolDef[] = [
+  {
+    key: 'home-event-radar',
+    label: 'Home Event Radar',
+    href: (id) => `/dashboard/properties/${id}/tools/home-event-radar`,
+    Icon: Radio,
+    tooltip: 'See weather, insurance, utility, and tax events matched to your specific home.',
+  },
   {
     key: 'service-price-radar',
     label: 'Service Price Radar',

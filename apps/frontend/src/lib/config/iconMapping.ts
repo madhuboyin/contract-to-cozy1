@@ -205,6 +205,7 @@ const HOME_TOOL_ALIASES: Record<string, HomeToolKey> = {
 };
 
 const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
+  HOME_EVENT_RADAR: 'Radar',
   PROPERTY_TAX: 'Receipt',
   COST_GROWTH: 'BarChart2',
   INSURANCE_TREND: 'Shield',

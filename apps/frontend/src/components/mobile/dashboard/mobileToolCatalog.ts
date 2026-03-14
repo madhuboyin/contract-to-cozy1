@@ -265,6 +265,14 @@ export type MobilePropertyToolLink = {
 
 export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
+    key: 'home-event-radar',
+    name: 'Home Event Radar',
+    hrefSuffix: 'tools/home-event-radar',
+    navTarget: 'tool:home-event-radar',
+    icon: resolveToolIcon('home', 'home-event-radar'),
+    isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-event-radar|home-event-radar)(\/|$)/.test(pathname),
+  },
+  {
     key: 'service-price-radar',
     name: 'Service Price Radar',
     hrefSuffix: 'tools/service-price-radar',
