@@ -13,6 +13,7 @@ import {
   listRadarFeed,
   getRadarMatchDetail,
   updateRadarMatchState,
+  trackHomeEventRadarEvent,
 } from '../controllers/homeEventRadar.controller';
 
 import {
@@ -20,6 +21,7 @@ import {
   triggerMatchBodySchema,
   listRadarFeedQuerySchema,
   updateRadarStateBodySchema,
+  trackHomeEventRadarEventBodySchema,
 } from '../validators/homeEventRadar.validators';
 
 const router = Router();
@@ -98,6 +100,17 @@ router.patch(
   propertyAuthMiddleware,
   validateBody(updateRadarStateBodySchema),
   updateRadarMatchState,
+);
+
+/**
+ * POST /properties/:propertyId/radar/analytics-events
+ * Record a frontend analytics/usage event for Home Event Radar.
+ */
+router.post(
+  '/properties/:propertyId/radar/analytics-events',
+  propertyAuthMiddleware,
+  validateBody(trackHomeEventRadarEventBodySchema),
+  trackHomeEventRadarEvent,
 );
 
 export default router;

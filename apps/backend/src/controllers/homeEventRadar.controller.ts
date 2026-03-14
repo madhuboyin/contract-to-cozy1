@@ -142,3 +142,19 @@ export async function updateRadarMatchState(req: CustomRequest, res: Response, n
     next(err);
   }
 }
+
+/**
+ * POST /properties/:propertyId/radar/events
+ * Record a frontend analytics event for Home Event Radar.
+ */
+export async function trackHomeEventRadarEvent(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { userId } = requireUser(req);
+    const { propertyId } = req.params;
+    const payload = req.body as { event: string; section?: string; metadata?: Record<string, unknown> };
+    const result = await service.trackEvent(propertyId, userId, payload);
+    return res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    return next(err);
+  }
+}

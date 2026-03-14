@@ -345,4 +345,36 @@ export class HomeEventRadarService {
     if (!event) throw new APIError('Radar event not found', 404, 'RADAR_EVENT_NOT_FOUND');
     return serializeEvent(event);
   }
+
+  // --------------------------------------------------------------------------
+  // 7. Analytics event tracking
+  // --------------------------------------------------------------------------
+
+  async trackEvent(
+    propertyId: string,
+    userId: string,
+    input: { event: string; section?: string; metadata?: Record<string, unknown> },
+  ): Promise<{ ok: true }> {
+    const eventName = String(input.event || 'UNKNOWN')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_]/g, '_')
+      .slice(0, 80);
+    const section = input.section ? String(input.section).slice(0, 80) : null;
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: `HOME_EVENT_RADAR_${eventName || 'UNKNOWN'}`,
+        entityType: 'PROPERTY',
+        entityId: propertyId,
+        newValues: {
+          section,
+          metadata: (input.metadata ?? {}) as any,
+        } as any,
+      },
+    });
+
+    return { ok: true };
+  }
 }

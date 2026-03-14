@@ -8,6 +8,26 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bookmark, BookmarkCheck, X, CheckCircle2, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
+
+// ---------------------------------------------------------------------------
+// Analytics helpers (local to sheet)
+// ---------------------------------------------------------------------------
+
+function trackRadarSheetEvent(
+  propertyId: string,
+  event: string,
+  metadata?: Record<string, unknown>,
+) {
+  void api.trackHomeEventRadarEvent(propertyId, {
+    event,
+    section: 'detail_sheet',
+    metadata: {
+      tool_name: 'home_event_radar',
+      property_id: propertyId,
+      ...metadata,
+    },
+  }).catch(() => undefined);
+}
 import {
   Sheet,
   SheetContent,
@@ -79,6 +99,11 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
   const queryClient = useQueryClient();
   const isOpen = item !== null;
 
+  // Analytics: fire EVENT_OPENED once per unique match open
+  const openedMatchRef = React.useRef<string | null>(null);
+  // Analytics: fire ACTIONS_VIEWED once per detail load with actions
+  const actionsViewedMatchRef = React.useRef<string | null>(null);
+
   // Fetch full detail when sheet opens
   const detailQuery = useQuery({
     queryKey: ['radar-match-detail', propertyId, item?.propertyRadarMatchId],
@@ -93,6 +118,41 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
   const detail = detailQuery.data;
   const currentState = detail?.state ?? item?.state ?? 'new';
 
+  // Analytics: EVENT_OPENED — once per unique match
+  React.useEffect(() => {
+    if (!item || !propertyId) return;
+    const matchId = item.propertyRadarMatchId;
+    if (openedMatchRef.current === matchId) return;
+    openedMatchRef.current = matchId;
+    trackRadarSheetEvent(propertyId, 'EVENT_OPENED', {
+      property_event_match_id: matchId,
+      home_event_id: item.radarEventId ?? undefined,
+      event_type: item.eventType,
+      severity: item.severity,
+      impact_level: item.impactLevel,
+      prior_state: item.state,
+    });
+  }, [item, propertyId]);
+
+  // Analytics: ACTIONS_VIEWED — once per match when detail loads with actions
+  const actions = detail?.recommendedActionsJson?.actions ?? [];
+  const systems = detail?.matchedSystemsJson?.systems ?? [];
+  const drivers = detail?.impactFactorsJson?.drivers ?? [];
+  const event = detail?.event;
+
+  React.useEffect(() => {
+    if (!item || !propertyId || detailQuery.isLoading || actions.length === 0) return;
+    const matchId = item.propertyRadarMatchId;
+    if (actionsViewedMatchRef.current === matchId) return;
+    actionsViewedMatchRef.current = matchId;
+    trackRadarSheetEvent(propertyId, 'ACTIONS_VIEWED', {
+      property_event_match_id: matchId,
+      event_type: item.eventType,
+      impact_level: item.impactLevel,
+      action_count: actions.length,
+    });
+  }, [item, propertyId, detailQuery.isLoading, actions.length]);
+
   // State mutation
   const stateMutation = useMutation({
     mutationFn: async (newState: RadarUserState) => {
@@ -104,13 +164,25 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
       queryClient.invalidateQueries({ queryKey: ['radar-feed', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['radar-match-detail', propertyId, item.propertyRadarMatchId] });
       onStateChange?.(item.propertyRadarMatchId, newState);
+      // Analytics: STATE_CHANGED
+      trackRadarSheetEvent(propertyId, 'STATE_CHANGED', {
+        property_event_match_id: item.propertyRadarMatchId,
+        event_type: item.eventType,
+        severity: item.severity,
+        impact_level: item.impactLevel,
+        new_state: newState,
+        prior_state: currentState,
+      });
+    },
+    onError: () => {
+      if (!item) return;
+      trackRadarSheetEvent(propertyId, 'ERROR', {
+        stage: 'state_change',
+        error_type: 'unknown',
+        event_type: item.eventType,
+      });
     },
   });
-
-  const actions = detail?.recommendedActionsJson?.actions ?? [];
-  const systems = detail?.matchedSystemsJson?.systems ?? [];
-  const drivers = detail?.impactFactorsJson?.drivers ?? [];
-  const event = detail?.event;
 
   function handleSave() {
     const next: RadarUserState = currentState === 'saved' ? 'seen' : 'saved';

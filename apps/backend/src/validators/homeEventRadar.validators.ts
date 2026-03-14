@@ -116,3 +116,14 @@ export const updateRadarStateBodySchema = z.object({
   state: z.enum(PROPERTY_RADAR_USER_STATES),
   stateMetaJson: z.record(z.string(), z.unknown()).optional().nullable(),
 });
+
+/**
+ * Body for POST /properties/:propertyId/radar/events  (analytics tracking)
+ */
+export const trackHomeEventRadarEventBodySchema = z.object({
+  event: z.string().trim().min(1).max(80),
+  section: z.string().trim().min(1).max(80).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type TrackHomeEventRadarEventBody = z.infer<typeof trackHomeEventRadarEventBodySchema>;

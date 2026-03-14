@@ -169,6 +169,42 @@ function DismissedNotice({
 }
 
 // ---------------------------------------------------------------------------
+// Analytics helpers (mirrors ServicePriceRadar pattern)
+// ---------------------------------------------------------------------------
+
+type RadarLaunchSurface =
+  | 'home_tools'
+  | 'property_hub'
+  | 'property_summary'
+  | 'dashboard_card'
+  | 'roof_page'
+  | 'plumbing_page'
+  | 'electrical_page'
+  | 'activity_feed'
+  | 'unknown';
+
+function normalizeLaunchSurface(value: string | null): RadarLaunchSurface {
+  const valid: RadarLaunchSurface[] = [
+    'home_tools', 'property_hub', 'property_summary', 'dashboard_card',
+    'roof_page', 'plumbing_page', 'electrical_page', 'activity_feed',
+  ];
+  return (valid as string[]).includes(value ?? '') ? (value as RadarLaunchSurface) : 'unknown';
+}
+
+function deviceContext(): 'mobile' | 'desktop' {
+  if (typeof window === 'undefined') return 'desktop';
+  return window.matchMedia('(max-width: 767px)').matches ? 'mobile' : 'desktop';
+}
+
+function eventCountBucket(n: number): '0' | '1' | '2_5' | '6_10' | '10_plus' {
+  if (n === 0) return '0';
+  if (n === 1) return '1';
+  if (n <= 5) return '2_5';
+  if (n <= 10) return '6_10';
+  return '10_plus';
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -179,12 +215,36 @@ export default function HomeEventRadarPage() {
 
   const queryClient = useQueryClient();
 
+  const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
+
   const [filter, setFilter] = React.useState<FilterKey>('all');
   const [selectedItem, setSelectedItem] = React.useState<RadarFeedItemType | null>(null);
   const [showDismissed, setShowDismissed] = React.useState(false);
 
   // Local override map: matchId → state (for optimistic UI without refetch)
   const [stateOverrides, setStateOverrides] = React.useState<Record<string, RadarUserState>>({});
+
+  // Analytics: fire-once guards
+  const openedRef = React.useRef<string | null>(null);
+  const feedViewedRef = React.useRef<string | null>(null);
+
+  // Shared tracking helper
+  const trackRadarEvent = React.useCallback(
+    (event: string, section?: string, metadata?: Record<string, unknown>) => {
+      if (!propertyId) return;
+      void api.trackHomeEventRadarEvent(propertyId, {
+        event,
+        section,
+        metadata: {
+          tool_name: 'home_event_radar',
+          property_id: propertyId,
+          launch_surface: launchSurface,
+          ...metadata,
+        },
+      }).catch(() => undefined);
+    },
+    [propertyId, launchSurface],
+  );
 
   // -------------------------------------------------------------------------
   // Data
@@ -221,6 +281,44 @@ export default function HomeEventRadarPage() {
   );
 
   // -------------------------------------------------------------------------
+  // Analytics: OPENED (once per propertyId+surface session)
+  // -------------------------------------------------------------------------
+
+  React.useEffect(() => {
+    if (!propertyId) return;
+    const sessionKey = `${propertyId}|${launchSurface}`;
+    if (openedRef.current === sessionKey) return;
+    openedRef.current = sessionKey;
+    trackRadarEvent('OPENED', 'page', {
+      launch_surface: launchSurface,
+      has_property_context: true,
+      device_context: deviceContext(),
+    });
+  }, [propertyId, launchSurface, trackRadarEvent]);
+
+  // Analytics: FEED_VIEWED (once per successful feed load)
+  React.useEffect(() => {
+    if (!propertyId || feedQuery.isLoading || feedQuery.isError) return;
+    const sessionKey = `${propertyId}|${feedQuery.dataUpdatedAt}`;
+    if (feedViewedRef.current === sessionKey) return;
+    feedViewedRef.current = sessionKey;
+    const count = feedQuery.data?.items?.length ?? 0;
+    trackRadarEvent('FEED_VIEWED', 'feed', {
+      feed_state: count > 0 ? 'has_events' : 'empty',
+      event_count_bucket: eventCountBucket(count),
+    });
+  }, [propertyId, feedQuery.isLoading, feedQuery.isError, feedQuery.dataUpdatedAt, feedQuery.data, trackRadarEvent]);
+
+  // Analytics: FEED_ERROR
+  React.useEffect(() => {
+    if (!propertyId || !feedQuery.isError) return;
+    trackRadarEvent('ERROR', 'feed', {
+      stage: 'feed',
+      error_type: 'network',
+    });
+  }, [propertyId, feedQuery.isError, trackRadarEvent]);
+
+  // -------------------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------------------
 
@@ -240,6 +338,13 @@ export default function HomeEventRadarPage() {
     setStateOverrides((prev) => ({ ...prev, [matchId]: state }));
     // Also update the selected item if it's still open
     setSelectedItem((prev) => (prev?.propertyRadarMatchId === matchId ? { ...prev, state } : prev));
+  }
+
+  function handleFilterChange(key: FilterKey) {
+    setFilter(key);
+    if (key !== 'all') {
+      trackRadarEvent('FILTER_APPLIED', 'feed', { filter_key: key });
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -299,7 +404,7 @@ export default function HomeEventRadarPage() {
 
       {/* Filter chips */}
       <MobileSection>
-        <FilterChips active={filter} onChange={setFilter} />
+        <FilterChips active={filter} onChange={handleFilterChange} />
       </MobileSection>
 
       {/* Feed */}
