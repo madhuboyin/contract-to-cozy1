@@ -1,0 +1,68 @@
+[
+  {
+    "provider": "weather_archive",
+    "eventType": "hail",
+    "eventSubType": "historical_hail_swath",
+    "severity": "high",
+    "titleTemplate": "Historical hail event near {{address}}",
+    "summaryTemplate": "Synthetic hail history for {{address}} in {{city}}, {{state}}, created for Home Risk Replay end-to-end testing.",
+    "geographyType": "property",
+    "startOffsetDays": -720,
+    "durationDays": 1
+  },
+  {
+    "provider": "weather_archive",
+    "eventType": "freeze",
+    "eventSubType": "deep_freeze",
+    "severity": "moderate",
+    "titleTemplate": "Historical freeze event at {{address}}",
+    "summaryTemplate": "Synthetic freeze history for {{zipCode}}, created to test plumbing- and HVAC-sensitive replay output.",
+    "geographyType": "property",
+    "startOffsetDays": -540,
+    "durationDays": 3
+  },
+  {
+    "provider": "weather_archive",
+    "eventType": "heavy_rain",
+    "eventSubType": "multi_day_precipitation",
+    "severity": "moderate",
+    "titleTemplate": "Historical heavy rain event for {{address}}",
+    "summaryTemplate": "Synthetic heavy-rain history for {{city}}, {{state}}, used to test drainage and basement replay messaging.",
+    "geographyType": "property",
+    "startOffsetDays": -360,
+    "durationDays": 4
+  },
+  {
+    "provider": "weather_archive",
+    "eventType": "heat_wave",
+    "eventSubType": "prolonged_heat",
+    "severity": "high",
+    "titleTemplate": "Historical heat wave near {{address}}",
+    "summaryTemplate": "Synthetic heat-wave history for {{zipCode}}, created for cooling-system replay testing.",
+    "geographyType": "property",
+    "startOffsetDays": -180,
+    "durationDays": 5
+  },
+  {
+    "provider": "air_quality_archive",
+    "eventType": "wildfire_smoke",
+    "eventSubType": "regional_smoke_episode",
+    "severity": "low",
+    "titleTemplate": "Historical smoke exposure near {{address}}",
+    "summaryTemplate": "Synthetic smoke-exposure history for {{city}}, {{state}}, created for Home Risk Replay QA.",
+    "geographyType": "property",
+    "startOffsetDays": -90,
+    "durationDays": 2
+  },
+  {
+    "provider": "utility_history_feed",
+    "eventType": "power_outage",
+    "eventSubType": "grid_interruption",
+    "severity": "moderate",
+    "titleTemplate": "Historical outage exposure at {{address}}",
+    "summaryTemplate": "Synthetic outage history for {{zipCode}}, created to test electrical and resilience recommendations.",
+    "geographyType": "property",
+    "startOffsetDays": -45,
+    "durationDays": 1
+  }
+]

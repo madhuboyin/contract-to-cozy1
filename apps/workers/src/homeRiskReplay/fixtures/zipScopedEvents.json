@@ -1,0 +1,68 @@
+[
+  {
+    "provider": "weather_archive",
+    "eventType": "hail",
+    "eventSubType": "historical_hail_swath",
+    "severity": "high",
+    "titleTemplate": "Historical hail event in ZIP {{zipCode}}",
+    "summaryTemplate": "Synthetic hail history for ZIP {{zipCode}} in {{city}}, {{state}}, created for Home Risk Replay end-to-end testing.",
+    "geographyType": "zip",
+    "startOffsetDays": -720,
+    "durationDays": 1
+  },
+  {
+    "provider": "weather_archive",
+    "eventType": "freeze",
+    "eventSubType": "deep_freeze",
+    "severity": "moderate",
+    "titleTemplate": "Historical freeze event in ZIP {{zipCode}}",
+    "summaryTemplate": "Synthetic freeze history for ZIP {{zipCode}}, created to test replay generation across multiple homes in the same area.",
+    "geographyType": "zip",
+    "startOffsetDays": -540,
+    "durationDays": 3
+  },
+  {
+    "provider": "weather_archive",
+    "eventType": "heavy_rain",
+    "eventSubType": "multi_day_precipitation",
+    "severity": "moderate",
+    "titleTemplate": "Historical heavy rain event in ZIP {{zipCode}}",
+    "summaryTemplate": "Synthetic heavy-rain history for ZIP {{zipCode}}, created to test water-stress replay messaging.",
+    "geographyType": "zip",
+    "startOffsetDays": -360,
+    "durationDays": 4
+  },
+  {
+    "provider": "weather_archive",
+    "eventType": "heat_wave",
+    "eventSubType": "prolonged_heat",
+    "severity": "high",
+    "titleTemplate": "Historical heat wave in ZIP {{zipCode}}",
+    "summaryTemplate": "Synthetic heat-wave history for ZIP {{zipCode}}, created for HVAC-focused replay testing.",
+    "geographyType": "zip",
+    "startOffsetDays": -180,
+    "durationDays": 5
+  },
+  {
+    "provider": "air_quality_archive",
+    "eventType": "wildfire_smoke",
+    "eventSubType": "regional_smoke_episode",
+    "severity": "low",
+    "titleTemplate": "Historical smoke exposure in ZIP {{zipCode}}",
+    "summaryTemplate": "Synthetic smoke-exposure history for ZIP {{zipCode}} in {{state}}, created for Home Risk Replay QA.",
+    "geographyType": "zip",
+    "startOffsetDays": -90,
+    "durationDays": 2
+  },
+  {
+    "provider": "utility_history_feed",
+    "eventType": "power_outage",
+    "eventSubType": "grid_interruption",
+    "severity": "moderate",
+    "titleTemplate": "Historical outage exposure in ZIP {{zipCode}}",
+    "summaryTemplate": "Synthetic outage history for ZIP {{zipCode}}, created to test power resilience replay recommendations.",
+    "geographyType": "zip",
+    "startOffsetDays": -45,
+    "durationDays": 1
+  }
+]

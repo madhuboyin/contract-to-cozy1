@@ -31,6 +31,7 @@ import { coverageLapseIncidentsJob } from './jobs/coverageLapseIncidents.job';
 import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
+import { ingestHomeRiskEventsJob } from './jobs/ingestHomeRiskEvents.job';
 import { prisma } from './lib/prisma';
 
 // =============================================================================
@@ -1050,6 +1051,31 @@ if (radarDummyIngestEnabled) {
   if (process.env.RADAR_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
     void ingestRadarSignalsJob().catch((err) => {
       console.error('[RADAR-DUMMY-INGEST] Startup run failed:', err);
+    });
+  }
+}
+
+// =============================================================================
+// DUMMY HOME RISK REPLAY INGEST (QA / E2E)
+// =============================================================================
+const homeRiskReplayDummyIngestEnabled = process.env.HOME_RISK_REPLAY_DUMMY_INGEST_ENABLED === 'true';
+const homeRiskReplayDummyIngestCron = process.env.HOME_RISK_REPLAY_DUMMY_INGEST_CRON || '15 */6 * * *';
+
+if (homeRiskReplayDummyIngestEnabled) {
+  cron.schedule(homeRiskReplayDummyIngestCron, async () => {
+    try {
+      console.log('[HOME-RISK-INGEST] Running dummy home risk event ingest job...');
+      await ingestHomeRiskEventsJob();
+    } catch (err) {
+      console.error('[HOME-RISK-INGEST] Job failed:', err);
+    }
+  }, { timezone: 'America/New_York' });
+
+  console.log(`[HOME-RISK-INGEST] Dummy home risk ingest scheduled for: ${homeRiskReplayDummyIngestCron} America/New_York`);
+
+  if (process.env.HOME_RISK_REPLAY_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
+    void ingestHomeRiskEventsJob().catch((err) => {
+      console.error('[HOME-RISK-INGEST] Startup run failed:', err);
     });
   }
 }
