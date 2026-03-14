@@ -98,6 +98,18 @@ function DetailSection({ title, children }: { title: string; children: React.Rea
 export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: Props) {
   const queryClient = useQueryClient();
   const isOpen = item !== null;
+  const [isDesktop, setIsDesktop] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const media = window.matchMedia('(min-width: 1024px)');
+    const sync = () => setIsDesktop(media.matches);
+    sync();
+
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
 
   // Analytics: fire EVENT_OPENED once per unique match open
   const openedMatchRef = React.useRef<string | null>(null);
@@ -201,17 +213,25 @@ export function RadarDetailSheet({ item, propertyId, onClose, onStateChange }: P
 
   const isSaved = currentState === 'saved';
   const isActedOn = currentState === 'acted_on';
+  const sheetSide = isDesktop ? 'right' : 'bottom';
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent
-        side="bottom"
-        className="max-h-[92dvh] overflow-y-auto rounded-t-[24px] px-0 pb-[env(safe-area-inset-bottom)] pt-0"
+        side={sheetSide}
+        className={cn(
+          'overflow-y-auto px-0 pt-0',
+          isDesktop
+            ? 'h-full w-full max-w-[560px] pb-0 sm:max-w-[560px]'
+            : 'max-h-[92dvh] rounded-t-[24px] pb-[env(safe-area-inset-bottom)]'
+        )}
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full bg-[hsl(var(--mobile-border-subtle))]" />
-        </div>
+        {!isDesktop ? (
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="h-1 w-10 rounded-full bg-[hsl(var(--mobile-border-subtle))]" />
+          </div>
+        ) : null}
 
         {item && (
           <div className="px-5 pb-8">

@@ -7,7 +7,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Radio } from 'lucide-react';
+import { ArrowLeft, Building2, Filter, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
@@ -21,7 +21,7 @@ import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dash
 import { RadarFeedItem } from '@/components/features/homeEventRadar/RadarFeedItem';
 import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFeedSkeleton';
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
-import type { RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
+import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Filter chip type
@@ -88,6 +88,97 @@ function RadarHero({ propertyAddress }: { propertyAddress?: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function compactPropertyAddress(property: Property | null | undefined): string {
+  if (!property) return '';
+  const locality = [property.city, property.state].filter(Boolean).join(', ');
+  return [property.address, locality].filter(Boolean).join(' · ');
+}
+
+function RadarDesktopSidebar({
+  propertyAddress,
+  totalCount,
+  newCount,
+  dismissedCount,
+  activeFilter,
+}: {
+  propertyAddress?: string;
+  totalCount: number;
+  newCount: number;
+  dismissedCount: number;
+  activeFilter: FilterKey;
+}) {
+  const activeFilterLabel = FILTER_OPTIONS.find((option) => option.key === activeFilter)?.label ?? 'All';
+
+  return (
+    <aside className="hidden space-y-4 lg:block lg:sticky lg:top-4">
+      <div
+        className={cn(
+          MOBILE_CARD_RADIUS,
+          'border border-[hsl(var(--mobile-border-subtle))] bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.07)]'
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] text-[hsl(var(--mobile-text-primary))]">
+            <Building2 className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className={cn('mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]')}>
+              Monitoring
+            </p>
+            <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+              Current property context
+            </p>
+            <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+              {propertyAddress || 'Events are matched against the selected property and available home details.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Matched events</p>
+            <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{totalCount}</p>
+          </div>
+          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>New</p>
+            <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{newCount}</p>
+          </div>
+          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Dismissed</p>
+            <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{dismissedCount}</p>
+          </div>
+          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Filter</p>
+            <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">{activeFilterLabel}</p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          MOBILE_CARD_RADIUS,
+          'border border-[hsl(var(--mobile-border-subtle))] bg-[linear-gradient(160deg,#ffffff,hsl(var(--mobile-brand-soft)))] p-5'
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-white text-[hsl(var(--mobile-brand-strong))]">
+            <Filter className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">How radar works</p>
+            <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+              Home Event Radar monitors recent weather, insurance, utility, and tax signals that may matter to this home.
+            </p>
+            <p className={cn('mb-0 mt-3 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+              Event severity reflects the signal itself. Impact reflects what it may mean for this specific property.
+            </p>
+          </div>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -259,6 +350,20 @@ export default function HomeEventRadarPage() {
     staleTime: 3 * 60 * 1000,
   });
 
+  const propertyQuery = useQuery({
+    queryKey: ['home-event-radar-property', propertyId],
+    queryFn: async () => {
+      if (!propertyId) return null;
+      const response = await api.getProperty(propertyId);
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to load property context.');
+      }
+      return response.data;
+    },
+    enabled: !!propertyId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const allItems: RadarFeedItemType[] = React.useMemo(() => {
     return (feedQuery.data?.items ?? []).map((item) => ({
       ...item,
@@ -278,6 +383,8 @@ export default function HomeEventRadarPage() {
     () => allItems.filter((i) => i.state === 'dismissed' && matchesFilter(i, filter)).length,
     [allItems, filter]
   );
+  const totalCount = allItems.length;
+  const propertyAddress = compactPropertyAddress(propertyQuery.data);
 
   // -------------------------------------------------------------------------
   // Analytics: OPENED (once per propertyId+surface session)
@@ -384,10 +491,9 @@ export default function HomeEventRadarPage() {
   const newCount = allItems.filter((i) => i.state === 'new').length;
 
   return (
-    <MobilePageContainer className="space-y-5 py-3 lg:max-w-2xl lg:px-8 lg:pb-10">
+    <MobilePageContainer className="space-y-5 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
 
-      {/* Back nav */}
-      <MobileSection>
+      <MobileSection className="lg:space-y-4">
         <Link
           href={`/dashboard?propertyId=${encodeURIComponent(propertyId)}`}
           className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]"
@@ -396,68 +502,98 @@ export default function HomeEventRadarPage() {
         </Link>
       </MobileSection>
 
-      {/* Hero */}
-      <MobileSection>
-        <RadarHero />
-      </MobileSection>
+      <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-5">
+          <MobileSection>
+            <RadarHero propertyAddress={propertyAddress || undefined} />
+          </MobileSection>
 
-      {/* Filter chips */}
-      <MobileSection>
-        <FilterChips active={filter} onChange={handleFilterChange} />
-      </MobileSection>
-
-      {/* Feed */}
-      <MobileSection>
-        <MobileSectionHeader
-          title="Events"
-          subtitle={newCount > 0 ? `${newCount} new` : undefined}
-        />
-
-        {feedQuery.isLoading ? (
-          <RadarFeedSkeleton count={4} />
-        ) : feedQuery.isError ? (
-          <EmptyStateCard
-            title="Unable to load events"
-            description="There was a problem loading your event feed. Pull to refresh or try again."
-            action={
-              <button
-                type="button"
-                onClick={() => feedQuery.refetch()}
-                className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+          <MobileSection className="space-y-3 lg:space-y-4">
+            <div className="lg:hidden">
+              <FilterChips active={filter} onChange={handleFilterChange} />
+            </div>
+            <div className="hidden lg:block">
+              <div
+                className={cn(
+                  MOBILE_CARD_RADIUS,
+                  'border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 shadow-[0_12px_32px_rgba(15,23,42,0.05)]'
+                )}
               >
-                Retry
-              </button>
-            }
-          />
-        ) : visibleItems.length === 0 ? (
-          <>
-            <RadarEmptyState filtered={filter !== 'all'} />
-            <DismissedNotice count={dismissedCount} onShow={() => setShowDismissed(true)} />
-          </>
-        ) : (
-          <div className="space-y-3">
-            {visibleItems.map((item) => (
-              <RadarFeedItem
-                key={item.propertyRadarMatchId}
-                item={item}
-                onClick={handleItemClick}
-              />
-            ))}
-            <DismissedNotice
-              count={dismissedCount}
-              onShow={() => setShowDismissed((v) => !v)}
-            />
-          </div>
-        )}
-      </MobileSection>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">Filter events</p>
+                    <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                      Narrow the feed to the signal types most relevant to your home.
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <FilterChips active={filter} onChange={handleFilterChange} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </MobileSection>
 
-      {/* Footer note */}
-      <MobileSection>
-        <div className="flex items-center justify-center gap-2 pb-2 text-xs text-[hsl(var(--mobile-text-muted))]">
-          <Radio className="h-3.5 w-3.5" />
-          Events are matched to your property location and home details
+          <MobileSection>
+            <MobileSectionHeader
+              title="Events"
+              subtitle={newCount > 0 ? `${newCount} new` : undefined}
+            />
+
+            {feedQuery.isLoading ? (
+              <RadarFeedSkeleton count={4} />
+            ) : feedQuery.isError ? (
+              <EmptyStateCard
+                title="Unable to load events"
+                description="There was a problem loading your event feed. Pull to refresh or try again."
+                action={
+                  <button
+                    type="button"
+                    onClick={() => feedQuery.refetch()}
+                    className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                  >
+                    Retry
+                  </button>
+                }
+              />
+            ) : visibleItems.length === 0 ? (
+              <>
+                <RadarEmptyState filtered={filter !== 'all'} />
+                <DismissedNotice count={dismissedCount} onShow={() => setShowDismissed(true)} />
+              </>
+            ) : (
+              <div className="space-y-3 lg:space-y-4">
+                {visibleItems.map((item) => (
+                  <RadarFeedItem
+                    key={item.propertyRadarMatchId}
+                    item={item}
+                    onClick={handleItemClick}
+                  />
+                ))}
+                <DismissedNotice
+                  count={dismissedCount}
+                  onShow={() => setShowDismissed((v) => !v)}
+                />
+              </div>
+            )}
+          </MobileSection>
+
+          <MobileSection>
+            <div className="flex items-center justify-center gap-2 pb-2 text-xs text-[hsl(var(--mobile-text-muted))] lg:justify-start">
+              <Radio className="h-3.5 w-3.5" />
+              Events are matched to your property location and home details
+            </div>
+          </MobileSection>
         </div>
-      </MobileSection>
+
+        <RadarDesktopSidebar
+          propertyAddress={propertyAddress || undefined}
+          totalCount={totalCount}
+          newCount={newCount}
+          dismissedCount={dismissedCount}
+          activeFilter={filter}
+        />
+      </div>
 
       {/* Detail sheet */}
       {propertyId && (
