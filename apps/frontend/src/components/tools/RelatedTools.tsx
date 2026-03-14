@@ -117,17 +117,20 @@ export default function RelatedTools({
     <section
       aria-labelledby={titleId}
       className={cn(
-        'rounded-[22px] border border-slate-200/80 bg-white/80 p-4 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.35)] backdrop-blur-sm',
+        'rounded-[20px] border border-slate-200/65 bg-[linear-gradient(180deg,rgba(255,255,255,0.74),rgba(255,255,255,0.58))] px-4 py-3 shadow-[0_10px_28px_-24px_rgba(15,23,42,0.28)] backdrop-blur-sm',
         className,
       )}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 id={titleId} className="text-sm font-semibold text-slate-900">
+          <h2
+            id={titleId}
+            className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+          >
             {title}
           </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            A few adjacent tools worth opening from here.
+          <p className="mt-1 text-xs text-slate-500/90">
+            Nearby decisions and follow-ups.
           </p>
         </div>
       </div>
@@ -140,7 +143,7 @@ export default function RelatedTools({
             <Link
               key={item.id}
               href={item.href}
-              className="group flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-3.5 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_14px_28px_-24px_rgba(15,23,42,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
+              className="group flex min-w-0 items-center gap-2.5 rounded-[18px] border border-slate-200/70 bg-white/78 px-3 py-2.5 text-left transition-colors duration-150 hover:border-slate-300 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
               onClick={() => {
                 void trackRelatedToolsEvent('related_tools_click', {
                   propertyId,
@@ -152,15 +155,15 @@ export default function RelatedTools({
                 }).catch(() => undefined);
               }}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-slate-50 text-slate-700 transition-colors group-hover:border-teal-200 group-hover:bg-teal-50 group-hover:text-teal-700">
-                <Icon className="h-4 w-4" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-slate-200/75 bg-slate-50/85 text-slate-600 transition-colors group-hover:border-teal-200/80 group-hover:bg-teal-50/80 group-hover:text-teal-700">
+                <Icon className="h-[15px] w-[15px]" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <span className="flex items-center gap-1.5 text-[15px] font-semibold text-slate-900">
                   <span className="truncate">{item.label}</span>
-                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-400 transition-colors group-hover:text-teal-600" />
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
                 </span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">
+                <span className="mt-0.5 block truncate text-[12px] text-slate-500">
                   {item.description}
                 </span>
               </span>
