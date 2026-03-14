@@ -43,6 +43,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetTitle,
@@ -54,6 +55,7 @@ import {
   EmptyStateCard,
   MobileCard,
   MobilePageContainer,
+  MobilePageIntro,
   MobileSection,
   MobileSectionHeader,
   StatusChip,
@@ -297,25 +299,28 @@ function WillEmptyState({
   return (
     <MobilePageContainer className="space-y-5 py-4 lg:max-w-7xl lg:px-8 lg:pb-10">
       <MobileSection>
-        <div className="mb-4 flex items-center gap-2">
+        <Button variant="ghost" className="min-h-[44px] w-fit gap-1.5 px-0 text-sm text-muted-foreground" asChild>
           <Link href={`/dashboard/properties/${propertyId}`}>
-            <Button variant="ghost" size="sm" className="gap-1.5 text-sm">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Property
-            </Button>
+            <ArrowLeft className="h-4 w-4" />
+            Back to property
           </Link>
-        </div>
-        <EmptyStateCard
+        </Button>
+        <MobilePageIntro
+          eyebrow="Home Tool"
           title="Home Digital Will"
-          description="Capture the critical knowledge your family may need to manage this home — emergency instructions, home quirks, contractor preferences, utilities, and more."
+          subtitle="Capture the knowledge your home needs — emergency contacts, utility info, contractor preferences, and critical instructions."
+        />
+        <EmptyStateCard
+          title="Get started"
+          description="Create your Home Digital Will to store everything someone would need to manage this property — in an emergency or any time you're unavailable."
           action={
             <Button onClick={onInit} disabled={isLoading} className="mt-2 gap-2">
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Plus className="h-4 w-4" />
+                <BookOpen className="h-4 w-4" />
               )}
-              {isLoading ? 'Creating…' : 'Create Home Digital Will'}
+              {isLoading ? 'Setting up…' : 'Create Home Digital Will'}
             </Button>
           }
         />
@@ -375,6 +380,7 @@ function DeleteConfirmButton({
       size="sm"
       className="h-8 w-8 p-0"
       onClick={() => setConfirming(true)}
+      aria-label={confirmLabel}
     >
       <Trash2 className="h-3.5 w-3.5 text-gray-400 hover:text-red-500" />
     </Button>
@@ -546,9 +552,11 @@ function SetupChecklist({
 function ReadinessNudges({
   will,
   onOpenContacts,
+  onSelectSection,
 }: {
   will: DigitalWill;
   onOpenContacts: () => void;
+  onSelectSection?: (sectionId: string) => void;
 }) {
   const emergencySection = will.sections.find((s) => s.type === 'EMERGENCY');
   const hasEmergencyEntries = emergencySection && emergencySection.entries.length > 0;
@@ -565,7 +573,9 @@ function ReadinessNudges({
   if (!hasEmergencyEntries) {
     nudges.push({
       icon: AlertTriangle,
-      text: 'Emergency instructions are empty — add steps for urgent situations.',
+      text: 'Emergency instructions are empty — add steps for urgent home situations.',
+      action: emergencySection && onSelectSection ? () => onSelectSection(emergencySection.id) : undefined,
+      actionLabel: 'Add steps',
     });
   }
   if (!hasContacts) {
@@ -670,7 +680,7 @@ function WillHeader({
           )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <Button variant="ghost" size="sm" onClick={onEditMetadata}>
+          <Button variant="ghost" size="sm" onClick={onEditMetadata} aria-label="Edit will details">
             <Pencil className="h-4 w-4" />
           </Button>
           {hasContent && (
@@ -710,6 +720,8 @@ function SectionCard({
   return (
     <button
       onClick={onClick}
+      aria-label={config.label}
+      aria-current={isSelected ? 'page' : undefined}
       className={cn(
         'w-full rounded-[22px] border p-4 text-left transition-colors',
         isSelected
@@ -725,7 +737,7 @@ function SectionCard({
           )}
         >
           <Icon
-            className={cn('h-4.5 w-4.5', isSelected ? 'text-white' : config.iconColor)}
+            className={cn('h-5 w-5', isSelected ? 'text-white' : config.iconColor)}
           />
         </div>
         <div className="min-w-0 flex-1">
@@ -787,6 +799,8 @@ function TrustedContactsNavCard({
   return (
     <button
       onClick={onClick}
+      aria-label="Trusted Contacts"
+      aria-current={isSelected ? 'page' : undefined}
       className={cn(
         'w-full rounded-[22px] border p-4 text-left transition-colors',
         isSelected
@@ -801,7 +815,7 @@ function TrustedContactsNavCard({
             isSelected ? 'bg-white/15' : 'bg-blue-50',
           )}
         >
-          <Users className={cn('h-4.5 w-4.5', isSelected ? 'text-white' : 'text-blue-600')} />
+          <Users className={cn('h-5 w-5', isSelected ? 'text-white' : 'text-blue-600')} />
         </div>
         <div className="min-w-0 flex-1">
           <p
@@ -894,6 +908,7 @@ function EntryCard({
             size="sm"
             className="h-8 w-8 p-0"
             onClick={() => onEdit(entry)}
+            aria-label={`Edit "${entry.title}"`}
           >
             <Pencil className="h-3.5 w-3.5 text-gray-400" />
           </Button>
@@ -930,19 +945,19 @@ function SectionDetailPanel({
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div>
         <Button
           variant="ghost"
           size="sm"
-          className="shrink-0 gap-1.5 lg:hidden"
+          className="mb-3 shrink-0 gap-1.5 lg:hidden"
           onClick={onBack}
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Sections
         </Button>
-        <div className="hidden items-center gap-3 lg:flex">
-          <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', config.iconBg)}>
-            <Icon className={cn('h-4.5 w-4.5', config.iconColor)} />
+        <div className="flex items-center gap-3">
+          <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', config.iconBg)}>
+            <Icon className={cn('h-5 w-5', config.iconColor)} />
           </div>
           <div>
             <h2 className={cn(MOBILE_TYPE_TOKENS.sectionTitle, 'text-gray-900')}>
@@ -951,19 +966,6 @@ function SectionDetailPanel({
             {config.hint && (
               <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{config.hint}</p>
             )}
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile section title */}
-      <div className="lg:hidden">
-        <div className="flex items-center gap-3">
-          <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', config.iconBg)}>
-            <Icon className={cn('h-4.5 w-4.5', config.iconColor)} />
-          </div>
-          <div>
-            <h2 className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'text-gray-900')}>{config.label}</h2>
-            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>{config.hint}</p>
           </div>
         </div>
       </div>
@@ -1061,22 +1063,28 @@ function ContactItem({
           )}
 
           <div className="mt-1.5 space-y-0.5">
-            {contact.email && (
-              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'flex items-center gap-1.5 text-gray-500')}>
-                <Mail className="h-3 w-3 shrink-0" />
-                {contact.email}
-              </p>
-            )}
             {contact.phone && (
-              <p className={cn(MOBILE_TYPE_TOKENS.caption, 'flex items-center gap-1.5 text-gray-500')}>
+              <a
+                href={`tel:${contact.phone}`}
+                className={cn(MOBILE_TYPE_TOKENS.caption, 'flex items-center gap-1.5 text-blue-600 hover:text-blue-700')}
+              >
                 <Phone className="h-3 w-3 shrink-0" />
                 {contact.phone}
-              </p>
+              </a>
+            )}
+            {contact.email && (
+              <a
+                href={`mailto:${contact.email}`}
+                className={cn(MOBILE_TYPE_TOKENS.caption, 'flex items-center gap-1.5 text-gray-500 hover:text-gray-700')}
+              >
+                <Mail className="h-3 w-3 shrink-0" />
+                {contact.email}
+              </a>
             )}
           </div>
 
           {contact.notes && (
-            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mt-1.5 line-clamp-1 text-gray-400')}>
+            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mt-1.5 line-clamp-2 text-gray-400')}>
               {contact.notes}
             </p>
           )}
@@ -1089,6 +1097,7 @@ function ContactItem({
               size="sm"
               className="h-8 w-8 p-0"
               onClick={() => onEdit(contact)}
+              aria-label={`Edit contact ${contact.name}`}
             >
               <Pencil className="h-3.5 w-3.5 text-gray-400" />
             </Button>
@@ -1142,40 +1151,23 @@ function ContactsDetailPanel({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      {/* Back button (mobile) */}
-      <div className="flex items-center gap-3">
+      {/* Back button (mobile) + header */}
+      <div>
         <Button
           variant="ghost"
           size="sm"
-          className="shrink-0 gap-1.5 lg:hidden"
+          className="mb-3 shrink-0 gap-1.5 lg:hidden"
           onClick={onBack}
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Sections
         </Button>
-        <div className="hidden items-center gap-3 lg:flex">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
-            <Users className="h-4.5 w-4.5 text-blue-600" />
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50">
+            <Users className="h-5 w-5 text-blue-600" />
           </div>
           <div>
             <h2 className={cn(MOBILE_TYPE_TOKENS.sectionTitle, 'text-gray-900')}>
-              Trusted Contacts
-            </h2>
-            <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
-              People who can access critical home knowledge
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile title */}
-      <div className="lg:hidden">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
-            <Users className="h-4.5 w-4.5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className={cn(MOBILE_TYPE_TOKENS.cardTitle, 'text-gray-900')}>
               Trusted Contacts
             </h2>
             <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
@@ -1455,7 +1447,7 @@ function EmergencyView({
       <div className={cn(MOBILE_CARD_RADIUS, 'border border-amber-200 bg-amber-50 px-4 py-3')}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Siren className="h-4.5 w-4.5 shrink-0 text-amber-600" />
+            <Siren className="h-5 w-5 shrink-0 text-amber-600" />
             <div>
               <p className={cn(MOBILE_TYPE_TOKENS.body, 'font-semibold text-amber-900')}>
                 Emergency View
@@ -1525,9 +1517,9 @@ function EmergencyView({
 
       {/* No contacts fallback */}
       {will.trustedContacts.length === 0 && (
-        <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
-            No trusted contacts added. Exit this view to add them.
+        <div className="rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3">
+          <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-amber-700')}>
+            No trusted contacts have been added yet. Exit this view and add at least one contact.
           </p>
         </div>
       )}
@@ -1576,16 +1568,22 @@ function EmergencyView({
       )}
 
       {/* Footer */}
-      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-center">
+      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 text-center">
         <p className={cn(MOBILE_TYPE_TOKENS.caption, 'text-gray-500')}>
-          {will.title} · Last reviewed {formatDate(will.lastReviewedAt)}
+          {will.title}
         </p>
-        <button
+        <p className={cn(MOBILE_TYPE_TOKENS.caption, 'mt-0.5 text-gray-400')}>
+          Last reviewed {formatDate(will.lastReviewedAt)}
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onExit}
-          className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+          className="mt-2 h-auto gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
         >
-          Return to full view to edit
-        </button>
+          <ArrowLeft className="h-3 w-3" />
+          Return to full view
+        </Button>
       </div>
 
       <BottomSafeAreaReserve size="chatAware" />
@@ -1623,9 +1621,11 @@ function EntryEditorSheet({
     effectiveFrom: null,
     effectiveTo: null,
   });
+  const [titleError, setTitleError] = React.useState('');
 
   React.useEffect(() => {
     if (!state) return;
+    setTitleError('');
     if (state.mode === 'edit' && state.entry) {
       setForm({
         entryType: state.entry.entryType,
@@ -1662,7 +1662,11 @@ function EntryEditorSheet({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) {
+      setTitleError('Title is required');
+      return;
+    }
+    setTitleError('');
     onSave({
       ...form,
       title: form.title.trim(),
@@ -1682,6 +1686,9 @@ function EntryEditorSheet({
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle>{title}</SheetTitle>
+          <SheetDescription className="sr-only">
+            {state?.mode === 'edit' ? 'Edit the details of this entry.' : 'Add a new entry to this section.'}
+          </SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
@@ -1712,14 +1719,23 @@ function EntryEditorSheet({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="entry-title">Title *</Label>
+                <Label htmlFor="entry-title">
+                  Title <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="entry-title"
                   value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, title: e.target.value }));
+                    if (titleError && e.target.value.trim()) setTitleError('');
+                  }}
                   placeholder="e.g. Main water shutoff valve location"
-                  required
+                  className={titleError ? 'border-red-400 focus-visible:ring-red-300' : ''}
+                  aria-describedby={titleError ? 'entry-title-error' : undefined}
                 />
+                {titleError && (
+                  <p id="entry-title-error" className="text-sm text-red-500">{titleError}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -1782,10 +1798,11 @@ function EntryEditorSheet({
 
               <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Emergency entry</p>
+                  <Label htmlFor="entry-is-emergency" className="text-sm font-medium text-gray-900">Emergency entry</Label>
                   <p className="text-xs text-gray-500">Mark for urgent situations</p>
                 </div>
                 <Switch
+                  id="entry-is-emergency"
                   checked={form.isEmergency ?? false}
                   onCheckedChange={(v) => setForm((f) => ({ ...f, isEmergency: v }))}
                 />
@@ -1793,10 +1810,11 @@ function EntryEditorSheet({
 
               <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Pin entry</p>
+                  <Label htmlFor="entry-is-pinned" className="text-sm font-medium text-gray-900">Pin entry</Label>
                   <p className="text-xs text-gray-500">Surface at the top of the list</p>
                 </div>
                 <Switch
+                  id="entry-is-pinned"
                   checked={form.isPinned ?? false}
                   onCheckedChange={(v) => setForm((f) => ({ ...f, isPinned: v }))}
                 />
@@ -1907,6 +1925,9 @@ function WillMetadataSheet({
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle>Edit Will Details</SheetTitle>
+          <SheetDescription className="sr-only">
+            Update the title, status, readiness, and last reviewed date for this Home Digital Will.
+          </SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
@@ -1931,9 +1952,9 @@ function WillMetadataSheet({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="ARCHIVED">Archived</SelectItem>
+                  <SelectItem value="DRAFT">Draft — still being filled in</SelectItem>
+                  <SelectItem value="ACTIVE">Active — ready for use</SelectItem>
+                  <SelectItem value="ARCHIVED">Archived — no longer current</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1948,10 +1969,10 @@ function WillMetadataSheet({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="NOT_STARTED">Not Started</SelectItem>
-                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="NOT_STARTED">Not started</SelectItem>
+                  <SelectItem value="IN_PROGRESS">In progress</SelectItem>
                   <SelectItem value="READY">Ready</SelectItem>
-                  <SelectItem value="NEEDS_REVIEW">Needs Review</SelectItem>
+                  <SelectItem value="NEEDS_REVIEW">Needs review</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1966,6 +1987,7 @@ function WillMetadataSheet({
                   setForm((f) => ({ ...f, lastReviewedAt: e.target.value }))
                 }
               />
+              <p className="text-xs text-gray-400">When did you last review the contents of this will?</p>
             </div>
           </div>
 
@@ -2016,9 +2038,11 @@ function ContactEditorSheet({
   isSaving: boolean;
 }) {
   const [form, setForm] = React.useState(EMPTY_CONTACT_FORM);
+  const [nameError, setNameError] = React.useState('');
 
   React.useEffect(() => {
     if (!state) return;
+    setNameError('');
     if (state.mode === 'edit' && state.contact) {
       setForm({
         name: state.contact.name,
@@ -2040,7 +2064,11 @@ function ContactEditorSheet({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) return;
+    if (!form.name.trim()) {
+      setNameError('Name is required');
+      return;
+    }
+    setNameError('');
     onSave({
       ...form,
       name: form.name.trim(),
@@ -2056,6 +2084,9 @@ function ContactEditorSheet({
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle>{sheetTitle}</SheetTitle>
+          <SheetDescription className="sr-only">
+            {state?.mode === 'edit' ? 'Update this trusted contact\'s information and access level.' : 'Add a trusted contact who can access critical home knowledge.'}
+          </SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
@@ -2067,14 +2098,23 @@ function ContactEditorSheet({
               </h3>
 
               <div className="space-y-1.5">
-                <Label htmlFor="contact-name">Name *</Label>
+                <Label htmlFor="contact-name">
+                  Name <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="contact-name"
                   value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, name: e.target.value }));
+                    if (nameError && e.target.value.trim()) setNameError('');
+                  }}
                   placeholder="e.g. Jane Smith"
-                  required
+                  className={nameError ? 'border-red-400 focus-visible:ring-red-300' : ''}
+                  aria-describedby={nameError ? 'contact-name-error' : undefined}
                 />
+                {nameError && (
+                  <p id="contact-name-error" className="text-sm text-red-500">{nameError}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -2142,12 +2182,13 @@ function ContactEditorSheet({
 
               <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Primary contact</p>
+                  <Label htmlFor="contact-is-primary" className="text-sm font-medium text-gray-900">Primary contact</Label>
                   <p className="text-xs text-gray-500">
                     Designate as the main person to reach first
                   </p>
                 </div>
                 <Switch
+                  id="contact-is-primary"
                   checked={form.isPrimary ?? false}
                   onCheckedChange={(v) => setForm((f) => ({ ...f, isPrimary: v }))}
                 />
@@ -2525,20 +2566,22 @@ export default function HomeDigitalWillClient() {
   return (
     <>
       <MobilePageContainer className="space-y-5 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
-        {/* Back link */}
-        <div>
-          <Link href={`/dashboard/properties/${propertyId}`}>
-            <Button variant="ghost" size="sm" className="gap-1.5 text-sm text-gray-500">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Property
-            </Button>
-          </Link>
+        {/* Back link — hidden on mobile when inside section/contacts detail */}
+        <div className={cn(
+          (selectedSectionId && !showContactsPanel) || showContactsPanel ? 'hidden lg:block' : '',
+        )}>
+          <Button variant="ghost" className="min-h-[44px] w-fit gap-1.5 px-0 text-sm text-muted-foreground" asChild>
+            <Link href={`/dashboard/properties/${propertyId}`}>
+              <ArrowLeft className="h-4 w-4" />
+              Back to property
+            </Link>
+          </Button>
         </div>
 
-        {/* Header: always on desktop, hidden on mobile during section detail */}
+        {/* Header: always on desktop, hidden on mobile during section detail or contacts panel */}
         <div
           className={cn(
-            selectedSectionId && !showContactsPanel ? 'hidden lg:block' : '',
+            (selectedSectionId && !showContactsPanel) || showContactsPanel ? 'hidden lg:block' : '',
           )}
         >
           <WillHeader
@@ -2551,7 +2594,7 @@ export default function HomeDigitalWillClient() {
         {/* Setup checklist OR readiness nudges — shown below header on section list */}
         <div
           className={cn(
-            selectedSectionId && !showContactsPanel ? 'hidden lg:block' : '',
+            (selectedSectionId && !showContactsPanel) || showContactsPanel ? 'hidden lg:block' : '',
           )}
         >
           {showSetupChecklist ? (
@@ -2563,7 +2606,11 @@ export default function HomeDigitalWillClient() {
               onDismiss={() => setSetupDismissed(true)}
             />
           ) : (
-            <ReadinessNudges will={will} onOpenContacts={handleOpenContacts} />
+            <ReadinessNudges
+              will={will}
+              onOpenContacts={handleOpenContacts}
+              onSelectSection={handleSelectSection}
+            />
           )}
         </div>
 
@@ -2629,7 +2676,7 @@ export default function HomeDigitalWillClient() {
               />
             ) : (
               <div className="flex h-48 items-center justify-center rounded-[22px] border border-dashed border-gray-200">
-                <p className="text-sm text-gray-400">Select a section to view entries</p>
+                <p className="text-sm text-gray-400">Select a section from the left to view its entries</p>
               </div>
             )}
           </div>
