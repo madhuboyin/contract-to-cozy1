@@ -848,7 +848,7 @@ export default function ServicePriceRadarClient() {
             linkedEntityType: 'ROOM' as const,
             linkedEntityId: room.id,
             label: room.name,
-            description: room.type ? optionLabel(room.type) : 'Room context',
+            description: room.floorLevel != null ? `Floor ${room.floorLevel}` : 'Room context',
           }))
         );
       }
