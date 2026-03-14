@@ -234,6 +234,40 @@ DB table name:
 
 - `service_price_benchmarks`
 
+How this table is intended to be used:
+
+- It is a normalized reference dataset, not a user-generated result table.
+- One benchmark row represents a pricing baseline for a category and region, with optional extra specificity.
+- The estimator uses this table opportunistically. If no usable benchmark matches, the tool still works through deterministic fallback heuristics.
+- In production, this table is a good fit for imported market-price reference data, derived internal pricing aggregates, or future provider-backed benchmark feeds.
+
+Field-level intent:
+
+- `serviceCategory`
+  - required primary category match
+- `serviceSubcategory`
+  - optional finer-grained service match such as `tune_up`, `panel_upgrade`, or `roof_repair`
+- `regionType`
+  - controls how specific the benchmark geography is
+- `regionKey`
+  - normalized lookup key for the selected region type
+- `homeType`
+  - optional housing-style filter such as single-family, condo, or townhouse
+- `sizeBand`
+  - optional coarse property size filter used by the estimator
+- `baseLow`, `baseHigh`, `baseMedian`
+  - the benchmark baseline before estimator adjustments
+- `laborFactor`, `materialFactor`
+  - optional multipliers that further shape the expected range
+- `complexityFactorJson`
+  - optional flexible JSON for future complexity modeling or source-specific metadata
+- `effectiveFrom`, `effectiveTo`
+  - active-date window used during benchmark lookup
+- `sourceLabel`
+  - human-readable provenance label surfaced in explainability payloads
+- `isActive`
+  - allows rows to stay in the table without remaining eligible for matching
+
 #### `ServiceRadarUserAction`
 
 Reserved persistence model for user actions taken after a result exists.
@@ -277,6 +311,102 @@ Current explainability usage includes:
 - property snapshot used during evaluation
 - linked entity summaries
 - limitations when the estimate is broad or fallback-based
+
+---
+
+## `service_price_benchmarks` in Practice
+
+### What counts as a benchmark
+
+`service_price_benchmarks` is the canonical benchmark/reference table for Service Price Radar.
+
+It is different from:
+
+- `service_radar_checks`
+  - saved user quote evaluations
+- `service_radar_check_system_links`
+  - linked entities for one saved check
+- `service_radar_user_actions`
+  - post-result interaction tracking
+
+The benchmark table exists to answer:
+
+- what pricing baseline should the estimator start from for this service
+- how region-specific is that baseline
+- how much extra confidence should we give the result
+
+### Region types and key formats
+
+Current supported benchmark region types:
+
+- `COUNTRY`
+  - broadest fallback, typically values like `US`
+- `STATE`
+  - normalized state key such as `NJ` or `NY`
+- `METRO`
+  - city/state combination normalized as either `CITY_STATE` or `CITYSTATE`
+- `ZIP_PREFIX`
+  - first 3 digits of the property ZIP code
+- `COUNTY`
+  - supported in the enum and scorer, but only useful if property county context is available to the matcher
+
+### How benchmark matching works today
+
+Service Price Radar does not require a benchmark, but it will use the best active match when one exists.
+
+Current matching flow:
+
+1. filter benchmarks to:
+   - matching `serviceCategory`
+   - `isActive = true`
+   - `effectiveFrom <= now`
+   - `effectiveTo is null` or `effectiveTo >= now`
+2. score each candidate by:
+   - region specificity
+   - subcategory match
+   - home type match
+   - size band match
+3. choose the highest-scoring candidate
+4. if no candidate matches geography, fall back to heuristic pricing
+
+Current region weight priority:
+
+- `ZIP_PREFIX` = most specific
+- `METRO`
+- `COUNTY`
+- `STATE`
+- `COUNTRY` = broadest fallback
+
+Current scoring behavior matters for seed data:
+
+- an exact subcategory match helps a lot
+- a blank subcategory is treated as a more generic benchmark, not a failure
+- matching `homeType` and `sizeBand` improve benchmark quality but are optional
+- benchmarks outside the active date window are ignored
+
+### How the estimator uses a matched benchmark
+
+When a benchmark is found:
+
+- `baseLow`, `baseHigh`, and optional `baseMedian` become the starting range
+- `laborFactor` and `materialFactor` influence the range through benchmark adjustments
+- confidence increases
+- explainability JSON records:
+  - `benchmark.matched`
+  - `benchmarkId`
+  - `regionType`
+  - `regionKey`
+  - `sourceLabel`
+  - `estimationMode = benchmark`
+
+When no benchmark is found:
+
+- category heuristics become the starting range
+- region/home/system adjustments still apply
+- explainability records `estimationMode = fallback`
+- trust messaging explicitly says direct benchmark data was unavailable
+
+This means benchmark seeding is not required for the feature to work, but it is the best way to exercise the strongest and most realistic result path.
 
 ---
 
@@ -385,6 +515,23 @@ Current backend validation includes:
 - record persistence
 - summary/detail DTO mapping
 - analytics event storage to `auditLog`
+
+### Benchmark lookup details
+
+Benchmark lookup currently lives inside `ServicePriceRadarService.findBestBenchmark(...)`.
+
+Important implementation details:
+
+- benchmark lookup is best-match, not first-match
+- lookup is wrapped in a try/catch and safely falls back if benchmark access fails
+- region candidates are derived from current property context:
+  - `COUNTRY` currently uses `US`
+  - `STATE` uses normalized property state
+  - `METRO` uses normalized city/state combinations
+  - `ZIP_PREFIX` uses the first 3 digits of the property ZIP code
+- benchmark rows are selected with a small, focused field set and then scored in memory
+
+This design keeps benchmark behavior deterministic and makes it easy to enhance without changing the external API.
 
 ### Estimation engine
 
@@ -710,6 +857,252 @@ Current production-hardening points:
 - history refresh failures do not make a successful quote check look like a failed submission
 - form fields have stronger validation and basic accessibility wiring
 - explainability sections render safe fallbacks when payloads are sparse
+
+---
+
+## Seeding `service_price_benchmarks`
+
+This section is intentionally detailed because benchmark seeding is the main enhancement path for stronger Service Price Radar QA and future data integrations.
+
+### Why seed benchmarks at all
+
+Service Price Radar already supports end-to-end testing without seeded benchmarks:
+
+1. open the property-scoped tool
+2. submit a quote
+3. backend creates `service_radar_checks`
+4. UI renders the result
+
+That path exercises the fallback estimator.
+
+Seeding `service_price_benchmarks` is useful when you want to test:
+
+- benchmark-backed confidence
+- region-specific pricing
+- stronger explainability
+- benchmark-vs-fallback behavior
+- realistic verdict swings for NJ/NY or other test regions
+
+### Recommended seed dimensions
+
+For deterministic testing, seed benchmarks with at least:
+
+- `serviceCategory`
+- `regionType`
+- `regionKey`
+- `baseLow`
+- `baseHigh`
+- `effectiveFrom`
+- `isActive`
+
+Better seeds also include:
+
+- `serviceSubcategory`
+- `homeType`
+- `sizeBand`
+- `baseMedian`
+- `laborFactor`
+- `materialFactor`
+- `sourceLabel`
+
+### Practical seed options
+
+#### Option 1: Direct DB seed for QA or staging
+
+This is the fastest current path.
+
+Approach:
+
+- insert rows directly into `service_price_benchmarks`
+- use active date windows
+- target states or ZIP prefixes that match known QA properties
+
+Best for:
+
+- quick manual testing
+- staging smoke tests
+- deterministic benchmark-vs-fallback comparisons
+
+Tradeoffs:
+
+- very fast
+- no new infrastructure required
+- but it bypasses any future ingest normalization layer
+
+Recommended initial regions:
+
+- `STATE = NJ`
+- `STATE = NY`
+
+Recommended starting categories:
+
+- `HVAC`
+- `PLUMBING`
+- `ROOFING`
+- `ELECTRICAL`
+
+#### Option 2: SQL or script-based seed utilities
+
+This is a cleaner step up from ad hoc inserts.
+
+Approach:
+
+- create a repeatable SQL seed file or Prisma/script seed utility
+- keep benchmark rows in versioned test fixtures
+- rerun the same seed set across local, staging, and QA environments
+
+Best for:
+
+- team-shared QA data
+- repeatable demo environments
+- regression testing after pricing logic changes
+
+Tradeoffs:
+
+- still relatively simple
+- easier to maintain than one-off SQL
+- but still not a true provider-like ingest pipeline
+
+#### Option 3: Internal import pipeline
+
+This is a good medium-term enhancement.
+
+Approach:
+
+- define a normalized CSV or JSON import contract
+- add an internal/admin import script or endpoint
+- map source rows into `service_price_benchmarks`
+
+Best for:
+
+- curated market data loads
+- bulk refreshes
+- controlled benchmark provenance
+
+Tradeoffs:
+
+- introduces light ingestion logic
+- still simpler than full worker/provider integration
+
+#### Option 4: Worker-based dummy benchmark ingest
+
+This is the closest equivalent to the future-proof Radar and Replay QA pattern.
+
+Approach:
+
+- add fixture JSON in `apps/workers`
+- add a worker job that loads raw benchmark-like data
+- normalize the data into `service_price_benchmarks`
+- schedule it through startup or cron for deterministic environments
+
+Best for:
+
+- future-proof E2E testing
+- shared QA flows
+- validating a realistic ingest path before real providers exist
+
+Tradeoffs:
+
+- requires worker implementation work that does not exist yet
+- more setup than direct DB seeding
+- but it most closely mirrors the long-term architecture
+
+#### Option 5: External provider or partner ingest
+
+This is the most production-oriented option.
+
+Approach:
+
+- fetch market pricing or quote reference data from partners or licensed feeds
+- normalize categories, geographies, and date windows
+- upsert canonical benchmark rows
+
+Best for:
+
+- production benchmark freshness
+- broader regional coverage
+- reducing dependence on heuristics
+
+Tradeoffs:
+
+- provider contracts are rarely clean or universal
+- usually requires normalization, licensing, and provenance handling
+- benchmark rows are often derived rather than copied 1:1 from a source
+
+#### Option 6: Derived internal benchmarks
+
+This is the strongest long-term product path if CtC accumulates enough quote outcome data.
+
+Approach:
+
+- aggregate accepted quotes, rejected quotes, and completed jobs
+- derive benchmark bands by category, region, and home context
+- publish normalized rows into `service_price_benchmarks`
+
+Best for:
+
+- product-native benchmark quality
+- better alignment with actual CtC homeowners and jobs
+- continuous benchmark improvement over time
+
+Tradeoffs:
+
+- requires enough volume and data quality
+- needs aggregation, outlier handling, and data governance
+
+### Recommended enhancement path
+
+If the goal is staged maturity, the clean path is:
+
+1. use direct DB or script-based seeds now
+2. add repeatable fixture-based imports next
+3. add worker-based dummy ingest for deterministic E2E
+4. later replace or enrich dummy ingest with real provider or internal derived feeds
+
+### Suggested benchmark seed matrix
+
+For strong QA coverage, seed rows that intentionally exercise:
+
+- state-level generic benchmark
+- subcategory-specific benchmark
+- home-type-specific benchmark
+- size-band-specific benchmark
+- expired benchmark that should not match
+- inactive benchmark that should not match
+
+Example seed ideas:
+
+- `HVAC`, `tune_up`, `STATE`, `NJ`
+- `PLUMBING`, `water_heater_replace`, `STATE`, `NJ`
+- `ROOFING`, `roof_repair`, `ZIP_PREFIX`, `085`
+- `ELECTRICAL`, `panel_upgrade`, `STATE`, `NY`
+- `HVAC`, generic category-only fallback, `COUNTRY`, `US`
+
+This makes it easy to test:
+
+- exact benchmark match
+- broader fallback benchmark match
+- heuristic-only fallback when no benchmark should match
+
+### What should change when this enhancement is implemented
+
+If we add a real benchmark ingest pipeline later, documentation and implementation should cover:
+
+- raw source contracts
+- normalization rules for:
+  - category
+  - subcategory
+  - region type/key
+  - currency
+  - effective dates
+- provenance handling in `sourceLabel` and optional metadata JSON
+- dedupe/upsert strategy
+- cron or scheduled refresh behavior
+- QA fixture support that remains available even after real providers exist
+
+Important product note:
+
+Unlike Home Event Radar or Home Risk Replay, Service Price Radar does not need benchmark ingest to function. Benchmarks are an enhancement path that improves confidence, realism, and explainability rather than a hard dependency for the core tool.
 
 ---
 
