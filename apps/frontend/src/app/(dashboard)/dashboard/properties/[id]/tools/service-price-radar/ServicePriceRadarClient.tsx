@@ -311,7 +311,7 @@ function buildNegotiationShieldHref(propertyId: string, check: ServicePriceRadar
 function extractReasons(check: ServicePriceRadarCheckDetail): string[] {
   const explanation = asRecord(check.explanationJson);
   const reasonCodes = explanation?.reasonCodes;
-  return asArray(reasonCodes).map((item) => optionLabel(typeof item === 'string' ? item : ''));
+  return asArray(reasonCodes ?? null).map((item) => optionLabel(typeof item === 'string' ? item : ''));
 }
 
 function extractAdjustmentRows(check: ServicePriceRadarCheckDetail) {
