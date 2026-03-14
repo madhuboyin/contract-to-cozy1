@@ -1702,9 +1702,11 @@ model Property {
   estimatedMaintenancePremiumCents Int @default(0)
   isEquityVerified      Boolean @default(false)
 
+  homeDigitalWill HomeDigitalWill?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@index([homeownerProfileId])
   @@index([coverPhotoDocumentId])
   @@map("properties")
@@ -6546,4 +6548,161 @@ model HomeRiskReplayEventMatch {
   @@index([homeRiskEventId])
   @@index([impactLevel])
   @@map("home_risk_replay_event_matches")
+}
+
+// ============================================================================
+// HOME DIGITAL WILL
+// ============================================================================
+
+enum HomeDigitalWillStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum HomeDigitalWillReadiness {
+  NOT_STARTED
+  IN_PROGRESS
+  READY
+  NEEDS_REVIEW
+}
+
+enum HomeDigitalWillSectionType {
+  EMERGENCY
+  CRITICAL_INFO
+  CONTRACTORS
+  MAINTENANCE_KNOWLEDGE
+  UTILITIES
+  INSURANCE
+  HOUSE_RULES
+  GENERAL_NOTES
+}
+
+enum HomeDigitalWillEntryType {
+  INSTRUCTION
+  LOCATION_NOTE
+  CONTACT_NOTE
+  SERVICE_PREFERENCE
+  MAINTENANCE_RULE
+  POLICY_NOTE
+  ACCESS_NOTE
+  GENERAL_NOTE
+}
+
+enum HomeDigitalWillEntryPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum HomeDigitalWillTrustedContactRole {
+  SPOUSE
+  FAMILY_MEMBER
+  PROPERTY_MANAGER
+  EMERGENCY_CONTACT
+  CARETAKER
+  OTHER
+}
+
+enum HomeDigitalWillAccessLevel {
+  VIEW
+  EDIT
+  EMERGENCY_ONLY
+}
+
+model HomeDigitalWill {
+  id         String @id @default(uuid())
+  propertyId String @unique
+
+  title     String                   @default("Home Digital Will")
+  status    HomeDigitalWillStatus    @default(DRAFT)
+  readiness HomeDigitalWillReadiness @default(NOT_STARTED)
+
+  completionPercent Int       @default(0)
+  setupCompletedAt  DateTime?
+  lastReviewedAt    DateTime?
+  publishedAt       DateTime?
+
+  property        Property                       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sections        HomeDigitalWillSection[]
+  trustedContacts HomeDigitalWillTrustedContact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
+  @@map("home_digital_wills")
+}
+
+model HomeDigitalWillSection {
+  id            String @id @default(uuid())
+  digitalWillId String
+
+  type        HomeDigitalWillSectionType
+  title       String
+  description String?
+  sortOrder   Int     @default(0)
+  isEnabled   Boolean @default(true)
+
+  digitalWill HomeDigitalWill        @relation(fields: [digitalWillId], references: [id], onDelete: Cascade)
+  entries     HomeDigitalWillEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([digitalWillId, type])
+  @@index([digitalWillId])
+  @@map("home_digital_will_sections")
+}
+
+model HomeDigitalWillEntry {
+  id        String @id @default(uuid())
+  sectionId String
+
+  entryType   HomeDigitalWillEntryType     @default(GENERAL_NOTE)
+  title       String
+  content     String?
+  summary     String?
+  priority    HomeDigitalWillEntryPriority @default(MEDIUM)
+  sortOrder   Int     @default(0)
+  isPinned    Boolean @default(false)
+  isEmergency Boolean @default(false)
+
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+
+  section HomeDigitalWillSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sectionId])
+  @@index([sectionId, sortOrder])
+  @@index([priority])
+  @@index([isEmergency])
+  @@map("home_digital_will_entries")
+}
+
+model HomeDigitalWillTrustedContact {
+  id            String @id @default(uuid())
+  digitalWillId String
+
+  name         String
+  email        String?
+  phone        String?
+  relationship String?
+  role         HomeDigitalWillTrustedContactRole @default(OTHER)
+  accessLevel  HomeDigitalWillAccessLevel        @default(VIEW)
+  isPrimary    Boolean @default(false)
+  notes        String?
+
+  digitalWill HomeDigitalWill @relation(fields: [digitalWillId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([digitalWillId])
+  @@index([email])
+  @@map("home_digital_will_trusted_contacts")
 }
