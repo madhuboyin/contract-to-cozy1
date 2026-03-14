@@ -1,0 +1,42 @@
+[
+  {
+    "provider": "weather_provider",
+    "signalType": "hail",
+    "severity": "high",
+    "headlineTemplate": "Test hail activity near {{address}}",
+    "summaryTemplate": "Synthetic hail signal for {{city}}, {{state}}, generated for Home Event Radar end-to-end testing.",
+    "geographyType": "property",
+    "startOffsetHours": -6,
+    "endOffsetHours": -2
+  },
+  {
+    "provider": "utility_feed",
+    "signalType": "utility_outage",
+    "severity": "medium",
+    "headlineTemplate": "Test utility outage watch for {{zipCode}}",
+    "summaryTemplate": "Synthetic utility outage signal for {{zipCode}}, generated to test property feed delivery.",
+    "geographyType": "property",
+    "startOffsetHours": -3,
+    "endOffsetHours": 3
+  },
+  {
+    "provider": "insurance_market_feed",
+    "signalType": "insurance_market",
+    "severity": "low",
+    "headlineTemplate": "Test insurance market pressure in {{state}}",
+    "summaryTemplate": "Synthetic insurance market shift signal for {{state}}, generated for Home Event Radar QA.",
+    "geographyType": "property",
+    "startOffsetHours": -12,
+    "endOffsetHours": 24
+  },
+  {
+    "provider": "tax_assessor_feed",
+    "signalType": "tax_reassessment",
+    "severity": "info",
+    "headlineTemplate": "Test reassessment notice for {{city}}",
+    "summaryTemplate": "Synthetic tax reassessment signal for {{city}}, generated for Home Event Radar QA.",
+    "geographyType": "property",
+    "startOffsetHours": -24,
+    "endOffsetHours": 72
+  }
+]

@@ -5,6 +5,7 @@ import type { CanonicalRadarSignal } from '../radar/radar.types';
 import { runMatchingForEvent } from '../../../backend/src/services/homeEventRadarMatcher.service';
 
 const DEFAULT_MAX_PROPERTIES = 3;
+const DEFAULT_TARGET_ZIPS = ['08536', '10019'];
 
 type TargetProperty = {
   id: string;
@@ -22,8 +23,43 @@ function parseTargetPropertyIds(): string[] {
     .filter(Boolean);
 }
 
+function parseTargetZips(): string[] {
+  const raw = process.env.RADAR_DUMMY_TARGET_ZIPS ?? DEFAULT_TARGET_ZIPS.join(',');
+  const zips = raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return zips.length > 0 ? zips : DEFAULT_TARGET_ZIPS;
+}
+
+function resolveMatchPropertyIds(rawSignal: {
+  geography: { type: string; key: string };
+  raw: Record<string, unknown>;
+}): string[] | null {
+  const targetPropertyIds = rawSignal.raw?.targetPropertyIds;
+
+  if (Array.isArray(targetPropertyIds)) {
+    const ids = targetPropertyIds
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (ids.length > 0) {
+      return ids;
+    }
+  }
+
+  if (rawSignal.geography.type === 'property' && rawSignal.geography.key.trim() !== '') {
+    return [rawSignal.geography.key.trim()];
+  }
+
+  return null;
+}
+
 async function loadTargetProperties(): Promise<TargetProperty[]> {
   const ids = parseTargetPropertyIds();
+  const targetZips = parseTargetZips();
   const maxProperties = Math.max(
     1,
     Number.parseInt(process.env.RADAR_DUMMY_MAX_PROPERTIES || '', 10) || DEFAULT_MAX_PROPERTIES
@@ -48,7 +84,7 @@ async function loadTargetProperties(): Promise<TargetProperty[]> {
       address: { not: '' },
       city: { not: '' },
       state: { not: '' },
-      zipCode: { not: '' },
+      zipCode: { in: targetZips },
     },
     select: {
       id: true,
@@ -122,7 +158,7 @@ export async function ingestRadarSignalsJob() {
     const event = await upsertCanonicalRadarEvent(canonical);
     canonicalUpserts += 1;
 
-    const matchResult = await runMatchingForEvent(event.id, [rawSignal.geography.key]);
+    const matchResult = await runMatchingForEvent(event.id, resolveMatchPropertyIds(rawSignal));
     matched += matchResult.matched;
     skipped += matchResult.skipped;
   }

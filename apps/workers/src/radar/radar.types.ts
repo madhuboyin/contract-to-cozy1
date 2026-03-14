@@ -54,3 +54,16 @@ export type CanonicalRadarSignal = {
   dedupeKey: string;
   status: 'active' | 'resolved' | 'archived';
 };
+
+export type DummyRadarSignalFixture = {
+  provider: DummyRadarRawSignal['provider'];
+  signalType: DummyRadarRawSignal['signalType'];
+  severity: DummyRadarRawSignal['severity'];
+  headlineTemplate: string;
+  summaryTemplate?: string | null;
+  geographyType?: DummyRadarRawSignal['geography']['type'];
+  startOffsetHours: number;
+  endOffsetHours?: number | null;
+};
+
+export type DummyRadarFixtureSet = 'property_scoped' | 'zip_scoped';

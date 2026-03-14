@@ -63,6 +63,10 @@ spec:
               value: "*/30 * * * *"
             - name: RADAR_DUMMY_INGEST_RUN_ON_STARTUP
               value: "false"
+            - name: RADAR_DUMMY_FIXTURE_SET
+              value: "zip_scoped"
+            - name: RADAR_DUMMY_TARGET_ZIPS
+              value: "08536,10019"
             - name: SMTP_HOST
               value: smtp-relay.brevo.com
             - name: SMTP_PORT

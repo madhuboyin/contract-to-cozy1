@@ -1,4 +1,10 @@
-import type { DummyRadarRawSignal } from './radar.types';
+import propertyScopedSignalFixtures from './fixtures/propertyScopedSignals.json';
+import zipScopedSignalFixtures from './fixtures/zipScopedSignals.json';
+import type {
+  DummyRadarFixtureSet,
+  DummyRadarRawSignal,
+  DummyRadarSignalFixture,
+} from './radar.types';
 
 type TargetProperty = {
   id: string;
@@ -16,97 +22,104 @@ function dayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function buildSignalId(propertyId: string, type: DummyRadarRawSignal['signalType']): string {
-  return `dummy:${dayKey()}:${propertyId}:${type}`;
+function buildSignalId(scopeKey: string, type: DummyRadarRawSignal['signalType'], geographyType: DummyRadarRawSignal['geography']['type']): string {
+  return `dummy:${dayKey()}:${geographyType}:${scopeKey}:${type}`;
 }
 
-function buildSummary(type: DummyRadarRawSignal['signalType'], property: TargetProperty): string {
+function renderTemplate(template: string | null | undefined, property: TargetProperty): string | null {
+  if (!template) return null;
+
+  return [
+    ['{{address}}', property.address],
+    ['{{city}}', property.city],
+    ['{{state}}', property.state],
+    ['{{zipCode}}', property.zipCode],
+    ['{{propertyId}}', property.id],
+  ].reduce((value, [token, replacement]) => value.split(token).join(replacement), template);
+}
+
+function geographyKeyForType(type: DummyRadarRawSignal['geography']['type'], property: TargetProperty): string {
   switch (type) {
-    case 'hail':
-      return `Synthetic hail signal for ${property.city}, ${property.state}, generated for Home Event Radar end-to-end testing.`;
-    case 'utility_outage':
-      return `Synthetic utility outage signal for ${property.zipCode}, generated to test property feed delivery.`;
-    case 'insurance_market':
-      return `Synthetic insurance market shift signal for ${property.state}, generated for Home Event Radar QA.`;
-    case 'tax_reassessment':
-      return `Synthetic tax reassessment signal for ${property.city}, generated for Home Event Radar QA.`;
+    case 'property':
+      return property.id;
+    case 'zip':
+      return property.zipCode;
+    case 'city':
+      return property.city;
+    case 'state':
+      return property.state;
     default:
-      return `Synthetic radar signal for ${property.address}.`;
+      return property.id;
   }
 }
 
-function signalBlueprints(property: TargetProperty): Array<{
-  provider: DummyRadarRawSignal['provider'];
-  signalType: DummyRadarRawSignal['signalType'];
-  severity: DummyRadarRawSignal['severity'];
-  headline: string;
-  startOffsetHours: number;
-  endOffsetHours?: number;
-}> {
-  return [
-    {
-      provider: 'weather_provider',
-      signalType: 'hail',
-      severity: 'high',
-      headline: `Test hail activity near ${property.address}`,
-      startOffsetHours: -6,
-      endOffsetHours: -2,
-    },
-    {
-      provider: 'utility_feed',
-      signalType: 'utility_outage',
-      severity: 'medium',
-      headline: `Test utility outage watch for ${property.zipCode}`,
-      startOffsetHours: -3,
-      endOffsetHours: 3,
-    },
-    {
-      provider: 'insurance_market_feed',
-      signalType: 'insurance_market',
-      severity: 'low',
-      headline: `Test insurance market pressure in ${property.state}`,
-      startOffsetHours: -12,
-      endOffsetHours: 24,
-    },
-    {
-      provider: 'tax_assessor_feed',
-      signalType: 'tax_reassessment',
-      severity: 'info',
-      headline: `Test reassessment notice for ${property.city}`,
-      startOffsetHours: -24,
-      endOffsetHours: 72,
-    },
-  ];
+function resolveFixtureSet(): DummyRadarFixtureSet {
+  const value = (process.env.RADAR_DUMMY_FIXTURE_SET || 'zip_scoped').trim().toLowerCase();
+  return value === 'property_scoped' ? 'property_scoped' : 'zip_scoped';
+}
+
+function loadFixtures(set: DummyRadarFixtureSet): DummyRadarSignalFixture[] {
+  if (set === 'property_scoped') {
+    return propertyScopedSignalFixtures as DummyRadarSignalFixture[];
+  }
+  return zipScopedSignalFixtures as DummyRadarSignalFixture[];
+}
+
+function groupPropertiesByZip(properties: TargetProperty[]): TargetProperty[][] {
+  const groups = new Map<string, TargetProperty[]>();
+
+  for (const property of properties) {
+    const key = property.zipCode.trim();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(property);
+  }
+
+  return Array.from(groups.values());
 }
 
 export async function fetchDummyRadarSignals(properties: TargetProperty[]): Promise<DummyRadarRawSignal[]> {
   const signals: DummyRadarRawSignal[] = [];
+  const fixtureSet = resolveFixtureSet();
+  const fixtures = loadFixtures(fixtureSet);
+  const groups = fixtureSet === 'property_scoped'
+    ? properties.map((property) => [property])
+    : groupPropertiesByZip(properties);
 
-  for (const property of properties) {
-    for (const blueprint of signalBlueprints(property)) {
-      const providerEventId = buildSignalId(property.id, blueprint.signalType);
+  for (const group of groups) {
+    const primaryProperty = group[0];
+    const targetPropertyIds = group.map((property) => property.id);
+
+    for (const fixture of fixtures) {
+      const geographyType = fixture.geographyType ?? 'property';
+      const geographyKey = geographyKeyForType(geographyType, primaryProperty);
+      const providerEventId = buildSignalId(geographyKey, fixture.signalType, geographyType);
       signals.push({
-        provider: blueprint.provider,
+        provider: fixture.provider,
         providerEventId,
-        signalType: blueprint.signalType,
-        headline: blueprint.headline,
-        summary: buildSummary(blueprint.signalType, property),
-        severity: blueprint.severity,
-        startsAt: isoAtOffset(blueprint.startOffsetHours),
-        endsAt: blueprint.endOffsetHours !== undefined ? isoAtOffset(blueprint.endOffsetHours) : null,
+        signalType: fixture.signalType,
+        headline: renderTemplate(fixture.headlineTemplate, primaryProperty) ?? `Test radar signal for ${primaryProperty.address}`,
+        summary: renderTemplate(fixture.summaryTemplate, primaryProperty),
+        severity: fixture.severity,
+        startsAt: isoAtOffset(fixture.startOffsetHours),
+        endsAt: fixture.endOffsetHours !== undefined && fixture.endOffsetHours !== null
+          ? isoAtOffset(fixture.endOffsetHours)
+          : null,
         geography: {
-          type: 'property',
-          key: property.id,
+          type: geographyType,
+          key: geographyKey,
         },
         raw: {
           seed: true,
           seedType: 'dummy_radar_signal',
+          fixtureSet,
+          fixtureSignalType: fixture.signalType,
+          targetPropertyIds,
           property: {
-            id: property.id,
-            address: property.address,
-            city: property.city,
-            state: property.state,
-            zipCode: property.zipCode,
+            id: primaryProperty.id,
+            address: primaryProperty.address,
+            city: primaryProperty.city,
+            state: primaryProperty.state,
+            zipCode: primaryProperty.zipCode,
           },
           generatedAt: new Date().toISOString(),
         },
