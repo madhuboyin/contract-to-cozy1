@@ -4,7 +4,6 @@ import { normalizeDummyRadarSignal } from '../radar/normalize';
 import type { CanonicalRadarSignal } from '../radar/radar.types';
 import { runMatchingForEvent } from '../../../backend/src/services/homeEventRadarMatcher.service';
 
-const DEFAULT_MAX_PROPERTIES = 3;
 const DEFAULT_TARGET_ZIPS = ['08536', '10019'];
 
 type TargetProperty = {
@@ -31,6 +30,16 @@ function parseTargetZips(): string[] {
     .filter(Boolean);
 
   return zips.length > 0 ? zips : DEFAULT_TARGET_ZIPS;
+}
+
+function parseMaxProperties(): number | null {
+  const raw = (process.env.RADAR_DUMMY_MAX_PROPERTIES ?? '').trim();
+  if (!raw) return null;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+
+  return parsed;
 }
 
 function resolveMatchPropertyIds(rawSignal: {
@@ -60,10 +69,7 @@ function resolveMatchPropertyIds(rawSignal: {
 async function loadTargetProperties(): Promise<TargetProperty[]> {
   const ids = parseTargetPropertyIds();
   const targetZips = parseTargetZips();
-  const maxProperties = Math.max(
-    1,
-    Number.parseInt(process.env.RADAR_DUMMY_MAX_PROPERTIES || '', 10) || DEFAULT_MAX_PROPERTIES
-  );
+  const maxProperties = parseMaxProperties();
 
   if (ids.length > 0) {
     return prisma.property.findMany({
@@ -94,7 +100,7 @@ async function loadTargetProperties(): Promise<TargetProperty[]> {
       zipCode: true,
     },
     orderBy: { createdAt: 'asc' },
-    take: maxProperties,
+    ...(maxProperties ? { take: maxProperties } : {}),
   });
 }
 
