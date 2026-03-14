@@ -663,6 +663,265 @@ This setup exercises the same conceptual production flow we want long term:
 
 That means the fixture-based ingest can later be swapped for real providers without rewriting the replay UI contract.
 
+## What Changes When We Integrate External Providers
+
+This section describes the intended production evolution from dummy historical signals to real provider-backed ingest.
+
+### Target production flow
+
+The target production flow remains:
+
+```text
+provider / feeds
+        ↓
+worker / cron ingest
+        ↓
+normalize to canonical HomeRiskEvent
+        ↓
+upsert into home_risk_events
+        ↓
+user generates replay
+        ↓
+home_risk_replay_runs + home_risk_replay_event_matches
+```
+
+The important principle is:
+
+- providers feed the canonical `home_risk_events` layer
+- replay generation remains on-demand and property-scoped
+- the UI should not fetch historical providers directly
+
+### 1. Replace dummy fixture clients with provider clients
+
+Current worker input:
+
+- JSON fixtures rendered by `dummyHomeRiskEvent.client.ts`
+
+Future worker input:
+
+- provider clients for weather, air quality, outage history, flood/rain history, smoke history, or other historical datasets
+
+Likely future worker file layout:
+
+- `apps/workers/src/homeRiskReplay/providers/weatherArchive.client.ts`
+- `apps/workers/src/homeRiskReplay/providers/airQualityArchive.client.ts`
+- `apps/workers/src/homeRiskReplay/providers/utilityHistory.client.ts`
+- `apps/workers/src/homeRiskReplay/providers/floodHistory.client.ts`
+
+Each provider client should be responsible for:
+
+- provider authentication
+- pagination and checkpointing
+- rate-limit handling
+- retries and backoff
+- returning provider-specific raw payloads
+
+### 2. Introduce provider-specific raw signal types
+
+Current worker types:
+
+- `DummyHomeRiskRawSignal`
+- `CanonicalHomeRiskEventSignal`
+
+When integrating real providers, we should keep the canonical signal type but add provider-specific raw types such as:
+
+- `ProviderWeatherArchiveSignal`
+- `ProviderAirQualitySignal`
+- `ProviderUtilityHistorySignal`
+- `ProviderFloodHistorySignal`
+
+Then normalize each provider-specific type into a shared internal replay raw signal shape before converting to canonical `HomeRiskEvent`.
+
+This keeps provider quirks isolated from replay generation and frontend contracts.
+
+### 3. Keep normalization as the contract boundary
+
+Today, `normalize.ts` maps fixture-driven raw signals into canonical `HomeRiskEvent` fields:
+
+- `eventType`
+- `eventSubType`
+- `title`
+- `summary`
+- `severity`
+- `startAt`
+- `endAt`
+- `locationType`
+- `locationKey`
+- `geoJson`
+- `payloadJson`
+- `dedupeKey`
+
+That normalization layer should remain the main contract boundary even after real providers are added.
+
+Why this matters:
+
+- the replay engine only needs canonical `HomeRiskEvent` rows
+- frontend DTOs do not need to change
+- provider migrations stay behind the worker ingest layer
+
+### 4. Strengthen dedupe rules
+
+Current dummy ingest uses deterministic QA-oriented `dedupeKey` values based on:
+
+- provider-like source
+- geography
+- event type
+- event start date
+
+Real providers will need stricter dedupe rules, typically based on one of:
+
+- `provider + providerEventId`
+- `provider + normalized event family + normalized geography + normalized time window`
+
+This is important so that:
+
+- repeated ingest updates mutate the same canonical event
+- replay history remains stable
+- reprocessing doesn’t create event explosions
+
+### 5. Improve provenance inside payloadJson
+
+Current dummy payloads are seed-oriented.
+
+Real provider payloads should preserve provenance such as:
+
+- provider name
+- provider event ID
+- provider publish/update timestamp
+- source confidence or quality flags if available
+- raw region identifiers
+- ingest batch or sync run ID
+
+Recommended approach:
+
+- keep raw provider metadata in `payloadJson`
+- keep canonical UI fields small and stable
+- avoid exposing raw provider blobs directly to the UI
+
+### 6. Expand geography support
+
+Current replay matching supports:
+
+- property
+- zip
+- city
+- state
+- limited polygon payload hints
+
+Current weak area:
+
+- county is not reliable because property context does not currently persist county in a durable MVP-friendly way
+
+Future provider integrations will likely require:
+
+- first-class county support once property data includes county cleanly
+- better polygon support using actual spatial libraries instead of payload hints
+- stronger location provenance so the UI can distinguish:
+  - exact property-level history
+  - ZIP/city/state inferred history
+  - polygon-based historical exposure
+
+### 7. Decide whether workers stay DB-direct or move to backend ingest APIs
+
+Current short-term pattern:
+
+- workers write directly with Prisma into `home_risk_events`
+
+This matches the existing CtC worker style and is acceptable while the feature is evolving.
+
+Longer-term options:
+
+- Keep DB-direct worker ingest
+  - Pros: simple, fewer moving parts
+  - Cons: backend and worker business rules can drift over time
+
+- Move to backend-owned ingest APIs
+  - Worker would call an internal replay-event ingest endpoint
+  - Backend would own validation, normalization guardrails, and canonical upsert rules
+  - Pros: one source of truth for ingest policy
+  - Cons: requires service auth and backend URL wiring
+
+Recommendation:
+
+- short term: keep DB-direct worker ingest
+- longer term: consider backend-owned ingest endpoints once real providers are stable
+
+### 8. Add internal auth if worker-to-backend APIs are introduced
+
+If we later move from direct Prisma writes to internal backend APIs, we will need:
+
+- internal backend base URL envs
+- machine/service credentials
+- internal authorization policy for replay-event ingest
+
+This is not needed in the current implementation because workers write directly to the shared database.
+
+### 9. Add provider scheduling and checkpoints
+
+Current scheduling is simple cron plus optional startup execution.
+
+Real provider integration will need more robust scheduling concerns:
+
+- per-provider cron cadence
+- last successful sync checkpoint
+- replay/backfill windows
+- partial retry behavior
+- manual re-run support for bad sync windows
+
+Recommended future additions:
+
+- provider-specific env vars or config rows
+- checkpoint persistence
+- batch-level logging and metrics
+
+### 10. Add ingest observability
+
+Current dummy ingest logs are sufficient for QA.
+
+Real providers need stronger observability:
+
+- ingest success/failure counts
+- rows upserted
+- rows skipped
+- dedupe hit rates
+- provider error counts
+- last successful sync timestamps
+- alerting when historical feeds fail repeatedly
+
+This should be added at the worker/job level, not in the user-facing replay screen.
+
+### 11. Preserve the frontend and replay-generation contract
+
+The goal of provider integration should be:
+
+- no major change to Home Risk Replay UI contracts
+- no major change to replay generation API shapes
+- no provider-specific branches in the frontend
+
+The canonical `HomeRiskEvent` layer is what makes this possible.
+
+As long as provider ingest continues to normalize into canonical events correctly:
+
+- the replay engine can stay focused on matching/scoring
+- the frontend can stay focused on summary/timeline/detail rendering
+- QA can continue using the same end-to-end flow
+
+### 12. Keep future E2E testing aligned with production
+
+Even after real providers are introduced, fixture-driven worker ingest should remain available for QA.
+
+Why:
+
+- deterministic tests
+- no external dependency flakiness
+- easier staging validation
+- safer regression testing for replay generation and timeline rendering
+
+So the long-term expectation is:
+
+- real providers for production/staging data
+- retained fixture-based ingest path for deterministic E2E testing
+
 ## Mobile Navigation and Entry Points
 
 Home Risk Replay is wired into the shared Home Tools catalog and property-scoped launch flows.
