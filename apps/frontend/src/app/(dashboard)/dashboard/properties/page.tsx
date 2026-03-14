@@ -69,6 +69,7 @@ export default function PropertiesPage() {
     'status-board': 'Home Tools > Status Board',
     'home-score': 'Reports > Home Score Report',
     reports: 'Home Admin > Reports',
+    'tool:service-price-radar': 'Home Tools > Service Price Radar',
     'tool:property-tax': 'Home Tools > Property Tax',
     'tool:cost-growth': 'Home Tools > Cost Growth',
     'tool:insurance-trend': 'Home Tools > Insurance Trend',

@@ -23,6 +23,10 @@ import IncidentDecisionTracePanel from '@/app/(dashboard)/dashboard/components/i
 import { Button } from '@/components/ui/button';
 import humanizeActionType from '@/lib/utils/humanize';
 import {
+  buildServicePriceRadarHref,
+  inferServicePriceRadarCategoryFromIncident,
+} from '@/lib/routes/servicePriceRadar';
+import {
   EmptyStateCard,
   MobileActionRow,
   MobileCard,
@@ -160,6 +164,22 @@ export default function IncidentDetailClient() {
                 {incident.confidence != null ? (
                   <span className="rounded-md bg-slate-50 px-2 py-1">Conf: {Number(incident.confidence).toFixed(2)}</span>
                 ) : null}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline" className="min-h-[40px]">
+                  <Link
+                    href={buildServicePriceRadarHref({
+                      propertyId,
+                      serviceCategory: inferServicePriceRadarCategoryFromIncident(incident),
+                      serviceLabelRaw: incident.title,
+                      linkedEntityType: 'INCIDENT',
+                      linkedEntityId: incident.id,
+                    })}
+                  >
+                    Check quote fairness
+                  </Link>
+                </Button>
               </div>
 
               <IncidentAckControls

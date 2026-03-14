@@ -59,6 +59,10 @@ import {
 } from '../../inventory/inventoryApi';
 import { listInventoryItemRecalls } from '../../properties/[id]/recalls/recallsApi';
 import { verifyItem } from '../verification/verificationApi';
+import {
+  buildServicePriceRadarHref,
+  inferServicePriceRadarCategoryFromInventoryItem,
+} from '@/lib/routes/servicePriceRadar';
 
 const CONDITIONS: InventoryItemCondition[] = ['NEW', 'GOOD', 'FAIR', 'POOR', 'UNKNOWN'];
 
@@ -884,6 +888,20 @@ useEffect(() => {
     );
   }
 
+  function openServicePriceRadar() {
+    if (!props.initialItem?.id) return;
+    props.onClose();
+    router.push(
+      buildServicePriceRadarHref({
+        propertyId: props.propertyId,
+        serviceCategory: inferServicePriceRadarCategoryFromInventoryItem(props.initialItem),
+        serviceLabelRaw: props.initialItem.name,
+        linkedEntityType: 'SYSTEM',
+        linkedEntityId: props.initialItem.id,
+      })
+    );
+  }
+
   const isUnverified = Boolean(isEdit && props.initialItem && !(props.initialItem as any).isVerified);
   const identifierFields = [
     { label: 'Manufacturer', value: manufacturer.trim() },
@@ -1379,6 +1397,16 @@ useEffect(() => {
                   <p className="mt-0.5 text-xs text-gray-500">Link this item to warranty and/or insurance.</p>
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openServicePriceRadar}
+                    disabled={!isEdit}
+                    title={!isEdit ? 'Save this item first to check a quote' : undefined}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <Wrench className="h-3.5 w-3.5" />
+                    Check quote
+                  </button>
                   <button
                     type="button"
                     onClick={openGetCoverage}

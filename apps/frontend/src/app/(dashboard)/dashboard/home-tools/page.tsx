@@ -32,7 +32,7 @@ const HOME_TOOL_GROUPS = [
     key: 'negotiation',
     title: 'Negotiation + Review',
     summary: 'Quote and premium review with response-ready guidance',
-    toolKeys: ['negotiation-shield'],
+    toolKeys: ['service-price-radar', 'negotiation-shield'],
   },
   {
     key: 'ownership',
@@ -58,6 +58,7 @@ const HOME_TOOL_GROUPS = [
 ] as const;
 
 const HOME_TOOL_TILE_META: Record<string, { subtitle: string }> = {
+  'service-price-radar': { subtitle: 'Know if a quote is fair for your home' },
   'property-tax': { subtitle: 'Forecast annual tax drag' },
   'cost-growth': { subtitle: 'Model ownership cost trend' },
   'insurance-trend': { subtitle: 'Track premium pressure' },

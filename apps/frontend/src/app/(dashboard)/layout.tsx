@@ -41,6 +41,7 @@ import {
   Scale,
   Activity,
   Target,
+  Radar,
   ChevronDown,
   Sparkles,
   Zap,
@@ -97,6 +98,14 @@ interface AIToolLink {
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
 
 const HOME_TOOL_LINKS: PropertyToolLink[] = [
+  {
+    key: 'service-price-radar',
+    name: 'Service Price Radar',
+    hrefSuffix: 'tools/service-price-radar',
+    navTarget: 'tool:service-price-radar',
+    icon: resolveToolIcon('home', 'service-price-radar', Radar),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/service-price-radar(\/|$)/.test(pathname),
+  },
   {
     key: 'property-tax',
     name: 'Property Tax',

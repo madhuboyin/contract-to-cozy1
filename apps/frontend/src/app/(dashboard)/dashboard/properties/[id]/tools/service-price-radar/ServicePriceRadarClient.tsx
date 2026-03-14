@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   Activity,
   ArrowLeft,
@@ -198,9 +198,12 @@ function resolveCategoryOption(value: ServiceRadarCategory | '') {
 
 function buildPayload(
   form: FormState,
-  linkedOptions: LinkedEntityOption[]
+  linkedOptions: LinkedEntityOption[],
+  prefilledLinkedOption?: LinkedEntityOption | null
 ): CreateServicePriceRadarCheckPayload {
-  const selectedLinked = linkedOptions.find((option) => option.key === form.linkedEntityKey);
+  const selectedLinked =
+    linkedOptions.find((option) => option.key === form.linkedEntityKey) ??
+    (prefilledLinkedOption?.key === form.linkedEntityKey ? prefilledLinkedOption : null);
 
   return {
     serviceCategory: form.serviceCategory as ServiceRadarCategory,
@@ -230,6 +233,21 @@ function buildFormFromCheck(check: ServicePriceRadarCheckDetail | ServicePriceRa
     serviceLabelRaw: check.serviceLabelRaw ?? '',
     linkedEntityKey: '',
   };
+}
+
+function buildNegotiationShieldHref(propertyId: string, check: ServicePriceRadarCheckDetail): string {
+  const params = new URLSearchParams({
+    create: '1',
+    scenario: 'contractor-quote-review',
+  });
+
+  if (check.quoteVendorName) {
+    params.set('contractorName', check.quoteVendorName);
+  }
+  params.set('quoteAmount', String(check.quoteAmount));
+  params.set('serviceCategory', check.serviceCategory);
+
+  return `/dashboard/properties/${propertyId}/tools/negotiation-shield?${params.toString()}`;
 }
 
 function extractReasons(check: ServicePriceRadarCheckDetail): string[] {
@@ -429,9 +447,11 @@ function RecentCheckRow({
 
 export default function ServicePriceRadarClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
   const resultRef = useRef<HTMLDivElement | null>(null);
   const loadRef = useRef(0);
+  const appliedPrefillSignatureRef = useRef<string | null>(null);
 
   const [property, setProperty] = useState<Property | null>(null);
   const [propertyLoading, setPropertyLoading] = useState(true);
@@ -453,12 +473,89 @@ export default function ServicePriceRadarClient() {
   const [linkedOptionsLoading, setLinkedOptionsLoading] = useState(false);
   const [linkedOptionsLoaded, setLinkedOptionsLoaded] = useState(false);
 
+  const prefilledCategoryValue = searchParams.get('category');
+  const prefilledQuoteAmount = searchParams.get('quoteAmount');
+  const prefilledLinkedEntityType = searchParams.get('linkedEntityType');
+  const prefilledLinkedEntityId = searchParams.get('linkedEntityId');
+  const prefilledLinkedKey =
+    prefilledLinkedEntityType && prefilledLinkedEntityId
+      ? `${prefilledLinkedEntityType}:${prefilledLinkedEntityId}`
+      : '';
+  const prefilledLinkedOption =
+    prefilledLinkedKey &&
+    ['SYSTEM', 'APPLIANCE', 'DOCUMENT', 'INCIDENT', 'ROOM', 'OTHER'].includes(prefilledLinkedEntityType || '')
+      ? {
+          key: prefilledLinkedKey,
+          linkedEntityType: prefilledLinkedEntityType as ServiceRadarLinkedEntityType,
+          linkedEntityId: prefilledLinkedEntityId as string,
+          label: searchParams.get('label')?.trim() || 'Linked context',
+          description: 'Prefilled from your current workflow',
+        }
+      : null;
+  const prefillSignature = [
+    prefilledCategoryValue || '',
+    searchParams.get('subcategory') || '',
+    searchParams.get('label') || '',
+    prefilledQuoteAmount || '',
+    searchParams.get('vendor') || '',
+    prefilledLinkedEntityType || '',
+    prefilledLinkedEntityId || '',
+  ].join('|');
+
   const hasResult = Boolean(currentCheck);
   const currentVerdict = verdictMeta(currentCheck?.verdict ?? null);
   const currentConfidence = confidenceMeta(currentCheck?.confidenceScore ?? null);
   const currentReasons = currentCheck ? extractReasons(currentCheck) : [];
   const adjustmentRows = currentCheck ? extractAdjustmentRows(currentCheck) : [];
   const factorChips = currentCheck ? extractFactorChips(currentCheck) : [];
+
+  useEffect(() => {
+    if (appliedPrefillSignatureRef.current === prefillSignature) return;
+
+    const nextCategory = SERVICE_PRICE_RADAR_CATEGORY_OPTIONS.some(
+      (option) => option.value === prefilledCategoryValue
+    )
+      ? (prefilledCategoryValue as ServiceRadarCategory)
+      : '';
+    const nextQuoteAmount =
+      prefilledQuoteAmount && Number.isFinite(Number(prefilledQuoteAmount)) && Number(prefilledQuoteAmount) > 0
+        ? prefilledQuoteAmount
+        : '';
+    const nextForm: FormState = {
+      serviceCategory: nextCategory,
+      serviceSubcategory: searchParams.get('subcategory')?.trim() || '',
+      quoteAmount: nextQuoteAmount,
+      quoteVendorName: searchParams.get('vendor')?.trim() || '',
+      serviceLabelRaw: searchParams.get('label')?.trim() || '',
+      linkedEntityKey: prefilledLinkedKey,
+    };
+
+    const hasPrefill = Object.values(nextForm).some((value) => value);
+    appliedPrefillSignatureRef.current = prefillSignature;
+    if (!hasPrefill) return;
+
+    setForm((current) => ({
+      ...current,
+      ...nextForm,
+    }));
+    if (nextForm.quoteVendorName || nextForm.serviceLabelRaw || nextForm.linkedEntityKey) {
+      setAdvancedOpen(true);
+    }
+    if (prefilledLinkedOption) {
+      setLinkedOptions((current) =>
+        current.some((option) => option.key === prefilledLinkedOption.key)
+          ? current
+          : [prefilledLinkedOption, ...current]
+      );
+    }
+  }, [
+    prefilledCategoryValue,
+    prefilledLinkedKey,
+    prefilledLinkedOption,
+    prefilledQuoteAmount,
+    prefillSignature,
+    searchParams,
+  ]);
 
   async function loadPropertyAndChecks() {
     if (!propertyId) return;
@@ -594,6 +691,13 @@ export default function ServicePriceRadarClient() {
         );
       }
 
+      if (
+        prefilledLinkedOption &&
+        !nextOptions.some((option) => option.key === prefilledLinkedOption.key)
+      ) {
+        nextOptions.unshift(prefilledLinkedOption);
+      }
+
       setLinkedOptions(nextOptions);
       setLinkedOptionsLoaded(true);
       setLinkedOptionsLoading(false);
@@ -604,7 +708,7 @@ export default function ServicePriceRadarClient() {
     return () => {
       active = false;
     };
-  }, [advancedOpen, linkedOptionsLoaded, propertyId]);
+  }, [advancedOpen, linkedOptionsLoaded, prefilledLinkedOption, propertyId]);
 
   function syncValidation(nextForm: FormState) {
     setValidationErrors(buildValidationErrors(nextForm));
@@ -660,7 +764,7 @@ export default function ServicePriceRadarClient() {
     setToolError(null);
 
     try {
-      const payload = buildPayload(form, linkedOptions);
+      const payload = buildPayload(form, linkedOptions, prefilledLinkedOption);
       const detail = await createServicePriceRadarCheck(propertyId, payload);
       setCurrentCheck(detail);
       await refreshRecentChecks();
@@ -985,6 +1089,13 @@ export default function ServicePriceRadarClient() {
                     ]}
                     columns={2}
                   />
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Button asChild variant="outline" className="min-h-[40px] rounded-xl">
+                      <Link href={buildNegotiationShieldHref(propertyId, currentCheck)}>
+                        Need help responding?
+                      </Link>
+                    </Button>
+                  </div>
                 </ScenarioInputCard>
 
                 <Collapsible defaultOpen={false}>

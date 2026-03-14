@@ -28,6 +28,7 @@ import {
   TrendingUp,
   LayoutGrid,
   MapPin,
+  Radar,
   Sparkles,
   ChevronRight,
 } from "lucide-react";
@@ -59,6 +60,11 @@ import {
   MobileSectionHeader,
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
+import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
+import {
+  listServicePriceRadarChecks,
+  type ServicePriceRadarCheckSummary,
+} from './tools/service-price-radar/servicePriceRadarApi';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -134,16 +140,29 @@ const renderContextualButton = (insight: any, propertyId: string) => {
     };
 
     return (
-      <Button
-        size="sm"
-        variant={isUrgent ? 'destructive' : 'default'}
-        asChild
-        className="w-full sm:w-auto"
-      >
-        <Link href={providerSearchLink}>
-          {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
-        </Link>
-      </Button>
+      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <Button
+          size="sm"
+          variant={isUrgent ? 'destructive' : 'default'}
+          asChild
+          className="w-full sm:w-auto"
+        >
+          <Link href={providerSearchLink}>
+            {buttonLabel} <Wrench className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+        <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
+          <Link
+            href={buildServicePriceRadarHref({
+              propertyId,
+              serviceCategory: category,
+              serviceLabelRaw: insight.factor,
+            })}
+          >
+            Check quote
+          </Link>
+        </Button>
+      </div>
     );
   }
 
@@ -251,6 +270,30 @@ const formatEnumLabel = (value: string | null | undefined, fallback = "—") =>
         .replace(/_/g, " ")
         .replace(/\b\w/g, (char) => char.toUpperCase())
     : fallback;
+
+const formatMoneyValue = (value: number | null | undefined, currency = 'USD') => {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: value % 1 === 0 ? 0 : 2,
+  }).format(value);
+};
+
+function getRadarVerdictTone(verdict: ServicePriceRadarCheckSummary['verdict']) {
+  if (verdict === 'FAIR') return 'good';
+  if (verdict === 'HIGH') return 'elevated';
+  if (verdict === 'VERY_HIGH') return 'needsAction';
+  return 'info';
+}
+
+function getRadarVerdictLabel(verdict: ServicePriceRadarCheckSummary['verdict']) {
+  if (verdict === 'FAIR') return 'Fair';
+  if (verdict === 'HIGH') return 'High';
+  if (verdict === 'VERY_HIGH') return 'Very high';
+  if (verdict === 'UNDERPRICED') return 'Below range';
+  return 'Needs context';
+}
 
 function openCozyChat() {
   if (typeof window === "undefined") return;
@@ -437,6 +480,38 @@ const PropertyOverview = ({ property }: { property: Property }) => {
               meta={property.roofReplacementYear ? `Replaced ${property.roofReplacementYear}` : undefined}
             />
           </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Link
+              href={buildServicePriceRadarHref({
+                propertyId: property.id,
+                serviceCategory: 'HVAC',
+                serviceLabelRaw: 'HVAC service quote',
+              })}
+              className="no-brand-style inline-flex min-h-[36px] items-center justify-center rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
+            >
+              Check HVAC quote
+            </Link>
+            <Link
+              href={buildServicePriceRadarHref({
+                propertyId: property.id,
+                serviceCategory: 'WATER_HEATER',
+                serviceLabelRaw: 'Water heater service quote',
+              })}
+              className="no-brand-style inline-flex min-h-[36px] items-center justify-center rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
+            >
+              Check water heater quote
+            </Link>
+            <Link
+              href={buildServicePriceRadarHref({
+                propertyId: property.id,
+                serviceCategory: 'ROOFING',
+                serviceLabelRaw: 'Roof service quote',
+              })}
+              className="no-brand-style inline-flex min-h-[36px] items-center justify-center rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
+            >
+              Check roof quote
+            </Link>
+          </div>
         </ExpandableSummaryCard>
 
         {property.homeAssets && property.homeAssets.length > 0 ? (
@@ -607,6 +682,41 @@ const PropertyOverview = ({ property }: { property: Property }) => {
                 ) : null}
               </div>
             )}
+            <div className="flex flex-wrap gap-2 pt-3 border-t">
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={buildServicePriceRadarHref({
+                    propertyId: property.id,
+                    serviceCategory: 'HVAC',
+                    serviceLabelRaw: 'HVAC service quote',
+                  })}
+                >
+                  Check HVAC quote
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={buildServicePriceRadarHref({
+                    propertyId: property.id,
+                    serviceCategory: 'WATER_HEATER',
+                    serviceLabelRaw: 'Water heater service quote',
+                  })}
+                >
+                  Check water heater quote
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={buildServicePriceRadarHref({
+                    propertyId: property.id,
+                    serviceCategory: 'ROOFING',
+                    serviceLabelRaw: 'Roof service quote',
+                  })}
+                >
+                  Check roof quote
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -1020,6 +1130,14 @@ export default function PropertyDetailPage() {
   const property = bootstrap?.property || null;
   const onboardingStatus = bootstrap?.onboarding || null;
   const narrativeRun = bootstrap?.narrativeRun || null;
+  const latestServicePriceRadarQuery = useQuery({
+    queryKey: ['service-price-radar-latest', propertyId],
+    queryFn: async () => {
+      const items = await listServicePriceRadarChecks(propertyId, 1);
+      return items[0] ?? null;
+    },
+    enabled: Boolean(propertyId),
+  });
 
   const selectedNudgeConfig = useMemo(
     () => (nudgeFieldKey ? NARRATIVE_NUDGE_CONFIG[nudgeFieldKey] : null),
@@ -1162,6 +1280,63 @@ export default function PropertyDetailPage() {
       <PropertyHeroCard property={property} />
 
       <SellingPrepBanner propertyId={property.id} />
+
+      <div className="rounded-[24px] border border-slate-200/90 bg-[linear-gradient(145deg,#ffffff,#f7fafc)] p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.45)]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
+                <Radar className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="mb-0 text-sm font-semibold text-slate-900">Service Price Radar</p>
+                <p className="mb-0 text-xs text-slate-500">Know if a quote is fair for your home</p>
+              </div>
+            </div>
+            <p className="mb-0 text-sm text-slate-600">
+              Compare a service quote against the expected range for this property using your home context.
+            </p>
+          </div>
+
+          <Button asChild className="min-h-[44px] md:shrink-0">
+            <Link href={buildServicePriceRadarHref({ propertyId: property.id })}>Check quote</Link>
+          </Button>
+        </div>
+
+        {latestServicePriceRadarQuery.data ? (
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500">Recent quote check</p>
+                <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">
+                  {formatEnumLabel(latestServicePriceRadarQuery.data.serviceCategory)}
+                  {latestServicePriceRadarQuery.data.serviceSubcategory
+                    ? ` · ${formatEnumLabel(latestServicePriceRadarQuery.data.serviceSubcategory)}`
+                    : ''}
+                </p>
+              </div>
+              <StatusChip tone={getRadarVerdictTone(latestServicePriceRadarQuery.data.verdict)}>
+                {getRadarVerdictLabel(latestServicePriceRadarQuery.data.verdict)}
+              </StatusChip>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span>Quote {formatMoneyValue(latestServicePriceRadarQuery.data.quoteAmount, latestServicePriceRadarQuery.data.quoteCurrency)}</span>
+              {latestServicePriceRadarQuery.data.expectedLow !== null &&
+              latestServicePriceRadarQuery.data.expectedHigh !== null ? (
+                <span>
+                  Expected {formatMoneyValue(latestServicePriceRadarQuery.data.expectedLow, latestServicePriceRadarQuery.data.quoteCurrency)}-
+                  {formatMoneyValue(latestServicePriceRadarQuery.data.expectedHigh, latestServicePriceRadarQuery.data.quoteCurrency)}
+                </span>
+              ) : null}
+            </div>
+            {latestServicePriceRadarQuery.data.explanationShort ? (
+              <p className="mb-0 mt-2 text-xs text-slate-600">
+                {latestServicePriceRadarQuery.data.explanationShort}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <div className="md:hidden">
         <HomeToolsRail propertyId={property.id} />
