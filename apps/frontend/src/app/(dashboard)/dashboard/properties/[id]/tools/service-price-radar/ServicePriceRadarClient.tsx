@@ -757,8 +757,18 @@ export default function ServicePriceRadarClient() {
     if (requestId !== loadRef.current) return;
 
     if (propertyResult.status === 'fulfilled') {
-      setProperty(propertyResult.value.data);
-      setPropertyError(null);
+      if (propertyResult.value.success && propertyResult.value.data) {
+        setProperty(propertyResult.value.data);
+        setPropertyError(null);
+      } else {
+        setProperty(null);
+        setPropertyError(
+          getServicePriceRadarUserMessage(
+            new Error(propertyResult.value.message || 'Unable to load property context.'),
+            'property'
+          ).message
+        );
+      }
     } else {
       setProperty(null);
       setPropertyError(getServicePriceRadarUserMessage(propertyResult.reason, 'property').message);
