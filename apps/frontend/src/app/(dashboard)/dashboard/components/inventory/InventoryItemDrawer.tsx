@@ -1446,12 +1446,12 @@ useEffect(() => {
             </section>
 
             <section className="space-y-4 rounded-xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
+              <div className="space-y-3">
+                <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-gray-800">Coverage links</h3>
                   <p className="mt-0.5 text-xs text-gray-500">Link this item to warranty and/or insurance.</p>
                 </div>
-                <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={openHomeRiskReplay}
