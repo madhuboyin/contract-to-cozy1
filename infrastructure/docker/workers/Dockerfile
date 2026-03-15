@@ -60,6 +60,7 @@ COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts src/shared/backend/ser
 COPY apps/backend/src/services/hiddenAssets/categoryConfig.ts src/shared/backend/services/hiddenAssets/
 COPY apps/backend/src/services/hiddenAssets/types.ts src/shared/backend/services/hiddenAssets/
 # Copy neighborhood intelligence files needed by refreshNeighborhoodEvents.job.ts
+# and ingestNeighborhoodDummyEvents.job.ts
 COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.ts src/shared/backend/neighborhoodIntelligence/
 COPY apps/backend/src/neighborhoodIntelligence/neighborhoodImpactEngine.ts src/shared/backend/neighborhoodIntelligence/
 COPY apps/backend/src/neighborhoodIntelligence/impactRules.ts src/shared/backend/neighborhoodIntelligence/
@@ -84,7 +85,8 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json

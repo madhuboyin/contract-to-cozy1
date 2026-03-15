@@ -35,6 +35,7 @@ import { ingestHomeRiskEventsJob } from './jobs/ingestHomeRiskEvents.job';
 import { runHiddenAssetRefreshJob } from './jobs/hiddenAssetRefresh.job';
 import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.job';
 import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNotification.job';
+import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummyEvents.job';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
 
@@ -1151,6 +1152,31 @@ cron.schedule('0 5 * * 0', async () => {
   }
 }, { timezone: 'America/New_York' });
 console.log('[NEIGHBORHOOD-REFRESH] Neighborhood radar refresh scheduled for Sunday 5:00 AM EST');
+
+// =============================================================================
+// DUMMY NEIGHBORHOOD EVENT INGEST (QA / E2E)
+// =============================================================================
+const neighborhoodDummyIngestEnabled = process.env.NEIGHBORHOOD_DUMMY_INGEST_ENABLED === 'true';
+const neighborhoodDummyIngestCron = process.env.NEIGHBORHOOD_DUMMY_INGEST_CRON || '45 */6 * * *';
+
+if (neighborhoodDummyIngestEnabled) {
+  cron.schedule(neighborhoodDummyIngestCron, async () => {
+    try {
+      console.log('[NEIGHBORHOOD-DUMMY-INGEST] Running dummy neighborhood event ingest job...');
+      await ingestNeighborhoodDummyEventsJob();
+    } catch (err) {
+      console.error('[NEIGHBORHOOD-DUMMY-INGEST] Job failed:', err);
+    }
+  }, { timezone: 'America/New_York' });
+
+  console.log(`[NEIGHBORHOOD-DUMMY-INGEST] Dummy neighborhood ingest scheduled for: ${neighborhoodDummyIngestCron} America/New_York`);
+
+  if (process.env.NEIGHBORHOOD_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
+    void ingestNeighborhoodDummyEventsJob().catch((err) => {
+      console.error('[NEIGHBORHOOD-DUMMY-INGEST] Startup run failed:', err);
+    });
+  }
+}
 
 // =============================================================================
 // INVENTORY DRAFT CLEANUP (Phase 3 hardening)
