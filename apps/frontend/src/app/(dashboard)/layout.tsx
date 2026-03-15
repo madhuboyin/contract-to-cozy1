@@ -49,6 +49,7 @@ import {
   Camera,
   PauseCircle,
   PiggyBank,
+  BarChart2,
 } from 'lucide-react';
 import { resolveHomeownerNavigationIcon, resolveToolIcon } from '@/lib/icons';
 import { User } from '@/types';
@@ -646,6 +647,13 @@ function DesktopNav({ user }: { user: User | null }) {
             icon: Settings,
             isActive: (path: string) => path.startsWith('/dashboard/knowledge-admin'),
           },
+          {
+            key: 'analytics-admin',
+            name: 'Analytics',
+            href: '/dashboard/analytics-admin',
+            icon: BarChart2,
+            isActive: (path: string) => path.startsWith('/dashboard/analytics-admin'),
+          },
         ]
       : []),
   ];
@@ -901,6 +909,17 @@ function SidebarNav({ user }: { user: User | null }) {
       : null;
   const KnowledgeAdminIcon = knowledgeAdminLink?.icon;
 
+  const analyticsAdminLink =
+    user?.role === 'ADMIN'
+      ? {
+          name: 'Analytics',
+          href: '/dashboard/analytics-admin',
+          icon: BarChart2,
+          isActive: (path: string) => path.startsWith('/dashboard/analytics-admin'),
+        }
+      : null;
+  const AnalyticsAdminIcon = analyticsAdminLink?.icon;
+
   const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     { name: 'Warranties', href: '/dashboard/warranties', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', Wrench), isActive: (path) => path.startsWith('/dashboard/warranties') },
     { name: 'Insurance', href: '/dashboard/insurance', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'insurance', Shield), isActive: (path) => path.startsWith('/dashboard/insurance') },
@@ -1144,6 +1163,17 @@ function SidebarNav({ user }: { user: User | null }) {
           >
             <KnowledgeAdminIcon className="h-4 w-4" />
             {knowledgeAdminLink.name}
+          </Link>
+        </SheetClose>
+      )}
+      {analyticsAdminLink && AnalyticsAdminIcon && (
+        <SheetClose asChild>
+          <Link
+            href={analyticsAdminLink.href}
+            className={navLinkClass(analyticsAdminLink.isActive(pathname || ''))}
+          >
+            <AnalyticsAdminIcon className="h-4 w-4" />
+            {analyticsAdminLink.name}
           </Link>
         </SheetClose>
       )}
