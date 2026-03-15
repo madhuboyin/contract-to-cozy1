@@ -2671,3 +2671,27 @@ export interface NeighborhoodTrendSummaryDTO {
   countByDirection: Record<NeighborhoodImpactDirection, number>;
   topDevelopments: NeighborhoodEventCard[];
 }
+
+export type NeighborhoodSignalCode =
+  | 'TRANSIT_UPSIDE_PRESENT'
+  | 'FLOOD_RISK_PRESSURE'
+  | 'SCHOOL_QUALITY_IMPROVING'
+  | 'SCHOOL_QUALITY_DECLINING'
+  | 'COMMERCIAL_GROWTH_SIGNAL'
+  | 'INDUSTRIAL_NOISE_RISK'
+  | 'WAREHOUSE_TRAFFIC_RISK'
+  | 'ZONING_RISK'
+  | 'HIGHWAY_DISRUPTION_RISK'
+  | 'PARK_AMENITY_UPSIDE'
+  | 'RESIDENTIAL_DENSITY_INCREASING'
+  | 'LARGE_CONSTRUCTION_DISRUPTION'
+  | 'UTILITY_INFRASTRUCTURE_CHANGE';
+
+export interface NeighborhoodSignal {
+  code: NeighborhoodSignalCode;
+  direction: 'POSITIVE' | 'NEGATIVE' | 'MIXED';
+  label: string;
+  /** Composite impact score for this property (0-100). */
+  score: number;
+  eventId: string;
+}

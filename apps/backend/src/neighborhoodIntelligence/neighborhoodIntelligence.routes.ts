@@ -12,6 +12,7 @@ import {
   getNeighborhoodRadarEvents,
   getNeighborhoodRadarEventDetail,
   getNeighborhoodRadarTrends,
+  getNeighborhoodSignals,
   ingestNeighborhoodEvent,
   recomputeEventMatches,
   recomputePropertyRadar,
@@ -78,6 +79,18 @@ router.get(
   '/properties/:propertyId/neighborhood-radar/trends',
   propertyAuthMiddleware,
   getNeighborhoodRadarTrends,
+);
+
+/**
+ * GET /api/properties/:propertyId/neighborhood-radar/signals
+ *
+ * Returns compact signal codes for active high-impact neighborhood events.
+ * Used by cross-tool signal exposure (sell-hold-rent, true-cost, etc.).
+ */
+router.get(
+  '/properties/:propertyId/neighborhood-radar/signals',
+  propertyAuthMiddleware,
+  getNeighborhoodSignals,
 );
 
 // ============================================================================

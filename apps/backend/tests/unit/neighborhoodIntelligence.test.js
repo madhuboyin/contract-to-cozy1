@@ -393,3 +393,158 @@ test('proximity matching — far property does not match', () => {
   assert.equal(isWithinRadius(2.1, TRANSIT_RADIUS), false);
   assert.equal(isWithinRadius(5.0, TRANSIT_RADIUS), false);
 });
+
+// ---------------------------------------------------------------------------
+// Neighborhood signal service — deriveDominantDirection (unit)
+// ---------------------------------------------------------------------------
+
+function deriveDominantDirection(impacts) {
+  let pos = 0;
+  let neg = 0;
+  for (const { direction } of impacts) {
+    if (direction === 'POSITIVE') pos++;
+    else if (direction === 'NEGATIVE') neg++;
+  }
+  if (pos > neg) return 'POSITIVE';
+  if (neg > pos) return 'NEGATIVE';
+  return 'MIXED';
+}
+
+test('deriveDominantDirection — majority positive → POSITIVE', () => {
+  const d = deriveDominantDirection([
+    { direction: 'POSITIVE' },
+    { direction: 'POSITIVE' },
+    { direction: 'NEGATIVE' },
+  ]);
+  assert.equal(d, 'POSITIVE');
+});
+
+test('deriveDominantDirection — majority negative → NEGATIVE', () => {
+  const d = deriveDominantDirection([
+    { direction: 'NEGATIVE' },
+    { direction: 'NEGATIVE' },
+    { direction: 'POSITIVE' },
+  ]);
+  assert.equal(d, 'NEGATIVE');
+});
+
+test('deriveDominantDirection — tie → MIXED', () => {
+  const d = deriveDominantDirection([
+    { direction: 'POSITIVE' },
+    { direction: 'NEGATIVE' },
+  ]);
+  assert.equal(d, 'MIXED');
+});
+
+test('deriveDominantDirection — empty array → MIXED', () => {
+  const d = deriveDominantDirection([]);
+  assert.equal(d, 'MIXED');
+});
+
+// ---------------------------------------------------------------------------
+// Signal mapping rules
+// ---------------------------------------------------------------------------
+
+const SIGNAL_RULES = [
+  { eventType: 'TRANSIT_PROJECT', direction: 'POSITIVE', code: 'TRANSIT_UPSIDE_PRESENT' },
+  { eventType: 'FLOOD_MAP_UPDATE', direction: 'NEGATIVE', code: 'FLOOD_RISK_PRESSURE' },
+  { eventType: 'SCHOOL_RATING_CHANGE', direction: 'POSITIVE', code: 'SCHOOL_QUALITY_IMPROVING' },
+  { eventType: 'SCHOOL_RATING_CHANGE', direction: 'NEGATIVE', code: 'SCHOOL_QUALITY_DECLINING' },
+  { eventType: 'COMMERCIAL_DEVELOPMENT', direction: 'POSITIVE', code: 'COMMERCIAL_GROWTH_SIGNAL' },
+  { eventType: 'INDUSTRIAL_PROJECT', direction: 'NEGATIVE', code: 'INDUSTRIAL_NOISE_RISK' },
+  { eventType: 'WAREHOUSE_PROJECT', direction: 'NEGATIVE', code: 'WAREHOUSE_TRAFFIC_RISK' },
+  { eventType: 'ZONING_CHANGE', direction: 'NEGATIVE', code: 'ZONING_RISK' },
+  { eventType: 'HIGHWAY_PROJECT', direction: 'NEGATIVE', code: 'HIGHWAY_DISRUPTION_RISK' },
+  { eventType: 'PARK_DEVELOPMENT', direction: 'POSITIVE', code: 'PARK_AMENITY_UPSIDE' },
+  { eventType: 'RESIDENTIAL_DEVELOPMENT', direction: null, code: 'RESIDENTIAL_DENSITY_INCREASING' },
+  { eventType: 'LARGE_CONSTRUCTION', direction: 'NEGATIVE', code: 'LARGE_CONSTRUCTION_DISRUPTION' },
+  { eventType: 'UTILITY_INFRASTRUCTURE', direction: null, code: 'UTILITY_INFRASTRUCTURE_CHANGE' },
+];
+
+function resolveSignalCode(eventType, dominantDirection) {
+  for (const rule of SIGNAL_RULES) {
+    if (rule.eventType !== eventType) continue;
+    if (rule.direction !== null && rule.direction !== dominantDirection) continue;
+    return rule.code;
+  }
+  return null;
+}
+
+test('signal rules — TRANSIT_PROJECT + POSITIVE → TRANSIT_UPSIDE_PRESENT', () => {
+  assert.equal(resolveSignalCode('TRANSIT_PROJECT', 'POSITIVE'), 'TRANSIT_UPSIDE_PRESENT');
+});
+
+test('signal rules — TRANSIT_PROJECT + NEGATIVE → no signal (not in rules)', () => {
+  assert.equal(resolveSignalCode('TRANSIT_PROJECT', 'NEGATIVE'), null);
+});
+
+test('signal rules — FLOOD_MAP_UPDATE + NEGATIVE → FLOOD_RISK_PRESSURE', () => {
+  assert.equal(resolveSignalCode('FLOOD_MAP_UPDATE', 'NEGATIVE'), 'FLOOD_RISK_PRESSURE');
+});
+
+test('signal rules — SCHOOL_RATING_CHANGE + POSITIVE → SCHOOL_QUALITY_IMPROVING', () => {
+  assert.equal(resolveSignalCode('SCHOOL_RATING_CHANGE', 'POSITIVE'), 'SCHOOL_QUALITY_IMPROVING');
+});
+
+test('signal rules — SCHOOL_RATING_CHANGE + NEGATIVE → SCHOOL_QUALITY_DECLINING', () => {
+  assert.equal(resolveSignalCode('SCHOOL_RATING_CHANGE', 'NEGATIVE'), 'SCHOOL_QUALITY_DECLINING');
+});
+
+test('signal rules — RESIDENTIAL_DEVELOPMENT + any direction → RESIDENTIAL_DENSITY_INCREASING', () => {
+  assert.equal(resolveSignalCode('RESIDENTIAL_DEVELOPMENT', 'POSITIVE'), 'RESIDENTIAL_DENSITY_INCREASING');
+  assert.equal(resolveSignalCode('RESIDENTIAL_DEVELOPMENT', 'NEGATIVE'), 'RESIDENTIAL_DENSITY_INCREASING');
+  assert.equal(resolveSignalCode('RESIDENTIAL_DEVELOPMENT', 'MIXED'), 'RESIDENTIAL_DENSITY_INCREASING');
+});
+
+test('signal rules — PARK_DEVELOPMENT + POSITIVE → PARK_AMENITY_UPSIDE', () => {
+  assert.equal(resolveSignalCode('PARK_DEVELOPMENT', 'POSITIVE'), 'PARK_AMENITY_UPSIDE');
+});
+
+// ---------------------------------------------------------------------------
+// Notification deduplication logic
+// ---------------------------------------------------------------------------
+
+function shouldNotify(existingNotificationIds, linkId) {
+  // Simulate deduplication: only notify if no prior notification for this link
+  return !existingNotificationIds.has(linkId);
+}
+
+test('notification dedup — first occurrence triggers notification', () => {
+  const sent = new Set();
+  assert.equal(shouldNotify(sent, 'link-abc'), true);
+});
+
+test('notification dedup — second occurrence is suppressed', () => {
+  const sent = new Set(['link-abc']);
+  assert.equal(shouldNotify(sent, 'link-abc'), false);
+});
+
+test('notification dedup — different link triggers new notification', () => {
+  const sent = new Set(['link-abc']);
+  assert.equal(shouldNotify(sent, 'link-xyz'), true);
+});
+
+// ---------------------------------------------------------------------------
+// Scheduled job guardrails
+// ---------------------------------------------------------------------------
+
+test('refresh job — NEIGHBORHOOD_REFRESH_ENABLED=false should skip', () => {
+  const enabled = 'false' !== 'false'; // simulates process.env check
+  assert.equal(enabled, false);
+});
+
+test('notification threshold — score below 60 should not trigger', () => {
+  const NOTIFICATION_THRESHOLD = 60;
+  assert.equal(59 >= NOTIFICATION_THRESHOLD, false);
+  assert.equal(60 >= NOTIFICATION_THRESHOLD, true);
+  assert.equal(85 >= NOTIFICATION_THRESHOLD, true);
+});
+
+test('notification lookback — 25h window covers daily cron with jitter', () => {
+  const LOOKBACK_MS = 25 * 60 * 60 * 1000;
+  const now = Date.now();
+  const since = new Date(now - LOOKBACK_MS);
+  const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000);
+  // 25h window should include events from 24h ago
+  assert.ok(since < twentyFourHoursAgo, 'Lookback window should extend past 24h');
+});

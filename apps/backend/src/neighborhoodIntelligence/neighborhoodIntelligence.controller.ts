@@ -5,11 +5,13 @@ import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
 import { NeighborhoodIntelligenceService } from './neighborhoodIntelligenceService';
 import { NeighborhoodRadarQueryService } from './neighborhoodRadarQueryService';
+import { NeighborhoodSignalService } from './neighborhoodSignalService';
 import { NeighborhoodEventType } from '@prisma/client';
 import { EventListQuery } from './neighborhoodIntelligence.validators';
 
 const intelligenceService = new NeighborhoodIntelligenceService();
 const queryService = new NeighborhoodRadarQueryService();
+const signalService = new NeighborhoodSignalService();
 
 // ---------------------------------------------------------------------------
 // GET /api/properties/:propertyId/neighborhood-radar/summary
@@ -122,6 +124,24 @@ export async function recomputeEventMatches(
     const { eventId } = req.params;
     const result = await intelligenceService.recomputeEventMatches(eventId);
     res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/properties/:propertyId/neighborhood-radar/signals
+// ---------------------------------------------------------------------------
+
+export async function getNeighborhoodSignals(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { propertyId } = req.params;
+    const signals = await signalService.getSignalsForProperty(propertyId);
+    res.json({ success: true, data: { signals } });
   } catch (err) {
     next(err);
   }

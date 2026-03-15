@@ -4,6 +4,7 @@ import type {
   NeighborhoodEventListDTO,
   NeighborhoodEventDetailDTO,
   NeighborhoodTrendSummaryDTO,
+  NeighborhoodSignal,
 } from '@/types';
 
 export async function getNeighborhoodRadarSummary(
@@ -36,4 +37,8 @@ export async function getNeighborhoodRadarTrends(
   propertyId: string,
 ): Promise<NeighborhoodTrendSummaryDTO | null> {
   return api.getNeighborhoodRadarTrends(propertyId);
+}
+
+export async function getNeighborhoodSignals(propertyId: string): Promise<NeighborhoodSignal[]> {
+  return api.getNeighborhoodSignals(propertyId);
 }

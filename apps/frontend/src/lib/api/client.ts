@@ -3128,6 +3128,15 @@ class APIClient {
     );
     return res.data?.trends ?? null;
   }
+
+  async getNeighborhoodSignals(
+    propertyId: string,
+  ): Promise<import('@/types').NeighborhoodSignal[]> {
+    const res = await this.get<{ signals: import('@/types').NeighborhoodSignal[] }>(
+      `/api/properties/${propertyId}/neighborhood-radar/signals`,
+    );
+    return res.data?.signals ?? [];
+  }
 }
 
 // Export singleton instance

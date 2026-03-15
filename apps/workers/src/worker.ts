@@ -33,6 +33,8 @@ import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { ingestHomeRiskEventsJob } from './jobs/ingestHomeRiskEvents.job';
 import { runHiddenAssetRefreshJob } from './jobs/hiddenAssetRefresh.job';
+import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.job';
+import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNotification.job';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
 
@@ -1123,6 +1125,32 @@ if (homeRiskReplayDummyIngestEnabled) {
     });
   }
 }
+
+// =============================================================================
+// NEIGHBORHOOD INTELLIGENCE — Scheduled jobs
+// =============================================================================
+
+// Daily 6:00 AM EST — notify property owners of new high-impact neighborhood changes
+cron.schedule('0 6 * * *', async () => {
+  try {
+    console.log('[NEIGHBORHOOD-NOTIFY] Running neighborhood change notification job...');
+    await neighborhoodChangeNotificationJob();
+  } catch (err) {
+    console.error('[NEIGHBORHOOD-NOTIFY] Job failed:', err);
+  }
+}, { timezone: 'America/New_York' });
+console.log('[NEIGHBORHOOD-NOTIFY] Neighborhood change notification scheduled for 6:00 AM EST daily');
+
+// Weekly Sunday 5:00 AM EST — refresh all property neighborhood radars
+cron.schedule('0 5 * * 0', async () => {
+  try {
+    console.log('[NEIGHBORHOOD-REFRESH] Running weekly neighborhood radar refresh...');
+    await refreshNeighborhoodEventsJob();
+  } catch (err) {
+    console.error('[NEIGHBORHOOD-REFRESH] Job failed:', err);
+  }
+}, { timezone: 'America/New_York' });
+console.log('[NEIGHBORHOOD-REFRESH] Neighborhood radar refresh scheduled for Sunday 5:00 AM EST');
 
 // =============================================================================
 // INVENTORY DRAFT CLEANUP (Phase 3 hardening)

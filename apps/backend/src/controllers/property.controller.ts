@@ -2,9 +2,12 @@ import { Request, Response } from 'express';
 import * as propertyService from '../services/property.service';
 import { AuthRequest } from '../types';
 // IMPORT REQUIRED: Assuming you have defined these in your validators.ts file (Phase 2)
-import { CreatePropertyInput, UpdatePropertyInput } from '../utils/validators'; 
+import { CreatePropertyInput, UpdatePropertyInput } from '../utils/validators';
 import { computeSetupStatus } from '../services/propertyOnboarding.service';
 import { getOrCreateActiveNarrativeRun } from '../services/narrativeRun.service';
+import { NeighborhoodIntelligenceService } from '../neighborhoodIntelligence/neighborhoodIntelligenceService';
+
+const neighborhoodService = new NeighborhoodIntelligenceService();
 
 /**
  * List all properties for the authenticated user
@@ -37,6 +40,11 @@ export const createProperty = async (req: AuthRequest, res: Response) => {
     const propertyData = req.body as CreatePropertyInput; 
 
     const property = await propertyService.createProperty(userId, propertyData);
+
+    // Fire-and-forget: bootstrap neighborhood radar for the new property.
+    void neighborhoodService.recomputePropertyNeighborhoodRadar(property.id).catch((err) => {
+      console.error(`[NeighborhoodRadar] Bootstrap failed for property ${property.id}:`, err);
+    });
 
     res.status(201).json({
       success: true,

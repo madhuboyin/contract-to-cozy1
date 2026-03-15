@@ -1,0 +1,78 @@
+// apps/workers/src/jobs/refreshNeighborhoodEvents.job.ts
+//
+// Scheduled job: weekly batch recompute of all property neighborhood radars.
+// Re-runs property-to-event proximity matching and impact generation for
+// every active property so that newly ingested or updated events are linked.
+//
+// Schedule: Weekly (Sunday 5:00 AM EST via worker.ts cron)
+// Can be disabled: NEIGHBORHOOD_REFRESH_ENABLED=false
+
+import { NeighborhoodPropertyMatchService } from '../../../backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService';
+import { prisma } from '../lib/prisma';
+
+const matchService = new NeighborhoodPropertyMatchService();
+
+const BATCH_SIZE = 20;
+const BATCH_DELAY_MS = 300;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function refreshNeighborhoodEventsJob(): Promise<void> {
+  const enabled = process.env.NEIGHBORHOOD_REFRESH_ENABLED !== 'false';
+  if (!enabled) {
+    console.log('[NEIGHBORHOOD-REFRESH] Skipped — NEIGHBORHOOD_REFRESH_ENABLED=false');
+    return;
+  }
+
+  console.log('[NEIGHBORHOOD-REFRESH] Starting weekly neighborhood radar refresh...');
+
+  // Count total properties for progress logging
+  const total = await (prisma as any).property.count();
+  if (total === 0) {
+    console.log('[NEIGHBORHOOD-REFRESH] No properties found, nothing to do.');
+    return;
+  }
+
+  let offset = 0;
+  let successCount = 0;
+  let failureCount = 0;
+
+  while (offset < total) {
+    const properties = await (prisma as any).property.findMany({
+      select: { id: true },
+      skip: offset,
+      take: BATCH_SIZE,
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (properties.length === 0) break;
+
+    for (const property of properties) {
+      try {
+        const result = await matchService.recomputePropertyNeighborhoodRadar(property.id);
+        console.log(
+          `[NEIGHBORHOOD-REFRESH] Property ${property.id}: processed ${result.processed} events`,
+        );
+        successCount++;
+      } catch (err: any) {
+        console.error(
+          `[NEIGHBORHOOD-REFRESH] Failed for property ${property.id}:`,
+          err?.message ?? err,
+        );
+        failureCount++;
+      }
+    }
+
+    offset += properties.length;
+
+    if (offset < total) {
+      await sleep(BATCH_DELAY_MS);
+    }
+  }
+
+  console.log(
+    `[NEIGHBORHOOD-REFRESH] Completed. success=${successCount} failures=${failureCount} total=${total}`,
+  );
+}
