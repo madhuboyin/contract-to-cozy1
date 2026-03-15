@@ -9,11 +9,11 @@
 // → triggers property matching via NeighborhoodPropertyMatchService.
 //
 // Env vars consumed here:
-//   NEIGHBORHOOD_DUMMY_TARGET_CITIES  — comma-separated "City:State" pairs
-//                                       (e.g. "Atlanta:GA,Austin:TX").
-//                                       Falls back to DEFAULT_TARGET_CITIES.
+//   NEIGHBORHOOD_DUMMY_TARGET_ZIPS    — comma-separated ZIP codes
+//                                       (e.g. "08536,10019").
+//                                       Falls back to DEFAULT_TARGET_ZIPS.
 //   NEIGHBORHOOD_DUMMY_TARGET_PROPERTY_IDS — comma-separated property IDs;
-//                                            when set, city filter is bypassed.
+//                                            when set, ZIP filter is bypassed.
 //   NEIGHBORHOOD_DUMMY_MAX_PROPERTIES — cap on how many properties to target.
 //   NEIGHBORHOOD_DUMMY_FIXTURE_SET    — consumed by dummyNeighborhoodEvent.client.ts.
 
@@ -24,11 +24,9 @@ import type { DummyNeighborhoodRawEvent } from '../neighborhoodIntelligence/neig
 
 const matchService = new NeighborhoodPropertyMatchService();
 
-// Default cities used when NEIGHBORHOOD_DUMMY_TARGET_CITIES is not set.
-// These must match the city+state of seed properties in the dev/QA database.
-const DEFAULT_TARGET_CITIES: Array<{ city: string; state: string }> = [
-  { city: 'Atlanta', state: 'GA' },
-];
+// Default ZIP codes used when NEIGHBORHOOD_DUMMY_TARGET_ZIPS is not set.
+// Same ZIPs used by Home Event Radar and Home Risk Replay dummy ingest.
+const DEFAULT_TARGET_ZIPS: string[] = ['08536', '10019'];
 
 type TargetProperty = {
   id: string;
@@ -49,19 +47,16 @@ function parseTargetPropertyIds(): string[] {
     .filter(Boolean);
 }
 
-function parseTargetCities(): Array<{ city: string; state: string }> {
-  const raw = (process.env.NEIGHBORHOOD_DUMMY_TARGET_CITIES ?? '').trim();
-  if (!raw) return DEFAULT_TARGET_CITIES;
+function parseTargetZips(): string[] {
+  const raw = (process.env.NEIGHBORHOOD_DUMMY_TARGET_ZIPS ?? '').trim();
+  if (!raw) return DEFAULT_TARGET_ZIPS;
 
   const parsed = raw
     .split(',')
-    .map((entry) => {
-      const [city, state] = entry.split(':').map((s) => s.trim());
-      return city && state ? { city, state } : null;
-    })
-    .filter((entry): entry is { city: string; state: string } => entry !== null);
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  return parsed.length > 0 ? parsed : DEFAULT_TARGET_CITIES;
+  return parsed.length > 0 ? parsed : DEFAULT_TARGET_ZIPS;
 }
 
 function parseMaxProperties(): number | null {
@@ -88,19 +83,13 @@ async function loadTargetProperties(): Promise<TargetProperty[]> {
     });
   }
 
-  const targetCities = parseTargetCities();
-  const cityFilter = targetCities.map(({ city, state }) => ({
-    city: { equals: city, mode: 'insensitive' as const },
-    state: { equals: state, mode: 'insensitive' as const },
-  }));
+  const targetZips = parseTargetZips();
 
   return db.property.findMany({
     where: {
       AND: [
         { address: { not: '' } },
-        { city: { not: '' } },
-        { state: { not: '' } },
-        { OR: cityFilter },
+        { zipCode: { in: targetZips } },
       ],
     },
     select: { id: true, address: true, city: true, state: true, zipCode: true },

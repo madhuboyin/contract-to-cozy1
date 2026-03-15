@@ -26,7 +26,7 @@ export type DummyNeighborhoodEventType =
   | 'PARK_DEVELOPMENT'
   | 'LARGE_CONSTRUCTION';
 
-export type DummyNeighborhoodFixtureSet = 'property_scoped' | 'city_scoped';
+export type DummyNeighborhoodFixtureSet = 'property_scoped' | 'zip_scoped';
 
 /**
  * Raw event output from the dummy neighborhood event client.

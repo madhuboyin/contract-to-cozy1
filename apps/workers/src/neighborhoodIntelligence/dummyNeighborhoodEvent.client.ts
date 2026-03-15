@@ -9,10 +9,11 @@
 //
 // Fixture sets:
 //   property_scoped — unique events per property (distinct neighborhoods)
-//   city_scoped     — shared events per city+state (city-wide developments)
+//   zip_scoped      — shared events per ZIP code (same pattern as Home Event Radar
+//                     and Home Risk Replay)
 //
 // Select the active fixture set via:
-//   NEIGHBORHOOD_DUMMY_FIXTURE_SET=property_scoped  (or city_scoped, the default)
+//   NEIGHBORHOOD_DUMMY_FIXTURE_SET=property_scoped  (or zip_scoped, the default)
 //
 // Base coordinates:
 //   Property lat/lng are used when provided via baseLatitude / baseLongitude.
@@ -21,7 +22,7 @@
 //   in the current MVP, so the coordinates just need to be valid.
 
 import propertyScopedFixtures from './fixtures/propertyScopedEvents.json';
-import cityScopedFixtures from './fixtures/cityScopedEvents.json';
+import zipScopedFixtures from './fixtures/zipScopedEvents.json';
 import type {
   DummyNeighborhoodEventFixture,
   DummyNeighborhoodFixtureSet,
@@ -78,27 +79,23 @@ function renderTemplate(
 }
 
 function resolveFixtureSet(): DummyNeighborhoodFixtureSet {
-  const value = (process.env.NEIGHBORHOOD_DUMMY_FIXTURE_SET ?? 'city_scoped')
+  const value = (process.env.NEIGHBORHOOD_DUMMY_FIXTURE_SET ?? 'zip_scoped')
     .trim()
     .toLowerCase();
-  return value === 'property_scoped' ? 'property_scoped' : 'city_scoped';
+  return value === 'property_scoped' ? 'property_scoped' : 'zip_scoped';
 }
 
 function loadFixtures(set: DummyNeighborhoodFixtureSet): DummyNeighborhoodEventFixture[] {
   if (set === 'property_scoped') {
     return propertyScopedFixtures as DummyNeighborhoodEventFixture[];
   }
-  return cityScopedFixtures as DummyNeighborhoodEventFixture[];
+  return zipScopedFixtures as DummyNeighborhoodEventFixture[];
 }
 
-function cityKey(property: TargetProperty): string {
-  return `${property.city.trim().toLowerCase()}_${property.state.trim().toLowerCase()}`;
-}
-
-function groupPropertiesByCity(properties: TargetProperty[]): TargetProperty[][] {
+function groupPropertiesByZip(properties: TargetProperty[]): TargetProperty[][] {
   const groups = new Map<string, TargetProperty[]>();
   for (const property of properties) {
-    const key = cityKey(property);
+    const key = property.zipCode.trim();
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(property);
   }
@@ -135,7 +132,7 @@ function buildEvent(
     eventType: fixture.eventType,
     title:
       renderTemplate(fixture.titleTemplate, property) ??
-      `Test ${fixture.eventType.toLowerCase().replace(/_/g, ' ')} near ${property.city}`,
+      `Test ${fixture.eventType.toLowerCase().replace(/_/g, ' ')} near ${property.zipCode}`,
     description: renderTemplate(fixture.descriptionTemplate, property),
     latitude,
     longitude,
@@ -190,11 +187,13 @@ export async function fetchDummyNeighborhoodEvents(
       }
     }
   } else {
-    // city_scoped: properties sharing city+state receive the same set of events.
-    const groups = groupPropertiesByCity(properties);
+    // zip_scoped: properties sharing a ZIP code receive the same set of events.
+    // Matches the grouping strategy used by dummyRadar.client.ts and
+    // dummyHomeRiskEvent.client.ts.
+    const groups = groupPropertiesByZip(properties);
     for (const group of groups) {
       const primaryProperty = group[0];
-      const scopeKey = cityKey(primaryProperty);
+      const scopeKey = primaryProperty.zipCode.trim();
       const targetPropertyIds = group.map((p) => p.id);
       for (const fixture of fixtures) {
         events.push(buildEvent(fixture, primaryProperty, scopeKey, targetPropertyIds, fixtureSet));

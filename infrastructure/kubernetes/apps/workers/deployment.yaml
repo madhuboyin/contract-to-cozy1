@@ -84,9 +84,9 @@ spec:
             - name: NEIGHBORHOOD_DUMMY_INGEST_RUN_ON_STARTUP
               value: "true"
             - name: NEIGHBORHOOD_DUMMY_FIXTURE_SET
-              value: "city_scoped"
-            - name: NEIGHBORHOOD_DUMMY_TARGET_CITIES
-              value: "Atlanta:GA"
+              value: "zip_scoped"
+            - name: NEIGHBORHOOD_DUMMY_TARGET_ZIPS
+              value: "08536,10019"
             - name: NEIGHBORHOOD_REFRESH_ENABLED
               value: "true"
             - name: SMTP_HOST
