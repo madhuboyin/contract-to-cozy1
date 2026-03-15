@@ -1184,6 +1184,7 @@ model User {
   knowledgeArticleEvents KnowledgeArticleEvent[]
   negotiationShieldCasesCreated NegotiationShieldCase[] @relation("NegotiationShieldCaseCreatedBy")
   radarStates    PropertyRadarState[]
+  createdHomeTwinScenarios HomeTwinScenario[]
 
   @@index([email])
   @@index([role])
@@ -1703,6 +1704,10 @@ model Property {
   isEquityVerified      Boolean @default(false)
 
   homeDigitalWill HomeDigitalWill?
+
+  homeDigitalTwin     HomeDigitalTwin?
+  homeTwinScenarios   HomeTwinScenario[]
+  homeTwinComponents  HomeTwinComponent[]
 
   hiddenAssetMatches  PropertyHiddenAssetMatch[]
   hiddenAssetScanRuns PropertyHiddenAssetScanRun[]
@@ -6917,4 +6922,296 @@ model PropertyHiddenAssetScanRun {
   @@index([propertyId, status])
   @@index([startedAt])
   @@map("property_hidden_asset_scan_runs")
+}
+
+// ============================================================================
+// HOME DIGITAL TWIN
+// ============================================================================
+
+// -- Enums --
+
+enum HomeDigitalTwinStatus {
+  DRAFT
+  ACTIVE
+  STALE
+  ARCHIVED
+}
+
+enum HomeTwinComponentType {
+  ROOF
+  HVAC
+  WATER_HEATER
+  PLUMBING
+  ELECTRICAL
+  INSULATION
+  WINDOWS
+  SOLAR
+  FLOORING
+  EXTERIOR
+  FOUNDATION
+  APPLIANCE
+  OTHER
+}
+
+enum HomeTwinComponentStatus {
+  KNOWN
+  ESTIMATED
+  NEEDS_REVIEW
+  RETIRED
+}
+
+enum HomeTwinSourceType {
+  PROPERTY_PROFILE
+  INVENTORY
+  DOCUMENT
+  RISK_ENGINE
+  MANUAL
+  SYSTEM_DERIVED
+  IMPORT
+  OTHER
+}
+
+enum HomeTwinScenarioType {
+  REPLACE_COMPONENT
+  UPGRADE_COMPONENT
+  ADD_FEATURE
+  REMOVE_FEATURE
+  ENERGY_IMPROVEMENT
+  RESILIENCE_IMPROVEMENT
+  RENOVATION
+  CUSTOM
+}
+
+enum HomeTwinScenarioStatus {
+  DRAFT
+  READY
+  COMPUTED
+  FAILED
+  ARCHIVED
+}
+
+enum HomeTwinImpactType {
+  UPFRONT_COST
+  ANNUAL_SAVINGS
+  PAYBACK_PERIOD
+  PROPERTY_VALUE_CHANGE
+  RISK_REDUCTION
+  ENERGY_USE_CHANGE
+  MAINTENANCE_COST_CHANGE
+  INSURANCE_IMPACT
+  EMISSIONS_IMPACT
+  COMFORT_IMPACT
+  CUSTOM
+}
+
+enum HomeTwinImpactDirection {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+  UNKNOWN
+}
+
+enum HomeTwinDataQualityDimension {
+  PROPERTY_PROFILE
+  SYSTEMS
+  APPLIANCES
+  DOCUMENTATION
+  COST_BASIS
+  ENERGY_BASIS
+  RISK_BASIS
+}
+
+enum HomeTwinDataQualityStatus {
+  SUFFICIENT
+  PARTIAL
+  INSUFFICIENT
+  UNKNOWN
+}
+
+enum HomeTwinRunType {
+  INITIAL_BUILD
+  REFRESH
+  SCENARIO_COMPUTE
+  QUALITY_EVALUATION
+}
+
+enum HomeTwinRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// -- Models --
+
+// Canonical digital twin record — one per property.
+model HomeDigitalTwin {
+  id         String @id @default(uuid())
+  propertyId String @unique
+
+  status            HomeDigitalTwinStatus @default(DRAFT)
+  version           Int                   @default(1)
+  completenessScore Float?
+  confidenceScore   Float?
+  lastComputedAt    DateTime?
+  lastSyncedAt      DateTime?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  property         Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  components       HomeTwinComponent[]
+  scenarios        HomeTwinScenario[]
+  dataQuality      HomeTwinDataQuality[]
+  computationRuns  HomeTwinComputationRun[]
+
+  @@index([propertyId])
+  @@index([status])
+  @@map("home_digital_twins")
+}
+
+// Models a major system or component tracked within the digital twin.
+model HomeTwinComponent {
+  id           String @id @default(uuid())
+  digitalTwinId String
+  propertyId   String
+
+  componentType  HomeTwinComponentType
+  label          String?               // e.g. "Main HVAC", "Upper Floor AC"
+  status         HomeTwinComponentStatus @default(ESTIMATED)
+  sourceType     HomeTwinSourceType      @default(MANUAL)
+  sourceReferenceId String?             // optional FK pointer to another domain model
+
+  installYear                  Int?
+  estimatedAgeYears            Float?
+  usefulLifeYears              Float?
+  conditionScore               Float?
+  failureRiskScore             Float?
+  replacementCostEstimate      Decimal? @db.Decimal(12, 2)
+  annualOperatingCostEstimate  Decimal? @db.Decimal(12, 2)
+  annualMaintenanceCostEstimate Decimal? @db.Decimal(12, 2)
+  energyImpactScore            Float?
+  resilienceImpactScore        Float?
+  confidenceScore              Float?
+  isUserConfirmed              Boolean  @default(false)
+  metadata                     Json?
+  lastModeledAt                DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  digitalTwin HomeDigitalTwin @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+  property    Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([digitalTwinId, componentType])
+  @@index([digitalTwinId, status])
+  @@index([propertyId, componentType])
+  @@map("home_twin_components")
+}
+
+// A saved "what if" scenario against a property's digital twin.
+model HomeTwinScenario {
+  id            String @id @default(uuid())
+  digitalTwinId String
+  propertyId    String
+  createdByUserId String?
+
+  name             String
+  scenarioType     HomeTwinScenarioType
+  status           HomeTwinScenarioStatus @default(DRAFT)
+  description      String?
+  inputPayload     Json                   // scenario assumptions
+  baselineSnapshot Json?                  // optional state summary at creation time
+  isPinned         Boolean                @default(false)
+  isArchived       Boolean                @default(false)
+  lastComputedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  digitalTwin   HomeDigitalTwin        @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+  property      Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy     User?                  @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  impacts       HomeTwinScenarioImpact[]
+
+  @@index([digitalTwinId, status])
+  @@index([propertyId, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@map("home_twin_scenarios")
+}
+
+// Normalized computed impact outputs for a saved scenario.
+model HomeTwinScenarioImpact {
+  id         String @id @default(uuid())
+  scenarioId String
+
+  impactType      HomeTwinImpactType
+  valueNumeric    Float?
+  valueText       String?
+  valueJson       Json?
+  unit            String?              // e.g. USD, YEARS, PERCENT, SCORE
+  direction       HomeTwinImpactDirection @default(UNKNOWN)
+  confidenceScore Float?
+  sortOrder       Int                  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  scenario HomeTwinScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId, impactType])
+  @@index([scenarioId, sortOrder])
+  @@map("home_twin_scenario_impacts")
+}
+
+// Tracks data quality and completeness at the twin level.
+model HomeTwinDataQuality {
+  id            String @id @default(uuid())
+  digitalTwinId String
+
+  dimension        HomeTwinDataQualityDimension
+  status           HomeTwinDataQualityStatus    @default(UNKNOWN)
+  score            Float?
+  missingFields    Json?
+  notes            String?
+  lastEvaluatedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  digitalTwin HomeDigitalTwin @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+
+  @@unique([digitalTwinId, dimension])
+  @@index([digitalTwinId, dimension])
+  @@map("home_twin_data_quality")
+}
+
+// Tracks computation/sync attempts for observability.
+model HomeTwinComputationRun {
+  id            String @id @default(uuid())
+  digitalTwinId String
+
+  runType      HomeTwinRunType
+  status       HomeTwinRunStatus @default(QUEUED)
+  startedAt    DateTime          @default(now())
+  completedAt  DateTime?
+  errorMessage String?
+  summary      Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  digitalTwin HomeDigitalTwin @relation(fields: [digitalTwinId], references: [id], onDelete: Cascade)
+
+  @@index([digitalTwinId])
+  @@index([digitalTwinId, status])
+  @@index([startedAt])
+  @@map("home_twin_computation_runs")
 }
