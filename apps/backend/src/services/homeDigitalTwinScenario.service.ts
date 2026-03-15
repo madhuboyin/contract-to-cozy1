@@ -120,6 +120,11 @@ const COMFORT_IMPACT_TYPES = new Set<HomeTwinComponentType>([
 // HELPERS
 // ============================================================================
 
+function formatUSDSummary(n: number): string {
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${n}`;
+}
+
 function toNum(v: unknown): number | null {
   if (v == null) return null;
   const n = Number(v);
@@ -310,6 +315,24 @@ function computeImpacts(
       });
     }
 
+    // CUSTOM takeaway: 10-year net financial picture
+    if (totalAnnualSavings > 0) {
+      const net10yr = Math.round(totalAnnualSavings * 10 - upfrontCost);
+      const takeawayText =
+        net10yr > 0
+          ? `Over 10 years, this investment nets ~${formatUSDSummary(net10yr)} after covering the upfront cost`
+          : `$${Math.round(upfrontCost).toLocaleString()} upfront · saves ~${formatUSDSummary(Math.round(totalAnnualSavings))}/yr`;
+      impacts.push({
+        impactType: 'CUSTOM',
+        valueNumeric: net10yr,
+        valueText: takeawayText,
+        unit: 'USD',
+        direction: net10yr >= 0 ? 'POSITIVE' : 'NEUTRAL',
+        confidenceScore: 0.55,
+        sortOrder: 9,
+      });
+    }
+
   // ── ENERGY_IMPROVEMENT ─────────────────────────────────────────────────────
   } else if (scenarioType === 'ENERGY_IMPROVEMENT') {
     const upfrontCost = toNum(inputPayload.upfrontCost) ?? 0;
@@ -391,6 +414,24 @@ function computeImpacts(
         direction: 'POSITIVE',
         confidenceScore: 0.50,
         sortOrder: 6,
+      });
+    }
+
+    // CUSTOM takeaway for energy improvement
+    if (annualSavings > 0) {
+      const net10yr = Math.round(annualSavings * 10 - upfrontCost);
+      const takeawayText =
+        net10yr > 0
+          ? `Over 10 years, this upgrade nets ~${formatUSDSummary(net10yr)} after covering the upfront cost`
+          : `${formatUSDSummary(upfrontCost)} upfront · saves ~${formatUSDSummary(annualSavings)}/yr`;
+      impacts.push({
+        impactType: 'CUSTOM',
+        valueNumeric: net10yr,
+        valueText: takeawayText,
+        unit: 'USD',
+        direction: net10yr >= 0 ? 'POSITIVE' : 'NEUTRAL',
+        confidenceScore: 0.55,
+        sortOrder: 7,
       });
     }
 

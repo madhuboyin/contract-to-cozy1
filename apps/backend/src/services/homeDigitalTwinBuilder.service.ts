@@ -52,6 +52,42 @@ function currentYear(): number {
   return new Date().getFullYear();
 }
 
+/**
+ * Scale HVAC replacement cost based on home square footage.
+ * Base reference: $9,500 for a 1,500 sqft home.
+ */
+function scaledHvacCost(sqft: number | null): number {
+  const base = COMPONENT_DEFAULTS.HVAC.replacementCost;
+  if (!sqft) return base;
+  const scaled = Math.round((sqft / 1500) * base);
+  return Math.min(Math.max(scaled, 7000), 22000);
+}
+
+/**
+ * Scale roof replacement cost by sqft and material type.
+ * Uses per-sqft rates: metal ~$11, tile ~$9, default (asphalt) ~$7.
+ */
+function scaledRoofCost(sqft: number | null, roofType: string | null): number {
+  const type = (roofType ?? '').toUpperCase().replace(/[-_ ]/g, '');
+  const perSqFt = type.includes('METAL') ? 11 : type.includes('TILE') ? 9 : 7;
+  const area = sqft ?? 1700; // median US home floor area proxy
+  return Math.min(Math.max(Math.round(area * perSqFt), 6000), 35000);
+}
+
+/**
+ * Return useful life and replacement cost tuned to water heater technology.
+ * Tankless and heat-pump units last longer and cost more upfront.
+ */
+function waterHeaterConfig(whType: string | null): {
+  usefulLifeYears: number;
+  replacementCost: number;
+} {
+  const type = (whType ?? '').toUpperCase().replace(/[-_ ]/g, '');
+  if (type === 'TANKLESS') return { usefulLifeYears: 20, replacementCost: 2400 };
+  if (type === 'HEATPUMP') return { usefulLifeYears: 15, replacementCost: 1900 };
+  return { usefulLifeYears: 12, replacementCost: 1200 }; // TANK default
+}
+
 function ageFromInstallYear(installYear: number | null | undefined): number | null {
   if (!installYear) return null;
   return Math.max(0, currentYear() - installYear);
@@ -141,6 +177,8 @@ export class HomeDigitalTwinBuilderService {
         where: { id: propertyId },
         select: {
           yearBuilt: true,
+          propertySize: true,
+          occupantsCount: true,
           hvacInstallYear: true,
           waterHeaterInstallYear: true,
           roofReplacementYear: true,
@@ -233,6 +271,8 @@ export class HomeDigitalTwinBuilderService {
   private deriveSpecs(
     property: {
       yearBuilt: number | null;
+      propertySize: number | null;
+      occupantsCount: number | null;
       hvacInstallYear: number | null;
       waterHeaterInstallYear: number | null;
       roofReplacementYear: number | null;
@@ -272,20 +312,26 @@ export class HomeDigitalTwinBuilderService {
       let sourceType: HomeTwinSourceType = 'PROPERTY_PROFILE';
       let sourceRef: string | null = null;
       let knownPoints = 0;
+      let dataSourceNote: string;
 
       if (installYear) {
         knownPoints++;
         sourceType = 'PROPERTY_PROFILE';
+        dataSourceNote = 'Install year from property profile';
       } else if (primaryHvac?.installedOn || primaryHvac?.purchasedOn) {
         const invAge = ageFromDate(primaryHvac.installedOn ?? primaryHvac.purchasedOn);
         installYear = invAge ? yr - Math.floor(invAge) : null;
         sourceType = 'INVENTORY';
         sourceRef = primaryHvac.id;
         knownPoints++;
+        dataSourceNote = 'Age derived from inventory item date';
       } else if (property.yearBuilt) {
         // Assume HVAC was replaced ~5 years after build as a conservative estimate
         installYear = property.yearBuilt + 5;
         sourceType = 'SYSTEM_DERIVED';
+        dataSourceNote = 'Age estimated from year built (assumed replaced ~5 yrs after construction)';
+      } else {
+        dataSourceNote = 'No install date available — using category defaults';
       }
 
       if (property.heatingType) knownPoints++;
@@ -294,7 +340,7 @@ export class HomeDigitalTwinBuilderService {
       const age = ageFromInstallYear(installYear);
       const condition = age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null;
 
-      let replacementCost = defaults.replacementCost;
+      let replacementCost = scaledHvacCost(property.propertySize);
       if (primaryHvac?.replacementCostCents) {
         replacementCost = primaryHvac.replacementCostCents / 100;
         knownPoints++;
@@ -319,6 +365,8 @@ export class HomeDigitalTwinBuilderService {
           heatingType: property.heatingType,
           coolingType: property.coolingType,
           inventoryItemCount: hvacInventory.length,
+          propertySizeSqft: property.propertySize,
+          dataSourceNote,
         },
       });
     }
@@ -326,6 +374,7 @@ export class HomeDigitalTwinBuilderService {
     // ── WATER HEATER ──────────────────────────────────────────────────────────
     {
       const defaults = COMPONENT_DEFAULTS.WATER_HEATER;
+      const whConfig = waterHeaterConfig(property.waterHeaterType);
       const whInventory = inventoryItems.filter(
         (i) =>
           i.category === 'APPLIANCE' &&
@@ -338,24 +387,30 @@ export class HomeDigitalTwinBuilderService {
       let sourceType: HomeTwinSourceType = 'PROPERTY_PROFILE';
       let sourceRef: string | null = null;
       let knownPoints = 0;
+      let dataSourceNote: string;
 
       if (installYear) {
         knownPoints++;
+        dataSourceNote = 'Install year from property profile';
       } else if (primaryWh?.installedOn || primaryWh?.purchasedOn) {
         const invAge = ageFromDate(primaryWh.installedOn ?? primaryWh.purchasedOn);
         installYear = invAge ? yr - Math.floor(invAge) : null;
         sourceType = 'INVENTORY';
         sourceRef = primaryWh.id;
         knownPoints++;
+        dataSourceNote = 'Age derived from inventory item date';
       } else if (property.yearBuilt) {
         installYear = property.yearBuilt;
         sourceType = 'SYSTEM_DERIVED';
+        dataSourceNote = 'Age estimated from year built (original installation assumed)';
+      } else {
+        dataSourceNote = 'No install date available — using type defaults';
       }
 
       if (property.waterHeaterType) knownPoints++;
 
       const age = ageFromInstallYear(installYear);
-      const condition = age != null ? conditionFromAgeRatio(age, defaults.usefulLifeYears) : null;
+      const condition = age != null ? conditionFromAgeRatio(age, whConfig.usefulLifeYears) : null;
 
       specs.push({
         componentType: 'WATER_HEATER',
@@ -365,15 +420,16 @@ export class HomeDigitalTwinBuilderService {
         sourceReferenceId: sourceRef,
         installYear,
         estimatedAgeYears: age,
-        usefulLifeYears: defaults.usefulLifeYears,
+        usefulLifeYears: whConfig.usefulLifeYears,
         conditionScore: condition,
         failureRiskScore: condition != null ? failureRiskFromCondition(condition) : null,
-        replacementCostEstimate: defaults.replacementCost,
+        replacementCostEstimate: whConfig.replacementCost,
         annualOperatingCostEstimate: defaults.annualOperatingCost,
         annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
         confidenceScore: deriveConfidence(knownPoints, 3),
         metadata: {
           waterHeaterType: property.waterHeaterType,
+          dataSourceNote,
         },
       });
     }
@@ -384,12 +440,17 @@ export class HomeDigitalTwinBuilderService {
       let installYear: number | null = property.roofReplacementYear ?? null;
       let sourceType: HomeTwinSourceType = 'PROPERTY_PROFILE';
       let knownPoints = 0;
+      let dataSourceNote: string;
 
       if (installYear) {
         knownPoints++;
+        dataSourceNote = 'Replacement year from property profile';
       } else if (property.yearBuilt) {
         installYear = property.yearBuilt;
         sourceType = 'SYSTEM_DERIVED';
+        dataSourceNote = 'Age estimated from year built (original roof assumed)';
+      } else {
+        dataSourceNote = 'No replacement date available — using category defaults';
       }
 
       if (property.roofType) knownPoints++;
@@ -415,11 +476,15 @@ export class HomeDigitalTwinBuilderService {
         usefulLifeYears: defaults.usefulLifeYears,
         conditionScore: condition,
         failureRiskScore: failureRisk,
-        replacementCostEstimate: defaults.replacementCost,
+        replacementCostEstimate: scaledRoofCost(property.propertySize, property.roofType),
         annualOperatingCostEstimate: defaults.annualOperatingCost,
         annualMaintenanceCostEstimate: defaults.annualMaintenanceCost,
         confidenceScore: deriveConfidence(knownPoints, 3),
-        metadata: { roofType: property.roofType },
+        metadata: {
+          roofType: property.roofType,
+          propertySizeSqft: property.propertySize,
+          dataSourceNote,
+        },
       });
     }
 

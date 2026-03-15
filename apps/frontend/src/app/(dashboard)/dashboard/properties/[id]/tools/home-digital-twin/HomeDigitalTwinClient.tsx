@@ -84,6 +84,13 @@ const SCENARIO_TYPE_LABEL: Record<HomeTwinScenarioType, string> = {
   CUSTOM: 'Custom',
 };
 
+const COMPONENT_STATUS_LABEL: Record<string, string> = {
+  KNOWN: 'Known',
+  ESTIMATED: 'Estimated',
+  NEEDS_REVIEW: 'Needs Review',
+  RETIRED: 'Retired',
+};
+
 type UrgencyTone = 'danger' | 'elevated' | 'info';
 
 const URGENCY_TONE: Record<'HIGH' | 'MEDIUM' | 'LOW', UrgencyTone> = {
@@ -131,12 +138,13 @@ function ageRatioPct(c: HomeTwinComponentDTO): number | null {
 function componentStatusTone(
   c: HomeTwinComponentDTO,
 ): 'danger' | 'elevated' | 'good' | 'info' {
-  const ratio = c.usefulLifeYears && c.estimatedAgeYears
-    ? c.estimatedAgeYears / c.usefulLifeYears
-    : null;
-  if (c.status === 'CRITICAL' || (ratio != null && ratio >= 0.85)) return 'danger';
-  if (c.status === 'POOR' || (ratio != null && ratio >= 0.60)) return 'elevated';
-  if (c.status === 'GOOD') return 'good';
+  const ratio =
+    c.usefulLifeYears && c.estimatedAgeYears
+      ? c.estimatedAgeYears / c.usefulLifeYears
+      : null;
+  if (c.status === 'RETIRED' || (ratio != null && ratio >= 0.85)) return 'danger';
+  if (c.status === 'NEEDS_REVIEW' || (ratio != null && ratio >= 0.60)) return 'elevated';
+  if (c.status === 'KNOWN' && (ratio == null || ratio < 0.40)) return 'good';
   return 'info';
 }
 
@@ -262,7 +270,9 @@ function ComponentCard({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex flex-wrap items-center gap-1.5">
-              <StatusChip tone={tone}>{component.status}</StatusChip>
+              <StatusChip tone={tone}>
+                {COMPONENT_STATUS_LABEL[component.status] ?? component.status}
+              </StatusChip>
               {pct != null && (
                 <span className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">
                   {pct}% of lifespan used
@@ -309,6 +319,12 @@ function ComponentDetailSheet({
   if (!component) return null;
   const tone = componentStatusTone(component);
   const pct = ageRatioPct(component);
+  const dataSourceNote =
+    component.metadata &&
+    typeof component.metadata === 'object' &&
+    'dataSourceNote' in component.metadata
+      ? String(component.metadata.dataSourceNote)
+      : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -325,7 +341,9 @@ function ComponentDetailSheet({
         <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 space-y-5">
           {/* Status */}
           <div className="flex flex-wrap gap-2">
-            <StatusChip tone={tone}>{component.status}</StatusChip>
+            <StatusChip tone={tone}>
+              {COMPONENT_STATUS_LABEL[component.status] ?? component.status}
+            </StatusChip>
             {pct != null && (
               <StatusChip tone="info">{pct}% of lifespan used</StatusChip>
             )}
@@ -411,15 +429,21 @@ function ComponentDetailSheet({
             </div>
           </div>
 
-          {/* Confidence */}
-          {component.confidenceScore != null && (
-            <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+          {/* Data source + confidence */}
+          <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5 space-y-1">
+            {dataSourceNote && (
               <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-                Data confidence: {formatPct(component.confidenceScore)}. Estimates are derived from
-                your property profile and inventory — adding more home details improves accuracy.
+                <span className="font-medium text-[hsl(var(--foreground))]">Source: </span>
+                {dataSourceNote}
               </p>
-            </div>
-          )}
+            )}
+            {component.confidenceScore != null && (
+              <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                Data confidence: {formatPct(component.confidenceScore)}. Adding more home details
+                improves accuracy.
+              </p>
+            )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -692,44 +716,71 @@ function ScenarioDetailSheet({
           )}
 
           {/* Computed impacts */}
-          {scenario.status === 'COMPUTED' && scenario.impacts.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
-                Projected impacts
-              </h3>
-              <div className="space-y-1.5">
-                {scenario.impacts.map((impact) => (
-                  <div
-                    key={impact.id}
-                    className="flex items-start justify-between gap-3 text-sm"
-                  >
-                    <span className="text-[hsl(var(--mobile-text-secondary))]">{impact.label}</span>
-                    <span
+          {scenario.status === 'COMPUTED' && scenario.impacts.length > 0 && (() => {
+            const takeaway = scenario.impacts.find((i) => i.impactType === 'CUSTOM');
+            const mainImpacts = scenario.impacts.filter((i) => i.impactType !== 'CUSTOM');
+            return (
+              <div className="space-y-3">
+                {/* Takeaway banner */}
+                {takeaway?.valueText && (
+                  <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))] mb-1">
+                      Bottom line
+                    </p>
+                    <p
                       className={cn(
-                        'shrink-0 font-medium',
-                        impact.direction === 'POSITIVE'
+                        'text-sm font-medium leading-snug',
+                        takeaway.direction === 'POSITIVE'
                           ? 'text-green-700'
-                          : impact.direction === 'NEGATIVE'
-                            ? 'text-red-600'
-                            : 'text-[hsl(var(--foreground))]',
+                          : 'text-[hsl(var(--foreground))]',
                       )}
                     >
-                      {impact.valueNumeric != null
-                        ? impact.unit === 'USD'
-                          ? formatUSD(impact.valueNumeric)
-                          : `${impact.valueNumeric}${impact.unit ? ` ${impact.unit}` : ''}`
-                        : impact.valueText ?? '—'}
-                    </span>
+                      {takeaway.valueText}
+                    </p>
                   </div>
-                ))}
+                )}
+
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+                    Projected impacts
+                  </h3>
+                  <div className="space-y-1.5">
+                    {mainImpacts.map((impact) => (
+                      <div
+                        key={impact.id}
+                        className="flex items-start justify-between gap-3 text-sm"
+                      >
+                        <span className="text-[hsl(var(--mobile-text-secondary))]">
+                          {impact.label}
+                        </span>
+                        <span
+                          className={cn(
+                            'shrink-0 font-medium',
+                            impact.direction === 'POSITIVE'
+                              ? 'text-green-700'
+                              : impact.direction === 'NEGATIVE'
+                                ? 'text-red-600'
+                                : 'text-[hsl(var(--foreground))]',
+                          )}
+                        >
+                          {impact.valueNumeric != null
+                            ? impact.unit === 'USD'
+                              ? formatUSD(impact.valueNumeric)
+                              : `${impact.valueNumeric}${impact.unit ? ` ${impact.unit}` : ''}`
+                            : impact.valueText ?? '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {scenario.lastComputedAt && (
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      Computed {formatDate(scenario.lastComputedAt)}
+                    </p>
+                  )}
+                </div>
               </div>
-              {scenario.lastComputedAt && (
-                <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                  Computed {formatDate(scenario.lastComputedAt)}
-                </p>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* Not yet computed notice */}
           {canCompute && (

@@ -94,6 +94,23 @@ function resolveUrgency(
 }
 
 /**
+ * Scoring function for ranking suggestions.
+ * Higher score = higher priority.
+ * Factors: urgency weight + confidence boost + estimated value signal.
+ */
+function scoreCandidate(
+  urgency: 'HIGH' | 'MEDIUM' | 'LOW',
+  confidence: number | null,
+  estimatedCost: number | null,
+): number {
+  const urgencyScore = urgency === 'HIGH' ? 3 : urgency === 'MEDIUM' ? 2 : 1;
+  const confidenceBoost = (confidence ?? 0.5) * 1.5;
+  // Higher-cost items have more impact potential — normalize against $20k cap
+  const valueBoost = estimatedCost != null ? Math.min(estimatedCost / 20000, 1) : 0;
+  return urgencyScore + confidenceBoost + valueBoost;
+}
+
+/**
  * Generates replacement suggestion for a component if it meets thresholds.
  * Returns null if the component doesn't warrant a suggestion yet.
  */
@@ -154,6 +171,7 @@ function replaceSuggestion(
       assumptions: {
         replacementCost: cost,
         riskReductionPercent: risk != null ? Math.round(risk * 80) : undefined,
+        newUsefulLifeYears: c.usefulLifeYears ?? undefined,
       },
     },
   };
@@ -163,12 +181,21 @@ function replaceSuggestion(
 // SERVICE
 // ============================================================================
 
+const MAX_SUGGESTIONS = 5;
+
 export class HomeDigitalTwinRecommendationsService {
   async getRecommendations(propertyId: string): Promise<ScenarioSuggestion[]> {
-    const twin = await prisma.homeDigitalTwin.findUnique({
-      where: { propertyId },
-      select: { id: true, status: true },
-    });
+    const [twin, property] = await Promise.all([
+      prisma.homeDigitalTwin.findUnique({
+        where: { propertyId },
+        select: { id: true, status: true, completenessScore: true },
+      }),
+      prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { yearBuilt: true },
+      }),
+    ]);
+
     if (!twin) {
       throw new APIError(
         'Digital twin not found. Use /init to create one first.',
@@ -256,17 +283,22 @@ export class HomeDigitalTwinRecommendationsService {
       if (s) suggestions.push(s);
     }
 
-    // ── INSULATION — always suggest as energy improvement ─────────────────────
+    // ── INSULATION — only for older homes (>15 years) ────────────────────────
     const insulation = byType.get('INSULATION');
     const insulationCost = decimalToNum(insulation?.replacementCostEstimate ?? null) ?? 3500;
+    const homeAgeYears = property?.yearBuilt
+      ? new Date().getFullYear() - property.yearBuilt
+      : null;
+    const homeIsOldEnoughForInsulation = homeAgeYears == null || homeAgeYears >= 15;
 
-    // Suggest insulation if it doesn't exist, or if low confidence / old
     const shouldSuggestInsulation =
-      !insulation ||
-      (insulation.confidenceScore ?? 1) < 0.50 ||
-      (ageRatio(insulation) ?? 0) >= 0.50;
+      homeIsOldEnoughForInsulation &&
+      (!insulation ||
+        (insulation.confidenceScore ?? 1) < 0.50 ||
+        (ageRatio(insulation) ?? 0) >= 0.50);
 
     if (shouldSuggestInsulation) {
+      const ageDesc = homeAgeYears != null ? `${homeAgeYears}-year-old home` : 'your home';
       suggestions.push({
         key: 'upgrade-insulation',
         title: 'Upgrade Insulation',
@@ -277,8 +309,8 @@ export class HomeDigitalTwinRecommendationsService {
         urgency: 'LOW',
         estimatedUpfrontCost: insulationCost,
         reason: insulation
-          ? 'Existing insulation data has low confidence or is aging'
-          : 'No insulation component has been modeled — this is a high-value opportunity to evaluate',
+          ? `Insulation data has low confidence or is aging in your ${ageDesc}`
+          : `No insulation has been modeled for your ${ageDesc} — a high-value opportunity to evaluate`,
         suggestedInputPayload: {
           upfrontCost: insulationCost,
           energySavingsPerYear: 380,
@@ -302,7 +334,7 @@ export class HomeDigitalTwinRecommendationsService {
           componentType: 'WINDOWS',
           urgency: resolveUrgency(ratio, windows.failureRiskScore),
           estimatedUpfrontCost: cost,
-          reason: `Windows are ${Math.round((ratio) * 100)}% through their typical lifespan`,
+          reason: `Windows are ${Math.round(ratio * 100)}% through their typical lifespan`,
           suggestedInputPayload: {
             upfrontCost: cost,
             energySavingsPerYear: 250,
@@ -312,9 +344,10 @@ export class HomeDigitalTwinRecommendationsService {
       }
     }
 
-    // ── SOLAR — suggest if not already present ─────────────────────────────────
+    // ── SOLAR — only suggest when twin has enough data to trust the absence ──
     const hasSolar = byType.has('SOLAR');
-    if (!hasSolar) {
+    const twinCompleteness = twin.completenessScore ?? 0;
+    if (!hasSolar && twinCompleteness >= 0.40) {
       suggestions.push({
         key: 'consider-solar',
         title: 'Consider Solar Panels',
@@ -334,10 +367,16 @@ export class HomeDigitalTwinRecommendationsService {
       });
     }
 
-    // Sort: HIGH urgency first, then MEDIUM, then LOW
-    const urgencyOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-    suggestions.sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency]);
+    // Score and sort: weighted by urgency, confidence, and estimated cost impact
+    suggestions.sort((a, b) => {
+      const aComp = byType.get(a.componentType ?? 'OTHER' as HomeTwinComponentType);
+      const bComp = byType.get(b.componentType ?? 'OTHER' as HomeTwinComponentType);
+      return (
+        scoreCandidate(b.urgency, bComp?.confidenceScore ?? null, b.estimatedUpfrontCost) -
+        scoreCandidate(a.urgency, aComp?.confidenceScore ?? null, a.estimatedUpfrontCost)
+      );
+    });
 
-    return suggestions;
+    return suggestions.slice(0, MAX_SUGGESTIONS);
   }
 }

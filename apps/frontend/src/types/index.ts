@@ -2412,7 +2412,7 @@ export type HomeTwinComponentType =
   | 'FOUNDATION'
   | 'OTHER';
 
-export type HomeTwinComponentStatus = 'GOOD' | 'FAIR' | 'POOR' | 'CRITICAL' | 'UNKNOWN';
+export type HomeTwinComponentStatus = 'KNOWN' | 'ESTIMATED' | 'NEEDS_REVIEW' | 'RETIRED';
 
 export type HomeTwinScenarioType =
   | 'REPLACE_COMPONENT'
@@ -2427,13 +2427,16 @@ export type HomeTwinScenarioType =
 export type HomeTwinScenarioStatus = 'DRAFT' | 'READY' | 'COMPUTED' | 'FAILED' | 'ARCHIVED';
 
 export type HomeTwinImpactType =
-  | 'COST_SAVINGS'
-  | 'ENERGY_SAVINGS'
+  | 'UPFRONT_COST'
+  | 'ANNUAL_SAVINGS'
+  | 'PAYBACK_PERIOD'
+  | 'PROPERTY_VALUE_CHANGE'
   | 'RISK_REDUCTION'
-  | 'PROPERTY_VALUE'
-  | 'COMFORT_IMPACT'
+  | 'ENERGY_USE_CHANGE'
+  | 'MAINTENANCE_COST_CHANGE'
   | 'INSURANCE_IMPACT'
-  | 'CARBON_OFFSET'
+  | 'EMISSIONS_IMPACT'
+  | 'COMFORT_IMPACT'
   | 'CUSTOM';
 
 export type HomeTwinImpactDirection = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
