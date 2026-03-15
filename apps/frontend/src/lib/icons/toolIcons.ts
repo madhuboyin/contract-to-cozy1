@@ -41,6 +41,7 @@ export const TOOL_ICON_MAP = {
     'seller-prep': { concept: 'tasks', icon: 'list-checks', category: 'home' },
     'home-timeline': { concept: 'calendar', icon: 'calendar', category: 'home' },
     'status-board': { concept: 'status-board', icon: 'layout-grid', category: 'home' },
+    'hidden-asset-finder': { concept: 'recommendations', icon: 'sparkles', category: 'home' },
   },
   insights: {
     'daily-snapshot': { concept: 'calendar', icon: 'calendar-days', category: 'insight' },

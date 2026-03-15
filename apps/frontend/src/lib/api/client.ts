@@ -2933,6 +2933,55 @@ class APIClient {
       stateMetaJson: stateMetaJson ?? null,
     });
   }
+
+  // ==========================================================================
+  // HIDDEN ASSET FINDER
+  // ==========================================================================
+
+  async getHiddenAssetMatches(
+    propertyId: string,
+    params?: { category?: string; confidenceLevel?: string; includeDismissed?: boolean }
+  ): Promise<import('@/types').HiddenAssetMatchListDTO | null> {
+    const qs = new URLSearchParams();
+    if (params?.category) qs.set('category', params.category);
+    if (params?.confidenceLevel) qs.set('confidenceLevel', params.confidenceLevel);
+    if (params?.includeDismissed) qs.set('includeDismissed', 'true');
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    const res = await this.get<import('@/types').HiddenAssetMatchListDTO>(
+      `/api/properties/${propertyId}/hidden-assets${q}`
+    );
+    return res.data ?? null;
+  }
+
+  async refreshHiddenAssetMatches(
+    propertyId: string
+  ): Promise<import('@/types').HiddenAssetRefreshResultDTO | null> {
+    const res = await this.post<import('@/types').HiddenAssetRefreshResultDTO>(
+      `/api/properties/${propertyId}/hidden-assets/refresh`,
+      {}
+    );
+    return res.data ?? null;
+  }
+
+  async getHiddenAssetProgramDetail(
+    programId: string
+  ): Promise<import('@/types').HiddenAssetProgramDetailDTO | null> {
+    const res = await this.get<{ program: import('@/types').HiddenAssetProgramDetailDTO }>(
+      `/api/hidden-asset-programs/${programId}`
+    );
+    return res.data?.program ?? null;
+  }
+
+  async updateHiddenAssetMatchStatus(
+    matchId: string,
+    status: 'VIEWED' | 'DISMISSED' | 'CLAIMED'
+  ): Promise<import('@/types').HiddenAssetMatchDTO | null> {
+    const res = await this.patch<{ match: import('@/types').HiddenAssetMatchDTO }>(
+      `/api/property-hidden-asset-matches/${matchId}`,
+      { status }
+    );
+    return res.data?.match ?? null;
+  }
 }
 
 // Export singleton instance

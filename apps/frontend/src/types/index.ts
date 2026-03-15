@@ -1516,6 +1516,119 @@ export interface OracleReport {
   generatedAt: string; // ISO Date string
 }
 
+// ============================================================================
+// HIDDEN ASSET FINDER
+// ============================================================================
+
+export type HiddenAssetCategory =
+  | 'TAX_EXEMPTION'
+  | 'REBATE'
+  | 'UTILITY_INCENTIVE'
+  | 'INSURANCE_DISCOUNT'
+  | 'ENERGY_CREDIT'
+  | 'LOCAL_GRANT'
+  | 'HISTORIC_BENEFIT'
+  | 'STORM_RESILIENCE';
+
+export type HiddenAssetConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export type HiddenAssetBenefitType =
+  | 'TAX_SAVINGS'
+  | 'TAX_CREDIT'
+  | 'REBATE'
+  | 'DISCOUNT'
+  | 'GRANT'
+  | 'CREDIT'
+  | 'OTHER';
+
+export type HiddenAssetMatchStatus =
+  | 'DETECTED'
+  | 'VIEWED'
+  | 'DISMISSED'
+  | 'CLAIMED'
+  | 'EXPIRED'
+  | 'INACTIVE';
+
+export interface HiddenAssetMatchDTO {
+  id: string;
+  propertyId: string;
+  programId: string;
+  programName: string;
+  category: HiddenAssetCategory;
+  description: string | null;
+  benefitType: HiddenAssetBenefitType;
+  estimatedValue: number | null;
+  estimatedValueMin: number | null;
+  estimatedValueMax: number | null;
+  currency: string;
+  confidenceLevel: HiddenAssetConfidenceLevel;
+  /** Human-friendly confidence label from backend ("Likely eligible", etc.) */
+  eligibilityLabel: string;
+  status: HiddenAssetMatchStatus;
+  matchedRuleCount: number | null;
+  totalRuleCount: number | null;
+  matchReasons: string[] | null;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+  eligibilityNotes: string | null;
+  lastVerifiedAt: string | null;
+  expiresAt: string | null;
+  isProgramActive: boolean;
+  /** Non-null when program data is stale — surface as a caveat in UI. */
+  freshnessNote: string | null;
+  lastEvaluatedAt: string;
+  firstDetectedAt: string;
+  dismissedAt: string | null;
+  claimedAt: string | null;
+}
+
+export interface HiddenAssetMatchSummaryDTO {
+  totalMatches: number;
+  highConfidenceCount: number;
+  mediumConfidenceCount: number;
+  lowConfidenceCount: number;
+  categoryCounts: Partial<Record<HiddenAssetCategory, number>>;
+  lastScanAt: string | null;
+}
+
+export interface HiddenAssetMatchListDTO {
+  propertyId: string;
+  matches: HiddenAssetMatchDTO[];
+  summary: HiddenAssetMatchSummaryDTO;
+}
+
+export interface HiddenAssetProgramDetailDTO {
+  id: string;
+  name: string;
+  category: HiddenAssetCategory;
+  description: string | null;
+  regionType: string;
+  regionValue: string;
+  benefitType: HiddenAssetBenefitType;
+  benefitEstimateMin: number | null;
+  benefitEstimateMax: number | null;
+  currency: string;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+  eligibilityNotes: string | null;
+  isActive: boolean;
+  expiresAt: string | null;
+  lastVerifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HiddenAssetRefreshResultDTO {
+  scanRunId: string;
+  propertyId: string;
+  programsEvaluated: number;
+  matchesFound: number;
+  matchesExpired: number;
+  matchesInactivated: number;
+  durationMs: number;
+  matches: HiddenAssetMatchDTO[];
+}
+
 
 // ============================================================================
 // NEW BUDGET FORECASTER TYPES (PHASE 3)

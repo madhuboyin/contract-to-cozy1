@@ -418,4 +418,14 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     icon: resolveToolIcon('home', 'home-digital-will'),
     isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-will(\/|$)/.test(pathname),
   },
+  {
+    key: 'hidden-asset-finder',
+    name: 'Hidden Asset Finder',
+    description: 'Find potential rebates, credits, and benefits for your home',
+    hrefSuffix: 'tools/hidden-asset-finder',
+    navTarget: 'tool:hidden-asset-finder',
+    icon: resolveToolIcon('home', 'hidden-asset-finder'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/hidden-asset-finder(\/|$)/.test(pathname),
+  },
 ];
