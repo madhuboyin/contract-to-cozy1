@@ -220,6 +220,8 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   HOME_TIMELINE: 'CalendarClock',
   STATUS_BOARD: 'Activity',
   HOME_DIGITAL_WILL: 'BookOpen',
+  HIDDEN_ASSET_FINDER: 'Sparkles',
+  HOME_DIGITAL_TWIN: 'Layers',
 };
 
 const CORE_NAV_ALIASES: Record<string, CoreNavKey> = {

@@ -48,4 +48,8 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   insurance: ['insurance-trend', 'home-risk-replay', 'status-board'],
   dashboard: ['home-event-radar', 'status-board', 'home-risk-replay'],
   'home-digital-will': ['home-event-radar', 'home-risk-replay', 'status-board'],
+  // Asset discovery and system modeling surface each other naturally.
+  'hidden-asset-finder': ['home-digital-twin', 'home-digital-will', 'status-board'],
+  // From the digital twin, capital planning and risk history are the most relevant follow-ons.
+  'home-digital-twin': ['capital-timeline', 'status-board', 'home-risk-replay'],
 };
