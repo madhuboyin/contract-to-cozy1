@@ -301,118 +301,6 @@ enum ReplaceRepairImpactLevel {
   HIGH
 }
 
-enum HomeDigitalTwinStatus {
-  DRAFT
-  ACTIVE
-  STALE
-  ARCHIVED
-}
-
-enum HomeTwinComponentType {
-  ROOF
-  HVAC
-  WATER_HEATER
-  PLUMBING
-  ELECTRICAL
-  INSULATION
-  WINDOWS
-  SOLAR
-  FLOORING
-  EXTERIOR
-  FOUNDATION
-  APPLIANCE
-  OTHER
-}
-
-enum HomeTwinComponentStatus {
-  KNOWN
-  ESTIMATED
-  NEEDS_REVIEW
-  RETIRED
-}
-
-enum HomeTwinSourceType {
-  PROPERTY_PROFILE
-  INVENTORY
-  DOCUMENT
-  RISK_ENGINE
-  MANUAL
-  SYSTEM_DERIVED
-  IMPORT
-  OTHER
-}
-
-enum HomeTwinScenarioType {
-  REPLACE_COMPONENT
-  UPGRADE_COMPONENT
-  ADD_FEATURE
-  REMOVE_FEATURE
-  ENERGY_IMPROVEMENT
-  RESILIENCE_IMPROVEMENT
-  RENOVATION
-  CUSTOM
-}
-
-enum HomeTwinScenarioStatus {
-  DRAFT
-  READY
-  COMPUTED
-  FAILED
-  ARCHIVED
-}
-
-enum HomeTwinImpactType {
-  UPFRONT_COST
-  ANNUAL_SAVINGS
-  PAYBACK_PERIOD
-  PROPERTY_VALUE_CHANGE
-  RISK_REDUCTION
-  ENERGY_USE_CHANGE
-  MAINTENANCE_COST_CHANGE
-  INSURANCE_IMPACT
-  EMISSIONS_IMPACT
-  COMFORT_IMPACT
-  CUSTOM
-}
-
-enum HomeTwinImpactDirection {
-  POSITIVE
-  NEGATIVE
-  NEUTRAL
-  UNKNOWN
-}
-
-enum HomeTwinDataQualityDimension {
-  PROPERTY_PROFILE
-  SYSTEMS
-  APPLIANCES
-  DOCUMENTATION
-  COST_BASIS
-  ENERGY_BASIS
-  RISK_BASIS
-}
-
-enum HomeTwinDataQualityStatus {
-  SUFFICIENT
-  PARTIAL
-  INSUFFICIENT
-  UNKNOWN
-}
-
-enum HomeTwinRunType {
-  INITIAL_BUILD
-  REFRESH
-  SCENARIO_COMPUTE
-  QUALITY_EVALUATION
-}
-
-enum HomeTwinRunStatus {
-  QUEUED
-  RUNNING
-  SUCCEEDED
-  FAILED
-}
-
 model InventoryRoomScanSession {
   id          String   @id @default(uuid())
   propertyId  String
@@ -1297,8 +1185,6 @@ model User {
   negotiationShieldCasesCreated NegotiationShieldCase[] @relation("NegotiationShieldCaseCreatedBy")
   radarStates    PropertyRadarState[]
 
-  createdHomeTwinScenarios HomeTwinScenario[]
-
   @@index([email])
   @@index([role])
   
@@ -1821,10 +1707,6 @@ model Property {
   hiddenAssetMatches  PropertyHiddenAssetMatch[]
   hiddenAssetScanRuns PropertyHiddenAssetScanRun[]
 
-  homeDigitalTwin     HomeDigitalTwin?
-  homeTwinComponents  HomeTwinComponent[]
-  homeTwinScenarios   HomeTwinScenario[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2168,4 +2050,4871 @@ model Payment {
   @@index([bookingId])
   @@index([status])
   @@map("payments")
+}
+
+// ============================================================================
+// DOCUMENT MANAGEMENT
+// ============================================================================
+
+model Document {
+  id          String       @id @default(uuid())
+  bookingId   String?
+  propertyId  String?      // NEW: Link to general home documents
+  warrantyId  String? // NEW: Link to a Warranty record
+  policyId    String? // NEW: Link to an InsurancePolicy record
+
+  uploadedBy  String       // userId
+  
+  // Document Details
+  type        DocumentType
+  name        String
+  description String?
+  fileUrl     String
+  fileSize    Int          // Bytes
+  mimeType    String
+  
+  // Metadata
+  metadata    Json? // Flexible storage for document-specific data
+  sha256      String? @db.VarChar(64)
+  storageEtag String?
+
+  // Verification lifecycle
+  verificationStatus DocumentVerificationStatus @default(UNVERIFIED)
+  verifiedAt         DateTime?
+  verifiedByUserId   String?
+
+  // Extraction quality/versioning
+  ocrQualityScore Float?
+  parserVersion   String?
+  
+  // Relations
+  booking          Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  property         Property? @relation("PropertyDocuments", fields: [propertyId], references: [id])
+  coverForProperties Property[] @relation("PropertyCoverPhoto")
+  warranty         Warranty? @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  insurancePolicy  InsurancePolicy? @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  inventoryItemId  String? // NEW: Link to an InventoryItem record
+  inventoryItem    InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  homeReportExports HomeReportExport[]
+  claimDocuments ClaimDocument[]
+  homeEventLinks HomeEventDocument[]
+  riskMitigationPlanItems RiskMitigationPlanItem[]
+  capitalTimelineItems HomeCapitalTimelineItem[]
+  negotiationShieldDocuments NegotiationShieldDocument[]
+  knowledgeArticleCoverFor KnowledgeArticle[] @relation("KnowledgeArticleCoverDocument")
+  
+  homeSavingsAccountId     String?
+  homeSavingsOpportunityId String?
+
+  homeSavingsAccount       HomeSavingsAccount?     @relation("HomeSavingsAccountDocuments", fields: [homeSavingsAccountId], references: [id], onDelete: SetNull)
+  homeSavingsOpportunity   HomeSavingsOpportunity? @relation("HomeSavingsOpportunityDocuments", fields: [homeSavingsOpportunityId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([homeSavingsAccountId])
+  @@index([homeSavingsOpportunityId])
+
+  @@index([bookingId])
+  @@index([type])
+  @@index([propertyId]) // NEW INDEX
+  @@index([propertyId, type, createdAt(sort: Desc)])
+  @@index([verificationStatus, createdAt(sort: Desc)])
+  @@index([sha256])
+  @@index([warrantyId]) // NEW INDEX
+  @@index([policyId])   // NEW INDEX
+  @@index([inventoryItemId]) // NEW INDEX
+  @@map("documents")
+}
+
+// ============================================================================
+// MESSAGING SYSTEM
+// ============================================================================
+
+model Message {
+  id          String      @id @default(uuid())
+  bookingId   String?
+  senderId    String
+  recipientId String
+  
+  // Message Content
+  type        MessageType @default(TEXT)
+  content     String
+  attachments Json? // Array of file URLs
+  
+  // Status
+  isRead      Boolean     @default(false)
+  readAt      DateTime?
+  // Relations
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id])
+  
+  createdAt DateTime @default(now())
+  
+  @@index([bookingId])
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+// Add new enum for frequency
+enum RecurrenceFrequency {
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUALLY
+  ANNUALLY
+}
+
+
+model MaintenanceTaskTemplate {
+  id               String               @id @default(uuid())
+  title            String
+  description      String?
+  defaultFrequency RecurrenceFrequency
+  serviceCategory  ServiceCategory?
+  
+  // NEW fields
+  isActive         Boolean @default(true)
+  sortOrder        Int     @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("maintenance_task_templates")
+}
+
+// ============================================================================
+// WARRANTY MANAGEMENT
+// ============================================================================
+
+model Warranty {
+  id                 String    @id @default(uuid())
+  homeownerProfileId String
+  category           WarrantyCategory @default(HOME_WARRANTY_PLAN)
+  propertyId         String? // Link to a specific property (e.g., HVAC unit warranty is for the main home)
+  homeAssetId        String?
+  inventoryItemId    String?  // NEW: Direct link to InventoryItem
+  // Policy Details
+  providerName       String
+  policyNumber       String?
+  coverageDetails    String?
+  cost               Decimal? @db.Decimal(12, 2)
+  
+  // Dates
+  startDate          DateTime
+  expiryDate         DateTime
+  
+  // Relations
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property? @relation(fields: [propertyId], references: [id])
+  documents          Document[]
+  homeAsset          HomeAsset? @relation(fields: [homeAssetId], references: [id])
+  inventoryItem      InventoryItem? @relation("WarrantyToInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  
+  // PHASE 1: NEW RELATION
+  maintenanceTasks PropertyMaintenanceTask[]
+  inventoryItems    InventoryItem[]
+  claims Claim[]
+  homeSavingsAccounts HomeSavingsAccount[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([homeownerProfileId])
+  @@index([expiryDate])
+  @@index([homeAssetId])
+  @@index([inventoryItemId])
+  @@map("warranties")
+}
+
+// ============================================================================
+// INSURANCE MANAGEMENT
+// ============================================================================
+
+model InsurancePolicy {
+  id                 String    @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String? // Link to the insured property
+
+  // Policy Details
+  carrierName        String
+  policyNumber       String
+  coverageType       String? // e.g., "Homeowner", "Landlord", "Flood"
+  premiumAmount      Decimal   @db.Decimal(12, 2)
+
+  // ✅ Added for optimizer (recommended)
+  deductibleAmount   Decimal?  @db.Decimal(12, 2)
+  coverageJson       Json?
+
+  personalPropertyLimitCents Int? 
+  deductibleCents            Int?
+  isVerified                 Boolean @default(false)
+  lastVerifiedAt             DateTime?
+  // Dates
+  startDate          DateTime
+  expiryDate         DateTime
+
+  // Relations
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property? @relation(fields: [propertyId], references: [id])
+  documents          Document[]
+  inventoryItems     InventoryItem[]
+  claims             Claim[]
+  homeSavingsAccounts HomeSavingsAccount[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Existing
+  @@index([homeownerProfileId])
+  @@index([expiryDate])
+
+  // ✅ Recommended additions
+  @@index([propertyId, startDate(sort: Desc)]) // latest policy for a property
+  @@index([propertyId, expiryDate])            // active/expiring policy lookups
+  @@index([homeownerProfileId, startDate(sort: Desc)]) // latest across profile
+  @@index([carrierName])
+  @@index([policyNumber])
+  @@index([coverageType])
+
+  @@map("insurance_policies")
+}
+
+
+// ============================================================================
+// EXPENSE MANAGEMENT
+// ============================================================================
+
+model Expense {
+  id                 String          @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String? // Link to a specific property
+  bookingId          String? // Optional link to a platform booking (e.g., a top-up payment)
+  
+  // Expense Details
+  description        String
+  category           ExpenseCategory
+  amount             Decimal         @db.Decimal(12, 2)
+  transactionDate    DateTime
+  
+  // Relations
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property? @relation(fields: [propertyId], references: [id])
+  booking            Booking? @relation(fields: [bookingId], references: [id])
+  homeEvents HomeEvent[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([homeownerProfileId])
+  @@index([category])
+  @@index([transactionDate])
+  @@map("expenses")
+}
+
+model HomeAsset {
+  id          String    @id @default(uuid())
+  propertyId  String
+  property    Property  @relation(fields: [propertyId], references: [id])
+  assetType   String    // e.g., "HVAC_FURNACE", "WATER_HEATER" - should map to an Enum
+  installationYear Int? // Year the user installed it (more accurate than age)
+  modelNumber String?
+  serialNumber String?
+  // Optional fields for Maintenance Readiness/Energy:
+  lastServiced DateTime? 
+  efficiencyRating String?
+  warranties  Warranty[]
+  
+  // PHASE 1: NEW RELATION
+  maintenanceTasks PropertyMaintenanceTask[]
+  inventoryItems InventoryItem[]
+
+  manufacturer    String?
+  brand           String?
+  manufacturerNorm String?
+  modelNumberNorm  String?
+
+  recallMatches   RecallMatch[]
+  homeItems HomeItem[]
+
+  @@index([manufacturerNorm, modelNumberNorm])
+  
+  @@index([propertyId])
+  @@unique([propertyId, assetType]) // Usually only one furnace per house
+}
+
+model MovingPlan {
+  id              String   @id @default(uuid())
+  propertyId      String
+  closingDate     DateTime
+  planData        Json     // Full moving plan (timeline, costs, utilities, etc.)
+  completedTasks  String[] // Array of completed task IDs
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
+  @@map("moving_plans")
+}
+
+model CommunityEvent {
+  id              String   @id @default(uuid())
+  source          String
+  externalEventId String
+  title           String
+  description     String?
+  startTime       DateTime
+  endTime         DateTime?
+  venueName       String?
+  city            String
+  state           String
+  latitude        Float?
+  longitude       Float?
+  externalUrl     String
+  isActive        Boolean  @default(true)
+  lastFetchedAt   DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@unique([source, externalEventId])
+  @@index([city, state, startTime])
+  @@index([isActive, startTime])
+}
+
+model CityFeatureFlag {
+  id               String  @id @default(uuid())
+  city             String
+  state            String
+  eventsEnabled    Boolean @default(false)
+  servicesEnabled  Boolean @default(false)
+  alertsEnabled    Boolean @default(false)
+  providersEnabled Boolean @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([city, state])
+}
+
+model SellerPrepPlan {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  preferences Json?    // ADD THIS LINE
+  createdAt   DateTime @default(now())
+
+  items       SellerPrepPlanItem[]
+  interviews  AgentInterview[]
+
+  @@index([userId, propertyId])
+}
+
+model SellerPrepPlanItem {
+  id          String   @id @default(uuid())
+  planId      String
+  code        String
+  title       String
+  priority    String
+  roiRange    String
+  costBucket  String
+  status      String   @default("PLANNED")
+  
+  // Timeline tracking
+  completedAt DateTime?
+  skippedAt   DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt  // ADD DEFAULT
+
+  plan        SellerPrepPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@index([status])
+}
+
+model SellerPrepLead {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  leadType    String   // AGENT | CONTRACTOR | STAGER
+  context     String   // JSON string with task details
+  
+  // NEW FIELDS for contact info
+  fullName    String?
+  email       String?
+  phone       String?
+  contactMethod String? // email | phone | either
+  
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId, leadType])
+}
+
+model SellerPrepFeedback {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  rating      String   // "helpful" or "not-helpful"
+  comment     String?
+  page        String   @default("seller-prep")
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId])
+  @@index([rating])
+  @@index([createdAt])
+}
+
+// NEW MODEL: Stores data for the Agent Interview Guide
+model AgentInterview {
+  id          String   @id @default(uuid())
+  planId      String
+  
+  agentName   String
+  isFavorite  Boolean  @default(false)
+  
+  // Structured Notes (Stored as JSON to handle dynamic interview questions)
+  // Format: { "Experience": "...", "Marketing": "...", "Pricing": "...", etc. }
+  notes       Json?
+  
+  totalScore  Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plan        SellerPrepPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("agent_interviews")
+}
+
+// ============================================================================
+// INSPECTION REPORTS (HOME_BUYER FEATURE)
+// ============================================================================
+
+model InspectionReport {
+  id                  String   @id @default(uuid())
+  propertyId          String
+  userId              String
+  
+  // Report metadata
+  inspectionDate      DateTime?
+  inspectorName       String?
+  inspectorCompany    String?
+  reportType          String?
+  
+  // PDF storage
+  pdfUrl              String?
+  pdfFileName         String
+  
+  // AI Analysis Results
+  overallScore        Int      @default(0)
+  overallCondition    String   @default("FAIR")
+  
+  totalIssuesFound    Int      @default(0)
+  criticalIssues      Int      @default(0)
+  highPriorityIssues  Int      @default(0)
+  mediumIssues        Int      @default(0)
+  lowIssues           Int      @default(0)
+  cosmeticIssues      Int      @default(0)
+  
+  // Cost estimates
+  totalRepairCost     Decimal  @default(0) @db.Decimal(12, 2)
+  criticalRepairCost  Decimal  @default(0) @db.Decimal(12, 2)
+  recommendedRepairCost Decimal @default(0) @db.Decimal(12, 2)
+  
+  // Negotiation data
+  negotiationScript   String?  @db.Text
+  suggestedCredit     Decimal? @db.Decimal(12, 2)
+  negotiationPoints   Json?
+  
+  // Comparison data
+  comparableHomes     Json?
+  marketContext       String?  @db.Text
+  
+  // Status
+  analysisCompleted   Boolean  @default(false)
+  analysisError       String?
+  
+  // Relations
+  property            Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  issues              InspectionIssue[]
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@index([propertyId])
+  @@index([userId])
+  @@map("inspection_reports")
+}
+
+model InspectionIssue {
+  id                  String   @id @default(uuid())
+  reportId            String
+  
+  // Issue details
+  title               String
+  description         String   @db.Text
+  location            String
+  category            String
+  
+  // Severity & Priority
+  severity            String
+  urgency             String
+  isCritical          Boolean  @default(false)
+  
+  // Cost estimates
+  estimatedCost       Decimal  @db.Decimal(12, 2)
+  costRange           Json?
+  
+  // Inspector notes
+  inspectorNotes      String?  @db.Text
+  inspectorRecommendation String? @db.Text
+  
+  // Repair info
+  repairRecommendations String[]
+  preventativeMeasures  String[]
+  estimatedRepairTime   String?
+  
+  // Maintenance calendar
+  needsImmediateAction Boolean @default(false)
+  scheduledMaintenanceDate DateTime?
+  maintenanceFrequency String?
+  
+  // Relations
+  report              InspectionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@index([reportId])
+  @@index([severity])
+  @@index([category])
+  @@map("inspection_issues")
+}
+
+model LocalUpdate {
+  id               String   @id @default(uuid())
+
+  title            String
+  shortDescription String
+
+  category         LocalUpdateCategory
+
+  sourceName       String
+  isSponsored      Boolean  @default(false)
+
+  ctaText          String
+  ctaUrl           String?
+
+  priority         Int      @default(3)
+
+  startDate        DateTime
+  endDate          DateTime
+
+  // Location targeting
+  zipCodes         String[]
+  cities           String[]
+  state            String?
+
+  // Eligibility
+  propertyTypes    PropertyType[]
+  ownerOnly        Boolean  @default(false)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  dismissals       UserLocalUpdateDismissal[]
+  events           LocalUpdateEvent[]
+
+  @@index([startDate, endDate])
+}
+
+model UserLocalUpdateDismissal {
+  id             String   @id @default(uuid())
+
+  userId         String
+  localUpdateId  String
+
+  dismissedAt    DateTime @default(now())
+
+  localUpdate    LocalUpdate @relation(fields: [localUpdateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, localUpdateId])
+  @@index([userId])
+}
+model LocalUpdateEvent {
+  id             String   @id @default(uuid())
+
+  userId         String?
+  localUpdateId  String
+
+  eventType      LocalUpdateEventType
+
+  createdAt      DateTime @default(now())
+
+  localUpdate    LocalUpdate @relation(fields: [localUpdateId], references: [id], onDelete: Cascade)
+
+  @@index([localUpdateId])
+}
+
+// ===============================
+// Orchestration Action Events
+// ===============================
+
+model OrchestrationActionEvent {
+  id            String   @id @default(cuid())
+
+  // Scope
+  propertyId    String
+  actionKey     String   // canonical identity (stable across recalculations)
+
+  // Event semantics
+  actionType    OrchestrationActionEventType
+  source        OrchestrationActionSource
+
+  primarySourceType  SignalSourceType? // optional cache
+  primarySourceLabel String?           // optional cache
+  primaryConfidence  Float?            // optional cache
+
+  // Metadata / audit
+  payload       Json?
+  createdBy     String?  // userId (nullable for system actions)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  // Performance + idempotency
+  @@index([propertyId])
+  @@index([propertyId, actionKey])
+  @@index([actionKey])
+
+  // Guarantees idempotency per action type
+  @@unique([propertyId, actionKey, actionType])
+}
+
+enum OrchestrationActionEventType {
+  USER_MARKED_COMPLETE
+  USER_UNMARKED_COMPLETE
+  USER_DISMISSED
+  SYSTEM_SUPPRESSED
+  SYSTEM_UNSUPPRESSED
+}
+
+enum OrchestrationActionSource {
+  USER
+  SYSTEM
+}
+
+model OrchestrationActionSnooze {
+  id            String   @id @default(uuid())
+  propertyId    String
+  actionKey     String
+  
+  snoozedAt     DateTime @default(now())
+  snoozeUntil   DateTime
+  snoozeReason  String?
+  
+  endedAt       DateTime?  // When un-snoozed or auto-expired
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([propertyId, actionKey])
+  @@index([snoozeUntil])
+  @@map("orchestration_action_snoozes")
+}
+
+model OrchestrationActionCompletion {
+  id            String   @id @default(uuid())
+  
+  // Scope
+  propertyId    String
+  actionKey     String   // Links to orchestration action
+  eventId       String   @unique // Links to USER_MARKED_COMPLETE event
+  
+  // Completion details
+  completedAt   DateTime
+  costAmount    Decimal? @db.Decimal(10, 2)
+  costCurrency  String   @default("USD")
+  didItMyself   Boolean  @default(false)
+  
+  serviceProviderName   String?
+  serviceProviderRating Int? // 1-5
+  
+  notes         String?  @db.Text
+  photoCount    Int      @default(0)
+  
+  // Metadata
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?  // userId
+  undoneAt      DateTime? // If user undoes completion
+  
+  // Relations
+  photos        OrchestrationActionCompletionPhoto[]
+  
+  @@index([propertyId, actionKey])
+  @@index([propertyId, completedAt])
+  @@index([serviceProviderName])
+  @@map("orchestration_action_completions")
+}
+
+model OrchestrationActionCompletionPhoto {
+  id            String   @id @default(uuid())
+  
+  completionId  String?
+  propertyId    String
+  
+  // File metadata
+  fileName      String
+  fileSizeBytes Int
+  mimeType      String
+  
+  // URLs (PLACEHOLDER - will store S3 URLs when image processing is implemented)
+  originalUrl   String
+  thumbnailUrl  String
+  
+  // Dimensions
+  width         Int?
+  height        Int?
+  
+  orderIndex    Int      @default(0)
+  uploadedAt    DateTime @default(now())
+  
+  // Relations
+  completion    OrchestrationActionCompletion? @relation(fields: [completionId], references: [id], onDelete: Cascade)
+  @@index([completionId])
+  @@index([propertyId])
+  @@map("orchestration_action_completion_photos")
+}
+
+
+model OrchestrationDecisionTrace {
+  id          String   @id @default(uuid())
+
+  // Scope
+  propertyId  String
+  actionKey   String   // canonical identity (stable)
+
+  // Snapshot metadata
+  computedAt  DateTime @default(now())
+  algoVersion String?  // optional: "v1", "phase8-coverage", etc.
+
+  // Persisted explanation payloads
+  signals     Json?    // age, last service, coverage, assumptions, etc.
+  confidence  Json?    // confidence drivers and score/level
+  suppression Json?    // suppressionSource + reasons (if any)
+  steps       Json     // DecisionTraceStep[] (ordered)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([propertyId, actionKey])
+  @@index([propertyId])
+  @@index([actionKey])
+  @@map("orchestration_decision_traces")
+}
+
+// ===============================
+// SIGNAL SOURCE TAGGING
+// ===============================
+
+enum SignalSourceType {
+  SCHEDULED     // ⏱ Time-based / cron / seasonal
+  INTELLIGENCE  // 📊 Risk model / AI / prediction
+  COVERAGE      // 📄 Insurance / warranty derived
+  MANUAL        // 👤 User initiated
+  SENSOR        // 🔔 IoT / telemetry
+  DOCUMENT      // 🧾 OCR/PDF extraction
+  EXTERNAL      // 🌎 CPSC/NOAA/3rd-party feeds (optional but useful)
+}
+
+enum SignalTriggerType {
+  RULE          // deterministic rule fired
+  MODEL         // probabilistic model output
+  EXTRACTION    // OCR/doc parsing
+  USER_ACTION   // explicit user action
+  SCHEDULE      // cron/time-based
+  INGEST        // external feed ingestion
+}
+
+enum DerivedFromType {
+  RISK_ASSESSMENT
+  POLICY
+  WARRANTY
+  DOCUMENT
+  INVENTORY_ITEM
+  RECALL_RECORD
+  WEATHER_EVENT
+  USER_EVENT
+}
+
+
+model SignalProvenance {
+  id              String           @id @default(uuid())
+  propertyId  String
+
+  // Core taxonomy
+  sourceType       SignalSourceType
+  triggerType      SignalTriggerType
+
+  // Optional “where it came from”
+  sourceSystem     String?          // e.g. "coverageLapseJob", "freezeRiskModel", "ocrLabel", "cpscIngest"
+  sourceVersion    String?          // model version, ruleset version, pipeline version
+  sourceRunId      String?          // jobRunId / batchId / ingestionRunId / workflowRunId
+
+  // Optional linkage to the underlying evidence/inputs
+  derivedFromType  DerivedFromType?         // "RISK_ASSESSMENT" | "POLICY" | "WARRANTY" | "DOCUMENT" | "INVENTORY_ITEM" etc.
+  derivedFromId    String?          // id of the evidence record
+  externalRef      String?          // provider id or URL-safe id (e.g., CPSC recall id)
+
+  // Explainability
+  label            String?          // short UI label override (rare)
+  summary          String?          // 1-line “why this appeared”
+  details          Json?            // structured payload: thresholds, features, matched fields, etc.
+  confidence       Float?           // 0..1 (or 0..100) – pick one convention
+  severityScore    Float?           // optional numeric strength signal separate from confidence
+
+  // Polymorphic target (links provenance to a thing in your system)
+  targetType       String           // "ORCHESTRATED_ACTION" | "INCIDENT" | "NOTIFICATION" | "TASK" | "CLAIM_INSIGHT"
+  targetId         String
+
+  createdAt        DateTime         @default(now())
+  attributions    SignalAttribution[]
+  homeEvents      HomeEvent[]       @relation("HomeEventProvenance")
+  homeScoreReportEvidenceLinks HomeScoreReportEvidenceLink[]
+
+  @@index([propertyId])
+  @@index([propertyId, targetType, targetId])
+
+  @@index([targetType, targetId])
+  @@index([sourceType])
+  @@index([sourceSystem])
+}
+
+model SignalAttribution {
+  id             String @id @default(uuid())
+  provenanceId   String
+  provenance     SignalProvenance @relation(fields: [provenanceId], references: [id], onDelete: Cascade)
+
+  rank           Int    @default(0)    // 0 = primary
+  weight         Float?                 // e.g. contribution score
+
+  @@index([provenanceId])
+}
+
+
+// =============================================================================
+// SEASONAL MAINTENANCE MODELS
+// =============================================================================
+
+model SeasonalTaskTemplate {
+  id                    String           @id @default(cuid())
+  taskKey               String           @unique @map("task_key")
+  season                Season
+  title                 String
+  description           String?
+  whyItMatters          String?          @map("why_it_matters")
+  typicalCostMin        Decimal?         @map("typical_cost_min") @db.Decimal(10, 2)
+  typicalCostMax        Decimal?         @map("typical_cost_max") @db.Decimal(10, 2)
+  isDiyPossible         Boolean          @default(false) @map("is_diy_possible")
+  diyDifficulty         String?          @default("MODERATE") @map("diy_difficulty")
+  tutorialUrl           String?          @map("tutorial_url")
+  materialsList         String?          @map("materials_list")
+  safetyWarning         String?          @map("safety_warning")
+  estimatedHours        Decimal?         @map("estimated_hours") @db.Decimal(4, 1)
+  priority              TaskPriority     @default(RECOMMENDED)
+  serviceCategory       String?          @map("service_category")
+  climateRegions        ClimateRegion[]  @map("climate_regions")
+  requiredAssetType     String?          @map("required_asset_type")
+  requiredAssetCheck    String?          @map("required_asset_check")
+  timingOffsetDays      Int              @default(-14) @map("timing_offset_days")
+  recurrencePattern     String           @default("ANNUAL") @map("recurrence_pattern")
+  isActive              Boolean          @default(true) @map("is_active")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  
+  // Relations
+  seasonalChecklistItems SeasonalChecklistItem[]
+  
+  @@index([season])
+  @@index([isActive, priority])
+  @@map("seasonal_task_templates")
+}
+
+model SeasonalChecklist {
+  id                   String                  @id @default(cuid())
+  propertyId           String                  @map("property_id")
+  season               Season
+  year                 Int
+  climateRegion        ClimateRegion           @map("climate_region")
+  seasonStartDate      DateTime                @map("season_start_date") @db.Date
+  seasonEndDate        DateTime                @map("season_end_date") @db.Date
+  status               SeasonalChecklistStatus @default(PENDING)
+  totalTasks           Int                     @default(0) @map("total_tasks")
+  tasksAdded           Int                     @default(0) @map("tasks_added")
+  tasksCompleted       Int                     @default(0) @map("tasks_completed")
+  generatedAt          DateTime                @default(now()) @map("generated_at")
+  firstViewedAt        DateTime?               @map("first_viewed_at")
+  notificationSentAt   DateTime?               @map("notification_sent_at")
+  dismissedAt          DateTime?               @map("dismissed_at")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+  
+  // Relations
+  property             Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  items                SeasonalChecklistItem[]
+  
+  @@unique([propertyId, season, year])
+  @@index([propertyId])
+  @@index([status, seasonStartDate])
+  @@map("seasonal_checklists")
+}
+
+model SeasonalChecklistItem {
+  id                       String                @id @default(cuid())
+  seasonalChecklistId      String                @map("seasonal_checklist_id")
+  seasonalTaskTemplateId   String                @map("seasonal_task_template_id")
+  propertyId               String                @map("property_id")
+  checklistItemId          String?               @unique @map("checklist_item_id")
+  taskKey                  String                @map("task_key")
+  title                    String
+  description              String?
+  priority                 TaskPriority          @default(RECOMMENDED)
+  status                   SeasonalTaskStatus    @default(RECOMMENDED)
+  recommendedDate          DateTime?             @map("recommended_date") @db.Date
+  addedAt                  DateTime?             @map("added_at")
+  completedAt              DateTime?             @map("completed_at")
+  dismissedAt              DateTime?             @map("dismissed_at")
+  snoozedUntil             DateTime?             @map("snoozed_until")
+  createdAt                DateTime              @default(now()) @map("created_at")
+  updatedAt                DateTime              @updatedAt @map("updated_at")
+  
+  // Relations
+  seasonalChecklist        SeasonalChecklist     @relation(fields: [seasonalChecklistId], references: [id], onDelete: Cascade)
+  seasonalTaskTemplate     SeasonalTaskTemplate  @relation(fields: [seasonalTaskTemplateId], references: [id])
+  property                 Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  checklistItem            ChecklistItem?        @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  
+  // PHASE 1: NEW RELATION
+  maintenanceTask PropertyMaintenanceTask?
+  
+  @@index([seasonalChecklistId])
+  @@index([propertyId, status])
+  @@index([checklistItemId])
+  @@map("seasonal_checklist_items")
+}
+
+model PropertyOnboarding {
+  id            String   @id @default(uuid())
+  propertyId    String   @unique
+  userId        String
+  status        OnboardingStatus @default(IN_PROGRESS)
+
+  // step tracking
+  currentStep   Int      @default(1) // 1..5
+  completedJson Json?    // { "1": true, "2": false, ... }
+  dismissedAt   DateTime?
+
+  // derived snapshot (optional cache)
+  setupScore    Int      @default(0)
+
+  // Narrative Engine (first-visit story overlay)
+  narrativeRunId        String?
+  narrativeSeenAt       DateTime?
+  narrativeCompletedAt  DateTime?
+  narrativeDismissedAt  DateTime?
+
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  property      Property  @relation(fields: [propertyId], references: [id])
+}
+
+enum OnboardingStatus {
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+model ReplaceRepairAnalysis {
+  id                 String  @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+  inventoryItemId    String
+
+  status      ReplaceRepairAnalysisStatus @default(READY)
+  verdict     ReplaceRepairVerdict
+  confidence  ReplaceRepairConfidence
+  impactLevel ReplaceRepairImpactLevel?
+
+  // Short human summary for UI card
+  summary     String?
+  nextSteps   Json?   // structured actions
+  decisionTrace Json? // factors: label/detail/impact
+
+  // Inputs / assumptions (user overrides, inferred defaults, cost assumptions)
+  inputsSnapshot Json?
+
+  // Key numerics (queryable + sortable for backlog)
+  ageYears                  Int?
+  remainingYears            Int?
+  estimatedNextRepairCostCents      Int?
+  estimatedReplacementCostCents     Int?
+  expectedAnnualRepairRiskCents     Int?
+  expectedAnnualOwnershipDeltaCents Int? // optional: replace vs repair yearly delta
+  breakEvenMonths            Int?
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([inventoryItemId, computedAt(sort: Desc)])
+  @@index([propertyId, verdict])
+  @@index([propertyId, impactLevel])
+  @@map("replace_repair_analyses")
+}
+
+model PropertyClimateSetting {
+  id                      String              @id @default(cuid())
+  propertyId              String              @unique @map("property_id")
+  climateRegion           ClimateRegion       @map("climate_region")
+  climateRegionSource     String              @default("AUTO_DETECTED") @map("climate_region_source")
+  notificationTiming      NotificationTiming  @default(STANDARD) @map("notification_timing")
+  notificationEnabled     Boolean             @default(true) @map("notification_enabled")
+  autoGenerateChecklists  Boolean             @default(true) @map("auto_generate_checklists")
+  customSeasonDates       Json?               @map("custom_season_dates")
+  excludedTaskKeys        String[]            @default([]) @map("excluded_task_keys")
+
+  dailyPulseEnabled   Boolean  @default(true)  @map("daily_pulse_enabled")
+  dailyPulseChannel   NotificationChannel?     @map("daily_pulse_channel") // reuse your enum
+  dailyPulseTimeLocal String?  @map("daily_pulse_time_local") // "08:00"
+
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+  
+  // Relations
+  property                Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
+  @@index([climateRegion])
+  @@map("property_climate_settings")
+}
+
+model PropertyFinanceSnapshot {
+  id                 String   @id @default(uuid())
+  propertyId          String   @unique
+  mortgageBalance     Float?
+  interestRate        Float?   // decimal, e.g. 0.0625
+  remainingTermMonths Int?
+  monthlyPayment      Float?   // optional override; if null, computed
+  lastVerifiedAt      DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model ToolOverride {
+  id         String   @id @default(uuid())
+  propertyId  String
+  toolKey     String   // e.g. "SELL_HOLD_RENT"
+  key         String   // e.g. "monthlyRentNow", "appreciationRate"
+  value       Float
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, toolKey, key])
+  @@index([propertyId, toolKey])
+}
+
+
+// ============================================================================
+// HOME TIMELINE
+// ============================================================================
+
+enum HomeEventType {
+  PURCHASE
+  DOCUMENT
+  REPAIR
+  MAINTENANCE
+  CLAIM
+  IMPROVEMENT
+  VALUE_UPDATE
+  INSPECTION
+  NOTE
+  MILESTONE
+  OTHER
+}
+
+enum HomeEventImportance {
+  LOW
+  NORMAL
+  HIGH
+  HIGHLIGHT
+}
+
+enum HomeEventVisibility {
+  PRIVATE
+  HOUSEHOLD
+  SHARE_LINK
+  RESALE_PACK
+}
+
+enum HomeEventDocumentKind {
+  PHOTO
+  RECEIPT
+  INVOICE
+  PDF
+  BEFORE
+  AFTER
+  OTHER
+}
+
+enum HomeScoreProvenanceBadge {
+  VERIFIED
+  DOCUMENT_BACKED
+  PUBLIC_RECORD
+  USER_REPORTED
+  INFERRED
+  MISSING
+}
+
+model HomeEvent {
+  id              String   @id @default(uuid())
+  propertyId      String
+  createdById     String?
+
+  roomId          String?
+  inventoryItemId String?
+  claimId         String?
+  expenseId       String?
+
+  type            HomeEventType
+  subtype         String?
+  importance      HomeEventImportance @default(NORMAL)
+  visibility      HomeEventVisibility @default(HOUSEHOLD)
+
+  occurredAt      DateTime
+  endAt           DateTime?
+
+  title           String
+  summary         String?
+
+  // Money/value signals (align with Expense using Decimal)
+  amount          Decimal? @db.Decimal(12, 2)
+  currency        String?  @default("USD")
+  valueDelta      Decimal? @db.Decimal(12, 2)
+
+  meta            Json?
+  groupKey        String?
+  idempotencyKey  String?
+  sourceBadge     HomeScoreProvenanceBadge @default(USER_REPORTED)
+  confidenceScore Int?
+  provenanceId    String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy       User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  room            InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  claim           Claim?         @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  expense         Expense?       @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  provenance      SignalProvenance? @relation("HomeEventProvenance", fields: [provenanceId], references: [id], onDelete: SetNull)
+
+  documents       HomeEventDocument[]
+  riskMitigationPlanItems RiskMitigationPlanItem[]
+  capitalTimelineItems HomeCapitalTimelineItem[]
+
+  @@index([propertyId, occurredAt])
+  @@index([propertyId, type, occurredAt])
+  @@index([propertyId, roomId, occurredAt])
+  @@index([propertyId, inventoryItemId, occurredAt])
+  @@index([propertyId, claimId, occurredAt])
+  @@index([propertyId, importance, occurredAt])
+  @@index([propertyId, sourceBadge, occurredAt])
+  @@index([propertyId, groupKey])
+  @@index([provenanceId])
+
+  @@unique([propertyId, idempotencyKey])
+  @@map("home_events")
+}
+
+model HomeEventDocument {
+  id         String @id @default(uuid())
+  eventId    String
+  documentId String
+
+  kind       HomeEventDocumentKind @default(OTHER)
+  caption    String?
+  sortOrder  Int @default(0)
+
+  createdAt  DateTime @default(now())
+
+  event      HomeEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, documentId])
+  @@index([eventId])
+  @@index([documentId])
+  @@map("home_event_documents")
+}
+
+// ============================================================================
+// REVIEWS & RATINGS
+// ============================================================================
+
+model Review {
+  id          String       @id @default(uuid())
+  bookingId   String       @unique
+  authorId    String
+  providerId  String
+  
+  // Rating (1-5)
+  rating      Int
+  
+  // Review Content
+  title       String?
+  content     String
+  
+  // Review Categories (1-5 each)
+  qualityRating      Int?
+  communicationRating Int?
+  valueRating        Int?
+  professionalismRating Int?
+  // Moderation
+  status      ReviewStatus @default(PENDING)
+  moderatedAt DateTime?
+  moderatedBy String? // admin userId
+  
+  // Provider Response
+  response    String?
+  respondedAt DateTime?
+  // Relations
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  author   User    @relation("ReviewAuthor", fields: [authorId], references: [id])
+  provider User    @relation("ReviewProvider", fields: [providerId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([providerId])
+  @@index([rating])
+  @@index([status])
+  @@map("reviews")
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String
+  title       String
+  message     String
+  actionUrl   String?
+
+  entityType  String?
+  entityId    String?
+
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  deliveries  NotificationDelivery[]
+  dailySnapshots PropertyDailySnapshot[]
+  
+  recallMatchId String?
+  recallMatch   RecallMatch? @relation(fields: [recallMatchId], references: [id], onDelete: SetNull)
+
+  @@index([recallMatchId])
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
+  @@index([entityType, entityId])
+}
+
+
+model NotificationDelivery {
+  id                 String   @id @default(uuid())
+  notificationId     String
+  channel            NotificationChannel
+
+  status             DeliveryStatus @default(PENDING)
+  sentAt             DateTime?
+  failureReason      String?
+  digestId           String?
+  providerMessageId  String?
+
+  enqueuedAt         DateTime?
+
+  createdAt          DateTime @default(now())
+
+  notification       Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([channel, status])
+  @@index([channel, status, enqueuedAt])
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+  WHATSAPP
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+
+// ============================================================================
+// KNOWLEDGE HUB
+// ============================================================================
+
+enum KnowledgeArticleStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum KnowledgeArticleType {
+  EDUCATIONAL
+  BUYER_GUIDE
+  VALUE_FACTORS
+  RISK_EXPLAINER
+  CHECKLIST_ARTICLE
+  TOOL_LANDING
+  SEASONAL
+}
+
+enum KnowledgeSectionType {
+  INTRO
+  TEXT
+  CALLOUT
+  CHECKLIST
+  FACT_BOX
+  RISK_BOX
+  TOOL_EMBED
+  CTA
+  FAQ
+  SUMMARY
+}
+
+enum ProductToolType {
+  AI_TOOL
+  HOME_TOOL
+  FEATURE
+  REPORT
+  WORKFLOW
+}
+
+enum ProductToolStatus {
+  ACTIVE
+  HIDDEN
+  DEPRECATED
+}
+
+enum KnowledgeToolPlacement {
+  HERO
+  INLINE
+  SIDEBAR
+  END_OF_ARTICLE
+  STICKY_CARD
+}
+
+enum KnowledgeCtaType {
+  TOOL
+  DATA_PROMPT
+  INTERNAL_LINK
+  REPORT
+  SIGNUP
+}
+
+enum KnowledgeEventType {
+  VIEW
+  TOOL_CLICK
+  CTA_CLICK
+  SECTION_EXPAND
+  RELATED_ARTICLE_CLICK
+  DATA_PROMPT_CLICK
+}
+
+
+// Core article record for Knowledge Hub / SEO / in-app education
+model KnowledgeArticle {
+  id               String                 @id @default(uuid())
+  slug             String                 @unique
+  title            String
+  subtitle         String?
+  excerpt          String?
+
+  status           KnowledgeArticleStatus @default(DRAFT)
+  articleType      KnowledgeArticleType   @default(EDUCATIONAL)
+
+  // Hero / editorial metadata
+  heroTitle        String?
+  heroDescription  String?
+  heroImageUrl     String?
+  coverDocumentId  String?
+
+  // SEO
+  seoTitle         String?
+  seoDescription   String?
+  seoKeywords      String[]               @default([])
+  canonicalUrl     String?
+
+  // Editorial controls
+  readingMinutes   Int?
+  featured         Boolean                @default(false)
+  evergreenScore   Int?
+  sortOrder        Int                    @default(0)
+  schemaVersion    String                 @default("v1")
+  publishedAt      DateTime?
+
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  // Relations
+  coverDocument    Document?              @relation("KnowledgeArticleCoverDocument", fields: [coverDocumentId], references: [id], onDelete: SetNull)
+
+  sections         KnowledgeArticleSection[]
+  categoryLinks    KnowledgeArticleCategory[]
+  tagLinks         KnowledgeArticleTag[]
+  toolLinks        KnowledgeArticleToolLink[]
+  ctaLinks         KnowledgeArticleCta[]
+
+  relatedFrom      KnowledgeArticleRelation[] @relation("KnowledgeArticleRelationSource")
+  relatedTo        KnowledgeArticleRelation[] @relation("KnowledgeArticleRelationTarget")
+
+  audienceRules    KnowledgeAudienceRule[]
+  events           KnowledgeArticleEvent[]
+
+  @@index([status, publishedAt])
+  @@index([articleType, status])
+  @@index([featured, sortOrder])
+  @@index([coverDocumentId])
+  @@map("knowledge_articles")
+}
+
+// Structured sections so frontend can inject cards / FAQs / tool embeds / CTA blocks
+model KnowledgeArticleSection {
+  id           String               @id @default(uuid())
+  articleId    String
+
+  sectionType  KnowledgeSectionType @default(TEXT)
+  title        String?
+  body         String?
+  dataJson     Json?
+  sortOrder    Int                  @default(0)
+
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  // Relations
+  article      KnowledgeArticle     @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  toolLinks    KnowledgeArticleToolLink[]
+  ctaLinks     KnowledgeArticleCta[]
+  events       KnowledgeArticleEvent[]
+
+  @@index([articleId, sortOrder])
+  @@map("knowledge_article_sections")
+}
+
+// High-level grouping: Maintenance / Insurance / Climate / Property Value, etc.
+model KnowledgeCategory {
+  id           String                    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slug         String                    @unique
+  name         String
+  description  String?
+  sortOrder    Int                       @default(0)
+  isActive     Boolean                   @default(true)
+
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @default(now()) @updatedAt
+
+  // Relations
+  articles     KnowledgeArticleCategory[]
+
+  @@index([isActive, sortOrder])
+  @@map("knowledge_categories")
+}
+
+// Granular tagging: roof-age / hvac-age / climate-risk / curb-appeal, etc.
+model KnowledgeTag {
+  id           String                @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slug         String                @unique
+  name         String
+  tagGroup     String?
+  isActive     Boolean               @default(true)
+
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @default(now()) @updatedAt
+
+  // Relations
+  articles     KnowledgeArticleTag[]
+
+  @@index([tagGroup])
+  @@index([isActive])
+  @@map("knowledge_tags")
+}
+
+// Join table: Article <-> Category
+model KnowledgeArticleCategory {
+  articleId    String
+  categoryId   String
+
+  createdAt    DateTime              @default(now())
+
+  // Relations
+  article      KnowledgeArticle      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  category     KnowledgeCategory     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, categoryId])
+  @@index([categoryId])
+  @@map("knowledge_article_categories")
+}
+
+// Join table: Article <-> Tag
+model KnowledgeArticleTag {
+  articleId    String
+  tagId        String
+
+  createdAt    DateTime              @default(now())
+
+  // Relations
+  article      KnowledgeArticle      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag          KnowledgeTag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@index([tagId])
+  @@map("knowledge_article_tags")
+}
+
+// Canonical registry for AI Tools / Home Tools / Features / Reports that articles can promote
+model ProductTool {
+  id               String                @id @default(dbgenerated("(gen_random_uuid())::text"))
+  key              String                @unique
+  slug             String                @unique
+  name             String
+  shortDescription String?
+
+  toolType         ProductToolType
+  status           ProductToolStatus     @default(ACTIVE)
+
+  routePath        String?
+  iconName         String?
+  badgeLabel       String?
+  sortOrder        Int                   @default(0)
+
+  category         String?
+  metadata         Json?
+
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @default(now()) @updatedAt
+
+  // Relations
+  articleLinks     KnowledgeArticleToolLink[]
+  ctaLinks         KnowledgeArticleCta[]
+  events           KnowledgeArticleEvent[]
+
+  @@index([toolType, status])
+  @@index([category])
+  @@index([status, sortOrder])
+  @@map("product_tools")
+}
+
+// Controls which tools appear on which article, where, and with what override copy
+model KnowledgeArticleToolLink {
+  id               String                 @id @default(uuid())
+  articleId        String
+  productToolId    String
+  anchorSectionId  String?
+
+  placement        KnowledgeToolPlacement @default(END_OF_ARTICLE)
+  priority         Int                    @default(1)
+
+  customTitle      String?
+  customBody       String?
+  ctaLabel         String?
+  isPrimary        Boolean                @default(false)
+
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  // Relations
+  article          KnowledgeArticle       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  productTool      ProductTool            @relation(fields: [productToolId], references: [id], onDelete: Cascade)
+  anchorSection    KnowledgeArticleSection? @relation(fields: [anchorSectionId], references: [id], onDelete: SetNull)
+
+  @@index([articleId, placement, priority])
+  @@index([productToolId])
+  @@index([anchorSectionId])
+  @@map("knowledge_article_tool_links")
+}
+
+// Rich CTA modules inside articles: tool launch, data prompt, signup, report, internal jump, etc.
+model KnowledgeArticleCta {
+  id               String                 @id @default(uuid())
+  articleId        String
+  productToolId    String?
+  sectionId        String?
+
+  ctaType          KnowledgeCtaType
+  title            String
+  description      String?
+  ctaLabel         String
+  href             String?
+
+  priority         Int                    @default(1)
+
+  // Optional product/data-collection hook
+  dataPromptKey    String?
+  visibilityRule   Json?
+
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  // Relations
+  article          KnowledgeArticle       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  productTool      ProductTool?           @relation(fields: [productToolId], references: [id], onDelete: SetNull)
+  section          KnowledgeArticleSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([articleId, priority])
+  @@index([productToolId])
+  @@index([sectionId])
+  @@map("knowledge_article_ctas")
+}
+
+// Optional personalization / targeting rules for article variants and CTA visibility
+model KnowledgeAudienceRule {
+  id               String               @id @default(uuid())
+  articleId        String
+
+  name             String
+  description      String?
+  ruleJson         Json
+  priority         Int                  @default(1)
+  isActive         Boolean              @default(true)
+
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  // Relations
+  article          KnowledgeArticle     @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId, isActive, priority])
+  @@map("knowledge_audience_rules")
+}
+
+// Related / recommended article graph
+model KnowledgeArticleRelation {
+  sourceArticleId  String
+  targetArticleId  String
+  relationType     String
+  sortOrder        Int                  @default(0)
+
+  createdAt        DateTime             @default(now())
+
+  // Relations
+  sourceArticle    KnowledgeArticle     @relation("KnowledgeArticleRelationSource", fields: [sourceArticleId], references: [id], onDelete: Cascade)
+  targetArticle    KnowledgeArticle     @relation("KnowledgeArticleRelationTarget", fields: [targetArticleId], references: [id], onDelete: Cascade)
+
+  @@id([sourceArticleId, targetArticleId, relationType])
+  @@index([targetArticleId])
+  @@map("knowledge_article_relations")
+}
+
+// Analytics layer: article view -> tool click -> CTA click -> personalized engagement
+model KnowledgeArticleEvent {
+  id               String                 @id @default(uuid())
+  articleId        String
+  userId           String?
+  propertyId       String?
+  productToolId    String?
+  sectionId        String?
+
+  eventType        KnowledgeEventType
+  sessionId        String?
+  metadata         Json?
+
+  createdAt        DateTime               @default(now())
+
+  // Relations
+  article          KnowledgeArticle       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user             User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  property         Property?              @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  productTool      ProductTool?           @relation(fields: [productToolId], references: [id], onDelete: SetNull)
+  section          KnowledgeArticleSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([articleId, eventType, createdAt])
+  @@index([userId, createdAt])
+  @@index([propertyId, createdAt])
+  @@index([productToolId, createdAt])
+  @@index([sectionId, createdAt])
+  @@map("knowledge_article_events")
+}
+
+// ============================================================================
+// PDF REPORTS
+// ============================================================================
+
+enum HomeReportExportType {
+  HOME_SUMMARY
+  INVENTORY
+  MAINTENANCE_HISTORY
+  COVERAGE_SNAPSHOT
+  HOME_REPORT_PACK
+}
+
+enum HomeReportExportStatus {
+  PENDING
+  GENERATING
+  READY
+  FAILED
+  EXPIRED
+  DELETED
+}
+
+enum HomeReportExportEventType {
+  CREATED
+  GENERATION_STARTED
+  GENERATED
+  DOWNLOADED
+  SHARED
+  SHARE_REVOKED
+  FAILED
+  EXPIRED
+  DELETED
+}
+
+model HomeReportExport {
+  id         String @id @default(uuid())
+  userId     String
+  propertyId String
+
+  type       HomeReportExportType
+  status     HomeReportExportStatus @default(PENDING)
+
+  // Section toggles / configuration for report-pack
+  sections   Json?
+
+  // Reproducibility (prevents “why did this change later?”)
+  templateVersion Int @default(1)
+  dataVersion     Int @default(1)
+  snapshot        Json? // store the final computed DTO used to render
+
+  // Optional: store generated PDF as a Document row (recommended)
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  // Shareable link support (no second table needed)
+  shareToken     String?   @unique
+  shareExpiresAt DateTime?
+  shareRevokedAt DateTime?
+
+  storageBucket String?
+  storageKey    String?  @unique
+  expiresAt     DateTime?
+
+
+  // Lifecycle
+  requestedAt DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  errorMessage String?
+
+  // Useful metadata
+  locale   String?
+  timezone String?
+
+  deletedAt       DateTime?
+  deletedByUserId String?
+  regeneratedFromId String?
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  events   HomeReportExportEvent[]
+
+  @@index([userId, requestedAt])
+  @@index([propertyId, requestedAt])
+  @@index([status, requestedAt])
+  @@index([shareToken])
+
+  @@map("home_report_exports")
+}
+
+model HomeReportExportEvent {
+  id        String @id @default(uuid())
+  reportId  String
+  type      HomeReportExportEventType
+  createdAt DateTime @default(now())
+  meta      Json?
+
+  report HomeReportExport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt])
+  @@map("home_report_export_events")
+}
+
+// ============================================================================
+// CLAIMS
+// ============================================================================
+
+enum ClaimStatus {
+  DRAFT
+  IN_PROGRESS
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  DENIED
+  CLOSED
+}
+
+enum ClaimType {
+  WATER_DAMAGE
+  FIRE_SMOKE
+  STORM_WIND_HAIL
+  THEFT_VANDALISM
+  LIABILITY
+  HVAC
+  PLUMBING
+  ELECTRICAL
+  APPLIANCE
+  OTHER
+}
+
+enum ClaimSourceType {
+  INSURANCE
+  HOME_WARRANTY
+  MANUFACTURER_WARRANTY
+  OUT_OF_POCKET
+  UNKNOWN
+}
+
+enum ClaimChecklistStatus {
+  OPEN
+  DONE
+  NOT_APPLICABLE
+}
+
+enum ClaimDocumentType {
+  PHOTO
+  VIDEO
+  INVOICE
+  ESTIMATE
+  REPORT
+  POLICY
+  COMMUNICATION
+  RECEIPT
+  OTHER
+}
+
+enum ClaimTimelineEventType {
+  CREATED
+  CHECKLIST_GENERATED
+  DOCUMENT_ADDED
+  SUBMITTED
+  INSPECTION_SCHEDULED
+  INSPECTION_COMPLETED
+  ESTIMATE_RECEIVED
+  FOLLOW_UP
+  APPROVED
+  DENIED
+  SETTLEMENT_ISSUED
+  CLOSED
+  NOTE
+  STATUS_CHANGE
+  OTHER
+}
+
+enum DomainEventType {
+  CLAIM_SUBMITTED
+  CLAIM_CLOSED
+  FOLLOW_UP_DUE
+}
+
+enum DomainEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model Claim {
+  id          String @id @default(uuid())
+  propertyId  String
+  createdBy   String // userId
+
+  title       String
+  description String?
+  type        ClaimType
+  status      ClaimStatus @default(DRAFT)
+
+  sourceType   ClaimSourceType @default(UNKNOWN)
+  providerName String?
+  claimNumber  String?
+  externalUrl  String?
+
+  // Coverage references (optional)
+  insurancePolicyId String?
+  warrantyId        String?
+
+  incidentAt   DateTime?
+  openedAt     DateTime?
+  submittedAt  DateTime?
+  closedAt     DateTime?
+
+  deductibleAmount     Decimal? @db.Decimal(12, 2)
+  estimatedLossAmount  Decimal? @db.Decimal(12, 2)
+  settlementAmount     Decimal? @db.Decimal(12, 2)
+
+  checklistCompletionPct Int? @default(0)
+  lastActivityAt         DateTime @default(now())
+  nextFollowUpAt         DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  creator        User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  insurancePolicy InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+  warranty        Warranty?        @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+
+  checklistItems ClaimChecklistItem[]
+  documents      ClaimDocument[]
+  timelineEvents ClaimTimelineEvent[]
+  homeEvents HomeEvent[]
+
+  @@index([propertyId, status])
+  @@index([createdBy, status])
+  @@index([propertyId, lastActivityAt])
+  @@index([nextFollowUpAt])
+  @@map("claims")
+}
+
+model ClaimChecklistItem {
+  id          String @id @default(uuid())
+  claimId     String
+
+  orderIndex  Int
+  title       String
+  description String?
+  required    Boolean @default(false)
+
+  status      ClaimChecklistStatus @default(OPEN)
+  completedAt DateTime?
+  completedBy String?
+
+  primaryClaimDocumentId String?
+
+  requiredDocTypes     ClaimDocumentType[] @default([])
+  requiredDocMinCount  Int @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  claim       Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  primaryClaimDocument ClaimDocument? @relation("ClaimChecklistPrimaryDoc", fields: [primaryClaimDocumentId], references: [id], onDelete: SetNull)
+
+  itemDocuments ClaimChecklistItemDocument[]
+
+  @@unique([claimId, orderIndex])
+  @@index([claimId, status])
+  @@map("claim_checklist_items")
+}
+
+model ClaimChecklistItemDocument {
+  id                  String @id @default(uuid())
+  claimChecklistItemId String
+  claimDocumentId      String
+  createdAt            DateTime @default(now())
+
+  item         ClaimChecklistItem @relation(fields: [claimChecklistItemId], references: [id], onDelete: Cascade)
+  claimDocument ClaimDocument      @relation(fields: [claimDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([claimChecklistItemId, claimDocumentId])
+  @@index([claimChecklistItemId])
+  @@index([claimDocumentId])
+  @@map("claim_checklist_item_documents")
+}
+
+
+model ClaimDocument {
+  id         String @id @default(uuid())
+  claimId    String
+  documentId String
+
+  type       ClaimDocumentType @default(OTHER)
+  title      String?
+  notes      String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  claim      Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  checklistPrimaryFor ClaimChecklistItem[] @relation("ClaimChecklistPrimaryDoc")
+  timelineEvents ClaimTimelineEvent[]
+  itemDocuments   ClaimChecklistItemDocument[]
+
+  @@unique([claimId, documentId])
+  @@index([claimId, type])
+  @@index([documentId])
+  @@map("claim_documents")
+}
+
+model ClaimTimelineEvent {
+  id          String @id @default(uuid())
+  claimId     String
+  propertyId  String
+  createdBy   String // userId
+
+  type        ClaimTimelineEventType
+  title       String?
+  description String?
+
+  occurredAt  DateTime @default(now())
+  meta        Json?
+
+  // Optional attachment
+  claimDocumentId String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  claim       Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  creator     User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  claimDocument ClaimDocument? @relation(fields: [claimDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([claimId, occurredAt])
+  @@index([propertyId, occurredAt])
+  @@map("claim_timeline_events")
+}
+
+model DomainEvent {
+  id          String @id @default(uuid())
+  type        DomainEventType
+  status      DomainEventStatus @default(PENDING)
+
+  // Scope / routing
+  propertyId  String?
+  userId      String?
+
+  // Optional idempotency key to prevent duplicates
+  idempotencyKey String? @unique
+
+  // Payload for consumers (workers/notifications)
+  payload     Json
+
+  attempts    Int @default(0)
+  lastError   String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  processedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([type, status])
+  @@map("domain_events")
+}
+
+// ============================================================================
+// RISK TO PREMIUM Optimizer
+// ============================================================================
+
+enum RiskPremiumOptimizationStatus {
+  READY
+  STALE
+  ERROR
+}
+
+enum NegotiationShieldScenarioType {
+  CONTRACTOR_QUOTE_REVIEW
+  INSURANCE_PREMIUM_INCREASE
+  INSURANCE_CLAIM_SETTLEMENT
+  BUYER_INSPECTION_NEGOTIATION
+  CONTRACTOR_URGENCY_PRESSURE
+}
+
+enum NegotiationShieldCaseStatus {
+  DRAFT
+  READY_FOR_REVIEW
+  ANALYZED
+  ARCHIVED
+}
+
+enum NegotiationShieldSourceType {
+  MANUAL
+  DOCUMENT_UPLOAD
+  HYBRID
+}
+
+enum NegotiationShieldInputType {
+  CONTRACTOR_QUOTE
+  INSURANCE_PREMIUM
+  INSURANCE_CLAIM_SETTLEMENT
+  BUYER_INSPECTION
+  CONTRACTOR_URGENCY
+}
+
+enum NegotiationShieldDocumentType {
+  QUOTE
+  PREMIUM_NOTICE
+  CLAIM_SETTLEMENT_NOTICE
+  CLAIM_ESTIMATE
+  INSPECTION_REPORT
+  BUYER_REQUEST
+  CONTRACTOR_RECOMMENDATION
+  CONTRACTOR_ESTIMATE
+  SUPPORTING_DOCUMENT
+}
+
+enum NegotiationShieldDraftType {
+  EMAIL
+  MESSAGE
+}
+
+enum RiskPremiumOptimizationConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum MitigationPlanStatus {
+  RECOMMENDED
+  PLANNED
+  DONE
+  SKIPPED
+}
+
+enum MitigationPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum MitigationPeril {
+  WATER
+  FIRE
+  WIND_HAIL
+  THEFT
+  LIABILITY
+  ELECTRICAL
+  OTHER
+}
+
+enum MitigationActionType {
+  // Water / plumbing
+  LEAK_SENSORS
+  AUTO_SHUTOFF_VALVE
+  SUMP_PUMP_OR_BACKUP
+  WATER_HEATER_REPLACEMENT
+
+  // Roof / wind / exterior
+  ROOF_INSPECTION_OR_REPAIR
+  TREE_TRIMMING
+  WIND_HAIL_HARDENING
+
+  // Fire / safety
+  SMOKE_CO_DETECTORS
+  ELECTRICAL_PANEL_INSPECTION
+
+  // Security
+  SECURITY_SYSTEM
+
+  // Policy levers (non-carrier specific)
+  RAISE_DEDUCTIBLE
+  REVIEW_DISCOUNTS
+}
+
+model RiskPremiumOptimizationAnalysis {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  status     RiskPremiumOptimizationStatus     @default(READY)
+  confidence RiskPremiumOptimizationConfidence
+
+  summary String?
+
+  // Snapshot of inputs and assumptions used for this run
+  inputsSnapshot Json?
+  // Ranked premium drivers with explainability
+  premiumDrivers Json?
+  // Ranked recommendations and rationale
+  recommendations Json?
+
+  // Optional savings estimate range (Decimal to match InsurancePolicy.premiumAmount)
+  estimatedSavingsMin Decimal? @db.Decimal(12, 2)
+  estimatedSavingsMax Decimal? @db.Decimal(12, 2)
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  planItems RiskMitigationPlanItem[]
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@map("risk_premium_optimization_analyses")
+}
+
+// ============================================================================
+// Negotiation Shield
+// ============================================================================
+
+model NegotiationShieldCase {
+  id              String                         @id @default(uuid())
+  propertyId      String
+  createdByUserId String?
+
+  scenarioType    NegotiationShieldScenarioType
+  status          NegotiationShieldCaseStatus   @default(DRAFT)
+  sourceType      NegotiationShieldSourceType
+
+  title           String
+  description     String?
+
+  analysisVersion String?
+  latestAnalysisAt DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy       User?    @relation("NegotiationShieldCaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  inputs          NegotiationShieldInput[]
+  documents       NegotiationShieldDocument[]
+  analyses        NegotiationShieldAnalysis[]
+  drafts          NegotiationShieldDraft[]
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@index([propertyId, scenarioType])
+  @@index([createdByUserId])
+  @@map("negotiation_shield_cases")
+}
+
+model NegotiationShieldInput {
+  id              String                     @id @default(uuid())
+  caseId          String
+
+  inputType       NegotiationShieldInputType
+  rawText         String?
+  structuredData  Json
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt(sort: Desc)])
+  @@map("negotiation_shield_inputs")
+}
+
+model NegotiationShieldDocument {
+  id              String                        @id @default(uuid())
+  caseId          String
+  documentId      String
+
+  documentType    NegotiationShieldDocumentType
+  uploadedAt      DateTime                      @default(now())
+
+  negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  document        Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, documentId])
+  @@index([caseId, uploadedAt(sort: Desc)])
+  @@index([documentId])
+  @@map("negotiation_shield_documents")
+}
+
+model NegotiationShieldAnalysis {
+  id                  String                        @id @default(uuid())
+  caseId              String
+
+  scenarioType        NegotiationShieldScenarioType
+  summary             String?
+  findings            Json
+  negotiationLeverage Json
+  recommendedActions  Json
+  pricingAssessment   Json?
+  confidence          Float?
+  generatedAt         DateTime                      @default(now())
+  modelVersion        String?
+  createdAt           DateTime                      @default(now())
+
+  negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, generatedAt(sort: Desc)])
+  @@index([caseId, scenarioType])
+  @@map("negotiation_shield_analyses")
+}
+
+model NegotiationShieldDraft {
+  id              String                     @id @default(uuid())
+  caseId          String
+
+  draftType       NegotiationShieldDraftType
+  subject         String?
+  body            String
+  tone            String?
+  isLatest        Boolean                    @default(true)
+  createdAt       DateTime                   @default(now())
+
+  negotiationShieldCase NegotiationShieldCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt(sort: Desc)])
+  @@index([caseId, isLatest])
+  @@map("negotiation_shield_drafts")
+}
+
+model RiskMitigationPlanItem {
+  id         String @id @default(uuid())
+  analysisId String
+  propertyId String
+
+  actionType  MitigationActionType
+  status      MitigationPlanStatus @default(RECOMMENDED)
+  priority    MitigationPriority   @default(MEDIUM)
+  targetPeril MitigationPeril?
+
+  title String?
+  why   String
+
+  // Optional estimates (Decimal keeps consistency with HomeEvent.amount and InsurancePolicy.premiumAmount)
+  estimatedCost        Decimal? @db.Decimal(12, 2)
+  estimatedSavingsMin  Decimal? @db.Decimal(12, 2)
+  estimatedSavingsMax  Decimal? @db.Decimal(12, 2)
+
+  // Optional proof links (you already have Document + HomeEvent)
+  evidenceDocumentId String?
+  linkedHomeEventId  String?
+
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analysis  RiskPremiumOptimizationAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  property  Property                       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  evidenceDocument Document? @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
+  linkedHomeEvent  HomeEvent? @relation(fields: [linkedHomeEventId], references: [id], onDelete: SetNull)
+
+  @@index([analysisId])
+  @@index([propertyId, status])
+  @@index([propertyId, priority])
+  @@index([propertyId, actionType])
+  @@map("risk_mitigation_plan_items")
+}
+
+// ============================================================================
+// Home Capital Timeline
+// ============================================================================
+
+enum HomeCapitalTimelineStatus {
+  READY
+  STALE
+  ERROR
+}
+
+enum HomeCapitalTimelineConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum HomeCapitalTimelinePriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum HomeCapitalTimelineCategory {
+  ROOF
+  HVAC
+  WATER_HEATER
+  APPLIANCE
+  PLUMBING
+  ELECTRICAL
+  EXTERIOR
+  FOUNDATION
+  OTHER
+}
+
+enum HomeCapitalTimelineEventType {
+  REPLACE
+  MAJOR_REPAIR
+  INSPECTION
+}
+
+enum HomeCapitalTimelineOverrideType {
+  PLANNED_DATE          // exact planned date
+  PLANNED_WINDOW        // planned start/end window
+  COST_OVERRIDE         // override estimated cost range
+  DISABLE_ITEM          // exclude from timeline
+  ADJUST_REMAINING_LIFE // override remaining years
+  NOTE                 // free-form note affecting reasoning
+}
+
+model HomeCapitalTimelineAnalysis {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  status     HomeCapitalTimelineStatus     @default(READY)
+  confidence HomeCapitalTimelineConfidence
+
+  horizonYears Int @default(10)
+  summary     String?
+
+  // Versioned assumptions / overrides used for this run
+  inputsSnapshot Json?
+  // Full computed timeline for fast render (UI can also use items table)
+  timelineJson   Json?
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  items HomeCapitalTimelineItem[]
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@map("home_capital_timeline_analyses")
+}
+
+model HomeCapitalTimelineItem {
+  id         String @id @default(uuid())
+  analysisId String
+  propertyId String
+
+  inventoryItemId String?
+  category        HomeCapitalTimelineCategory
+  eventType       HomeCapitalTimelineEventType
+
+  // Predicted window for the event
+  windowStart DateTime
+  windowEnd   DateTime
+
+  // Estimated cost range (cents)
+  estimatedCostMinCents Int?
+  estimatedCostMaxCents Int?
+  currency              String @default("USD")
+
+  confidence HomeCapitalTimelineConfidence
+  priority   HomeCapitalTimelinePriority @default(MEDIUM)
+
+  why String
+
+  // Optional proof / linkage
+  linkedHomeEventId   String?
+  evidenceDocumentId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analysis       HomeCapitalTimelineAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  property       Property                   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem  InventoryItem?             @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  linkedHomeEvent  HomeEvent? @relation(fields: [linkedHomeEventId], references: [id], onDelete: SetNull)
+  evidenceDocument Document?  @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([analysisId])
+  @@index([propertyId, windowStart])
+  @@index([propertyId, category])
+  @@index([propertyId, priority])
+  @@index([inventoryItemId, windowStart])
+  @@map("home_capital_timeline_items")
+}
+
+model HomeCapitalTimelineOverride {
+  id         String @id @default(uuid())
+  propertyId String
+
+  inventoryItemId String?
+  type            HomeCapitalTimelineOverrideType
+
+  // Flexible payload:
+  // - PLANNED_DATE: { date: "2028-06-01" }
+  // - PLANNED_WINDOW: { start: "...", end: "..." }
+  // - COST_OVERRIDE: { minCents: 900000, maxCents: 1200000 }
+  // - ADJUST_REMAINING_LIFE: { remainingYears: 3 }
+  // - DISABLE_ITEM: { disabled: true }
+  payload Json
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([inventoryItemId])
+  @@index([propertyId, type])
+  @@map("home_capital_timeline_overrides")
+}
+
+// ============================================================================
+// Do Nothing Simulator
+// ============================================================================
+
+enum DoNothingSimulationStatus {
+  READY
+  STALE
+  ERROR
+}
+
+enum DoNothingSimulationConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum DoNothingIncidentLikelihood {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model DoNothingScenario {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  name         String
+  horizonMonths Int @default(12)
+
+  // User-defined knobs: e.g., { skipMaintenance: true, skipWarranty: true, deductibleStayHigh: true, cashBufferCents: 500000, ... }
+  inputOverrides Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  runs DoNothingSimulationRun[]
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, horizonMonths])
+  @@map("do_nothing_scenarios")
+}
+
+model DoNothingSimulationRun {
+  id                 String @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String
+
+  scenarioId String?
+
+  status     DoNothingSimulationStatus     @default(READY)
+  confidence DoNothingSimulationConfidence
+
+  horizonMonths Int @default(12)
+
+  // Short human summary for UI
+  summary String?
+
+  // Versioned assumptions/inputs used by the simulator (baseline risk snapshot, toggles, overrides)
+  inputsSnapshot Json?
+
+  // Main computed outputs (risk deltas, cost deltas, incident likelihood, per-category impacts)
+  outputsSnapshot Json?
+
+  // Explainability factors: label/detail/impact
+  decisionTrace Json?
+
+  // Optional: lightweight structured “next steps” list for UI cards
+  nextSteps Json?
+
+  // Key numerics (queryable + sortable for dashboards)
+  riskScoreDelta             Int?   // signed change vs baseline (if you have a numeric risk score)
+  expectedCostDeltaCentsMin  Int?   // min additional expected cost due to inaction (cents)
+  expectedCostDeltaCentsMax  Int?   // max additional expected cost due to inaction (cents)
+
+  incidentLikelihood DoNothingIncidentLikelihood?
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  scenario DoNothingScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
+
+  @@index([homeownerProfileId])
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([propertyId, horizonMonths])
+  @@index([propertyId, status])
+  @@index([scenarioId, computedAt(sort: Desc)])
+  @@map("do_nothing_simulation_runs")
+}
+
+
+// ============================================================================
+// PROPERTY SCORE
+// ============================================================================
+
+enum PropertyScoreType {
+  HEALTH
+  RISK
+  FINANCIAL
+}
+
+enum HomeScoreReportMode {
+  HOMEOWNER
+  BUYER
+  SELLER
+  AGENT
+}
+
+enum HomeScoreReportStatus {
+  DRAFT
+  FINAL
+  SUPERSEDED
+  REVOKED
+}
+
+enum HomeScoreReportSectionKey {
+  REPORT_META
+  EXECUTIVE_SUMMARY
+  RADAR
+  SCORE_DRIVERS
+  TIMELINE
+  SYSTEM_HEALTH
+  FINANCIAL_EXPOSURE
+  TRUST_VERIFICATION
+  INTEGRITY_CHECKS
+  BENCHMARKS
+  IMPROVEMENT_PLAN
+  METHODOLOGY
+}
+
+enum HomeScoreCertificationStatus {
+  PENDING_REVIEW
+  CERTIFIED
+  EXPIRED
+  REVOKED
+}
+
+enum HomeScoreCheckStatus {
+  PASS
+  WARN
+  FAIL
+}
+
+enum HomeScoreCheckSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum HomeScoreDataSourceName {
+  FEMA
+  CLIMATE_RISK
+  COUNTY_PERMITS
+  TAX_RECORDS
+  UTILITY_BENCHMARK
+  INSURANCE_MODEL
+  CONTRACT_TO_COZY_ENGINE
+}
+
+enum HomeScoreDataSourceRunStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum HomeScoreFinancialForecastSourceType {
+  VERIFIED
+  ESTIMATED
+}
+
+enum HomeScoreUrgencyLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum HomeScoreBenchmarkDimensionType {
+  ZIP
+  CITY
+  STATE
+  NATIONAL
+  TOP_PERCENTILE
+}
+
+enum HomeScoreAudienceMode {
+  BUYER
+  SELLER
+  AGENT
+  PUBLIC_LINK
+}
+
+enum HomeScoreExportFormat {
+  PDF
+  JSON
+}
+
+enum HomeScoreExportJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+// New history table (weekly buckets)
+model PropertyScoreSnapshot {
+  id                 String            @id @default(uuid())
+  propertyId         String
+  homeownerProfileId String
+  scoreType          PropertyScoreType
+
+  // Current score value for that week
+  score              Float
+  scoreMax           Float?            // optional (ex: health can be 71 max)
+
+  // Optional UX helpers (can also be derived at read time)
+  scoreBand          String?           // "Excellent", "Fair", etc.
+  sourceVersion      Int               @default(1)
+  confidenceScore    Int?
+  calculationRunId   String?
+  reportEligible     Boolean           @default(false)
+
+  // Monday 00:00:00 (or your chosen canonical week bucket in UTC)
+  weekStart          DateTime
+
+  computedAt         DateTime          @default(now())
+  snapshotJson       Json?             // factors/drivers/metadata for "what changed"
+  createdAt          DateTime          @default(now())
+
+  property           Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  homeownerProfile   HomeownerProfile  @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, scoreType, weekStart])
+  @@index([propertyId, scoreType, weekStart(sort: Desc)])
+  @@index([homeownerProfileId, scoreType, weekStart(sort: Desc)])
+  @@index([computedAt(sort: Desc)])
+  @@index([propertyId, reportEligible, weekStart(sort: Desc)])
+  @@map("property_score_snapshots")
+}
+
+model HomeScoreReport {
+  id                String              @id @default(uuid())
+  propertyId        String
+  generatedByUserId String?
+  reportMode        HomeScoreReportMode   @default(HOMEOWNER)
+  reportVersion     String                @default("2.0")
+  scoreModelVersion String?
+  status            HomeScoreReportStatus @default(FINAL)
+  generatedAt       DateTime              @default(now())
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  property          Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sections          HomeScoreReportSection[]
+  certifications    HomeScoreCertification[]
+  evidenceLinks     HomeScoreReportEvidenceLink[]
+  integrityCheckRuns HomeScoreIntegrityCheckRun[]
+  financialForecasts HomeScoreFinancialForecast[]
+  shareTokens       HomeScoreShareToken[]
+  exportJobs        HomeScoreExportJob[]
+
+  @@index([propertyId, generatedAt(sort: Desc)])
+  @@index([status, generatedAt(sort: Desc)])
+  @@index([reportMode, generatedAt(sort: Desc)])
+  @@map("home_score_reports")
+}
+
+model HomeScoreReportSection {
+  id         String                    @id @default(uuid())
+  reportId   String
+  sectionKey HomeScoreReportSectionKey
+  sectionJson Json
+  hashSha256 String?                   @db.VarChar(64)
+  createdAt  DateTime                  @default(now())
+
+  report     HomeScoreReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, sectionKey])
+  @@index([sectionKey, createdAt(sort: Desc)])
+  @@map("home_score_report_sections")
+}
+
+model HomeScoreCertification {
+  id                  String                       @id @default(uuid())
+  reportId            String                       @unique
+  certificationStatus HomeScoreCertificationStatus @default(PENDING_REVIEW)
+  issuedAt            DateTime?
+  expiresAt           DateTime?
+  revokedAt           DateTime?
+  issuedByUserId      String?
+  revokedByUserId     String?
+  criteriaVersion     String
+  attestationJson     Json?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+
+  report              HomeScoreReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  checks              HomeScoreCertificationCheck[]
+
+  @@index([certificationStatus, expiresAt])
+  @@index([issuedByUserId])
+  @@index([revokedByUserId])
+  @@map("home_score_certifications")
+}
+
+model HomeScoreCertificationCheck {
+  id              String                 @id @default(uuid())
+  certificationId String
+  checkKey        String
+  status          HomeScoreCheckStatus
+  severity        HomeScoreCheckSeverity?
+  evidenceRef     String?
+  detail          String
+  createdAt       DateTime               @default(now())
+
+  certification   HomeScoreCertification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+
+  @@index([certificationId, checkKey])
+  @@map("home_score_certification_checks")
+}
+
+model HomeScoreReportEvidenceLink {
+  id                 String   @id @default(uuid())
+  reportId           String
+  sectionKey         HomeScoreReportSectionKey
+  itemKey            String
+  provenanceId       String
+  contributionWeight Float?
+  createdAt          DateTime @default(now())
+
+  report             HomeScoreReport  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  provenance         SignalProvenance @relation(fields: [provenanceId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, sectionKey])
+  @@index([provenanceId])
+  @@map("home_score_report_evidence_links")
+}
+
+model HomeScoreDataSourceRun {
+  id             String                    @id @default(uuid())
+  propertyId     String
+  sourceName     HomeScoreDataSourceName
+  sourceVersion  String?
+  runStatus      HomeScoreDataSourceRunStatus
+  startedAt      DateTime                  @default(now())
+  completedAt    DateTime?
+  recordsRead    Int                       @default(0)
+  recordsWritten Int                       @default(0)
+  errorSummary   String?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  property       Property                  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  facts          HomeScoreDataSourceFact[]
+
+  @@index([propertyId, sourceName, completedAt(sort: Desc)])
+  @@index([sourceName, runStatus, startedAt(sort: Desc)])
+  @@map("home_score_data_source_runs")
+}
+
+model HomeScoreDataSourceFact {
+  id            String                  @id @default(uuid())
+  propertyId    String
+  sourceName    HomeScoreDataSourceName
+  factKey       String
+  factValueJson Json
+  effectiveAt   DateTime                @default(now())
+  expiresAt     DateTime?
+  runId         String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  property      Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  run           HomeScoreDataSourceRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, sourceName, factKey, effectiveAt])
+  @@index([propertyId, sourceName, effectiveAt(sort: Desc)])
+  @@index([runId])
+  @@map("home_score_data_source_facts")
+}
+
+model HomeScoreIntegrityCheckRun {
+  id              String                @id @default(uuid())
+  propertyId      String
+  reportId        String?
+  checkKey        String
+  status          HomeScoreCheckStatus
+  severity        HomeScoreCheckSeverity
+  detail          String
+  remediationHref String?
+  computedAt      DateTime              @default(now())
+  createdAt       DateTime              @default(now())
+
+  property        Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  report          HomeScoreReport?      @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, computedAt(sort: Desc)])
+  @@index([propertyId, checkKey, computedAt(sort: Desc)])
+  @@index([reportId])
+  @@map("home_score_integrity_check_runs")
+}
+
+model HomeScoreFinancialForecast {
+  id                  String                             @id @default(uuid())
+  propertyId          String
+  reportId            String?
+  modelVersion        String
+  horizonMonths       Int
+  moneyAtRiskCents    BigInt
+  confidenceLowCents  BigInt?
+  confidenceHighCents BigInt?
+  computedAt          DateTime                           @default(now())
+  createdAt           DateTime                           @default(now())
+  updatedAt           DateTime                           @updatedAt
+
+  property            Property                          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  report              HomeScoreReport?                  @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  items               HomeScoreFinancialForecastItem[]
+
+  @@index([propertyId, horizonMonths, computedAt(sort: Desc)])
+  @@index([reportId])
+  @@map("home_score_financial_forecasts")
+}
+
+model HomeScoreFinancialForecastItem {
+  id                 String                              @id @default(uuid())
+  forecastId         String
+  categoryKey        String
+  estimatedCostCents BigInt
+  verifiedCostCents  BigInt?
+  urgency            HomeScoreUrgencyLevel              @default(MEDIUM)
+  sourceType         HomeScoreFinancialForecastSourceType
+  createdAt          DateTime                            @default(now())
+
+  forecast           HomeScoreFinancialForecast @relation(fields: [forecastId], references: [id], onDelete: Cascade)
+
+  @@index([forecastId, categoryKey])
+  @@map("home_score_financial_forecast_items")
+}
+
+model HomeScoreBenchmarkSnapshot {
+  id                 String                           @id @default(uuid())
+  snapshotDate       DateTime                         @db.Date
+  dimensionType      HomeScoreBenchmarkDimensionType
+  dimensionKey       String
+  sampleSize         Int
+  avgHomeScore       Float
+  p25                Float?
+  p50                Float?
+  p75                Float?
+  p90                Float?
+  methodologyVersion String                           @default("v1")
+  createdAt          DateTime                         @default(now())
+
+  @@unique([snapshotDate, dimensionType, dimensionKey, methodologyVersion])
+  @@index([dimensionType, dimensionKey, snapshotDate(sort: Desc)])
+  @@map("home_score_benchmark_snapshots")
+}
+
+model HomeScoreShareToken {
+  id              String                @id @default(uuid())
+  reportId        String
+  tokenHash       String                @unique
+  audienceMode    HomeScoreAudienceMode
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdByUserId String?
+  createdAt       DateTime              @default(now())
+
+  report          HomeScoreReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, expiresAt])
+  @@map("home_score_share_tokens")
+}
+
+model HomeScoreExportJob {
+  id                String                   @id @default(uuid())
+  reportId          String
+  format            HomeScoreExportFormat
+  jobStatus         HomeScoreExportJobStatus @default(QUEUED)
+  storageUrl        String?
+  requestedByUserId String?
+  createdAt         DateTime                 @default(now())
+  completedAt       DateTime?
+
+  report            HomeScoreReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt(sort: Desc)])
+  @@index([jobStatus, createdAt(sort: Desc)])
+  @@map("home_score_export_jobs")
+}
+
+// ============================================================================
+// HOME PULSE
+// ============================================================================
+
+enum MicroActionStatus {
+  PENDING
+  COMPLETED
+  DISMISSED
+  EXPIRED
+}
+
+enum MicroActionType {
+  // Maintenance / safety
+  HVAC_FILTER_CHECK
+  GFCI_TEST
+  SMOKE_CO_TEST
+  SUMP_PUMP_TEST
+  PIPE_FREEZE_PREP
+  STORM_PREP
+
+  // Warranty / inventory / recall
+  WARRANTY_EXPIRING
+  RECALL_ALERT
+
+  // Financial / rebates
+  UTILITY_REBATE
+  INSURANCE_REVIEW
+}
+
+enum PropertyStreakType {
+  DAILY_PULSE_CHECKIN
+  MICRO_ACTION_COMPLETED
+  NO_OVERDUE_TASKS
+}
+
+model PropertyDailySnapshot {
+  id            String   @id @default(uuid())
+  propertyId    String
+  userId        String?
+
+  // Daily bucket (DATE semantics)
+  snapshotDate  DateTime @db.Date
+
+  // Render-ready content for UI/email/push
+  payloadJson   Json
+
+  // Optional: numeric scores + deltas for analytics/filtering
+  scoreJson     Json?
+  weatherJson   Json?
+
+  microActionId String?
+  microAction   PropertyMicroAction? @relation(fields: [microActionId], references: [id], onDelete: SetNull)
+
+  // Optional: if you create a Notification for email/push, link it
+  notificationId String?
+  notification   Notification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+
+  sourceVersion Int      @default(1)
+  generatedAt   DateTime @default(now())
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, snapshotDate])
+  @@index([propertyId, snapshotDate(sort: Desc)])
+  @@index([userId, snapshotDate(sort: Desc)])
+  @@map("property_daily_snapshots")
+}
+
+model PropertyMicroAction {
+  id             String           @id @default(uuid())
+  propertyId     String
+  userId         String?
+
+  type           MicroActionType
+  status         MicroActionStatus @default(PENDING)
+
+  title          String
+  description    String?
+  ctaLabel       String?
+  etaMinutes     Int?
+  impactScore    Int?             // ranking score
+
+  // Optional linkage into existing domain objects
+  sourceType     String?          // "PROPERTY_MAINTENANCE_TASK" | "WARRANTY" | "RECALL_MATCH" etc.
+  sourceId       String?
+
+  // suppression/dedupe (avoid repeating)
+  suppressionKey String?          // e.g. "PIPE_FREEZE_PREP:2026-02-16" or hashed
+
+  suggestedAt    DateTime         @default(now())
+  dueAt          DateTime?
+  completedAt    DateTime?
+  dismissedAt    DateTime?
+
+  metaJson       Json?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  snapshots      PropertyDailySnapshot[]
+
+  @@index([propertyId, status, suggestedAt])
+  @@index([propertyId, type, suggestedAt])
+  @@index([sourceType, sourceId])
+  @@index([suppressionKey])
+  @@map("property_micro_actions")
+}
+
+model PropertyStreak {
+  id             String            @id @default(uuid())
+  propertyId     String
+  userId         String?
+
+  streakType     PropertyStreakType
+  currentCount   Int               @default(0)
+  bestCount      Int               @default(0)
+
+  lastActiveDate DateTime          @db.Date
+  startedAt      DateTime?
+
+  metaJson       Json?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, streakType])
+  @@index([propertyId, streakType])
+  @@index([userId, streakType])
+  @@map("property_streaks")
+}
+
+// ============================================================================
+// Home Savings Check
+// ============================================================================
+
+enum HomeSavingsBillingCadence {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+  OTHER
+}
+
+enum HomeSavingsAccountStatus {
+  ACTIVE
+  INACTIVE
+  UNKNOWN
+}
+
+enum HomeSavingsOpportunityStatus {
+  NEW
+  VIEWED
+  DISMISSED
+  SAVED
+  APPLIED
+  SWITCHED
+  EXPIRED
+}
+
+enum HomeSavingsConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum HomeSavingsRunTrigger {
+  MANUAL
+  SCHEDULED
+  EVENT_DRIVEN
+}
+
+model HomeSavingsRun {
+  id                 String   @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?
+
+  trigger            HomeSavingsRunTrigger @default(MANUAL)
+
+  // Inputs used to compute comparisons
+  inputsJson         Json?
+  // Summary of outputs (totals, counts)
+  summaryJson        Json?
+
+  ranAt              DateTime @default(now())
+
+  homeownerProfile   HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property           Property?        @relation(fields: [propertyId], references: [id])
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([homeownerProfileId, ranAt(sort: Desc)])
+  @@index([propertyId, ranAt(sort: Desc)])
+  @@map("home_savings_runs")
+}
+
+model HomeSavingsOpportunity {
+  id                 String   @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?
+
+  categoryKey        String
+  accountId          String? // the current plan this is based on
+  status             HomeSavingsOpportunityStatus @default(NEW)
+  confidence         HomeSavingsConfidence @default(MEDIUM)
+
+  headline           String // "Switch to Verizon Fios and save $20/month"
+  detail             String?
+  rationaleJson      Json?  // why we think you’re overpaying
+
+  // Savings math (store both monthly and annual)
+  estimatedMonthlySavings Decimal? @db.Decimal(12, 2)
+  estimatedAnnualSavings  Decimal? @db.Decimal(12, 2)
+  currency               String    @default("USD")
+
+  // Recommended alternative(s)
+  recommendedProviderName String?
+  recommendedPlanName     String?
+  offerJson               Json? // multiple offers, rates, fees, promo periods, etc.
+
+  // Links / next action
+  actionUrl           String?
+  expiresAt           DateTime?
+
+  generatedAt         DateTime @default(now())
+
+  homeownerProfile    HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property            Property?        @relation(fields: [propertyId], references: [id])
+  account             HomeSavingsAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  documents           Document[] @relation("HomeSavingsOpportunityDocuments")
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([homeownerProfileId, categoryKey, status])
+  @@index([propertyId, categoryKey, status])
+  @@index([accountId])
+  @@map("home_savings_opportunities")
+}
+
+model HomeSavingsAccount {
+  id                 String   @id @default(uuid())
+  homeownerProfileId String
+  propertyId         String?
+
+  categoryKey         String // FK by convention to HomeSavingsCategory.key
+  status              HomeSavingsAccountStatus @default(ACTIVE)
+
+  providerName        String?
+  planName            String?
+  accountNumberMasked String? // last4 or masked token
+
+  // Cost inputs
+  billingCadence      HomeSavingsBillingCadence @default(MONTHLY)
+  amount              Decimal? @db.Decimal(12, 2) // current recurring amount
+  currency            String   @default("USD")
+
+  // Contract / dates
+  startDate           DateTime?
+  renewalDate         DateTime?
+  contractEndDate     DateTime?
+
+  // Usage + plan details (internet speed, kWh usage, rate type, etc.)
+  usageJson           Json?
+  planDetailsJson     Json?
+
+  // Optional linking to existing canonical entities (for Phase-1 categories)
+  insurancePolicyId   String?
+  warrantyId          String?
+
+  homeownerProfile    HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
+  property            Property?        @relation(fields: [propertyId], references: [id])
+
+  insurancePolicy     InsurancePolicy? @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
+  warranty            Warranty?        @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+
+  documents           Document[]       @relation("HomeSavingsAccountDocuments")
+  opportunities HomeSavingsOpportunity[]
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([homeownerProfileId, categoryKey])
+  @@index([propertyId, categoryKey])
+  @@index([insurancePolicyId])
+  @@index([warrantyId])
+  @@map("home_savings_accounts")
+}
+
+model HomeSavingsCategory {
+  id          String   @id @default(uuid())
+  key         String   @unique // e.g. "INTERNET", "ELECTRICITY_GAS"
+  label       String   // "Internet", "Electricity & Gas"
+  description String?
+  isEnabled   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  metadata    Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("home_savings_categories")
+}
+
+// ============================================================================
+// SERVICE PRICE RADAR
+// ============================================================================
+
+model ServiceRadarCheck {
+  id                   String                   @id @default(uuid())
+  propertyId           String
+  serviceCategory      ServiceCategory
+  serviceSubcategory   String?
+  serviceLabelRaw      String?
+  quoteAmount          Decimal                  @db.Decimal(12, 2)
+  quoteCurrency        String                   @default("USD")
+  quoteVendorName      String?
+  quoteSource          ServiceRadarQuoteSource
+  status               ServiceRadarStatus       @default(PENDING)
+  verdict              ServiceRadarVerdict?
+  expectedLow          Decimal?                 @db.Decimal(12, 2)
+  expectedHigh         Decimal?                 @db.Decimal(12, 2)
+  expectedMedian       Decimal?                 @db.Decimal(12, 2)
+  confidenceScore      Decimal?                 @db.Decimal(5, 4)
+  explanationShort     String?
+  explanationJson      Json?
+  propertySnapshotJson Json?
+  pricingFactorsJson   Json?
+  engineVersion        String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  property             Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  systemLinks          ServiceRadarCheckSystemLink[]
+  userActions          ServiceRadarUserAction[]
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([serviceCategory, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([verdict])
+  @@map("service_radar_checks")
+}
+
+model ServiceRadarCheckSystemLink {
+  id                   String                      @id @default(uuid())
+  serviceRadarCheckId  String
+  linkedEntityType     ServiceRadarLinkedEntityType
+  linkedEntityId       String
+  relevanceScore       Decimal?                    @db.Decimal(5, 4)
+  createdAt            DateTime                    @default(now())
+
+  serviceRadarCheck    ServiceRadarCheck           @relation(fields: [serviceRadarCheckId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRadarCheckId])
+  @@index([linkedEntityType, linkedEntityId])
+  @@map("service_radar_check_system_links")
+}
+
+model ServicePriceBenchmark {
+  id                   String                     @id @default(uuid())
+  serviceCategory      ServiceCategory
+  serviceSubcategory   String?
+  regionType           ServiceBenchmarkRegionType
+  regionKey            String
+  homeType             String?
+  sizeBand             String?
+  baseLow              Decimal                    @db.Decimal(12, 2)
+  baseHigh             Decimal                    @db.Decimal(12, 2)
+  baseMedian           Decimal?                   @db.Decimal(12, 2)
+  laborFactor          Decimal?                   @db.Decimal(6, 3)
+  materialFactor       Decimal?                   @db.Decimal(6, 3)
+  complexityFactorJson Json?
+  effectiveFrom        DateTime
+  effectiveTo          DateTime?
+  sourceLabel          String?
+  isActive             Boolean                    @default(true)
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@index([serviceCategory, regionType, regionKey])
+  @@index([isActive])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@map("service_price_benchmarks")
+}
+
+model ServiceRadarUserAction {
+  id                  String                  @id @default(uuid())
+  serviceRadarCheckId String
+  actionType          ServiceRadarActionType
+  actionMetaJson      Json?
+  createdAt           DateTime                @default(now())
+
+  serviceRadarCheck   ServiceRadarCheck       @relation(fields: [serviceRadarCheckId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRadarCheckId])
+  @@index([actionType])
+  @@index([createdAt(sort: Desc)])
+  @@map("service_radar_user_actions")
+}
+
+// ============================================================================
+// HOME STATUS BOARD (Whole Home Overview)
+// Canonical unified registry + computed/override status for compact grid view
+// ============================================================================
+
+enum HomeItemKind {
+  INVENTORY_ITEM
+  HOME_ASSET
+}
+
+enum HomeItemCondition {
+  GOOD
+  MONITOR
+  ACTION_NEEDED
+}
+
+enum HomeItemRecommendation {
+  OK
+  REPAIR
+  REPLACE_SOON
+}
+
+enum HomeItemDataConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum HomeItemValueSource {
+  SYSTEM
+  USER
+  DOCUMENT
+  PHOTO
+}
+
+enum HomeItemStatusEventType {
+  COMPUTED_UPDATE
+  USER_OVERRIDE
+  PIN
+  UNPIN
+  HIDE
+  UNHIDE
+  REVIEWED
+}
+
+model HomeItem {
+  id         String @id @default(uuid())
+  propertyId String
+
+  kind       HomeItemKind
+
+  // Optional link to room for grouping/navigation (when applicable)
+  roomId     String?
+
+  // Exactly one of these should be set based on kind (enforce in code):
+  // - INVENTORY_ITEM => inventoryItemId required, homeAssetId null
+  // - HOME_ASSET     => homeAssetId required, inventoryItemId null
+  inventoryItemId String?
+  homeAssetId     String?
+
+  // Optional display overrides (keep grid consistent)
+  displayName String?
+  categoryKey String? // e.g. "HVAC", "ROOF", "APPLIANCE" (populate in code/backfill)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room          InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  homeAsset     HomeAsset?     @relation(fields: [homeAssetId], references: [id], onDelete: Cascade)
+
+  status        HomeItemStatus?
+  events        HomeItemStatusEvent[]
+
+  @@index([propertyId, kind])
+  @@index([propertyId, roomId])
+  @@index([propertyId, categoryKey])
+
+  // Property-scoped uniqueness (safer for future)
+  @@unique([propertyId, inventoryItemId])
+  @@unique([propertyId, homeAssetId])
+
+  @@map("home_items")
+}
+
+
+model HomeItemStatus {
+  id         String @id @default(uuid())
+  homeItemId String @unique
+
+  // Computed (system)
+  computedCondition      HomeItemCondition?
+  computedRecommendation HomeItemRecommendation?
+  computedReasonJson     Json?     // reasons: overdue maintenance, EOL, risk flags
+  computedAt             DateTime?
+
+  // User overrides (do not mutate underlying entities)
+  overrideCondition      HomeItemCondition?
+  overrideRecommendation HomeItemRecommendation?
+  overridePurchaseDate   DateTime?
+  overrideInstalledAt    DateTime?
+  overrideNotes          String?
+  overrideSource         HomeItemValueSource?
+
+  // Confidence in the correctness of key facts (future HomeScore readiness)
+  confidence             HomeItemDataConfidence @default(MEDIUM)
+
+  // UX controls
+  isPinned  Boolean @default(false)
+  pinOrder  Int?
+  isHidden  Boolean @default(false)
+
+  // Optional: allows “Mark reviewed” / recency prompts later
+  lastReviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeItem HomeItem @relation(fields: [homeItemId], references: [id], onDelete: Cascade)
+
+  @@index([isPinned, pinOrder])
+  @@index([isHidden])
+  @@index([computedCondition])
+  @@index([overrideCondition])
+
+  @@map("home_item_status")
+}
+
+
+model HomeItemStatusEvent {
+  id          String @id @default(uuid())
+  homeItemId  String
+  actorUserId String?
+
+  eventType   HomeItemStatusEventType
+  payloadJson Json?
+
+  createdAt   DateTime @default(now())
+
+  homeItem    HomeItem @relation(fields: [homeItemId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([homeItemId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+
+  @@map("home_item_status_events")
+}
+
+// ============================================================================
+// RECALL
+// ============================================================================
+
+enum RecallSource {
+  CPSC        // US Consumer Product Safety Commission (v1)
+  NHTSA       // Vehicle recalls (future)
+  MANUFACTURER
+  USER_REPORTED
+}
+
+enum RecallStatus {
+  ACTIVE
+  ENDED
+  UNKNOWN
+}
+
+enum RecallSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  UNKNOWN
+}
+
+enum RecallMatchStatus {
+  OPEN                  // active alert (confirmed or high-confidence)
+  NEEDS_CONFIRMATION     // medium confidence - user confirmation required
+  DISMISSED              // user said "not my model"
+  RESOLVED               // user handled recall / fixed / replaced
+}
+
+enum RecallResolutionType {
+  FIXED
+  REPLACED
+  REFUNDED
+  NOT_APPLICABLE
+  IGNORED
+  OTHER
+}
+
+enum RecallMatchMethod {
+  MAKE_MODEL
+  SERIAL
+  UPC
+  SKU
+  TEXT_FUZZY
+}
+
+model RecallRecord {
+  id            String       @id @default(uuid())
+
+  source        RecallSource
+  externalId    String       // e.g., CPSC recall ID / release ID
+  status        RecallStatus @default(ACTIVE)
+  severity      RecallSeverity @default(UNKNOWN)
+
+  title         String
+  summary       String?
+  hazard        String?       // e.g., "Fire hazard"
+  remedy        String?       // e.g., "Stop use and contact manufacturer"
+  remedyUrl     String?
+  recallUrl     String?
+
+  recalledAt    DateTime?     // date recall announced
+  lastSeenAt    DateTime      @default(now()) // ingestion heartbeat
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // optional structured fields
+  affectedUnits String?
+  countryCodes  String[]      @default(["US"])
+  raw           Json?         // store raw payload for traceability/debug
+
+  // relations
+  products      RecallProduct[]
+  matches       RecallMatch[]
+
+  @@unique([source, externalId])
+  @@index([source, status])
+  @@index([recalledAt])
+}
+
+model RecallProduct {
+  id            String   @id @default(uuid())
+  recallId      String
+  recall        RecallRecord @relation(fields: [recallId], references: [id], onDelete: Cascade)
+
+  // normalized matching fields
+  manufacturer  String?  // "Whirlpool"
+  brand         String?  // "KitchenAid"
+  model         String?  // "KDTM404KPS"
+  modelRange    String?  // optional range patterns (future)
+  upc           String?
+  sku           String?
+  serialPrefix  String?
+
+  category      InventoryItemCategory? // leverage your existing enum
+  notes         String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([recallId])
+  @@index([manufacturer, model])
+  @@index([upc])
+}
+
+model RecallMatch {
+  id              String   @id @default(uuid())
+
+  propertyId      String
+  inventoryItemId String?
+  homeAssetId     String?
+
+  recallId        String
+  recall          RecallRecord @relation(fields: [recallId], references: [id], onDelete: Cascade)
+
+  method          RecallMatchMethod @default(MAKE_MODEL)
+  confidencePct   Int       @default(0)  // 0-100
+  status          RecallMatchStatus @default(OPEN)
+
+  // optional details for explainability / audit
+  matchedOn       Json?     // store fields used (manufacturer/model etc)
+  rationale       String?   // human-readable explanation
+
+  // user workflow fields
+  confirmedAt     DateTime?
+  dismissedAt     DateTime?
+  resolvedAt      DateTime?
+  resolutionType  RecallResolutionType?
+  resolutionNotes String?
+
+  // linking to generated follow-ups
+  maintenanceTaskId String? @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // relations
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  homeAsset       HomeAsset? @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  maintenanceTask PropertyMaintenanceTask? @relation(fields: [maintenanceTaskId], references: [id], onDelete: SetNull)
+  notifications   Notification[]
+
+  @@index([propertyId, status])
+  @@index([inventoryItemId])
+  @@index([homeAssetId])
+  @@index([recallId])
+  // Prevent duplicates for same recall+asset within a property (important for idempotency)
+  @@unique([propertyId, recallId, inventoryItemId])
+  @@unique([propertyId, recallId, homeAssetId])
+}
+
+
+// ============================
+// Incidents (NEW)
+// ============================
+
+enum IncidentStatus {
+  DETECTED
+  EVALUATED
+  ACTIVE
+  ACTIONED
+  MITIGATED
+  RESOLVED
+  SUPPRESSED
+  EXPIRED
+}
+
+enum IncidentSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum IncidentSourceType {
+  WEATHER
+  COVERAGE
+  MODEL
+  IOT
+  MANUAL
+  SYSTEM
+}
+
+enum SignalType {
+  WEATHER_FORECAST
+  COVERAGE_CHECK
+  MODEL_OUTPUT
+  SENSOR_READING
+  USER_REPORT
+  SYSTEM_RULE
+  INSURANCE_POLICY_EXPIRY
+  WEATHER_FORECAST_MIN_TEMP
+  WEATHER_FORECAST_HEAVY_RAIN
+}
+
+enum IncidentActionType {
+  TASK
+  BOOKING
+  CHECKLIST_ITEM
+  NOTIFICATION
+  DOCUMENT
+  NOTE
+}
+
+enum IncidentActionStatus {
+  PROPOSED
+  CREATED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+  FAILED
+}
+
+enum SuppressionScope {
+  PROPERTY
+  USER
+  GLOBAL
+}
+
+enum SuppressionReason {
+  BOOKING_EXISTS
+  TASK_EXISTS
+  COVERED
+  USER_ACKED
+  USER_DISMISSED
+  SNOOZED
+  RECENTLY_SHOWN
+  LOW_CONFIDENCE
+  NOT_ACTIONABLE
+}
+
+enum AcknowledgementType {
+  ACKNOWLEDGED
+  DISMISSED
+  SNOOZED
+}
+
+model Incident {
+  id               String            @id @default(cuid())
+  propertyId       String
+  userId           String?
+  sourceType       IncidentSourceType
+
+  roomId           String?
+  room             InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  typeKey          String
+  category         String?
+  title            String
+  summary          String?
+  details          Json?
+
+  status           IncidentStatus    @default(DETECTED)
+  openedAt         DateTime          @default(now())
+  activatedAt      DateTime?
+  mitigatedAt      DateTime?
+  resolvedAt       DateTime?
+  expiredAt        DateTime?
+
+  severity         IncidentSeverity?
+  severityScore    Int?
+  scoreBreakdown   Json?
+  confidence       Int?
+
+  fingerprint      String
+  recurrenceKey    String?
+  dedupeWindowMins Int?
+
+  isSuppressed     Boolean           @default(false)
+  suppressedAt     DateTime?
+  suppressionReason String?
+  suppressionRuleId String?
+  events           IncidentEvent[]
+  snapshots        IncidentScoreSnapshot[]
+  snoozedUntil     DateTime?
+
+  severityBreakdown  Json?
+  decisionTrace      Json?
+  lastEvaluatedAt    DateTime?
+  nextReevalAt       DateTime?
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  signals          IncidentSignal[]
+  actions          IncidentAction[]
+  acknowledgements IncidentAcknowledgement[]
+
+  property         Property          @relation(fields: [propertyId], references: [id])
+
+  @@index([roomId])
+  @@index([propertyId, status, severity])
+  @@index([propertyId, typeKey, isSuppressed])
+  @@index([propertyId, fingerprint])
+}
+
+model IncidentSignal {
+  id          String     @id @default(cuid())
+  incidentId  String
+  signalType  SignalType
+  externalRef String?
+  observedAt  DateTime   @default(now())
+
+  payload     Json
+  scoreHint   Int?
+  confidence  Int?
+
+  createdAt   DateTime   @default(now())
+
+  incident    Incident   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, signalType])
+  @@index([signalType, observedAt])
+}
+
+model IncidentAction {
+  id         String              @id @default(cuid())
+  incidentId String
+
+  type       IncidentActionType
+  status     IncidentActionStatus @default(PROPOSED)
+
+  actionKey   String?
+  decisionTrace Json?
+
+  entityType String?
+  entityId   String?
+
+  ctaLabel   String?
+  ctaUrl     String?
+  payload    Json?
+
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  incident   Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, type, status])
+  @@index([entityType, entityId])
+  @@index([incidentId])
+  @@unique([actionKey])
+}
+
+model IncidentSuppressionRule {
+  id            String           @id @default(cuid())
+  scope         SuppressionScope @default(PROPERTY)
+  propertyId    String?
+  userId        String?
+
+  typeKey       String?
+  assetId       String?
+  reason        SuppressionReason
+  isEnabled     Boolean          @default(true)
+
+  params        Json?
+  suppressUntil DateTime?
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([propertyId, isEnabled])
+  @@index([userId, isEnabled])
+  @@index([typeKey, isEnabled])
+}
+
+model IncidentAcknowledgement {
+  id          String              @id @default(cuid())
+  incidentId  String
+  userId      String
+  type        AcknowledgementType
+  note        String?
+  snoozeUntil DateTime?
+
+  createdAt   DateTime            @default(now())
+
+  incident    Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, userId])
+  @@index([userId, createdAt])
+}
+
+// ============================
+// Incident events / timeline (NEW)
+// ============================
+
+enum IncidentEventType {
+  CREATED
+  STATUS_CHANGED
+  SEVERITY_COMPUTED
+  ACTION_PROPOSED
+  ACTION_CREATED
+  SUPPRESSED
+  ACKNOWLEDGED
+  DISMISSED
+  SNOOZED
+  RESOLVED
+  EXPIRED
+}
+
+model IncidentEvent {
+  id          String            @id @default(cuid())
+  incidentId  String
+  propertyId  String
+  userId      String?
+  type        IncidentEventType
+  message     String?
+  payload     Json?
+
+  createdAt   DateTime          @default(now())
+
+  incident    Incident          @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@index([propertyId, createdAt])
+}
+
+model IncidentScoreSnapshot {
+  id            String          @id @default(cuid())
+  incidentId    String
+  computedAt    DateTime        @default(now())
+
+  severity      IncidentSeverity
+  severityScore Int
+  confidence    Int?
+  breakdown     Json
+  modelVersion  String?
+
+  incident      Incident        @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, computedAt])
+}
+
+// ============================================================================
+// ROOM DESIGN
+// ============================================================================
+
+enum RoomType {
+  KITCHEN
+  LIVING_ROOM
+  BEDROOM
+  BATHROOM
+  DINING
+  LAUNDRY
+  GARAGE
+  OFFICE
+  BASEMENT
+  OTHER
+}
+
+enum RoomChecklistStatus {
+  OPEN
+  DONE
+}
+
+enum RoomChecklistFrequency {
+  ONCE
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEASONAL
+}
+
+model RoomChecklistItem {
+  id         String @id @default(uuid())
+  propertyId String
+  roomId     String
+
+  // Optional “stable key” to ship default items later without duplicates
+  key        String?
+
+  title      String
+  notes      String?
+
+  status     RoomChecklistStatus    @default(OPEN)
+  frequency  RoomChecklistFrequency @default(ONCE)
+
+  sortOrder  Int @default(0)
+
+  lastCompletedAt DateTime?
+  nextDueDate     DateTime?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room       InventoryRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, roomId])
+  @@index([roomId, status])
+  @@unique([roomId, key])
+  @@map("room_checklist_items")
+}
+
+
+// ============================================================================
+// FAVORITES
+// ============================================================================
+
+model Favorite {
+  id                String   @id @default(uuid())
+  userId            String
+  providerProfileId String
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // FIX: ADDED MISSING RELATION FIELD TO ProviderProfile
+  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, providerProfileId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+// 
+// ============================================================================
+// SYSTEM TABLES
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  
+  // Who & What
+  userId     String?
+  action     String   // created_booking, updated_payment, etc.
+  entityType String   // booking, payment, user, etc.
+  entityId   String
+  
+  // Changes
+  oldValues  Json?
+  newValues  Json?
+  
+  // Context
+  ipAddress  String?
+  userAgent  String?
+  requestId  String?
+  traceId    String?
+  signatureHash String? @db.VarChar(64)
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([requestId])
+  @@index([traceId])
+  @@index([signatureHash])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  id    String @id @default(uuid())
+  key   String @unique
+  value Json
+  
+  description String?
+  updatedAt DateTime @updatedAt
+  
+  @@map("system_settings")
+}
+
+// ============================================================================
+// HOME EVENT RADAR — ENUMS
+// Note: Names use "Radar" prefix to avoid collision with existing HomeEventType
+// and HomeEvent models (which belong to the home timeline feature).
+// ============================================================================
+
+enum RadarEventType {
+  weather
+  insurance_market
+  utility_outage
+  utility_rate_change
+  tax_reassessment
+  tax_rate_change
+  air_quality
+  wildfire_smoke
+  flood_risk
+  heat_wave
+  freeze
+  hail
+  heavy_rain
+  wind
+  power_surge_risk
+  nearby_construction
+  other
+}
+
+enum RadarEventSourceType {
+  weather_provider
+  insurance_market_feed
+  utility_feed
+  tax_assessor_feed
+  internal_derived
+  manual_import
+}
+
+enum RadarEventSeverity {
+  info
+  low
+  medium
+  high
+  critical
+}
+
+enum RadarEventLocationType {
+  property
+  zip
+  city
+  county
+  state
+  polygon
+}
+
+enum RadarEventStatus {
+  active
+  resolved
+  archived
+}
+
+enum PropertyRadarImpactLevel {
+  none
+  watch
+  moderate
+  high
+}
+
+enum PropertyRadarUserState {
+  new
+  seen
+  saved
+  dismissed
+  acted_on
+}
+
+enum PropertyRadarActionType {
+  open_event
+  expand_details
+  view_recommendation
+  save_event
+  dismiss_event
+  mark_checked
+  open_related_system
+  open_related_tool
+  share
+}
+
+// ============================================================================
+// HOME EVENT RADAR — MODELS
+// ============================================================================
+
+// Canonical external event record, independent of any single property.
+model RadarEvent {
+  id            String               @id @default(uuid())
+  eventType     RadarEventType
+  eventSubType  String?
+  title         String
+  summary       String?
+  sourceType    RadarEventSourceType
+  sourceRef     String?
+  severity      RadarEventSeverity
+  startAt       DateTime
+  endAt         DateTime?
+  locationType  RadarEventLocationType
+  locationKey   String
+  geoJson       Json?
+  payloadJson   Json?
+  dedupeKey     String               @unique
+  status        RadarEventStatus     @default(active)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  propertyMatches PropertyRadarMatch[]
+
+  @@index([eventType, startAt])
+  @@index([sourceType])
+  @@index([severity])
+  @@index([status])
+  @@index([locationType, locationKey])
+  @@map("radar_events")
+}
+
+// Maps a canonical RadarEvent to a specific property and captures
+// property-specific relevance and recommended actions.
+model PropertyRadarMatch {
+  id                     String                   @id @default(uuid())
+  propertyId             String
+  radarEventId           String
+  matchScore             Decimal?                 @db.Decimal(5, 4)
+  impactLevel            PropertyRadarImpactLevel
+  impactSummary          String?
+  impactFactorsJson      Json?
+  recommendedActionsJson Json?
+  matchedSystemsJson     Json?
+  isVisible              Boolean                  @default(true)
+  visibleFrom            DateTime?
+  visibleUntil           DateTime?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  property    Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  radarEvent  RadarEvent  @relation(fields: [radarEventId], references: [id], onDelete: Cascade)
+
+  states  PropertyRadarState[]
+  actions PropertyRadarAction[]
+
+  @@unique([propertyId, radarEventId])
+  @@index([propertyId])
+  @@index([radarEventId])
+  @@index([impactLevel])
+  @@index([isVisible, visibleFrom])
+  @@index([createdAt])
+  @@map("property_radar_matches")
+}
+
+// Per-user interaction state on a property-event match.
+model PropertyRadarState {
+  id                   String                 @id @default(uuid())
+  propertyRadarMatchId String
+  userId               String
+  state                PropertyRadarUserState
+  stateMetaJson        Json?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  propertyRadarMatch PropertyRadarMatch @relation(fields: [propertyRadarMatchId], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyRadarMatchId, userId])
+  @@index([propertyRadarMatchId])
+  @@index([state])
+  @@index([updatedAt])
+  @@map("property_radar_states")
+}
+
+// Post-open user actions taken from Home Event Radar.
+model PropertyRadarAction {
+  id                   String                  @id @default(uuid())
+  propertyRadarMatchId String
+  actionType           PropertyRadarActionType
+  actionMetaJson       Json?
+  createdAt            DateTime                @default(now())
+
+  propertyRadarMatch PropertyRadarMatch @relation(fields: [propertyRadarMatchId], references: [id], onDelete: Cascade)
+
+  @@index([propertyRadarMatchId])
+  @@index([actionType])
+  @@index([createdAt])
+  @@map("property_radar_actions")
+}
+
+// Source/provider configuration and ingest bookkeeping.
+model RadarSourceConfig {
+  id             String               @id @default(uuid())
+  sourceType     RadarEventSourceType
+  sourceLabel    String
+  isEnabled      Boolean              @default(true)
+  lastIngestedAt DateTime?
+  configJson     Json?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([sourceType])
+  @@index([isEnabled])
+  @@map("radar_source_configs")
+}
+
+// ============================================================================
+// HOME RISK REPLAY — ENUMS
+// Note: Names use "HomeRisk" prefix to distinguish from the Home Event Radar
+// feature (RadarEvent*) and the home timeline (HomeEvent*).
+// ============================================================================
+
+enum HomeRiskEventType {
+  hail
+  freeze
+  heavy_rain
+  flood_risk
+  wind
+  heat_wave
+  wildfire_smoke
+  air_quality
+  power_outage
+  power_surge_risk
+  drought
+  extreme_weather
+  other
+}
+
+enum HomeRiskEventSeverity {
+  info
+  low
+  moderate
+  high
+  severe
+}
+
+enum HomeRiskReplayStatus {
+  pending
+  completed
+  failed
+}
+
+enum HomeRiskReplayWindowType {
+  since_built
+  last_5_years
+  custom_range
+}
+
+// ============================================================================
+// HOME RISK REPLAY — MODELS
+// ============================================================================
+
+// Canonical environmental event that may affect multiple properties.
+model HomeRiskEvent {
+  id            String                @id @default(uuid())
+  eventType     HomeRiskEventType
+  eventSubType  String?
+  title         String
+  summary       String?
+  severity      HomeRiskEventSeverity
+  startAt       DateTime
+  endAt         DateTime?
+  locationType  String
+  locationKey   String
+  geoJson       Json?
+  payloadJson   Json?
+  dedupeKey     String                @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  replayEventMatches HomeRiskReplayEventMatch[]
+
+  @@index([eventType, startAt])
+  @@index([severity])
+  @@index([locationType, locationKey])
+  @@map("home_risk_events")
+}
+
+// Snapshot of one generated replay timeline for a property.
+model HomeRiskReplayRun {
+  id                   String                   @id @default(uuid())
+  propertyId           String
+  windowType           HomeRiskReplayWindowType
+  windowStart          DateTime?
+  windowEnd            DateTime?
+  status               HomeRiskReplayStatus     @default(pending)
+  totalEvents          Int?
+  highImpactEvents     Int?
+  moderateImpactEvents Int?
+  summaryText          String?
+  summaryJson          Json?
+  propertySnapshotJson Json?
+  engineVersion        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property     Property                   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  eventMatches HomeRiskReplayEventMatch[]
+
+  @@index([propertyId, createdAt])
+  @@index([status])
+  @@map("home_risk_replay_runs")
+}
+
+// Maps a canonical HomeRiskEvent to a property within a replay run.
+model HomeRiskReplayEventMatch {
+  id                  String                @id @default(uuid())
+  homeRiskReplayRunId String
+  homeRiskEventId     String
+  propertyId          String
+  matchScore          Decimal?              @db.Decimal(5, 4)
+  impactLevel         HomeRiskEventSeverity
+  impactSummary       String?
+  impactFactorsJson   Json?
+  recommendedActionsJson Json?
+  matchedSystemsJson  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeRiskReplayRun HomeRiskReplayRun @relation(fields: [homeRiskReplayRunId], references: [id], onDelete: Cascade)
+  homeRiskEvent     HomeRiskEvent     @relation(fields: [homeRiskEventId], references: [id], onDelete: Cascade)
+  property          Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, homeRiskEventId, homeRiskReplayRunId])
+  @@index([propertyId])
+  @@index([homeRiskReplayRunId])
+  @@index([homeRiskEventId])
+  @@index([impactLevel])
+  @@map("home_risk_replay_event_matches")
+}
+
+// ============================================================================
+// HOME DIGITAL WILL
+// ============================================================================
+
+enum HomeDigitalWillStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum HomeDigitalWillReadiness {
+  NOT_STARTED
+  IN_PROGRESS
+  READY
+  NEEDS_REVIEW
+}
+
+enum HomeDigitalWillSectionType {
+  EMERGENCY
+  CRITICAL_INFO
+  CONTRACTORS
+  MAINTENANCE_KNOWLEDGE
+  UTILITIES
+  INSURANCE
+  HOUSE_RULES
+  GENERAL_NOTES
+}
+
+enum HomeDigitalWillEntryType {
+  INSTRUCTION
+  LOCATION_NOTE
+  CONTACT_NOTE
+  SERVICE_PREFERENCE
+  MAINTENANCE_RULE
+  POLICY_NOTE
+  ACCESS_NOTE
+  GENERAL_NOTE
+}
+
+enum HomeDigitalWillEntryPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum HomeDigitalWillTrustedContactRole {
+  SPOUSE
+  FAMILY_MEMBER
+  PROPERTY_MANAGER
+  EMERGENCY_CONTACT
+  CARETAKER
+  OTHER
+}
+
+enum HomeDigitalWillAccessLevel {
+  VIEW
+  EDIT
+  EMERGENCY_ONLY
+}
+
+model HomeDigitalWill {
+  id         String @id @default(uuid())
+  propertyId String @unique
+
+  title     String                   @default("Home Digital Will")
+  status    HomeDigitalWillStatus    @default(DRAFT)
+  readiness HomeDigitalWillReadiness @default(NOT_STARTED)
+
+  completionPercent Int       @default(0)
+  setupCompletedAt  DateTime?
+  lastReviewedAt    DateTime?
+  publishedAt       DateTime?
+
+  property        Property                       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sections        HomeDigitalWillSection[]
+  trustedContacts HomeDigitalWillTrustedContact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
+  @@map("home_digital_wills")
+}
+
+model HomeDigitalWillSection {
+  id            String @id @default(uuid())
+  digitalWillId String
+
+  type        HomeDigitalWillSectionType
+  title       String
+  description String?
+  sortOrder   Int     @default(0)
+  isEnabled   Boolean @default(true)
+
+  digitalWill HomeDigitalWill        @relation(fields: [digitalWillId], references: [id], onDelete: Cascade)
+  entries     HomeDigitalWillEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([digitalWillId, type])
+  @@index([digitalWillId])
+  @@map("home_digital_will_sections")
+}
+
+model HomeDigitalWillEntry {
+  id        String @id @default(uuid())
+  sectionId String
+
+  entryType   HomeDigitalWillEntryType     @default(GENERAL_NOTE)
+  title       String
+  content     String?
+  summary     String?
+  priority    HomeDigitalWillEntryPriority @default(MEDIUM)
+  sortOrder   Int     @default(0)
+  isPinned    Boolean @default(false)
+  isEmergency Boolean @default(false)
+
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+
+  section HomeDigitalWillSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sectionId])
+  @@index([sectionId, sortOrder])
+  @@index([priority])
+  @@index([isEmergency])
+  @@map("home_digital_will_entries")
+}
+
+model HomeDigitalWillTrustedContact {
+  id            String @id @default(uuid())
+  digitalWillId String
+
+  name         String
+  email        String?
+  phone        String?
+  relationship String?
+  role         HomeDigitalWillTrustedContactRole @default(OTHER)
+  accessLevel  HomeDigitalWillAccessLevel        @default(VIEW)
+  isPrimary    Boolean @default(false)
+  notes        String?
+
+  digitalWill HomeDigitalWill @relation(fields: [digitalWillId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([digitalWillId])
+  @@index([email])
+  @@map("home_digital_will_trusted_contacts")
+}
+
+// ============================================================================
+// HIDDEN ASSET FINDER
+// ============================================================================
+
+enum HiddenAssetCategory {
+  TAX_EXEMPTION
+  REBATE
+  UTILITY_INCENTIVE
+  INSURANCE_DISCOUNT
+  ENERGY_CREDIT
+  LOCAL_GRANT
+  HISTORIC_BENEFIT
+  STORM_RESILIENCE
+}
+
+enum HiddenAssetRegionType {
+  COUNTRY
+  STATE
+  COUNTY
+  CITY
+  ZIP
+  UTILITY
+  HAZARD_ZONE
+  HISTORIC_DISTRICT
+}
+
+enum HiddenAssetBenefitType {
+  TAX_SAVINGS
+  TAX_CREDIT
+  REBATE
+  DISCOUNT
+  GRANT
+  CREDIT
+  OTHER
+}
+
+enum HiddenAssetRuleOperator {
+  EQUALS
+  NOT_EQUALS
+  IN
+  NOT_IN
+  GREATER_THAN
+  GREATER_THAN_OR_EQUAL
+  LESS_THAN
+  LESS_THAN_OR_EQUAL
+  EXISTS
+  NOT_EXISTS
+  CONTAINS
+  BOOLEAN_IS
+}
+
+enum HiddenAssetConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum PropertyHiddenAssetMatchStatus {
+  DETECTED
+  VIEWED
+  DISMISSED
+  CLAIMED
+  EXPIRED
+  INACTIVE
+}
+
+enum PropertyHiddenAssetScanRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// Master registry of incentive/benefit programs.
+// Each program defines a benefit that may apply to one or more properties
+// based on geography, property attributes, and eligibility rules.
+model HiddenAssetProgram {
+  id          String @id @default(uuid())
+  name        String
+  category    HiddenAssetCategory
+  description String?
+
+  // Geography / scope targeting
+  regionType  HiddenAssetRegionType
+  regionValue String // e.g., "TX", "78701", "PSEG", "Miami-Dade"
+
+  // Benefit classification
+  benefitType        HiddenAssetBenefitType
+  benefitEstimateMin Decimal? @db.Decimal(12, 2)
+  benefitEstimateMax Decimal? @db.Decimal(12, 2)
+  currency           String   @default("USD")
+
+  // Official source (for "Last verified" UX and linking)
+  sourceUrl    String?
+  sourceLabel  String?
+
+  // Eligibility context for human review / display
+  eligibilityNotes String?
+
+  // Detection tuning: optional weight for confidence scoring
+  confidenceWeight Float?
+
+  // Freshness / lifecycle tracking
+  expiresAt      DateTime?
+  lastVerifiedAt DateTime?
+  isActive       Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rules   HiddenAssetProgramRule[]
+  matches PropertyHiddenAssetMatch[]
+
+  @@index([category])
+  @@index([regionType])
+  @@index([regionValue])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([regionType, regionValue, isActive])
+  @@map("hidden_asset_programs")
+}
+
+// Individual eligibility rule attached to a program.
+// Rules are evaluated by the backend rule engine against property attributes.
+// Examples: property.state = TX, property.roofAge < 5, property.heatingType = HEAT_PUMP
+model HiddenAssetProgramRule {
+  id        String @id @default(uuid())
+  programId String
+
+  attribute String                  // e.g., "state", "yearBuilt", "heatingType"
+  operator  HiddenAssetRuleOperator
+  value     String                  // stored as string; engine casts per attribute type
+
+  sortOrder Int     @default(0)
+  groupKey  String? // reserved for future grouped/OR logic
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  program HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+  @@index([programId, sortOrder])
+  @@map("hidden_asset_program_rules")
+}
+
+// Property-level detection result linking a property to a matched program.
+// Represents a potential benefit signal, not a guaranteed benefit.
+model PropertyHiddenAssetMatch {
+  id         String @id @default(uuid())
+  propertyId String
+  programId  String
+
+  confidenceLevel   HiddenAssetConfidenceLevel
+  estimatedValue    Decimal? @db.Decimal(12, 2)
+  estimatedValueMin Decimal? @db.Decimal(12, 2)
+  estimatedValueMax Decimal? @db.Decimal(12, 2)
+
+  status           PropertyHiddenAssetMatchStatus @default(DETECTED)
+  matchedRuleCount Int?
+  totalRuleCount   Int?
+  matchReasons     Json? // array of human-readable match signals for display
+
+  lastEvaluatedAt DateTime @default(now())
+  firstDetectedAt DateTime @default(now())
+  dismissedAt     DateTime?
+  claimedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program  HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, programId])
+  @@index([propertyId])
+  @@index([programId])
+  @@index([confidenceLevel])
+  @@index([status])
+  @@index([lastEvaluatedAt])
+  @@index([propertyId, status, confidenceLevel])
+  @@map("property_hidden_asset_matches")
+}
+
+// Tracks background or manual scan runs for a property.
+// Enables freshness monitoring and job troubleshooting for scheduled re-evaluation.
+model PropertyHiddenAssetScanRun {
+  id         String @id @default(uuid())
+  propertyId String
+
+  status    PropertyHiddenAssetScanRunStatus @default(PENDING)
+  startedAt DateTime                         @default(now())
+
+  completedAt       DateTime?
+  programsEvaluated Int?
+  matchesFound      Int?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([propertyId, status])
+  @@index([startedAt])
+  @@map("property_hidden_asset_scan_runs")
 }
