@@ -87,6 +87,7 @@ import narrativeRoutes from './routes/narrative.routes';
 import knowledgeHubRoutes from './routes/knowledgeHub.routes';
 import knowledgeHubAdminRoutes from './routes/knowledgeHubAdmin.routes';
 import homeDigitalWillRoutes from './routes/homeDigitalWill.routes';
+import hiddenAssetsRoutes from './routes/hiddenAssets.routes';
 dotenv.config();
 
 const app = express();
@@ -377,6 +378,7 @@ app.use('/api', maintenancePredictionRoutes);
 app.use('/api', narrativeRoutes);
 app.use('/api', knowledgeHubAdminRoutes);
 app.use('/api', homeDigitalWillRoutes);
+app.use('/api', hiddenAssetsRoutes);
 app.use('/api/weather', weatherRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
