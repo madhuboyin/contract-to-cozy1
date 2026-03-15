@@ -37,6 +37,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolsRail from '../../components/HomeToolsRail';
+import RelatedTools from '@/components/tools/RelatedTools';
 import type {
   NeighborhoodConfidenceBand,
   NeighborhoodEventCard,
@@ -717,7 +718,7 @@ export default function NeighborhoodChangeRadarClient() {
   }
 
   return (
-    <MobilePageContainer className="space-y-4 pt-4">
+    <MobilePageContainer className="space-y-4 pt-4 lg:max-w-7xl lg:px-8 lg:pb-10">
       {/* Back nav */}
       <div>
         <Link
@@ -729,54 +730,72 @@ export default function NeighborhoodChangeRadarClient() {
         </Link>
       </div>
 
-      {/* Page intro */}
-      <MobilePageIntro
-        eyebrow="Home Tools"
-        title="Neighborhood Change Radar"
-        subtitle="Track major external changes near your home and understand how they may affect value, demand, and livability."
-      />
-
-      {/* Summary strip */}
-      <SummaryStrip propertyId={propertyId} />
-
-      {/* Tools rail */}
-      <HomeToolsRail propertyId={propertyId} context="neighborhood-change-radar" />
-
-      {/* Trend strip */}
-      <TrendStrip propertyId={propertyId} />
-
-      {/* Event list section */}
-      <MobileSection>
-        <MobileSectionHeader
-          title="Nearby Changes"
-          subtitle={total > 0 ? `${total} development${total !== 1 ? 's' : ''} detected` : undefined}
-        />
-
-        {/* Filters */}
-        <MobileFilterSurface>
-          <FilterTabs value={filterEffect} onChange={setFilterEffect} />
-        </MobileFilterSurface>
-
-        {/* Event list */}
-        {eventsQuery.isLoading ? (
-          <RadarSkeleton />
-        ) : events.length === 0 ? (
-          <EmptyStateCard
-            title="No major changes detected"
-            description="CtC will continue monitoring meaningful external changes near this property."
+      <div className="space-y-4 lg:grid lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-6 lg:space-y-0">
+        {/* Page intro — full width on desktop */}
+        <div className="lg:col-span-2">
+          <MobilePageIntro
+            eyebrow="Home Tools"
+            title="Neighborhood Change Radar"
+            subtitle="Track major external changes near your home and understand how they may affect value, demand, and livability."
           />
-        ) : (
-          <div className="space-y-3">
-            {events.map((event) => (
-              <NeighborhoodEventCardView
-                key={event.id}
-                event={event}
-                onClick={() => openDetail(event.eventId)}
-              />
-            ))}
+        </div>
+
+        {/* Desktop-only: RelatedTools horizontal bar */}
+        <div className="hidden lg:col-span-2 lg:block">
+          <RelatedTools
+            context="neighborhood-change-radar"
+            currentToolId="neighborhood-change-radar"
+            propertyId={propertyId}
+            minViewport="lg"
+          />
+        </div>
+
+        {/* Left column: summary + trend. Tools rail hidden on desktop (RelatedTools above replaces it). */}
+        <div className="space-y-4 lg:space-y-5">
+          <SummaryStrip propertyId={propertyId} />
+
+          <div className="lg:hidden">
+            <HomeToolsRail propertyId={propertyId} context="neighborhood-change-radar" />
           </div>
-        )}
-      </MobileSection>
+
+          <TrendStrip propertyId={propertyId} />
+        </div>
+
+        {/* Right column: event list */}
+        <div className="space-y-4 lg:col-start-2">
+          <MobileSection>
+            <MobileSectionHeader
+              title="Nearby Changes"
+              subtitle={total > 0 ? `${total} development${total !== 1 ? 's' : ''} detected` : undefined}
+            />
+
+            {/* Filters */}
+            <MobileFilterSurface>
+              <FilterTabs value={filterEffect} onChange={setFilterEffect} />
+            </MobileFilterSurface>
+
+            {/* Event list */}
+            {eventsQuery.isLoading ? (
+              <RadarSkeleton />
+            ) : events.length === 0 ? (
+              <EmptyStateCard
+                title="No major changes detected"
+                description="CtC will continue monitoring meaningful external changes near this property."
+              />
+            ) : (
+              <div className="space-y-3">
+                {events.map((event) => (
+                  <NeighborhoodEventCardView
+                    key={event.id}
+                    event={event}
+                    onClick={() => openDetail(event.eventId)}
+                  />
+                ))}
+              </div>
+            )}
+          </MobileSection>
+        </div>
+      </div>
 
       {/* Detail sheet */}
       <EventDetailSheet
