@@ -12,6 +12,7 @@ import { APIError } from '../middleware/error.middleware';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { HomeDigitalTwinBuilderService } from './homeDigitalTwinBuilder.service';
 import { HomeDigitalTwinQualityService } from './homeDigitalTwinQuality.service';
+import { maybeMarkPropertyActivated } from './property.service';
 
 const builder = new HomeDigitalTwinBuilderService();
 const quality = new HomeDigitalTwinQualityService();
@@ -210,6 +211,12 @@ export class HomeDigitalTwinService {
         featureKey: AnalyticsFeature.DIGITAL_TWIN,
         metadataJson: { twinId: twin.id, isNewTwin: !existing },
       });
+
+      // For new twins, digital twin initialization is a strong activation signal.
+      // This is idempotent — marks ACTIVATED only if not already set.
+      if (!existing) {
+        void maybeMarkPropertyActivated(propertyId, null);
+      }
     } catch (err) {
       // Mark run failed — don't swallow the error
       await prisma.homeTwinComputationRun.update({

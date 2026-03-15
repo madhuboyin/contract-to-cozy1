@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Filter,
   Home,
+  Info,
   Layers,
   Loader2,
   RefreshCw,
@@ -862,7 +863,7 @@ function TrendsSection({ filters, enabled }: { filters: AdminAnalyticsFilters; e
             Active Homes
           </CardTitle>
           <CardDescription className="text-xs">
-            Daily active properties and 7-day rolling WAH.
+            Daily active properties and 7-day rolling WAH (est. — rolling sum, may overcount homes active on multiple days).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -891,7 +892,7 @@ function TrendsSection({ filters, enabled }: { filters: AdminAnalyticsFilters; e
             Interactions
           </CardTitle>
           <CardDescription className="text-xs">
-            Total platform interaction events per day.
+            Total homeowner interaction events per day. Admin analytics activity excluded.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -928,10 +929,16 @@ export default function AnalyticsAdminPage() {
   const { user, loading } = useAuth();
   const [filters, setFilters] = useState<AdminAnalyticsFilters>(DEFAULT_FILTERS);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
   const isAdmin = !loading && user?.role === 'ADMIN';
 
   const overviewQ = useAdminAnalyticsOverview(filters, isAdmin);
+
+  // Track when overview data last loaded successfully
+  React.useEffect(() => {
+    if (overviewQ.data) setLastFetched(new Date());
+  }, [overviewQ.data]);
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -1014,17 +1021,17 @@ export default function AnalyticsAdminPage() {
             <OverviewCard
               label="Weekly Active Homes"
               value={num(overviewQ.data.activeHomes.weeklyActiveHomes)}
-              sub={`${num(overviewQ.data.activeHomes.monthlyActiveHomes)} monthly (MAH)`}
+              sub={`${num(overviewQ.data.activeHomes.monthlyActiveHomes)} monthly · exact distinct count`}
             />
             <OverviewCard
               label="WAH / MAH Ratio"
               value={overviewQ.data.activeHomes.wahOverMah != null ? dec(overviewQ.data.activeHomes.wahOverMah, 2) : '—'}
-              sub="Stickiness indicator"
+              sub="Stickiness · higher = better"
             />
             <OverviewCard
               label="Avg Interactions"
               value={dec(overviewQ.data.interactions.avgInteractionsPerActiveHome)}
-              sub="per active home"
+              sub="per MAH · admin events excluded"
             />
             <OverviewCard
               label="Decisions Guided"
@@ -1061,18 +1068,31 @@ export default function AnalyticsAdminPage() {
         {/* ── Cohort Retention ── */}
         <CohortTable enabled={isAdmin} key={`cohort-${refreshKey}`} />
 
-        {/* ── Footer ── */}
-        <p className="text-center text-xs text-slate-400">
-          Data from{' '}
-          <span className="font-medium text-slate-500">
-            {filters.from ? fmtDate(filters.from) : '—'}
-          </span>{' '}
-          to{' '}
-          <span className="font-medium text-slate-500">
-            {filters.to ? fmtDate(filters.to) : '—'}
-          </span>
-          {' · '}Analytics queries run live against product_analytics_events.
-        </p>
+        {/* ── Footer / trust cues ── */}
+        <div className="space-y-1 text-center">
+          <p className="text-xs text-slate-400">
+            Showing data from{' '}
+            <span className="font-medium text-slate-500">
+              {filters.from ? fmtDate(filters.from) : '—'}
+            </span>{' '}
+            to{' '}
+            <span className="font-medium text-slate-500">
+              {filters.to ? fmtDate(filters.to) : '—'}
+            </span>
+            {lastFetched && (
+              <>
+                {' · '}Fetched{' '}
+                <span className="font-medium text-slate-500">
+                  {lastFetched.toLocaleTimeString()}
+                </span>
+              </>
+            )}
+          </p>
+          <p className="text-[11px] text-slate-300">
+            <Info className="mr-1 inline h-3 w-3" />
+            Queries run live · Admin activity excluded from engagement counts · View events deduplicated (1hr window) · WAH trend line is an estimate
+          </p>
+        </div>
       </DashboardShell>
     </div>
   );

@@ -1,18 +1,25 @@
 // apps/backend/src/services/adminAnalytics/funnelService.ts
 //
 // Funnel stage calculation for the admin analytics dashboard.
+//
+// FUNNEL INTERPRETATION NOTE:
+//   Stage 1 counts all properties that existed as of the period end date
+//   (all-time denominator), while stages 2–5 filter to activity within the
+//   selected date range. This means "conversion" from Stage 1 to Stage 2
+//   reflects period-specific adoption against a cumulative base, NOT a pure
+//   new-cohort funnel. The UI labels make this clear.
 
 import { getFunnelCounts } from './repository';
 import { resolveDateRange } from './schemas';
 import type { AdminFunnelResponse, FunnelStage } from './types';
 
-// Ordered funnel stages — must match the stage keys in repository.getFunnelCounts
+// Ordered funnel stages — stage keys MUST match repository.getFunnelCounts SQL aliases.
 const FUNNEL_STAGES: Array<{ stage: string; label: string }> = [
-  { stage: 'properties_created',      label: 'Properties Created' },
-  { stage: 'property_profile_viewed', label: 'Profile Viewed' },
-  { stage: 'first_feature_opened',    label: 'First Feature Opened' },
-  { stage: 'decision_guided',         label: 'Decision Guided' },
-  { stage: 'property_activated',      label: 'Fully Activated' },
+  { stage: 'properties_created',     label: 'Total Properties (all-time)' },
+  { stage: 'has_analytics_activity', label: 'Had Activity in Period' },
+  { stage: 'first_feature_opened',   label: 'Opened a Feature' },
+  { stage: 'decision_guided',        label: 'Received a Decision' },
+  { stage: 'property_activated',     label: 'Fully Activated' },
 ];
 
 export async function getFunnelMetrics(

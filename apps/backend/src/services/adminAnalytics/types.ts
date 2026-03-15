@@ -26,6 +26,8 @@ export interface ActiveHomesMetrics {
   weeklyActiveHomes: number;   // WAH: distinct propertyIds with events in last 7d
   monthlyActiveHomes: number;  // MAH: distinct propertyIds with events in last 30d
   wahOverMah: number | null;   // stickiness ratio
+  /** Explanation of any approximation in the WAH/trend figures. Present when applicable. */
+  wahNote?: string;
 }
 
 export interface InteractionsMetrics {

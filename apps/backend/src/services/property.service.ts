@@ -1188,3 +1188,58 @@ export async function deleteProperty(propertyId: string, userId: string) {
     where: { id: propertyId },
   });
 }
+
+// ============================================================================
+// PROPERTY ACTIVATION UTILITY
+// ============================================================================
+
+/**
+ * Idempotently marks a property as ACTIVATED and emits a PROPERTY_ACTIVATED
+ * analytics event exactly once.
+ *
+ * Safe to call multiple times — if the property is already ACTIVATED the DB
+ * write and event emission are both skipped.
+ *
+ * Activation signals (callers should invoke this after meaningful milestones):
+ *   - Digital twin successfully initialized
+ *   - Onboarding completion (if that flow is added later)
+ *   - Manual admin activation (future)
+ *
+ * Backfill / replay safety: The status check prevents double-counting even if
+ * this function is called during a replay or backfill run.
+ */
+export async function maybeMarkPropertyActivated(
+  propertyId: string,
+  userId: string | null,
+): Promise<void> {
+  try {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { id: true, activationStatus: true },
+    });
+
+    if (!property) return;
+    if (property.activationStatus === 'ACTIVATED') return; // Already activated — idempotent
+
+    const now = new Date();
+    await prisma.property.update({
+      where: { id: propertyId },
+      data: {
+        activationStatus: 'ACTIVATED',
+        activatedAt: now,
+      },
+    });
+
+    console.log(`[Property] marked ACTIVATED — propertyId=${propertyId}`);
+
+    // Emit analytics event — fire-and-forget, will not throw
+    analyticsEmitter.propertyActivated({
+      userId: userId ?? undefined,
+      propertyId,
+      occurredAt: now,
+    });
+  } catch (err) {
+    // Non-fatal: activation marking should never break the caller's workflow
+    console.error(`[Property] maybeMarkPropertyActivated failed — propertyId=${propertyId}:`, err instanceof Error ? err.message : err);
+  }
+}

@@ -27,6 +27,7 @@ export interface AdminOverviewResponse {
     weeklyActiveHomes: number;
     monthlyActiveHomes: number;
     wahOverMah: number | null;
+    wahNote?: string;
   };
   interactions: {
     totalInteractions: number;

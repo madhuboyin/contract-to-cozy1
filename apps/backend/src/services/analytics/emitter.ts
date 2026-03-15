@@ -23,6 +23,75 @@ import {
 } from './schemas';
 
 // ============================================================================
+// VIEW EVENT DEDUPLICATION
+//
+// Problem: "view" events (DIGITAL_TWIN_VIEWED, HOME_PULSE_VIEWED, etc.) are
+// emitted inside service-layer GET handlers that are called on every request.
+// A user refreshing the page 20 times would emit 20 identical events, inflating
+// session/engagement counts in the admin metrics.
+//
+// Solution: A per-process in-memory cache suppresses repeated view events for
+// the same (propertyId, eventType) within VIEW_DEDUP_WINDOW_MS. This is a
+// best-effort guard — it does not eliminate cross-process or cross-restart
+// duplicates, but eliminates the most common rapid-refresh inflation source.
+//
+// Backfill / replay safety: Suppression is purely runtime. A backfill or
+// process restart resets the cache, which is intentional — historical backfills
+// should bypass this guard by passing explicit occurredAt timestamps.
+// ============================================================================
+
+const VIEW_DEDUP_WINDOW_MS = 60 * 60 * 1000; // 1 hour per property+eventType
+const VIEW_DEDUP_CACHE_MAX = 10_000; // Bounded to prevent unbounded memory growth
+
+/** Key → timestamp of last emission */
+const viewDedupCache = new Map<string, number>();
+
+/**
+ * Event types that are likely to fire on every GET request and therefore
+ * need dedup protection. Transactional/mutation events (CREATED, COMPLETED,
+ * DECISION_GUIDED) are intentionally excluded — every occurrence matters.
+ */
+const VIEW_EVENT_TYPES = new Set<ProductAnalyticsEventType>([
+  ProductAnalyticsEventType.DIGITAL_TWIN_VIEWED,
+  ProductAnalyticsEventType.HOME_PULSE_VIEWED,
+  ProductAnalyticsEventType.CLAIM_VIEWED,
+  ProductAnalyticsEventType.INCIDENT_VIEWED,
+  ProductAnalyticsEventType.HIDDEN_ASSET_VIEWED,
+]);
+
+/**
+ * Returns true if the event should be emitted, false if it should be
+ * suppressed because an identical event was recently emitted.
+ */
+function shouldEmitViewEvent(
+  eventType: ProductAnalyticsEventType,
+  propertyId: string | null | undefined,
+): boolean {
+  // Non-view events always emit
+  if (!VIEW_EVENT_TYPES.has(eventType)) return true;
+  // Without propertyId we cannot deduplicate — let it through
+  if (!propertyId) return true;
+
+  const now = Date.now();
+  const key = `${propertyId}:${eventType}`;
+  const last = viewDedupCache.get(key);
+
+  if (last !== undefined && now - last < VIEW_DEDUP_WINDOW_MS) {
+    // Suppressed — same property+eventType within dedup window
+    return false;
+  }
+
+  // Evict oldest entry if cache is full (Map preserves insertion order)
+  if (viewDedupCache.size >= VIEW_DEDUP_CACHE_MAX) {
+    const firstKey = viewDedupCache.keys().next().value as string;
+    viewDedupCache.delete(firstKey);
+  }
+
+  viewDedupCache.set(key, now);
+  return true;
+}
+
+// ============================================================================
 // INTERNAL HELPER
 // ============================================================================
 
@@ -40,8 +109,10 @@ export const analyticsEmitter = {
   /**
    * Emit any arbitrary analytics event.
    * Best-effort — failures are logged and silently dropped.
+   * View-type events are deduplicated within a 1-hour window per property.
    */
   track(input: TrackEventInput): void {
+    if (!shouldEmitViewEvent(input.eventType, input.propertyId)) return;
     safeTrack(input.eventType, ProductAnalyticsService.trackEvent(input));
   },
 

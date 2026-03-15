@@ -97,6 +97,10 @@ export async function getOverviewMetrics(
       weeklyActiveHomes: wahRaw,
       monthlyActiveHomes: mahRaw,
       wahOverMah,
+      // WAH/MAH are true distinct-property counts (not approximations at the overview level).
+      // The WAH value in the trends chart IS an approximation (rolling sum of daily distinct
+      // homes, which may overcount homes active on multiple days). This note surfaces that.
+      wahNote: 'WAH/MAH counts are exact distinct-property counts. The WAH trend line in charts uses a rolling-sum approximation and may overcount.',
     },
     interactions: {
       totalInteractions: totalEvents,

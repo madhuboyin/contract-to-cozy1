@@ -1,9 +1,24 @@
 // apps/backend/src/services/adminAnalytics/repository.ts
 //
 // Raw Prisma queries against product_analytics_events for admin metrics.
+//
+// ADMIN EVENT EXCLUSION:
+//   Events with module_key = 'admin_analytics' are excluded from all interaction
+//   counts (WAH, MAH, totalEvents, eventsPerProperty). This prevents admin users
+//   loading the analytics dashboard from inflating engagement metrics.
+//
+// BACKFILL / REPLAY SAFETY:
+//   All metrics queries are read-only and idempotent — safe to run repeatedly.
+//   If historical events are backfilled, WAH/MAH and interaction counts will
+//   update automatically on the next query. No stale caches or counters exist.
+//   The one exception is countActivatedProperties() which reads Property.activationStatus,
+//   a durable field that is written idempotently by maybeMarkPropertyActivated().
 
 import { prisma } from '../../lib/prisma';
 import { DateRange } from './types';
+
+// Module key to exclude from user-facing metrics (admin's own usage)
+const ADMIN_MODULE_KEY = 'admin_analytics';
 
 // ============================================================================
 // ACTIVATION METRICS
@@ -37,6 +52,8 @@ export async function countDistinctActiveProperties(since: Date): Promise<number
     where: {
       propertyId: { not: null },
       occurredAt: { gte: since },
+      // Exclude admin's own analytics dashboard activity from engagement counts
+      NOT: { moduleKey: ADMIN_MODULE_KEY },
     },
     select: { propertyId: true },
     distinct: ['propertyId'],
@@ -50,20 +67,29 @@ export async function countDistinctActiveProperties(since: Date): Promise<number
 
 export async function countTotalEvents(range: DateRange): Promise<number> {
   return prisma.productAnalyticsEvent.count({
-    where: { occurredAt: { gte: range.from, lte: range.to } },
+    where: {
+      occurredAt: { gte: range.from, lte: range.to },
+      // Exclude admin analytics dashboard events from interaction totals
+      NOT: { moduleKey: ADMIN_MODULE_KEY },
+    },
   });
 }
 
 export async function countEventsPerProperty(
   range: DateRange,
 ): Promise<Array<{ propertyId: string; count: bigint }>> {
+  // SAFETY: LIMIT 50000 prevents this query from returning an unbounded result
+  // set on large tables. The median calculation in metricsService.ts processes
+  // all returned rows in memory, so this caps memory usage too.
   return prisma.$queryRaw<Array<{ propertyId: string; count: bigint }>>`
     SELECT "property_id" AS "propertyId", COUNT(*)::bigint AS count
     FROM "product_analytics_events"
     WHERE "property_id" IS NOT NULL
       AND "occurred_at" >= ${range.from}
       AND "occurred_at" <= ${range.to}
+      AND "module_key" != ${ADMIN_MODULE_KEY}
     GROUP BY "property_id"
+    LIMIT 50000
   `;
 }
 
@@ -104,6 +130,7 @@ export async function getDailyEventCounts(range: DateRange): Promise<DailyEventR
     FROM "product_analytics_events"
     WHERE "occurred_at" >= ${range.from}
       AND "occurred_at" <= ${range.to}
+      AND "module_key" != ${ADMIN_MODULE_KEY}
     GROUP BY DATE_TRUNC('day', "occurred_at")
     ORDER BY day ASC
   `;
@@ -166,7 +193,18 @@ export interface FunnelCountRow {
 }
 
 export async function getFunnelCounts(range: DateRange): Promise<FunnelCountRow[]> {
-  // Each stage is determined by whether a property has emitted the key event
+  // FUNNEL DEFINITION:
+  //   Stage 1 (properties_created):     All properties that existed as of range.to
+  //                                     (cumulative baseline — gives funnel a denominator)
+  //   Stage 2 (has_analytics_activity): Properties with ANY analytics event in range
+  //                                     (proxy for "instrumented and active")
+  //   Stage 3 (first_feature_opened):   Properties that opened at least one feature
+  //   Stage 4 (decision_guided):        Properties that received at least one guided decision
+  //   Stage 5 (property_activated):     Properties marked ACTIVATED in range
+  //
+  // Note: Stage 1 is an all-time count (not range-filtered from), so "conversion"
+  // from Stage 1 to Stage 2 reflects adoption within the period, not a pure cohort
+  // funnel. Admin UI should make this denominator distinction clear.
   return prisma.$queryRaw<FunnelCountRow[]>`
     SELECT stage, COUNT(*) ::bigint AS count FROM (
       SELECT DISTINCT p.id, 'properties_created' AS stage
@@ -175,12 +213,13 @@ export async function getFunnelCounts(range: DateRange): Promise<FunnelCountRow[
 
       UNION ALL
 
-      SELECT DISTINCT e."property_id", 'property_profile_viewed' AS stage
+      -- Stage 2: properties with ANY analytics activity in range (excluding admin module)
+      SELECT DISTINCT e."property_id", 'has_analytics_activity' AS stage
       FROM "product_analytics_events" e
-      WHERE e."event_type" = 'PROPERTY_CREATED'
-        AND e."occurred_at" >= ${range.from}
+      WHERE e."occurred_at" >= ${range.from}
         AND e."occurred_at" <= ${range.to}
         AND e."property_id" IS NOT NULL
+        AND e."module_key" != ${ADMIN_MODULE_KEY}
 
       UNION ALL
 
