@@ -2553,3 +2553,121 @@ export interface UpdateScenarioInput {
   isPinned?: boolean;
   isArchived?: boolean;
 }
+
+// ============================================================================
+// NEIGHBORHOOD CHANGE RADAR
+// ============================================================================
+
+export type NeighborhoodEventType =
+  | 'TRANSIT_PROJECT'
+  | 'HIGHWAY_PROJECT'
+  | 'COMMERCIAL_DEVELOPMENT'
+  | 'RESIDENTIAL_DEVELOPMENT'
+  | 'INDUSTRIAL_PROJECT'
+  | 'WAREHOUSE_PROJECT'
+  | 'ZONING_CHANGE'
+  | 'SCHOOL_RATING_CHANGE'
+  | 'SCHOOL_BOUNDARY_CHANGE'
+  | 'FLOOD_MAP_UPDATE'
+  | 'UTILITY_INFRASTRUCTURE'
+  | 'PARK_DEVELOPMENT'
+  | 'LARGE_CONSTRUCTION';
+
+export type NeighborhoodImpactDirection = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+
+export type NeighborhoodImpactCategory =
+  | 'PROPERTY_VALUE'
+  | 'RENTAL_DEMAND'
+  | 'TRAFFIC'
+  | 'NOISE'
+  | 'AMENITIES'
+  | 'INSURANCE_RISK'
+  | 'DEVELOPMENT_PRESSURE'
+  | 'LIVING_EXPERIENCE';
+
+export type NeighborhoodDemographicSegment =
+  | 'YOUNG_PROFESSIONALS'
+  | 'FAMILIES_WITH_CHILDREN'
+  | 'AFFLUENT_BUYERS'
+  | 'RETIREES'
+  | 'STUDENTS'
+  | 'RENTERS';
+
+export type NeighborhoodOverallEffect =
+  | 'HIGHLY_POSITIVE'
+  | 'MODERATELY_POSITIVE'
+  | 'MIXED'
+  | 'MODERATELY_NEGATIVE'
+  | 'HIGHLY_NEGATIVE'
+  | 'NEUTRAL';
+
+export interface NeighborhoodImpactSnippet {
+  category: NeighborhoodImpactCategory;
+  direction: NeighborhoodImpactDirection;
+  description: string;
+  confidence: number;
+}
+
+export interface NeighborhoodDemographicSnippet {
+  segment: NeighborhoodDemographicSegment;
+  description: string;
+  confidence: number;
+}
+
+export interface NeighborhoodEventCard {
+  id: string;
+  eventId: string;
+  eventType: NeighborhoodEventType;
+  title: string;
+  shortExplanation: string;
+  distanceMiles: number;
+  impactScore: number;
+  overallEffect: NeighborhoodOverallEffect;
+  topPositives: NeighborhoodImpactSnippet[];
+  topNegatives: NeighborhoodImpactSnippet[];
+  demographicSignals: NeighborhoodDemographicSnippet[];
+  announcedDate: string | null;
+  expectedStartDate: string | null;
+  expectedEndDate: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+export interface NeighborhoodRadarSummaryDTO {
+  propertyId: string;
+  meaningfulChangeCount: number;
+  topHeadline: string | null;
+  overallSentiment: NeighborhoodOverallEffect | null;
+  topPositiveThemes: string[];
+  topNegativeThemes: string[];
+  mostImportantEvent: NeighborhoodEventCard | null;
+  lastScanAt: string | null;
+}
+
+export interface NeighborhoodEventListDTO {
+  events: NeighborhoodEventCard[];
+  total: number;
+}
+
+export interface NeighborhoodEventDetailDTO extends NeighborhoodEventCard {
+  description: string | null;
+  sourceUrl: string | null;
+  sourceName: string | null;
+  country: string | null;
+  latitude: number;
+  longitude: number;
+  allImpacts: NeighborhoodImpactSnippet[];
+  allDemographics: NeighborhoodDemographicSnippet[];
+}
+
+export interface NeighborhoodTrendSummaryDTO {
+  propertyId: string;
+  totalEvents: number;
+  narrative: string;
+  pressureSignals: string[];
+  countByEventType: Record<string, number>;
+  countByDirection: Record<NeighborhoodImpactDirection, number>;
+  topDevelopments: NeighborhoodEventCard[];
+}

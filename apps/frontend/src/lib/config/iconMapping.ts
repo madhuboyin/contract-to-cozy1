@@ -222,6 +222,8 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   HOME_DIGITAL_WILL: 'BookOpen',
   HIDDEN_ASSET_FINDER: 'Sparkles',
   HOME_DIGITAL_TWIN: 'Layers',
+  NEIGHBORHOOD_CHANGE_RADAR: 'Radar',
+  'NEIGHBORHOOD-CHANGE-RADAR': 'Radar',
 };
 
 const CORE_NAV_ALIASES: Record<string, CoreNavKey> = {

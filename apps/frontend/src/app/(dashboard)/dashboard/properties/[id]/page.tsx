@@ -71,6 +71,7 @@ import {
   listServicePriceRadarChecks,
   type ServicePriceRadarCheckSummary,
 } from './tools/service-price-radar/servicePriceRadarApi';
+import NeighborhoodRadarDashboardCard from './components/NeighborhoodRadarDashboardCard';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -1439,6 +1440,8 @@ export default function PropertyDetailPage() {
           </p>
         )}
       </div>
+
+      <NeighborhoodRadarDashboardCard propertyId={property.id} />
 
       <div className="md:hidden">
         <HomeToolsRail propertyId={property.id} context="property-hub" />

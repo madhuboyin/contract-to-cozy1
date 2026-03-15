@@ -52,4 +52,6 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'hidden-asset-finder': ['home-digital-twin', 'home-digital-will', 'status-board'],
   // From the digital twin, capital planning and risk history are the most relevant follow-ons.
   'home-digital-twin': ['capital-timeline', 'status-board', 'home-risk-replay'],
+  // Neighborhood radar surfaces related monitoring tools for context.
+  'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
 };

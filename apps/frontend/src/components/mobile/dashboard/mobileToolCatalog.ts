@@ -438,4 +438,14 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-twin(\/|$)/.test(pathname),
   },
+  {
+    key: 'neighborhood-change-radar',
+    name: 'Neighborhood Change Radar',
+    description: 'Track major external changes near your home and understand how they may affect value, demand, and livability.',
+    hrefSuffix: 'tools/neighborhood-change-radar',
+    navTarget: 'tool:neighborhood-change-radar',
+    icon: resolveToolIcon('home', 'neighborhood-change-radar'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/neighborhood-change-radar(\/|$)/.test(pathname),
+  },
 ];

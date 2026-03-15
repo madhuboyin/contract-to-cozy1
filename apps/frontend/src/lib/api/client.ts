@@ -3073,6 +3073,61 @@ class APIClient {
     );
     return res.data?.scenario ?? null;
   }
+
+  // ==========================================================================
+  // NEIGHBORHOOD CHANGE RADAR
+  // ==========================================================================
+
+  async getNeighborhoodRadarSummary(
+    propertyId: string,
+  ): Promise<import('@/types').NeighborhoodRadarSummaryDTO | null> {
+    const res = await this.get<{ summary: import('@/types').NeighborhoodRadarSummaryDTO }>(
+      `/api/properties/${propertyId}/neighborhood-radar/summary`,
+    );
+    return res.data?.summary ?? null;
+  }
+
+  async getNeighborhoodRadarEvents(
+    propertyId: string,
+    params?: {
+      sortBy?: 'impact' | 'date';
+      filterType?: string;
+      filterEffect?: 'POSITIVE' | 'NEGATIVE' | 'MIXED';
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<import('@/types').NeighborhoodEventListDTO | null> {
+    const qs = new URLSearchParams();
+    if (params?.sortBy) qs.set('sortBy', params.sortBy);
+    if (params?.filterType) qs.set('filterType', params.filterType);
+    if (params?.filterEffect) qs.set('filterEffect', params.filterEffect);
+    if (params?.limit != null) qs.set('limit', String(params.limit));
+    if (params?.offset != null) qs.set('offset', String(params.offset));
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    const res = await this.get<import('@/types').NeighborhoodEventListDTO>(
+      `/api/properties/${propertyId}/neighborhood-radar/events${q}`,
+    );
+    return res.data ?? null;
+  }
+
+  async getNeighborhoodRadarEventDetail(
+    propertyId: string,
+    eventId: string,
+  ): Promise<import('@/types').NeighborhoodEventDetailDTO | null> {
+    const res = await this.get<{ event: import('@/types').NeighborhoodEventDetailDTO }>(
+      `/api/properties/${propertyId}/neighborhood-radar/events/${eventId}`,
+    );
+    return res.data?.event ?? null;
+  }
+
+  async getNeighborhoodRadarTrends(
+    propertyId: string,
+  ): Promise<import('@/types').NeighborhoodTrendSummaryDTO | null> {
+    const res = await this.get<{ trends: import('@/types').NeighborhoodTrendSummaryDTO }>(
+      `/api/properties/${propertyId}/neighborhood-radar/trends`,
+    );
+    return res.data?.trends ?? null;
+  }
 }
 
 // Export singleton instance
