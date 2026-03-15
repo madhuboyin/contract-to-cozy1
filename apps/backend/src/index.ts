@@ -89,6 +89,7 @@ import knowledgeHubAdminRoutes from './routes/knowledgeHubAdmin.routes';
 import homeDigitalWillRoutes from './routes/homeDigitalWill.routes';
 import hiddenAssetsRoutes from './routes/hiddenAssets.routes';
 import homeDigitalTwinRoutes from './routes/homeDigitalTwin.routes';
+import neighborhoodIntelligenceRoutes from './neighborhoodIntelligence/neighborhoodIntelligence.routes';
 dotenv.config();
 
 const app = express();
@@ -381,6 +382,7 @@ app.use('/api', knowledgeHubAdminRoutes);
 app.use('/api', homeDigitalWillRoutes);
 app.use('/api', hiddenAssetsRoutes);
 app.use('/api', homeDigitalTwinRoutes);
+app.use('/api', neighborhoodIntelligenceRoutes);
 app.use('/api/weather', weatherRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
