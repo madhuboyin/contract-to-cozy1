@@ -1,5 +1,6 @@
 import { DocumentType, HomeEventType, MaintenanceTaskStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { APIError } from '../middleware/error.middleware';
 import {
   AttachNegotiationShieldDocumentPayload,
@@ -1259,6 +1260,19 @@ export class NegotiationShieldService {
       }
 
       return createdCase;
+    });
+
+    // Analytics: negotiation scenario launched
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.NEGOTIATION_SCENARIO_LAUNCHED,
+      userId: createdByUserId,
+      propertyId,
+      moduleKey: AnalyticsModule.NEGOTIATION,
+      featureKey: AnalyticsFeature.NEGOTIATION_SHIELD,
+      metadataJson: {
+        scenarioType: input.scenarioType ?? null,
+        sourceType: sourceType ?? null,
+      },
     });
 
     return this.getCaseDetail(propertyId, created.id);

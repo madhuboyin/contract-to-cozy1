@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { InventoryItemCategory } from '@prisma/client';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import crypto from 'crypto';
 import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
 import { NextFunction } from 'express';
@@ -374,6 +375,20 @@ export class InventoryService {
       },
     });
   
+    // Analytics: inventory item or system added
+    {
+      const itemCategory = String(created.category ?? '');
+      const isSystem = itemCategory === 'APPLIANCE' || itemCategory === 'HVAC';
+      analyticsEmitter.track({
+        eventType: isSystem ? AnalyticsEvent.SYSTEM_ADDED : AnalyticsEvent.INVENTORY_ITEM_CREATED,
+        userId,
+        propertyId,
+        moduleKey: isSystem ? AnalyticsModule.PROPERTY : AnalyticsModule.INVENTORY,
+        featureKey: isSystem ? AnalyticsFeature.PROPERTY_PROFILE : AnalyticsFeature.INVENTORY_ITEM,
+        metadataJson: { category: itemCategory, sourceType: created.sourceType },
+      });
+    }
+
     // Home Timeline event generation
     try {
       await HomeEventsAutoGen.onInventoryItemCreated({

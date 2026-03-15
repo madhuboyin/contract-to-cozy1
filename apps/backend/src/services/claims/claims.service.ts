@@ -13,6 +13,7 @@ import { assertValidTransition } from './claims.transitions';
 import { DomainEventsService } from '../domainEvents/domainEvents.service';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../coverageAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../riskPremiumOptimizer.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../analytics';
 import { markDoNothingRunsStale } from '../doNothingSimulator.service';
 import { ClaimStatus } from '../../types/claims.types';
 
@@ -472,6 +473,16 @@ export class ClaimsService {
         incidentAt: isoToDateOrNull(input.incidentAt),
         lastActivityAt: new Date(),
       },
+    });
+
+    // Analytics: claim created
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.CLAIM_CREATED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.CLAIMS,
+      featureKey: AnalyticsFeature.CLAIM,
+      metadataJson: { claimType: String(input.type) },
     });
 
     await HomeEventsAutoGen.onClaimCreated({

@@ -7,6 +7,7 @@ import { evaluateIncident } from '../services/incidents/incident.evaluator';
 import { orchestrateIncident } from '../services/incidents/incident.orchestrator';
 import { prisma } from '../lib/prisma';
 import { IncidentExecutionService } from '../services/incidents/incident.execution.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 /**
  * Helper: enforce incident belongs to property (prevents IDOR)
@@ -184,6 +185,16 @@ export const getIncident = async (req: CustomRequest, res: Response) => {
     });
 
     if (!incident) return res.status(404).json({ message: 'Incident not found' });
+
+    // Analytics: incident viewed
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.INCIDENT_VIEWED,
+      userId: req.user?.userId ?? null,
+      propertyId: incident.propertyId,
+      moduleKey: AnalyticsModule.INCIDENTS,
+      featureKey: AnalyticsFeature.INCIDENT,
+      metadataJson: { incidentId },
+    });
 
     // Pull latest decision trace from ACTION_PROPOSED event payload (if present)
     const latestProposalEvent = await prisma.incidentEvent.findFirst({

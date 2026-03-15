@@ -14,6 +14,7 @@ import {
 } from './insuranceAuditor.service';
 import { hasPendingCriticalAssetVerification } from './inventoryVerification.service';
 import { incrementStreak } from './gamification.service';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 
 import { prisma } from '../lib/prisma';
 
@@ -480,11 +481,25 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
     });
   }
 
+  // Analytics: property created
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.PROPERTY_CREATED,
+    userId,
+    propertyId: property.id,
+    moduleKey: AnalyticsModule.PROPERTY,
+    featureKey: AnalyticsFeature.PROPERTY_PROFILE,
+    metadataJson: {
+      propertyType: data.propertyType ?? null,
+      state: data.state.toUpperCase(),
+      yearBuilt: data.yearBuilt ?? null,
+    },
+  });
+
   // NEW STEP: Handle assets AFTER property creation
   if (data.homeAssets !== undefined) {
     await syncPropertyApplianceInventoryItems(property.id, data.homeAssets || []);
   }
-  
+
 
   // PHASE 2 ADDITION: FIX: Use the comprehensive job enqueuer
   // This triggers both Risk and FES calculations
@@ -1099,6 +1114,17 @@ export async function updateProperty(
     where: { id: propertyId },
     data: updatePayload,
   });
+
+  // Analytics: property updated (only when there are actual changes)
+  if (Object.keys(updatePayload).length > 0) {
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.PROPERTY_UPDATED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.PROPERTY,
+      featureKey: AnalyticsFeature.PROPERTY_PROFILE,
+    });
+  }
 
   if (completedResilienceNudge || completedUtilityNudge || completedEquityNudge) {
     await incrementStreak(propertyId);

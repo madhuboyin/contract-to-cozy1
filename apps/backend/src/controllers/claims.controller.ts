@@ -21,6 +21,7 @@ import {
   UpdateChecklistItemSchema,
   UpdateClaimSchema,
 } from '../validators/claims.validators';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
 // ✅ Multer helper (memory storage)
 const storage = multer.memoryStorage();
@@ -89,6 +90,17 @@ export class ClaimsController {
     try {
       const { propertyId, claimId } = req.params;
       const data = await ClaimsService.getClaim(propertyId, claimId);
+
+      // Analytics: claim viewed (only on explicit user-facing fetch, not internal calls)
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.CLAIM_VIEWED,
+        userId: req.user?.userId ?? null,
+        propertyId,
+        moduleKey: AnalyticsModule.CLAIMS,
+        featureKey: AnalyticsFeature.CLAIM,
+        metadataJson: { claimId },
+      });
+
       return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(404).json({ message: e.message || 'Claim not found' });

@@ -12,6 +12,7 @@ import {
   RecallMatchStatus,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { calculateHealthScore } from '../utils/propertyScore.util';
 import { getOwnerLocalUpdates } from '../localUpdates/localUpdates.service';
 
@@ -1197,6 +1198,16 @@ export class DailyHomePulseService {
     }
 
     await this.bumpStreak(propertyId, userId, PropertyStreakType.DAILY_PULSE_CHECKIN, todayKey);
+
+    // Analytics: home pulse viewed (user-initiated snapshot fetch)
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.HOME_PULSE_VIEWED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.HOME_PULSE,
+      featureKey: AnalyticsFeature.HOME_PULSE,
+    });
+
     const dto = toSnapshotDto(snapshot);
     dto.streaks = await this.getStreakCounts(propertyId);
     return dto;

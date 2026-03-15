@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 // Prisma is used for GetPayload generic types and Decimal/JsonValue helpers
 import { prisma } from '../lib/prisma';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import {
   buildPropertyAttributeMap,
   evaluateProgram,
@@ -540,6 +541,16 @@ export class HiddenAssetService {
     const lastScanAt = await getLastCompletedScanAt(propertyId);
     const matches = rows.map(serializeMatch);
 
+    // Analytics: hidden assets feature viewed
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.HIDDEN_ASSET_VIEWED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.HIDDEN_ASSETS,
+      featureKey: AnalyticsFeature.HIDDEN_ASSET,
+      metadataJson: { matchCount: matches.length },
+    });
+
     return {
       propertyId,
       matches,
@@ -556,7 +567,22 @@ export class HiddenAssetService {
     userId: string,
   ): Promise<RefreshResultDTO> {
     const property = await assertPropertyForUser(propertyId, userId);
-    return executePropertyScan(propertyId, property);
+    const result = await executePropertyScan(propertyId, property);
+
+    // Analytics: user-initiated hidden asset refresh completed
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.HIDDEN_ASSET_REFRESHED,
+      userId,
+      propertyId,
+      moduleKey: AnalyticsModule.HIDDEN_ASSETS,
+      featureKey: AnalyticsFeature.HIDDEN_ASSET,
+      metadataJson: {
+        matchesFound: result.matchesFound,
+        programsEvaluated: result.programsEvaluated,
+      },
+    });
+
+    return result;
   }
 
   /**

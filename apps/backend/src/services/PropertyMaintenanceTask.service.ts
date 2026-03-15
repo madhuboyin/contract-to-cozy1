@@ -10,7 +10,8 @@ import {
     Season,
   } from '@prisma/client';
   import { prisma } from '../lib/prisma';
-  
+  import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
+
   /**
    * Service for managing property maintenance tasks.
    * Handles tasks for EXISTING_OWNER segment from multiple sources:
@@ -149,7 +150,21 @@ import {
           nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : null,
         },
       });
-  
+
+      // Analytics: maintenance item created
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.MAINTENANCE_ITEM_CREATED,
+        userId,
+        propertyId,
+        moduleKey: AnalyticsModule.MAINTENANCE,
+        featureKey: AnalyticsFeature.MAINTENANCE_TASK,
+        metadataJson: {
+          source: 'USER_CREATED',
+          priority: data.priority ?? 'MEDIUM',
+          isRecurring: data.isRecurring ?? false,
+        },
+      });
+
       return task;
     }
   
@@ -461,7 +476,22 @@ import {
         where: { id: taskId },
         data: updateData,
       });
-    
+
+      // Analytics: maintenance item completed (only on first completion transition)
+      if (!wasCompleted && isNowCompleted) {
+        analyticsEmitter.track({
+          eventType: AnalyticsEvent.MAINTENANCE_ITEM_COMPLETED,
+          propertyId: task.propertyId,
+          moduleKey: AnalyticsModule.MAINTENANCE,
+          featureKey: AnalyticsFeature.MAINTENANCE_TASK,
+          metadataJson: {
+            source: task.source,
+            priority: task.priority,
+            isRecurring: task.isRecurring,
+          },
+        });
+      }
+
       // Sync to seasonal checklist if this task is linked to one
       if (task.seasonalChecklistItemId) {
         // Fetch once, use for both update and getting checklistId

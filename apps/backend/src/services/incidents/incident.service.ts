@@ -1,5 +1,6 @@
 // apps/backend/src/services/incidents/incident.service.ts
 import { prisma } from '../../lib/prisma';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../analytics';
 import {
   AcknowledgementType,
   IncidentActionStatus,
@@ -152,6 +153,22 @@ export class IncidentService {
         : await prisma.incident.create({
             data: baseData,
           });
+
+    // Analytics: incident created (only for genuinely new incidents, not updates)
+    if (!existing) {
+      analyticsEmitter.track({
+        eventType: AnalyticsEvent.INCIDENT_CREATED,
+        userId: incident.userId ?? null,
+        propertyId: incident.propertyId,
+        moduleKey: AnalyticsModule.INCIDENTS,
+        featureKey: AnalyticsFeature.INCIDENT,
+        metadataJson: {
+          typeKey: incident.typeKey,
+          severity: incident.severity ?? null,
+          isSuppressed: incident.isSuppressed,
+        },
+      });
+    }
 
     // attach signals
     if (signals?.length) {

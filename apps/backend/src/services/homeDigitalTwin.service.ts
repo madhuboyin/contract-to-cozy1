@@ -9,6 +9,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { HomeDigitalTwinBuilderService } from './homeDigitalTwinBuilder.service';
 import { HomeDigitalTwinQualityService } from './homeDigitalTwinQuality.service';
 
@@ -115,6 +116,15 @@ export class HomeDigitalTwinService {
       );
     }
 
+    // Analytics: digital twin viewed
+    analyticsEmitter.track({
+      eventType: AnalyticsEvent.DIGITAL_TWIN_VIEWED,
+      propertyId,
+      moduleKey: AnalyticsModule.DIGITAL_TWIN,
+      featureKey: AnalyticsFeature.DIGITAL_TWIN,
+      metadataJson: { twinId: twin.id, status: twin.status },
+    });
+
     return serializeTwin(twin);
   }
 
@@ -191,6 +201,14 @@ export class HomeDigitalTwinService {
       await prisma.homeTwinComputationRun.update({
         where: { id: run.id },
         data: { status: 'SUCCEEDED', completedAt: new Date() },
+      });
+
+      // Analytics: digital twin initialized/activated
+      analyticsEmitter.featureOpened({
+        propertyId,
+        moduleKey: AnalyticsModule.DIGITAL_TWIN,
+        featureKey: AnalyticsFeature.DIGITAL_TWIN,
+        metadataJson: { twinId: twin.id, isNewTwin: !existing },
       });
     } catch (err) {
       // Mark run failed — don't swallow the error
