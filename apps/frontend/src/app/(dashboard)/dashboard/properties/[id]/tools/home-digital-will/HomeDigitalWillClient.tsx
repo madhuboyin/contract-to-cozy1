@@ -1181,7 +1181,7 @@ function ContactsDetailPanel({
       <div className="rounded-xl bg-gray-50 px-4 py-3">
         <p className={cn(MOBILE_TYPE_TOKENS.body, 'text-gray-600')}>
           Trusted contacts can access critical home knowledge when needed — during an emergency,
-          a transition, or when you're unavailable. Choose each person's access level based on
+          a transition, or when you&apos;re unavailable. Choose each person&apos;s access level based on
           their role.
         </p>
       </div>

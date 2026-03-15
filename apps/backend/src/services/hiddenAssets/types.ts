@@ -141,7 +141,6 @@ export interface HiddenAssetMatchFilters {
   confidenceLevel?: HiddenAssetConfidenceLevel;
   category?: HiddenAssetCategory;
   status?: PropertyHiddenAssetMatchStatus;
-  activeOnly?: boolean;
   includeDismissed?: boolean;
   includeExpired?: boolean;
 }

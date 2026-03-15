@@ -332,6 +332,20 @@ async function executePropertyScan(
 ): Promise<RefreshResultDTO> {
   const startedAt = Date.now();
 
+  // Guard: reject if a scan is already in progress for this property (within last 5 min).
+  // Prevents duplicate scan runs from concurrent user actions or race conditions.
+  const runningRun = await prisma.propertyHiddenAssetScanRun.findFirst({
+    where: {
+      propertyId,
+      status: PropertyHiddenAssetScanRunStatus.RUNNING,
+      startedAt: { gte: new Date(Date.now() - 5 * 60 * 1000) },
+    },
+    select: { id: true },
+  });
+  if (runningRun) {
+    throw new Error('SCAN_IN_PROGRESS');
+  }
+
   const scanRun = await prisma.propertyHiddenAssetScanRun.create({
     data: {
       propertyId,

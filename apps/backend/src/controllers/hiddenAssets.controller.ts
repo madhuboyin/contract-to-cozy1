@@ -32,7 +32,6 @@ export async function getHiddenAssetsForProperty(req: CustomRequest, res: Respon
       confidenceLevel: req.query.confidenceLevel as HiddenAssetConfidenceLevel | undefined,
       category: req.query.category as HiddenAssetCategory | undefined,
       status: req.query.status as PropertyHiddenAssetMatchStatus | undefined,
-      activeOnly: req.query.activeOnly === 'true',
       includeDismissed: req.query.includeDismissed === 'true',
       includeExpired: req.query.includeExpired === 'true',
     };
@@ -61,12 +60,17 @@ export async function refreshHiddenAssetsForProperty(req: CustomRequest, res: Re
     const result = await service.refreshMatchesForProperty(propertyId, userId);
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    const status = error?.message === 'Authentication required.' ? 401 : 500;
+    const msg = error?.message ?? '';
+    const status =
+      msg === 'Authentication required.' ? 401 :
+      msg === 'SCAN_IN_PROGRESS' ? 409 :
+      500;
+    const clientMessage =
+      msg === 'SCAN_IN_PROGRESS'
+        ? 'A scan is already in progress for this property. Please wait a moment and try again.'
+        : msg || 'Failed to run hidden asset scan.';
     console.error('[HiddenAssets] refreshHiddenAssetsForProperty error:', error);
-    return res.status(status).json({
-      success: false,
-      message: error?.message || 'Failed to run hidden asset scan.',
-    });
+    return res.status(status).json({ success: false, message: clientMessage });
   }
 }
 

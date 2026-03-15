@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -61,6 +62,23 @@ const CATEGORY_LABEL: Record<HiddenAssetCategory, string> = {
   STORM_RESILIENCE: 'Storm Resilience',
 };
 
+// Category-specific safety caveats shown in the detail sheet.
+// Keeps tone cautious and reminds users to verify with official sources.
+const CATEGORY_CAVEAT: Partial<Record<HiddenAssetCategory, string>> = {
+  TAX_EXEMPTION:
+    'Tax exemptions depend on official filing requirements, jurisdiction, and individual eligibility. This is not tax advice — verify with your local tax authority.',
+  ENERGY_CREDIT:
+    'Energy credits depend on installation dates, equipment specifications, and tax year. Consult a tax professional before claiming.',
+  INSURANCE_DISCOUNT:
+    'Discounts vary by insurer and policy. Contact your insurance carrier directly to confirm whether your specific policy qualifies.',
+  LOCAL_GRANT:
+    'Grant availability and funding change frequently. Confirm current availability and application status with the issuing authority.',
+  HISTORIC_BENEFIT:
+    'Historic benefits require registry verification. Contact your local historic preservation office to confirm eligibility.',
+  STORM_RESILIENCE:
+    'Storm-resilience incentives depend on hazard zone designation and program availability. Verify with the program administrator.',
+};
+
 const ALL_CATEGORIES: HiddenAssetCategory[] = [
   'TAX_EXEMPTION',
   'REBATE',
@@ -101,7 +119,7 @@ function formatValueRange(
   return `Up to ${fmt(max!)}`;
 }
 
-function formatDate(iso: string | null): string {
+function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-US', {
     month: 'short',
@@ -137,7 +155,6 @@ function HiddenAssetSummaryCard({
   onRefresh: () => void;
   isRefreshing: boolean;
 }) {
-  const valueRange = formatValueRange(null, null); // summary has no total value — omit
   return (
     <MobileCard variant="standard">
       <div className="flex items-start justify-between gap-3">
@@ -150,7 +167,7 @@ function HiddenAssetSummaryCard({
             value={String(summary.totalMatches)}
           />
           <MetricRow
-            label="High-confidence matches"
+            label="Likely matches (high confidence)"
             value={String(summary.highConfidenceCount)}
           />
           <MetricRow
@@ -163,12 +180,13 @@ function HiddenAssetSummaryCard({
           size="sm"
           onClick={onRefresh}
           disabled={isRefreshing}
+          aria-label={isRefreshing ? 'Scanning for benefits…' : 'Re-scan for benefits'}
           className="shrink-0 gap-1.5 rounded-full"
         >
           {isRefreshing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
           ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
           )}
           {isRefreshing ? 'Scanning…' : 'Re-scan'}
         </Button>
@@ -202,6 +220,7 @@ function HiddenAssetMatchCard({
     <button
       type="button"
       onClick={onClick}
+      aria-label={`View details for ${match.programName}`}
       className="block w-full text-left"
     >
       <MobileCard
@@ -229,7 +248,10 @@ function HiddenAssetMatchCard({
         {/* Footer row */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[hsl(var(--mobile-text-secondary))]">
           {valueStr && (
-            <span className="font-semibold text-[hsl(var(--foreground))]">{valueStr}</span>
+            <span className="font-medium text-[hsl(var(--foreground))]">
+              <span className="font-normal text-[hsl(var(--mobile-text-secondary))]">Est. </span>
+              {valueStr}
+            </span>
           )}
           {match.lastVerifiedAt && (
             <span>Verified {formatDate(match.lastVerifiedAt)}</span>
@@ -239,8 +261,11 @@ function HiddenAssetMatchCard({
 
         {/* Freshness warning */}
         {match.freshnessNote && (
-          <div className="mt-2 flex items-start gap-1.5 rounded-xl border border-amber-200/70 bg-amber-50/80 px-2.5 py-1.5">
-            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+          <div
+            role="note"
+            className="mt-2 flex items-start gap-1.5 rounded-xl border border-amber-200/70 bg-amber-50/80 px-2.5 py-1.5"
+          >
+            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" aria-hidden="true" />
             <p className="text-[11px] leading-snug text-amber-700">{match.freshnessNote}</p>
           </div>
         )}
@@ -279,13 +304,15 @@ function HiddenAssetDetailSheet({
   const canAct =
     match.status !== 'DISMISSED' && match.status !== 'CLAIMED' && !isUpdating;
 
+  const categoryCaveat = CATEGORY_CAVEAT[match.category] ?? null;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b px-5 py-4">
           <SheetTitle className="pr-8 text-base">{match.programName}</SheetTitle>
           <SheetDescription className="sr-only">
-            Details for {match.programName}
+            Potential benefit details for {match.programName}. Verify eligibility with the official source before taking action.
           </SheetDescription>
         </SheetHeader>
 
@@ -314,12 +341,15 @@ function HiddenAssetDetailSheet({
           {match.matchReasons && match.matchReasons.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
-                Why this may apply
+                Why this may apply to your home
               </h3>
               <ul className="space-y-1.5">
                 {match.matchReasons.map((reason, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm leading-[1.45]">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--mobile-brand-border))]" />
+                    <span
+                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--mobile-brand-border))]"
+                      aria-hidden="true"
+                    />
                     <span>{reason}</span>
                   </li>
                 ))}
@@ -331,11 +361,11 @@ function HiddenAssetDetailSheet({
           {valueStr && (
             <div className="space-y-1">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
-                Potential value
+                Estimated potential value
               </h3>
               <p className="text-sm font-semibold">{valueStr}</p>
               <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                Estimates only — actual benefit depends on your eligibility and program rules.
+                These are estimates only — actual benefit depends on your eligibility, program rules, and available funding.
               </p>
             </div>
           )}
@@ -359,7 +389,9 @@ function HiddenAssetDetailSheet({
                 </p>
               )}
               {!match.lastVerifiedAt && !match.expiresAt && (
-                <p className="text-[hsl(var(--mobile-text-secondary))]">No date information available.</p>
+                <p className="text-[hsl(var(--mobile-text-secondary))]">
+                  No date information available. Verify current status with the official source.
+                </p>
               )}
             </div>
           </div>
@@ -383,9 +415,10 @@ function HiddenAssetDetailSheet({
                 href={match.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`Open official source: ${match.sourceLabel ?? match.programName} (opens in new tab)`}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--mobile-border-subtle))] px-3 py-2 text-sm font-medium hover:bg-[hsl(var(--mobile-bg-muted))]"
               >
-                <ExternalLink className="h-3.5 w-3.5" />
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 {match.sourceLabel ?? 'View official source'}
               </a>
             </div>
@@ -393,16 +426,28 @@ function HiddenAssetDetailSheet({
 
           {/* Freshness note */}
           {match.freshnessNote && (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2.5">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div
+              role="note"
+              className="flex items-start gap-2 rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2.5"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
               <p className="text-xs leading-snug text-amber-700">{match.freshnessNote}</p>
             </div>
           )}
 
-          {/* Disclaimer */}
+          {/* Category-specific safety caveat */}
+          {categoryCaveat && (
+            <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+              <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                {categoryCaveat}
+              </p>
+            </div>
+          )}
+
+          {/* Base disclaimer */}
           <p className="text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
-            This is a potential match based on your property details. Verify eligibility directly
-            with the program administrator before taking action.
+            This is a potential match based on your property details and publicly available program data.
+            Verify eligibility directly with the program administrator before taking any action.
           </p>
         </div>
 
@@ -415,30 +460,39 @@ function HiddenAssetDetailSheet({
               className="flex-1"
               onClick={onDismiss}
               disabled={isUpdating}
+              aria-label="Dismiss this match"
             >
-              Dismiss
+              Not relevant
             </Button>
             <Button
               size="sm"
               className="flex-1"
               onClick={onClaim}
               disabled={isUpdating}
+              aria-label="Mark this match as pursued"
             >
-              {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Mark as Claimed'}
+              {isUpdating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                'Mark as Pursuing'
+              )}
             </Button>
           </div>
         )}
         {match.status === 'DISMISSED' && (
           <div className="border-t px-5 py-3">
             <p className="text-center text-xs text-[hsl(var(--mobile-text-secondary))]">
-              You dismissed this match.
+              You marked this as not relevant.
             </p>
           </div>
         )}
         {match.status === 'CLAIMED' && (
-          <div className="border-t px-5 py-3">
-            <p className="text-center text-xs text-green-700">
-              Marked as claimed on {formatDate(match.claimedAt)}.
+          <div className="border-t px-5 py-3 space-y-1 text-center">
+            <p className="text-xs text-green-700">
+              You marked this as pursued{match.claimedAt ? ` on ${formatDate(match.claimedAt)}` : ''}.
+            </p>
+            <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+              Remember to verify eligibility with the official source.
             </p>
           </div>
         )}
@@ -464,6 +518,7 @@ function FilterChip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         'inline-flex min-h-[32px] items-center rounded-full px-3 text-[11px] font-medium transition-colors',
         active
@@ -490,7 +545,9 @@ export default function HiddenAssetFinderClient() {
   const [confidenceFilter, setConfidenceFilter] = useState<HiddenAssetConfidenceLevel | null>(
     null,
   );
-  const [selectedMatch, setSelectedMatch] = useState<HiddenAssetMatchDTO | null>(null);
+  // Store only the ID; derive the full match from current query data so the sheet
+  // always reflects the latest state without manual sync.
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   // ---- Query ----
@@ -504,18 +561,47 @@ export default function HiddenAssetFinderClient() {
     enabled: !!propertyId,
   });
 
+  // Derive selectedMatch from current query data — always fresh, no stale state.
+  const selectedMatch = data?.matches.find((m) => m.id === selectedMatchId) ?? null;
+
+  // Auto-close detail sheet when the selected match is no longer in the visible
+  // list (expired, inactivated, filtered out, or dismissed after background refresh).
+  useEffect(() => {
+    if (detailOpen && selectedMatchId && !selectedMatch) {
+      setDetailOpen(false);
+    }
+  }, [detailOpen, selectedMatchId, selectedMatch]);
+
+  function closeDetail() {
+    setDetailOpen(false);
+    setSelectedMatchId(null);
+  }
+
   // ---- Refresh mutation ----
   const refreshMutation = useMutation({
     mutationFn: () => refreshHiddenAssetMatches(propertyId),
     onSuccess: (result) => {
+      // Close any open detail sheet before invalidating to prevent showing
+      // stale data for matches that may have changed status during the scan.
+      closeDetail();
       queryClient.invalidateQueries({ queryKey: ['hidden-assets', propertyId] });
       toast({
         title: 'Scan complete',
-        description: `Found ${result.matchesFound} potential benefit${result.matchesFound !== 1 ? 's' : ''} for this property.`,
+        description:
+          result.matchesFound > 0
+            ? `Found ${result.matchesFound} potential benefit${result.matchesFound !== 1 ? 's' : ''} for this property.`
+            : 'No new programs matched this property.',
       });
     },
-    onError: () =>
-      toast({ title: 'Scan failed. Please try again.', variant: 'destructive' }),
+    onError: (error) =>
+      toast({
+        title: 'Scan failed',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Could not complete the scan. Please try again.',
+        variant: 'destructive',
+      }),
   });
 
   // ---- Status mutation ----
@@ -531,11 +617,11 @@ export default function HiddenAssetFinderClient() {
       queryClient.invalidateQueries({ queryKey: ['hidden-assets', propertyId] });
     },
     onError: () =>
-      toast({ title: 'Could not update status.', variant: 'destructive' }),
+      toast({ title: 'Could not update status. Please try again.', variant: 'destructive' }),
   });
 
   function openDetail(match: HiddenAssetMatchDTO) {
-    setSelectedMatch(match);
+    setSelectedMatchId(match.id);
     setDetailOpen(true);
     // Fire-and-forget: mark as VIEWED if not already acted on
     if (match.status === 'DETECTED') {
@@ -547,7 +633,7 @@ export default function HiddenAssetFinderClient() {
     if (!selectedMatch) return;
     statusMutation.mutate(
       { matchId: selectedMatch.id, status: 'DISMISSED' },
-      { onSuccess: () => setDetailOpen(false) },
+      { onSuccess: () => closeDetail() },
     );
   }
 
@@ -557,8 +643,10 @@ export default function HiddenAssetFinderClient() {
       { matchId: selectedMatch.id, status: 'CLAIMED' },
       {
         onSuccess: () => {
-          setDetailOpen(false);
-          toast({ title: 'Marked as claimed.' });
+          toast({
+            title: "Noted — you're pursuing this benefit.",
+            description: 'Remember to verify eligibility with the official source.',
+          });
         },
       },
     );
@@ -566,6 +654,7 @@ export default function HiddenAssetFinderClient() {
 
   const matches = data?.matches ?? [];
   const summary = data?.summary;
+  const hasBeenScanned = Boolean(summary?.lastScanAt);
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -576,7 +665,7 @@ export default function HiddenAssetFinderClient() {
         asChild
       >
         <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
+          <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
           Back to property
         </Link>
       </Button>
@@ -585,7 +674,7 @@ export default function HiddenAssetFinderClient() {
       <MobilePageIntro
         eyebrow="Home Tool"
         title="Hidden Asset Finder"
-        subtitle="Find potential rebates, tax benefits, discounts, and grants tied to your home."
+        subtitle="Discover potential rebates, tax benefits, discounts, and grants that may apply to your home. All results are potential matches — verify eligibility with each program's official source."
       />
 
       {/* Filter surface: tool rail + filters */}
@@ -593,7 +682,11 @@ export default function HiddenAssetFinderClient() {
         <HomeToolsRail propertyId={propertyId} />
 
         {/* Category filter chips */}
-        <div className="flex flex-wrap gap-1.5 pt-1">
+        <div
+          role="group"
+          aria-label="Filter by benefit category"
+          className="flex flex-wrap gap-1.5 pt-1"
+        >
           {ALL_CATEGORIES.map((cat) => (
             <FilterChip
               key={cat}
@@ -605,7 +698,11 @@ export default function HiddenAssetFinderClient() {
         </div>
 
         {/* Confidence filter chips */}
-        <div className="flex flex-wrap gap-1.5">
+        <div
+          role="group"
+          aria-label="Filter by match confidence"
+          className="flex flex-wrap gap-1.5"
+        >
           {(['HIGH', 'MEDIUM', 'LOW'] as HiddenAssetConfidenceLevel[]).map((level) => (
             <FilterChip
               key={level}
@@ -634,18 +731,19 @@ export default function HiddenAssetFinderClient() {
         />
       )}
 
-      {/* Refresh CTA if no summary yet */}
+      {/* Scan CTA before first scan */}
       {!summary && !isLoading && !isError && (
         <Button
           variant="outline"
           className="w-full gap-2 rounded-full"
           onClick={() => refreshMutation.mutate()}
           disabled={refreshMutation.isPending}
+          aria-label="Scan this property for potential benefits"
         >
           {refreshMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
           )}
           {refreshMutation.isPending ? 'Scanning property…' : 'Scan for Benefits'}
         </Button>
@@ -655,12 +753,17 @@ export default function HiddenAssetFinderClient() {
       {isLoading ? (
         <HiddenAssetSkeleton />
       ) : isError ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3">
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
           <div className="flex-1 text-sm text-red-600">
-            Could not load benefits data. Please try again.
+            Could not load benefits data. Check your connection and try again.
           </div>
           <button
             onClick={() => refetch()}
+            aria-label="Retry loading benefits data"
             className="shrink-0 text-sm font-medium text-red-700 hover:text-red-900"
           >
             Retry
@@ -668,21 +771,30 @@ export default function HiddenAssetFinderClient() {
         </div>
       ) : matches.length === 0 ? (
         <EmptyStateCard
-          title="No benefits detected yet"
-          description="Run a scan to check for potential tax exemptions, rebates, discounts, and other programs that may apply to this home. Results depend on available property details."
+          title={hasBeenScanned ? 'No programs found' : 'No benefits detected yet'}
+          description={
+            hasBeenScanned
+              ? 'Your last scan found no matching programs for this property. Results may change as new programs are added or as your property details are updated.'
+              : 'Run a scan to check for potential tax exemptions, rebates, discounts, and other programs that may apply to this home. Results depend on your current property details.'
+          }
           action={
             <Button
               variant="outline"
               onClick={() => refreshMutation.mutate()}
               disabled={refreshMutation.isPending}
               className="gap-2"
+              aria-label={hasBeenScanned ? 'Re-scan for benefits' : 'Scan for benefits'}
             >
               {refreshMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
               )}
-              {refreshMutation.isPending ? 'Scanning…' : 'Scan for Benefits'}
+              {refreshMutation.isPending
+                ? 'Scanning…'
+                : hasBeenScanned
+                  ? 'Re-scan'
+                  : 'Scan for Benefits'}
             </Button>
           }
         />
@@ -692,18 +804,19 @@ export default function HiddenAssetFinderClient() {
             title="Programs worth verifying"
             subtitle={`${matches.length} potential match${matches.length !== 1 ? 'es' : ''} found`}
           />
-          <div className="space-y-2">
+          <div className="space-y-2" role="list" aria-label="Potential benefit programs">
             {matches.map((match) => (
-              <HiddenAssetMatchCard
-                key={match.id}
-                match={match}
-                onClick={() => openDetail(match)}
-              />
+              <div key={match.id} role="listitem">
+                <HiddenAssetMatchCard
+                  match={match}
+                  onClick={() => openDetail(match)}
+                />
+              </div>
             ))}
           </div>
           <p className="pt-1 text-xs leading-snug text-[hsl(var(--mobile-text-secondary))]">
             Results are based on your property details and publicly available program data.
-            Verify eligibility with each program&apos;s official source before applying.
+            Eligibility is not guaranteed — verify with each program&apos;s official source before applying.
           </p>
         </MobileSection>
       )}
@@ -712,7 +825,10 @@ export default function HiddenAssetFinderClient() {
       <HiddenAssetDetailSheet
         match={selectedMatch}
         open={detailOpen}
-        onOpenChange={setDetailOpen}
+        onOpenChange={(open) => {
+          if (!open) closeDetail();
+          else setDetailOpen(true);
+        }}
         onDismiss={handleDismiss}
         onClaim={handleClaim}
         isUpdating={statusMutation.isPending}
