@@ -1704,6 +1704,9 @@ model Property {
 
   homeDigitalWill HomeDigitalWill?
 
+  hiddenAssetMatches  PropertyHiddenAssetMatch[]
+  hiddenAssetScanRuns PropertyHiddenAssetScanRun[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -6705,4 +6708,213 @@ model HomeDigitalWillTrustedContact {
   @@index([digitalWillId])
   @@index([email])
   @@map("home_digital_will_trusted_contacts")
+}
+
+// ============================================================================
+// HIDDEN ASSET FINDER
+// ============================================================================
+
+enum HiddenAssetCategory {
+  TAX_EXEMPTION
+  REBATE
+  UTILITY_INCENTIVE
+  INSURANCE_DISCOUNT
+  ENERGY_CREDIT
+  LOCAL_GRANT
+  HISTORIC_BENEFIT
+  STORM_RESILIENCE
+}
+
+enum HiddenAssetRegionType {
+  COUNTRY
+  STATE
+  COUNTY
+  CITY
+  ZIP
+  UTILITY
+  HAZARD_ZONE
+  HISTORIC_DISTRICT
+}
+
+enum HiddenAssetBenefitType {
+  TAX_SAVINGS
+  TAX_CREDIT
+  REBATE
+  DISCOUNT
+  GRANT
+  CREDIT
+  OTHER
+}
+
+enum HiddenAssetRuleOperator {
+  EQUALS
+  NOT_EQUALS
+  IN
+  NOT_IN
+  GREATER_THAN
+  GREATER_THAN_OR_EQUAL
+  LESS_THAN
+  LESS_THAN_OR_EQUAL
+  EXISTS
+  NOT_EXISTS
+  CONTAINS
+  BOOLEAN_IS
+}
+
+enum HiddenAssetConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum PropertyHiddenAssetMatchStatus {
+  DETECTED
+  VIEWED
+  DISMISSED
+  CLAIMED
+  EXPIRED
+  INACTIVE
+}
+
+enum PropertyHiddenAssetScanRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// Master registry of incentive/benefit programs.
+// Each program defines a benefit that may apply to one or more properties
+// based on geography, property attributes, and eligibility rules.
+model HiddenAssetProgram {
+  id          String @id @default(uuid())
+  name        String
+  category    HiddenAssetCategory
+  description String?
+
+  // Geography / scope targeting
+  regionType  HiddenAssetRegionType
+  regionValue String // e.g., "TX", "78701", "PSEG", "Miami-Dade"
+
+  // Benefit classification
+  benefitType        HiddenAssetBenefitType
+  benefitEstimateMin Decimal? @db.Decimal(12, 2)
+  benefitEstimateMax Decimal? @db.Decimal(12, 2)
+  currency           String   @default("USD")
+
+  // Official source (for "Last verified" UX and linking)
+  sourceUrl    String?
+  sourceLabel  String?
+
+  // Eligibility context for human review / display
+  eligibilityNotes String?
+
+  // Detection tuning: optional weight for confidence scoring
+  confidenceWeight Float?
+
+  // Freshness / lifecycle tracking
+  expiresAt      DateTime?
+  lastVerifiedAt DateTime?
+  isActive       Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rules   HiddenAssetProgramRule[]
+  matches PropertyHiddenAssetMatch[]
+
+  @@index([category])
+  @@index([regionType])
+  @@index([regionValue])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([regionType, regionValue, isActive])
+  @@map("hidden_asset_programs")
+}
+
+// Individual eligibility rule attached to a program.
+// Rules are evaluated by the backend rule engine against property attributes.
+// Examples: property.state = TX, property.roofAge < 5, property.heatingType = HEAT_PUMP
+model HiddenAssetProgramRule {
+  id        String @id @default(uuid())
+  programId String
+
+  attribute String                  // e.g., "state", "yearBuilt", "heatingType"
+  operator  HiddenAssetRuleOperator
+  value     String                  // stored as string; engine casts per attribute type
+
+  sortOrder Int     @default(0)
+  groupKey  String? // reserved for future grouped/OR logic
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  program HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+  @@index([programId, sortOrder])
+  @@map("hidden_asset_program_rules")
+}
+
+// Property-level detection result linking a property to a matched program.
+// Represents a potential benefit signal, not a guaranteed benefit.
+model PropertyHiddenAssetMatch {
+  id         String @id @default(uuid())
+  propertyId String
+  programId  String
+
+  confidenceLevel   HiddenAssetConfidenceLevel
+  estimatedValue    Decimal? @db.Decimal(12, 2)
+  estimatedValueMin Decimal? @db.Decimal(12, 2)
+  estimatedValueMax Decimal? @db.Decimal(12, 2)
+
+  status           PropertyHiddenAssetMatchStatus @default(DETECTED)
+  matchedRuleCount Int?
+  totalRuleCount   Int?
+  matchReasons     Json? // array of human-readable match signals for display
+
+  lastEvaluatedAt DateTime @default(now())
+  firstDetectedAt DateTime @default(now())
+  dismissedAt     DateTime?
+  claimedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program  HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, programId])
+  @@index([propertyId])
+  @@index([programId])
+  @@index([confidenceLevel])
+  @@index([status])
+  @@index([lastEvaluatedAt])
+  @@index([propertyId, status, confidenceLevel])
+  @@map("property_hidden_asset_matches")
+}
+
+// Tracks background or manual scan runs for a property.
+// Enables freshness monitoring and job troubleshooting for scheduled re-evaluation.
+model PropertyHiddenAssetScanRun {
+  id         String @id @default(uuid())
+  propertyId String
+
+  status    PropertyHiddenAssetScanRunStatus @default(PENDING)
+  startedAt DateTime                         @default(now())
+
+  completedAt       DateTime?
+  programsEvaluated Int?
+  matchesFound      Int?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([propertyId, status])
+  @@index([startedAt])
+  @@map("property_hidden_asset_scan_runs")
 }
