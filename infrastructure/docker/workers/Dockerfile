@@ -30,6 +30,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/pdf/templates \
              src/shared/backend/services/domainEvents \
              src/shared/backend/services/incidents \
+             src/shared/backend/services/hiddenAssets \
              src/shared/backend/types \
              src/shared/backend/lib
 
@@ -53,6 +54,10 @@ COPY apps/backend/src/services/incidents/incident.orchestrator.ts src/shared/bac
 COPY apps/backend/src/services/incidents/incident.scoring.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/incident.events.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/integrations/incidentNotification.service.ts src/shared/backend/services/incidents/integrations/
+COPY apps/backend/src/services/hiddenAssets.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts src/shared/backend/services/hiddenAssets/
+COPY apps/backend/src/services/hiddenAssets/categoryConfig.ts src/shared/backend/services/hiddenAssets/
+COPY apps/backend/src/services/hiddenAssets/types.ts src/shared/backend/services/hiddenAssets/
 # Copy worker source code + TS config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json
@@ -68,7 +73,9 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     # This ensures the domainEvents service can find the prisma lib in its new shared relative path
     sed -i 's/\.\.\/\.\.\/lib\/prisma/\.\.\/\.\.\/lib\/prisma/g' src/shared/backend/services/domainEvents/domainEvents.service.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/freezeRiskIncidents.job.ts
+    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
