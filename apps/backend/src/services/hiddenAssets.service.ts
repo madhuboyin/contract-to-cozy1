@@ -8,7 +8,12 @@ import {
 } from '@prisma/client';
 // Prisma is used for GetPayload generic types and Decimal/JsonValue helpers
 import { prisma } from '../lib/prisma';
-import { buildPropertyAttributeMap, evaluateProgram } from './hiddenAssets/ruleEngine';
+import {
+  buildPropertyAttributeMap,
+  evaluateProgram,
+  getEligibilityLabel,
+  getFreshnessNote,
+} from './hiddenAssets/ruleEngine';
 import {
   HiddenAssetMatchDTO,
   HiddenAssetMatchFilters,
@@ -55,6 +60,7 @@ function serializeMatch(row: MatchWithProgram): HiddenAssetMatchDTO {
     estimatedValueMax: decimalToNumber(row.estimatedValueMax),
     currency: p.currency,
     confidenceLevel: row.confidenceLevel,
+    eligibilityLabel: getEligibilityLabel(row.confidenceLevel),
     status: row.status,
     matchedRuleCount: row.matchedRuleCount ?? null,
     totalRuleCount: row.totalRuleCount ?? null,
@@ -65,6 +71,7 @@ function serializeMatch(row: MatchWithProgram): HiddenAssetMatchDTO {
     lastVerifiedAt: p.lastVerifiedAt ? p.lastVerifiedAt.toISOString() : null,
     expiresAt: p.expiresAt ? p.expiresAt.toISOString() : null,
     isProgramActive: p.isActive,
+    freshnessNote: getFreshnessNote(p.lastVerifiedAt),
     lastEvaluatedAt: row.lastEvaluatedAt.toISOString(),
     firstDetectedAt: row.firstDetectedAt.toISOString(),
     dismissedAt: row.dismissedAt ? row.dismissedAt.toISOString() : null,
@@ -152,6 +159,11 @@ async function assertPropertyForUser(
       hasIrrigation: true,
       hasSumpPumpBackup: true,
       primaryHeatingFuel: true,
+      lastAppraisedValue: true,
+      hasSmokeDetectors: true,
+      hasCoDetectors: true,
+      hasFireExtinguisher: true,
+      hasDrainageIssues: true,
     },
   });
 
@@ -341,7 +353,10 @@ export class HiddenAssetService {
           benefitEstimateMax: decimalToNumber(prog.benefitEstimateMax),
           rules: prog.rules,
         };
-        const result = evaluateProgram(attrs, engineInput);
+        const result = evaluateProgram(attrs, engineInput, {
+          category: prog.category,
+          lastVerifiedAt: prog.lastVerifiedAt,
+        });
         evalResults.push(result);
       }
 
