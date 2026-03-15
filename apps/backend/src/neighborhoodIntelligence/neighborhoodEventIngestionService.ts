@@ -132,32 +132,59 @@ export class NeighborhoodEventIngestionService {
   // ---------------------------------------------------------------------------
 
   private async findExistingEvent(input: NormalizedNeighborhoodEventInput) {
-    // Strategy 1: exact external id + source
+    const normalizedTitle = this.normalizeTitle(input.title);
+
+    // Strategy 1: externalSourceId + sourceName match (when external ID is provided)
+    // We match on sourceName + eventType + normalized title to find the canonical record.
     if (input.externalSourceId && input.sourceName) {
       const found = await prisma.neighborhoodEvent.findFirst({
         where: {
           sourceName: input.sourceName,
-          sourceUrl: input.sourceUrl ?? undefined,
-          title: input.title.trim(),
           eventType: input.eventType,
+          title: { equals: normalizedTitle, mode: 'insensitive' },
         },
       });
-      if (found) return found;
+      if (found) {
+        console.log(
+          `[NeighborhoodIntelligence] Dedup strategy-1 matched: id=${found.id} title="${found.title}"`,
+        );
+        return found;
+      }
     }
 
-    // Strategy 2: same event type + normalized title + approximate location (±0.01 deg ~= 0.7 miles)
-    const latMin = input.latitude - 0.01;
-    const latMax = input.latitude + 0.01;
-    const lonMin = input.longitude - 0.01;
-    const lonMax = input.longitude + 0.01;
+    // Strategy 2: same event type + normalized title + approximate location
+    // ±0.015 degrees ≈ ~1 mile bounding box (wider than original ±0.01 to catch
+    // slightly different geocodes for the same real-world location)
+    const delta = 0.015;
+    const latMin = input.latitude - delta;
+    const latMax = input.latitude + delta;
+    const lonMin = input.longitude - delta;
+    const lonMax = input.longitude + delta;
 
-    return prisma.neighborhoodEvent.findFirst({
+    const candidate = await prisma.neighborhoodEvent.findFirst({
       where: {
         eventType: input.eventType,
-        title: input.title.trim(),
+        title: { equals: normalizedTitle, mode: 'insensitive' },
         latitude: { gte: latMin, lte: latMax },
         longitude: { gte: lonMin, lte: lonMax },
       },
     });
+
+    if (candidate) {
+      console.log(
+        `[NeighborhoodIntelligence] Dedup strategy-2 matched: id=${candidate.id} title="${candidate.title}"`,
+      );
+    }
+
+    return candidate ?? null;
+  }
+
+  /**
+   * Normalize a title for deduplication comparisons.
+   * Lowercases, trims, and collapses internal whitespace so minor
+   * formatting differences don't create duplicate event records.
+   */
+  private normalizeTitle(title: string): string {
+    return title.trim().toLowerCase().replace(/\s+/g, ' ');
   }
 }

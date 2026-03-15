@@ -2614,6 +2614,8 @@ export interface NeighborhoodDemographicSnippet {
   confidence: number;
 }
 
+export type NeighborhoodConfidenceBand = 'HIGH' | 'MEDIUM' | 'PRELIMINARY';
+
 export interface NeighborhoodEventCard {
   id: string;
   eventId: string;
@@ -2622,6 +2624,8 @@ export interface NeighborhoodEventCard {
   shortExplanation: string;
   distanceMiles: number;
   impactScore: number;
+  /** Composite ranking score accounting for confidence and freshness. */
+  compositeRank: number;
   overallEffect: NeighborhoodOverallEffect;
   topPositives: NeighborhoodImpactSnippet[];
   topNegatives: NeighborhoodImpactSnippet[];
@@ -2633,6 +2637,14 @@ export interface NeighborhoodEventCard {
   sourceUrl: string | null;
   city: string | null;
   state: string | null;
+  /** Normalized confidence score 0–1. */
+  confidence: number;
+  /** User-visible reliability band. */
+  confidenceBand: NeighborhoodConfidenceBand;
+  /** Freshness score 0–1. Lower means older or likely concluded. */
+  freshnessScore: number;
+  /** True when the event is considered stale. */
+  isStale: boolean;
 }
 
 export interface NeighborhoodRadarSummaryDTO {
@@ -2660,6 +2672,10 @@ export interface NeighborhoodEventDetailDTO extends NeighborhoodEventCard {
   longitude: number;
   allImpacts: NeighborhoodImpactSnippet[];
   allDemographics: NeighborhoodDemographicSnippet[];
+  /** Plain-language reasons why CtC surfaced this event for this property. */
+  whyThisMatters: string[];
+  /** Short reliability note. */
+  confidenceNote: string;
 }
 
 export interface NeighborhoodTrendSummaryDTO {

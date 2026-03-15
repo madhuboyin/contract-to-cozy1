@@ -11,17 +11,30 @@ import { prisma } from '../lib/prisma';
 import { NeighborhoodImpactEngine } from './neighborhoodImpactEngine';
 import {
   NeighborhoodEventCard,
+  NeighborhoodEventDetail,
   NeighborhoodRadarSummary,
   NeighborhoodTrendSummary,
   ImpactSnippet,
   DemographicSnippet,
   OverallEffect,
 } from './types';
+import {
+  computeEventConfidence,
+  computeFreshnessScore,
+  computeCompositeRank,
+  isStaleEvent,
+  buildWhyThisMatters,
+} from './eventConfidence';
 
 const impactEngine = new NeighborhoodImpactEngine();
 
 // Minimum impact score to be surfaced in summary/trend APIs
 const MEANINGFUL_IMPACT_THRESHOLD = 40;
+
+// Minimum composite rank to count in the "meaningful changes" headline number.
+// This filters out very stale or very low-confidence events from the headline count
+// while still showing them in the full event list.
+const SUMMARY_COMPOSITE_THRESHOLD = 20;
 
 const EVENT_TYPE_LABELS: Record<NeighborhoodEventType, string> = {
   TRANSIT_PROJECT: 'Transit Project',
@@ -58,22 +71,27 @@ export class NeighborhoodRadarQueryService {
     const links = await prisma.propertyNeighborhoodEvent.findMany({
       where: { propertyId },
       include: PROPERTY_EVENT_INCLUDE,
-      orderBy: { impactScore: 'desc' },
     });
 
-    const meaningful = links.filter(
-      (l) => (l.impactScore ?? 0) >= MEANINGFUL_IMPACT_THRESHOLD,
-    );
+    // Build cards with full scoring
+    const allCards = links
+      .filter((l) => (l.impactScore ?? 0) >= MEANINGFUL_IMPACT_THRESHOLD)
+      .map((l) => this.toEventCard(l));
 
-    const cards = meaningful.map((l) => this.toEventCard(l));
+    // Sort by composite rank descending (best signal first)
+    allCards.sort((a, b) => b.compositeRank - a.compositeRank);
 
-    const topCard = cards[0] ?? null;
+    // Meaningful = passes composite threshold (filters truly stale/low-confidence items
+    // from the headline count, but keeps them in the full list view)
+    const meaningful = allCards.filter((c) => c.compositeRank >= SUMMARY_COMPOSITE_THRESHOLD);
 
-    const topPositiveThemes = this.extractThemes(cards, 'POSITIVE');
-    const topNegativeThemes = this.extractThemes(cards, 'NEGATIVE');
+    const topCard = meaningful[0] ?? null;
 
-    const overallSentiment = cards.length > 0
-      ? this.computeAggregateEffect(cards)
+    const topPositiveThemes = this.extractThemes(meaningful, 'POSITIVE');
+    const topNegativeThemes = this.extractThemes(meaningful, 'NEGATIVE');
+
+    const overallSentiment = meaningful.length > 0
+      ? this.computeAggregateEffect(meaningful)
       : null;
 
     const lastScanAt = links.length > 0
@@ -87,7 +105,9 @@ export class NeighborhoodRadarQueryService {
     return {
       propertyId,
       meaningfulChangeCount: meaningful.length,
-      topHeadline: topCard ? `${EVENT_TYPE_LABELS[topCard.eventType]}: ${topCard.title}` : null,
+      topHeadline: topCard
+        ? `${EVENT_TYPE_LABELS[topCard.eventType]}: ${topCard.title}`
+        : null,
       overallSentiment,
       topPositiveThemes,
       topNegativeThemes,
@@ -118,6 +138,7 @@ export class NeighborhoodRadarQueryService {
         ...(filterType ? { event: { eventType: filterType } } : {}),
       },
       include: PROPERTY_EVENT_INCLUDE,
+      // DB-level pre-sort by announced date if requested; compositeRank is applied below
       orderBy:
         sortBy === 'date'
           ? { event: { announcedDate: 'desc' } }
@@ -126,7 +147,12 @@ export class NeighborhoodRadarQueryService {
 
     let cards = links.map((l) => this.toEventCard(l));
 
-    // Client-side effect filter (post-map, since overallEffect is derived)
+    // Sort by composite rank (best signal first) unless user explicitly chose date sort
+    if (sortBy !== 'date') {
+      cards.sort((a, b) => b.compositeRank - a.compositeRank);
+    }
+
+    // Client-side effect filter
     if (opts.filterEffect) {
       const target = opts.filterEffect;
       cards = cards.filter((c) => {
@@ -149,16 +175,7 @@ export class NeighborhoodRadarQueryService {
   async getEventDetail(
     propertyId: string,
     eventId: string,
-  ): Promise<NeighborhoodEventCard & {
-    description: string | null;
-    sourceUrl: string | null;
-    sourceName: string | null;
-    allImpacts: ImpactSnippet[];
-    allDemographics: DemographicSnippet[];
-    country: string | null;
-    latitude: number;
-    longitude: number;
-  }> {
+  ): Promise<NeighborhoodEventDetail> {
     const link = await prisma.propertyNeighborhoodEvent.findFirst({
       where: { propertyId, eventId },
       include: PROPERTY_EVENT_INCLUDE,
@@ -173,6 +190,33 @@ export class NeighborhoodRadarQueryService {
 
     const card = this.toEventCard(link);
 
+    const allImpacts: ImpactSnippet[] = link.event.impacts.map((i) => ({
+      category: i.category,
+      direction: i.direction,
+      description: i.description ?? '',
+      confidence: Number(i.confidence ?? 0),
+    }));
+
+    const allDemographics: DemographicSnippet[] = link.event.demographics.map((d) => ({
+      segment: d.segment,
+      description: d.description ?? '',
+      confidence: Number(d.confidence ?? 0),
+    }));
+
+    const whyThisMatters = buildWhyThisMatters({
+      eventType: link.event.eventType,
+      distanceMiles: link.distanceMiles,
+      impactScore: link.impactScore ?? 0,
+      confidenceBand: card.confidenceBand,
+    });
+
+    console.log(
+      `[NeighborhoodRadar] getEventDetail — property=${propertyId} event=${eventId}` +
+      ` confidence=${card.confidence} band=${card.confidenceBand}` +
+      ` freshness=${card.freshnessScore} stale=${card.isStale}` +
+      ` compositeRank=${card.compositeRank}`,
+    );
+
     return {
       ...card,
       description: link.event.description,
@@ -181,17 +225,14 @@ export class NeighborhoodRadarQueryService {
       country: link.event.country,
       latitude: link.event.latitude,
       longitude: link.event.longitude,
-      allImpacts: link.event.impacts.map((i) => ({
-        category: i.category,
-        direction: i.direction,
-        description: i.description ?? '',
-        confidence: Number(i.confidence ?? 0),
-      })),
-      allDemographics: link.event.demographics.map((d) => ({
-        segment: d.segment,
-        description: d.description ?? '',
-        confidence: Number(d.confidence ?? 0),
-      })),
+      allImpacts,
+      allDemographics,
+      whyThisMatters,
+      confidenceNote: card.confidenceBand === 'HIGH'
+        ? 'Based on verified source data with recent activity.'
+        : card.confidenceBand === 'MEDIUM'
+        ? 'Based on available public signals. More detail may become available.'
+        : 'Limited data available. Treat as an early-stage signal only.',
     };
   }
 
@@ -203,10 +244,11 @@ export class NeighborhoodRadarQueryService {
     const links = await prisma.propertyNeighborhoodEvent.findMany({
       where: { propertyId },
       include: PROPERTY_EVENT_INCLUDE,
-      orderBy: { impactScore: 'desc' },
     });
 
     const cards = links.map((l) => this.toEventCard(l));
+    // Trends: sort by compositeRank so the top 3 are genuinely best signals
+    cards.sort((a, b) => b.compositeRank - a.compositeRank);
 
     const countByEventType: Record<string, number> = {};
     for (const card of cards) {
@@ -251,6 +293,7 @@ export class NeighborhoodRadarQueryService {
     event: {
       eventType: string;
       title: string;
+      description: string | null;
       sourceName: string | null;
       sourceUrl: string | null;
       city: string | null;
@@ -258,6 +301,7 @@ export class NeighborhoodRadarQueryService {
       announcedDate: Date | null;
       expectedStartDate: Date | null;
       expectedEndDate: Date | null;
+      createdAt: Date;
       impacts: Array<{
         category: string;
         direction: string;
@@ -278,6 +322,37 @@ export class NeighborhoodRadarQueryService {
 
     const overallEffect = impactEngine.computeOverallEffect(impacts);
 
+    const impactScore = link.impactScore ?? 0;
+
+    // Confidence + freshness (computed at query time, not stored)
+    const confidenceResult = computeEventConfidence({
+      description: link.event.description,
+      sourceName: link.event.sourceName,
+      sourceUrl: link.event.sourceUrl,
+      announcedDate: link.event.announcedDate,
+      expectedStartDate: link.event.expectedStartDate,
+      expectedEndDate: link.event.expectedEndDate,
+      createdAt: link.event.createdAt,
+    });
+
+    const freshnessScore = computeFreshnessScore({
+      createdAt: link.event.createdAt,
+      announcedDate: link.event.announcedDate,
+      expectedEndDate: link.event.expectedEndDate,
+    });
+
+    const stale = isStaleEvent({
+      createdAt: link.event.createdAt,
+      announcedDate: link.event.announcedDate,
+      expectedEndDate: link.event.expectedEndDate,
+    });
+
+    const compositeRank = computeCompositeRank(
+      impactScore,
+      confidenceResult.overall,
+      freshnessScore,
+    );
+
     return {
       id: link.id,
       eventId: link.eventId,
@@ -287,9 +362,11 @@ export class NeighborhoodRadarQueryService {
         link.event.eventType as NeighborhoodEventType,
         overallEffect,
         link.distanceMiles,
+        stale,
       ),
       distanceMiles: link.distanceMiles,
-      impactScore: link.impactScore ?? 0,
+      impactScore,
+      compositeRank: Math.round(compositeRank * 10) / 10,
       overallEffect,
       topPositives: positives,
       topNegatives: negatives,
@@ -301,6 +378,10 @@ export class NeighborhoodRadarQueryService {
       sourceUrl: link.event.sourceUrl,
       city: link.event.city,
       state: link.event.state,
+      confidence: confidenceResult.overall,
+      confidenceBand: confidenceResult.band,
+      freshnessScore: Math.round(freshnessScore * 100) / 100,
+      isStale: stale,
     };
   }
 
@@ -308,6 +389,7 @@ export class NeighborhoodRadarQueryService {
     eventType: NeighborhoodEventType,
     effect: OverallEffect,
     distanceMiles: number,
+    isStale: boolean,
   ): string {
     const label = EVENT_TYPE_LABELS[eventType] ?? 'Nearby development';
     const distStr =
@@ -316,20 +398,25 @@ export class NeighborhoodRadarQueryService {
         : `approximately ${distanceMiles.toFixed(1)} miles away`;
 
     const effectStr: Record<OverallEffect, string> = {
-      HIGHLY_POSITIVE: 'could be a strong positive signal',
+      HIGHLY_POSITIVE: 'may be a positive signal',
       MODERATELY_POSITIVE: 'may have a positive effect',
       MIXED: 'has mixed implications',
       MODERATELY_NEGATIVE: 'may have a negative effect',
-      HIGHLY_NEGATIVE: 'could be a significant concern',
+      HIGHLY_NEGATIVE: 'may be worth monitoring closely',
       NEUTRAL: 'has limited expected impact',
     };
 
-    return `${label} ${distStr} that ${effectStr[effect]} for your property.`;
+    const base = `${label} ${distStr} that ${effectStr[effect]} for your property.`;
+    if (isStale) {
+      return `${base} This is an older signal — confirm current status from official sources.`;
+    }
+    return base;
   }
 
   private extractThemes(cards: NeighborhoodEventCard[], direction: 'POSITIVE' | 'NEGATIVE'): string[] {
     const themes = new Set<string>();
     for (const card of cards) {
+      if (card.isStale) continue; // stale events don't contribute to theme chips
       const impacts = direction === 'POSITIVE' ? card.topPositives : card.topNegatives;
       for (const imp of impacts) {
         themes.add(this.categoryLabel(imp.category as string));
@@ -354,30 +441,39 @@ export class NeighborhoodRadarQueryService {
   }
 
   private computeAggregateEffect(cards: NeighborhoodEventCard[]): OverallEffect {
-    const all = cards.flatMap((c) => [
-      ...c.topPositives,
-      ...c.topNegatives,
-    ]);
+    // Weight active (non-stale) events more heavily in aggregate sentiment
+    const all = cards
+      .filter((c) => !c.isStale)
+      .flatMap((c) => [...c.topPositives, ...c.topNegatives]);
+
+    if (all.length === 0) {
+      // Fall back to all cards if all are stale
+      const fallback = cards.flatMap((c) => [...c.topPositives, ...c.topNegatives]);
+      return impactEngine.computeOverallEffect(fallback);
+    }
+
     return impactEngine.computeOverallEffect(all);
   }
 
   private derivePressureSignals(cards: NeighborhoodEventCard[]): string[] {
+    // Only use non-stale cards for pressure signals
+    const active = cards.filter((c) => !c.isStale);
     const signals: string[] = [];
 
-    const hasWarehouse = cards.some((c) =>
-      c.eventType === 'WAREHOUSE_PROJECT' || c.eventType === 'INDUSTRIAL_PROJECT',
+    const hasWarehouse = active.some(
+      (c) => c.eventType === 'WAREHOUSE_PROJECT' || c.eventType === 'INDUSTRIAL_PROJECT',
     );
-    const hasTransit = cards.some((c) => c.eventType === 'TRANSIT_PROJECT');
-    const hasFlood = cards.some((c) => c.eventType === 'FLOOD_MAP_UPDATE');
-    const hasSchoolImprovement = cards.some((c) => c.eventType === 'SCHOOL_RATING_CHANGE');
-    const hasZoning = cards.some((c) => c.eventType === 'ZONING_CHANGE');
-    const hasResidential = cards.some((c) => c.eventType === 'RESIDENTIAL_DEVELOPMENT');
-    const hasCommercial = cards.some((c) => c.eventType === 'COMMERCIAL_DEVELOPMENT');
+    const hasTransit = active.some((c) => c.eventType === 'TRANSIT_PROJECT');
+    const hasFlood = active.some((c) => c.eventType === 'FLOOD_MAP_UPDATE');
+    const hasSchoolChange = active.some((c) => c.eventType === 'SCHOOL_RATING_CHANGE');
+    const hasZoning = active.some((c) => c.eventType === 'ZONING_CHANGE');
+    const hasResidential = active.some((c) => c.eventType === 'RESIDENTIAL_DEVELOPMENT');
+    const hasCommercial = active.some((c) => c.eventType === 'COMMERCIAL_DEVELOPMENT');
 
-    if (hasWarehouse) signals.push('Industrial/warehouse activity may affect livability');
-    if (hasTransit) signals.push('Transit development may improve long-term demand');
     if (hasFlood) signals.push('Flood map changes may affect insurance costs');
-    if (hasSchoolImprovement) signals.push('School quality changes may influence family demand');
+    if (hasTransit) signals.push('Transit development may improve long-term demand');
+    if (hasWarehouse) signals.push('Industrial or warehouse activity may affect livability');
+    if (hasSchoolChange) signals.push('School quality changes may influence family demand');
     if (hasZoning) signals.push('Zoning activity may signal development pressure');
     if (hasResidential && hasCommercial) signals.push('Active mixed-use development nearby');
     else if (hasResidential) signals.push('Residential growth detected in the area');
@@ -391,22 +487,30 @@ export class NeighborhoodRadarQueryService {
       return 'No significant neighborhood changes have been detected near this property.';
     }
 
-    const count = cards.length;
-    const positiveCount = cards.filter((c) =>
-      c.overallEffect.includes('POSITIVE'),
-    ).length;
-    const negativeCount = cards.filter((c) =>
-      c.overallEffect.includes('NEGATIVE'),
-    ).length;
+    const active = cards.filter((c) => !c.isStale);
+    const staleCount = cards.length - active.length;
+
+    const count = active.length;
+
+    if (count === 0) {
+      return `${staleCount} older signal${staleCount !== 1 ? 's' : ''} on record. No recent neighborhood activity has been detected.`;
+    }
+
+    const positiveCount = active.filter((c) => c.overallEffect.includes('POSITIVE')).length;
+    const negativeCount = active.filter((c) => c.overallEffect.includes('NEGATIVE')).length;
+
+    const staleSuffix = staleCount > 0
+      ? ` ${staleCount} older signal${staleCount !== 1 ? 's' : ''} also on record.`
+      : '';
 
     if (positiveCount > negativeCount) {
-      return `${count} change${count !== 1 ? 's' : ''} detected near your property. Activity suggests the area may see positive development momentum.`;
+      return `${count} active change${count !== 1 ? 's' : ''} detected near your property. Activity suggests the area may see positive development momentum.${staleSuffix}`;
     }
 
     if (negativeCount > positiveCount) {
-      return `${count} change${count !== 1 ? 's' : ''} detected near your property. Some developments may create challenges for livability or property demand.`;
+      return `${count} active change${count !== 1 ? 's' : ''} detected near your property. Some developments may create challenges for livability or demand.${staleSuffix}`;
     }
 
-    return `${count} change${count !== 1 ? 's' : ''} detected near your property with mixed implications. ${signals[0] ?? ''}`;
+    return `${count} active change${count !== 1 ? 's' : ''} detected near your property with mixed implications. ${signals[0] ?? ''}${staleSuffix}`;
   }
 }

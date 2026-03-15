@@ -8,6 +8,7 @@ import {
   ImpactDirection,
   DemographicSegment,
 } from '@prisma/client';
+import { ConfidenceBand } from './eventConfidence';
 
 // ---------------------------------------------------------------------------
 // Ingestion input
@@ -123,6 +124,8 @@ export interface NeighborhoodEventCard {
   shortExplanation: string;
   distanceMiles: number;
   impactScore: number;
+  /** Composite ranking score (impactScore × confidence × freshness). Used for sorting only. */
+  compositeRank: number;
   overallEffect: OverallEffect;
   topPositives: ImpactSnippet[];
   topNegatives: ImpactSnippet[];
@@ -134,6 +137,28 @@ export interface NeighborhoodEventCard {
   sourceUrl: string | null;
   city: string | null;
   state: string | null;
+  /** Normalized confidence score 0–1. */
+  confidence: number;
+  /** User-visible reliability band. */
+  confidenceBand: ConfidenceBand;
+  /** Freshness score 0–1. Lower means the event is older or likely concluded. */
+  freshnessScore: number;
+  /** True if the event is considered stale (old with no recent activity). */
+  isStale: boolean;
+}
+
+/** Detail-view–only additions on top of NeighborhoodEventCard. */
+export interface NeighborhoodEventDetail extends NeighborhoodEventCard {
+  description: string | null;
+  country: string | null;
+  latitude: number;
+  longitude: number;
+  allImpacts: ImpactSnippet[];
+  allDemographics: DemographicSnippet[];
+  /** Plain-language reasons why CtC surfaced this event for this property. */
+  whyThisMatters: string[];
+  /** Short reliability note for the UI. */
+  confidenceNote: string;
 }
 
 export interface NeighborhoodRadarSummary {

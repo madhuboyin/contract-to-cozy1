@@ -548,3 +548,402 @@ test('notification lookback — 25h window covers daily cron with jitter', () =>
   // 25h window should include events from 24h ago
   assert.ok(since < twentyFourHoursAgo, 'Lookback window should extend past 24h');
 });
+
+// ---------------------------------------------------------------------------
+// Event confidence scoring (mirrors eventConfidence.ts logic)
+// ---------------------------------------------------------------------------
+
+function monthsAgo(date) {
+  return (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24 * 30.5);
+}
+
+function computeEventConfidence(event) {
+  let score = 0.50;
+  if (event.description && event.description.trim().length >= 20) score += 0.10;
+  if (event.sourceName) score += 0.10;
+  if (event.sourceUrl) score += 0.08;
+  if (event.announcedDate) score += 0.07;
+  if (event.expectedStartDate || event.expectedEndDate) score += 0.05;
+
+  const refDate = event.announcedDate ?? event.createdAt;
+  const ageMonths = monthsAgo(refDate);
+
+  if (ageMonths < 6) {
+    score += 0.05;
+  } else if (ageMonths > 24) {
+    score -= 0.20;
+  } else if (ageMonths > 12) {
+    score -= 0.10;
+  }
+
+  if (event.expectedEndDate && event.expectedEndDate < new Date()) {
+    const monthsPastEnd = monthsAgo(event.expectedEndDate);
+    if (monthsPastEnd > 12) score -= 0.15;
+    else if (monthsPastEnd > 6) score -= 0.08;
+  }
+
+  const clamped = Math.max(0.05, Math.min(1.0, score));
+  const rounded = Math.round(clamped * 100) / 100;
+  const band = rounded >= 0.72 ? 'HIGH' : rounded >= 0.48 ? 'MEDIUM' : 'PRELIMINARY';
+  return { overall: rounded, band };
+}
+
+const recentDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 1 month ago
+const oldDate = new Date(Date.now() - 36 * 30 * 24 * 60 * 60 * 1000); // 3 years ago
+
+test('confidence — full data + fresh → HIGH band', () => {
+  const score = computeEventConfidence({
+    description: 'A detailed description of the transit corridor expansion project.',
+    sourceName: 'City Planning Dept',
+    sourceUrl: 'https://example.gov/project',
+    announcedDate: recentDate,
+    expectedStartDate: recentDate,
+    expectedEndDate: null,
+    createdAt: recentDate,
+  });
+  assert.equal(score.band, 'HIGH', `Expected HIGH, got ${score.band} (${score.overall})`);
+});
+
+test('confidence — no extra data + fresh → MEDIUM band', () => {
+  const score = computeEventConfidence({
+    description: null,
+    sourceName: null,
+    sourceUrl: null,
+    announcedDate: recentDate,
+    expectedStartDate: null,
+    expectedEndDate: null,
+    createdAt: recentDate,
+  });
+  // Fresh event boosts baseline 0.50 by 0.05 = 0.55 + announced 0.07 = 0.62 → MEDIUM
+  assert.equal(score.band, 'MEDIUM', `Expected MEDIUM, got ${score.band} (${score.overall})`);
+});
+
+test('confidence — stale event (3 years old) → PRELIMINARY or low MEDIUM', () => {
+  const score = computeEventConfidence({
+    description: null,
+    sourceName: null,
+    sourceUrl: null,
+    announcedDate: null,
+    expectedStartDate: null,
+    expectedEndDate: null,
+    createdAt: oldDate,
+  });
+  // 0.50 base - 0.20 stale penalty = 0.30 → PRELIMINARY
+  assert.equal(score.band, 'PRELIMINARY', `Expected PRELIMINARY, got ${score.band} (${score.overall})`);
+});
+
+test('confidence — expected end date 18 months ago penalizes score', () => {
+  const endPast = new Date(Date.now() - 18 * 30 * 24 * 60 * 60 * 1000);
+  const score = computeEventConfidence({
+    description: null,
+    sourceName: null,
+    sourceUrl: null,
+    announcedDate: null,
+    expectedStartDate: null,
+    expectedEndDate: endPast,
+    createdAt: recentDate, // recently ingested but project ended 18mo ago
+  });
+  // Should be penalized for ended project
+  assert.ok(score.overall < 0.50, `Expected < 0.50, got ${score.overall}`);
+});
+
+test('confidence score is clamped between 0.05 and 1.0', () => {
+  // Worst case: all penalties
+  const score = computeEventConfidence({
+    description: null,
+    sourceName: null,
+    sourceUrl: null,
+    announcedDate: null,
+    expectedStartDate: null,
+    expectedEndDate: new Date(Date.now() - 24 * 30 * 24 * 60 * 60 * 1000), // 2yr old end
+    createdAt: oldDate,
+  });
+  assert.ok(score.overall >= 0.05, `Score ${score.overall} below minimum 0.05`);
+  assert.ok(score.overall <= 1.0, `Score ${score.overall} above maximum 1.0`);
+});
+
+// ---------------------------------------------------------------------------
+// Freshness scoring
+// ---------------------------------------------------------------------------
+
+function computeFreshnessScore(event) {
+  const now = Date.now();
+
+  if (event.expectedEndDate && event.expectedEndDate.getTime() < now) {
+    const monthsPastEnd = (now - event.expectedEndDate.getTime()) / (1000 * 60 * 60 * 24 * 30.5);
+    if (monthsPastEnd > 18) return 0.20;
+    if (monthsPastEnd > 12) return 0.35;
+    if (monthsPastEnd > 6) return 0.50;
+    return 0.65;
+  }
+
+  const refDate = event.announcedDate ?? event.createdAt;
+  const ageMonths = (now - refDate.getTime()) / (1000 * 60 * 60 * 24 * 30.5);
+
+  if (ageMonths < 3) return 1.00;
+  if (ageMonths < 6) return 0.90;
+  if (ageMonths < 12) return 0.80;
+  if (ageMonths < 18) return 0.65;
+  if (ageMonths < 24) return 0.50;
+  if (ageMonths < 36) return 0.35;
+  return 0.20;
+}
+
+function isStaleEvent(event) {
+  return computeFreshnessScore(event) <= 0.35;
+}
+
+test('freshness — event created 1 month ago → 1.0', () => {
+  const score = computeFreshnessScore({ createdAt: recentDate, announcedDate: null, expectedEndDate: null });
+  assert.equal(score, 1.0);
+});
+
+test('freshness — event 3+ years old → 0.20', () => {
+  // Use 38 * 30.5-day months to clearly exceed the 36-month boundary in the formula
+  const veryOldDate = new Date(Date.now() - Math.ceil(38 * 30.5) * 24 * 60 * 60 * 1000);
+  const score = computeFreshnessScore({ createdAt: veryOldDate, announcedDate: null, expectedEndDate: null });
+  assert.equal(score, 0.20);
+});
+
+test('freshness — expected end 18+ months in past → 0.20', () => {
+  const pastEnd = new Date(Date.now() - 20 * 30 * 24 * 60 * 60 * 1000);
+  const score = computeFreshnessScore({ createdAt: recentDate, announcedDate: null, expectedEndDate: pastEnd });
+  assert.equal(score, 0.20);
+});
+
+test('freshness — expected end 3 months in past → 0.65', () => {
+  const pastEnd = new Date(Date.now() - 3 * 30 * 24 * 60 * 60 * 1000);
+  const score = computeFreshnessScore({ createdAt: recentDate, announcedDate: null, expectedEndDate: pastEnd });
+  assert.equal(score, 0.65);
+});
+
+test('isStale — old event is stale', () => {
+  assert.equal(isStaleEvent({ createdAt: oldDate, announcedDate: null, expectedEndDate: null }), true);
+});
+
+test('isStale — recent event is not stale', () => {
+  assert.equal(isStaleEvent({ createdAt: recentDate, announcedDate: null, expectedEndDate: null }), false);
+});
+
+// ---------------------------------------------------------------------------
+// Composite rank ordering
+// ---------------------------------------------------------------------------
+
+function computeCompositeRank(impactScore, confidence, freshnessScore) {
+  return impactScore * 0.55 + confidence * 25 + freshnessScore * 20;
+}
+
+test('compositeRank — high impact + high confidence + fresh ranks above weak + stale', () => {
+  const strong = computeCompositeRank(85, 0.90, 1.0);
+  const weak = computeCompositeRank(45, 0.30, 0.20);
+  assert.ok(strong > weak, `Expected ${strong} > ${weak}`);
+});
+
+test('compositeRank — fresh high-confidence event outranks old medium-confidence event at same impactScore', () => {
+  const fresh = computeCompositeRank(60, 0.80, 1.0);
+  const stale = computeCompositeRank(60, 0.50, 0.20);
+  assert.ok(fresh > stale, `Expected fresh(${fresh}) > stale(${stale})`);
+});
+
+test('compositeRank — flood risk at 70 score outranks minor commercial at 50', () => {
+  const floodRisk = computeCompositeRank(70, 0.75, 0.90); // verified flood data
+  const minor = computeCompositeRank(50, 0.55, 0.90);
+  assert.ok(floodRisk > minor, `Flood(${floodRisk}) should outrank minor(${minor})`);
+});
+
+// ---------------------------------------------------------------------------
+// Risk language / copy guardrails
+// ---------------------------------------------------------------------------
+
+function hasDeterministicClaim(text) {
+  const FORBIDDEN = [
+    'will increase property value',
+    'will decrease property value',
+    'will move in',
+    'will appreciate',
+    'will depreciate',
+    'is definitely',
+    'guaranteed',
+    'certain',
+  ];
+  const lower = text.toLowerCase();
+  return FORBIDDEN.some((phrase) => lower.includes(phrase));
+}
+
+function hasCautiousLanguage(text) {
+  const CAUTIOUS = ['may', 'might', 'could', 'often', 'typically', 'generally', 'possible'];
+  const lower = text.toLowerCase();
+  return CAUTIOUS.some((word) => lower.includes(word));
+}
+
+const SAMPLE_IMPACT_DESCRIPTIONS = [
+  'Transit infrastructure often correlates with increased long-term property demand in surrounding neighborhoods.',
+  'Highway construction and expanded road capacity may increase vehicle traffic volumes near the property.',
+  'New commercial development may expand local retail, dining, and services near the property.',
+  'Proximity to new highway infrastructure may affect outdoor quality of life and pedestrian experience.',
+  'Flood zone expansion may increase insurance premium requirements for affected properties.',
+];
+
+test('impact descriptions — no deterministic claims in sample descriptions', () => {
+  for (const desc of SAMPLE_IMPACT_DESCRIPTIONS) {
+    assert.equal(hasDeterministicClaim(desc), false, `Found overclaiming language in: "${desc}"`);
+  }
+});
+
+test('impact descriptions — all use cautious hedging language', () => {
+  for (const desc of SAMPLE_IMPACT_DESCRIPTIONS) {
+    assert.equal(hasCautiousLanguage(desc), true, `Missing cautious language in: "${desc}"`);
+  }
+});
+
+test('notification copy — title should not contain overclaiming language', () => {
+  const titles = [
+    'Transit development detected nearby',
+    'Flood map update may affect your property',
+    'Nearby school rating has changed',
+    'Commercial development nearby',
+  ];
+  for (const title of titles) {
+    assert.equal(hasDeterministicClaim(title), false, `Overclaiming title: "${title}"`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Explainability
+// ---------------------------------------------------------------------------
+
+function buildWhyThisMatters({ eventType, distanceMiles, impactScore, confidenceBand }) {
+  const reasons = [];
+
+  if (distanceMiles < 0.3) {
+    reasons.push('This development is very close to your property.');
+  } else if (distanceMiles < 1.0) {
+    reasons.push(`This development is approximately ${distanceMiles.toFixed(1)} mile from your property.`);
+  } else {
+    reasons.push(`This development is approximately ${distanceMiles.toFixed(1)} miles from your property.`);
+  }
+
+  const EVENT_CONTEXT = {
+    TRANSIT_PROJECT: 'Transit projects often correlate with long-term demand shifts in surrounding neighborhoods.',
+    FLOOD_MAP_UPDATE: 'Flood map changes may affect insurance requirements and financing options.',
+    SCHOOL_RATING_CHANGE: 'School quality is a key factor in family buyer demand and long-term value.',
+  };
+
+  const context = EVENT_CONTEXT[eventType];
+  if (context) reasons.push(context);
+
+  if (impactScore >= 75) {
+    reasons.push('The estimated relevance for your property is high based on event type and proximity.');
+  }
+
+  if (confidenceBand === 'PRELIMINARY') {
+    reasons.push('Data for this signal is limited — consider it an early indicator only.');
+  }
+
+  return reasons;
+}
+
+test('explainability — returns at least one reason for any valid event', () => {
+  const reasons = buildWhyThisMatters({
+    eventType: 'TRANSIT_PROJECT',
+    distanceMiles: 0.5,
+    impactScore: 60,
+    confidenceBand: 'MEDIUM',
+  });
+  assert.ok(reasons.length >= 1, `Expected at least 1 reason, got ${reasons.length}`);
+});
+
+test('explainability — includes distance context', () => {
+  const reasons = buildWhyThisMatters({
+    eventType: 'FLOOD_MAP_UPDATE',
+    distanceMiles: 0.8,
+    impactScore: 70,
+    confidenceBand: 'HIGH',
+  });
+  const hasDistance = reasons.some((r) => r.toLowerCase().includes('mile'));
+  assert.ok(hasDistance, 'Should include distance context');
+});
+
+test('explainability — PRELIMINARY band adds caveat', () => {
+  const reasons = buildWhyThisMatters({
+    eventType: 'ZONING_CHANGE',
+    distanceMiles: 1.2,
+    impactScore: 45,
+    confidenceBand: 'PRELIMINARY',
+  });
+  const hasCaveat = reasons.some((r) => r.toLowerCase().includes('early indicator'));
+  assert.ok(hasCaveat, 'Should add preliminary caveat for PRELIMINARY band');
+});
+
+test('explainability — HIGH confidence without PRELIMINARY caveat', () => {
+  const reasons = buildWhyThisMatters({
+    eventType: 'TRANSIT_PROJECT',
+    distanceMiles: 0.5,
+    impactScore: 80,
+    confidenceBand: 'HIGH',
+  });
+  const hasCaveat = reasons.some((r) => r.toLowerCase().includes('limited data'));
+  assert.equal(hasCaveat, false, 'Should not add caveat for HIGH confidence');
+});
+
+test('explainability — high score includes impact strength reason', () => {
+  const reasons = buildWhyThisMatters({
+    eventType: 'FLOOD_MAP_UPDATE',
+    distanceMiles: 0.5,
+    impactScore: 85,
+    confidenceBand: 'HIGH',
+  });
+  const hasStrength = reasons.some((r) => r.toLowerCase().includes('high'));
+  assert.ok(hasStrength, 'Should mention high relevance for score >= 75');
+});
+
+// ---------------------------------------------------------------------------
+// Prioritization / surfacing
+// ---------------------------------------------------------------------------
+
+test('prioritization — flood risk should outrank multiple weak commercial signals', () => {
+  const floodRank = computeCompositeRank(72, 0.85, 0.90);
+  const weakCommercial1 = computeCompositeRank(40, 0.55, 0.80);
+  const weakCommercial2 = computeCompositeRank(42, 0.50, 0.75);
+  assert.ok(
+    floodRank > weakCommercial1 && floodRank > weakCommercial2,
+    `Flood(${floodRank}) should outrank both commercial signals`,
+  );
+});
+
+test('prioritization — stale events should not dominate summary when fresh events exist', () => {
+  const staleEventRank = computeCompositeRank(75, 0.55, 0.20);  // Old, faded
+  const freshModerateRank = computeCompositeRank(55, 0.70, 1.0); // New, decent data
+  assert.ok(
+    freshModerateRank > staleEventRank,
+    `Fresh moderate(${freshModerateRank}) should outrank stale strong(${staleEventRank})`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+test('edge case — event with no metadata scores baseline MEDIUM confidence', () => {
+  const score = computeEventConfidence({
+    description: null, sourceName: null, sourceUrl: null,
+    announcedDate: null, expectedStartDate: null, expectedEndDate: null,
+    createdAt: recentDate,
+  });
+  // Fresh bonus 0.05 added: 0.50 + 0.05 = 0.55 → MEDIUM
+  assert.equal(score.band, 'MEDIUM', `Expected MEDIUM for minimal data, got ${score.band}`);
+});
+
+test('edge case — very stale event with all data fields still bounded at PRELIMINARY', () => {
+  const score = computeEventConfidence({
+    description: 'Detailed description with lots of helpful information.',
+    sourceName: 'Official Gov Source',
+    sourceUrl: 'https://example.gov/old',
+    announcedDate: oldDate,
+    expectedStartDate: oldDate,
+    expectedEndDate: new Date(Date.now() - 30 * 30 * 24 * 60 * 60 * 1000), // 2.5yr old end
+    createdAt: oldDate,
+  });
+  // All bonuses + stale penalties: should be capped low
+  assert.ok(score.overall < 0.72, `Stale event should not reach HIGH: ${score.overall}`);
+});

@@ -38,6 +38,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import type {
+  NeighborhoodConfidenceBand,
   NeighborhoodEventCard,
   NeighborhoodEventDetailDTO,
   NeighborhoodEventType,
@@ -155,6 +156,42 @@ function EffectBadge({ effect }: { effect: NeighborhoodOverallEffect }) {
 }
 
 // ============================================================================
+// CONFIDENCE LABEL — subtle inline text, not a flashy badge
+// ============================================================================
+
+const CONFIDENCE_LABEL: Record<NeighborhoodConfidenceBand, string> = {
+  HIGH: 'High confidence',
+  MEDIUM: 'Medium confidence',
+  PRELIMINARY: 'Preliminary signal',
+};
+
+const CONFIDENCE_COLOR: Record<NeighborhoodConfidenceBand, string> = {
+  HIGH: 'text-emerald-700',
+  MEDIUM: 'text-slate-500',
+  PRELIMINARY: 'text-amber-600',
+};
+
+function ConfidenceLabel({
+  band,
+  isStale,
+}: {
+  band: NeighborhoodConfidenceBand;
+  isStale: boolean;
+}) {
+  if (isStale) {
+    return (
+      <span className="text-[11px] text-amber-600">Older signal</span>
+    );
+  }
+  if (band === 'HIGH') return null; // High confidence needs no label — it's the default expectation
+  return (
+    <span className={cn('text-[11px]', CONFIDENCE_COLOR[band])}>
+      {CONFIDENCE_LABEL[band]}
+    </span>
+  );
+}
+
+// ============================================================================
 // FILTER TABS
 // ============================================================================
 
@@ -266,6 +303,7 @@ function NeighborhoodEventCardView({
               Announced {formatDate(event.announcedDate)}
             </span>
           )}
+          <ConfidenceLabel band={event.confidenceBand} isStale={event.isStale} />
         </div>
 
         {/* Short explanation */}
@@ -473,6 +511,28 @@ function EventDetailContent({ detail }: { detail: NeighborhoodEventDetailDTO }) 
         </div>
       )}
 
+      {/* Why CtC flagged this */}
+      {detail.whyThisMatters && detail.whyThisMatters.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Why CtC Flagged This
+          </p>
+          <div className="space-y-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
+            {detail.whyThisMatters.map((reason, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span
+                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--mobile-brand-strong))]"
+                  aria-hidden="true"
+                />
+                <p className="mb-0 text-[13px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
+                  {reason}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Source */}
       {(detail.sourceName || detail.sourceUrl) && (
         <div className="space-y-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
@@ -496,9 +556,20 @@ function EventDetailContent({ detail }: { detail: NeighborhoodEventDetailDTO }) 
             </a>
           )}
           <p className="mb-0 mt-1.5 text-[11px] text-[hsl(var(--mobile-text-muted))]">
-            Insights are based on publicly available signals and are intended as general guidance only. Always verify with official sources.
+            {detail.confidenceNote
+              ? detail.confidenceNote
+              : 'Insights are based on publicly available signals and are intended as general guidance only. Always verify with official sources.'}
           </p>
         </div>
+      )}
+
+      {/* Show confidence/source note even when there's no named source */}
+      {!detail.sourceName && !detail.sourceUrl && (
+        <p className="text-[11px] text-[hsl(var(--mobile-text-muted))]">
+          {detail.confidenceNote
+            ? detail.confidenceNote
+            : 'Insights are based on publicly available signals and are intended as general guidance only.'}
+        </p>
       )}
     </div>
   );
