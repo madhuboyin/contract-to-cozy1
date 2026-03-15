@@ -1186,9 +1186,12 @@ model User {
   radarStates    PropertyRadarState[]
   createdHomeTwinScenarios HomeTwinScenario[]
 
+  // Admin Analytics relations
+  analyticsEvents ProductAnalyticsEvent[]
+
   @@index([email])
   @@index([role])
-  
+
   @@index([status])
   @@map("users")
 }
@@ -1714,11 +1717,20 @@ model Property {
 
   neighborhoodEvents  PropertyNeighborhoodEvent[]
 
+  // Analytics activation state
+  activatedAt         DateTime?
+  activationStatus    PropertyActivationStatus @default(NOT_STARTED)
+
+  // Admin Analytics relations
+  analyticsEvents          ProductAnalyticsEvent[]
+  analyticsDailyRollups    PropertyAnalyticsDailyRollup[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([homeownerProfileId])
   @@index([coverPhotoDocumentId])
+  @@index([activationStatus])
   @@map("properties")
 }
 
@@ -7382,4 +7394,199 @@ model NeighborhoodScanJob {
   @@index([status])
   @@index([dataSource])
   @@map("neighborhood_scan_jobs")
+}
+
+// ============================================================================
+// ADMIN ANALYTICS LAYER
+// ============================================================================
+
+// Enum: property activation lifecycle
+enum PropertyActivationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  ACTIVATED
+}
+
+// Enum: standardized event taxonomy for raw product analytics events
+enum ProductAnalyticsEventType {
+  PROPERTY_CREATED
+  PROPERTY_UPDATED
+  PROPERTY_ACTIVATED
+  DASHBOARD_VIEWED
+  FEATURE_OPENED
+  SYSTEM_ADDED
+  SYSTEM_UPDATED
+  MAINTENANCE_ITEM_CREATED
+  MAINTENANCE_ITEM_COMPLETED
+  INCIDENT_CREATED
+  INCIDENT_VIEWED
+  CLAIM_CREATED
+  CLAIM_VIEWED
+  HIDDEN_ASSET_VIEWED
+  HIDDEN_ASSET_REFRESHED
+  NEGOTIATION_SCENARIO_LAUNCHED
+  HOME_PULSE_VIEWED
+  DIGITAL_TWIN_VIEWED
+  ARTICLE_VIEWED
+  DECISION_GUIDED
+  ACTION_COMPLETED
+  DOCUMENT_UPLOADED
+  INVENTORY_ITEM_CREATED
+  RISK_VIEWED
+  TOOL_USED
+  ADMIN_ANALYTICS_VIEWED
+}
+
+// Enum: cohort type for retention/activation cohort snapshots
+enum AnalyticsCohortType {
+  PROPERTY_CREATED_MONTH
+  PROPERTY_ACTIVATED_MONTH
+  USER_SIGNUP_MONTH
+}
+
+// Append-only raw product analytics event log.
+// Source of truth for detailed usage, value, and workflow analytics.
+model ProductAnalyticsEvent {
+  id          String                    @id @default(uuid())
+  eventType   ProductAnalyticsEventType
+  eventName   String?
+
+  userId      String?
+  propertyId  String?
+
+  moduleKey   String?
+  featureKey  String?
+  screenKey   String?
+  sessionKey  String?
+
+  // Origin surface (e.g. dashboard, home_tools, automation, admin)
+  source      String?
+
+  // Date-only bucket for efficient day-level aggregation
+  eventDate   DateTime?                 @db.Date
+
+  occurredAt  DateTime
+  metadataJson Json?
+
+  valueNumeric Float?
+  valueText    String?
+
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  user        User?                     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  property    Property?                 @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([eventType])
+  @@index([userId])
+  @@index([propertyId])
+  @@index([moduleKey])
+  @@index([featureKey])
+  @@index([occurredAt])
+  @@index([propertyId, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([eventType, occurredAt])
+  @@index([featureKey, occurredAt])
+  @@map("product_analytics_events")
+}
+
+// Aggregated daily analytics per property.
+// Keeps admin dashboards fast without scanning raw events.
+model PropertyAnalyticsDailyRollup {
+  id         String   @id @default(uuid())
+  propertyId String
+  rollupDate DateTime @db.Date
+
+  isActivated               Boolean @default(false)
+  interactionCount          Int     @default(0)
+  featureOpenCount          Int     @default(0)
+  toolUsageCount            Int     @default(0)
+  dashboardViewCount        Int     @default(0)
+  decisionGuidedCount       Int     @default(0)
+  incidentCount             Int     @default(0)
+  claimCount                Int     @default(0)
+  maintenanceActionCount    Int     @default(0)
+  articleViewCount          Int     @default(0)
+  hiddenAssetInteractionCount Int   @default(0)
+  homePulseViewCount        Int     @default(0)
+  digitalTwinViewCount      Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, rollupDate])
+  @@index([propertyId])
+  @@index([rollupDate])
+  @@index([rollupDate, isActivated])
+  @@map("property_analytics_daily_rollups")
+}
+
+// Daily platform-level usage aggregates per module/feature.
+model FeatureAnalyticsDailyRollup {
+  id         String   @id @default(uuid())
+  rollupDate DateTime @db.Date
+  moduleKey  String
+  featureKey String
+
+  openCount            Int @default(0)
+  interactionCount     Int @default(0)
+  uniqueUserCount      Int @default(0)
+  uniquePropertyCount  Int @default(0)
+  decisionGuidedCount  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([rollupDate, moduleKey, featureKey])
+  @@index([rollupDate])
+  @@index([moduleKey])
+  @@index([featureKey])
+  @@map("feature_analytics_daily_rollups")
+}
+
+// Top-level daily platform metrics snapshot for fast admin dashboard rendering.
+model AdminAnalyticsDailySnapshot {
+  id           String   @id @default(uuid())
+  snapshotDate DateTime @db.Date @unique
+
+  totalUsers                     Int
+  totalAdminUsers                Int?
+  totalProperties                Int
+  totalActivatedHomes            Int
+  weeklyActiveHomes              Int
+  monthlyActiveHomes             Int
+  avgMonthlyInteractionsPerHome  Float?
+  decisionsGuidedCount           Int
+  activeFeatureCount             Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([snapshotDate])
+  @@map("admin_analytics_daily_snapshots")
+}
+
+// Precomputed activation/retention cohort metrics.
+// Avoids recalculating cohort windows on every admin dashboard load.
+model AnalyticsCohortSnapshot {
+  id           String              @id @default(uuid())
+  cohortKey    String
+  cohortType   AnalyticsCohortType
+  snapshotDate DateTime            @db.Date
+
+  cohortSize          Int
+  activatedCount      Int
+  retainedWeek1Count  Int?
+  retainedWeek4Count  Int?
+  retainedMonth3Count Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cohortType, cohortKey, snapshotDate])
+  @@index([cohortType, snapshotDate])
+  @@index([snapshotDate])
+  @@map("analytics_cohort_snapshots")
 }
