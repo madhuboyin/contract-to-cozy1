@@ -2,9 +2,11 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeDigitalTwinService } from '../services/homeDigitalTwin.service';
 import { HomeDigitalTwinScenarioService } from '../services/homeDigitalTwinScenario.service';
+import { HomeDigitalTwinRecommendationsService } from '../services/homeDigitalTwinRecommendations.service';
 
 const twinService = new HomeDigitalTwinService();
 const scenarioService = new HomeDigitalTwinScenarioService();
+const recommendationsService = new HomeDigitalTwinRecommendationsService();
 
 // ============================================================================
 // TWIN ENDPOINTS
@@ -54,6 +56,24 @@ export async function refreshTwin(
 }
 
 // ============================================================================
+// RECOMMENDED SCENARIOS
+// ============================================================================
+
+export async function getRecommendedScenarios(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId } = req.params;
+    const recommendations = await recommendationsService.getRecommendations(propertyId);
+    res.json({ success: true, data: { recommendations } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ============================================================================
 // SCENARIO ENDPOINTS
 // ============================================================================
 
@@ -64,14 +84,11 @@ export async function listScenarios(
 ) {
   try {
     const { propertyId } = req.params;
-
     const twin = await getTwinIdForProperty(propertyId);
-
     const scenarios = await scenarioService.listScenarios(twin.id, {
       status: req.query.status as any,
       includeArchived: req.query.includeArchived === 'true',
     });
-
     res.json({ success: true, data: { scenarios } });
   } catch (err) {
     next(err);
@@ -86,16 +103,13 @@ export async function createScenario(
   try {
     const { propertyId } = req.params;
     const userId = req.user!.userId;
-
     const twin = await getTwinIdForProperty(propertyId);
-
     const scenario = await scenarioService.createScenario(
       twin.id,
       propertyId,
       userId,
       req.body,
     );
-
     res.status(201).json({ success: true, data: { scenario } });
   } catch (err) {
     next(err);
@@ -109,10 +123,27 @@ export async function getScenario(
 ) {
   try {
     const { propertyId, scenarioId } = req.params;
-
     const twin = await getTwinIdForProperty(propertyId);
-
     const scenario = await scenarioService.getScenario(scenarioId, twin.id);
+    res.json({ success: true, data: { scenario } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateScenario(
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { propertyId, scenarioId } = req.params;
+    const twin = await getTwinIdForProperty(propertyId);
+    const scenario = await scenarioService.updateScenario(
+      scenarioId,
+      twin.id,
+      req.body,
+    );
     res.json({ success: true, data: { scenario } });
   } catch (err) {
     next(err);
@@ -126,9 +157,7 @@ export async function computeScenario(
 ) {
   try {
     const { propertyId, scenarioId } = req.params;
-
     const twin = await getTwinIdForProperty(propertyId);
-
     const scenario = await scenarioService.computeScenario(scenarioId, twin.id);
     res.json({ success: true, data: { scenario } });
   } catch (err) {

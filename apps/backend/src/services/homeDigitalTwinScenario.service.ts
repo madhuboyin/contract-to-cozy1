@@ -2,6 +2,13 @@
  * HomeDigitalTwinScenarioService
  *
  * Manages HomeTwinScenario CRUD and MVP scenario impact computation.
+ *
+ * Compute engine design principles:
+ * - Deterministic and rules-based for MVP
+ * - Accepts both canonical and aliased payload field names
+ * - Emits only impacts that can be computed with reasonable confidence
+ * - Replaces all prior impact rows on recompute (idempotent)
+ * - Records confidence per impact, not just per scenario
  */
 
 import {
@@ -27,6 +34,11 @@ export type CreateScenarioInput = {
   isPinned?: boolean;
 };
 
+export type UpdateScenarioInput = {
+  isPinned?: boolean;
+  isArchived?: boolean;
+};
+
 type ImpactSpec = {
   impactType: HomeTwinImpactType;
   valueNumeric: number | null;
@@ -38,8 +50,7 @@ type ImpactSpec = {
 };
 
 // ============================================================================
-// DEFAULT REPLACEMENT COSTS BY COMPONENT TYPE
-// (mirrors builder defaults, kept in sync manually for MVP)
+// DEFAULT VALUES BY COMPONENT TYPE (USD, matches builder defaults)
 // ============================================================================
 
 const DEFAULT_REPLACEMENT_COST: Record<HomeTwinComponentType, number> = {
@@ -74,7 +85,7 @@ const DEFAULT_ANNUAL_MAINTENANCE: Record<HomeTwinComponentType, number> = {
   OTHER:        100,
 };
 
-// Property value ROI multiplier per component type (fraction of replacement cost)
+// Fraction of upfront cost typically recovered in property resale value
 const PROPERTY_VALUE_ROI: Record<HomeTwinComponentType, number> = {
   HVAC:         0.50,
   WATER_HEATER: 0.45,
@@ -90,6 +101,20 @@ const PROPERTY_VALUE_ROI: Record<HomeTwinComponentType, number> = {
   FOUNDATION:   0.45,
   OTHER:        0.35,
 };
+
+// Estimated insurance discount per component replacement (fraction of current premium, rough heuristic)
+const INSURANCE_IMPACT_BY_COMPONENT: Partial<Record<HomeTwinComponentType, number>> = {
+  ROOF:       0.07,  // new roof → ~7% discount
+  ELECTRICAL: 0.05,
+  PLUMBING:   0.03,
+};
+
+// Components where replacing has notable comfort impact
+const COMFORT_IMPACT_TYPES = new Set<HomeTwinComponentType>([
+  'HVAC',
+  'INSULATION',
+  'WINDOWS',
+]);
 
 // ============================================================================
 // HELPERS
@@ -115,6 +140,9 @@ function computeImpacts(
   inputPayload: Record<string, unknown>,
   component: {
     componentType: HomeTwinComponentType;
+    estimatedAgeYears: number | null;
+    conditionScore: number | null;
+    failureRiskScore: number | null;
     annualMaintenanceCostEstimate: Prisma.Decimal | null;
     annualOperatingCostEstimate: Prisma.Decimal | null;
     replacementCostEstimate: Prisma.Decimal | null;
@@ -122,6 +150,7 @@ function computeImpacts(
 ): ImpactSpec[] {
   const impacts: ImpactSpec[] = [];
 
+  // ── REPLACE_COMPONENT / UPGRADE_COMPONENT ──────────────────────────────────
   if (
     scenarioType === 'REPLACE_COMPONENT' ||
     scenarioType === 'UPGRADE_COMPONENT'
@@ -129,8 +158,10 @@ function computeImpacts(
     const assumptions = (inputPayload.assumptions as Record<string, unknown>) ?? {};
     const compType = (inputPayload.componentType as HomeTwinComponentType) ?? 'OTHER';
 
+    // Accept projectCost as alias for replacementCost
     const upfrontCost =
       toNum(assumptions.replacementCost) ??
+      toNum(assumptions.projectCost) ??
       decimalToNumber(component?.replacementCostEstimate) ??
       DEFAULT_REPLACEMENT_COST[compType] ??
       DEFAULT_REPLACEMENT_COST.OTHER;
@@ -140,18 +171,28 @@ function computeImpacts(
       DEFAULT_ANNUAL_MAINTENANCE[compType] ??
       DEFAULT_ANNUAL_MAINTENANCE.OTHER;
 
+    const oldAnnualOp = decimalToNumber(component?.annualOperatingCostEstimate) ?? 0;
+
+    // annualSavings can be provided directly in assumptions (e.g. insulation scenario)
+    const directAnnualSavings = toNum(assumptions.annualSavings);
     const efficiencyGainPct = toNum(assumptions.efficiencyGainPercent) ?? 0;
-    const oldAnnualOp =
-      decimalToNumber(component?.annualOperatingCostEstimate) ?? 0;
 
     const annualMaintSavings = oldAnnualMaint * 0.80;
-    const annualEnergySavings = oldAnnualOp * (efficiencyGainPct / 100);
+    const annualEnergySavings =
+      directAnnualSavings != null
+        ? directAnnualSavings
+        : oldAnnualOp * (efficiencyGainPct / 100);
+
     const totalAnnualSavings = annualMaintSavings + annualEnergySavings;
     const paybackYears = totalAnnualSavings > 0 ? upfrontCost / totalAnnualSavings : null;
     const propertyValueChange =
       upfrontCost * (PROPERTY_VALUE_ROI[compType] ?? PROPERTY_VALUE_ROI.OTHER);
 
-    const newUsefulLife = toNum(assumptions.newUsefulLifeYears) ?? null;
+    const newUsefulLife = toNum(assumptions.newUsefulLifeYears);
+    const riskReductionPct = toNum(assumptions.riskReductionPercent);
+
+    // Confidence is higher when we have the component on record
+    const hasComponent = component != null;
 
     impacts.push(
       {
@@ -160,7 +201,7 @@ function computeImpacts(
         valueText: null,
         unit: 'USD',
         direction: 'NEGATIVE',
-        confidenceScore: component ? 0.80 : 0.55,
+        confidenceScore: hasComponent ? 0.80 : 0.55,
         sortOrder: 0,
       },
       {
@@ -169,15 +210,15 @@ function computeImpacts(
         valueText: null,
         unit: 'USD',
         direction: totalAnnualSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
-        confidenceScore: component ? 0.70 : 0.45,
+        confidenceScore: hasComponent ? 0.70 : 0.45,
         sortOrder: 1,
       },
       {
         impactType: 'PAYBACK_PERIOD',
         valueNumeric: paybackYears != null ? Math.round(paybackYears * 10) / 10 : null,
-        valueText: paybackYears != null ? `${(paybackYears).toFixed(1)} years` : 'N/A',
+        valueText: paybackYears != null ? `${paybackYears.toFixed(1)} years` : 'N/A',
         unit: 'YEARS',
-        direction: paybackYears != null && paybackYears < 10 ? 'POSITIVE' : 'NEUTRAL',
+        direction: paybackYears != null && paybackYears <= 10 ? 'POSITIVE' : 'NEUTRAL',
         confidenceScore: 0.65,
         sortOrder: 2,
       },
@@ -187,48 +228,96 @@ function computeImpacts(
         valueText: null,
         unit: 'USD',
         direction: 'POSITIVE',
-        confidenceScore: 0.55,
+        confidenceScore: 0.50,
         sortOrder: 3,
       },
       {
         impactType: 'MAINTENANCE_COST_CHANGE',
         valueNumeric: -Math.round(annualMaintSavings),
-        valueText: `Save ~$${Math.round(annualMaintSavings)}/yr`,
+        valueText: `Save ~$${Math.round(annualMaintSavings)}/yr on maintenance`,
         unit: 'USD',
         direction: annualMaintSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
-        confidenceScore: 0.70,
+        confidenceScore: hasComponent ? 0.70 : 0.45,
         sortOrder: 4,
       },
     );
 
-    if (efficiencyGainPct > 0) {
+    // Energy savings impact (only when meaningful)
+    if (annualEnergySavings > 0) {
       impacts.push({
         impactType: 'ENERGY_USE_CHANGE',
         valueNumeric: -Math.round(annualEnergySavings),
-        valueText: `${efficiencyGainPct}% efficiency improvement`,
+        valueText:
+          efficiencyGainPct > 0
+            ? `${efficiencyGainPct}% efficiency improvement`
+            : `~$${Math.round(annualEnergySavings)}/yr energy savings`,
         unit: 'USD',
         direction: 'POSITIVE',
-        confidenceScore: 0.65,
+        confidenceScore: 0.60,
         sortOrder: 5,
       });
     }
 
-    if (newUsefulLife != null) {
+    // Risk reduction: from explicit assumption or derived from old component state
+    const derivedRiskReduction =
+      riskReductionPct ??
+      (component?.failureRiskScore != null
+        ? Math.round(component.failureRiskScore * 80) // replacing clears ~80% of failure risk
+        : null);
+
+    if (derivedRiskReduction != null) {
+      const riskText = newUsefulLife != null
+        ? `${derivedRiskReduction}% risk reduction; new useful life ${newUsefulLife} yrs`
+        : `${derivedRiskReduction}% risk reduction`;
       impacts.push({
         impactType: 'RISK_REDUCTION',
-        valueNumeric: null,
-        valueText: `New useful life: ${newUsefulLife} years`,
-        unit: 'YEARS',
+        valueNumeric: derivedRiskReduction,
+        valueText: riskText,
+        unit: 'PERCENT',
         direction: 'POSITIVE',
-        confidenceScore: 0.75,
+        confidenceScore: riskReductionPct != null ? 0.80 : 0.55,
         sortOrder: 6,
       });
     }
+
+    // Insurance discount for components with known insurer response
+    const insuranceFraction = INSURANCE_IMPACT_BY_COMPONENT[compType];
+    if (insuranceFraction != null) {
+      // Rough estimate: median US home insurance is ~$1,800/yr
+      const estimatedAnnualPremium = 1800;
+      const annualInsuranceSaving = Math.round(estimatedAnnualPremium * insuranceFraction);
+      impacts.push({
+        impactType: 'INSURANCE_IMPACT',
+        valueNumeric: -annualInsuranceSaving,
+        valueText: `~$${annualInsuranceSaving}/yr insurance discount (estimate)`,
+        unit: 'USD',
+        direction: 'POSITIVE',
+        confidenceScore: 0.40, // heuristic — low confidence
+        sortOrder: 7,
+      });
+    }
+
+    // Comfort impact for relevant systems
+    if (COMFORT_IMPACT_TYPES.has(compType)) {
+      impacts.push({
+        impactType: 'COMFORT_IMPACT',
+        valueNumeric: null,
+        valueText: `Improved comfort expected with new ${compType.toLowerCase().replace('_', ' ')}`,
+        unit: null,
+        direction: 'POSITIVE',
+        confidenceScore: 0.75,
+        sortOrder: 8,
+      });
+    }
+
+  // ── ENERGY_IMPROVEMENT ─────────────────────────────────────────────────────
   } else if (scenarioType === 'ENERGY_IMPROVEMENT') {
     const upfrontCost = toNum(inputPayload.upfrontCost) ?? 0;
     const annualSavings = toNum(inputPayload.energySavingsPerYear) ?? 0;
     const paybackYears = annualSavings > 0 ? upfrontCost / annualSavings : null;
     const carbonOffset = toNum(inputPayload.carbonOffsetTonsCO2PerYear);
+    const comfortDesc = inputPayload.comfortImpactDescription as string | undefined;
+    const resilienceDesc = inputPayload.resilienceImpactDescription as string | undefined;
 
     impacts.push(
       {
@@ -237,7 +326,7 @@ function computeImpacts(
         valueText: null,
         unit: 'USD',
         direction: 'NEGATIVE',
-        confidenceScore: 0.80,
+        confidenceScore: 0.85,
         sortOrder: 0,
       },
       {
@@ -246,7 +335,7 @@ function computeImpacts(
         valueText: null,
         unit: 'USD',
         direction: annualSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
-        confidenceScore: 0.70,
+        confidenceScore: 0.75,
         sortOrder: 1,
       },
       {
@@ -254,8 +343,8 @@ function computeImpacts(
         valueNumeric: paybackYears != null ? Math.round(paybackYears * 10) / 10 : null,
         valueText: paybackYears != null ? `${paybackYears.toFixed(1)} years` : 'N/A',
         unit: 'YEARS',
-        direction: paybackYears != null && paybackYears < 10 ? 'POSITIVE' : 'NEUTRAL',
-        confidenceScore: 0.65,
+        direction: paybackYears != null && paybackYears <= 10 ? 'POSITIVE' : 'NEUTRAL',
+        confidenceScore: 0.70,
         sortOrder: 2,
       },
       {
@@ -269,7 +358,7 @@ function computeImpacts(
       },
     );
 
-    if (carbonOffset != null) {
+    if (carbonOffset != null && carbonOffset > 0) {
       impacts.push({
         impactType: 'EMISSIONS_IMPACT',
         valueNumeric: -carbonOffset,
@@ -280,43 +369,99 @@ function computeImpacts(
         sortOrder: 4,
       });
     }
+
+    if (comfortDesc) {
+      impacts.push({
+        impactType: 'COMFORT_IMPACT',
+        valueNumeric: null,
+        valueText: comfortDesc,
+        unit: null,
+        direction: 'POSITIVE',
+        confidenceScore: 0.65,
+        sortOrder: 5,
+      });
+    }
+
+    if (resilienceDesc) {
+      impacts.push({
+        impactType: 'RISK_REDUCTION',
+        valueNumeric: null,
+        valueText: resilienceDesc,
+        unit: null,
+        direction: 'POSITIVE',
+        confidenceScore: 0.50,
+        sortOrder: 6,
+      });
+    }
+
+  // ── RESILIENCE_IMPROVEMENT ─────────────────────────────────────────────────
   } else if (scenarioType === 'RESILIENCE_IMPROVEMENT') {
     const upfrontCost = toNum(inputPayload.upfrontCost) ?? 0;
     const riskReductionPct = toNum(inputPayload.riskReductionPercent);
     const insuranceSavings = toNum(inputPayload.estimatedInsuranceSavingsPerYear);
+    const propertyValueChange = toNum(inputPayload.estimatedPropertyValueChange);
+    const resilienceDesc = inputPayload.resilienceImpactDescription as string | undefined;
 
-    impacts.push(
-      {
-        impactType: 'UPFRONT_COST',
-        valueNumeric: upfrontCost,
+    impacts.push({
+      impactType: 'UPFRONT_COST',
+      valueNumeric: upfrontCost,
+      valueText: null,
+      unit: 'USD',
+      direction: 'NEGATIVE',
+      confidenceScore: 0.85,
+      sortOrder: 0,
+    });
+
+    impacts.push({
+      impactType: 'RISK_REDUCTION',
+      valueNumeric: riskReductionPct,
+      valueText:
+        riskReductionPct != null
+          ? `${riskReductionPct}% risk reduction`
+          : resilienceDesc ?? null,
+      unit: riskReductionPct != null ? 'PERCENT' : null,
+      direction: 'POSITIVE',
+      confidenceScore: riskReductionPct != null ? 0.65 : 0.45,
+      sortOrder: 1,
+    });
+
+    if (insuranceSavings != null && insuranceSavings > 0) {
+      const payback = insuranceSavings > 0 ? upfrontCost / insuranceSavings : null;
+      impacts.push(
+        {
+          impactType: 'INSURANCE_IMPACT',
+          valueNumeric: -insuranceSavings,
+          valueText: `Save ~$${insuranceSavings}/yr on insurance`,
+          unit: 'USD',
+          direction: 'POSITIVE',
+          confidenceScore: 0.55,
+          sortOrder: 2,
+        },
+        {
+          impactType: 'PAYBACK_PERIOD',
+          valueNumeric: payback != null ? Math.round(payback * 10) / 10 : null,
+          valueText: payback != null ? `${payback.toFixed(1)} years` : 'N/A',
+          unit: 'YEARS',
+          direction: payback != null && payback <= 10 ? 'POSITIVE' : 'NEUTRAL',
+          confidenceScore: 0.55,
+          sortOrder: 3,
+        },
+      );
+    }
+
+    if (propertyValueChange != null) {
+      impacts.push({
+        impactType: 'PROPERTY_VALUE_CHANGE',
+        valueNumeric: propertyValueChange,
         valueText: null,
         unit: 'USD',
-        direction: 'NEGATIVE',
-        confidenceScore: 0.80,
-        sortOrder: 0,
-      },
-      {
-        impactType: 'RISK_REDUCTION',
-        valueNumeric: riskReductionPct,
-        valueText: riskReductionPct != null ? `${riskReductionPct}% risk reduction` : null,
-        unit: 'PERCENT',
-        direction: 'POSITIVE',
-        confidenceScore: 0.55,
-        sortOrder: 1,
-      },
-    );
-
-    if (insuranceSavings != null) {
-      impacts.push({
-        impactType: 'INSURANCE_IMPACT',
-        valueNumeric: -insuranceSavings,
-        valueText: `Save ~$${insuranceSavings}/yr on insurance`,
-        unit: 'USD',
-        direction: 'POSITIVE',
-        confidenceScore: 0.45,
-        sortOrder: 2,
+        direction: propertyValueChange >= 0 ? 'POSITIVE' : 'NEGATIVE',
+        confidenceScore: 0.40,
+        sortOrder: 4,
       });
     }
+
+  // ── ADD_FEATURE / RENOVATION ───────────────────────────────────────────────
   } else if (scenarioType === 'ADD_FEATURE' || scenarioType === 'RENOVATION') {
     const upfrontCost = toNum(inputPayload.upfrontCost) ?? 0;
     const propertyValueChange = toNum(inputPayload.estimatedPropertyValueChange);
@@ -328,7 +473,7 @@ function computeImpacts(
       valueText: null,
       unit: 'USD',
       direction: 'NEGATIVE',
-      confidenceScore: 0.75,
+      confidenceScore: 0.80,
       sortOrder: 0,
     });
 
@@ -345,18 +490,73 @@ function computeImpacts(
     }
 
     if (annualSavings != null) {
+      const payback = annualSavings > 0 ? upfrontCost / annualSavings : null;
+      impacts.push(
+        {
+          impactType: 'ANNUAL_SAVINGS',
+          valueNumeric: annualSavings,
+          valueText: null,
+          unit: 'USD',
+          direction: annualSavings >= 0 ? 'POSITIVE' : 'NEGATIVE',
+          confidenceScore: 0.55,
+          sortOrder: 2,
+        },
+        {
+          impactType: 'PAYBACK_PERIOD',
+          valueNumeric: payback != null ? Math.round(payback * 10) / 10 : null,
+          valueText: payback != null ? `${payback.toFixed(1)} years` : 'N/A',
+          unit: 'YEARS',
+          direction: payback != null && payback <= 10 ? 'POSITIVE' : 'NEUTRAL',
+          confidenceScore: 0.50,
+          sortOrder: 3,
+        },
+      );
+    }
+
+  // ── REMOVE_FEATURE ─────────────────────────────────────────────────────────
+  } else if (scenarioType === 'REMOVE_FEATURE') {
+    const removalCost = toNum(inputPayload.removalCost) ?? 0;
+    const annualSavings = toNum(inputPayload.annualSavings);
+    const propertyValueChange = toNum(inputPayload.estimatedPropertyValueChange);
+
+    if (removalCost > 0) {
+      impacts.push({
+        impactType: 'UPFRONT_COST',
+        valueNumeric: removalCost,
+        valueText: null,
+        unit: 'USD',
+        direction: 'NEGATIVE',
+        confidenceScore: 0.75,
+        sortOrder: 0,
+      });
+    }
+
+    if (annualSavings != null) {
       impacts.push({
         impactType: 'ANNUAL_SAVINGS',
         valueNumeric: annualSavings,
         valueText: null,
         unit: 'USD',
         direction: annualSavings >= 0 ? 'POSITIVE' : 'NEGATIVE',
-        confidenceScore: 0.55,
+        confidenceScore: 0.60,
+        sortOrder: 1,
+      });
+    }
+
+    if (propertyValueChange != null) {
+      impacts.push({
+        impactType: 'PROPERTY_VALUE_CHANGE',
+        valueNumeric: propertyValueChange,
+        valueText: null,
+        unit: 'USD',
+        direction: propertyValueChange >= 0 ? 'POSITIVE' : 'NEGATIVE',
+        confidenceScore: 0.40,
         sortOrder: 2,
       });
     }
+
+  // ── CUSTOM ─────────────────────────────────────────────────────────────────
   } else {
-    // CUSTOM or REMOVE_FEATURE — use whatever the user provided
     const expectedImpacts = inputPayload.expectedImpacts;
     if (Array.isArray(expectedImpacts)) {
       expectedImpacts.forEach((ei: unknown, idx: number) => {
@@ -396,9 +596,7 @@ export class HomeDigitalTwinScenarioService {
     return prisma.homeTwinScenario.findMany({
       where,
       orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
-      include: {
-        impacts: { orderBy: { sortOrder: 'asc' } },
-      },
+      include: { impacts: { orderBy: { sortOrder: 'asc' } } },
     });
   }
 
@@ -406,9 +604,7 @@ export class HomeDigitalTwinScenarioService {
   async getScenario(scenarioId: string, digitalTwinId: string) {
     const scenario = await prisma.homeTwinScenario.findFirst({
       where: { id: scenarioId, digitalTwinId },
-      include: {
-        impacts: { orderBy: { sortOrder: 'asc' } },
-      },
+      include: { impacts: { orderBy: { sortOrder: 'asc' } } },
     });
     if (!scenario) {
       throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
@@ -423,7 +619,6 @@ export class HomeDigitalTwinScenarioService {
     createdByUserId: string,
     input: CreateScenarioInput,
   ) {
-    // Snapshot current twin state at creation time
     const twin = await prisma.homeDigitalTwin.findUniqueOrThrow({
       where: { id: digitalTwinId },
       select: { completenessScore: true, confidenceScore: true, status: true, version: true },
@@ -451,7 +646,35 @@ export class HomeDigitalTwinScenarioService {
       include: { impacts: true },
     });
 
+    console.log(
+      `[HomeDigitalTwin] scenario created — id=${scenario.id} type=${input.scenarioType} property=${propertyId}`,
+    );
+
     return scenario;
+  }
+
+  // ── Update (archive / pin) ───────────────────────────────────────────────
+  async updateScenario(
+    scenarioId: string,
+    digitalTwinId: string,
+    input: UpdateScenarioInput,
+  ) {
+    const existing = await prisma.homeTwinScenario.findFirst({
+      where: { id: scenarioId, digitalTwinId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
+    }
+
+    return prisma.homeTwinScenario.update({
+      where: { id: scenarioId },
+      data: {
+        ...(input.isPinned !== undefined && { isPinned: input.isPinned }),
+        ...(input.isArchived !== undefined && { isArchived: input.isArchived }),
+      },
+      include: { impacts: { orderBy: { sortOrder: 'asc' } } },
+    });
   }
 
   // ── Compute ─────────────────────────────────────────────────────────────────
@@ -465,9 +688,12 @@ export class HomeDigitalTwinScenarioService {
 
     const inputPayload = scenario.inputPayload as Record<string, unknown>;
 
-    // Find the relevant component in the twin (for REPLACE/UPGRADE scenarios)
+    // Load the relevant component for replace/upgrade scenarios
     let component: {
       componentType: HomeTwinComponentType;
+      estimatedAgeYears: number | null;
+      conditionScore: number | null;
+      failureRiskScore: number | null;
       annualMaintenanceCostEstimate: Prisma.Decimal | null;
       annualOperatingCostEstimate: Prisma.Decimal | null;
       replacementCostEstimate: Prisma.Decimal | null;
@@ -483,6 +709,9 @@ export class HomeDigitalTwinScenarioService {
           where: { digitalTwinId, componentType: compType },
           select: {
             componentType: true,
+            estimatedAgeYears: true,
+            conditionScore: true,
+            failureRiskScore: true,
             annualMaintenanceCostEstimate: true,
             annualOperatingCostEstimate: true,
             replacementCostEstimate: true,
@@ -492,10 +721,9 @@ export class HomeDigitalTwinScenarioService {
       }
     }
 
-    // Compute impacts
     const impactSpecs = computeImpacts(scenario.scenarioType, inputPayload, component);
 
-    // Persist: delete old impacts, create new ones, update scenario status
+    // Atomically replace old impacts and mark computed
     await prisma.$transaction(async (tx) => {
       await tx.homeTwinScenarioImpact.deleteMany({ where: { scenarioId } });
 
@@ -507,12 +735,13 @@ export class HomeDigitalTwinScenarioService {
 
       await tx.homeTwinScenario.update({
         where: { id: scenarioId },
-        data: {
-          status: 'COMPUTED',
-          lastComputedAt: new Date(),
-        },
+        data: { status: 'COMPUTED', lastComputedAt: new Date() },
       });
     });
+
+    console.log(
+      `[HomeDigitalTwin] scenario computed — id=${scenarioId} type=${scenario.scenarioType} impacts=${impactSpecs.length}`,
+    );
 
     return prisma.homeTwinScenario.findUniqueOrThrow({
       where: { id: scenarioId },

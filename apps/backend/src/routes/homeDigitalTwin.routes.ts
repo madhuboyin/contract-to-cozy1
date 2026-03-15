@@ -6,14 +6,17 @@ import { validateBody } from '../middleware/validate.middleware';
 import {
   initTwinBodySchema,
   createScenarioBodySchema,
+  updateScenarioBodySchema,
 } from '../validators/homeDigitalTwin.validators';
 import {
   getTwin,
   initTwin,
   refreshTwin,
+  getRecommendedScenarios,
   listScenarios,
   createScenario,
   getScenario,
+  updateScenario,
   computeScenario,
 } from '../controllers/homeDigitalTwin.controller';
 
@@ -29,9 +32,13 @@ router.use(authenticate);
 /**
  * GET /api/properties/:propertyId/home-digital-twin
  *
- * Returns the digital twin for the property including all modeled
- * components, data quality dimensions, and recent scenarios.
- * Returns 404 if twin has not been initialized yet.
+ * Returns the digital twin for the property, including:
+ *   - twin metadata (status, version, completenessScore, confidenceScore)
+ *   - all modeled components with age/condition/cost estimates
+ *   - data quality dimension summaries
+ *   - up to 5 recent non-archived scenarios
+ *
+ * Returns 404 if the twin has not been initialized yet.
  */
 router.get(
   '/properties/:propertyId/home-digital-twin',
@@ -42,9 +49,9 @@ router.get(
 /**
  * POST /api/properties/:propertyId/home-digital-twin/init
  *
- * Creates and builds a digital twin for the property if one does not
- * exist yet. If the twin already exists, returns it unless
- * forceRefresh=true is passed in the body, which triggers a rebuild.
+ * Creates and builds the digital twin for the property if one does not
+ * exist yet. Returns the existing twin if already present, unless
+ * forceRefresh=true is passed to trigger a full rebuild.
  *
  * Body (optional):
  *   forceRefresh  boolean — default false
@@ -59,14 +66,43 @@ router.post(
 /**
  * POST /api/properties/:propertyId/home-digital-twin/refresh
  *
- * Recomputes all derived component state from current source data
- * and re-evaluates data quality. Returns the updated twin.
- * Requires the twin to exist (call /init first).
+ * Recomputes all derived component state from the latest source data
+ * (property profile, inventory, risk report) and re-evaluates all
+ * quality dimensions. Returns the updated twin.
+ *
+ * Requires the twin to exist — call /init first.
  */
 router.post(
   '/properties/:propertyId/home-digital-twin/refresh',
   propertyAuthMiddleware,
   refreshTwin,
+);
+
+// ============================================================================
+// RECOMMENDED SCENARIOS
+// ============================================================================
+
+/**
+ * GET /api/properties/:propertyId/home-digital-twin/recommended-scenarios
+ *
+ * Returns lightweight prebuilt scenario suggestions based on the current
+ * state of the twin's modeled components. Nothing is persisted.
+ *
+ * Each suggestion includes:
+ *   - key          deterministic slug (e.g. "replace-hvac")
+ *   - title / description / reason
+ *   - scenarioType / componentType
+ *   - urgency      HIGH | MEDIUM | LOW
+ *   - estimatedUpfrontCost
+ *   - suggestedInputPayload — ready to send to POST /scenarios
+ *
+ * Suggestions are sorted by urgency (HIGH first).
+ * Low-confidence or low-value suggestions are suppressed.
+ */
+router.get(
+  '/properties/:propertyId/home-digital-twin/recommended-scenarios',
+  propertyAuthMiddleware,
+  getRecommendedScenarios,
 );
 
 // ============================================================================
@@ -81,6 +117,8 @@ router.post(
  * Query params (all optional):
  *   status          DRAFT | READY | COMPUTED | FAILED | ARCHIVED
  *   includeArchived true — include archived scenarios (default false)
+ *
+ * Results are ordered: pinned first, then by createdAt descending.
  */
 router.get(
   '/properties/:propertyId/home-digital-twin/scenarios',
@@ -91,31 +129,39 @@ router.get(
 /**
  * POST /api/properties/:propertyId/home-digital-twin/scenarios
  *
- * Creates a new "what if" scenario for the property twin.
+ * Creates a new "what if" scenario. The inputPayload is validated
+ * per scenarioType — invalid shapes are rejected with field-level errors.
  *
  * Body:
  *   name          string (required)
  *   scenarioType  HomeTwinScenarioType (required)
  *   description   string (optional)
- *   inputPayload  object (required) — scenario assumptions
+ *   inputPayload  object (required) — see per-type shapes below
  *   isPinned      boolean (optional, default false)
  *
- * Scenario types and expected inputPayload shapes:
+ * inputPayload shapes by scenarioType:
  *
  * REPLACE_COMPONENT / UPGRADE_COMPONENT:
- *   { componentType: "HVAC", assumptions: { replacementCost: 9800, newUsefulLifeYears: 15, efficiencyGainPercent: 18 } }
+ *   { componentType, assumptions: { replacementCost?, projectCost?, newUsefulLifeYears?,
+ *     efficiencyGainPercent?, riskReductionPercent?, annualSavings? } }
  *
  * ENERGY_IMPROVEMENT:
- *   { upfrontCost: 5000, energySavingsPerYear: 800, carbonOffsetTonsCO2PerYear: 1.2 }
+ *   { upfrontCost, energySavingsPerYear, carbonOffsetTonsCO2PerYear?,
+ *     comfortImpactDescription?, resilienceImpactDescription? }
  *
  * RESILIENCE_IMPROVEMENT:
- *   { upfrontCost: 3000, riskReductionPercent: 15, estimatedInsuranceSavingsPerYear: 200 }
+ *   { upfrontCost, riskReductionPercent?, estimatedInsuranceSavingsPerYear?,
+ *     estimatedPropertyValueChange?, resilienceImpactDescription? }
  *
  * ADD_FEATURE / RENOVATION:
- *   { upfrontCost: 20000, estimatedPropertyValueChange: 15000, annualSavings: 0 }
+ *   { upfrontCost, estimatedPropertyValueChange?, annualSavings?, description? }
  *
- * CUSTOM / REMOVE_FEATURE:
- *   { expectedImpacts: [{ impactType: "UPFRONT_COST", valueNumeric: 5000, unit: "USD", direction: "NEGATIVE" }] }
+ * REMOVE_FEATURE:
+ *   { removalCost?, annualSavings?, estimatedPropertyValueChange?, description? }
+ *
+ * CUSTOM:
+ *   { expectedImpacts?: [{ impactType, valueNumeric?, valueText?, unit?, direction,
+ *     confidenceScore? }], description? }
  */
 router.post(
   '/properties/:propertyId/home-digital-twin/scenarios',
@@ -127,7 +173,12 @@ router.post(
 /**
  * GET /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId
  *
- * Returns a single scenario with its computed impacts.
+ * Returns a single scenario with full detail:
+ *   - scenario metadata (name, type, status, description)
+ *   - inputPayload (the scenario assumptions)
+ *   - baselineSnapshot (twin state at creation time)
+ *   - lastComputedAt
+ *   - impacts[] — normalized computed outputs, sorted by sortOrder
  */
 router.get(
   '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId',
@@ -136,11 +187,30 @@ router.get(
 );
 
 /**
+ * PATCH /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId
+ *
+ * Updates mutable metadata on a scenario.
+ * At least one field must be provided.
+ *
+ * Body:
+ *   isPinned    boolean (optional) — pin/unpin the scenario
+ *   isArchived  boolean (optional) — archive/restore the scenario
+ */
+router.patch(
+  '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId',
+  propertyAuthMiddleware,
+  validateBody(updateScenarioBodySchema),
+  updateScenario,
+);
+
+/**
  * POST /api/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/compute
  *
- * Computes impact outputs for a saved scenario and persists them as
- * HomeTwinScenarioImpact rows. Updates scenario status to COMPUTED.
- * Safe to call multiple times (recomputes each time).
+ * Runs the impact compute engine for a saved scenario and persists
+ * normalized HomeTwinScenarioImpact rows. Updates scenario status to COMPUTED.
+ *
+ * Safe to call multiple times — old impact rows are deleted and replaced
+ * on each run (idempotent).
  */
 router.post(
   '/properties/:propertyId/home-digital-twin/scenarios/:scenarioId/compute',
