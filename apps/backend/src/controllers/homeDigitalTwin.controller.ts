@@ -1,5 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
+import { prisma } from '../lib/prisma';
+import { APIError } from '../middleware/error.middleware';
 import { HomeDigitalTwinService } from '../services/homeDigitalTwin.service';
 import { HomeDigitalTwinScenarioService } from '../services/homeDigitalTwinScenario.service';
 import { HomeDigitalTwinRecommendationsService } from '../services/homeDigitalTwinRecommendations.service';
@@ -77,6 +79,10 @@ export async function getRecommendedScenarios(
 // SCENARIO ENDPOINTS
 // ============================================================================
 
+const VALID_SCENARIO_STATUSES = new Set([
+  'DRAFT', 'READY', 'COMPUTED', 'FAILED', 'ARCHIVED',
+]);
+
 export async function listScenarios(
   req: CustomRequest,
   res: Response,
@@ -84,9 +90,13 @@ export async function listScenarios(
 ) {
   try {
     const { propertyId } = req.params;
+    const statusParam = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const status = statusParam && VALID_SCENARIO_STATUSES.has(statusParam)
+      ? (statusParam as 'DRAFT' | 'READY' | 'COMPUTED' | 'FAILED' | 'ARCHIVED')
+      : undefined;
     const twin = await getTwinIdForProperty(propertyId);
     const scenarios = await scenarioService.listScenarios(twin.id, {
-      status: req.query.status as any,
+      status,
       includeArchived: req.query.includeArchived === 'true',
     });
     res.json({ success: true, data: { scenarios } });
@@ -102,7 +112,10 @@ export async function createScenario(
 ) {
   try {
     const { propertyId } = req.params;
-    const userId = req.user!.userId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new APIError('Authentication required', 401, 'NOT_AUTHENTICATED');
+    }
     const twin = await getTwinIdForProperty(propertyId);
     const scenario = await scenarioService.createScenario(
       twin.id,
@@ -170,13 +183,11 @@ export async function computeScenario(
 // ============================================================================
 
 async function getTwinIdForProperty(propertyId: string) {
-  const { prisma } = await import('../lib/prisma');
   const twin = await prisma.homeDigitalTwin.findUnique({
     where: { propertyId },
     select: { id: true },
   });
   if (!twin) {
-    const { APIError } = await import('../middleware/error.middleware');
     throw new APIError(
       'Digital twin not found for this property. Use /init to create one.',
       404,

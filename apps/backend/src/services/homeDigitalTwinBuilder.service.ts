@@ -58,7 +58,7 @@ function currentYear(): number {
  */
 function scaledHvacCost(sqft: number | null): number {
   const base = COMPONENT_DEFAULTS.HVAC.replacementCost;
-  if (!sqft) return base;
+  if (!sqft || sqft <= 0) return base;
   const scaled = Math.round((sqft / 1500) * base);
   return Math.min(Math.max(scaled, 7000), 22000);
 }
@@ -70,7 +70,7 @@ function scaledHvacCost(sqft: number | null): number {
 function scaledRoofCost(sqft: number | null, roofType: string | null): number {
   const type = (roofType ?? '').toUpperCase().replace(/[-_ ]/g, '');
   const perSqFt = type.includes('METAL') ? 11 : type.includes('TILE') ? 9 : 7;
-  const area = sqft ?? 1700; // median US home floor area proxy
+  const area = sqft && sqft > 0 ? sqft : 1700; // median US home floor area proxy
   return Math.min(Math.max(Math.round(area * perSqFt), 6000), 35000);
 }
 

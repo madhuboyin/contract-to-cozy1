@@ -2481,21 +2481,19 @@ export interface HomeTwinDataQualityDTO {
   dimension: HomeTwinDataQualityDimension;
   status: HomeTwinDataQualityStatus;
   score: number | null;
-  notes: string | null;
-  evaluatedAt: string | null;
+  missingFields: string[];
+  lastEvaluatedAt: string | null;
 }
 
 export interface HomeTwinScenarioImpactDTO {
   id: string;
   impactType: HomeTwinImpactType;
   direction: HomeTwinImpactDirection;
-  label: string;
   valueNumeric: number | null;
   valueText: string | null;
   unit: string | null;
   confidenceScore: number | null;
   sortOrder: number;
-  notes: string | null;
 }
 
 export interface HomeTwinScenarioDTO {

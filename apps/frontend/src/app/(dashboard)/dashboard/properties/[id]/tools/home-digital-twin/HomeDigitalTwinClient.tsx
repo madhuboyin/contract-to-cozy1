@@ -91,6 +91,28 @@ const COMPONENT_STATUS_LABEL: Record<string, string> = {
   RETIRED: 'Retired',
 };
 
+const IMPACT_TYPE_LABEL: Record<string, string> = {
+  UPFRONT_COST: 'Upfront Cost',
+  ANNUAL_SAVINGS: 'Annual Savings',
+  PAYBACK_PERIOD: 'Payback Period',
+  PROPERTY_VALUE_CHANGE: 'Property Value Impact',
+  RISK_REDUCTION: 'Risk Reduction',
+  ENERGY_USE_CHANGE: 'Energy Savings',
+  MAINTENANCE_COST_CHANGE: 'Maintenance Savings',
+  INSURANCE_IMPACT: 'Insurance Impact',
+  EMISSIONS_IMPACT: 'Emissions Reduction',
+  COMFORT_IMPACT: 'Comfort Impact',
+  CUSTOM: 'Summary',
+};
+
+const SCENARIO_STATUS_LABEL: Record<string, string> = {
+  DRAFT: 'Draft',
+  READY: 'Ready',
+  COMPUTED: 'Results Ready',
+  FAILED: 'Compute Failed',
+  ARCHIVED: 'Archived',
+};
+
 type UrgencyTone = 'danger' | 'elevated' | 'info';
 
 const URGENCY_TONE: Record<'HIGH' | 'MEDIUM' | 'LOW', UrgencyTone> = {
@@ -630,7 +652,9 @@ function ScenarioCard({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex flex-wrap items-center gap-1.5">
-              <StatusChip tone={statusTone}>{scenario.status}</StatusChip>
+              <StatusChip tone={statusTone}>
+                {SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
+              </StatusChip>
               <StatusChip tone="info">{SCENARIO_TYPE_LABEL[scenario.scenarioType]}</StatusChip>
               {scenario.isPinned && (
                 <span className="text-[11px] text-[hsl(var(--mobile-text-secondary))]">Pinned</span>
@@ -639,10 +663,12 @@ function ScenarioCard({
             <p className="text-base font-semibold leading-tight">{scenario.name}</p>
             {topImpact && (
               <p className="mt-0.5 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                {topImpact.label}
+                {IMPACT_TYPE_LABEL[topImpact.impactType] ?? topImpact.impactType}
                 {topImpact.valueNumeric != null
                   ? `: ${topImpact.unit === 'USD' ? formatUSD(topImpact.valueNumeric) : topImpact.valueNumeric}`
-                  : ''}
+                  : topImpact.valueText
+                    ? `: ${topImpact.valueText}`
+                    : ''}
               </p>
             )}
           </div>
@@ -701,7 +727,9 @@ function ScenarioDetailSheet({
         <div className="flex flex-1 flex-col overflow-y-auto px-5 py-5 space-y-5">
           {/* Status chips */}
           <div className="flex flex-wrap gap-2">
-            <StatusChip tone={statusTone}>{scenario.status}</StatusChip>
+            <StatusChip tone={statusTone}>
+              {SCENARIO_STATUS_LABEL[scenario.status] ?? scenario.status}
+            </StatusChip>
             <StatusChip tone="info">{SCENARIO_TYPE_LABEL[scenario.scenarioType]}</StatusChip>
           </div>
 
@@ -751,7 +779,7 @@ function ScenarioDetailSheet({
                         className="flex items-start justify-between gap-3 text-sm"
                       >
                         <span className="text-[hsl(var(--mobile-text-secondary))]">
-                          {impact.label}
+                          {IMPACT_TYPE_LABEL[impact.impactType] ?? impact.impactType}
                         </span>
                         <span
                           className={cn(
@@ -763,11 +791,17 @@ function ScenarioDetailSheet({
                                 : 'text-[hsl(var(--foreground))]',
                           )}
                         >
-                          {impact.valueNumeric != null
-                            ? impact.unit === 'USD'
-                              ? formatUSD(impact.valueNumeric)
-                              : `${impact.valueNumeric}${impact.unit ? ` ${impact.unit}` : ''}`
-                            : impact.valueText ?? '—'}
+                          {impact.impactType === 'PAYBACK_PERIOD' && impact.valueText
+                            ? impact.valueText
+                            : impact.impactType === 'COMFORT_IMPACT' && impact.valueText
+                              ? impact.valueText
+                              : impact.valueNumeric != null
+                                ? impact.unit === 'USD'
+                                  ? formatUSD(impact.valueNumeric)
+                                  : impact.unit === 'PERCENT'
+                                    ? `${impact.valueNumeric}%`
+                                    : `${impact.valueNumeric}${impact.unit ? ` ${impact.unit.toLowerCase()}` : ''}`
+                                : impact.valueText ?? '—'}
                         </span>
                       </div>
                     ))}
@@ -886,7 +920,8 @@ export default function HomeDigitalTwinClient() {
     queryKey: ['home-digital-twin', propertyId],
     queryFn: () => getHomeDigitalTwin(propertyId),
     enabled: !!propertyId,
-    retry: false,
+    retry: 1,
+    retryDelay: 1500,
   });
 
   // ── Recommendations query ───────────────────────────────────────────────────
@@ -992,7 +1027,9 @@ export default function HomeDigitalTwinClient() {
       toast({ title: 'Could not update scenario. Please try again.', variant: 'destructive' }),
   });
 
-  const twinNotFound = twinError;
+  // Distinguish "not yet built" (API returned null) from "failed to load" (request error)
+  const twinNotFound = !twinError && twin === null;
+  const twinLoadError = twinError;
   const isRefreshing = refreshMutation.isPending;
 
   return (
@@ -1020,6 +1057,23 @@ export default function HomeDigitalTwinClient() {
       {/* Content states */}
       {twinLoading ? (
         <DigitalTwinSkeleton />
+      ) : twinLoadError ? (
+        /* ── LOAD ERROR ─────────────────────────────────────────────────────── */
+        <EmptyStateCard
+          title="Couldn't load your home model"
+          description="There was a problem loading your digital twin. This is usually temporary."
+          action={
+            <Button
+              variant="outline"
+              onClick={() => refetchTwin()}
+              className="gap-2"
+              aria-label="Retry loading home model"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Try Again
+            </Button>
+          }
+        />
       ) : twinNotFound || !twin ? (
         /* ── NOT YET BUILT ──────────────────────────────────────────────────── */
         <EmptyStateCard
@@ -1078,6 +1132,12 @@ export default function HomeDigitalTwinClient() {
           )}
 
           {/* ── SUGGESTIONS ─────────────────────────────────────────────────── */}
+          {recLoading && (
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 w-32 rounded bg-gray-100" />
+              <div className="h-20 rounded-[22px] bg-gray-100" />
+            </div>
+          )}
           {!recLoading && recommendations && recommendations.length > 0 && (
             <MobileSection>
               <MobileSectionHeader
@@ -1128,10 +1188,10 @@ export default function HomeDigitalTwinClient() {
           )}
 
           {/* Empty scenarios state */}
-          {twin.recentScenarios.length === 0 && recommendations && recommendations.length === 0 && (
+          {twin.recentScenarios.length === 0 && !recLoading && recommendations && recommendations.length === 0 && (
             <EmptyStateCard
-              title="No scenarios yet"
-              description="Tap a suggested scenario above to run a what-if analysis, or refresh your model to generate new suggestions."
+              title="No what-if scenarios yet"
+              description="Refresh your model to generate suggestions, or add more details to your property profile to improve the analysis."
             />
           )}
         </>

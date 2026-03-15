@@ -238,7 +238,7 @@ function computeImpacts(
       },
       {
         impactType: 'MAINTENANCE_COST_CHANGE',
-        valueNumeric: -Math.round(annualMaintSavings),
+        valueNumeric: Math.round(annualMaintSavings),
         valueText: `Save ~$${Math.round(annualMaintSavings)}/yr on maintenance`,
         unit: 'USD',
         direction: annualMaintSavings > 0 ? 'POSITIVE' : 'NEUTRAL',
@@ -251,7 +251,7 @@ function computeImpacts(
     if (annualEnergySavings > 0) {
       impacts.push({
         impactType: 'ENERGY_USE_CHANGE',
-        valueNumeric: -Math.round(annualEnergySavings),
+        valueNumeric: Math.round(annualEnergySavings),
         valueText:
           efficiencyGainPct > 0
             ? `${efficiencyGainPct}% efficiency improvement`
@@ -725,6 +725,14 @@ export class HomeDigitalTwinScenarioService {
     });
     if (!scenario) {
       throw new APIError('Scenario not found', 404, 'SCENARIO_NOT_FOUND');
+    }
+
+    if (scenario.isArchived) {
+      throw new APIError(
+        'Archived scenarios cannot be recomputed. Restore the scenario first.',
+        409,
+        'SCENARIO_ARCHIVED',
+      );
     }
 
     const inputPayload = scenario.inputPayload as Record<string, unknown>;
