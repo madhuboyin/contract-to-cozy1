@@ -1712,6 +1712,8 @@ model Property {
   hiddenAssetMatches  PropertyHiddenAssetMatch[]
   hiddenAssetScanRuns PropertyHiddenAssetScanRun[]
 
+  neighborhoodEvents  PropertyNeighborhoodEvent[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -7042,6 +7044,52 @@ enum HomeTwinRunStatus {
   FAILED
 }
 
+// ============================================================================
+// NEIGHBORHOOD INTELLIGENCE ENGINE — ENUMS
+// ============================================================================
+
+enum NeighborhoodEventType {
+  TRANSIT_PROJECT
+  HIGHWAY_PROJECT
+  COMMERCIAL_DEVELOPMENT
+  RESIDENTIAL_DEVELOPMENT
+  INDUSTRIAL_PROJECT
+  WAREHOUSE_PROJECT
+  ZONING_CHANGE
+  SCHOOL_RATING_CHANGE
+  SCHOOL_BOUNDARY_CHANGE
+  FLOOD_MAP_UPDATE
+  UTILITY_INFRASTRUCTURE
+  PARK_DEVELOPMENT
+  LARGE_CONSTRUCTION
+}
+
+enum ImpactDirection {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+enum ImpactCategory {
+  PROPERTY_VALUE
+  RENTAL_DEMAND
+  TRAFFIC
+  NOISE
+  AMENITIES
+  INSURANCE_RISK
+  DEVELOPMENT_PRESSURE
+  LIVING_EXPERIENCE
+}
+
+enum DemographicSegment {
+  YOUNG_PROFESSIONALS
+  FAMILIES_WITH_CHILDREN
+  AFFLUENT_BUYERS
+  RETIREES
+  STUDENTS
+  RENTERS
+}
+
 // -- Models --
 
 // Canonical digital twin record — one per property.
@@ -7214,4 +7262,124 @@ model HomeTwinComputationRun {
   @@index([digitalTwinId, status])
   @@index([startedAt])
   @@map("home_twin_computation_runs")
+}
+
+// ============================================================================
+// NEIGHBORHOOD INTELLIGENCE ENGINE — MODELS
+// ============================================================================
+
+// Stores detected external infrastructure or planning events near a property.
+model NeighborhoodEvent {
+  id          String @id @default(cuid())
+
+  eventType   NeighborhoodEventType
+  title       String
+  description String?
+
+  latitude  Float
+  longitude Float
+
+  city    String?
+  state   String?
+  country String?
+
+  sourceName String?
+  sourceUrl  String?
+
+  announcedDate     DateTime?
+  expectedStartDate DateTime?
+  expectedEndDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  impacts         NeighborhoodImpact[]
+  propertyMatches PropertyNeighborhoodEvent[]
+  demographics    DemographicImpact[]
+
+  @@index([eventType])
+  @@index([latitude, longitude])
+  @@map("neighborhood_events")
+}
+
+// Links a property to nearby neighborhood events.
+model PropertyNeighborhoodEvent {
+  id         String @id @default(cuid())
+
+  propertyId String
+  eventId    String
+
+  distanceMiles Float
+
+  impactScore Int?
+
+  createdAt DateTime @default(now())
+
+  property Property          @relation(fields: [propertyId], references: [id])
+  event    NeighborhoodEvent @relation(fields: [eventId], references: [id])
+
+  @@index([propertyId])
+  @@index([eventId])
+  @@map("property_neighborhood_events")
+}
+
+// Stores predicted impacts from a neighborhood event.
+model NeighborhoodImpact {
+  id      String @id @default(cuid())
+
+  eventId String
+
+  category  ImpactCategory
+  direction ImpactDirection
+
+  description String?
+
+  confidence Float?
+
+  createdAt DateTime @default(now())
+
+  event NeighborhoodEvent @relation(fields: [eventId], references: [id])
+
+  @@index([eventId])
+  @@map("neighborhood_impacts")
+}
+
+// Stores predicted demographic shifts from a neighborhood event.
+model DemographicImpact {
+  id      String @id @default(cuid())
+
+  eventId String
+
+  segment DemographicSegment
+
+  description String?
+
+  confidence Float?
+
+  createdAt DateTime @default(now())
+
+  event NeighborhoodEvent @relation(fields: [eventId], references: [id])
+
+  @@index([eventId])
+  @@map("demographic_impacts")
+}
+
+// Tracks ingestion scan runs of public planning/infrastructure datasets.
+model NeighborhoodScanJob {
+  id String @id @default(cuid())
+
+  dataSource String
+  status     String
+
+  recordsFound Int?
+  recordsSaved Int?
+
+  startedAt   DateTime
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
+  @@index([dataSource])
+  @@map("neighborhood_scan_jobs")
 }
