@@ -287,6 +287,227 @@ async function getLastCompletedScanAt(propertyId: string): Promise<Date | null> 
 }
 
 // ============================================================================
+// INTERNAL PROPERTY FETCH (no ownership check — for background/system use)
+// ============================================================================
+
+type PropertyScanInput = Awaited<ReturnType<typeof assertPropertyForUser>>;
+
+async function fetchPropertyForScan(propertyId: string): Promise<PropertyScanInput | null> {
+  return prisma.property.findFirst({
+    where: { id: propertyId },
+    select: {
+      id: true,
+      homeownerProfileId: true,
+      state: true,
+      city: true,
+      zipCode: true,
+      yearBuilt: true,
+      propertySize: true,
+      propertyType: true,
+      ownershipType: true,
+      heatingType: true,
+      waterHeaterType: true,
+      roofType: true,
+      roofReplacementYear: true,
+      hasSecuritySystem: true,
+      hasIrrigation: true,
+      hasSumpPumpBackup: true,
+      primaryHeatingFuel: true,
+      lastAppraisedValue: true,
+      hasSmokeDetectors: true,
+      hasCoDetectors: true,
+      hasFireExtinguisher: true,
+      hasDrainageIssues: true,
+    },
+  });
+}
+
+// ============================================================================
+// CORE SCAN EXECUTION (shared by user-facing and internal paths)
+// ============================================================================
+
+async function executePropertyScan(
+  propertyId: string,
+  property: PropertyScanInput,
+): Promise<RefreshResultDTO> {
+  const startedAt = Date.now();
+
+  const scanRun = await prisma.propertyHiddenAssetScanRun.create({
+    data: {
+      propertyId,
+      status: PropertyHiddenAssetScanRunStatus.RUNNING,
+      startedAt: new Date(),
+    },
+  });
+
+  try {
+    const regionPairs = deriveRegionPairs(property);
+    const candidatePrograms = await fetchCandidatePrograms(regionPairs);
+
+    const attrs = buildPropertyAttributeMap(property);
+    const now = new Date();
+
+    // Evaluate each candidate program
+    const evalResults: ProgramEvalResult[] = [];
+    for (const prog of candidatePrograms) {
+      const engineInput = {
+        id: prog.id,
+        benefitEstimateMin: decimalToNumber(prog.benefitEstimateMin),
+        benefitEstimateMax: decimalToNumber(prog.benefitEstimateMax),
+        rules: prog.rules,
+      };
+      const result = evaluateProgram(attrs, engineInput, {
+        category: prog.category,
+        lastVerifiedAt: prog.lastVerifiedAt,
+      });
+      evalResults.push(result);
+    }
+
+    const matchedResults = evalResults.filter((r) => r.matched && r.confidenceLevel !== null);
+    const matchedProgramIds = new Set(matchedResults.map((r) => r.programId));
+
+    // Fetch existing matches to preserve user-set statuses
+    const existingMatches = await prisma.propertyHiddenAssetMatch.findMany({
+      where: { propertyId },
+      select: { id: true, programId: true, status: true },
+    });
+    const existingByProgramId = new Map(existingMatches.map((m) => [m.programId, m]));
+
+    // Upsert matched programs
+    for (const result of matchedResults) {
+      const existing = existingByProgramId.get(result.programId);
+      const preserveStatus =
+        existing?.status === PropertyHiddenAssetMatchStatus.DISMISSED ||
+        existing?.status === PropertyHiddenAssetMatchStatus.CLAIMED;
+
+      await prisma.propertyHiddenAssetMatch.upsert({
+        where: {
+          propertyId_programId: {
+            propertyId,
+            programId: result.programId,
+          },
+        },
+        update: {
+          confidenceLevel: result.confidenceLevel!,
+          estimatedValueMin: result.estimatedValueMin ?? null,
+          estimatedValueMax: result.estimatedValueMax ?? null,
+          matchedRuleCount: result.matchedRuleCount,
+          totalRuleCount: result.totalRuleCount,
+          matchReasons: result.matchReasons,
+          lastEvaluatedAt: now,
+          // Only update status if the user hasn't explicitly acted on this match
+          ...(preserveStatus ? {} : { status: PropertyHiddenAssetMatchStatus.DETECTED }),
+        },
+        create: {
+          propertyId,
+          programId: result.programId,
+          confidenceLevel: result.confidenceLevel!,
+          estimatedValueMin:
+            result.estimatedValueMin != null ? result.estimatedValueMin : undefined,
+          estimatedValueMax:
+            result.estimatedValueMax != null ? result.estimatedValueMax : undefined,
+          matchedRuleCount: result.matchedRuleCount,
+          totalRuleCount: result.totalRuleCount,
+          matchReasons: result.matchReasons,
+          status: PropertyHiddenAssetMatchStatus.DETECTED,
+          lastEvaluatedAt: now,
+          firstDetectedAt: now,
+        },
+      });
+    }
+
+    // Mark prior matches whose programs are no longer in the active candidate set
+    let matchesExpired = 0;
+    let matchesInactivated = 0;
+
+    for (const existing of existingMatches) {
+      if (
+        existing.status === PropertyHiddenAssetMatchStatus.DISMISSED ||
+        existing.status === PropertyHiddenAssetMatchStatus.CLAIMED
+      ) {
+        continue; // Never auto-change user-set terminal statuses
+      }
+
+      if (!matchedProgramIds.has(existing.programId)) {
+        const prog = await prisma.hiddenAssetProgram.findUnique({
+          where: { id: existing.programId },
+          select: { isActive: true, expiresAt: true },
+        });
+
+        if (!prog) continue;
+
+        const isExpired = prog.expiresAt != null && prog.expiresAt <= now;
+        const isInactive = !prog.isActive;
+
+        if (isExpired) {
+          await prisma.propertyHiddenAssetMatch.update({
+            where: { id: existing.id },
+            data: { status: PropertyHiddenAssetMatchStatus.EXPIRED, lastEvaluatedAt: now },
+          });
+          matchesExpired++;
+        } else if (isInactive) {
+          await prisma.propertyHiddenAssetMatch.update({
+            where: { id: existing.id },
+            data: { status: PropertyHiddenAssetMatchStatus.INACTIVE, lastEvaluatedAt: now },
+          });
+          matchesInactivated++;
+        }
+      }
+    }
+
+    // Complete the scan run
+    await prisma.propertyHiddenAssetScanRun.update({
+      where: { id: scanRun.id },
+      data: {
+        status: PropertyHiddenAssetScanRunStatus.COMPLETED,
+        completedAt: new Date(),
+        programsEvaluated: candidatePrograms.length,
+        matchesFound: matchedResults.length,
+      },
+    });
+
+    // Fetch fresh match list for response
+    const freshMatches = await prisma.propertyHiddenAssetMatch.findMany({
+      where: {
+        propertyId,
+        status: { in: [PropertyHiddenAssetMatchStatus.DETECTED, PropertyHiddenAssetMatchStatus.VIEWED] },
+      },
+      include: { program: true },
+      orderBy: [{ confidenceLevel: 'asc' }, { lastEvaluatedAt: 'desc' }],
+    });
+
+    const durationMs = Date.now() - startedAt;
+    console.log(
+      `[HiddenAssets] Scan complete for property ${propertyId}: ` +
+        `evaluated=${candidatePrograms.length} matched=${matchedResults.length} ` +
+        `expired=${matchesExpired} inactivated=${matchesInactivated} duration=${durationMs}ms`,
+    );
+
+    return {
+      scanRunId: scanRun.id,
+      propertyId,
+      programsEvaluated: candidatePrograms.length,
+      matchesFound: matchedResults.length,
+      matchesExpired,
+      matchesInactivated,
+      durationMs,
+      matches: freshMatches.map(serializeMatch),
+    };
+  } catch (err) {
+    await prisma.propertyHiddenAssetScanRun.update({
+      where: { id: scanRun.id },
+      data: {
+        status: PropertyHiddenAssetScanRunStatus.FAILED,
+        completedAt: new Date(),
+        notes: err instanceof Error ? err.message : String(err),
+      },
+    });
+    console.error(`[HiddenAssets] Scan failed for property ${propertyId}:`, err);
+    throw err;
+  }
+}
+
+// ============================================================================
 // SERVICE CLASS
 // ============================================================================
 
@@ -313,196 +534,27 @@ export class HiddenAssetService {
   }
 
   /**
-   * Runs a full detection scan for a property:
-   * 1. Loads property data
-   * 2. Derives candidate region keys
-   * 3. Fetches active/non-expired programs for those regions
-   * 4. Evaluates each program against property attributes
-   * 5. Upserts match rows (preserving DISMISSED/CLAIMED status)
-   * 6. Expires/deactivates stale prior matches
-   * 7. Writes a scan run record
+   * Runs a full detection scan for a property, verifying userId ownership.
+   * Used by the user-facing POST /refresh endpoint.
    */
   async refreshMatchesForProperty(
     propertyId: string,
     userId: string,
   ): Promise<RefreshResultDTO> {
-    const startedAt = Date.now();
     const property = await assertPropertyForUser(propertyId, userId);
+    return executePropertyScan(propertyId, property);
+  }
 
-    const scanRun = await prisma.propertyHiddenAssetScanRun.create({
-      data: {
-        propertyId,
-        status: PropertyHiddenAssetScanRunStatus.RUNNING,
-        startedAt: new Date(),
-      },
-    });
-
-    try {
-      const regionPairs = deriveRegionPairs(property);
-      const candidatePrograms = await fetchCandidatePrograms(regionPairs);
-
-      const attrs = buildPropertyAttributeMap(property);
-      const now = new Date();
-
-      // Evaluate each candidate program
-      const evalResults: ProgramEvalResult[] = [];
-      for (const prog of candidatePrograms) {
-        const engineInput = {
-          id: prog.id,
-          benefitEstimateMin: decimalToNumber(prog.benefitEstimateMin),
-          benefitEstimateMax: decimalToNumber(prog.benefitEstimateMax),
-          rules: prog.rules,
-        };
-        const result = evaluateProgram(attrs, engineInput, {
-          category: prog.category,
-          lastVerifiedAt: prog.lastVerifiedAt,
-        });
-        evalResults.push(result);
-      }
-
-      const matchedResults = evalResults.filter((r) => r.matched && r.confidenceLevel !== null);
-      const matchedProgramIds = new Set(matchedResults.map((r) => r.programId));
-
-      // Fetch existing matches to preserve user-set statuses
-      const existingMatches = await prisma.propertyHiddenAssetMatch.findMany({
-        where: { propertyId },
-        select: { id: true, programId: true, status: true },
-      });
-      const existingByProgramId = new Map(existingMatches.map((m) => [m.programId, m]));
-
-      // Upsert matched programs
-      for (const result of matchedResults) {
-        const existing = existingByProgramId.get(result.programId);
-        const preserveStatus =
-          existing?.status === PropertyHiddenAssetMatchStatus.DISMISSED ||
-          existing?.status === PropertyHiddenAssetMatchStatus.CLAIMED;
-
-        await prisma.propertyHiddenAssetMatch.upsert({
-          where: {
-            propertyId_programId: {
-              propertyId,
-              programId: result.programId,
-            },
-          },
-          update: {
-            confidenceLevel: result.confidenceLevel!,
-            estimatedValueMin: result.estimatedValueMin ?? null,
-            estimatedValueMax: result.estimatedValueMax ?? null,
-            matchedRuleCount: result.matchedRuleCount,
-            totalRuleCount: result.totalRuleCount,
-            matchReasons: result.matchReasons,
-            lastEvaluatedAt: now,
-            // Only update status if the user hasn't explicitly acted on this match
-            ...(preserveStatus ? {} : { status: PropertyHiddenAssetMatchStatus.DETECTED }),
-          },
-          create: {
-            propertyId,
-            programId: result.programId,
-            confidenceLevel: result.confidenceLevel!,
-            estimatedValueMin:
-              result.estimatedValueMin != null ? result.estimatedValueMin : undefined,
-            estimatedValueMax:
-              result.estimatedValueMax != null ? result.estimatedValueMax : undefined,
-            matchedRuleCount: result.matchedRuleCount,
-            totalRuleCount: result.totalRuleCount,
-            matchReasons: result.matchReasons,
-            status: PropertyHiddenAssetMatchStatus.DETECTED,
-            lastEvaluatedAt: now,
-            firstDetectedAt: now,
-          },
-        });
-      }
-
-      // Mark prior matches whose programs are no longer in the active candidate set
-      let matchesExpired = 0;
-      let matchesInactivated = 0;
-
-      for (const existing of existingMatches) {
-        if (
-          existing.status === PropertyHiddenAssetMatchStatus.DISMISSED ||
-          existing.status === PropertyHiddenAssetMatchStatus.CLAIMED
-        ) {
-          continue; // Never auto-change user-set terminal statuses
-        }
-
-        if (!matchedProgramIds.has(existing.programId)) {
-          // Check whether the program is expired or inactive to set the right status
-          const prog = await prisma.hiddenAssetProgram.findUnique({
-            where: { id: existing.programId },
-            select: { isActive: true, expiresAt: true },
-          });
-
-          if (!prog) continue;
-
-          const isExpired = prog.expiresAt != null && prog.expiresAt <= now;
-          const isInactive = !prog.isActive;
-
-          if (isExpired) {
-            await prisma.propertyHiddenAssetMatch.update({
-              where: { id: existing.id },
-              data: { status: PropertyHiddenAssetMatchStatus.EXPIRED, lastEvaluatedAt: now },
-            });
-            matchesExpired++;
-          } else if (isInactive) {
-            await prisma.propertyHiddenAssetMatch.update({
-              where: { id: existing.id },
-              data: { status: PropertyHiddenAssetMatchStatus.INACTIVE, lastEvaluatedAt: now },
-            });
-            matchesInactivated++;
-          }
-        }
-      }
-
-      // Complete the scan run
-      await prisma.propertyHiddenAssetScanRun.update({
-        where: { id: scanRun.id },
-        data: {
-          status: PropertyHiddenAssetScanRunStatus.COMPLETED,
-          completedAt: new Date(),
-          programsEvaluated: candidatePrograms.length,
-          matchesFound: matchedResults.length,
-        },
-      });
-
-      // Fetch fresh match list for response
-      const freshMatches = await prisma.propertyHiddenAssetMatch.findMany({
-        where: {
-          propertyId,
-          status: { in: [PropertyHiddenAssetMatchStatus.DETECTED, PropertyHiddenAssetMatchStatus.VIEWED] },
-        },
-        include: { program: true },
-        orderBy: [{ confidenceLevel: 'asc' }, { lastEvaluatedAt: 'desc' }],
-      });
-
-      const durationMs = Date.now() - startedAt;
-      console.log(
-        `[HiddenAssets] Scan complete for property ${propertyId}: ` +
-          `evaluated=${candidatePrograms.length} matched=${matchedResults.length} ` +
-          `expired=${matchesExpired} inactivated=${matchesInactivated} duration=${durationMs}ms`,
-      );
-
-      return {
-        scanRunId: scanRun.id,
-        propertyId,
-        programsEvaluated: candidatePrograms.length,
-        matchesFound: matchedResults.length,
-        matchesExpired,
-        matchesInactivated,
-        durationMs,
-        matches: freshMatches.map(serializeMatch),
-      };
-    } catch (err) {
-      await prisma.propertyHiddenAssetScanRun.update({
-        where: { id: scanRun.id },
-        data: {
-          status: PropertyHiddenAssetScanRunStatus.FAILED,
-          completedAt: new Date(),
-          notes: err instanceof Error ? err.message : String(err),
-        },
-      });
-      console.error(`[HiddenAssets] Scan failed for property ${propertyId}:`, err);
-      throw err;
+  /**
+   * Runs a full detection scan without a userId ownership check.
+   * Used by background jobs, queue workers, and system-triggered scans.
+   */
+  async refreshMatchesInternal(propertyId: string): Promise<RefreshResultDTO> {
+    const property = await fetchPropertyForScan(propertyId);
+    if (!property) {
+      throw new Error(`Property ${propertyId} not found for internal scan.`);
     }
+    return executePropertyScan(propertyId, property);
   }
 
   /**

@@ -11,6 +11,7 @@ import {
 } from '../config/risk-job-types';
 import RiskAssessmentService from './RiskAssessment.service';
 import { FinancialReportService } from './FinancialReport.service';
+import { HiddenAssetService } from './hiddenAssets.service';
 
 // -----------------------------------------------------------------------------
 // Shared Redis Connection Configuration
@@ -70,6 +71,7 @@ export const smsNotificationQueue = new Queue<SmsNotificationJobPayload>(
 // -----------------------------------------------------------------------------
 const riskAssessmentService = RiskAssessmentService;
 const financialReportService = new FinancialReportService();
+const hiddenAssetService = new HiddenAssetService();
 
 // -----------------------------------------------------------------------------
 // Job Queue Service
@@ -115,8 +117,20 @@ export class JobQueueService {
       }
     );
 
+    await propertyIntelligenceQueue.add(
+      PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS,
+      {
+        propertyId,
+        jobType: PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS,
+      },
+      {
+        jobId: `${propertyId}-HIDDEN-ASSETS`,
+        ...defaultOptions,
+      }
+    );
+
     console.log(
-      `[QUEUE-MANAGER] Risk + FES jobs enqueued for property ${propertyId}`
+      `[QUEUE-MANAGER] Risk + FES + HiddenAssets jobs enqueued for property ${propertyId}`
     );
   }
 
@@ -136,6 +150,10 @@ export class JobQueueService {
 
         case PropertyIntelligenceJobType.CALCULATE_FES:
           await financialReportService.calculateAndSaveFES(propertyId);
+          break;
+
+        case PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS:
+          await hiddenAssetService.refreshMatchesInternal(propertyId);
           break;
 
         default:

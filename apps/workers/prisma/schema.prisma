@@ -1699,6 +1699,9 @@ model Property {
   homeRiskReplayRuns         HomeRiskReplayRun[]
   homeRiskReplayEventMatches HomeRiskReplayEventMatch[]
 
+  hiddenAssetMatches  PropertyHiddenAssetMatch[]
+  hiddenAssetScanRuns PropertyHiddenAssetScanRun[]
+
   estimatedMaintenancePremiumCents Int @default(0)
   isEquityVerified      Boolean @default(false)
 
@@ -6546,4 +6549,195 @@ model HomeRiskReplayEventMatch {
   @@index([homeRiskEventId])
   @@index([impactLevel])
   @@map("home_risk_replay_event_matches")
+}
+
+// ============================================================================
+// HIDDEN ASSET FINDER
+// ============================================================================
+
+enum HiddenAssetCategory {
+  TAX_EXEMPTION
+  REBATE
+  UTILITY_INCENTIVE
+  INSURANCE_DISCOUNT
+  ENERGY_CREDIT
+  LOCAL_GRANT
+  HISTORIC_BENEFIT
+  STORM_RESILIENCE
+}
+
+enum HiddenAssetRegionType {
+  COUNTRY
+  STATE
+  COUNTY
+  CITY
+  ZIP
+  UTILITY
+  HAZARD_ZONE
+  HISTORIC_DISTRICT
+}
+
+enum HiddenAssetBenefitType {
+  TAX_SAVINGS
+  TAX_CREDIT
+  REBATE
+  DISCOUNT
+  GRANT
+  CREDIT
+  OTHER
+}
+
+enum HiddenAssetRuleOperator {
+  EQUALS
+  NOT_EQUALS
+  IN
+  NOT_IN
+  GREATER_THAN
+  GREATER_THAN_OR_EQUAL
+  LESS_THAN
+  LESS_THAN_OR_EQUAL
+  EXISTS
+  NOT_EXISTS
+  CONTAINS
+  BOOLEAN_IS
+}
+
+enum HiddenAssetConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum PropertyHiddenAssetMatchStatus {
+  DETECTED
+  VIEWED
+  DISMISSED
+  CLAIMED
+  EXPIRED
+  INACTIVE
+}
+
+enum PropertyHiddenAssetScanRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model HiddenAssetProgram {
+  id          String @id @default(uuid())
+  name        String
+  category    HiddenAssetCategory
+  description String?
+
+  regionType  HiddenAssetRegionType
+  regionValue String
+
+  benefitType        HiddenAssetBenefitType
+  benefitEstimateMin Decimal? @db.Decimal(12, 2)
+  benefitEstimateMax Decimal? @db.Decimal(12, 2)
+  currency           String   @default("USD")
+
+  sourceUrl        String?
+  sourceLabel      String?
+  eligibilityNotes String?
+  confidenceWeight Float?
+
+  expiresAt      DateTime?
+  lastVerifiedAt DateTime?
+  isActive       Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rules   HiddenAssetProgramRule[]
+  matches PropertyHiddenAssetMatch[]
+
+  @@index([category])
+  @@index([regionType])
+  @@index([regionValue])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([regionType, regionValue, isActive])
+  @@map("hidden_asset_programs")
+}
+
+model HiddenAssetProgramRule {
+  id        String @id @default(uuid())
+  programId String
+
+  attribute String
+  operator  HiddenAssetRuleOperator
+  value     String
+
+  sortOrder Int     @default(0)
+  groupKey  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  program HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+  @@index([programId, sortOrder])
+  @@map("hidden_asset_program_rules")
+}
+
+model PropertyHiddenAssetMatch {
+  id         String @id @default(uuid())
+  propertyId String
+  programId  String
+
+  confidenceLevel   HiddenAssetConfidenceLevel
+  estimatedValue    Decimal? @db.Decimal(12, 2)
+  estimatedValueMin Decimal? @db.Decimal(12, 2)
+  estimatedValueMax Decimal? @db.Decimal(12, 2)
+
+  status           PropertyHiddenAssetMatchStatus @default(DETECTED)
+  matchedRuleCount Int?
+  totalRuleCount   Int?
+  matchReasons     Json?
+
+  lastEvaluatedAt DateTime @default(now())
+  firstDetectedAt DateTime @default(now())
+  dismissedAt     DateTime?
+  claimedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program  HiddenAssetProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, programId])
+  @@index([propertyId])
+  @@index([programId])
+  @@index([confidenceLevel])
+  @@index([status])
+  @@index([lastEvaluatedAt])
+  @@index([propertyId, status, confidenceLevel])
+  @@map("property_hidden_asset_matches")
+}
+
+model PropertyHiddenAssetScanRun {
+  id         String @id @default(uuid())
+  propertyId String
+
+  status    PropertyHiddenAssetScanRunStatus @default(PENDING)
+  startedAt DateTime                         @default(now())
+
+  completedAt       DateTime?
+  programsEvaluated Int?
+  matchesFound      Int?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([propertyId, status])
+  @@index([startedAt])
+  @@map("property_hidden_asset_scan_runs")
 }

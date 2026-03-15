@@ -7,6 +7,7 @@
 export enum PropertyIntelligenceJobType {
   CALCULATE_RISK_REPORT = 'CALCULATE_RISK_REPORT',
   CALCULATE_FES = 'CALCULATE_FES',
+  CALCULATE_HIDDEN_ASSETS = 'CALCULATE_HIDDEN_ASSETS',
 }
 
 export interface PropertyIntelligenceJobPayload {

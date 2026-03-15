@@ -32,7 +32,11 @@ import { freezeRiskIncidentsJob } from './jobs/freezeRiskIncidents.job';
 import { cleanupInventoryDraftsJob } from './jobs/cleanupInventoryDrafts.job';
 import { ingestRadarSignalsJob } from './jobs/ingestRadarSignals.job';
 import { ingestHomeRiskEventsJob } from './jobs/ingestHomeRiskEvents.job';
+import { runHiddenAssetRefreshJob } from './jobs/hiddenAssetRefresh.job';
 import { prisma } from './lib/prisma';
+import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
+
+const hiddenAssetService = new HiddenAssetService();
 
 // =============================================================================
 // FIX: Update queue configuration to match backend
@@ -43,6 +47,7 @@ const QUEUE_NAME = 'property-intelligence-queue'; // FIXED: Was 'main-background
 enum PropertyIntelligenceJobType {
   CALCULATE_RISK_REPORT = 'CALCULATE_RISK_REPORT',
   CALCULATE_FES = 'CALCULATE_FES',
+  CALCULATE_HIDDEN_ASSETS = 'CALCULATE_HIDDEN_ASSETS',
 }
 
 interface PropertyIntelligenceJobPayload {
@@ -717,6 +722,26 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
 }
 
 /**
+ * Process hidden asset scan for a single property
+ */
+async function processHiddenAssetScan(jobData: PropertyIntelligenceJobPayload) {
+  const { propertyId } = jobData;
+  console.log(`[${new Date().toISOString()}] Processing hidden asset scan for property ${propertyId}...`);
+
+  try {
+    const result = await hiddenAssetService.refreshMatchesInternal(propertyId);
+    console.log(
+      `✅ Hidden asset scan completed for property ${propertyId}. ` +
+      `Evaluated: ${result.programsEvaluated}, Matched: ${result.matchesFound}, ` +
+      `Expired: ${result.matchesExpired}, Inactivated: ${result.matchesInactivated}`
+    );
+  } catch (error) {
+    console.error(`❌ Error running hidden asset scan for property ${propertyId}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Main worker startup function
  */
 function startWorker() {
@@ -797,6 +822,21 @@ function startWorker() {
     { timezone: 'America/New_York' }
   );
   console.log('   - Weekly score snapshots: Monday at 4:00 AM EST');
+
+  cron.schedule(
+    '0 3 * * 0',
+    async () => {
+      console.log('[HIDDEN-ASSETS] Running weekly batch refresh job...');
+      try {
+        await runHiddenAssetRefreshJob();
+        console.log('[HIDDEN-ASSETS] ✅ Weekly batch refresh completed');
+      } catch (error) {
+        console.error('[HIDDEN-ASSETS] ❌ Weekly batch refresh failed:', error);
+      }
+    },
+    { timezone: 'America/New_York' }
+  );
+  console.log('   - Hidden asset batch refresh: Sunday at 3:00 AM EST');
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================
@@ -816,6 +856,10 @@ function startWorker() {
             
           case PropertyIntelligenceJobType.CALCULATE_FES:
             await processFESCalculation(job.data);
+            break;
+
+          case PropertyIntelligenceJobType.CALCULATE_HIDDEN_ASSETS:
+            await processHiddenAssetScan(job.data);
             break;
 
           default:
