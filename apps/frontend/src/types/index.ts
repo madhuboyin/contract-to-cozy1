@@ -2390,3 +2390,165 @@ export interface RadarMatchDetail {
   updatedAt: string;
 }
 // =============================================================================
+
+// ============================================================================
+// HOME DIGITAL TWIN
+// ============================================================================
+
+export type HomeDigitalTwinStatus = 'DRAFT' | 'ACTIVE' | 'STALE' | 'ARCHIVED';
+
+export type HomeTwinComponentType =
+  | 'HVAC'
+  | 'WATER_HEATER'
+  | 'ROOF'
+  | 'PLUMBING'
+  | 'ELECTRICAL'
+  | 'INSULATION'
+  | 'WINDOWS'
+  | 'SOLAR'
+  | 'APPLIANCE'
+  | 'FLOORING'
+  | 'EXTERIOR'
+  | 'FOUNDATION'
+  | 'OTHER';
+
+export type HomeTwinComponentStatus = 'GOOD' | 'FAIR' | 'POOR' | 'CRITICAL' | 'UNKNOWN';
+
+export type HomeTwinScenarioType =
+  | 'REPLACE_COMPONENT'
+  | 'UPGRADE_COMPONENT'
+  | 'ENERGY_IMPROVEMENT'
+  | 'RESILIENCE_IMPROVEMENT'
+  | 'ADD_FEATURE'
+  | 'RENOVATION'
+  | 'REMOVE_FEATURE'
+  | 'CUSTOM';
+
+export type HomeTwinScenarioStatus = 'DRAFT' | 'READY' | 'COMPUTED' | 'FAILED' | 'ARCHIVED';
+
+export type HomeTwinImpactType =
+  | 'COST_SAVINGS'
+  | 'ENERGY_SAVINGS'
+  | 'RISK_REDUCTION'
+  | 'PROPERTY_VALUE'
+  | 'COMFORT_IMPACT'
+  | 'INSURANCE_IMPACT'
+  | 'CARBON_OFFSET'
+  | 'CUSTOM';
+
+export type HomeTwinImpactDirection = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+
+export type HomeTwinDataQualityDimension =
+  | 'PROPERTY_PROFILE'
+  | 'SYSTEMS'
+  | 'APPLIANCES'
+  | 'DOCUMENTATION'
+  | 'COST_BASIS'
+  | 'ENERGY_BASIS'
+  | 'RISK_BASIS';
+
+export type HomeTwinDataQualityStatus = 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT' | 'UNKNOWN';
+
+export interface HomeTwinComponentDTO {
+  id: string;
+  componentType: HomeTwinComponentType;
+  label: string | null;
+  status: HomeTwinComponentStatus;
+  sourceType: string;
+  sourceReferenceId: string | null;
+  installYear: number | null;
+  estimatedAgeYears: number | null;
+  usefulLifeYears: number | null;
+  conditionScore: number | null;
+  failureRiskScore: number | null;
+  replacementCostEstimate: number | null;
+  annualOperatingCostEstimate: number | null;
+  annualMaintenanceCostEstimate: number | null;
+  energyImpactScore: number | null;
+  resilienceImpactScore: number | null;
+  confidenceScore: number | null;
+  isUserConfirmed: boolean;
+  metadata: Record<string, unknown> | null;
+  lastModeledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HomeTwinDataQualityDTO {
+  dimension: HomeTwinDataQualityDimension;
+  status: HomeTwinDataQualityStatus;
+  score: number | null;
+  notes: string | null;
+  evaluatedAt: string | null;
+}
+
+export interface HomeTwinScenarioImpactDTO {
+  id: string;
+  impactType: HomeTwinImpactType;
+  direction: HomeTwinImpactDirection;
+  label: string;
+  valueNumeric: number | null;
+  valueText: string | null;
+  unit: string | null;
+  confidenceScore: number | null;
+  sortOrder: number;
+  notes: string | null;
+}
+
+export interface HomeTwinScenarioDTO {
+  id: string;
+  name: string;
+  scenarioType: HomeTwinScenarioType;
+  status: HomeTwinScenarioStatus;
+  description: string | null;
+  inputPayload: Record<string, unknown>;
+  baselineSnapshot: Record<string, unknown> | null;
+  isPinned: boolean;
+  isArchived: boolean;
+  lastComputedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  impacts: HomeTwinScenarioImpactDTO[];
+}
+
+export interface HomeDigitalTwinDTO {
+  id: string;
+  propertyId: string;
+  status: HomeDigitalTwinStatus;
+  version: number;
+  completenessScore: number | null;
+  confidenceScore: number | null;
+  lastComputedAt: string | null;
+  lastSyncedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  components: HomeTwinComponentDTO[];
+  dataQuality: HomeTwinDataQualityDTO[];
+  recentScenarios: HomeTwinScenarioDTO[];
+}
+
+export interface ScenarioSuggestionDTO {
+  key: string;
+  title: string;
+  description: string;
+  scenarioType: HomeTwinScenarioType;
+  componentType: HomeTwinComponentType | null;
+  urgency: 'HIGH' | 'MEDIUM' | 'LOW';
+  estimatedUpfrontCost: number | null;
+  reason: string;
+  suggestedInputPayload: Record<string, unknown>;
+}
+
+export interface CreateScenarioInput {
+  name: string;
+  scenarioType: HomeTwinScenarioType;
+  description?: string | null;
+  inputPayload: Record<string, unknown>;
+  isPinned?: boolean;
+}
+
+export interface UpdateScenarioInput {
+  isPinned?: boolean;
+  isArchived?: boolean;
+}

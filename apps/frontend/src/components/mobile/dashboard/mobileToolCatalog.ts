@@ -428,4 +428,14 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/hidden-asset-finder(\/|$)/.test(pathname),
   },
+  {
+    key: 'home-digital-twin',
+    name: 'Home Digital Twin',
+    description: 'A living model of your home — systems, age, risk, and what-if scenarios',
+    hrefSuffix: 'tools/home-digital-twin',
+    navTarget: 'tool:home-digital-twin',
+    icon: resolveToolIcon('home', 'home-digital-twin'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-twin(\/|$)/.test(pathname),
+  },
 ];

@@ -2982,6 +2982,97 @@ class APIClient {
     );
     return res.data?.match ?? null;
   }
+
+  // ==========================================================================
+  // HOME DIGITAL TWIN
+  // ==========================================================================
+
+  async getHomeDigitalTwin(
+    propertyId: string
+  ): Promise<import('@/types').HomeDigitalTwinDTO | null> {
+    const res = await this.get<{ twin: import('@/types').HomeDigitalTwinDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin`
+    );
+    return res.data?.twin ?? null;
+  }
+
+  async initHomeDigitalTwin(
+    propertyId: string,
+    forceRefresh?: boolean
+  ): Promise<import('@/types').HomeDigitalTwinDTO | null> {
+    const res = await this.post<{ twin: import('@/types').HomeDigitalTwinDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/init`,
+      { forceRefresh: forceRefresh ?? false }
+    );
+    return res.data?.twin ?? null;
+  }
+
+  async refreshHomeDigitalTwin(
+    propertyId: string
+  ): Promise<import('@/types').HomeDigitalTwinDTO | null> {
+    const res = await this.post<{ twin: import('@/types').HomeDigitalTwinDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/refresh`,
+      {}
+    );
+    return res.data?.twin ?? null;
+  }
+
+  async getDigitalTwinRecommendations(
+    propertyId: string
+  ): Promise<import('@/types').ScenarioSuggestionDTO[] | null> {
+    const res = await this.get<{ recommendations: import('@/types').ScenarioSuggestionDTO[] }>(
+      `/api/properties/${propertyId}/home-digital-twin/recommended-scenarios`
+    );
+    return res.data?.recommendations ?? null;
+  }
+
+  async listDigitalTwinScenarios(
+    propertyId: string,
+    params?: { status?: string; includeArchived?: boolean }
+  ): Promise<import('@/types').HomeTwinScenarioDTO[] | null> {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.includeArchived) qs.set('includeArchived', 'true');
+    const q = qs.toString() ? `?${qs.toString()}` : '';
+    const res = await this.get<{ scenarios: import('@/types').HomeTwinScenarioDTO[] }>(
+      `/api/properties/${propertyId}/home-digital-twin/scenarios${q}`
+    );
+    return res.data?.scenarios ?? null;
+  }
+
+  async createDigitalTwinScenario(
+    propertyId: string,
+    input: import('@/types').CreateScenarioInput
+  ): Promise<import('@/types').HomeTwinScenarioDTO | null> {
+    const res = await this.post<{ scenario: import('@/types').HomeTwinScenarioDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/scenarios`,
+      input
+    );
+    return res.data?.scenario ?? null;
+  }
+
+  async computeDigitalTwinScenario(
+    propertyId: string,
+    scenarioId: string
+  ): Promise<import('@/types').HomeTwinScenarioDTO | null> {
+    const res = await this.post<{ scenario: import('@/types').HomeTwinScenarioDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/scenarios/${scenarioId}/compute`,
+      {}
+    );
+    return res.data?.scenario ?? null;
+  }
+
+  async updateDigitalTwinScenario(
+    propertyId: string,
+    scenarioId: string,
+    input: import('@/types').UpdateScenarioInput
+  ): Promise<import('@/types').HomeTwinScenarioDTO | null> {
+    const res = await this.patch<{ scenario: import('@/types').HomeTwinScenarioDTO }>(
+      `/api/properties/${propertyId}/home-digital-twin/scenarios/${scenarioId}`,
+      input
+    );
+    return res.data?.scenario ?? null;
+  }
 }
 
 // Export singleton instance
