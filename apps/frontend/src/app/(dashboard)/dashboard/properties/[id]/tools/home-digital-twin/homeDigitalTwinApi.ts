@@ -8,7 +8,14 @@ import type {
 } from '@/types';
 
 export async function getHomeDigitalTwin(propertyId: string): Promise<HomeDigitalTwinDTO | null> {
-  return api.getHomeDigitalTwin(propertyId);
+  try {
+    return await api.getHomeDigitalTwin(propertyId);
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'status' in err && (err as { status: unknown }).status === 404) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function initHomeDigitalTwin(
