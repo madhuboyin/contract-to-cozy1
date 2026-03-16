@@ -71,8 +71,8 @@ COPY apps/backend/src/services/analytics/emitter.ts src/shared/backend/services/
 COPY apps/backend/src/services/analytics/service.ts src/shared/backend/services/analytics/
 COPY apps/backend/src/services/analytics/repository.ts src/shared/backend/services/analytics/
 COPY apps/backend/src/services/analytics/taxonomy.ts src/shared/backend/services/analytics/
-# Replace zod-dependent schemas.ts with a type-only stub (zod is not a workers dependency)
-RUN printf 'export type TrackEventInput = Record<string, unknown>;\nexport type TrackFeatureOpenedInput = Record<string, unknown>;\nexport type TrackDecisionGuidedInput = Record<string, unknown>;\nexport type TrackPropertyActivatedInput = Record<string, unknown>;\nexport type TrackToolUsedInput = Record<string, unknown>;\nexport const TrackEventSchema: unknown = null;\nexport const TrackFeatureOpenedSchema: unknown = null;\nexport const TrackDecisionGuidedSchema: unknown = null;\nexport const TrackPropertyActivatedSchema: unknown = null;\nexport const TrackToolUsedSchema: unknown = null;\n' > src/shared/backend/services/analytics/schemas.ts
+# Replace zod-dependent schemas.ts with a typed pass-through stub (zod is not a workers dependency)
+COPY apps/workers/stubs/analytics-schemas.ts src/shared/backend/services/analytics/schemas.ts
 # Copy neighborhood intelligence files needed by refreshNeighborhoodEvents.job.ts
 # and ingestNeighborhoodDummyEvents.job.ts
 COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.ts src/shared/backend/neighborhoodIntelligence/
