@@ -37,6 +37,7 @@ import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.j
 import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNotification.job';
 import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummyEvents.job';
 import { runHabitGenerationJob } from './jobs/habitGeneration.job';
+import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
 
@@ -745,102 +746,90 @@ async function processHiddenAssetScan(jobData: PropertyIntelligenceJobPayload) {
   }
 }
 
+// =============================================================================
+// REGISTRY-DRIVEN CRON SCHEDULING
+// =============================================================================
+// All production cron jobs are defined in:
+//   apps/backend/src/config/workerJobRegistry.ts
+//
+// To add a new cron job:
+//   1. Add an entry to JOB_REGISTRY in workerJobRegistry.ts
+//   2. Add a handler here in CRON_HANDLERS (key must match registry entry key)
+//
+// If a registry entry has no handler → warning logged, job won't run.
+// If a handler has no registry entry → warning logged, job runs but won't
+// appear in the Worker Jobs admin dashboard.
+// =============================================================================
+
+const CRON_HANDLERS: Record<string, () => Promise<void>> = {
+  'maintenance-reminders':           async () => { await sendMaintenanceReminders(); },
+  'daily-email-digest':              async () => { await runDailyEmailDigest(); },
+  'seasonal-checklist-expiration':   async () => { await expireSeasonalChecklists(); },
+  'seasonal-checklist-generation':   async () => { await generateSeasonalChecklists(); },
+  'seasonal-notifications':          async () => { await sendSeasonalNotifications(); },
+  'weekly-score-snapshots':          async () => { await captureWeeklyScoreSnapshotsJob(); },
+  'hidden-asset-refresh':            async () => { await runHiddenAssetRefreshJob(); },
+  'coverage-lapse-incidents':        async () => { await coverageLapseIncidentsJob(); },
+  'freeze-risk-incidents':           async () => { await freezeRiskIncidentsJob(); },
+  'neighborhood-change-notifications': async () => { await neighborhoodChangeNotificationJob(); },
+  'neighborhood-radar-refresh':      async () => { await refreshNeighborhoodEventsJob(); },
+  'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
+  'home-habit-generation':           async () => { await runHabitGenerationJob(); },
+};
+
+// Per-job cron expression overrides (env-var-based schedules)
+const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
+  'inventory-draft-cleanup': process.env.INVENTORY_DRAFT_CLEANUP_CRON,
+};
+
+function scheduleCronJobs(): void {
+  const cronEntries = JOB_REGISTRY.filter((j) => j.type === 'cron' && j.cronExpression);
+
+  for (const entry of cronEntries) {
+    const handler = CRON_HANDLERS[entry.key];
+    if (!handler) {
+      console.warn(
+        `[REGISTRY] ⚠️  No handler for registry job "${entry.key}" — ` +
+        `job will not run. Add it to CRON_HANDLERS in worker.ts`,
+      );
+      continue;
+    }
+    const cronExpr = CRON_ENV_OVERRIDES[entry.key] ?? entry.cronExpression;
+    cron.schedule(
+      cronExpr,
+      async () => {
+        try {
+          console.log(`[${entry.key}] Starting: ${entry.name}`);
+          await handler();
+          console.log(`[${entry.key}] ✅ Completed`);
+        } catch (err) {
+          console.error(`[${entry.key}] ❌ Failed:`, err);
+        }
+      },
+      { timezone: 'America/New_York' },
+    );
+    console.log(`[REGISTRY] Scheduled "${entry.name}" — ${cronExpr} (${entry.schedule})`);
+  }
+
+  // Warn about handlers that have no registry entry (invisible in admin UI)
+  const registeredKeys = new Set(cronEntries.map((e) => e.key));
+  for (const key of Object.keys(CRON_HANDLERS)) {
+    if (!registeredKeys.has(key)) {
+      console.warn(
+        `[REGISTRY] ⚠️  Handler exists for unregistered job "${key}" — ` +
+        `add it to JOB_REGISTRY in workerJobRegistry.ts`,
+      );
+    }
+  }
+
+  console.log(`[REGISTRY] ${cronEntries.length} cron jobs scheduled from registry`);
+}
+
 /**
  * Main worker startup function
  */
 function startWorker() {
   console.log('🚀 Worker started. Waiting for jobs...');
-
-  // Schedule maintenance reminders cron job
-  cron.schedule('0 9 * * *', sendMaintenanceReminders, {
-    timezone: 'America/New_York',
-  });
-  
-  cron.schedule(
-    '0 8 * * *',
-    async () => {
-      console.log('[DIGEST] Running daily email digest...');
-      await runDailyEmailDigest();
-    },
-    { timezone: 'America/New_York' }
-  );
-
-  // Clean up expired checklists first (1 AM)
-  cron.schedule(
-    '0 1 * * *',
-    //'*/5 * * * *',
-    async () => {
-      console.log('[SEASONAL-EXPIRE] Running checklist expiration job...');
-      try {
-        await expireSeasonalChecklists();
-        console.log('[SEASONAL-EXPIRE] ✅ Job completed successfully');
-      } catch (error) {
-        console.error('[SEASONAL-EXPIRE] ❌ Job failed:', error);
-      }
-    },
-    { timezone: 'America/New_York' }
-  );
-
-  // Generate new seasonal checklists (2 AM)
-  cron.schedule(
-     '0 2 * * *',
-    //'*/5 * * * *',
-    async () => {
-      console.log('[SEASONAL-GEN] Running checklist generation job...');
-      try {
-        await generateSeasonalChecklists();
-        console.log('[SEASONAL-GEN] ✅ Job completed successfully');
-      } catch (error) {
-        console.error('[SEASONAL-GEN] ❌ Job failed:', error);
-      }
-    },
-    { timezone: 'America/New_York' }
-  );
-
-  // Send notifications during morning hours (9 AM)
-  cron.schedule(
-     '0 9 * * *',
-    //'*/5 * * * *',
-    async () => {
-      console.log('[SEASONAL-NOTIFY] Running notification job...');
-      try {
-        await sendSeasonalNotifications();
-        console.log('[SEASONAL-NOTIFY] ✅ Job completed successfully');
-      } catch (error) {
-        console.error('[SEASONAL-NOTIFY] ❌ Job failed:', error);
-      }
-    },
-    { timezone: 'America/New_York' }
-  );
-
-  console.log('✅ Seasonal maintenance jobs scheduled:');
-  console.log('   - Expiration: Daily at 1:00 AM EST (clean up old checklists)');
-  console.log('   - Generation: Daily at 2:00 AM EST (create new checklists)');
-  console.log('   - Notifications: Daily at 9:00 AM EST (send emails)');
-
-  cron.schedule(
-    '0 4 * * 1',
-    async () => {
-      await captureWeeklyScoreSnapshotsJob();
-    },
-    { timezone: 'America/New_York' }
-  );
-  console.log('   - Weekly score snapshots: Monday at 4:00 AM EST');
-
-  cron.schedule(
-    '0 3 * * 0',
-    async () => {
-      console.log('[HIDDEN-ASSETS] Running weekly batch refresh job...');
-      try {
-        await runHiddenAssetRefreshJob();
-        console.log('[HIDDEN-ASSETS] ✅ Weekly batch refresh completed');
-      } catch (error) {
-        console.error('[HIDDEN-ASSETS] ❌ Weekly batch refresh failed:', error);
-      }
-    },
-    { timezone: 'America/New_York' }
-  );
-  console.log('   - Hidden asset batch refresh: Sunday at 3:00 AM EST');
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================
@@ -1067,16 +1056,7 @@ setupScheduledJobs().catch(console.error);
 
 console.log(`[RECALL-WORKER] Recall Worker started for queue: ${RECALL_QUEUE_NAME}`);
 
-// =============================================================================
-// COVERAGE LAPSE INCIDENTS
-// =============================================================================
-cron.schedule('0 8 * * *', coverageLapseIncidentsJob, { timezone: 'America/New_York' });
-console.log('[COVERAGE-LAPSE] Coverage Lapse Incidents job scheduled for 8:00 AM EST');
-// =============================================================================
-// FREEZE RISK INCIDENTS
-// =============================================================================
-cron.schedule('0 9 * * *', freezeRiskIncidentsJob, { timezone: 'America/New_York' });
-console.log('[FREEZE-RISK] Freeze Risk Incidents job scheduled for 9:00 AM EST');
+// Coverage lapse + freeze risk incidents are scheduled via scheduleCronJobs() above.
 
 // =============================================================================
 // DUMMY RADAR INGEST (QA / E2E)
@@ -1132,27 +1112,7 @@ if (homeRiskReplayDummyIngestEnabled) {
 // NEIGHBORHOOD INTELLIGENCE — Scheduled jobs
 // =============================================================================
 
-// Daily 6:00 AM EST — notify property owners of new high-impact neighborhood changes
-cron.schedule('0 6 * * *', async () => {
-  try {
-    console.log('[NEIGHBORHOOD-NOTIFY] Running neighborhood change notification job...');
-    await neighborhoodChangeNotificationJob();
-  } catch (err) {
-    console.error('[NEIGHBORHOOD-NOTIFY] Job failed:', err);
-  }
-}, { timezone: 'America/New_York' });
-console.log('[NEIGHBORHOOD-NOTIFY] Neighborhood change notification scheduled for 6:00 AM EST daily');
-
-// Weekly Sunday 5:00 AM EST — refresh all property neighborhood radars
-cron.schedule('0 5 * * 0', async () => {
-  try {
-    console.log('[NEIGHBORHOOD-REFRESH] Running weekly neighborhood radar refresh...');
-    await refreshNeighborhoodEventsJob();
-  } catch (err) {
-    console.error('[NEIGHBORHOOD-REFRESH] Job failed:', err);
-  }
-}, { timezone: 'America/New_York' });
-console.log('[NEIGHBORHOOD-REFRESH] Neighborhood radar refresh scheduled for Sunday 5:00 AM EST');
+// Neighborhood change notifications + radar refresh are scheduled via scheduleCronJobs() above.
 
 // =============================================================================
 // DUMMY NEIGHBORHOOD EVENT INGEST (QA / E2E)
@@ -1182,33 +1142,8 @@ if (neighborhoodDummyIngestEnabled) {
 // =============================================================================
 // INVENTORY DRAFT CLEANUP (Phase 3 hardening)
 // =============================================================================
-const draftCleanupCron = process.env.INVENTORY_DRAFT_CLEANUP_CRON || '15 3 * * *'; // default: 3:15am daily
-cron.schedule(draftCleanupCron, async () => {
-  try {
-    console.log('[WORKER] Running cleanupInventoryDraftsJob...');
-    await cleanupInventoryDraftsJob();
-  } catch (err) {
-    console.error('[WORKER] cleanupInventoryDraftsJob failed:', err);
-  }
-});
+// Inventory draft cleanup + home habit generation are scheduled via scheduleCronJobs() above.
 
-console.log(`[WORKER] Inventory Draft Cleanup scheduled for: ${draftCleanupCron} America/New_York`);
-
-// =============================================================================
-// HOME HABIT COACH — WEEKLY BATCH GENERATION
-// =============================================================================
-// Runs every Saturday at 3:30 AM EST. Safe to re-run: generation engine
-// deduplicates habits that are already ACTIVE or SNOOZED.
-cron.schedule('30 3 * * 6', async () => {
-  try {
-    console.log('[HABIT-GEN] Running weekly habit generation job...');
-    await runHabitGenerationJob();
-    console.log('[HABIT-GEN] ✅ Weekly habit generation complete');
-  } catch (err) {
-    console.error('[HABIT-GEN] ❌ Weekly habit generation failed:', err);
-  }
-}, { timezone: 'America/New_York' });
-console.log('[HABIT-GEN] Weekly habit generation scheduled for Saturday 3:30 AM EST');
-
-// Start the worker
+// Start cron jobs from registry, then start BullMQ worker
+scheduleCronJobs();
 startWorker();

@@ -40,6 +40,7 @@ RUN mkdir -p src/shared/backend/utils \
 COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
+COPY apps/backend/src/config/workerJobRegistry.ts src/shared/backend/config/
 COPY apps/backend/src/services/homeEventRadarMatcher.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/storage/reportStorage.ts src/shared/backend/services/storage/
 COPY apps/backend/src/services/storage/s3Client.ts src/shared/backend/services/storage/
@@ -98,6 +99,7 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
