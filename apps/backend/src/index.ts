@@ -91,6 +91,7 @@ import hiddenAssetsRoutes from './routes/hiddenAssets.routes';
 import homeDigitalTwinRoutes from './routes/homeDigitalTwin.routes';
 import neighborhoodIntelligenceRoutes from './neighborhoodIntelligence/neighborhoodIntelligence.routes';
 import adminAnalyticsRoutes from './routes/adminAnalytics.routes';
+import adminWorkerJobsRoutes from './routes/adminWorkerJobs.routes';
 import homeHabitCoachRoutes from './routes/homeHabitCoach.routes';
 dotenv.config();
 
@@ -386,6 +387,7 @@ app.use('/api', hiddenAssetsRoutes);
 app.use('/api', homeDigitalTwinRoutes);
 app.use('/api', neighborhoodIntelligenceRoutes);
 app.use('/api', adminAnalyticsRoutes);
+app.use('/api', adminWorkerJobsRoutes);
 app.use('/api', homeHabitCoachRoutes);
 app.use('/api/weather', weatherRoutes);
 
