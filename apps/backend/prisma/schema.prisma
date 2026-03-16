@@ -1261,6 +1261,9 @@ model User {
   // Home Habit Coach relations
   habitActions PropertyHabitAction[]
 
+  // Home Renovation Risk Advisor
+  renovationAdvisorSessions HomeRenovationAdvisorSession[] @relation("RenovationAdvisorSessionCreatedBy")
+
   @@index([email])
   @@index([role])
 
@@ -1801,6 +1804,9 @@ model Property {
   propertyHabits  PropertyHabit[]
   habitPreference PropertyHabitPreference?
   habitActions    PropertyHabitAction[]
+
+  // Home Renovation Risk Advisor
+  renovationAdvisorSessions HomeRenovationAdvisorSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4658,6 +4664,9 @@ model HomeCapitalTimelineItem {
   linkedHomeEvent  HomeEvent? @relation(fields: [linkedHomeEventId], references: [id], onDelete: SetNull)
   evidenceDocument Document?  @relation(fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
 
+  // Home Renovation Risk Advisor linkage (back-reference)
+  renovationAdvisorSessions HomeRenovationAdvisorSession[]
+
   @@index([analysisId])
   @@index([propertyId, windowStart])
   @@index([propertyId, category])
@@ -7275,6 +7284,9 @@ model HomeTwinScenario {
   createdBy     User?                  @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   impacts       HomeTwinScenarioImpact[]
 
+  // Home Renovation Risk Advisor linkage (back-reference)
+  renovationAdvisorSessions HomeRenovationAdvisorSession[]
+
   @@index([digitalTwinId, status])
   @@index([propertyId, createdAt])
   @@index([createdByUserId, createdAt])
@@ -7802,4 +7814,497 @@ model PropertyHabitPreference {
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_habit_preferences")
+}
+
+// ============================================================================
+// HOME RENOVATION RISK ADVISOR
+// ============================================================================
+
+// --- Enums ---
+
+enum RenovationAdvisorSessionStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+  PARTIAL
+  FAILED
+  ARCHIVED
+}
+
+enum HomeRenovationType {
+  ROOM_ADDITION
+  BATHROOM_ADDITION
+  BATHROOM_FULL_REMODEL
+  GARAGE_CONVERSION
+  BASEMENT_FINISHING
+  ADU_CONSTRUCTION
+  DECK_ADDITION
+  PATIO_MAJOR_ADDITION
+  STRUCTURAL_WALL_REMOVAL
+  STRUCTURAL_WALL_ADDITION
+  ROOF_REPLACEMENT
+  STRUCTURAL_REPAIR_MAJOR
+}
+
+enum RenovationAdvisorEntryPoint {
+  CAPITAL_PLANNING
+  HOME_TOOLS
+  GEMINI_CHAT
+  HOME_TIMELINE
+  PROPERTY_DASHBOARD
+  RISK_REPORT
+  OTHER
+}
+
+enum RenovationAdvisorFlowType {
+  EXPLICIT_PRE_PROJECT
+  CHAT_TRIGGERED
+  RETROACTIVE_COMPLIANCE
+}
+
+enum AdvisorConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+  UNAVAILABLE
+}
+
+enum PermitRequirementStatus {
+  REQUIRED
+  NOT_REQUIRED
+  LIKELY_REQUIRED
+  LIKELY_NOT_REQUIRED
+  UNKNOWN
+  DATA_UNAVAILABLE
+}
+
+enum ContractorLicenseRequirementStatus {
+  REQUIRED
+  MAY_BE_REQUIRED
+  NOT_REQUIRED
+  UNKNOWN
+  DATA_UNAVAILABLE
+}
+
+enum PropertyTaxReassessmentTriggerType {
+  ON_PERMIT
+  ON_COMPLETION
+  NEXT_ASSESSMENT_CYCLE
+  ON_SALE
+  JURISDICTION_SPECIFIC
+  UNKNOWN
+  DATA_UNAVAILABLE
+}
+
+enum RenovationProjectCostSource {
+  USER_INPUT
+  MEDIAN_ASSUMPTION
+  REGIONAL_ESTIMATE
+  PROVIDER_ESTIMATE
+  UNKNOWN
+}
+
+enum AdvisorRiskLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+  UNKNOWN
+}
+
+enum AdvisorDataSourceType {
+  API_VERIFIED
+  CURATED_DATASET
+  REGIONAL_INTERPOLATION
+  INTERNAL_RULE
+  USER_PROVIDED
+  MANUAL_OVERRIDE
+  UNKNOWN
+}
+
+enum RenovationJurisdictionLevel {
+  STATE
+  COUNTY
+  CITY
+  ZIP
+  MULTI_LEVEL
+  UNKNOWN
+}
+
+enum RenovationPermitType {
+  BUILDING
+  ELECTRICAL
+  PLUMBING
+  MECHANICAL
+  STRUCTURAL
+  ZONING
+  OTHER
+}
+
+enum RenovationInspectionStageType {
+  PLAN_REVIEW
+  PRE_CONSTRUCTION
+  FOUNDATION
+  FRAMING
+  ROUGH_IN
+  ELECTRICAL
+  PLUMBING
+  MECHANICAL
+  INSULATION
+  FINAL
+  OTHER
+}
+
+enum RenovationLicenseCategoryType {
+  GENERAL_CONTRACTOR
+  ELECTRICAL
+  PLUMBING
+  HVAC
+  ROOFING
+  STRUCTURAL
+  SPECIALTY
+  OTHER
+}
+
+enum TriStateChecklistStatus {
+  YES
+  NO
+  UNKNOWN
+}
+
+// --- Models ---
+
+// A. Core session — one per advisor run for a property + renovation scenario.
+model HomeRenovationAdvisorSession {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  propertyId      String
+  createdByUserId String?
+
+  status         RenovationAdvisorSessionStatus @default(DRAFT)
+  renovationType HomeRenovationType
+
+  // Optional label for future "OTHER" type extension
+  customRenovationLabel String?
+
+  entryPoint RenovationAdvisorEntryPoint
+  flowType   RenovationAdvisorFlowType   @default(EXPLICIT_PRE_PROJECT)
+
+  // Jurisdiction
+  jurisdictionLevel         RenovationJurisdictionLevel @default(UNKNOWN)
+  jurisdictionState         String?
+  jurisdictionCounty        String?
+  jurisdictionCity          String?
+  postalCode                String?
+  normalizedJurisdictionKey String? // e.g. "US-CA-los-angeles-90001"
+  addressSnapshotJson       Json?   // lightweight address snapshot at time of run
+
+  // Project cost
+  projectCostInput          Decimal?                    @db.Decimal(12, 2)
+  projectCostSource         RenovationProjectCostSource @default(UNKNOWN)
+  projectCostAssumptionNote String?
+
+  // Overall output
+  overallConfidence AdvisorConfidenceLevel @default(UNAVAILABLE)
+  overallRiskLevel  AdvisorRiskLevel       @default(UNKNOWN)
+  overallSummary    String?
+  warningsSummary   String?
+  nextStepsSummary  String?
+
+  // Versioning for auditability
+  disclaimerVersion       String?
+  rulesVersion            String?
+  calculationVersion      String?
+  providerSnapshotVersion String?
+
+  // Flow flags
+  isRetroactiveCheck            Boolean @default(false)
+  completedModificationReported Boolean @default(false)
+  userConfirmedJurisdiction     Boolean @default(false)
+
+  // Lifecycle
+  sessionExpiresAt DateTime?
+  lastEvaluatedAt  DateTime?
+  archivedAt       DateTime?
+
+  // Linkage anchors — real FK where model is stable and exists
+  linkedTimelineItemId        String? // -> HomeCapitalTimelineItem.id
+  linkedDigitalTwinScenarioId String? // -> HomeTwinScenario.id
+
+  // String anchors — FK targets not yet modeled in this schema version
+  linkedRiskEntityId      String? // future: risk item / factor id
+  linkedTcoEntityId       String? // future: TCO snapshot id
+  linkedBreakEvenEntityId String? // future: break-even scenario id
+
+  // Relations
+  property                  Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy                 User?                   @relation("RenovationAdvisorSessionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  linkedTimelineItem        HomeCapitalTimelineItem? @relation(fields: [linkedTimelineItemId], references: [id], onDelete: SetNull)
+  linkedDigitalTwinScenario HomeTwinScenario?        @relation(fields: [linkedDigitalTwinScenarioId], references: [id], onDelete: SetNull)
+
+  // Child outputs
+  permitOutput        HomeRenovationPermitOutput?
+  taxImpactOutput     HomeRenovationTaxImpactOutput?
+  licensingOutput     HomeRenovationLicensingOutput?
+  assumptions         HomeRenovationAdvisorAssumption[]
+  dataPoints          HomeRenovationAdvisorDataPoint[]
+  complianceChecklist HomeRenovationComplianceChecklist?
+
+  @@index([propertyId, createdAt])
+  @@index([propertyId, renovationType])
+  @@index([createdByUserId, createdAt])
+  @@index([normalizedJurisdictionKey])
+  @@index([status])
+  @@index([isRetroactiveCheck])
+  @@map("home_renovation_advisor_sessions")
+}
+
+// C. Permit output — 1:1 with session.
+model HomeRenovationPermitOutput {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  advisorSessionId String @unique
+
+  requirementStatus PermitRequirementStatus @default(UNKNOWN)
+  confidenceLevel   AdvisorConfidenceLevel  @default(UNAVAILABLE)
+  confidenceReason  String?
+
+  permitCostMin         Decimal? @db.Decimal(12, 2)
+  permitCostMax         Decimal? @db.Decimal(12, 2)
+  permitTimelineMinDays Int?
+  permitTimelineMaxDays Int?
+
+  applicationPortalUrl   String?
+  applicationPortalLabel String?
+  permitSummary          String?
+
+  dataAvailable      Boolean               @default(false)
+  sourceType         AdvisorDataSourceType @default(UNKNOWN)
+  sourceLabel        String?
+  sourceReferenceUrl String?
+  sourceRefreshedAt  DateTime?
+
+  rawSourcePayloadJson Json?
+  notes                String?
+
+  advisorSession   HomeRenovationAdvisorSession          @relation(fields: [advisorSessionId], references: [id], onDelete: Cascade)
+  permitTypes      HomeRenovationPermitTypeRequirement[]
+  inspectionStages HomeRenovationInspectionStage[]
+
+  @@index([advisorSessionId])
+  @@map("home_renovation_permit_outputs")
+}
+
+// Permit type child — many per permit output.
+model HomeRenovationPermitTypeRequirement {
+  id             String @id @default(uuid())
+  permitOutputId String
+
+  permitType      RenovationPermitType
+  isRequired      Boolean                @default(false)
+  confidenceLevel AdvisorConfidenceLevel @default(UNAVAILABLE)
+  note            String?
+  displayOrder    Int                    @default(0)
+
+  createdAt DateTime @default(now())
+
+  permitOutput HomeRenovationPermitOutput @relation(fields: [permitOutputId], references: [id], onDelete: Cascade)
+
+  @@index([permitOutputId])
+  @@map("home_renovation_permit_type_requirements")
+}
+
+// Inspection stage child — many per permit output.
+model HomeRenovationInspectionStage {
+  id             String @id @default(uuid())
+  permitOutputId String
+
+  inspectionStageType RenovationInspectionStageType
+  isLikelyRequired    Boolean                       @default(false)
+  note                String?
+  displayOrder        Int                           @default(0)
+
+  createdAt DateTime @default(now())
+
+  permitOutput HomeRenovationPermitOutput @relation(fields: [permitOutputId], references: [id], onDelete: Cascade)
+
+  @@index([permitOutputId])
+  @@map("home_renovation_inspection_stages")
+}
+
+// D. Tax impact output — 1:1 with session.
+model HomeRenovationTaxImpactOutput {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  advisorSessionId String @unique
+
+  confidenceLevel  AdvisorConfidenceLevel @default(UNAVAILABLE)
+  confidenceReason String?
+
+  assessedValueIncreaseMin Decimal? @db.Decimal(12, 2)
+  assessedValueIncreaseMax Decimal? @db.Decimal(12, 2)
+  annualTaxIncreaseMin     Decimal? @db.Decimal(12, 2)
+  annualTaxIncreaseMax     Decimal? @db.Decimal(12, 2)
+  monthlyTaxIncreaseMin    Decimal? @db.Decimal(12, 2)
+  monthlyTaxIncreaseMax    Decimal? @db.Decimal(12, 2)
+
+  reassessmentTriggerType     PropertyTaxReassessmentTriggerType @default(UNKNOWN)
+  reassessmentTimelineSummary String?
+  reassessmentRuleSummary     String?
+  plainLanguageSummary        String?
+
+  // Stored for audit/explainability
+  millageRateSnapshot Decimal? @db.Decimal(10, 6)
+  taxModelRegion      String?
+  valueUpliftMethod   String?
+
+  dataAvailable      Boolean               @default(false)
+  sourceType         AdvisorDataSourceType @default(UNKNOWN)
+  sourceLabel        String?
+  sourceReferenceUrl String?
+  sourceRefreshedAt  DateTime?
+
+  rawSourcePayloadJson Json?
+  notes                String?
+
+  advisorSession HomeRenovationAdvisorSession @relation(fields: [advisorSessionId], references: [id], onDelete: Cascade)
+
+  @@index([advisorSessionId])
+  @@map("home_renovation_tax_impact_outputs")
+}
+
+// E. Licensing output — 1:1 with session.
+model HomeRenovationLicensingOutput {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  advisorSessionId String @unique
+
+  requirementStatus ContractorLicenseRequirementStatus @default(UNKNOWN)
+  confidenceLevel   AdvisorConfidenceLevel              @default(UNAVAILABLE)
+  confidenceReason  String?
+
+  consequenceSummary    String?
+  verificationToolUrl   String?
+  verificationToolLabel String?
+  plainLanguageSummary  String?
+
+  dataAvailable      Boolean               @default(false)
+  sourceType         AdvisorDataSourceType @default(UNKNOWN)
+  sourceLabel        String?
+  sourceReferenceUrl String?
+  sourceRefreshedAt  DateTime?
+
+  rawSourcePayloadJson Json?
+  notes                String?
+
+  advisorSession    HomeRenovationAdvisorSession                 @relation(fields: [advisorSessionId], references: [id], onDelete: Cascade)
+  licenseCategories HomeRenovationLicenseCategoryRequirement[]
+
+  @@index([advisorSessionId])
+  @@map("home_renovation_licensing_outputs")
+}
+
+// License category child — many per licensing output.
+model HomeRenovationLicenseCategoryRequirement {
+  id                String @id @default(uuid())
+  licensingOutputId String
+
+  licenseCategoryType RenovationLicenseCategoryType
+  isApplicable        Boolean                       @default(false)
+  confidenceLevel     AdvisorConfidenceLevel        @default(UNAVAILABLE)
+  note                String?
+  displayOrder        Int                           @default(0)
+
+  createdAt DateTime @default(now())
+
+  licensingOutput HomeRenovationLicensingOutput @relation(fields: [licensingOutputId], references: [id], onDelete: Cascade)
+
+  @@index([licensingOutputId])
+  @@map("home_renovation_license_category_requirements")
+}
+
+// F. Assumptions — explicit inputs/fallbacks used during calculation.
+model HomeRenovationAdvisorAssumption {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  advisorSessionId String
+
+  assumptionKey         String  // e.g. "median_project_cost", "county_tax_rule_fallback"
+  assumptionLabel       String  // human-readable label for UI
+  assumptionValueText   String?
+  assumptionValueNumber Decimal? @db.Decimal(18, 4) // nullable numeric value
+  assumptionUnit        String?  // e.g. "USD", "percent", "days"
+
+  sourceType      AdvisorDataSourceType  @default(UNKNOWN)
+  confidenceLevel AdvisorConfidenceLevel @default(UNAVAILABLE)
+  rationale       String?
+
+  isUserVisible Boolean @default(true)
+  displayOrder  Int     @default(0)
+
+  advisorSession HomeRenovationAdvisorSession @relation(fields: [advisorSessionId], references: [id], onDelete: Cascade)
+
+  @@index([advisorSessionId])
+  @@index([advisorSessionId, assumptionKey])
+  @@map("home_renovation_advisor_assumptions")
+}
+
+// G. Field-level data points — per-field explainability and source metadata.
+model HomeRenovationAdvisorDataPoint {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+
+  advisorSessionId String
+
+  sectionKey         String  // e.g. "permit", "tax", "licensing"
+  fieldKey           String  // e.g. "permitCostMin", "annualTaxIncreaseMax"
+  fieldLabel         String?
+  fieldValueText     String?
+
+  confidenceLevel    AdvisorConfidenceLevel @default(UNAVAILABLE)
+  sourceType         AdvisorDataSourceType  @default(UNKNOWN)
+  sourceLabel        String?
+  sourceReferenceUrl String?
+  sourceRefreshedAt  DateTime?
+  freshnessLabel     String? // e.g. "Updated Jan 2025"
+  note               String?
+
+  isUserVisible Boolean @default(true)
+  displayOrder  Int     @default(0)
+
+  advisorSession HomeRenovationAdvisorSession @relation(fields: [advisorSessionId], references: [id], onDelete: Cascade)
+
+  @@index([advisorSessionId])
+  @@index([advisorSessionId, sectionKey])
+  @@map("home_renovation_advisor_data_points")
+}
+
+// I. Compliance follow-up checklist — supports retroactive compliance flow.
+model HomeRenovationComplianceChecklist {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  advisorSessionId String @unique
+
+  permitObtainedStatus         TriStateChecklistStatus @default(UNKNOWN)
+  licensedContractorUsedStatus TriStateChecklistStatus @default(UNKNOWN)
+  reassessmentReceivedStatus   TriStateChecklistStatus @default(UNKNOWN)
+  notes                        String?
+  lastReviewedAt               DateTime?
+
+  advisorSession HomeRenovationAdvisorSession @relation(fields: [advisorSessionId], references: [id], onDelete: Cascade)
+
+  @@index([advisorSessionId])
+  @@map("home_renovation_compliance_checklists")
 }
