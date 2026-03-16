@@ -72,6 +72,15 @@ export function AdvisorSummaryCard({ session, onRerun, isRerunning }: AdvisorSum
           >
             {formatConfidence(session.overallConfidence)}
           </span>
+          {/* Last evaluated timestamp */}
+          {session.lastEvaluatedAt && (
+            <span className={cn('text-right text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.chip)}>
+              Checked {new Date(session.lastEvaluatedAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              })}
+            </span>
+          )}
         </div>
       </div>
 

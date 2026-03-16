@@ -71,6 +71,13 @@ router.post(
   HomeRenovationAdvisorController.archiveSession,
 );
 
+// GET /api/home-renovation-advisor/sessions/:id/export
+router.get(
+  '/home-renovation-advisor/sessions/:id/export',
+  authenticate,
+  HomeRenovationAdvisorController.getSessionExport,
+);
+
 // PATCH /api/home-renovation-advisor/sessions/:id/compliance
 router.patch(
   '/home-renovation-advisor/sessions/:id/compliance',

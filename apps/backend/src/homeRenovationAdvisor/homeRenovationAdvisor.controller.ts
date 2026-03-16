@@ -123,6 +123,18 @@ export class HomeRenovationAdvisorController {
     }
   }
 
+  // GET /api/home-renovation-advisor/sessions/:id/export
+  static async getSessionExport(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const { id } = req.params;
+      const exportData = await service.getSessionExport(userId, id);
+      res.json(exportData);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   // GET /api/home-renovation-advisor/metadata
   static getMetadata(req: AuthRequest, res: Response, next: NextFunction) {
     try {

@@ -351,6 +351,7 @@ export async function saveEvaluationOutputs(
         nextStepsSummary: output.nextStepsSummary,
         calculationVersion: output.calculationVersion,
         rulesVersion: output.rulesVersion,
+        disclaimerVersion: output.disclaimerVersion,
         lastEvaluatedAt: new Date(),
       },
     });

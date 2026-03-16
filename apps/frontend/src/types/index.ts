@@ -2880,6 +2880,7 @@ export interface RenovationAdvisorSession {
   warningsSummary: string | null;
   nextStepsSummary: string | null;
   disclaimerVersion: string | null;
+  disclaimerText?: string | null;
   isRetroactiveCheck: boolean;
   completedModificationReported: boolean;
   permit: RenovationAdvisorPermit | null;

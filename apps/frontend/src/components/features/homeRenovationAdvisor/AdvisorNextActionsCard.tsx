@@ -29,7 +29,7 @@ export function AdvisorNextActionsCard({ nextActions }: AdvisorNextActionsCardPr
       <div className="space-y-2">
         {sorted.map((action, i) => {
           const isExternal = action.destinationType === 'EXTERNAL_URL' && action.destinationRef;
-          const isInternal = action.destinationType === 'INTERNAL_ROUTE' && action.destinationRef;
+          const isInternal = (action.destinationType === 'INTERNAL_ROUTE' || action.destinationType === 'MODULE_LINK') && action.destinationRef;
           const isTop = i === 0;
 
           const inner = (

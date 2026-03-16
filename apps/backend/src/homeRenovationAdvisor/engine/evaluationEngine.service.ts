@@ -20,6 +20,11 @@ import {
   buildWarningsSummary,
   computeOverallRiskLevel,
 } from './summary/summaryBuilder.service';
+import {
+  DISCLAIMER_VERSION,
+  getDisclaimerText,
+  selectDisclaimerVariant,
+} from './disclaimer/disclaimerText';
 
 export const CALCULATION_VERSION = '1.0.0';
 export const RULES_VERSION = '1.0.0-internal';
@@ -60,6 +65,18 @@ export async function runEvaluation(ctx: EvaluationContext): Promise<EvaluationO
   const warningsSummary = buildWarningsSummary(warnings);
   const nextStepsSummary = buildNextStepsSummary(nextActions);
 
+  // Select context-appropriate disclaimer
+  const isLowConfidence =
+    overallConfidence === 'LOW' || overallConfidence === 'UNAVAILABLE';
+  const unsupportedArea =
+    overallConfidence === 'UNAVAILABLE';
+  const disclaimerVariant = selectDisclaimerVariant(
+    ctx.isRetroactiveCheck || ctx.flowType === 'RETROACTIVE_COMPLIANCE',
+    unsupportedArea,
+    isLowConfidence,
+  );
+  const disclaimerText = getDisclaimerText(disclaimerVariant);
+
   return {
     permit,
     taxImpact,
@@ -74,6 +91,8 @@ export async function runEvaluation(ctx: EvaluationContext): Promise<EvaluationO
     nextStepsSummary,
     calculationVersion: CALCULATION_VERSION,
     rulesVersion: RULES_VERSION,
+    disclaimerVersion: DISCLAIMER_VERSION,
+    disclaimerText,
   };
 }
 

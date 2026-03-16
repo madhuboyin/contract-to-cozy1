@@ -29,6 +29,7 @@ import { AdvisorNextActionsCard } from '@/components/features/homeRenovationAdvi
 import { AdvisorSkeleton } from '@/components/features/homeRenovationAdvisor/AdvisorSkeleton';
 import { AdvisorLinkedIntegrations } from '@/components/features/homeRenovationAdvisor/AdvisorLinkedIntegrations';
 import { AdvisorRetroactiveBar } from '@/components/features/homeRenovationAdvisor/AdvisorRetroactiveBar';
+import { AdvisorDisclaimerBar } from '@/components/features/homeRenovationAdvisor/AdvisorDisclaimerBar';
 import {
   formatRenovationType,
   formatRiskLevel,
@@ -556,6 +557,14 @@ export default function HomeRenovationRiskAdvisorPage() {
                   <AdvisorNextActionsCard nextActions={currentSession.nextActions} />
                 </MobileSection>
               )}
+
+              {/* Disclaimer */}
+              <MobileSection>
+                <AdvisorDisclaimerBar
+                  disclaimerText={currentSession.disclaimerText}
+                  disclaimerVersion={currentSession.disclaimerVersion}
+                />
+              </MobileSection>
             </>
           )}
 

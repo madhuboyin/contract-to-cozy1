@@ -24,7 +24,9 @@ import {
 } from './mappers/response.mapper';
 import {
   buildNextActions,
+  buildOverallSummary,
   buildWarnings,
+  computeOverallRiskLevel,
 } from './engine/summary/summaryBuilder.service';
 import {
   CreateSessionBody,
@@ -103,6 +105,22 @@ export class HomeRenovationAdvisorService {
       },
     });
 
+    // Emit retroactive start event when flow is retroactive
+    if (input.flowType === 'RETROACTIVE_COMPLIANCE' || input.isRetroactiveCheck) {
+      analyticsEmitter.featureOpened({
+        userId,
+        propertyId: input.propertyId,
+        moduleKey: AnalyticsModule.RENOVATION_ADVISOR,
+        featureKey: AnalyticsFeature.RENOVATION_ADVISOR_SESSION,
+        source: AnalyticsSource.HOME_TOOLS,
+        metadataJson: {
+          event: 'retroactive_check_started',
+          renovationType: input.renovationType,
+          flowType: input.flowType,
+        },
+      });
+    }
+
     return mapSessionToResponse(session, [], []);
   }
 
@@ -147,6 +165,14 @@ export class HomeRenovationAdvisorService {
 
     if (session.status === RenovationAdvisorSessionStatus.ARCHIVED) {
       throw new APIError('Cannot evaluate an archived session', 400, 'SESSION_ARCHIVED');
+    }
+
+    if (session.status === RenovationAdvisorSessionStatus.PROCESSING) {
+      throw new APIError(
+        'Evaluation is already in progress for this session',
+        409,
+        'EVALUATION_IN_PROGRESS',
+      );
     }
 
     // Check if already completed and not forcing refresh
@@ -315,6 +341,20 @@ export class HomeRenovationAdvisorService {
   }
 
   // ============================================================================
+  // EXPORT SESSION
+  // ============================================================================
+
+  async getSessionExport(
+    userId: string,
+    sessionId: string,
+  ): Promise<import('./export/advisorExportMapper').AdvisorExportViewModel> {
+    const session = await this.getSessionAndVerifyAccess(sessionId, userId);
+    const sessionResponse = await this.buildResponseFromStoredSession(session);
+    const { buildExportViewModel } = await import('./export/advisorExportMapper');
+    return buildExportViewModel(sessionResponse);
+  }
+
+  // ============================================================================
   // DETECT RETROACTIVE CANDIDATES
   // ============================================================================
 
@@ -389,6 +429,26 @@ export class HomeRenovationAdvisorService {
         }
       : null;
 
+    // Re-derive overallSummary when checklist answers are present (so summary updates live with checklist changes)
+    let derivedSummary = session.overallSummary;
+    if (session.permitOutput && session.taxImpactOutput && session.licensingOutput && checklistAnswers) {
+      const derivedRiskLevel = computeOverallRiskLevel(
+        mapStoredPermitToResult(session.permitOutput),
+        mapStoredLicensingToResult(session.licensingOutput),
+        mapStoredTaxToResult(session.taxImpactOutput),
+        ctx,
+        checklistAnswers,
+      );
+      derivedSummary = buildOverallSummary(
+        ctx,
+        mapStoredPermitToResult(session.permitOutput),
+        mapStoredTaxToResult(session.taxImpactOutput),
+        mapStoredLicensingToResult(session.licensingOutput),
+        derivedRiskLevel,
+        session.overallConfidence as any,
+      );
+    }
+
     const warnings = session.permitOutput && session.taxImpactOutput && session.licensingOutput
       ? buildWarnings(
           ctx,
@@ -413,7 +473,10 @@ export class HomeRenovationAdvisorService {
         )
       : [];
 
-    return mapSessionToResponse(session, warnings, nextActions);
+    const sessionForMapping = derivedSummary !== session.overallSummary
+      ? { ...session, overallSummary: derivedSummary }
+      : session;
+    return mapSessionToResponse(sessionForMapping as typeof session, warnings, nextActions);
   }
 }
 

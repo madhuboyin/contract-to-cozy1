@@ -3212,6 +3212,10 @@ class APIClient {
     return res.data;
   }
 
+  async getAdvisorSessionExport(sessionId: string) {
+    return this.get<any>(`/api/home-renovation-advisor/sessions/${sessionId}/export`);
+  }
+
   async getRetroactiveCandidates(
     propertyId: string,
   ): Promise<import('@/types').RetroactiveCandidate[]> {

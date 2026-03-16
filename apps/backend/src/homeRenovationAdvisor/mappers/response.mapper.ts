@@ -20,6 +20,10 @@ import {
 import { SessionWithIncludes } from '../repository/advisorSession.repository';
 import { AdvisorConfidenceLevel } from '@prisma/client';
 import { getRenovationLabel } from '../engine/summary/summaryBuilder.service';
+import {
+  getDisclaimerText,
+  selectDisclaimerVariant,
+} from '../engine/disclaimer/disclaimerText';
 
 // ============================================================================
 // DECIMAL CONVERSION HELPER
@@ -99,6 +103,16 @@ export function mapSessionToResponse(
 
   const uiMeta = buildUiMeta(session, permit, taxImpact, licensing);
 
+  // Compute disclaimer text from session context (derived at response time, not persisted)
+  const isLowConf =
+    session.overallConfidence === 'LOW' || session.overallConfidence === 'UNAVAILABLE';
+  const disclaimerVariant = selectDisclaimerVariant(
+    session.isRetroactiveCheck,
+    session.overallConfidence === 'UNAVAILABLE',
+    isLowConf,
+  );
+  const disclaimerText = getDisclaimerText(disclaimerVariant);
+
   return {
     id: session.id,
     propertyId: session.propertyId,
@@ -129,6 +143,7 @@ export function mapSessionToResponse(
     warningsSummary: session.warningsSummary,
     nextStepsSummary: session.nextStepsSummary,
     disclaimerVersion: session.disclaimerVersion,
+    disclaimerText,
     isRetroactiveCheck: session.isRetroactiveCheck,
     completedModificationReported: session.completedModificationReported,
     permit,

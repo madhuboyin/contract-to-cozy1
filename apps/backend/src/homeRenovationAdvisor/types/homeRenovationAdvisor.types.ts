@@ -250,6 +250,8 @@ export interface EvaluationOutput {
   nextStepsSummary: string;
   calculationVersion: string;
   rulesVersion: string;
+  disclaimerVersion: string;
+  disclaimerText: string;
 }
 
 // ============================================================================
@@ -357,6 +359,7 @@ export interface HomeRenovationAdvisorSessionResponse {
   warningsSummary: string | null;
   nextStepsSummary: string | null;
   disclaimerVersion: string | null;
+  disclaimerText: string | null;
   isRetroactiveCheck: boolean;
   completedModificationReported: boolean;
   permit: PermitResponseModule | null;
