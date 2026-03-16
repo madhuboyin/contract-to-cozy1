@@ -112,10 +112,14 @@ export class HomeHabitCoachService {
       select: HABIT_SUMMARY_SELECT,
     });
 
-    // Filter out snoozed habits still in their snooze window
-    const visible = allHabits.filter(
-      (h) => h.status !== 'SNOOZED' || (h.snoozedUntil != null && h.snoozedUntil <= now),
-    );
+    // When includeSnoozed is true the caller wants to see all habits (active + snoozed),
+    // including ones still inside their snooze window (so the UI can display "Back on Mar 15").
+    // When false, hide snoozed habits that haven't woken up yet.
+    const visible = opts.includeSnoozed
+      ? allHabits
+      : allHabits.filter(
+          (h) => h.status !== 'SNOOZED' || (h.snoozedUntil != null && h.snoozedUntil <= now),
+        );
 
     // Apply behavior-aware ranking on top of base priorityScore
     const ranked = await rankHabits(visible, propertyId);

@@ -57,7 +57,19 @@ import {
   snoozeHabit,
   updatePreferences,
 } from './homeHabitCoachApi';
-import type { HabitAssignmentStatus, HabitCadence, HabitCategory, PropertyHabit, SnoozePreset } from './types';
+import type { HabitCategory, PropertyHabit, SnoozePreset } from './types';
+import {
+  HABIT_STATUS_TONE,
+  HABIT_STATUS_LABEL,
+  HABIT_CADENCE_LABEL,
+  formatDueLabel,
+  getDueTone,
+  formatSnoozedLabel,
+  formatActionDateLabel,
+  formatEffortLabel,
+  getHabitActionErrorMessage,
+  getHabitLoadErrorMessage,
+} from './homeHabitCoachUi';
 
 // ─── Display helpers ─────────────────────────────────────────────────────────
 
@@ -74,33 +86,6 @@ const CATEGORY_LABELS: Record<HabitCategory, string> = {
   GENERAL: 'General',
 };
 
-const CADENCE_LABELS: Record<HabitCadence, string> = {
-  DAILY: 'Daily',
-  WEEKLY: 'Weekly',
-  MONTHLY: 'Monthly',
-  SEASONAL: 'Seasonal',
-  ANNUAL: 'Annual',
-  AD_HOC: 'As needed',
-};
-
-const STATUS_CHIP_TONE: Record<HabitAssignmentStatus, 'info' | 'good' | 'elevated' | 'danger'> = {
-  ACTIVE: 'info',
-  SNOOZED: 'elevated',
-  COMPLETED: 'good',
-  SKIPPED: 'info',
-  DISMISSED: 'info',
-  EXPIRED: 'danger',
-};
-
-const STATUS_LABELS: Record<HabitAssignmentStatus, string> = {
-  ACTIVE: 'Active',
-  SNOOZED: 'Snoozed',
-  COMPLETED: 'Completed',
-  SKIPPED: 'Skipped',
-  DISMISSED: 'Dismissed',
-  EXPIRED: 'Expired',
-};
-
 const SNOOZE_PRESETS: { label: string; value: SnoozePreset }[] = [
   { label: '1 day', value: '1d' },
   { label: '3 days', value: '3d' },
@@ -108,43 +93,6 @@ const SNOOZE_PRESETS: { label: string; value: SnoozePreset }[] = [
   { label: '2 weeks', value: '14d' },
   { label: '1 month', value: '30d' },
 ];
-
-function formatDue(dueAt: string | null): string | null {
-  if (!dueAt) return null;
-  const date = new Date(dueAt);
-  const now = new Date();
-  const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return `Overdue by ${Math.abs(diffDays)}d`;
-  if (diffDays === 0) return 'Due today';
-  if (diffDays === 1) return 'Due tomorrow';
-  if (diffDays <= 7) return `Due in ${diffDays} days`;
-  return `Due ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-}
-
-function formatSnoozed(snoozedUntil: string | null): string | null {
-  if (!snoozedUntil) return null;
-  const date = new Date(snoozedUntil);
-  return `Back on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-}
-
-function formatActionDate(lastActionAt: string | null): string | null {
-  if (!lastActionAt) return null;
-  const date = new Date(lastActionAt);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays <= 7) return `${diffDays} days ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function effortLabel(minutes: number | null): string | null {
-  if (!minutes) return null;
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}min` : `${h}h`;
-}
 
 function habitTitle(habit: PropertyHabit): string {
   return habit.titleOverride ?? habit.habitTemplate.title;
@@ -163,8 +111,9 @@ function SpotlightCard({
   habit: PropertyHabit;
   onOpen: (h: PropertyHabit) => void;
 }) {
-  const dueLabel = formatDue(habit.dueAt);
-  const effort = effortLabel(habit.habitTemplate.estimatedMinutes);
+  const dueLabel = formatDueLabel(habit.dueAt);
+  const dueTone = getDueTone(habit.dueAt);
+  const effort = formatEffortLabel(habit.habitTemplate.estimatedMinutes);
 
   return (
     <MobileCard
@@ -203,7 +152,7 @@ function SpotlightCard({
           <StatusChip tone="info">
             {CATEGORY_LABELS[habit.habitTemplate.category] ?? habit.habitTemplate.category}
           </StatusChip>
-          {dueLabel ? <StatusChip tone="elevated">{dueLabel}</StatusChip> : null}
+          {dueLabel ? <StatusChip tone={dueTone}>{dueLabel}</StatusChip> : null}
           {effort ? (
             <span className={cn('inline-flex items-center gap-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
               <Clock className="h-3 w-3" />
@@ -214,7 +163,7 @@ function SpotlightCard({
 
         <div className="mt-4 flex items-center justify-between">
           <span className={cn('text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
-            {CADENCE_LABELS[habit.habitTemplate.cadence] ?? habit.habitTemplate.cadence}
+            {HABIT_CADENCE_LABEL[habit.habitTemplate.cadence] ?? habit.habitTemplate.cadence}
           </span>
           <span className="inline-flex items-center gap-1 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
             View details
@@ -237,9 +186,9 @@ function HabitRow({
   onOpen: (h: PropertyHabit) => void;
   showDate?: boolean;
 }) {
-  const dueLabel = formatDue(habit.dueAt);
-  const snoozedLabel = habit.status === 'SNOOZED' ? formatSnoozed(habit.snoozedUntil) : null;
-  const actionDateLabel = showDate ? formatActionDate(habit.lastActionAt) : null;
+  const dueLabel = formatDueLabel(habit.dueAt);
+  const snoozedLabel = habit.status === 'SNOOZED' ? formatSnoozedLabel(habit.snoozedUntil) : null;
+  const actionDateLabel = showDate ? formatActionDateLabel(habit.lastActionAt) : null;
 
   // Build subtitle: priority → snooze info → due label → action date → description
   const subtitle =
@@ -255,8 +204,8 @@ function HabitRow({
         title={habitTitle(habit)}
         subtitle={subtitle}
         status={
-          <StatusChip tone={STATUS_CHIP_TONE[habit.status] ?? 'info'}>
-            {STATUS_LABELS[habit.status] ?? habit.status}
+          <StatusChip tone={HABIT_STATUS_TONE[habit.status] ?? 'info'}>
+            {HABIT_STATUS_LABEL[habit.status] ?? habit.status}
           </StatusChip>
         }
         leading={
@@ -302,7 +251,8 @@ function HabitDetailSheet({
       invalidate();
       onClose();
     },
-    onError: () => toast({ title: 'Could not complete habit', variant: 'destructive' }),
+    onError: () =>
+      toast({ title: getHabitActionErrorMessage('complete'), variant: 'destructive' }),
   });
 
   const snoozeMut = useMutation({
@@ -314,7 +264,8 @@ function HabitDetailSheet({
       invalidate();
       onClose();
     },
-    onError: () => toast({ title: 'Could not snooze habit', variant: 'destructive' }),
+    onError: () =>
+      toast({ title: getHabitActionErrorMessage('snooze'), variant: 'destructive' }),
   });
 
   const skipMut = useMutation({
@@ -324,7 +275,8 @@ function HabitDetailSheet({
       invalidate();
       onClose();
     },
-    onError: () => toast({ title: 'Could not skip habit', variant: 'destructive' }),
+    onError: () =>
+      toast({ title: getHabitActionErrorMessage('skip'), variant: 'destructive' }),
   });
 
   const dismissMut = useMutation({
@@ -334,7 +286,8 @@ function HabitDetailSheet({
       invalidate();
       onClose();
     },
-    onError: () => toast({ title: 'Could not dismiss habit', variant: 'destructive' }),
+    onError: () =>
+      toast({ title: getHabitActionErrorMessage('dismiss'), variant: 'destructive' }),
   });
 
   const reopenMut = useMutation({
@@ -344,7 +297,8 @@ function HabitDetailSheet({
       invalidate();
       onClose();
     },
-    onError: () => toast({ title: 'Could not reopen habit', variant: 'destructive' }),
+    onError: () =>
+      toast({ title: getHabitActionErrorMessage('reopen'), variant: 'destructive' }),
   });
 
   const isBusy =
@@ -358,8 +312,9 @@ function HabitDetailSheet({
 
   const isActionable = habit.status === 'ACTIVE' || habit.status === 'SNOOZED';
   const isReopenable = ['COMPLETED', 'SKIPPED', 'DISMISSED', 'EXPIRED'].includes(habit.status);
-  const dueLabel = formatDue(habit.dueAt);
-  const effort = effortLabel(habit.habitTemplate.estimatedMinutes);
+  const dueLabel = formatDueLabel(habit.dueAt);
+  const dueTone = getDueTone(habit.dueAt);
+  const effort = formatEffortLabel(habit.habitTemplate.estimatedMinutes);
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) { setSnoozeMode(false); onClose(); } }}>
@@ -376,7 +331,7 @@ function HabitDetailSheet({
               <SheetDescription className="mt-1 text-left">
                 {CATEGORY_LABELS[habit.habitTemplate.category] ?? habit.habitTemplate.category}
                 {' · '}
-                {CADENCE_LABELS[habit.habitTemplate.cadence] ?? habit.habitTemplate.cadence}
+                {HABIT_CADENCE_LABEL[habit.habitTemplate.cadence] ?? habit.habitTemplate.cadence}
               </SheetDescription>
             </div>
           </div>
@@ -385,10 +340,10 @@ function HabitDetailSheet({
         <div className="space-y-4 py-4">
           {/* Status + meta */}
           <div className="flex flex-wrap items-center gap-2">
-            <StatusChip tone={STATUS_CHIP_TONE[habit.status] ?? 'info'}>
-              {STATUS_LABELS[habit.status] ?? habit.status}
+            <StatusChip tone={HABIT_STATUS_TONE[habit.status] ?? 'info'}>
+              {HABIT_STATUS_LABEL[habit.status] ?? habit.status}
             </StatusChip>
-            {dueLabel ? <StatusChip tone="elevated">{dueLabel}</StatusChip> : null}
+            {dueLabel ? <StatusChip tone={dueTone}>{dueLabel}</StatusChip> : null}
             {effort ? (
               <span className={cn('inline-flex items-center gap-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
                 <Clock className="h-3 w-3" />
@@ -587,7 +542,8 @@ export default function HomeHabitCoachClient() {
       qc.invalidateQueries({ queryKey: ['home-habits', propertyId] });
       qc.invalidateQueries({ queryKey: ['home-habits-spotlight', propertyId] });
     },
-    onError: () => toast({ title: 'Could not generate habits', variant: 'destructive' }),
+    onError: () =>
+      toast({ title: getHabitActionErrorMessage('generate'), variant: 'destructive' }),
   });
 
   const toggleEnabledMut = useMutation({
@@ -615,6 +571,7 @@ export default function HomeHabitCoachClient() {
   const feedHabits = habits.filter((h) => h.id !== spotlight?.id);
 
   const isLoading = spotlightQ.isLoading || habitsQ.isLoading;
+  const isError = habitsQ.isError;
 
   // Determine empty state variant
   const snoozedCount = habits.filter((h) => h.status === 'SNOOZED').length;
@@ -732,14 +689,33 @@ export default function HomeHabitCoachClient() {
               </MobileSection>
             ) : null}
 
-            {!isLoading && spotlight ? (
+            {!isLoading && isError ? (
+              <MobileSection>
+                <EmptyStateCard
+                  title="Could not load habits"
+                  description={getHabitLoadErrorMessage('list')}
+                  action={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => habitsQ.refetch()}
+                    >
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                      Retry
+                    </Button>
+                  }
+                />
+              </MobileSection>
+            ) : null}
+
+            {!isLoading && !isError && spotlight ? (
               <MobileSection>
                 <MobileSectionHeader title="Top pick" />
                 <SpotlightCard habit={spotlight} onOpen={openHabit} />
               </MobileSection>
             ) : null}
 
-            {!isLoading && feedHabits.length > 0 ? (
+            {!isLoading && !isError && feedHabits.length > 0 ? (
               <MobileSection>
                 <MobileSectionHeader title="All habits" />
                 <div className="space-y-2">
@@ -750,7 +726,7 @@ export default function HomeHabitCoachClient() {
               </MobileSection>
             ) : null}
 
-            {!isLoading && habits.length === 0 ? (
+            {!isLoading && !isError && habits.length === 0 ? (
               <MobileSection>
                 <EmptyStateCard
                   title="No habits yet"
@@ -774,7 +750,7 @@ export default function HomeHabitCoachClient() {
               </MobileSection>
             ) : null}
 
-            {!isLoading && allSnoozed ? (
+            {!isLoading && !isError && allSnoozed ? (
               <MobileSection>
                 <MobileCard variant="compact" className="border-slate-200 bg-slate-50">
                   <p className={cn('mb-1 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
@@ -837,6 +813,17 @@ export default function HomeHabitCoachClient() {
               <div className="flex items-center justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-[hsl(var(--mobile-text-muted))]" />
               </div>
+            ) : historyQ.isError ? (
+              <EmptyStateCard
+                title="Could not load history"
+                description={getHabitLoadErrorMessage('history')}
+                action={
+                  <Button size="sm" variant="outline" onClick={() => historyQ.refetch()}>
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Retry
+                  </Button>
+                }
+              />
             ) : historyHabits.length === 0 ? (
               <EmptyStateCard
                 title="No history yet"
