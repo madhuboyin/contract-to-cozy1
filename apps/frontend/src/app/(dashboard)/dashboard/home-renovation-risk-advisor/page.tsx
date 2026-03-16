@@ -27,6 +27,7 @@ import { AdvisorAssumptionsCard } from '@/components/features/homeRenovationAdvi
 import { AdvisorWarningsCard } from '@/components/features/homeRenovationAdvisor/AdvisorWarningsCard';
 import { AdvisorNextActionsCard } from '@/components/features/homeRenovationAdvisor/AdvisorNextActionsCard';
 import { AdvisorSkeleton } from '@/components/features/homeRenovationAdvisor/AdvisorSkeleton';
+import { AdvisorLinkedIntegrations } from '@/components/features/homeRenovationAdvisor/AdvisorLinkedIntegrations';
 import {
   formatRenovationType,
   formatRiskLevel,
@@ -486,6 +487,10 @@ export default function HomeRenovationRiskAdvisorPage() {
                   session={currentSession}
                   onRerun={handleRun}
                   isRerunning={isEvaluating}
+                />
+                <AdvisorLinkedIntegrations
+                  session={currentSession}
+                  propertyId={propertyId}
                 />
               </MobileSection>
 

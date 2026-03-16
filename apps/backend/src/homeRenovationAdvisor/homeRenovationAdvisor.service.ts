@@ -45,6 +45,7 @@ import {
   AnalyticsSource,
 } from '../services/analytics/taxonomy';
 import { analyticsEmitter } from '../services/analytics/emitter';
+import { runPostEvaluationIntegrations } from './integrations/advisorIntegration.service';
 import { HomeRenovationType, RenovationAdvisorEntryPoint, RenovationAdvisorFlowType } from '@prisma/client';
 
 export class HomeRenovationAdvisorService {
@@ -195,6 +196,11 @@ export class HomeRenovationAdvisorService {
 
       // Persist outputs
       const updatedSession = await saveEvaluationOutputs(sessionId, output);
+
+      // Run post-evaluation integrations (fire-and-forget — never throws)
+      void runPostEvaluationIntegrations(updatedSession, output).catch((err) => {
+        console.error('[RenovationAdvisor] Post-evaluation integration error:', err);
+      });
 
       // Emit analytics
       analyticsEmitter.toolUsed({
