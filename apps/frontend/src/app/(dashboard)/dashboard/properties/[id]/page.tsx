@@ -72,6 +72,8 @@ import {
   type ServicePriceRadarCheckSummary,
 } from './tools/service-price-radar/servicePriceRadarApi';
 import NeighborhoodRadarDashboardCard from './components/NeighborhoodRadarDashboardCard';
+import { getSpotlightHabit } from './tools/home-habit-coach/homeHabitCoachApi';
+import { ListChecks } from 'lucide-react';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -1161,6 +1163,13 @@ export default function PropertyDetailPage() {
     enabled: Boolean(propertyId),
   });
 
+  const spotlightHabitQuery = useQuery({
+    queryKey: ['home-habits-spotlight', propertyId],
+    queryFn: () => getSpotlightHabit(propertyId),
+    enabled: Boolean(propertyId) && FEATURE_FLAGS.HOME_HABIT_COACH,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const selectedNudgeConfig = useMemo(
     () => (nudgeFieldKey ? NARRATIVE_NUDGE_CONFIG[nudgeFieldKey] : null),
     [nudgeFieldKey]
@@ -1440,6 +1449,60 @@ export default function PropertyDetailPage() {
           </p>
         )}
       </div>
+
+      {FEATURE_FLAGS.HOME_HABIT_COACH && (
+        <div className="rounded-[24px] border border-slate-200/90 bg-[linear-gradient(145deg,#ffffff,#f0fdf4)] p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
+                  <ListChecks className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="mb-0 text-sm font-semibold text-slate-900">Home Habit Coach</p>
+                  <p className="mb-0 text-xs text-slate-500">Seasonal care routines and safety checks</p>
+                </div>
+              </div>
+              <p className="mb-0 text-sm text-slate-600">
+                Small, actionable habits tailored to your home's systems, location, and season.
+              </p>
+            </div>
+
+            <Button asChild variant="outline" className="min-h-[44px] md:shrink-0">
+              <Link href={`/dashboard/properties/${property.id}/tools/home-habit-coach`}>
+                {spotlightHabitQuery.data?.habit ? 'View habits' : 'Open Habit Coach'}
+              </Link>
+            </Button>
+          </div>
+
+          {spotlightHabitQuery.data?.habit ? (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500">Top habit right now</p>
+                  <p className="mb-0 mt-1 truncate text-sm font-semibold text-slate-900">
+                    {spotlightHabitQuery.data.habit.titleOverride ?? spotlightHabitQuery.data.habit.habitTemplate.title}
+                  </p>
+                </div>
+                <StatusChip tone="info">
+                  {spotlightHabitQuery.data.habit.habitTemplate.category}
+                </StatusChip>
+              </div>
+              {(spotlightHabitQuery.data.habit.reasonSummary ?? spotlightHabitQuery.data.habit.habitTemplate.shortDescription) ? (
+                <p className="mb-0 mt-2 text-xs text-slate-600 line-clamp-2">
+                  {spotlightHabitQuery.data.habit.reasonSummary ?? spotlightHabitQuery.data.habit.habitTemplate.shortDescription}
+                </p>
+              ) : null}
+            </div>
+          ) : spotlightHabitQuery.isLoading ? (
+            <div className="mt-3 h-16 animate-pulse rounded-2xl bg-slate-100" />
+          ) : (
+            <p className="mb-0 mt-3 text-xs text-slate-500">
+              No habits yet — open Habit Coach to generate personalized routines for this property.
+            </p>
+          )}
+        </div>
+      )}
 
       <NeighborhoodRadarDashboardCard propertyId={property.id} />
 

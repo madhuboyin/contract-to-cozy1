@@ -43,7 +43,7 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'room-detail': ['status-board', 'home-risk-replay', 'service-price-radar'],
   'find-services': ['service-price-radar', 'negotiation-shield', 'cost-explainer'],
   warranties: ['status-board', 'home-risk-replay', 'insurance-trend'],
-  maintenance: ['service-price-radar', 'status-board', 'home-risk-replay'],
+  maintenance: ['home-habit-coach', 'service-price-radar', 'status-board'],
   claims: ['home-event-radar', 'home-risk-replay', 'negotiation-shield'],
   insurance: ['insurance-trend', 'home-risk-replay', 'status-board'],
   dashboard: ['home-event-radar', 'status-board', 'home-risk-replay'],
@@ -54,4 +54,6 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'home-digital-twin': ['capital-timeline', 'status-board', 'home-risk-replay'],
   // Neighborhood radar surfaces related monitoring tools for context.
   'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
+  // Habit coach relates to monitoring and planning tools.
+  'home-habit-coach': ['home-event-radar', 'home-timeline', 'status-board'],
 };

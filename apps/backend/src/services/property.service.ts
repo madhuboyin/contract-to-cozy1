@@ -15,6 +15,7 @@ import {
 import { hasPendingCriticalAssetVerification } from './inventoryVerification.service';
 import { incrementStreak } from './gamification.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
+import { generateHabitsForProperty } from './homeHabitCoach/habitGenerationEngine';
 
 import { prisma } from '../lib/prisma';
 
@@ -494,6 +495,11 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
       yearBuilt: data.yearBuilt ?? null,
     },
   });
+
+  // Fire-and-forget: seed initial habits for the new property
+  generateHabitsForProperty(property.id).catch((err) =>
+    console.error('[HABIT-GEN] Initial generation failed for new property:', err),
+  );
 
   // NEW STEP: Handle assets AFTER property creation
   if (data.homeAssets !== undefined) {

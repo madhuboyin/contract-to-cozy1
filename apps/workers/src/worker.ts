@@ -36,6 +36,7 @@ import { runHiddenAssetRefreshJob } from './jobs/hiddenAssetRefresh.job';
 import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.job';
 import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNotification.job';
 import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummyEvents.job';
+import { runHabitGenerationJob } from './jobs/habitGeneration.job';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
 
@@ -1192,6 +1193,22 @@ cron.schedule(draftCleanupCron, async () => {
 });
 
 console.log(`[WORKER] Inventory Draft Cleanup scheduled for: ${draftCleanupCron} America/New_York`);
+
+// =============================================================================
+// HOME HABIT COACH — WEEKLY BATCH GENERATION
+// =============================================================================
+// Runs every Saturday at 3:30 AM EST. Safe to re-run: generation engine
+// deduplicates habits that are already ACTIVE or SNOOZED.
+cron.schedule('30 3 * * 6', async () => {
+  try {
+    console.log('[HABIT-GEN] Running weekly habit generation job...');
+    await runHabitGenerationJob();
+    console.log('[HABIT-GEN] ✅ Weekly habit generation complete');
+  } catch (err) {
+    console.error('[HABIT-GEN] ❌ Weekly habit generation failed:', err);
+  }
+}, { timezone: 'America/New_York' });
+console.log('[HABIT-GEN] Weekly habit generation scheduled for Saturday 3:30 AM EST');
 
 // Start the worker
 startWorker();

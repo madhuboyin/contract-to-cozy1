@@ -21,6 +21,7 @@ const ROUTE_CONTEXT_PATTERNS: Array<{ context: PageContextId; pattern: RegExp }>
   { context: 'home-digital-will', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-will(?:\/|$)/ },
   { context: 'hidden-asset-finder', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/hidden-asset-finder(?:\/|$)/ },
   { context: 'home-digital-twin', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-twin(?:\/|$)/ },
+  { context: 'home-habit-coach', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/home-habit-coach(?:\/|$)/ },
   { context: 'home-event-radar', pattern: /^\/dashboard\/(?:home-event-radar|properties\/[^/]+\/tools\/home-event-radar)(?:\/|$)/ },
   { context: 'status-board', pattern: /^\/dashboard\/properties\/[^/]+\/status-board(?:\/|$)/ },
   { context: 'seller-prep', pattern: /^\/dashboard\/properties\/[^/]+\/seller-prep(?:\/|$)/ },
