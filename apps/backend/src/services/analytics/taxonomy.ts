@@ -37,6 +37,7 @@ export const AnalyticsModule = {
   FINANCIAL:         'financial',
   DASHBOARD:         'dashboard',
   ADMIN_ANALYTICS:   'admin_analytics',
+  RENOVATION_ADVISOR: 'renovation_advisor',
 } as const;
 
 export type AnalyticsModuleKey = typeof AnalyticsModule[keyof typeof AnalyticsModule];
@@ -94,6 +95,9 @@ export const AnalyticsFeature = {
 
   // Admin
   ADMIN_ANALYTICS_DASHBOARD: 'admin_analytics_dashboard',
+
+  // Home Renovation Risk Advisor
+  RENOVATION_ADVISOR_SESSION: 'renovation_advisor_session',
 } as const;
 
 export type AnalyticsFeatureKey = typeof AnalyticsFeature[keyof typeof AnalyticsFeature];
