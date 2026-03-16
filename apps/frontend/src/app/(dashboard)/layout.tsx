@@ -50,6 +50,7 @@ import {
   PauseCircle,
   PiggyBank,
   BarChart2,
+  Cpu,
 } from 'lucide-react';
 import { resolveHomeownerNavigationIcon, resolveToolIcon } from '@/lib/icons';
 import { User } from '@/types';
@@ -654,6 +655,13 @@ function DesktopNav({ user }: { user: User | null }) {
             icon: BarChart2,
             isActive: (path: string) => path.startsWith('/dashboard/analytics-admin'),
           },
+          {
+            key: 'worker-jobs',
+            name: 'Worker Jobs',
+            href: '/dashboard/worker-jobs',
+            icon: Cpu,
+            isActive: (path: string) => path.startsWith('/dashboard/worker-jobs'),
+          },
         ]
       : []),
   ];
@@ -920,6 +928,17 @@ function SidebarNav({ user }: { user: User | null }) {
       : null;
   const AnalyticsAdminIcon = analyticsAdminLink?.icon;
 
+  const workerJobsLink =
+    user?.role === 'ADMIN'
+      ? {
+          name: 'Worker Jobs',
+          href: '/dashboard/worker-jobs',
+          icon: Cpu,
+          isActive: (path: string) => path.startsWith('/dashboard/worker-jobs'),
+        }
+      : null;
+  const WorkerJobsIcon = workerJobsLink?.icon;
+
   const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     { name: 'Warranties', href: '/dashboard/warranties', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', Wrench), isActive: (path) => path.startsWith('/dashboard/warranties') },
     { name: 'Insurance', href: '/dashboard/insurance', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'insurance', Shield), isActive: (path) => path.startsWith('/dashboard/insurance') },
@@ -1174,6 +1193,17 @@ function SidebarNav({ user }: { user: User | null }) {
           >
             <AnalyticsAdminIcon className="h-4 w-4" />
             {analyticsAdminLink.name}
+          </Link>
+        </SheetClose>
+      )}
+      {workerJobsLink && WorkerJobsIcon && (
+        <SheetClose asChild>
+          <Link
+            href={workerJobsLink.href}
+            className={navLinkClass(workerJobsLink.isActive(pathname || ''))}
+          >
+            <WorkerJobsIcon className="h-4 w-4" />
+            {workerJobsLink.name}
           </Link>
         </SheetClose>
       )}
