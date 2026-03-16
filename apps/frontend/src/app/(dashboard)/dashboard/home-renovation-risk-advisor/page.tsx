@@ -350,9 +350,15 @@ export default function HomeRenovationRiskAdvisorPage() {
     currentSession?.status === 'PROCESSING';
 
   function handleRun() {
-    if (currentSessionId) {
+    const renovationTypeChanged =
+      currentSession && currentSession.renovationType !== renovationType;
+
+    if (currentSessionId && !renovationTypeChanged) {
+      // Same renovation type — re-run the existing session
       rerunMutation.mutate();
     } else {
+      // No session, or renovation type changed — always create a fresh session
+      setCurrentSessionId(null);
       createAndEvaluateMutation.mutate();
     }
   }
