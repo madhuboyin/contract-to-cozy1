@@ -91,4 +91,12 @@ router.get(
   HomeRenovationAdvisorController.listSessions,
 );
 
+// GET /api/properties/:propertyId/home-renovation-advisor/retroactive-candidates
+router.get(
+  '/properties/:propertyId/home-renovation-advisor/retroactive-candidates',
+  authenticate,
+  propertyAuthMiddleware,
+  HomeRenovationAdvisorController.detectRetroactiveCandidates,
+);
+
 export default router;

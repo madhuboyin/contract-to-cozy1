@@ -49,14 +49,14 @@ export async function runEvaluation(ctx: EvaluationContext): Promise<EvaluationO
   );
 
   // Compute overall risk
-  const overallRiskLevel = computeOverallRiskLevel(permit, licensing, taxImpact);
+  const overallRiskLevel = computeOverallRiskLevel(permit, licensing, taxImpact, ctx);
 
   // Build structured warnings and next actions
   const warnings = buildWarnings(ctx, permit, taxImpact, licensing);
-  const nextActions = buildNextActions(ctx, permit, taxImpact, licensing, overallRiskLevel);
+  const nextActions = buildNextActions(ctx, permit, taxImpact, licensing, overallRiskLevel, null);
 
   // Build text summaries
-  const overallSummary = buildOverallSummary(ctx, permit, taxImpact, licensing, overallRiskLevel);
+  const overallSummary = buildOverallSummary(ctx, permit, taxImpact, licensing, overallRiskLevel, overallConfidence);
   const warningsSummary = buildWarningsSummary(warnings);
   const nextStepsSummary = buildNextStepsSummary(nextActions);
 

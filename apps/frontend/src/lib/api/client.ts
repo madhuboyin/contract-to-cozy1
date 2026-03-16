@@ -3212,6 +3212,15 @@ class APIClient {
     return res.data;
   }
 
+  async getRetroactiveCandidates(
+    propertyId: string,
+  ): Promise<import('@/types').RetroactiveCandidate[]> {
+    const res = await this.get<{ candidates: import('@/types').RetroactiveCandidate[] }>(
+      `/api/properties/${propertyId}/home-renovation-advisor/retroactive-candidates`,
+    );
+    return res.data?.candidates ?? [];
+  }
+
   async updateRenovationAdvisorCompliance(
     sessionId: string,
     input: Partial<import('@/types').RenovationAdvisorComplianceChecklist>,

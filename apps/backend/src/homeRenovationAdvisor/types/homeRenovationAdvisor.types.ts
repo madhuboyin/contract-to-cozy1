@@ -201,6 +201,7 @@ export interface WarningEntry {
   code: string;
   title: string;
   severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'IMMEDIATE';
   description: string;
 }
 

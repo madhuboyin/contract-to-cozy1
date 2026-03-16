@@ -28,6 +28,7 @@ import { AdvisorWarningsCard } from '@/components/features/homeRenovationAdvisor
 import { AdvisorNextActionsCard } from '@/components/features/homeRenovationAdvisor/AdvisorNextActionsCard';
 import { AdvisorSkeleton } from '@/components/features/homeRenovationAdvisor/AdvisorSkeleton';
 import { AdvisorLinkedIntegrations } from '@/components/features/homeRenovationAdvisor/AdvisorLinkedIntegrations';
+import { AdvisorRetroactiveBar } from '@/components/features/homeRenovationAdvisor/AdvisorRetroactiveBar';
 import {
   formatRenovationType,
   formatRiskLevel,
@@ -428,6 +429,17 @@ export default function HomeRenovationRiskAdvisorPage() {
             minViewport="lg"
           />
 
+          {/* Retroactive context banner */}
+          {currentSession?.flowType === 'RETROACTIVE_COMPLIANCE' && (
+            <MobileSection>
+              <AdvisorRetroactiveBar
+                renovationLabel={
+                  currentSession.renovationLabel || formatRenovationType(currentSession.renovationType)
+                }
+              />
+            </MobileSection>
+          )}
+
           {/* Input card */}
           <MobileSection>
             <AdvisorInputCard
@@ -497,6 +509,22 @@ export default function HomeRenovationRiskAdvisorPage() {
               {/* Module cards */}
               <MobileSection className="space-y-3">
                 <MobileSectionHeader title="Details" />
+                {/* Unsupported area fallback — shown when no local data is available */}
+                {currentSession.uiMeta?.unsupportedArea && (
+                  <div
+                    className={cn(
+                      MOBILE_CARD_RADIUS,
+                      'border border-amber-200 bg-amber-50 p-4',
+                    )}
+                  >
+                    <p className="mb-1 text-sm font-semibold text-amber-800">
+                      Limited local data available
+                    </p>
+                    <p className={cn('mb-0 text-amber-700', MOBILE_TYPE_TOKENS.caption)}>
+                      Detailed permit, tax, and licensing data wasn&apos;t available for your specific area. The estimates below are based on national defaults — treat them as directional and verify requirements locally before making any decisions.
+                    </p>
+                  </div>
+                )}
                 {currentSession.permit && (
                   <AdvisorPermitCard permit={currentSession.permit} />
                 )}

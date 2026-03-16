@@ -315,6 +315,22 @@ export class HomeRenovationAdvisorService {
   }
 
   // ============================================================================
+  // DETECT RETROACTIVE CANDIDATES
+  // ============================================================================
+
+  async detectRetroactiveCandidates(
+    userId: string,
+    propertyId: string,
+  ): Promise<import('./engine/retroactive/retroactiveCompliance.service').RetroactiveCandidate[]> {
+    const isOwner = await verifyPropertyOwnership(propertyId, userId);
+    if (!isOwner) {
+      throw new APIError('Property not found or access denied', 404, 'PROPERTY_NOT_FOUND');
+    }
+    const { detectRetroactiveCandidates } = await import('./engine/retroactive/retroactiveCompliance.service');
+    return detectRetroactiveCandidates(propertyId);
+  }
+
+  // ============================================================================
   // PRIVATE HELPERS
   // ============================================================================
 
@@ -365,12 +381,21 @@ export class HomeRenovationAdvisorService {
     };
 
     // Build warnings from stored outputs (no DB re-evaluation)
+    const checklistAnswers = session.complianceChecklist
+      ? {
+          permitObtainedStatus: session.complianceChecklist.permitObtainedStatus as string | null,
+          licensedContractorUsedStatus: session.complianceChecklist.licensedContractorUsedStatus as string | null,
+          reassessmentReceivedStatus: session.complianceChecklist.reassessmentReceivedStatus as string | null,
+        }
+      : null;
+
     const warnings = session.permitOutput && session.taxImpactOutput && session.licensingOutput
       ? buildWarnings(
           ctx,
           mapStoredPermitToResult(session.permitOutput),
           mapStoredTaxToResult(session.taxImpactOutput),
           mapStoredLicensingToResult(session.licensingOutput),
+          checklistAnswers,
         )
       : [];
 
@@ -381,6 +406,10 @@ export class HomeRenovationAdvisorService {
           mapStoredTaxToResult(session.taxImpactOutput),
           mapStoredLicensingToResult(session.licensingOutput),
           session.overallRiskLevel as any,
+          {
+            digitalTwinEntityId: session.linkedDigitalTwinScenarioId,
+            timelineEventId: session.linkedTimelineItemId,
+          },
         )
       : [];
 

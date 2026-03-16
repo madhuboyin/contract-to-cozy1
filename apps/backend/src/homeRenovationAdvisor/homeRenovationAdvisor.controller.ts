@@ -111,6 +111,18 @@ export class HomeRenovationAdvisorController {
     }
   }
 
+  // GET /api/properties/:propertyId/home-renovation-advisor/retroactive-candidates
+  static async detectRetroactiveCandidates(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const { propertyId } = req.params;
+      const candidates = await service.detectRetroactiveCandidates(userId, propertyId);
+      res.json({ success: true, data: { candidates } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   // GET /api/home-renovation-advisor/metadata
   static getMetadata(req: AuthRequest, res: Response, next: NextFunction) {
     try {

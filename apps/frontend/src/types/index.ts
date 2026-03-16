@@ -2818,7 +2818,19 @@ export interface RenovationAdvisorWarning {
   code: string;
   title: string;
   severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'IMMEDIATE';
   description: string;
+}
+
+export interface RetroactiveCandidate {
+  timelineEventId: string;
+  propertyId: string;
+  eventTitle: string;
+  occurredAt: string;
+  amount: number | null;
+  suggestedRenovationType: string | null;
+  suggestedRenovationLabel: string | null;
+  hasLinkedAdvisorSession: boolean;
 }
 
 export interface RenovationAdvisorNextAction {

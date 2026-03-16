@@ -358,21 +358,22 @@ test('warnings builder — no state produces JURISDICTION_UNRESOLVED warning', (
   assert.ok(jWarning, 'should have JURISDICTION_UNRESOLVED warning');
 });
 
-test('warnings builder — retroactive check generates RETROACTIVE_COMPLIANCE_RISK warning', () => {
+test('warnings builder — retroactive check (no checklist) generates RETROACTIVE_COMPLIANCE_REVIEW warning', () => {
   const { buildWarnings } = require('../../dist/homeRenovationAdvisor/engine/summary/summaryBuilder.service');
 
   const ctx = {
     projectCostInput: 50000,
     isRetroactiveCheck: true,
+    renovationType: 'DECK_ADDITION',
     jurisdiction: { state: 'CA', jurisdictionLevel: 'CITY' },
   };
   const permit = { requirementStatus: 'LIKELY_REQUIRED', confidenceLevel: 'MEDIUM' };
   const tax = { monthlyTaxIncreaseMax: 200, dataAvailable: true };
   const licensing = { requirementStatus: 'MAY_BE_REQUIRED', confidenceLevel: 'MEDIUM' };
 
-  const warnings = buildWarnings(ctx, permit, tax, licensing);
-  const retroWarning = warnings.find((w) => w.code === 'RETROACTIVE_COMPLIANCE_RISK');
-  assert.ok(retroWarning, 'should have RETROACTIVE_COMPLIANCE_RISK warning');
+  const warnings = buildWarnings(ctx, permit, tax, licensing, null);
+  const retroWarning = warnings.find((w) => w.code === 'RETROACTIVE_COMPLIANCE_REVIEW');
+  assert.ok(retroWarning, 'should have RETROACTIVE_COMPLIANCE_REVIEW warning');
 });
 
 // ============================================================================
