@@ -301,6 +301,75 @@ enum ReplaceRepairImpactLevel {
   HIGH
 }
 
+// ============================================================================
+// HOME HABIT COACH ENUMS
+// ============================================================================
+
+enum HabitCategory {
+  PLUMBING
+  HVAC
+  ELECTRICAL
+  SAFETY
+  APPLIANCE
+  EXTERIOR
+  INTERIOR
+  SEASONAL
+  ENVIRONMENTAL
+  GENERAL
+}
+
+enum HabitCadence {
+  DAILY
+  WEEKLY
+  MONTHLY
+  SEASONAL
+  ANNUAL
+  AD_HOC
+}
+
+enum HabitAssignmentStatus {
+  ACTIVE
+  COMPLETED
+  SNOOZED
+  SKIPPED
+  EXPIRED
+  DISMISSED
+}
+
+enum HabitActionType {
+  VIEWED
+  COMPLETED
+  SNOOZED
+  SKIPPED
+  DISMISSED
+  REOPENED
+}
+
+enum HabitGenerationSource {
+  SYSTEM_RULE
+  PROPERTY_PROFILE
+  CLIMATE_PROFILE
+  SEASONAL_ENGINE
+  USER_CONTEXT
+  MANUAL
+  IMPORTED
+}
+
+enum HabitDifficulty {
+  EASY
+  MODERATE
+  ADVANCED
+}
+
+enum HabitImpactType {
+  PREVENT_DAMAGE
+  IMPROVE_EFFICIENCY
+  IMPROVE_SAFETY
+  REDUCE_WEAR
+  IMPROVE_AIR_QUALITY
+  GENERAL_UPKEEP
+}
+
 model InventoryRoomScanSession {
   id          String   @id @default(uuid())
   propertyId  String
@@ -1189,6 +1258,9 @@ model User {
   // Admin Analytics relations
   analyticsEvents ProductAnalyticsEvent[]
 
+  // Home Habit Coach relations
+  habitActions PropertyHabitAction[]
+
   @@index([email])
   @@index([role])
 
@@ -1724,6 +1796,11 @@ model Property {
   // Admin Analytics relations
   analyticsEvents          ProductAnalyticsEvent[]
   analyticsDailyRollups    PropertyAnalyticsDailyRollup[]
+
+  // Home Habit Coach relations
+  propertyHabits  PropertyHabit[]
+  habitPreference PropertyHabitPreference?
+  habitActions    PropertyHabitAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -7589,4 +7666,140 @@ model AnalyticsCohortSnapshot {
   @@index([cohortType, snapshotDate])
   @@index([snapshotDate])
   @@map("analytics_cohort_snapshots")
+}
+
+// ============================================================================
+// HOME HABIT COACH
+// ============================================================================
+
+// Master catalog of reusable habit definitions shared across all properties.
+// This is the template layer — not property-specific.
+model HabitTemplate {
+  id    String @id @default(uuid())
+  key   String @unique // stable slug, e.g. "hvac_filter_replace_monthly"
+
+  title              String
+  shortDescription   String?
+  description        String?
+
+  category   HabitCategory
+  cadence    HabitCadence
+  difficulty HabitDifficulty
+  impactType HabitImpactType
+
+  estimatedMinutes Int?
+  isActive         Boolean @default(true)
+  isSeasonal       Boolean @default(false)
+  priority         Int?    // lower = higher priority; null = unranked
+
+  tipText                String? // guidance shown alongside the habit
+  completionNoteTemplate String? // suggested note prompt when user completes
+  iconKey                String? // future UI icon mapping key
+
+  // Flexible targeting rules and metadata for engine use
+  targetingRulesJson Json? // conditions under which this habit should be surfaced
+  metadataJson       Json? // additional arbitrary metadata
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  propertyHabits PropertyHabit[]
+
+  @@index([category])
+  @@index([cadence])
+  @@index([isActive])
+  @@map("habit_templates")
+}
+
+// A habit instance assigned or generated for a specific property.
+// Multiple instances of the same template may exist over time (recurrence-safe).
+model PropertyHabit {
+  id              String @id @default(uuid())
+  propertyId      String
+  habitTemplateId String
+
+  status           HabitAssignmentStatus @default(ACTIVE)
+  generationSource HabitGenerationSource
+
+  // Optional property-scoped overrides for title/description
+  titleOverride       String?
+  descriptionOverride String?
+
+  // Timing lifecycle fields
+  surfacedAt    DateTime  @default(now())
+  dueAt         DateTime?
+  availableFrom DateTime?
+  expiresAt     DateTime?
+  lastActionAt  DateTime?
+  lastCompletedAt DateTime?
+  snoozedUntil  DateTime?
+
+  // Explainability and scoring
+  priorityScore Float?
+  reasonSummary String? // short human-readable "why this was suggested"
+  reasonJson    Json?   // structured engine output: rules matched, signals, weights
+  contextJson   Json?   // seasonal/property/climate context snapshot at generation time
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  habitTemplate HabitTemplate @relation(fields: [habitTemplateId], references: [id], onDelete: Restrict)
+
+  actions PropertyHabitAction[]
+
+  @@index([propertyId, status])
+  @@index([propertyId, dueAt])
+  @@index([propertyId, snoozedUntil])
+  @@index([propertyId, createdAt])
+  @@index([habitTemplateId])
+  @@map("property_habits")
+}
+
+// Immutable event log of user or system interactions with a property habit.
+// Supports full auditability and habit history replay.
+model PropertyHabitAction {
+  id              String  @id @default(uuid())
+  propertyHabitId String
+  propertyId      String
+  userId          String? // null if system-generated
+
+  actionType         HabitActionType
+  note               String?   // optional user note on completion/skip
+  snoozeUntil        DateTime? // populated when actionType = SNOOZED
+  actionMetadataJson Json?     // any additional context from the client or engine
+
+  createdAt DateTime @default(now())
+
+  propertyHabit PropertyHabit @relation(fields: [propertyHabitId], references: [id], onDelete: Cascade)
+  property      Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([propertyHabitId, createdAt])
+  @@index([propertyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([actionType])
+  @@map("property_habit_actions")
+}
+
+// Property-scoped preferences controlling habit coach behavior.
+// One record per property; created lazily on first preference save.
+model PropertyHabitPreference {
+  id         String @id @default(uuid())
+  propertyId String @unique
+
+  isEnabled             Boolean @default(true)
+  preferredSurfaceCount Int?    // max habits to surface at once; null = engine default
+
+  snoozeDefaultsJson   Json? // default snooze durations per category, e.g. { "HVAC": 7 }
+  quietHoursJson       Json? // future: suppress habit surfacing during certain hours
+  hiddenCategoriesJson Json? // HabitCategory values the user has muted
+  personalizationJson  Json? // future personalization signals (skill level, goals, etc.)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_habit_preferences")
 }
