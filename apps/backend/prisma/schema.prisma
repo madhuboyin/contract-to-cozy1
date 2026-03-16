@@ -1808,6 +1808,11 @@ model Property {
   // Home Renovation Risk Advisor
   renovationAdvisorSessions HomeRenovationAdvisorSession[]
 
+  // Mortgage Refinance Radar
+  refinanceOpportunities    RefinanceOpportunity[]
+  refinanceRadarState       PropertyRefinanceRadarState?
+  refinanceScenarios        RefinanceScenarioSnapshot[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -8307,4 +8312,163 @@ model HomeRenovationComplianceChecklist {
 
   @@index([advisorSessionId])
   @@map("home_renovation_compliance_checklists")
+}
+
+// ============================================================================
+// MORTGAGE REFINANCE RADAR
+// ============================================================================
+
+// --- Enums ---
+
+// Current detection state of the refinance radar for a property.
+enum RefinanceRadarState {
+  CLOSED // No actionable refinance opportunity currently detected
+  OPEN   // A refinance opportunity window is currently active
+}
+
+// Confidence level of a refinance opportunity evaluation.
+enum RefinanceConfidenceLevel {
+  WEAK   // Rate gap exists but savings are marginal or assumptions are uncertain
+  GOOD   // Meaningful savings detected with reasonable assumptions
+  STRONG // Clear, high-confidence savings window with solid inputs
+}
+
+// Source of a mortgage rate market snapshot.
+enum MortgageRateSource {
+  FREDDIE_MAC // Freddie Mac Primary Mortgage Market Survey
+  FRED        // St. Louis Fed FRED economic data
+  MANUAL      // Manually entered by an admin or operator
+  IMPORTED    // Imported from a third-party data pipeline
+}
+
+// Loan term used in a refinance scenario comparison.
+enum RefinanceScenarioTerm {
+  THIRTY_YEAR
+  TWENTY_YEAR
+  FIFTEEN_YEAR
+}
+
+// --- Models ---
+
+// A. Periodic market mortgage rate snapshot.
+// Used as the market-rate input for radar evaluations and trend analysis.
+model MortgageRateSnapshot {
+  id        String              @id @default(uuid())
+  date      DateTime            @db.Date
+  rate30yr  Float               // e.g. 6.875 (percent, not decimal fraction)
+  rate15yr  Float               // e.g. 6.125
+  source    MortgageRateSource
+  sourceRef String?             // External version/release reference (e.g. "2024-W12")
+  metadataJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Back-relations from radar state records that reference this snapshot
+  radarStates PropertyRefinanceRadarState[] @relation("LastRateSnapshot")
+
+  @@unique([source, date])
+  @@index([date(sort: Desc)])
+  @@index([source])
+  @@index([source, date(sort: Desc)])
+  @@map("mortgage_rate_snapshots")
+}
+
+// B. A refinance opportunity evaluation result for a specific property.
+// Multiple records accumulate over time — supports history and trend analysis.
+model RefinanceOpportunity {
+  id               String                    @id @default(uuid())
+  propertyId       String
+
+  currentRate      Float                     // Homeowner's existing mortgage rate (percent)
+  marketRate       Float                     // Prevailing market rate used in evaluation (percent)
+  rateGap          Float                     // currentRate - marketRate (percent)
+
+  loanBalance      Decimal                   @db.Decimal(12, 2) // Estimated remaining principal
+  monthlySavings   Decimal                   @db.Decimal(12, 2)
+  breakEvenMonths  Int                       // Months to recoup closing costs
+  lifetimeSavings  Decimal                   @db.Decimal(12, 2)
+
+  confidenceLevel  RefinanceConfidenceLevel
+  radarState       RefinanceRadarState
+
+  evaluationDate   DateTime                  @db.Date
+  triggerDate      DateTime?                 // When CLOSED → OPEN transition was first detected
+
+  closingCostAssumption Decimal?             @db.Decimal(12, 2)
+  remainingTermMonths   Int?                 // Months left on current loan at time of evaluation
+
+  metadataJson     Json?                     // Assumptions and inputs used in evaluation
+
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  property         Property                  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Back-reference from the radar state that treats this as the current opportunity
+  radarStateCurrentRef PropertyRefinanceRadarState? @relation("CurrentRefinanceOpportunity")
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([propertyId, radarState])
+  @@index([propertyId, evaluationDate(sort: Desc)])
+  @@index([confidenceLevel])
+  @@map("refinance_opportunities")
+}
+
+// C. Current refinance radar state for a property — one record per property.
+// Provides fast lookup of current state without scanning opportunity history.
+model PropertyRefinanceRadarState {
+  id         String              @id @default(uuid())
+  propertyId String              @unique
+
+  radarState RefinanceRadarState @default(CLOSED)
+
+  // Optional pointer to the RefinanceOpportunity that opened the current window
+  currentOpportunityId String?   @unique
+  // Optional pointer to the most recent rate snapshot used in evaluation
+  lastRateSnapshotId   String?
+
+  lastEvaluatedAt DateTime?
+  lastOpenedAt    DateTime?
+  lastClosedAt    DateTime?
+
+  metadataJson    Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property         Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  currentOpportunity RefinanceOpportunity? @relation("CurrentRefinanceOpportunity", fields: [currentOpportunityId], references: [id], onDelete: SetNull)
+  lastRateSnapshot MortgageRateSnapshot? @relation("LastRateSnapshot", fields: [lastRateSnapshotId], references: [id], onDelete: SetNull)
+
+  @@index([radarState])
+  @@index([lastEvaluatedAt])
+  @@map("property_refinance_radar_states")
+}
+
+// D. User-run refinance scenario comparison — persisted for later review.
+// Follows the same pattern as DoNothingScenario and CoverageScenario.
+model RefinanceScenarioSnapshot {
+  id         String                 @id @default(uuid())
+  propertyId String
+
+  targetRate   Float                // Hypothetical new mortgage rate (percent)
+  targetTerm   RefinanceScenarioTerm
+  closingCost  Decimal              @db.Decimal(12, 2)
+
+  monthlySavings  Decimal?          @db.Decimal(12, 2)
+  breakEvenMonths Int?
+  lifetimeSavings Decimal?          @db.Decimal(12, 2)
+
+  isSaved      Boolean              @default(false) // User explicitly saved this scenario
+  metadataJson Json?                // Full assumption set used in scenario run
+
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  property     Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([propertyId, isSaved])
+  @@map("refinance_scenario_snapshots")
 }
