@@ -67,6 +67,12 @@ const HOME_TOOL_GROUPS = [
     summary: 'Capital planning, prep, and timeline execution',
     toolKeys: ['capital-timeline', 'seller-prep', 'home-timeline', 'status-board'],
   },
+  {
+    key: 'habits',
+    title: 'Home Habits',
+    summary: 'Seasonal care routines, safety checks, and maintenance habits',
+    toolKeys: ['home-habit-coach'],
+  },
 ] as const;
 
 export default function HomeToolsPage() {

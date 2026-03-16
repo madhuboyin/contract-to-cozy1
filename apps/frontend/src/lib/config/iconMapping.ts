@@ -224,6 +224,8 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   HOME_DIGITAL_TWIN: 'Layers',
   NEIGHBORHOOD_CHANGE_RADAR: 'Radar',
   'NEIGHBORHOOD-CHANGE-RADAR': 'Radar',
+  HOME_HABIT_COACH: 'ListChecks',
+  'HOME-HABIT-COACH': 'ListChecks',
 };
 
 const CORE_NAV_ALIASES: Record<string, CoreNavKey> = {

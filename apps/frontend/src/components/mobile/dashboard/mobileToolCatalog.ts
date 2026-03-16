@@ -448,4 +448,14 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/neighborhood-change-radar(\/|$)/.test(pathname),
   },
+  {
+    key: 'home-habit-coach',
+    name: 'Home Habit Coach',
+    description: 'Seasonal care routines and safety checks for your home',
+    hrefSuffix: 'tools/home-habit-coach',
+    navTarget: 'tool:home-habit-coach',
+    icon: resolveToolIcon('home', 'home-habit-coach'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/home-habit-coach(\/|$)/.test(pathname),
+  },
 ];
