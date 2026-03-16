@@ -5,20 +5,20 @@ export type HabitCategory =
   | 'PLUMBING'
   | 'ELECTRICAL'
   | 'SAFETY'
+  | 'APPLIANCE'
   | 'EXTERIOR'
   | 'INTERIOR'
   | 'SEASONAL'
-  | 'APPLIANCES'
-  | 'LANDSCAPING'
+  | 'ENVIRONMENTAL'
   | 'GENERAL';
 
 export type HabitCadence =
+  | 'DAILY'
+  | 'WEEKLY'
   | 'MONTHLY'
-  | 'QUARTERLY'
-  | 'SEMI_ANNUAL'
+  | 'SEASONAL'
   | 'ANNUAL'
-  | 'AS_NEEDED'
-  | 'SEASONAL';
+  | 'AD_HOC';
 
 export type HabitAssignmentStatus =
   | 'ACTIVE'
@@ -28,9 +28,15 @@ export type HabitAssignmentStatus =
   | 'DISMISSED'
   | 'EXPIRED';
 
-export type HabitDifficulty = 'EASY' | 'MODERATE' | 'HARD';
+export type HabitDifficulty = 'EASY' | 'MODERATE' | 'ADVANCED';
 
-export type HabitImpactType = 'SAFETY' | 'COST_SAVINGS' | 'COMFORT' | 'LONGEVITY' | 'COMPLIANCE';
+export type HabitImpactType =
+  | 'PREVENT_DAMAGE'
+  | 'IMPROVE_EFFICIENCY'
+  | 'IMPROVE_SAFETY'
+  | 'REDUCE_WEAR'
+  | 'IMPROVE_AIR_QUALITY'
+  | 'GENERAL_UPKEEP';
 
 export type HabitActionType =
   | 'COMPLETED'

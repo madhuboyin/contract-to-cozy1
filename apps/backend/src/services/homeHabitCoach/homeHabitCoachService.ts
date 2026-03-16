@@ -4,6 +4,7 @@ import { HabitAssignmentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { APIError } from '../../middleware/error.middleware';
 import { generateHabitsForProperty } from './habitGenerationEngine';
+import { rankHabits, selectSpotlight } from './habitRankingEngine';
 
 // ─── Status transition rules ───────────────────────────────────────────────
 
@@ -103,48 +104,44 @@ export class HomeHabitCoachService {
         ? ['ACTIVE', 'SNOOZED']
         : ['ACTIVE'];
 
-    const where: Prisma.PropertyHabitWhereInput = {
-      propertyId,
-      status: { in: statusFilter },
-    };
-
-    if (opts.cursor) {
-      // Cursor-based pagination: use createdAt + id as stable cursor
-      where.id = { lt: opts.cursor };
-    }
-
-    const habits = await prisma.propertyHabit.findMany({
-      where,
-      take: limit + 1,
-      orderBy: [{ priorityScore: 'desc' }, { dueAt: 'asc' }, { createdAt: 'desc' }],
+    // Load all matching habits then rank in memory (lists are typically small).
+    // Cursor is applied post-sort so pagination remains stable.
+    const allHabits = await prisma.propertyHabit.findMany({
+      where: { propertyId, status: { in: statusFilter } },
+      orderBy: [{ priorityScore: 'desc' }, { createdAt: 'desc' }],
       select: HABIT_SUMMARY_SELECT,
     });
 
-    // Filter out snoozed habits whose snooze window has expired
-    const visible = habits.filter(
+    // Filter out snoozed habits still in their snooze window
+    const visible = allHabits.filter(
       (h) => h.status !== 'SNOOZED' || (h.snoozedUntil != null && h.snoozedUntil <= now),
     );
 
-    const hasMore = visible.length > limit;
-    const items = hasMore ? visible.slice(0, limit) : visible;
+    // Apply behavior-aware ranking on top of base priorityScore
+    const ranked = await rankHabits(visible, propertyId);
+
+    // Apply cursor (offset by ID position in sorted list)
+    const startIndex = opts.cursor
+      ? ranked.findIndex((h) => h.id === opts.cursor) + 1
+      : 0;
+    const page = ranked.slice(startIndex, startIndex + limit + 1);
+
+    const hasMore = page.length > limit;
+    const items = hasMore ? page.slice(0, limit) : page;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
 
     return { habits: items, hasMore, nextCursor };
   }
 
   async getSpotlightHabit(propertyId: string) {
-    const now = new Date();
-
-    const habit = await prisma.propertyHabit.findFirst({
-      where: {
-        propertyId,
-        status: 'ACTIVE',
-        OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }],
-      },
-      orderBy: [{ priorityScore: 'desc' }, { dueAt: 'asc' }, { createdAt: 'desc' }],
+    // Load all active candidates (including snoozed — selectSpotlight filters them)
+    const candidates = await prisma.propertyHabit.findMany({
+      where: { propertyId, status: { in: ['ACTIVE', 'SNOOZED'] } },
+      orderBy: [{ priorityScore: 'desc' }, { createdAt: 'desc' }],
       select: HABIT_SUMMARY_SELECT,
     });
 
+    const habit = await selectSpotlight(candidates, propertyId);
     return { habit: habit ?? null };
   }
 

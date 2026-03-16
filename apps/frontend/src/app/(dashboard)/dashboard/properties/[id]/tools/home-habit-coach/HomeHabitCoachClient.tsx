@@ -66,21 +66,21 @@ const CATEGORY_LABELS: Record<HabitCategory, string> = {
   PLUMBING: 'Plumbing',
   ELECTRICAL: 'Electrical',
   SAFETY: 'Safety',
+  APPLIANCE: 'Appliances',
   EXTERIOR: 'Exterior',
   INTERIOR: 'Interior',
   SEASONAL: 'Seasonal',
-  APPLIANCES: 'Appliances',
-  LANDSCAPING: 'Landscaping',
+  ENVIRONMENTAL: 'Environmental',
   GENERAL: 'General',
 };
 
 const CADENCE_LABELS: Record<HabitCadence, string> = {
+  DAILY: 'Daily',
+  WEEKLY: 'Weekly',
   MONTHLY: 'Monthly',
-  QUARTERLY: 'Quarterly',
-  SEMI_ANNUAL: 'Every 6 months',
-  ANNUAL: 'Annual',
-  AS_NEEDED: 'As needed',
   SEASONAL: 'Seasonal',
+  ANNUAL: 'Annual',
+  AD_HOC: 'As needed',
 };
 
 const STATUS_CHIP_TONE: Record<HabitAssignmentStatus, 'info' | 'good' | 'elevated' | 'danger'> = {
@@ -95,7 +95,7 @@ const STATUS_CHIP_TONE: Record<HabitAssignmentStatus, 'info' | 'good' | 'elevate
 const STATUS_LABELS: Record<HabitAssignmentStatus, string> = {
   ACTIVE: 'Active',
   SNOOZED: 'Snoozed',
-  COMPLETED: 'Done',
+  COMPLETED: 'Completed',
   SKIPPED: 'Skipped',
   DISMISSED: 'Dismissed',
   EXPIRED: 'Expired',
@@ -114,17 +114,36 @@ function formatDue(dueAt: string | null): string | null {
   const date = new Date(dueAt);
   const now = new Date();
   const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return 'Overdue';
+  if (diffDays < 0) return `Overdue by ${Math.abs(diffDays)}d`;
   if (diffDays === 0) return 'Due today';
   if (diffDays === 1) return 'Due tomorrow';
-  if (diffDays <= 7) return `Due in ${diffDays}d`;
+  if (diffDays <= 7) return `Due in ${diffDays} days`;
   return `Due ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 }
 
 function formatSnoozed(snoozedUntil: string | null): string | null {
   if (!snoozedUntil) return null;
   const date = new Date(snoozedUntil);
-  return `Snoozed until ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  return `Back on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
+function formatActionDate(lastActionAt: string | null): string | null {
+  if (!lastActionAt) return null;
+  const date = new Date(lastActionAt);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays <= 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function effortLabel(minutes: number | null): string | null {
+  if (!minutes) return null;
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
 function habitTitle(habit: PropertyHabit): string {
@@ -145,9 +164,7 @@ function SpotlightCard({
   onOpen: (h: PropertyHabit) => void;
 }) {
   const dueLabel = formatDue(habit.dueAt);
-  const minutesLabel = habit.habitTemplate.estimatedMinutes
-    ? `~${habit.habitTemplate.estimatedMinutes} min`
-    : null;
+  const effort = effortLabel(habit.habitTemplate.estimatedMinutes);
 
   return (
     <MobileCard
@@ -187,10 +204,10 @@ function SpotlightCard({
             {CATEGORY_LABELS[habit.habitTemplate.category] ?? habit.habitTemplate.category}
           </StatusChip>
           {dueLabel ? <StatusChip tone="elevated">{dueLabel}</StatusChip> : null}
-          {minutesLabel ? (
-            <span className={cn('text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-              <Clock className="mr-1 inline h-3 w-3" />
-              {minutesLabel}
+          {effort ? (
+            <span className={cn('inline-flex items-center gap-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+              <Clock className="h-3 w-3" />
+              {effort}
             </span>
           ) : null}
         </div>
@@ -214,18 +231,29 @@ function SpotlightCard({
 function HabitRow({
   habit,
   onOpen,
+  showDate = false,
 }: {
   habit: PropertyHabit;
   onOpen: (h: PropertyHabit) => void;
+  showDate?: boolean;
 }) {
   const dueLabel = formatDue(habit.dueAt);
-  const snoozedLabel = formatSnoozed(habit.snoozedUntil);
+  const snoozedLabel = habit.status === 'SNOOZED' ? formatSnoozed(habit.snoozedUntil) : null;
+  const actionDateLabel = showDate ? formatActionDate(habit.lastActionAt) : null;
+
+  // Build subtitle: priority → snooze info → due label → action date → description
+  const subtitle =
+    snoozedLabel ??
+    actionDateLabel ??
+    dueLabel ??
+    habitDescription(habit) ??
+    undefined;
 
   return (
     <button type="button" className="w-full text-left" onClick={() => onOpen(habit)}>
       <CompactEntityRow
         title={habitTitle(habit)}
-        subtitle={snoozedLabel ?? dueLabel ?? habitDescription(habit) ?? undefined}
+        subtitle={subtitle}
         status={
           <StatusChip tone={STATUS_CHIP_TONE[habit.status] ?? 'info'}>
             {STATUS_LABELS[habit.status] ?? habit.status}
@@ -331,9 +359,7 @@ function HabitDetailSheet({
   const isActionable = habit.status === 'ACTIVE' || habit.status === 'SNOOZED';
   const isReopenable = ['COMPLETED', 'SKIPPED', 'DISMISSED', 'EXPIRED'].includes(habit.status);
   const dueLabel = formatDue(habit.dueAt);
-  const minutesLabel = habit.habitTemplate.estimatedMinutes
-    ? `~${habit.habitTemplate.estimatedMinutes} min`
-    : null;
+  const effort = effortLabel(habit.habitTemplate.estimatedMinutes);
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) { setSnoozeMode(false); onClose(); } }}>
@@ -363,10 +389,10 @@ function HabitDetailSheet({
               {STATUS_LABELS[habit.status] ?? habit.status}
             </StatusChip>
             {dueLabel ? <StatusChip tone="elevated">{dueLabel}</StatusChip> : null}
-            {minutesLabel ? (
-              <span className={cn('text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
-                <Clock className="mr-1 inline h-3 w-3" />
-                {minutesLabel}
+            {effort ? (
+              <span className={cn('inline-flex items-center gap-1 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+                <Clock className="h-3 w-3" />
+                {effort}
               </span>
             ) : null}
           </div>
@@ -590,6 +616,10 @@ export default function HomeHabitCoachClient() {
 
   const isLoading = spotlightQ.isLoading || habitsQ.isLoading;
 
+  // Determine empty state variant
+  const snoozedCount = habits.filter((h) => h.status === 'SNOOZED').length;
+  const allSnoozed = habits.length > 0 && habits.every((h) => h.status === 'SNOOZED');
+
   return (
     <>
       <MobilePageContainer className="space-y-6 pt-2">
@@ -723,8 +753,8 @@ export default function HomeHabitCoachClient() {
             {!isLoading && habits.length === 0 ? (
               <MobileSection>
                 <EmptyStateCard
-                  title="No active habits"
-                  description="Tap Refresh to generate personalized home care habits for your property."
+                  title="No habits yet"
+                  description="Generate personalized care habits based on your home's profile, systems, and the current season."
                   action={
                     <Button
                       size="sm"
@@ -741,6 +771,21 @@ export default function HomeHabitCoachClient() {
                     </Button>
                   }
                 />
+              </MobileSection>
+            ) : null}
+
+            {!isLoading && allSnoozed ? (
+              <MobileSection>
+                <MobileCard variant="compact" className="border-slate-200 bg-slate-50">
+                  <p className={cn('mb-1 font-medium text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.body)}>
+                    All caught up for now
+                  </p>
+                  <p className={cn('mb-0 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                    {snoozedCount === 1
+                      ? '1 habit is snoozed and will resurface when ready.'
+                      : `${snoozedCount} habits are snoozed and will resurface when ready.`}
+                  </p>
+                </MobileCard>
               </MobileSection>
             ) : null}
 
@@ -800,7 +845,7 @@ export default function HomeHabitCoachClient() {
             ) : (
               <div className="space-y-2">
                 {historyHabits.map((habit) => (
-                  <HabitRow key={habit.id} habit={habit} onOpen={openHabit} />
+                  <HabitRow key={habit.id} habit={habit} onOpen={openHabit} showDate />
                 ))}
               </div>
             )}

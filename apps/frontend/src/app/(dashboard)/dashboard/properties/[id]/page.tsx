@@ -1464,7 +1464,7 @@ export default function PropertyDetailPage() {
                 </div>
               </div>
               <p className="mb-0 text-sm text-slate-600">
-                Small, actionable habits tailored to your home's systems, location, and season.
+                Small, actionable habits tailored to your home&apos;s systems, location, and season.
               </p>
             </div>
 
