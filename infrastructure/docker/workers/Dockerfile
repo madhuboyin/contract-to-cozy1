@@ -31,6 +31,8 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/domainEvents \
              src/shared/backend/services/incidents \
              src/shared/backend/services/hiddenAssets \
+             src/shared/backend/services/homeHabitCoach \
+             src/shared/backend/services/analytics \
              src/shared/backend/types \
              src/shared/backend/lib \
              src/shared/backend/neighborhoodIntelligence
@@ -59,6 +61,17 @@ COPY apps/backend/src/services/hiddenAssets.service.ts src/shared/backend/servic
 COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts src/shared/backend/services/hiddenAssets/
 COPY apps/backend/src/services/hiddenAssets/categoryConfig.ts src/shared/backend/services/hiddenAssets/
 COPY apps/backend/src/services/hiddenAssets/types.ts src/shared/backend/services/hiddenAssets/
+# Copy homeHabitCoach service files needed by habitGeneration.job.ts
+COPY apps/backend/src/services/homeHabitCoach/habitGenerationEngine.ts src/shared/backend/services/homeHabitCoach/
+COPY apps/backend/src/services/homeHabitCoach/habitRankingEngine.ts src/shared/backend/services/homeHabitCoach/
+COPY apps/backend/src/services/homeHabitCoach/habitRuleEvaluator.ts src/shared/backend/services/homeHabitCoach/
+# Copy analytics service needed by hiddenAssets.service.ts and incident.service.ts
+COPY apps/backend/src/services/analytics/index.ts src/shared/backend/services/analytics/
+COPY apps/backend/src/services/analytics/emitter.ts src/shared/backend/services/analytics/
+COPY apps/backend/src/services/analytics/service.ts src/shared/backend/services/analytics/
+COPY apps/backend/src/services/analytics/repository.ts src/shared/backend/services/analytics/
+COPY apps/backend/src/services/analytics/schemas.ts src/shared/backend/services/analytics/
+COPY apps/backend/src/services/analytics/taxonomy.ts src/shared/backend/services/analytics/
 # Copy neighborhood intelligence files needed by refreshNeighborhoodEvents.job.ts
 # and ingestNeighborhoodDummyEvents.job.ts
 COPY apps/backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService.ts src/shared/backend/neighborhoodIntelligence/
@@ -86,7 +99,8 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeHabitCoach\/habitGenerationEngine/\.\.\/shared\/backend\/services\/homeHabitCoach\/habitGenerationEngine/g' src/jobs/habitGeneration.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
