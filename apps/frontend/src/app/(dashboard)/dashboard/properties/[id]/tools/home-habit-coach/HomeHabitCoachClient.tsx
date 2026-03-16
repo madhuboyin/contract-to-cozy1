@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clock,
   History,
+  Info,
   ListChecks,
   Loader2,
   RefreshCw,
@@ -43,7 +44,8 @@ import {
   MobileSectionHeader,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
+import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dashboard/mobileDesignTokens';
+import RelatedTools from '@/components/tools/RelatedTools';
 import {
   completeHabit,
   dismissHabit,
@@ -493,6 +495,91 @@ function HabitDetailSheet({
   );
 }
 
+// ─── Desktop sidebar ─────────────────────────────────────────────────────────
+
+function HabitCoachDesktopSidebar({
+  totalCount,
+  snoozedCount,
+  isEnabled,
+  spotlightTitle,
+}: {
+  totalCount: number;
+  snoozedCount: number;
+  isEnabled: boolean | undefined;
+  spotlightTitle: string | null;
+}) {
+  return (
+    <aside className="hidden space-y-4 lg:block lg:sticky lg:top-4">
+      {/* Stats card */}
+      <div
+        className={cn(
+          MOBILE_CARD_RADIUS,
+          'border border-[hsl(var(--mobile-border-subtle))] bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.07)]',
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))]">
+            <ListChecks className="h-4 w-4 text-[hsl(var(--mobile-text-primary))]" />
+          </div>
+          <div className="min-w-0">
+            <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+              Habit Summary
+            </p>
+            <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+              {isEnabled === false ? 'Habits disabled' : 'Your active habits'}
+            </p>
+            {spotlightTitle ? (
+              <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+                Top pick: {spotlightTitle}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Total habits</p>
+            <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{totalCount}</p>
+          </div>
+          <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Snoozed</p>
+            <p className="mb-0 mt-1 text-xl font-semibold text-[hsl(var(--mobile-text-primary))]">{snoozedCount}</p>
+          </div>
+          <div className="col-span-2 rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3.5 py-3">
+            <p className={cn('mb-0 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>Status</p>
+            <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+              {isEnabled === false ? 'Disabled for this property' : 'Active'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* How it works card */}
+      <div
+        className={cn(
+          MOBILE_CARD_RADIUS,
+          'border border-[hsl(var(--mobile-border-subtle))] bg-[linear-gradient(160deg,#ffffff,hsl(var(--mobile-brand-soft)))] p-5',
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-white text-[hsl(var(--mobile-brand-strong))]">
+            <Info className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">How it works</p>
+            <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
+              Home Habit Coach generates personalised maintenance routines based on your home&apos;s systems, age, climate, and the current season.
+            </p>
+            <p className={cn('mb-0 mt-3 text-[hsl(var(--mobile-text-muted))]', MOBILE_TYPE_TOKENS.caption)}>
+              Complete habits to build a maintenance history. Snooze or skip habits that don&apos;t apply right now.
+            </p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 type Tab = 'active' | 'history';
@@ -579,7 +666,7 @@ export default function HomeHabitCoachClient() {
 
   return (
     <>
-      <MobilePageContainer className="space-y-6 pt-2">
+      <MobilePageContainer className="space-y-6 pt-2 lg:max-w-7xl lg:px-8 lg:pb-10">
         {/* Header */}
         <MobileSection>
           <div className="flex items-center gap-3">
@@ -597,6 +684,9 @@ export default function HomeHabitCoachClient() {
             />
           </div>
         </MobileSection>
+
+        <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-6">
 
         {/* Disabled banner */}
         {prefs && !prefs.isEnabled ? (
@@ -839,7 +929,23 @@ export default function HomeHabitCoachClient() {
           </MobileSection>
         ) : null}
 
-        <BottomSafeAreaReserve />
+            <BottomSafeAreaReserve />
+          </div>
+
+          <RelatedTools
+            context="home-habit-coach"
+            currentToolId="home-habit-coach"
+            propertyId={propertyId}
+            minViewport="lg"
+          />
+
+          <HabitCoachDesktopSidebar
+            totalCount={habits.length}
+            snoozedCount={snoozedCount}
+            isEnabled={prefs?.isEnabled}
+            spotlightTitle={spotlight ? (spotlight.titleOverride ?? spotlight.habitTemplate.title) : null}
+          />
+        </div>
       </MobilePageContainer>
 
       <HabitDetailSheet
