@@ -2711,3 +2711,218 @@ export interface NeighborhoodSignal {
   score: number;
   eventId: string;
 }
+
+// ---------------------------------------------------------------------------
+// Home Renovation Risk Advisor
+// ---------------------------------------------------------------------------
+
+export type RenovationAdvisorSessionStatus =
+  | 'DRAFT'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'PARTIAL'
+  | 'FAILED'
+  | 'ARCHIVED';
+
+export type RenovationAdvisorConfidence = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNAVAILABLE';
+
+export type RenovationAdvisorRiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' | 'UNKNOWN';
+
+export type RenovationPermitRequirementStatus =
+  | 'REQUIRED'
+  | 'LIKELY_REQUIRED'
+  | 'UNLIKELY_REQUIRED'
+  | 'NOT_REQUIRED'
+  | 'UNKNOWN'
+  | 'DATA_UNAVAILABLE';
+
+export interface RenovationAdvisorSourceMeta {
+  sourceType: string;
+  sourceLabel: string;
+  sourceReferenceUrl: string | null;
+  sourceRefreshedAt: string | null;
+  freshnessLabel: string | null;
+}
+
+export interface RenovationAdvisorPermit {
+  requirementStatus: RenovationPermitRequirementStatus;
+  confidenceLevel: string;
+  confidenceReason: string;
+  costRange: { min: number | null; max: number | null };
+  timelineRangeDays: { min: number | null; max: number | null };
+  permitTypes: {
+    permitType: string;
+    isRequired: boolean;
+    confidenceLevel: string;
+    note: string | null;
+    displayOrder: number;
+  }[];
+  inspectionStages: {
+    inspectionStageType: string;
+    isLikelyRequired: boolean;
+    note: string | null;
+    displayOrder: number;
+  }[];
+  applicationPortal: { url: string | null; label: string | null };
+  summary: string;
+  sourceMeta: RenovationAdvisorSourceMeta;
+  dataAvailable: boolean;
+}
+
+export interface RenovationAdvisorTaxImpact {
+  confidenceLevel: string;
+  confidenceReason: string;
+  assessedValueIncreaseRange: { min: number | null; max: number | null };
+  annualTaxIncreaseRange: { min: number | null; max: number | null };
+  monthlyTaxIncreaseRange: { min: number | null; max: number | null };
+  reassessmentTriggerType: string;
+  reassessmentTimelineSummary: string;
+  reassessmentRuleSummary: string;
+  plainLanguageSummary: string;
+  sourceMeta: RenovationAdvisorSourceMeta;
+  dataAvailable: boolean;
+}
+
+export interface RenovationAdvisorLicensing {
+  requirementStatus: RenovationPermitRequirementStatus;
+  confidenceLevel: string;
+  confidenceReason: string;
+  applicableCategories: {
+    licenseCategoryType: string;
+    isApplicable: boolean;
+    confidenceLevel: string;
+    note: string | null;
+    displayOrder: number;
+  }[];
+  consequenceSummary: string;
+  verificationTool: { url: string | null; label: string | null };
+  plainLanguageSummary: string;
+  sourceMeta: RenovationAdvisorSourceMeta & Record<string, any>;
+  dataAvailable: boolean;
+}
+
+export interface RenovationAdvisorAssumption {
+  assumptionKey: string;
+  assumptionLabel: string;
+  assumptionValueText: string | null;
+  assumptionValueNumber: number | null;
+  assumptionUnit: string | null;
+  sourceType: string;
+  confidenceLevel: string;
+  rationale: string | null;
+  isUserVisible: boolean;
+  displayOrder: number;
+}
+
+export interface RenovationAdvisorWarning {
+  code: string;
+  title: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  description: string;
+}
+
+export interface RenovationAdvisorNextAction {
+  key: string;
+  label: string;
+  description: string;
+  destinationType: string;
+  destinationRef: string | null;
+  priority: number;
+}
+
+export interface RenovationAdvisorComplianceChecklist {
+  permitObtainedStatus: string;
+  licensedContractorUsedStatus: string;
+  reassessmentReceivedStatus: string;
+  notes: string | null;
+  lastReviewedAt: string | null;
+}
+
+export interface RenovationAdvisorSession {
+  id: string;
+  propertyId: string;
+  status: RenovationAdvisorSessionStatus;
+  renovationType: string;
+  renovationLabel: string;
+  entryPoint: string;
+  flowType: string;
+  createdAt: string;
+  updatedAt: string;
+  lastEvaluatedAt: string | null;
+  jurisdiction: {
+    state: string | null;
+    county: string | null;
+    city: string | null;
+    postalCode: string | null;
+    jurisdictionLevel: string;
+    normalizedKey: string | null;
+  };
+  projectCost: {
+    inputValue: number | null;
+    source: string;
+    assumptionNote: string | null;
+  };
+  overallConfidence: RenovationAdvisorConfidence;
+  overallRiskLevel: RenovationAdvisorRiskLevel;
+  overallSummary: string | null;
+  warningsSummary: string | null;
+  nextStepsSummary: string | null;
+  disclaimerVersion: string | null;
+  isRetroactiveCheck: boolean;
+  completedModificationReported: boolean;
+  permit: RenovationAdvisorPermit | null;
+  taxImpact: RenovationAdvisorTaxImpact | null;
+  licensing: RenovationAdvisorLicensing | null;
+  assumptions: RenovationAdvisorAssumption[];
+  warnings: RenovationAdvisorWarning[];
+  nextActions: RenovationAdvisorNextAction[];
+  linkedEntities: {
+    timelineEventId: string | null;
+    riskEntityId: string | null;
+    tcoEntityId: string | null;
+    breakEvenEntityId: string | null;
+    digitalTwinEntityId: string | null;
+    chatContextId: string | null;
+  };
+  uiMeta: {
+    displayModeHints: string[];
+    unsupportedArea: boolean;
+    partialCoverage: boolean;
+    lowConfidenceAreas: string[];
+  };
+  complianceChecklist: RenovationAdvisorComplianceChecklist | null;
+}
+
+export interface RenovationAdvisorSessionSummary {
+  id: string;
+  propertyId: string;
+  status: string;
+  renovationType: string;
+  renovationLabel: string;
+  overallConfidence: string;
+  overallRiskLevel: string;
+  overallSummary: string | null;
+  lastEvaluatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  isRetroactiveCheck: boolean;
+}
+
+export interface CreateRenovationAdvisorSessionInput {
+  propertyId: string;
+  renovationType: string;
+  entryPoint: string;
+  flowType?: string;
+  projectCostInput?: number;
+  isRetroactiveCheck?: boolean;
+}
+
+export interface UpdateRenovationAdvisorSessionInput {
+  projectCostInput?: number | null;
+  renovationType?: string;
+}
+
+export interface EvaluateRenovationAdvisorSessionInput {
+  forceRefresh?: boolean;
+  evaluationMode?: 'FULL' | 'PERMIT_ONLY' | 'TAX_ONLY' | 'LICENSING_ONLY';
+}

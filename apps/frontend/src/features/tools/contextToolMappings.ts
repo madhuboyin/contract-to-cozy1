@@ -56,4 +56,6 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
   // Habit coach relates to monitoring and planning tools.
   'home-habit-coach': ['home-event-radar', 'home-timeline', 'status-board'],
+  // Renovation advisor surfaces tax, capital, and timeline planning tools.
+  'home-renovation-risk-advisor': ['capital-timeline', 'property-tax', 'home-digital-twin'],
 };

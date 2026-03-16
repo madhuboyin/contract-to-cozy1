@@ -62,6 +62,12 @@ const HOME_TOOL_GROUPS = [
     ],
   },
   {
+    key: 'renovation',
+    title: 'Renovation Planning',
+    summary: 'Understand permit, tax, and contractor requirements before starting a project.',
+    toolKeys: ['home-renovation-risk-advisor'],
+  },
+  {
     key: 'timeline',
     title: 'Readiness + Timeline',
     summary: 'Capital planning, prep, and timeline execution',

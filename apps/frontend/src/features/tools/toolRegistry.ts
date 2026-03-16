@@ -26,6 +26,7 @@ export const TOOL_IDS = [
   'home-digital-twin',
   'neighborhood-change-radar',
   'home-habit-coach',
+  'home-renovation-risk-advisor',
 ] as const;
 
 export type ToolId = (typeof TOOL_IDS)[number];

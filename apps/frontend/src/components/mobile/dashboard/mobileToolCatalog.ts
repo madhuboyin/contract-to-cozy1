@@ -458,4 +458,13 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/home-habit-coach(\/|$)/.test(pathname),
   },
+  {
+    key: 'home-renovation-risk-advisor',
+    name: 'Renovation Risk Advisor',
+    description: 'Check permit rules, tax impact, and contractor requirements before a major renovation.',
+    hrefSuffix: 'tools/home-renovation-risk-advisor',
+    navTarget: 'tool:home-renovation-risk-advisor',
+    icon: resolveToolIcon('home', 'home-renovation-risk-advisor'),
+    isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-renovation-risk-advisor|home-renovation-risk-advisor)(\/|$)/.test(pathname),
+  },
 ];

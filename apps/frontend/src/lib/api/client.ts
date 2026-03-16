@@ -3137,6 +3137,94 @@ class APIClient {
     );
     return res.data?.signals ?? [];
   }
+
+  // HOME RENOVATION RISK ADVISOR
+
+  async createRenovationAdvisorSession(
+    input: import('@/types').CreateRenovationAdvisorSessionInput,
+  ): Promise<import('@/types').RenovationAdvisorSession> {
+    const res = await this.post<import('@/types').RenovationAdvisorSession>(
+      '/api/home-renovation-advisor/sessions',
+      input,
+    );
+    if (!res.data) {
+      throw new APIError('Failed to create renovation advisor session', 500);
+    }
+    return res.data;
+  }
+
+  async updateRenovationAdvisorSession(
+    sessionId: string,
+    input: import('@/types').UpdateRenovationAdvisorSessionInput,
+  ): Promise<import('@/types').RenovationAdvisorSession> {
+    const res = await this.patch<import('@/types').RenovationAdvisorSession>(
+      `/api/home-renovation-advisor/sessions/${sessionId}`,
+      input,
+    );
+    if (!res.data) {
+      throw new APIError('Failed to update renovation advisor session', 500);
+    }
+    return res.data;
+  }
+
+  async evaluateRenovationAdvisorSession(
+    sessionId: string,
+    input: import('@/types').EvaluateRenovationAdvisorSessionInput,
+  ): Promise<import('@/types').RenovationAdvisorSession> {
+    const res = await this.post<import('@/types').RenovationAdvisorSession>(
+      `/api/home-renovation-advisor/sessions/${sessionId}/evaluate`,
+      input,
+    );
+    if (!res.data) {
+      throw new APIError('Failed to evaluate renovation advisor session', 500);
+    }
+    return res.data;
+  }
+
+  async getRenovationAdvisorSession(
+    sessionId: string,
+  ): Promise<import('@/types').RenovationAdvisorSession | null> {
+    const res = await this.get<import('@/types').RenovationAdvisorSession>(
+      `/api/home-renovation-advisor/sessions/${sessionId}`,
+    );
+    return res.data ?? null;
+  }
+
+  async listRenovationAdvisorSessions(
+    propertyId: string,
+  ): Promise<import('@/types').RenovationAdvisorSessionSummary[]> {
+    const res = await this.get<{ sessions: import('@/types').RenovationAdvisorSessionSummary[] }>(
+      `/api/properties/${propertyId}/home-renovation-advisor/sessions`,
+    );
+    return res.data?.sessions ?? [];
+  }
+
+  async archiveRenovationAdvisorSession(
+    sessionId: string,
+  ): Promise<import('@/types').RenovationAdvisorSession> {
+    const res = await this.post<import('@/types').RenovationAdvisorSession>(
+      `/api/home-renovation-advisor/sessions/${sessionId}/archive`,
+      {},
+    );
+    if (!res.data) {
+      throw new APIError('Failed to archive renovation advisor session', 500);
+    }
+    return res.data;
+  }
+
+  async updateRenovationAdvisorCompliance(
+    sessionId: string,
+    input: Partial<import('@/types').RenovationAdvisorComplianceChecklist>,
+  ): Promise<import('@/types').RenovationAdvisorSession> {
+    const res = await this.patch<import('@/types').RenovationAdvisorSession>(
+      `/api/home-renovation-advisor/sessions/${sessionId}/compliance`,
+      input,
+    );
+    if (!res.data) {
+      throw new APIError('Failed to update renovation advisor compliance', 500);
+    }
+    return res.data;
+  }
 }
 
 // Export singleton instance
