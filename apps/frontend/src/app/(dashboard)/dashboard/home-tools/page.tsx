@@ -59,6 +59,7 @@ const HOME_TOOL_GROUPS = [
       'sell-hold-rent',
       'cost-volatility',
       'break-even',
+      'mortgage-refinance-radar',
     ],
   },
   {

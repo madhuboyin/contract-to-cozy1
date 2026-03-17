@@ -467,4 +467,14 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     icon: resolveToolIcon('home', 'home-renovation-risk-advisor'),
     isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-renovation-risk-advisor|home-renovation-risk-advisor)(\/|$)/.test(pathname),
   },
+  {
+    key: 'mortgage-refinance-radar',
+    name: 'Mortgage Refinance Radar',
+    description: 'Monitor the market and know when refinancing makes financial sense.',
+    hrefSuffix: 'tools/mortgage-refinance-radar',
+    navTarget: 'tool:mortgage-refinance-radar',
+    icon: resolveToolIcon('home', 'mortgage-refinance-radar'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/mortgage-refinance-radar(\/|$)/.test(pathname),
+  },
 ];
