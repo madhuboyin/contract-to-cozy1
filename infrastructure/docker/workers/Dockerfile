@@ -35,7 +35,10 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/analytics \
              src/shared/backend/types \
              src/shared/backend/lib \
-             src/shared/backend/neighborhoodIntelligence
+             src/shared/backend/neighborhoodIntelligence \
+             src/shared/backend/refinanceRadar/engine \
+             src/shared/backend/refinanceRadar/config \
+             src/shared/backend/refinanceRadar/types
 
 COPY apps/backend/src/utils/riskCalculator.util.ts src/shared/backend/utils/
 COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils/
@@ -82,6 +85,10 @@ COPY apps/backend/src/neighborhoodIntelligence/impactRules.ts src/shared/backend
 COPY apps/backend/src/neighborhoodIntelligence/geoUtils.ts src/shared/backend/neighborhoodIntelligence/
 COPY apps/backend/src/neighborhoodIntelligence/types.ts src/shared/backend/neighborhoodIntelligence/
 COPY apps/backend/src/neighborhoodIntelligence/eventConfidence.ts src/shared/backend/neighborhoodIntelligence/
+# Copy refinanceRadar files needed by ingestMortgageRates.job.ts
+COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts src/shared/backend/refinanceRadar/engine/
+COPY apps/backend/src/refinanceRadar/config/refinanceRadar.config.ts src/shared/backend/refinanceRadar/config/
+COPY apps/backend/src/refinanceRadar/types/refinanceRadar.types.ts src/shared/backend/refinanceRadar/types/
 # Copy worker source code + TS config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json
@@ -103,7 +110,8 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeHabitCoach\/habitGenerationEngine/\.\.\/shared\/backend\/services\/homeHabitCoach\/habitGenerationEngine/g' src/jobs/habitGeneration.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeHabitCoach\/habitGenerationEngine/\.\.\/shared\/backend\/services\/homeHabitCoach\/habitGenerationEngine/g' src/jobs/habitGeneration.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/refinanceRadar\/engine\/mortgageRate\.service/\.\.\/shared\/backend\/refinanceRadar\/engine\/mortgageRate\.service/g' src/jobs/ingestMortgageRates.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json

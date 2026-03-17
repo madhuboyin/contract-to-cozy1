@@ -19,7 +19,8 @@ export type JobCategory =
   | 'MAINTENANCE'
   | 'RISK_SAFETY'
   | 'NEIGHBORHOOD'
-  | 'HOME_CARE';
+  | 'HOME_CARE'
+  | 'FINANCIAL_MARKET';
 
 export interface JobRegistryEntry {
   key: string;
@@ -247,6 +248,22 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     cronExpression: '0 6 * * *',
     type: 'cron',
     triggerSupported: false,
+  },
+
+  // ── Financial Market (cron) ───────────────────────────────────────────────
+  {
+    key: 'mortgage-rate-ingest',
+    name: 'Mortgage Rate Ingest',
+    description:
+      'Fetches the weekly Freddie Mac PMMS 30-year and 15-year fixed mortgage rates from the ' +
+      'St. Louis Fed FRED API and stores them as MortgageRateSnapshot records. ' +
+      'Requires FRED_API_KEY env var; falls back to MORTGAGE_RATE_30YR_FALLBACK / ' +
+      'MORTGAGE_RATE_15YR_FALLBACK if set. Safe to re-run — deduplicates on (source, date).',
+    category: 'FINANCIAL_MARKET',
+    schedule: 'Thursdays at 5:00 PM EST (after PMMS release)',
+    cronExpression: '0 17 * * 4',
+    type: 'cron',
+    triggerSupported: true,
   },
 
   // ── Home Care (cron) ──────────────────────────────────────────────────────

@@ -13,7 +13,8 @@ export type JobCategory =
   | 'MAINTENANCE'
   | 'RISK_SAFETY'
   | 'NEIGHBORHOOD'
-  | 'HOME_CARE';
+  | 'HOME_CARE'
+  | 'FINANCIAL_MARKET';
 
 export interface QueueStats {
   waiting: number;

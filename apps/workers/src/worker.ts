@@ -37,6 +37,7 @@ import { refreshNeighborhoodEventsJob } from './jobs/refreshNeighborhoodEvents.j
 import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNotification.job';
 import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummyEvents.job';
 import { runHabitGenerationJob } from './jobs/habitGeneration.job';
+import { ingestMortgageRatesJob } from './jobs/ingestMortgageRates.job';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -775,6 +776,12 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'neighborhood-radar-refresh':      async () => { await refreshNeighborhoodEventsJob(); },
   'inventory-draft-cleanup':         async () => { await cleanupInventoryDraftsJob(); },
   'home-habit-generation':           async () => { await runHabitGenerationJob(); },
+  'mortgage-rate-ingest':            async () => {
+    const result = await ingestMortgageRatesJob();
+    if (!result.success) {
+      console.warn('[mortgage-rate-ingest] No rates ingested:', result.reason);
+    }
+  },
 };
 
 // Per-job cron expression overrides (env-var-based schedules)
