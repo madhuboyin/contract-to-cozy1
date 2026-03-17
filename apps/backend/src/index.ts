@@ -95,6 +95,8 @@ import adminWorkerJobsRoutes from './routes/adminWorkerJobs.routes';
 import homeHabitCoachRoutes from './routes/homeHabitCoach.routes';
 import homeRenovationAdvisorRoutes from './homeRenovationAdvisor/homeRenovationAdvisor.routes';
 import refinanceRadarRoutes from './refinanceRadar/refinanceRadar.routes';
+import gazetteRoutes from './modules/gazette/gazette.routes';
+import gazetteInternalRoutes from './modules/gazette/gazetteInternal.routes';
 dotenv.config();
 
 const app = express();
@@ -393,6 +395,8 @@ app.use('/api', adminWorkerJobsRoutes);
 app.use('/api', homeHabitCoachRoutes);
 app.use('/api', homeRenovationAdvisorRoutes);
 app.use('/api', refinanceRadarRoutes);
+app.use('/api', gazetteRoutes);
+app.use('/api', gazetteInternalRoutes);
 app.use('/api/weather', weatherRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
