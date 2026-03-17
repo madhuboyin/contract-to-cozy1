@@ -31,7 +31,16 @@ export function calcMonthlyPayment(
   annualRatePct: number,
   termMonths: number,
 ): number {
-  if (termMonths <= 0 || principalUsd <= 0) return 0;
+  if (
+    !Number.isFinite(principalUsd) ||
+    !Number.isFinite(annualRatePct) ||
+    !Number.isFinite(termMonths) ||
+    termMonths <= 0 ||
+    principalUsd <= 0 ||
+    annualRatePct < 0
+  ) {
+    return 0;
+  }
 
   const monthlyRate = annualRatePct / 100 / 12;
 
@@ -97,12 +106,23 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
     closingCostPct,
   } = input;
 
+  // ── Input guardrails — clamp to safe ranges ──
+  // Rates capped at 30% (no real mortgage exceeds this); closing cost pct capped at 10%.
+  const safeCurrentRatePct = Math.min(Math.max(currentRatePct, 0), 30);
+  const safeTargetRatePct = Math.min(Math.max(targetRatePct, 0), 30);
+  const safeRemainingTermMonths = Math.max(1, Math.round(remainingTermMonths));
+  const safeTargetTermMonths = Math.max(1, Math.round(targetTermMonths));
+  const safeClosingCostPct =
+    closingCostPct !== undefined
+      ? Math.min(Math.max(closingCostPct, 0), 0.10)
+      : undefined;
+
   // ── Effective closing cost ──
   let effectiveClosingCostUsd: number;
   if (closingCostUsd !== undefined && closingCostUsd > 0) {
-    effectiveClosingCostUsd = closingCostUsd;
-  } else if (closingCostPct !== undefined && closingCostPct > 0) {
-    effectiveClosingCostUsd = loanBalance * closingCostPct;
+    effectiveClosingCostUsd = Math.min(closingCostUsd, loanBalance); // never exceed balance
+  } else if (safeClosingCostPct !== undefined && safeClosingCostPct > 0) {
+    effectiveClosingCostUsd = loanBalance * safeClosingCostPct;
   } else {
     effectiveClosingCostUsd = loanBalance * DEFAULT_CLOSING_COST_PCT;
   }
@@ -111,9 +131,9 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
   const currentMonthlyPayment =
     input.currentMonthlyPayment && input.currentMonthlyPayment > 0
       ? input.currentMonthlyPayment
-      : calcMonthlyPayment(loanBalance, currentRatePct, remainingTermMonths);
+      : calcMonthlyPayment(loanBalance, safeCurrentRatePct, safeRemainingTermMonths);
 
-  const newMonthlyPayment = calcMonthlyPayment(loanBalance, targetRatePct, targetTermMonths);
+  const newMonthlyPayment = calcMonthlyPayment(loanBalance, safeTargetRatePct, safeTargetTermMonths);
 
   // ── Monthly savings ──
   const monthlySavings = currentMonthlyPayment - newMonthlyPayment;
@@ -128,14 +148,14 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
   // Current loan: total interest over its remaining term
   const totalInterestRemainingCurrent = calcTotalInterest(
     currentMonthlyPayment,
-    remainingTermMonths,
+    safeRemainingTermMonths,
     loanBalance,
   );
 
   // New loan: total interest over its full new term
   const totalInterestNewLoan = calcTotalInterest(
     newMonthlyPayment,
-    targetTermMonths,
+    safeTargetTermMonths,
     loanBalance,
   );
 
@@ -143,8 +163,8 @@ export function calcRefinanceScenario(input: RefinanceScenarioInput): RefinanceC
   const lifetimeSavings =
     totalInterestRemainingCurrent - totalInterestNewLoan - effectiveClosingCostUsd;
 
-  const rateGapPct = currentRatePct - targetRatePct;
-  const payoffDeltaMonths = targetTermMonths - remainingTermMonths;
+  const rateGapPct = safeCurrentRatePct - safeTargetRatePct;
+  const payoffDeltaMonths = safeTargetTermMonths - safeRemainingTermMonths;
 
   return {
     rateGapPct,
