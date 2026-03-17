@@ -477,4 +477,14 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/mortgage-refinance-radar(\/|$)/.test(pathname),
   },
+  {
+    key: 'home-gazette',
+    name: 'Home Gazette',
+    description: 'Your weekly home intelligence briefing — risks, maintenance, finances, and more.',
+    hrefSuffix: 'tools/home-gazette',
+    navTarget: 'tool:home-gazette',
+    icon: resolveToolIcon('home', 'home-gazette'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/home-gazette(\/|$)/.test(pathname),
+  },
 ];

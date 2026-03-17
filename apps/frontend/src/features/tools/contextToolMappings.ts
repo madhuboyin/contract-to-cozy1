@@ -60,4 +60,6 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'home-renovation-risk-advisor': ['capital-timeline', 'property-tax', 'home-digital-twin'],
   // Refinance radar surfaces break-even math, full-cost context, and capital planning.
   'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'true-cost'],
+  // Gazette surfaces the monitoring and event tools that feed it.
+  'home-gazette': ['home-event-radar', 'home-risk-replay', 'status-board'],
 };
