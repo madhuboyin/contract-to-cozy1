@@ -8472,3 +8472,340 @@ model RefinanceScenarioSnapshot {
   @@index([propertyId, isSaved])
   @@map("refinance_scenario_snapshots")
 }
+
+// ============================================================================
+// HOME GAZETTE
+// ============================================================================
+//
+// Gazette-owned persistence layer for weekly AI-generated property digests.
+// Design principles:
+//   - Gazette tables own Gazette artifacts only — not upstream domain data.
+//   - Upstream linkage is loose: sourceFeature / sourceEventId / entityType /
+//     entityId fields instead of hard FK dependencies on every domain table.
+//   - Share tokens are stored in hashed form only (tokenHash, never raw token).
+//   - One edition per property per (weekStart, weekEnd) window, enforced by
+//     @@unique([propertyId, weekStart, weekEnd]) on GazetteEdition.
+// ============================================================================
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+// Overall lifecycle state of a weekly Gazette edition.
+enum GazetteEditionStatus {
+  DRAFT      // Generation in progress or not yet started
+  READY      // Stories selected and generated; awaiting publication
+  PUBLISHED  // Delivered to the homeowner
+  SKIPPED    // Week skipped due to insufficient qualified stories
+  FAILED     // Generation pipeline encountered an unrecoverable error
+}
+
+// Broad editorial category of a story or candidate.
+enum GazetteStoryCategory {
+  RISK
+  MAINTENANCE
+  INCIDENT
+  CLAIMS
+  INSURANCE
+  WARRANTY
+  FINANCIAL
+  REFINANCE
+  NEIGHBORHOOD
+  SEASONAL
+  SCORE
+  DIGITAL_TWIN
+  GENERAL
+}
+
+// Editorial placement priority for a selected story.
+enum GazetteStoryPriority {
+  HERO   // Lead story; only one per edition
+  HIGH
+  MEDIUM
+  LOW
+}
+
+// Pipeline stage being executed by a GazetteGenerationJob.
+enum GazetteGenerationStage {
+  SIGNAL_COLLECTION      // Upstream feature data harvested
+  CANDIDATE_GENERATION   // Raw candidates produced from signals
+  RANKING                // Candidates scored and ranked
+  EDITORIAL_GENERATION   // AI prose / headline generation
+  VALIDATION             // Output quality and safety checks
+  PUBLICATION            // Edition persisted and delivered
+}
+
+// Lifecycle state of a story candidate before selection.
+enum GazetteCandidateStatus {
+  ACTIVE    // In the pool; eligible for selection
+  SELECTED  // Promoted to a GazetteStory in this edition
+  EXCLUDED  // Scored but did not meet selection criteria
+  EXPIRED   // Passed storyDeadline or expiresAt without being selected
+}
+
+// Reason a candidate was excluded from a given edition.
+enum GazetteExclusionReason {
+  LOW_SCORE                  // Composite score below threshold
+  LOW_CONFIDENCE             // Confidence score insufficient
+  DUPLICATE                  // Another candidate covers the same event
+  EXPIRED                    // Past deadline or expiry date
+  CATEGORY_CAP               // Edition already has max stories in this category
+  NOT_SHARE_SAFE             // Contains content not safe to share externally
+  MISSING_DEEP_LINK          // No valid action link available
+  MISSING_SUPPORTING_FACTS   // Insufficient data to support the story claim
+  BELOW_NEWSWORTHY_THRESHOLD // Score did not cross the minimum newsworthy bar
+}
+
+// State of a public share link for an edition.
+enum GazetteShareStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+// AI prose generation status for a story.
+enum GazetteAiStatus {
+  NOT_REQUESTED  // No AI generation was attempted
+  GENERATED      // AI produced the prose successfully
+  FALLBACK_USED  // Template or rule-based fallback was used instead
+  FAILED         // AI generation was attempted but failed
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+// A. One weekly Gazette edition per property.
+// Uniqueness enforced on (propertyId, weekStart, weekEnd).
+model GazetteEdition {
+  id                 String               @id @default(uuid())
+  propertyId         String
+
+  weekStart          DateTime             // Monday 00:00:00 UTC of the edition week
+  weekEnd            DateTime             // Sunday 23:59:59 UTC of the edition week
+  publishDate        DateTime?            // Intended or actual publication timestamp
+  status             GazetteEditionStatus @default(DRAFT)
+
+  // Quality gate counters
+  minQualifiedNeeded Int                  @default(4)  // Minimum stories needed to publish
+  qualifiedCount     Int                  @default(0)  // Candidates that passed the quality bar
+  selectedCount      Int                  @default(0)  // Stories actually selected for this edition
+
+  skippedReason      String?              // Human-readable reason when status = SKIPPED
+
+  // Hero story pointer (denormalised for fast rendering)
+  heroStoryId        String?
+
+  // Edition-level AI-generated copy
+  summaryHeadline    String?
+  summaryDeck        String?
+  tickerJson         Json?                // Array of short ticker-style bullets
+
+  generationVersion  String?              // Pipeline version tag (e.g. "v1.2.0")
+  publishedAt        DateTime?
+
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  stories            GazetteStory[]
+  candidates         GazetteStoryCandidate[]
+  traces             GazetteSelectionTrace[]
+  jobs               GazetteGenerationJob[]
+  shareLinks         GazetteShareLink[]
+
+  @@unique([propertyId, weekStart, weekEnd])
+  @@index([propertyId, weekStart])
+  @@index([status])
+  @@map("gazette_editions")
+}
+
+// B. A final selected story that appears in a published edition.
+// Stories are created by promoting GazetteStoryCandidate records.
+model GazetteStory {
+  id            String               @id @default(uuid())
+  editionId     String
+  propertyId    String
+
+  // Loose upstream linkage — no FK to upstream domain tables
+  sourceFeature  String              // e.g. "INCIDENT", "REFINANCE_RADAR", "NEIGHBORHOOD"
+  sourceEventId  String?             // Upstream event ID if available (informational only)
+  storyCategory  GazetteStoryCategory
+  storyTag       String?             // Fine-grained tag within category (e.g. "PIPE_BURST")
+  entityType     String              // e.g. "Property", "Appliance", "InsurancePolicy"
+  entityId       String              // ID of the entity in the upstream domain
+
+  // Editorial placement
+  priority       GazetteStoryPriority @default(MEDIUM)
+  rank           Int                  // 1-based display order within the edition
+  isHero         Boolean              @default(false)
+
+  // AI-generated story copy
+  headline       String
+  dek            String?              // Subheadline / supporting sentence
+  summary        String               // Main body prose
+  supportingFactsJson Json?           // Structured data used to generate copy
+  rankExplanation String?             // Human-readable explanation of why this story was ranked here
+
+  // Scoring dimensions (copied from candidate at selection time)
+  urgencyScore            Float?
+  financialImpactEstimate Float?
+  confidenceScore         Float?
+  noveltyScore            Float?
+  engagementScore         Float?
+  compositeScore          Float?
+
+  // Action links
+  primaryDeepLink   String            // Required — in-app deep link for the story action
+  secondaryDeepLink String?
+
+  // Share safety flag — controls whether story is included in public share view
+  shareSafe Boolean @default(true)
+
+  // AI generation traceability
+  aiStatus          GazetteAiStatus @default(NOT_REQUESTED)
+  aiModel           String?         // e.g. "gemini-1.5-pro"
+  aiPromptVersion   String?         // Prompt template version tag
+  aiValidationJson  Json?           // Output from validation / guardrail checks
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  edition GazetteEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@index([editionId, rank])
+  @@index([propertyId, storyCategory])
+  @@index([entityType, entityId])
+  @@map("gazette_stories")
+}
+
+// C. A normalised story candidate produced before final selection.
+// Candidates survive across editions via noveltyKey deduplication.
+// editionId is nullable: candidates may exist before an edition is created.
+model GazetteStoryCandidate {
+  id            String  @id @default(uuid())
+  editionId     String?
+  propertyId    String
+
+  // Loose upstream linkage
+  sourceFeature  String
+  sourceEventId  String?
+  storyCategory  GazetteStoryCategory
+  storyTag       String?
+  entityType     String
+  entityId       String
+
+  // Inputs for story generation
+  headlineHint        String?  // Suggested headline (AI will refine)
+  supportingFactsJson Json     // Structured signals that back this candidate
+
+  // Scoring dimensions (inputs to the ranking engine)
+  urgencyScoreInput       Float?
+  financialImpactEstimate Float?
+  confidenceScore         Float?
+  engagementScore         Float?
+  noveltyScore            Float?
+  compositeScore          Float?
+
+  // Novelty / deduplication
+  noveltyKey      String    // Stable hash key — identifies this story event across editions
+  firstDetectedAt DateTime?
+  lastUpdatedAt   DateTime?
+  storyDeadline   DateTime? // After this date the story is no longer newsworthy
+  expiresAt       DateTime? // Hard expiry for the candidate record
+
+  // Action links
+  primaryDeepLink   String
+  secondaryDeepLink String?
+  shareSafe         Boolean  @default(true)
+
+  // Selection outcome
+  status               GazetteCandidateStatus @default(ACTIVE)
+  exclusionReason      GazetteExclusionReason?
+  exclusionDetail      String?                // Free-text detail to supplement exclusionReason
+  selectionRank        Int?                   // Rank assigned if SELECTED
+  rankAdjustmentReason String?                // Reason if rank was manually or rule-adjusted
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  edition GazetteEdition? @relation(fields: [editionId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, status])
+  @@index([propertyId, noveltyKey])
+  @@index([editionId, selectionRank])
+  @@index([sourceFeature, entityType, entityId])
+  @@map("gazette_story_candidates")
+}
+
+// D. Per-candidate selection/ranking trace for explainability.
+// Records both included and excluded candidates so the full decision can be audited.
+// candidateId is nullable to allow traces for synthetic or inline candidates.
+model GazetteSelectionTrace {
+  id          String  @id @default(uuid())
+  editionId   String
+  candidateId String?  // FK omitted intentionally — loose linkage for isolation
+  propertyId  String
+
+  preScore             Float?                  // Score before any adjustments
+  postScore            Float?                  // Score after boosts / penalties applied
+  finalRank            Int?                    // Assigned rank (null if excluded)
+  included             Boolean                 // true = selected into edition
+  exclusionReason      GazetteExclusionReason?
+  rankAdjustmentReason String?
+  rankExplanation      String?                 // Prose explanation of final rank decision
+  traceJson            Json?                   // Full scoring breakdown for debugging
+
+  createdAt DateTime @default(now())
+
+  edition GazetteEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@index([editionId, included, finalRank])
+  @@index([propertyId, createdAt])
+  @@map("gazette_selection_traces")
+}
+
+// E. Tracks execution of individual pipeline stages.
+// One job record per stage attempt; retries produce new records.
+model GazetteGenerationJob {
+  id         String  @id @default(uuid())
+  editionId  String?
+  propertyId String
+
+  stage        GazetteGenerationStage
+  status       GazetteEditionStatus   @default(DRAFT)
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  attemptCount Int                    @default(0)
+  errorMessage String?
+  metricsJson  Json?                  // Timing, token counts, candidate counts, etc.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  edition GazetteEdition? @relation(fields: [editionId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, stage])
+  @@index([editionId])
+  @@map("gazette_generation_jobs")
+}
+
+// F. Secure public share link for a Gazette edition.
+// Raw share tokens are NEVER stored — only the SHA-256 hash.
+model GazetteShareLink {
+  id         String @id @default(uuid())
+  editionId  String
+  propertyId String
+
+  tokenHash    String             @unique  // SHA-256 hash of the raw share token
+  status       GazetteShareStatus @default(ACTIVE)
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  lastViewedAt DateTime?
+  viewCount    Int                @default(0)
+  metadataJson Json?              // e.g. share channel, recipient hint (no PII)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  edition GazetteEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@index([editionId, status])
+  @@index([propertyId, status])
+  @@map("gazette_share_links")
+}
