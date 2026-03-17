@@ -10,6 +10,7 @@ import { GazetteCandidateFactoryService } from './gazetteCandidateFactory.servic
 import { GazetteRankingEngineService } from './gazetteRankingEngine.service';
 import { GazetteEditionAssemblerService } from './gazetteEditionAssembler.service';
 import { GazettePublishService } from './gazettePublish.service';
+import { GazetteEditorialService } from '../editorial/GazetteEditorialService';
 
 type GazetteGenerationStage =
   | 'SIGNAL_COLLECTION'
@@ -170,11 +171,15 @@ export class GazetteGenerationJobRunnerService {
           edition,
           rankedCandidates,
         );
+        // AI editorial enrichment — upgrades fallback copy with AI-generated
+        // headlines/deks/summaries. Safe no-op when GEMINI_API_KEY is not set.
+        await GazetteEditorialService.enrichStories(stories, edition.id);
       }
       completedStages.push('EDITORIAL_GENERATION');
 
       await GazetteGenerationJobRunnerService._completeJob(editorialJob.id, {
         storyCount: stories.length,
+        aiEditorialEnabled: GazetteEditorialService.isEnabled(),
       });
 
       // ── STAGE: VALIDATION ─────────────────────────────────────────────────
