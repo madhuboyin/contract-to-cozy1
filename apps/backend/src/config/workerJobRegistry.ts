@@ -20,7 +20,8 @@ export type JobCategory =
   | 'RISK_SAFETY'
   | 'NEIGHBORHOOD'
   | 'HOME_CARE'
-  | 'FINANCIAL_MARKET';
+  | 'FINANCIAL_MARKET'
+  | 'HOME_INTELLIGENCE';
 
 export interface JobRegistryEntry {
   key: string;
@@ -262,6 +263,22 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     category: 'FINANCIAL_MARKET',
     schedule: 'Thursdays at 5:00 PM EST (after PMMS release)',
     cronExpression: '0 17 * * 4',
+    type: 'cron',
+    triggerSupported: true,
+  },
+
+  // ── Home Intelligence (cron) ──────────────────────────────────────────────
+  {
+    key: 'home-gazette-generation',
+    name: 'Home Gazette Generation',
+    description:
+      'Generates the weekly Home Gazette edition for every active property. ' +
+      'Collects signals, ranks candidates, assembles edition, runs AI editorial enrichment, ' +
+      'and publishes or skips each edition based on available signals. Idempotent — safe to re-run. ' +
+      'Override schedule via HOME_GAZETTE_GENERATION_CRON env var.',
+    category: 'HOME_INTELLIGENCE',
+    schedule: 'Mondays at 6:00 AM EST',
+    cronExpression: '0 6 * * 1',
     type: 'cron',
     triggerSupported: true,
   },

@@ -11,6 +11,9 @@ import { GazetteRankingEngineService } from './gazetteRankingEngine.service';
 import { GazetteEditionAssemblerService } from './gazetteEditionAssembler.service';
 import { GazettePublishService } from './gazettePublish.service';
 import { GazetteEditorialService } from '../editorial/GazetteEditorialService';
+import { NotificationService } from '../../../services/notification.service';
+import { analyticsEmitter } from '../../../services/analytics/emitter';
+import { AnalyticsModule, AnalyticsFeature, AnalyticsSource, ProductAnalyticsEventType } from '../../../services/analytics/taxonomy';
 
 type GazetteGenerationStage =
   | 'SIGNAL_COLLECTION'
@@ -232,6 +235,18 @@ export class GazetteGenerationJobRunnerService {
         selectedCount: finalEdition.selectedCount,
       });
 
+      // ── POST-PUBLISH: Notification + Analytics ────────────────────────────
+      if (finalEdition.status === 'PUBLISHED' && !dryRun) {
+        // Fire-and-forget: do not let these block or fail the pipeline
+        GazetteGenerationJobRunnerService._onPublished(
+          propertyId,
+          editionId!,
+          finalEdition,
+        ).catch((err) => {
+          console.warn('[GazetteJobRunner] Post-publish hooks failed (non-fatal):', err?.message);
+        });
+      }
+
       return {
         editionId,
         status: finalEdition.status,
@@ -339,6 +354,59 @@ export class GazetteGenerationJobRunnerService {
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
+
+  /**
+   * Fire-and-forget hooks after a new edition is successfully published.
+   * Emits analytics + in-app notification. Never throws — caller wraps in catch.
+   */
+  private static async _onPublished(
+    propertyId: string,
+    editionId: string,
+    edition: GazetteEdition,
+  ): Promise<void> {
+    // Resolve the homeowner userId for this property
+    const property = await prisma.property.findFirst({
+      where: { id: propertyId },
+      select: { homeownerProfile: { select: { userId: true } } },
+    });
+    const userId = property?.homeownerProfile?.userId;
+
+    // Analytics — edition generated + published
+    analyticsEmitter.track({
+      eventType: ProductAnalyticsEventType.FEATURE_OPENED,
+      propertyId,
+      userId: userId ?? undefined,
+      moduleKey: AnalyticsModule.GAZETTE,
+      featureKey: AnalyticsFeature.GAZETTE_EDITION,
+      source: AnalyticsSource.SYSTEM,
+      metadataJson: {
+        editionId,
+        selectedCount: edition.selectedCount,
+        action: 'PUBLISHED',
+      },
+    });
+
+    if (!userId) return; // Cannot notify without userId
+
+    // In-app notification
+    await NotificationService.create({
+      userId,
+      type: 'GAZETTE_PUBLISHED',
+      title: 'Your Home Gazette is ready',
+      message:
+        (edition.summaryHeadline as string | null) ??
+        'Your weekly home intelligence briefing is available.',
+      actionUrl: `/dashboard/properties/${propertyId}/tools/home-gazette`,
+      entityType: 'GAZETTE_EDITION',
+      entityId: editionId,
+      metadata: {
+        propertyId,
+        selectedCount: edition.selectedCount,
+        weekStart: edition.weekStart,
+        weekEnd: edition.weekEnd,
+      },
+    });
+  }
 
   private static async _createJob(
     editionId: string,

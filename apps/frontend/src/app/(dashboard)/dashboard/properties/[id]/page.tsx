@@ -73,6 +73,7 @@ import {
 } from './tools/service-price-radar/servicePriceRadarApi';
 import NeighborhoodRadarDashboardCard from './components/NeighborhoodRadarDashboardCard';
 import RefinanceRadarDashboardCard from './components/RefinanceRadarDashboardCard';
+import GazetteDashboardCard from './components/GazetteDashboardCard';
 import { getSpotlightHabit } from './tools/home-habit-coach/homeHabitCoachApi';
 import { ListChecks } from 'lucide-react';
 
@@ -1509,6 +1510,10 @@ export default function PropertyDetailPage() {
 
       {FEATURE_FLAGS.MORTGAGE_REFINANCE_RADAR && (
         <RefinanceRadarDashboardCard propertyId={property.id} />
+      )}
+
+      {FEATURE_FLAGS.HOME_GAZETTE && (
+        <GazetteDashboardCard propertyId={property.id} />
       )}
 
       <div className="md:hidden">

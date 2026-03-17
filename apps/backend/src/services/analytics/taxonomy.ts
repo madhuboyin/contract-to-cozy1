@@ -38,6 +38,7 @@ export const AnalyticsModule = {
   DASHBOARD:         'dashboard',
   ADMIN_ANALYTICS:   'admin_analytics',
   RENOVATION_ADVISOR: 'renovation_advisor',
+  GAZETTE:           'gazette',
 } as const;
 
 export type AnalyticsModuleKey = typeof AnalyticsModule[keyof typeof AnalyticsModule];
@@ -98,6 +99,11 @@ export const AnalyticsFeature = {
 
   // Home Renovation Risk Advisor
   RENOVATION_ADVISOR_SESSION: 'renovation_advisor_session',
+
+  // Home Gazette
+  GAZETTE_EDITION:   'gazette_edition',
+  GAZETTE_SHARE:     'gazette_share',
+  GAZETTE_STORY_CTA: 'gazette_story_cta',
 } as const;
 
 export type AnalyticsFeatureKey = typeof AnalyticsFeature[keyof typeof AnalyticsFeature];

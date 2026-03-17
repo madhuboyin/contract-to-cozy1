@@ -38,6 +38,7 @@ import { neighborhoodChangeNotificationJob } from './jobs/neighborhoodChangeNoti
 import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummyEvents.job';
 import { runHabitGenerationJob } from './jobs/habitGeneration.job';
 import { ingestMortgageRatesJob } from './jobs/ingestMortgageRates.job';
+import { runGazetteGenerationJob } from './jobs/gazetteGeneration.job';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -782,11 +783,13 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
       console.warn('[mortgage-rate-ingest] No rates ingested:', result.reason);
     }
   },
+  'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
 };
 
 // Per-job cron expression overrides (env-var-based schedules)
 const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
-  'inventory-draft-cleanup': process.env.INVENTORY_DRAFT_CLEANUP_CRON,
+  'inventory-draft-cleanup':    process.env.INVENTORY_DRAFT_CLEANUP_CRON,
+  'home-gazette-generation':    process.env.HOME_GAZETTE_GENERATION_CRON,
 };
 
 function scheduleCronJobs(): void {

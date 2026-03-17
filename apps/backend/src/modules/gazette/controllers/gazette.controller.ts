@@ -8,6 +8,8 @@ import { prisma } from '../../../lib/prisma';
 import { GazetteMapper } from '../mappers/gazette.mapper';
 import { GazetteShareService } from '../services/gazetteShare.service';
 import { GazetteEdition } from '@prisma/client';
+import { analyticsEmitter } from '../../../services/analytics/emitter';
+import { AnalyticsModule, AnalyticsFeature, AnalyticsSource, ProductAnalyticsEventType } from '../../../services/analytics/taxonomy';
 
 export class GazetteController {
   /**
@@ -44,6 +46,16 @@ export class GazetteController {
           message: 'No published edition found',
         });
       }
+
+      // Analytics — gazette edition viewed
+      analyticsEmitter.track({
+        eventType: ProductAnalyticsEventType.FEATURE_OPENED,
+        userId: req.user!.userId,
+        propertyId,
+        moduleKey: AnalyticsModule.GAZETTE,
+        featureKey: AnalyticsFeature.GAZETTE_EDITION,
+        source: AnalyticsSource.HOME_TOOLS,
+      });
 
       return res.json({
         success: true,
@@ -154,6 +166,17 @@ export class GazetteController {
         edition.propertyId,
         req.body?.metadata,
       );
+
+      // Analytics — share created
+      analyticsEmitter.track({
+        eventType: ProductAnalyticsEventType.TOOL_USED,
+        userId: req.user!.userId,
+        propertyId: edition.propertyId,
+        moduleKey: AnalyticsModule.GAZETTE,
+        featureKey: AnalyticsFeature.GAZETTE_SHARE,
+        source: AnalyticsSource.HOME_TOOLS,
+        metadataJson: { editionId },
+      });
 
       return res.status(201).json({
         success: true,
