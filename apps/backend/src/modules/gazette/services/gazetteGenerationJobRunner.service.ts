@@ -67,6 +67,13 @@ export class GazetteGenerationJobRunnerService {
           where: { id: edition.id },
           data: { status: 'DRAFT' as any },
         });
+        console.log(`[GazetteJobRunner] Edition ${editionId} reset from FAILED → DRAFT for retry`);
+      }
+
+      // 5. Pre-run: mark stale candidates as EXPIRED so they don't pollute ranking
+      const expiredCount = await GazetteCandidateFactoryService.markExpiredCandidates(propertyId);
+      if (expiredCount > 0) {
+        console.log(`[GazetteJobRunner] Marked ${expiredCount} stale candidate(s) EXPIRED for property ${propertyId}`);
       }
 
       // ── STAGE: SIGNAL_COLLECTION ──────────────────────────────────────────
@@ -168,7 +175,7 @@ export class GazetteGenerationJobRunnerService {
         'EDITORIAL_GENERATION',
       );
 
-      let stories: any[] = [];
+      let stories: any[] = []; // `let` so validation stage can reassign to validStories
       if (!dryRun && rankedCandidates.length > 0) {
         stories = await GazetteEditionAssemblerService.assembleEdition(
           edition,
@@ -192,21 +199,26 @@ export class GazetteGenerationJobRunnerService {
         'VALIDATION',
       );
 
-      // Basic validation: all required story fields present
-      const invalidStories = stories.filter(
-        (s) => !s.headline || !s.summary || !s.primaryDeepLink,
+      // Required field validation: remove stories that are missing critical fields
+      // rather than just warning — prevents partially-formed stories from publishing.
+      const validStories = stories.filter(
+        (s) => s.headline && s.summary && s.primaryDeepLink,
       );
+      const invalidCount = stories.length - validStories.length;
 
-      if (invalidStories.length > 0) {
+      if (invalidCount > 0) {
         console.warn(
-          `[GazetteJobRunner] ${invalidStories.length} stories failed validation for edition ${editionId}`,
+          `[GazetteJobRunner] ${invalidCount} story(ies) failed validation and will be excluded ` +
+          `for edition ${editionId}. Valid: ${validStories.length}`,
         );
+        // Replace stories with only the valid set going forward
+        stories = validStories;
       }
       completedStages.push('VALIDATION');
 
       await GazetteGenerationJobRunnerService._completeJob(validationJob.id, {
-        validCount: stories.length - invalidStories.length,
-        invalidCount: invalidStories.length,
+        validCount: validStories.length,
+        invalidCount,
       });
 
       // ── STAGE: PUBLICATION ────────────────────────────────────────────────
@@ -247,6 +259,12 @@ export class GazetteGenerationJobRunnerService {
         });
       }
 
+      const durationMs = Date.now() - startTime;
+      console.log(
+        `[GazetteJobRunner] Edition ${editionId} → ${finalEdition.status} ` +
+        `(qualified=${qualifiedCount}, selected=${stories.length}, durationMs=${durationMs})`,
+      );
+
       return {
         editionId,
         status: finalEdition.status,
@@ -255,7 +273,7 @@ export class GazetteGenerationJobRunnerService {
         skippedReason: finalEdition.skippedReason ?? undefined,
         dryRun,
         stages: completedStages,
-        durationMs: Date.now() - startTime,
+        durationMs,
       };
     } catch (err: any) {
       // Update edition status to FAILED

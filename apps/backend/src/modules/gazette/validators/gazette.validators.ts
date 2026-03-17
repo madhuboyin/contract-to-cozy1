@@ -59,3 +59,16 @@ export const gazetteJobsQuerySchema = z.object({
 });
 
 export type GazetteJobsQuery = z.infer<typeof gazetteJobsQuerySchema>;
+
+// Schema for raw share token param (64-char lowercase hex from randomBytes(32).toString('hex'))
+export const shareTokenSchema = z.string().regex(
+  /^[0-9a-f]{64}$/,
+  'Invalid share token format',
+);
+
+export type ShareToken = z.infer<typeof shareTokenSchema>;
+
+// Validate that an edition ID looks like a CUID or UUID (non-empty string, reasonable length)
+export const editionIdParamSchema = z.string().min(1).max(128, 'editionId too long');
+
+export type EditionIdParam = z.infer<typeof editionIdParamSchema>;

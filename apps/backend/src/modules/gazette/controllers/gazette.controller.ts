@@ -7,6 +7,7 @@ import { APIError } from '../../../middleware/error.middleware';
 import { prisma } from '../../../lib/prisma';
 import { GazetteMapper } from '../mappers/gazette.mapper';
 import { GazetteShareService } from '../services/gazetteShare.service';
+import { shareTokenSchema, editionIdParamSchema } from '../validators/gazette.validators';
 import { GazetteEdition } from '@prisma/client';
 import { analyticsEmitter } from '../../../services/analytics/emitter';
 import { AnalyticsModule, AnalyticsFeature, AnalyticsSource, ProductAnalyticsEventType } from '../../../services/analytics/taxonomy';
@@ -203,6 +204,12 @@ export class GazetteController {
         throw new APIError('Token is required', 400, 'MISSING_TOKEN');
       }
 
+      // Validate token format before hashing/lookup
+      const tokenParse = shareTokenSchema.safeParse(token);
+      if (!tokenParse.success) {
+        throw new APIError('Share link not found', 404, 'SHARE_LINK_NOT_FOUND');
+      }
+
       const tokenHash = GazetteShareService.hashToken(token);
       const shareLink = await GazetteShareService.revokeShareLink(
         tokenHash,
@@ -228,6 +235,12 @@ export class GazetteController {
 
       if (!token) {
         throw new APIError('Token is required', 400, 'MISSING_TOKEN');
+      }
+
+      // Validate token format before hitting the DB — prevents timing attacks on arbitrary strings
+      const tokenParse = shareTokenSchema.safeParse(token);
+      if (!tokenParse.success) {
+        throw new APIError('Share link not found or expired', 404, 'SHARE_LINK_NOT_FOUND');
       }
 
       const { edition, shareLink } = await GazetteShareService.getPublicEdition(token);

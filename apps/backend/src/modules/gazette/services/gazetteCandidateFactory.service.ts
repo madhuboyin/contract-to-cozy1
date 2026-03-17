@@ -138,6 +138,24 @@ export class GazetteCandidateFactoryService {
   }
 
   /**
+   * Mark ACTIVE candidates whose hard expiry (expiresAt) has passed as EXPIRED.
+   * Should be called at the start of each generation run to keep the candidate
+   * pool clean. Returns the number of candidates expired.
+   */
+  static async markExpiredCandidates(propertyId: string): Promise<number> {
+    const now = new Date();
+    const result = await prisma.gazetteStoryCandidate.updateMany({
+      where: {
+        propertyId,
+        status: 'ACTIVE' as any,
+        expiresAt: { lt: now },
+      },
+      data: { status: 'EXPIRED' as any },
+    });
+    return result.count;
+  }
+
+  /**
    * Compute a stable novelty key for a signal.
    * Exposed for testing and reuse.
    */

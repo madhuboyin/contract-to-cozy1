@@ -396,3 +396,132 @@ describe('Gazette Ranking — Deep Link Validation', () => {
     assert.equal(reason, 'MISSING_DEEP_LINK');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Near-Duplicate Headline Detection (Step 6 guardrail)
+// ---------------------------------------------------------------------------
+
+const NEAR_DUPLICATE_THRESHOLD = 0.65;
+const MIN_WORD_LENGTH = 3;
+
+function headlineSimilarity(a, b) {
+  const toWords = (s) =>
+    new Set(
+      s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter((w) => w.length >= MIN_WORD_LENGTH),
+    );
+  const wordsA = toWords(a);
+  const wordsB = toWords(b);
+  if (wordsA.size === 0 && wordsB.size === 0) return 1;
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  let intersection = 0;
+  for (const w of wordsA) { if (wordsB.has(w)) intersection++; }
+  const union = wordsA.size + wordsB.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function filterNearDuplicateHeadlines(ranked) {
+  const kept = [];
+  const duplicates = [];
+  for (const item of ranked) {
+    const hint = (item.headlineHint ?? '').trim();
+    if (!hint) { kept.push(item); continue; }
+    let isDuplicate = false;
+    for (const accepted of kept) {
+      const acceptedHint = (accepted.headlineHint ?? '').trim();
+      if (!acceptedHint) continue;
+      const sim = headlineSimilarity(hint, acceptedHint);
+      if (sim >= NEAR_DUPLICATE_THRESHOLD) {
+        duplicates.push({ id: item.candidateId, similarTo: accepted.candidateId, similarity: sim });
+        isDuplicate = true;
+        break;
+      }
+    }
+    if (!isDuplicate) kept.push(item);
+  }
+  return { kept, duplicates };
+}
+
+describe('Gazette Ranking — Near-Duplicate Headline Detection', () => {
+  test('13. Identical headlines → second is a duplicate', () => {
+    const ranked = [
+      { candidateId: 'c1', headlineHint: 'Your HVAC system needs service this winter' },
+      { candidateId: 'c2', headlineHint: 'Your HVAC system needs service this winter' },
+    ];
+    const { kept, duplicates } = filterNearDuplicateHeadlines(ranked);
+    assert.equal(kept.length, 1);
+    assert.equal(duplicates.length, 1);
+    assert.equal(duplicates[0].id, 'c2');
+    assert.equal(kept[0].candidateId, 'c1', 'Best-ranked (first) should be kept');
+  });
+
+  test('14. Highly similar headlines (>= 0.65 Jaccard) → second excluded', () => {
+    // c1: {roof, inspection, overdue, schedule, service} = 5 words
+    // c2: {roof, inspection, overdue, schedule, service, now} = 6 words
+    // intersection = 5, union = 6, similarity = 5/6 ≈ 0.833 → above 0.65
+    const ranked = [
+      { candidateId: 'c1', headlineHint: 'Roof inspection overdue schedule service' },
+      { candidateId: 'c2', headlineHint: 'Roof inspection overdue schedule service now' },
+    ];
+    const { duplicates } = filterNearDuplicateHeadlines(ranked);
+    assert.equal(duplicates.length, 1, 'Similar headlines should be flagged as near-duplicate');
+  });
+
+  test('15. Different headlines → both kept', () => {
+    const ranked = [
+      { candidateId: 'c1', headlineHint: 'HVAC maintenance needed this season' },
+      { candidateId: 'c2', headlineHint: 'Insurance policy expiring next month review' },
+    ];
+    const { kept, duplicates } = filterNearDuplicateHeadlines(ranked);
+    assert.equal(kept.length, 2);
+    assert.equal(duplicates.length, 0);
+  });
+
+  test('16. Null headlineHints skip dedup — both kept', () => {
+    const ranked = [
+      { candidateId: 'c1', headlineHint: null },
+      { candidateId: 'c2', headlineHint: null },
+    ];
+    const { kept, duplicates } = filterNearDuplicateHeadlines(ranked);
+    assert.equal(kept.length, 2);
+    assert.equal(duplicates.length, 0);
+  });
+
+  test('17. headlineSimilarity: identical strings → 1.0', () => {
+    const sim = headlineSimilarity('your roof needs attention now', 'your roof needs attention now');
+    assert.ok(Math.abs(sim - 1.0) < 0.001);
+  });
+
+  test('18. headlineSimilarity: completely different → near zero', () => {
+    const sim = headlineSimilarity('roof inspection overdue service', 'insurance policy renewing coverage');
+    assert.ok(sim < 0.2, `Expected low similarity, got ${sim}`);
+  });
+
+  test('19. headlineSimilarity: both empty → 1.0 (degenerate case)', () => {
+    assert.equal(headlineSimilarity('', ''), 1);
+  });
+
+  test('20. headlineSimilarity: one empty → 0', () => {
+    assert.equal(headlineSimilarity('some words here', ''), 0);
+    assert.equal(headlineSimilarity('', 'some words here'), 0);
+  });
+
+  test('21. filterNearDuplicateHeadlines: first (highest rank) always wins', () => {
+    // In a list of 3, if c1≈c2 and c2≈c3, c1 is kept, c2 filtered, then c3 vs c1 checked
+    const ranked = [
+      { candidateId: 'c1', headlineHint: 'Water heater end life cycle soon replacement needed' },
+      { candidateId: 'c2', headlineHint: 'Water heater end life cycle replacement needed now' },
+      { candidateId: 'c3', headlineHint: 'Completely different topic about insurance coverage' },
+    ];
+    const { kept } = filterNearDuplicateHeadlines(ranked);
+    assert.ok(kept.some((k) => k.candidateId === 'c1'), 'c1 (rank 1) should always be kept');
+  });
+
+  test('22. Similarity threshold: below 0.65 → both kept', () => {
+    // Construct headlines that share ~50% word overlap (below 0.65 threshold)
+    const sim = headlineSimilarity(
+      'roof inspection overdue schedule service',       // 5 words
+      'roof water damage detected insurance claim',    // 5 words, only "roof" shared
+    );
+    assert.ok(sim < NEAR_DUPLICATE_THRESHOLD, `Similarity ${sim} should be below threshold`);
+  });
+});

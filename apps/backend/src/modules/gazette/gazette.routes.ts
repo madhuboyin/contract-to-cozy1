@@ -3,9 +3,8 @@
 
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.middleware';
-import { validateBody } from '../../middleware/validate.middleware';
+import { apiRateLimiter } from '../../middleware/rateLimiter.middleware';
 import { GazetteController } from './controllers/gazette.controller';
-import { currentEditionQuerySchema, editionListQuerySchema } from './validators/gazette.validators';
 
 const router = Router();
 
@@ -24,7 +23,7 @@ router.post('/gazette/editions/:editionId/share', authenticate, GazetteControlle
 // POST /gazette/share/:token/revoke
 router.post('/gazette/share/:token/revoke', authenticate, GazetteController.revokeShare.bind(GazetteController));
 
-// GET /gazette/share/:token  (public — no auth required)
-router.get('/gazette/share/:token', GazetteController.getPublicEdition.bind(GazetteController));
+// GET /gazette/share/:token  (public — no auth required, rate-limited by IP)
+router.get('/gazette/share/:token', apiRateLimiter, GazetteController.getPublicEdition.bind(GazetteController));
 
 export default router;

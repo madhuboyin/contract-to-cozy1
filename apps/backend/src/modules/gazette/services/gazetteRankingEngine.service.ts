@@ -20,6 +20,12 @@ export const MIN_NEWSWORTHY_SCORE = 0.40;
 export const MAX_PER_CATEGORY = 2;
 export const MIN_CONFIDENCE = 0.25;
 
+/** Jaccard word-overlap threshold above which two headlines are considered near-duplicates. */
+export const NEAR_DUPLICATE_THRESHOLD = 0.65;
+
+/** Minimum word length to include in similarity comparison (filters out stop words like "is", "at"). */
+const MIN_WORD_LENGTH = 3;
+
 // ---------------------------------------------------------------------------
 // Pure scoring helpers (exported for testability)
 // ---------------------------------------------------------------------------
@@ -88,6 +94,88 @@ export function classifyExclusion(
 }
 
 /**
+ * Compute Jaccard word-overlap similarity between two headline strings.
+ * Words shorter than MIN_WORD_LENGTH are ignored (reduces noise from stop words).
+ * Returns a value in [0, 1] where 1 = identical word sets.
+ */
+export function headlineSimilarity(a: string, b: string): number {
+  const toWords = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .split(/\s+/)
+        .filter((w) => w.length >= MIN_WORD_LENGTH),
+    );
+
+  const wordsA = toWords(a);
+  const wordsB = toWords(b);
+
+  if (wordsA.size === 0 && wordsB.size === 0) return 1;
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
+  let intersection = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) intersection++;
+  }
+
+  const union = wordsA.size + wordsB.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Filter near-duplicate headlines from a ranked list.
+ * Walks in rank order (best score first); any later candidate whose headline
+ * exceeds NEAR_DUPLICATE_THRESHOLD similarity against an already-kept candidate
+ * is tagged as a duplicate. Only candidates with non-empty headlineHints are compared.
+ *
+ * Returns:
+ *   kept — candidates to keep (in original order)
+ *   duplicates — { id, similarTo, similarity } for each removed candidate
+ */
+export function filterNearDuplicateHeadlines(
+  ranked: Array<{
+    candidateId: string;
+    headlineHint: string | null | undefined;
+  }>,
+): {
+  kept: typeof ranked;
+  duplicates: Array<{ id: string; similarTo: string; similarity: number }>;
+} {
+  const kept: typeof ranked = [];
+  const duplicates: Array<{ id: string; similarTo: string; similarity: number }> = [];
+
+  for (const item of ranked) {
+    const hint = (item.headlineHint ?? '').trim();
+
+    // Skip dedup for candidates without hints — they'll get distinct AI copy
+    if (!hint) {
+      kept.push(item);
+      continue;
+    }
+
+    let isDuplicate = false;
+    for (const accepted of kept) {
+      const acceptedHint = (accepted.headlineHint ?? '').trim();
+      if (!acceptedHint) continue;
+
+      const sim = headlineSimilarity(hint, acceptedHint);
+      if (sim >= NEAR_DUPLICATE_THRESHOLD) {
+        duplicates.push({ id: item.candidateId, similarTo: accepted.candidateId, similarity: sim });
+        isDuplicate = true;
+        break;
+      }
+    }
+
+    if (!isDuplicate) {
+      kept.push(item);
+    }
+  }
+
+  return { kept, duplicates };
+}
+
+/**
  * Determine priority label based on rank.
  */
 export function determinePriorityByRank(
@@ -141,15 +229,35 @@ export class GazetteRankingEngineService {
       return { candidate, compositeScore, exclusionReason };
     });
 
-    // Step 3: Apply diversity cap (sorted by compositeScore descending)
+    // Step 3: Near-duplicate headline filter (applied before diversity cap)
     const eligible = withExclusion
       .filter((c) => !c.exclusionReason)
       .sort((a, b) => b.compositeScore - a.compositeScore);
 
+    const { duplicates: dupeResults } = filterNearDuplicateHeadlines(
+      eligible.map((e) => ({
+        candidateId: e.candidate.id,
+        headlineHint: (e.candidate as any).headlineHint ?? null,
+      })),
+    );
+    const dupeIds = new Set(dupeResults.map((d) => d.id));
+
+    if (dupeResults.length > 0) {
+      console.log(
+        `[GazetteRanking] Filtered ${dupeResults.length} near-duplicate headline(s) for edition ${editionId}`,
+      );
+    }
+
+    // Step 4: Apply diversity cap (sorted by compositeScore descending)
     const categoryCounts = new Map<string, number>();
     const finalResults = withExclusion.map((item) => {
       if (item.exclusionReason) {
         return { ...item, included: false, diversityExcluded: false };
+      }
+
+      // Exclude near-duplicates
+      if (dupeIds.has(item.candidate.id)) {
+        return { ...item, exclusionReason: 'DUPLICATE', included: false, diversityExcluded: false };
       }
 
       const category = item.candidate.storyCategory as string;
