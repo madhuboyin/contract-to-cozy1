@@ -184,7 +184,14 @@ export class RefinanceRadarService {
       return { available: false, reason: 'MISSING_MORTGAGE_DATA' };
     }
 
-    const evalResult = await this.engine.evaluate(mortgageContext);
+    // Read the current persisted radar state before evaluating so the engine
+    // can apply hysteresis (lower close threshold when window is already OPEN).
+    const existingState = await prisma.propertyRefinanceRadarState.findUnique({
+      where: { propertyId },
+      select: { radarState: true },
+    });
+
+    const evalResult = await this.engine.evaluate(mortgageContext, existingState?.radarState ?? null);
 
     // Persist opportunity + radar state transition (fire-and-settle)
     await this.persistEvaluationResult(propertyId, evalResult, evalResult.latestSnapshotId);

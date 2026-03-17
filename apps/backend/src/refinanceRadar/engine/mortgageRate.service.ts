@@ -141,30 +141,32 @@ export class MortgageRateService {
     const delta = prior ? +(latest.rate30yr - prior.rate30yr).toFixed(3) : 0;
     const absThreshold = 0.05; // < 0.05pp change = stable
 
-    let trend30yr: RateTrendSummary['trend30yr'] = 'STABLE';
-    let trendLabel: string;
-
-    if (Math.abs(delta) < absThreshold) {
-      trend30yr = 'STABLE';
-      trendLabel = `Rates have been relatively stable. Current 30-year fixed rate: ${latest.rate30yr.toFixed(3)}%.`;
-    } else if (delta > 0) {
-      trend30yr = 'RISING';
-      trendLabel =
-        `Rates have risen by ${delta.toFixed(3)} percentage point(s) recently. ` +
-        `Current 30-year fixed rate: ${latest.rate30yr.toFixed(3)}%.`;
-    } else {
-      trend30yr = 'FALLING';
-      trendLabel =
-        `Rates have declined by ${Math.abs(delta).toFixed(3)} percentage point(s) recently. ` +
-        `Current 30-year fixed rate: ${latest.rate30yr.toFixed(3)}%.`;
-    }
-
     const deltaWeeks = prior
       ? Math.round(
           (new Date(latest.date).getTime() - new Date(prior.date).getTime()) /
             (7 * 24 * 60 * 60 * 1000),
         )
       : 0;
+
+    let trend30yr: RateTrendSummary['trend30yr'] = 'STABLE';
+    let trendLabel: string;
+
+    const periodLabel = deltaWeeks > 0 ? ` over the past ${deltaWeeks} week${deltaWeeks !== 1 ? 's' : ''}` : '';
+
+    if (Math.abs(delta) < absThreshold) {
+      trend30yr = 'STABLE';
+      trendLabel = `Rates have been relatively stable${periodLabel}. Current 30-year: ${latest.rate30yr.toFixed(3)}%.`;
+    } else if (delta > 0) {
+      trend30yr = 'RISING';
+      trendLabel =
+        `Rates have risen by ${delta.toFixed(2)}pp${periodLabel}. ` +
+        `Current 30-year: ${latest.rate30yr.toFixed(3)}%.`;
+    } else {
+      trend30yr = 'FALLING';
+      trendLabel =
+        `Rates have fallen by ${Math.abs(delta).toFixed(2)}pp${periodLabel}. ` +
+        `Current 30-year: ${latest.rate30yr.toFixed(3)}%.`;
+    }
 
     return {
       current30yr: latest.rate30yr,
