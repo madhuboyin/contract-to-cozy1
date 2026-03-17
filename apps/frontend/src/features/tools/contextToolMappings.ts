@@ -58,4 +58,6 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'home-habit-coach': ['home-event-radar', 'home-timeline', 'status-board'],
   // Renovation advisor surfaces tax, capital, and timeline planning tools.
   'home-renovation-risk-advisor': ['capital-timeline', 'property-tax', 'home-digital-twin'],
+  // Refinance radar surfaces break-even math, full-cost context, and capital planning.
+  'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'true-cost'],
 };

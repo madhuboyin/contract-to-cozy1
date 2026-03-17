@@ -72,6 +72,7 @@ import {
   type ServicePriceRadarCheckSummary,
 } from './tools/service-price-radar/servicePriceRadarApi';
 import NeighborhoodRadarDashboardCard from './components/NeighborhoodRadarDashboardCard';
+import RefinanceRadarDashboardCard from './components/RefinanceRadarDashboardCard';
 import { getSpotlightHabit } from './tools/home-habit-coach/homeHabitCoachApi';
 import { ListChecks } from 'lucide-react';
 
@@ -1505,6 +1506,10 @@ export default function PropertyDetailPage() {
       )}
 
       <NeighborhoodRadarDashboardCard propertyId={property.id} />
+
+      {FEATURE_FLAGS.MORTGAGE_REFINANCE_RADAR && (
+        <RefinanceRadarDashboardCard propertyId={property.id} />
+      )}
 
       <div className="md:hidden">
         <HomeToolsRail propertyId={property.id} context="property-hub" />

@@ -227,6 +227,8 @@ const HOME_TOOL_ICON_OVERRIDES: Record<string, IconName> = {
   'NEIGHBORHOOD-CHANGE-RADAR': 'Radar',
   HOME_HABIT_COACH: 'ListChecks',
   'HOME-HABIT-COACH': 'ListChecks',
+  MORTGAGE_REFINANCE_RADAR: 'BarChart2',
+  'MORTGAGE-REFINANCE-RADAR': 'BarChart2',
 };
 
 const CORE_NAV_ALIASES: Record<string, CoreNavKey> = {

@@ -628,6 +628,8 @@ export default function MortgageRefinanceRadarClient() {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
+    setData(null);
+    setRateData(null);
     try {
       const reqId = ++reqRef.current;
       const [status, rates] = await Promise.all([
