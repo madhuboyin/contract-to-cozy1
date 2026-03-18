@@ -102,7 +102,7 @@ async function getRecentRuns(queueName: string, limit = 3): Promise<RecentRun[]>
 export async function listWorkerJobs(): Promise<WorkerJobDetail[]> {
   return Promise.all(
     JOB_REGISTRY.map(async (job) => {
-      if (job.type !== 'bullmq' || !job.queueName) {
+      if (!job.queueName) {
         return { ...job, recentRuns: [] };
       }
       try {
