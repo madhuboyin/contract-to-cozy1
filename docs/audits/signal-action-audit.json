@@ -1,0 +1,1209 @@
+[
+  {
+    "signalId": "SIG-R01",
+    "signalFamily": "RISK",
+    "signalLabel": "Property Risk Score",
+    "signalType": "score",
+    "sourceKind": "backend_computation",
+    "feature": "Risk Assessment",
+    "screen": "Dashboard Main, Risk Radar Page",
+    "filePaths": [
+      "apps/backend/src/services/RiskAssessment.service.ts",
+      "apps/backend/src/config/risk-constants.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/PropertyRiskScoreCard.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/risk-radar/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/RiskAssessment.service.ts",
+      "apps/backend/src/config/risk-constants.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/PropertyRiskScoreCard.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/risk-radar/page.tsx"
+    ],
+    "prismaModels": ["RiskAssessmentReport"],
+    "currentActionLabel": "View Full Report (ArrowRight icon only)",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/properties/{id}/risk-assessment",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-01",
+    "notes": "Score 0-100, color coded: green 80+, amber 60-79, red <60. Shows dollar exposure. Action is implicit (icon only). Guidance Engine: prescribe next step per score band."
+  },
+  {
+    "signalId": "SIG-R02",
+    "signalFamily": "RISK",
+    "signalLabel": "Top Risk Drivers — Per Asset",
+    "signalType": "table_column",
+    "sourceKind": "backend_rule",
+    "feature": "Risk Radar",
+    "screen": "Risk Radar Page",
+    "filePaths": [
+      "apps/backend/src/services/RiskAssessment.service.ts",
+      "apps/backend/src/config/risk-constants.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/risk-radar/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/RiskAssessment.service.ts",
+      "apps/backend/src/config/risk-constants.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/risk-radar/page.tsx"
+    ],
+    "prismaModels": ["RiskAssessmentReport", "InventoryItem"],
+    "currentActionLabel": "None",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Highest-value missing action in the product. Table rows show asset, risk level, exposure, replacement cost, probability — no per-row CTA. Each row should have: Replace/Repair, View Coverage, Book Inspection."
+  },
+  {
+    "signalId": "SIG-R03",
+    "signalFamily": "RISK",
+    "signalLabel": "Freeze Risk Incident",
+    "signalType": "alert",
+    "sourceKind": "backend_rule",
+    "feature": "Incident System",
+    "screen": "Incidents List, Dashboard Notifications",
+    "filePaths": [
+      "apps/workers/src/jobs/freezeRiskIncidents.job.ts",
+      "apps/backend/src/services/incidents/incident.orchestrator.ts",
+      "apps/backend/src/services/incidents/incident.scoring.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/incidents/IncidentCard.tsx"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/freezeRiskIncidents.job.ts",
+      "apps/backend/src/services/incidents/incident.orchestrator.ts",
+      "apps/backend/src/services/incidents/incident.scoring.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/incidents/IncidentCard.tsx"
+    ],
+    "prismaModels": ["Incident"],
+    "currentActionLabel": "View Incident Details",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/properties/{id}/incidents/{id}",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Backend has actions[].ctaLabel='Create urgent winterization task'. Score: 85 (<=15F), 75 (<=20F), 60 (<=27F). Frontend shows generic 'View Incident Details' instead of surfacing backend action inline."
+  },
+  {
+    "signalId": "SIG-R04",
+    "signalFamily": "RISK",
+    "signalLabel": "Climate Risk Assessment",
+    "signalType": "score",
+    "sourceKind": "ai_generated",
+    "feature": "Climate Risk Predictor",
+    "screen": "Property Detail",
+    "filePaths": [
+      "apps/backend/src/services/climateRiskPredictor.service.ts"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/climateRiskPredictor.service.ts"
+    ],
+    "frontendFiles": [],
+    "prismaModels": ["ClimateRiskAssessment"],
+    "currentActionLabel": "Text mitigation steps (no CTA)",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "diagnosis",
+    "confidence": "medium",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "9 risk categories (Flooding, Hurricanes, Wildfires, Heat, Tornadoes, Earthquakes, Winter, Drought, Sea Level). Rich analysis with no deep links. Guidance Engine: map mitigation steps to Coverage Intelligence, Seasonal Checklist, Negotiation Shield."
+  },
+  {
+    "signalId": "SIG-R05",
+    "signalFamily": "RISK",
+    "signalLabel": "Do-Nothing Simulator Output",
+    "signalType": "card_metric",
+    "sourceKind": "backend_computation",
+    "feature": "Do-Nothing Simulator",
+    "screen": "Dashboard Tool Card, Tool Page",
+    "filePaths": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/DoNothingSimulatorToolCard.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/do-nothing/"
+    ],
+    "backendFiles": [],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/DoNothingSimulatorToolCard.tsx"
+    ],
+    "prismaModels": [],
+    "currentActionLabel": "Run simulation / Re-run / View details",
+    "currentActionType": "tool_launch",
+    "actionTarget": "/dashboard/properties/{id}/tools/do-nothing",
+    "userStageImplied": "decision",
+    "confidence": "medium",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Shows risk delta, projected cost, incident likelihood. After simulation output, no 'Now act on this' CTA. Guidance Engine should surface actionable next step based on simulation results."
+  },
+  {
+    "signalId": "SIG-R06",
+    "signalFamily": "RISK",
+    "signalLabel": "Digital Twin Component Replacement Suggestion",
+    "signalType": "card_metric",
+    "sourceKind": "backend_rule",
+    "feature": "Home Digital Twin",
+    "screen": "Digital Twin Tool Page",
+    "filePaths": [
+      "apps/backend/src/services/homeDigitalTwinRecommendations.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-digital-twin/"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/homeDigitalTwinRecommendations.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-digital-twin/"
+    ],
+    "prismaModels": ["HomeTwinComponent"],
+    "currentActionLabel": "Replace {Component} (pre-filled scenario)",
+    "currentActionType": "scenario_launch",
+    "actionTarget": "Scenario creation with pre-filled payload",
+    "userStageImplied": "decision",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": true,
+    "duplicateGroupId": "",
+    "notes": "MAX_SUGGESTIONS=5, ranked by urgency+confidence+cost. suggestedInputPayload in backend response. Missing: Replace/Repair tool integration before jumping to replacement scenario."
+  },
+  {
+    "signalId": "SIG-R07",
+    "signalFamily": "RISK",
+    "signalLabel": "Risk Mitigation Plan Item",
+    "signalType": "status_indicator",
+    "sourceKind": "backend_rule",
+    "feature": "Risk Assessment / Incidents",
+    "screen": "Risk Assessment Detail (not surfaced in frontend)",
+    "filePaths": [
+      "apps/backend/src/services/incidents/incident.orchestrator.ts"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/incidents/incident.orchestrator.ts"
+    ],
+    "frontendFiles": [],
+    "prismaModels": ["RiskMitigationPlanItem"],
+    "currentActionLabel": "None (not shown in frontend)",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "diagnosis",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Well-structured backend model (status: RECOMMENDED/PLANNED/IN_PROGRESS/COMPLETED, priority: LOW/MEDIUM/HIGH/CRITICAL). Not surfaced in any frontend component found. High Guidance Engine value."
+  },
+  {
+    "signalId": "SIG-M01",
+    "signalFamily": "MAINTENANCE",
+    "signalLabel": "Maintenance Task Overdue",
+    "signalType": "badge",
+    "sourceKind": "date_based",
+    "feature": "Maintenance Management",
+    "screen": "Maintenance Page, Action Center",
+    "filePaths": [
+      "apps/backend/src/services/maintenancePrediction.service.ts",
+      "apps/backend/src/controllers/maintenance.controller.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/maintenance/page.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/actions/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/maintenancePrediction.service.ts",
+      "apps/backend/src/controllers/maintenance.controller.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/maintenance/page.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/actions/page.tsx"
+    ],
+    "prismaModels": ["PropertyMaintenanceTask"],
+    "currentActionLabel": "Edit | Complete | Mark as Not Needed",
+    "currentActionType": "modal",
+    "actionTarget": "Modal inline update",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-05",
+    "notes": "Red (overdue), orange (due soon), green (scheduled). Missing context-specific 'Book Service' for professional tasks vs DIY tasks."
+  },
+  {
+    "signalId": "SIG-M02",
+    "signalFamily": "MAINTENANCE",
+    "signalLabel": "Seasonal Checklist Due",
+    "signalType": "alert",
+    "sourceKind": "cron_job",
+    "feature": "Seasonal Maintenance",
+    "screen": "Dashboard, Actions Page",
+    "filePaths": [
+      "apps/workers/src/jobs/seasonalChecklistGeneration.job.ts",
+      "apps/workers/src/jobs/seasonalChecklistExpiration.job.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/actions/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/seasonalChecklistGeneration.job.ts",
+      "apps/workers/src/jobs/seasonalChecklistExpiration.job.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/actions/page.tsx"
+    ],
+    "prismaModels": ["SeasonalChecklist", "SeasonalChecklistItem"],
+    "currentActionLabel": "View Action Plan",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/maintenance?propertyId={id}",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Daily 2 AM generation, 9 AM notification. Climate region + home profile driven. No 'Book Contractor' CTA for complex seasonal tasks (gutter cleaning, HVAC tune-up)."
+  },
+  {
+    "signalId": "SIG-M03",
+    "signalFamily": "MAINTENANCE",
+    "signalLabel": "Maintenance Prediction (Interval-based)",
+    "signalType": "alert",
+    "sourceKind": "backend_rule",
+    "feature": "Maintenance Forecast",
+    "screen": "Maintenance Forecast Page",
+    "filePaths": [
+      "apps/backend/src/services/maintenancePrediction.service.ts"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/maintenancePrediction.service.ts"
+    ],
+    "frontendFiles": [],
+    "prismaModels": ["MaintenancePrediction"],
+    "currentActionLabel": "Schedule / Add to Tasks",
+    "currentActionType": "task_creation",
+    "actionTarget": "Creates PropertyMaintenanceTask",
+    "userStageImplied": "planning",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Confidence scores: 0.95 (OCR/AI), 0.60 (manual), 0.85 (verified), 0.50 (unverified). Confidence score not surfaced in UI."
+  },
+  {
+    "signalId": "SIG-M04",
+    "signalFamily": "MAINTENANCE",
+    "signalLabel": "Maintenance Nudge (Health Score < 70)",
+    "signalType": "alert",
+    "sourceKind": "frontend_card",
+    "feature": "Maintenance Nudge",
+    "screen": "Dashboard Main",
+    "filePaths": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/MaintenanceNudgeCard.tsx"
+    ],
+    "backendFiles": [],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/MaintenanceNudgeCard.tsx"
+    ],
+    "prismaModels": ["HomeScoreReport", "PropertyMaintenanceTask"],
+    "currentActionLabel": "View Action Plan",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/maintenance?propertyId={id}&priority=true",
+    "userStageImplied": "diagnosis",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-03",
+    "notes": "Only renders when health < 70 AND pending actions > 0. Well-targeted. Could show specific category of failing tasks."
+  },
+  {
+    "signalId": "SIG-M05",
+    "signalFamily": "MAINTENANCE",
+    "signalLabel": "Home Habit Coach — Habit Assignment",
+    "signalType": "status_indicator",
+    "sourceKind": "cron_job",
+    "feature": "Home Habit Coach",
+    "screen": "Home Habit Coach Tool Page",
+    "filePaths": [
+      "apps/workers/src/jobs/habitGeneration.job.ts",
+      "apps/backend/src/services/homeHabitCoach/habitGenerationEngine.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-habit-coach/"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/habitGeneration.job.ts",
+      "apps/backend/src/services/homeHabitCoach/habitGenerationEngine.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-habit-coach/"
+    ],
+    "prismaModels": ["PropertyHabit"],
+    "currentActionLabel": "Mark Complete / Snooze",
+    "currentActionType": "status_update",
+    "actionTarget": "Inline update",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Saturdays 3:30 AM. Dedup prevents duplicate ACTIVE/SNOOZED. No escalation when habit repeatedly snoozed."
+  },
+  {
+    "signalId": "SIG-M06",
+    "signalFamily": "MAINTENANCE",
+    "signalLabel": "Health Score Insight — Needs Attention",
+    "signalType": "alert",
+    "sourceKind": "backend_computation",
+    "feature": "Health Score",
+    "screen": "Health Score Detail Page, Dashboard",
+    "filePaths": [
+      "apps/backend/src/services/homeScoreReport.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/health-score/page.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/HealthInsightList.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/homeScoreReport.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/health-score/page.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/HealthInsightList.tsx"
+    ],
+    "prismaModels": ["HomeScoreReport", "HomeScoreReportSection"],
+    "currentActionLabel": "Manage Appliance Warranties / Book Service / View Inspection",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/warranties | /dashboard/providers | /dashboard/bookings",
+    "userStageImplied": "diagnosis",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": true,
+    "duplicateGroupId": "DUP-03",
+    "notes": "Backend has reasons[].actionHref. HVAC/Roof/Water Heater sends user directly to booking without Replace/Repair or Price Radar intermediate step. Premature booking gap."
+  },
+  {
+    "signalId": "SIG-M07",
+    "signalFamily": "MAINTENANCE",
+    "signalLabel": "Proactive Maintenance Recommended (N Items)",
+    "signalType": "alert",
+    "sourceKind": "frontend_card",
+    "feature": "Health Insight List",
+    "screen": "Dashboard Main",
+    "filePaths": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/HealthInsightList.tsx"
+    ],
+    "backendFiles": [],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/HealthInsightList.tsx"
+    ],
+    "prismaModels": ["HomeScoreReport", "PropertyMaintenanceTask"],
+    "currentActionLabel": "Contextual per category",
+    "currentActionType": "navigation",
+    "actionTarget": "Varies by category",
+    "userStageImplied": "diagnosis",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": true,
+    "duplicateGroupId": "DUP-03",
+    "notes": "Blue box with Shield icon. Appliance warranty → warranties page. HVAC/Roof/Water Heater → booking (premature). Should route through Replace/Repair first."
+  },
+  {
+    "signalId": "SIG-I01",
+    "signalFamily": "INSURANCE",
+    "signalLabel": "Coverage Lapse Incident",
+    "signalType": "alert",
+    "sourceKind": "cron_job",
+    "feature": "Incident System / Insurance",
+    "screen": "Incidents List, Notifications",
+    "filePaths": [
+      "apps/workers/src/jobs/coverageLapseIncidents.job.ts",
+      "apps/backend/src/services/incidents/incident.orchestrator.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/incidents/IncidentCard.tsx"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/coverageLapseIncidents.job.ts",
+      "apps/backend/src/services/incidents/incident.orchestrator.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/incidents/IncidentCard.tsx"
+    ],
+    "prismaModels": ["Incident", "InsurancePolicy"],
+    "currentActionLabel": "View Incident Details",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/properties/{id}/incidents/{id}",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-07",
+    "notes": "Backend: actions[].ctaLabel='Create renewal task'. Score: 75 (<=3d), 60 (<=7d), 40 (<=14d). Frontend doesn't surface specific action inline."
+  },
+  {
+    "signalId": "SIG-I02",
+    "signalFamily": "INSURANCE",
+    "signalLabel": "Insurance Policy Expiring / Expired",
+    "signalType": "badge",
+    "sourceKind": "date_based",
+    "feature": "Insurance Management",
+    "screen": "Insurance Page",
+    "filePaths": [
+      "apps/backend/src/controllers/insurance.controller.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/insurance/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/controllers/insurance.controller.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/insurance/page.tsx"
+    ],
+    "prismaModels": ["InsurancePolicy"],
+    "currentActionLabel": "Edit | Delete | Add Document",
+    "currentActionType": "modal",
+    "actionTarget": "Policy management modal",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-07",
+    "notes": "No 'Compare Rates' or 'Find Better Policy' CTA on expiring policy. Guidance Engine: surface Coverage Intelligence or Risk Premium Optimizer when renewal approaches."
+  },
+  {
+    "signalId": "SIG-I03",
+    "signalFamily": "INSURANCE",
+    "signalLabel": "Coverage Intelligence Verdict",
+    "signalType": "card_metric",
+    "sourceKind": "backend_computation",
+    "feature": "Coverage Intelligence Tool",
+    "screen": "Dashboard Tool Card, Tool Page",
+    "filePaths": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/CoverageIntelligenceToolCard.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/coverage-intelligence/"
+    ],
+    "backendFiles": [],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/CoverageIntelligenceToolCard.tsx"
+    ],
+    "prismaModels": ["CoverageAnalysis"],
+    "currentActionLabel": "Run analysis / Re-run / View details",
+    "currentActionType": "tool_launch",
+    "actionTarget": "/dashboard/properties/{id}/tools/coverage-intelligence",
+    "userStageImplied": "diagnosis",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Verdict: ADEQUATE / HAS_GAPS / CRITICAL_GAPS. CRITICAL_GAPS verdict should escalate to stronger action than 'View details'."
+  },
+  {
+    "signalId": "SIG-I04",
+    "signalFamily": "INSURANCE",
+    "signalLabel": "Risk Premium Optimizer — Savings Opportunity",
+    "signalType": "card_metric",
+    "sourceKind": "backend_computation",
+    "feature": "Risk Premium Optimizer",
+    "screen": "Dashboard Tool Card, Tool Page",
+    "filePaths": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/RiskPremiumOptimizerToolCard.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/risk-premium-optimizer/"
+    ],
+    "backendFiles": [],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/RiskPremiumOptimizerToolCard.tsx"
+    ],
+    "prismaModels": ["RiskPremiumOptimizationAnalysis"],
+    "currentActionLabel": "Run optimizer / Re-run / View details",
+    "currentActionType": "tool_launch",
+    "actionTarget": "/dashboard/properties/{id}/tools/risk-premium-optimizer",
+    "userStageImplied": "decision",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Shows savings range and top recommendation. After recommendations, no 'Contact insurer', 'Negotiate', or 'Implement mitigation' CTA."
+  },
+  {
+    "signalId": "SIG-I05",
+    "signalFamily": "INSURANCE",
+    "signalLabel": "Upcoming Renewals (Warranty + Insurance)",
+    "signalType": "card_metric",
+    "sourceKind": "date_based",
+    "feature": "Upcoming Renewals",
+    "screen": "Dashboard Main",
+    "filePaths": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/UpcomingRenewalsCard.tsx"
+    ],
+    "backendFiles": [],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/UpcomingRenewalsCard.tsx"
+    ],
+    "prismaModels": ["Warranty", "InsurancePolicy"],
+    "currentActionLabel": "View All N / Add Coverage",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/warranties OR /dashboard/insurance",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-02",
+    "notes": "Three item preview. Generic 'View All' — no inline 'Renew Now' or 'Compare Options' per item."
+  },
+  {
+    "signalId": "SIG-C01",
+    "signalFamily": "CLAIMS",
+    "signalLabel": "Claim Status (Draft → Submitted → Approved/Denied)",
+    "signalType": "badge",
+    "sourceKind": "event_based",
+    "feature": "Claims Management",
+    "screen": "Claims Page, Claim Detail",
+    "filePaths": [
+      "apps/backend/src/services/claims/claims.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/claims/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/claims/claims.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/claims/page.tsx"
+    ],
+    "prismaModels": ["Claim"],
+    "currentActionLabel": "View | Edit | Submit | Download",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/properties/{id}/claims/{id}",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Backend tracks overdueFollowUps and nextFollowUpAt. Guidance Engine: surface follow-up reminders proactively."
+  },
+  {
+    "signalId": "SIG-C02",
+    "signalFamily": "CLAIMS",
+    "signalLabel": "Negotiation Shield Analysis Signal",
+    "signalType": "alert",
+    "sourceKind": "ai_generated",
+    "feature": "Negotiation Shield",
+    "screen": "Negotiation Shield Tool Page",
+    "filePaths": [
+      "apps/backend/src/services/negotiationShield.service.ts",
+      "apps/backend/src/services/negotiationShieldBuyerInspection.service.ts",
+      "apps/backend/src/services/negotiationShieldContractorQuote.service.ts",
+      "apps/backend/src/services/negotiationShieldContractorUrgency.service.ts",
+      "apps/backend/src/services/negotiationShieldInsuranceClaimSettlement.service.ts",
+      "apps/backend/src/services/negotiationShieldInsurancePremiumIncreaseAnalysis.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/negotiation-shield/"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/negotiationShield.service.ts",
+      "apps/backend/src/services/negotiationShieldBuyerInspection.service.ts",
+      "apps/backend/src/services/negotiationShieldContractorQuote.service.ts",
+      "apps/backend/src/services/negotiationShieldContractorUrgency.service.ts",
+      "apps/backend/src/services/negotiationShieldInsuranceClaimSettlement.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/negotiation-shield/"
+    ],
+    "prismaModels": ["NegotiationShieldCase", "NegotiationShieldAnalysis"],
+    "currentActionLabel": "Analysis text (no clickable CTA)",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "decision",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "5 scenario types: BUYER_INSPECTION, CONTRACTOR_QUOTE, CONTRACTOR_URGENCY, INSURANCE_CLAIM_SETTLEMENT, INSURANCE_PREMIUM. Rich AI output has no clickable next step. Should convert to counter-offer templates, claim reopening, or contractor shortlist."
+  },
+  {
+    "signalId": "SIG-W01",
+    "signalFamily": "WARRANTY",
+    "signalLabel": "Warranty Expiring / Expired",
+    "signalType": "badge",
+    "sourceKind": "date_based",
+    "feature": "Warranties Management",
+    "screen": "Warranties Page, Upcoming Renewals Card",
+    "filePaths": [
+      "apps/backend/src/controllers/warranty.controller.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/warranties/page.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/UpcomingRenewalsCard.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/controllers/warranty.controller.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/warranties/page.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/UpcomingRenewalsCard.tsx"
+    ],
+    "prismaModels": ["Warranty"],
+    "currentActionLabel": "Renew / Edit / View",
+    "currentActionType": "modal",
+    "actionTarget": "Warranty management modal",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-02",
+    "notes": "No signal for warranty GAP (item with no warranty coverage). Coverage Intelligence fills this but is not cross-linked."
+  },
+  {
+    "signalId": "SIG-W02",
+    "signalFamily": "WARRANTY",
+    "signalLabel": "Recall Match — Product Recall Detected",
+    "signalType": "alert",
+    "sourceKind": "cron_job",
+    "feature": "Recall Safety Alerts",
+    "screen": "Recalls Page, Property Detail",
+    "filePaths": [
+      "apps/workers/src/jobs/recallIngest.job.ts",
+      "apps/workers/src/jobs/recallMatch.job.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/recalls/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/recallIngest.job.ts",
+      "apps/workers/src/jobs/recallMatch.job.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/recalls/page.tsx"
+    ],
+    "prismaModels": ["RecallMatch", "RecallRecord"],
+    "currentActionLabel": "Resolve Recall | View Details | Contact Manufacturer",
+    "currentActionType": "modal",
+    "actionTarget": "RecallMatch status update",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "CRITICAL (death/fatal), HIGH (fire/burn/electrocution), MEDIUM (shock/choking). No 'Find Replacement' or 'Book Installation' CTA post-resolution."
+  },
+  {
+    "signalId": "SIG-F01",
+    "signalFamily": "FINANCIAL",
+    "signalLabel": "Financial Efficiency Score",
+    "signalType": "score",
+    "sourceKind": "backend_computation",
+    "feature": "Financial Efficiency",
+    "screen": "Dashboard Main, Financial Efficiency Page",
+    "filePaths": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/FinancialEfficiencyScoreCard.tsx"
+    ],
+    "backendFiles": [],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/FinancialEfficiencyScoreCard.tsx"
+    ],
+    "prismaModels": ["PropertyScoreSnapshot"],
+    "currentActionLabel": "View Report (arrow icon)",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/properties/{id}/financial-efficiency",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-01",
+    "notes": "Score <50 should surface Home Savings, Refinance Radar, Energy Audit. Celebration modal at >=60 on first load."
+  },
+  {
+    "signalId": "SIG-F02",
+    "signalFamily": "FINANCIAL",
+    "signalLabel": "Home Savings Opportunity",
+    "signalType": "card_metric",
+    "sourceKind": "backend_rule",
+    "feature": "Home Savings Check",
+    "screen": "Dashboard Tool Card, Home Savings Tool Page",
+    "filePaths": [
+      "apps/backend/src/services/homeSavings.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/HomeSavingsCheckToolCard.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-savings/"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/homeSavings.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/HomeSavingsCheckToolCard.tsx"
+    ],
+    "prismaModels": ["HomeSavingsOpportunity", "HomeSavingsAccount", "HomeSavingsCategory"],
+    "currentActionLabel": "Add bill / Compare / View details",
+    "currentActionType": "tool_launch",
+    "actionTarget": "/dashboard/properties/{id}/tools/home-savings",
+    "userStageImplied": "decision",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "actionUrl field in DB but not consistently surfaced per opportunity. Confidence: HIGH/MEDIUM/LOW. Status: NEW/VIEWED/SAVED/APPLIED/SWITCHED/EXPIRED."
+  },
+  {
+    "signalId": "SIG-F03",
+    "signalFamily": "FINANCIAL",
+    "signalLabel": "Refinance Opportunity",
+    "signalType": "card_metric",
+    "sourceKind": "cron_job",
+    "feature": "Mortgage Refinance Radar",
+    "screen": "Dashboard Tool Card, Refinance Radar Tool Page",
+    "filePaths": [
+      "apps/workers/src/jobs/ingestMortgageRates.job.ts",
+      "apps/backend/src/refinanceRadar/refinanceRadar.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/mortgage-refinance-radar/"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/ingestMortgageRates.job.ts",
+      "apps/backend/src/refinanceRadar/refinanceRadar.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/mortgage-refinance-radar/"
+    ],
+    "prismaModels": ["RefinanceOpportunity", "PropertyRefinanceRadarState"],
+    "currentActionLabel": "Open Tool",
+    "currentActionType": "tool_launch",
+    "actionTarget": "/dashboard/properties/{id}/tools/mortgage-refinance-radar",
+    "userStageImplied": "decision",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "FRED/Freddie Mac data Thursday 5PM. After viewing opportunity, no 'Contact Lender' or 'Get Rate Quote' CTA. Tracks missed opportunities and rate trends."
+  },
+  {
+    "signalId": "SIG-F04",
+    "signalFamily": "FINANCIAL",
+    "signalLabel": "Hidden Asset Match — Tax / Rebate / Warranty Gap",
+    "signalType": "alert",
+    "sourceKind": "cron_job",
+    "feature": "Hidden Asset Finder",
+    "screen": "Hidden Asset Finder Tool Page",
+    "filePaths": [
+      "apps/workers/src/jobs/hiddenAssetRefresh.job.ts",
+      "apps/backend/src/services/hiddenAssets.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/hidden-asset-finder/"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/hiddenAssetRefresh.job.ts",
+      "apps/backend/src/services/hiddenAssets.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/hidden-asset-finder/"
+    ],
+    "prismaModels": ["PropertyHiddenAssetMatch", "HiddenAssetProgram"],
+    "currentActionLabel": "Apply / Learn More",
+    "currentActionType": "navigation",
+    "actionTarget": "Program-specific URL",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Sundays 3AM. Status: DETECTED→CONFIRMED→EXPIRED/INACTIVATED. No push notification when new DETECTED match found."
+  },
+  {
+    "signalId": "SIG-F05",
+    "signalFamily": "FINANCIAL",
+    "signalLabel": "Energy Audit Score & Savings",
+    "signalType": "score",
+    "sourceKind": "ai_generated",
+    "feature": "Energy Auditor",
+    "screen": "Property Detail (embedded)",
+    "filePaths": [
+      "apps/backend/src/services/energyAuditor.service.ts"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/energyAuditor.service.ts"
+    ],
+    "frontendFiles": [],
+    "prismaModels": [],
+    "currentActionLabel": "Text recommendations by category",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "diagnosis",
+    "confidence": "medium",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "paybackMonths computed per recommendation but no booking/upgrade CTA attached. Categories: HVAC, Water Heating, Lighting, Appliances, Insulation, Solar, Behavioral."
+  },
+  {
+    "signalId": "SIG-F06",
+    "signalFamily": "NEIGHBORHOOD",
+    "signalLabel": "Neighborhood Signal Code",
+    "signalType": "alert",
+    "sourceKind": "cron_job",
+    "feature": "Neighborhood Change Radar",
+    "screen": "Neighborhood Change Radar Tool Page",
+    "filePaths": [
+      "apps/backend/src/neighborhoodIntelligence/neighborhoodSignalService.ts",
+      "apps/workers/src/jobs/refreshNeighborhoodEvents.job.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/neighborhood-change-radar/"
+    ],
+    "backendFiles": [
+      "apps/backend/src/neighborhoodIntelligence/neighborhoodSignalService.ts",
+      "apps/workers/src/jobs/refreshNeighborhoodEvents.job.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/neighborhood-change-radar/"
+    ],
+    "prismaModels": ["NeighborhoodEvent", "PropertyNeighborhoodEvent", "NeighborhoodImpact"],
+    "currentActionLabel": "None",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-08",
+    "notes": "12 signal codes: 7 NEGATIVE, 4 POSITIVE, 1 MIXED. Threshold: impact_score >= 40. No action. Map: FLOOD_RISK_PRESSURE → Coverage Intelligence, TRANSIT_UPSIDE_PRESENT → Sell/Hold/Rent, ZONING_RISK → Renovation Advisor."
+  },
+  {
+    "signalId": "SIG-S01",
+    "signalFamily": "SCORE",
+    "signalLabel": "Health Score Overall",
+    "signalType": "score",
+    "sourceKind": "backend_computation",
+    "feature": "Property Intelligence Scores",
+    "screen": "Dashboard Main, Health Score Detail Page",
+    "filePaths": [
+      "apps/backend/src/services/homeScoreReport.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/PropertyHealthScoreCard.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/health-score/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/homeScoreReport.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/PropertyHealthScoreCard.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/health-score/page.tsx"
+    ],
+    "prismaModels": ["HomeScoreReport"],
+    "currentActionLabel": "Arrow icon (no label)",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/properties/{id}/health-score",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-01",
+    "notes": "Grade: A=EXCELLENT, B=STRONG, C=STABLE, D=MODERATE_RISK, F=HIGH_RISK. Below 70 triggers MaintenanceNudgeCard. Action is implicit icon only."
+  },
+  {
+    "signalId": "SIG-S02",
+    "signalFamily": "SCORE",
+    "signalLabel": "Home Score Certification Status",
+    "signalType": "badge",
+    "sourceKind": "date_based",
+    "feature": "Home Score",
+    "screen": "Health Score Page",
+    "filePaths": [
+      "apps/backend/src/services/homeScoreReport.service.ts"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/homeScoreReport.service.ts"
+    ],
+    "frontendFiles": [],
+    "prismaModels": ["HomeScoreCertification"],
+    "currentActionLabel": "Renew Certification",
+    "currentActionType": "navigation",
+    "actionTarget": "Certification renewal flow",
+    "userStageImplied": "execution",
+    "confidence": "medium",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Status: AVAILABLE / EXPIRED / REVOKED. Expiry should trigger prominent notification."
+  },
+  {
+    "signalId": "SIG-S03",
+    "signalFamily": "SCORE",
+    "signalLabel": "Property Score Weekly Delta",
+    "signalType": "score",
+    "sourceKind": "cron_job",
+    "feature": "Score Tracking",
+    "screen": "Dashboard, Health Score Page",
+    "filePaths": [],
+    "backendFiles": [],
+    "frontendFiles": [],
+    "prismaModels": ["PropertyScoreSnapshot"],
+    "currentActionLabel": "None",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Week-over-week delta displayed but no action when score drops significantly. Guidance Engine: 'Score dropped 10pts — here's why + what to do'."
+  },
+  {
+    "signalId": "SIG-IN01",
+    "signalFamily": "INCIDENT",
+    "signalLabel": "Incident (All Types)",
+    "signalType": "alert",
+    "sourceKind": "backend_rule",
+    "feature": "Incident System",
+    "screen": "Incidents List, Property Detail, Notifications",
+    "filePaths": [
+      "apps/backend/src/services/incidents/incident.service.ts",
+      "apps/backend/src/services/incidents/incident.orchestrator.ts",
+      "apps/backend/src/services/incidents/incident.evaluator.ts",
+      "apps/backend/src/services/incidents/incident.scoring.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/components/incidents/IncidentCard.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/incidents/incident.service.ts",
+      "apps/backend/src/services/incidents/incident.orchestrator.ts",
+      "apps/backend/src/services/incidents/incident.evaluator.ts",
+      "apps/backend/src/services/incidents/incident.scoring.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/components/incidents/IncidentCard.tsx"
+    ],
+    "prismaModels": ["Incident"],
+    "currentActionLabel": "View Incident Details",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/properties/{id}/incidents/{id}",
+    "userStageImplied": "diagnosis",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-04",
+    "notes": "Most significant backend→frontend action gap. actions[].ctaLabel exists in backend response but frontend shows generic 'View Incident Details'. 6 source types, 5 status states, suppression + snooze support. AUTO_ACTIVATE_MIN_CONFIDENCE=45."
+  },
+  {
+    "signalId": "SIG-IN02",
+    "signalFamily": "INCIDENT",
+    "signalLabel": "Orchestration Action (Suppressed / Active)",
+    "signalType": "status_indicator",
+    "sourceKind": "backend_rule",
+    "feature": "Action Center",
+    "screen": "Actions Page",
+    "filePaths": [
+      "apps/backend/src/services/orchestration.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/actions/page.tsx"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/orchestration.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/actions/page.tsx"
+    ],
+    "prismaModels": ["OrchestrationActionEvent"],
+    "currentActionLabel": "View Details | Take Action",
+    "currentActionType": "navigation",
+    "actionTarget": "/dashboard/properties/{id}/[resource]",
+    "userStageImplied": "execution",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-04",
+    "notes": "cta.reason (COVERED/MISSING_DATA/ACTION_REQUIRED/NONE) present in backend but not surfaced to user. Suppression reasons: BOOKING_EXISTS, COVERED, NOT_ACTIONABLE, CHECKLIST_TRACKED, USER_MARKED_COMPLETE."
+  },
+  {
+    "signalId": "SIG-N01",
+    "signalFamily": "NEIGHBORHOOD",
+    "signalLabel": "Neighborhood Event",
+    "signalType": "alert",
+    "sourceKind": "cron_job",
+    "feature": "Neighborhood Change Radar",
+    "screen": "Neighborhood Change Radar Tool Page",
+    "filePaths": [
+      "apps/workers/src/jobs/refreshNeighborhoodEvents.job.ts",
+      "apps/backend/src/neighborhoodIntelligence/neighborhoodImpactEngine.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/neighborhood-change-radar/"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/refreshNeighborhoodEvents.job.ts",
+      "apps/backend/src/neighborhoodIntelligence/neighborhoodImpactEngine.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/neighborhood-change-radar/"
+    ],
+    "prismaModels": ["NeighborhoodEvent", "PropertyNeighborhoodEvent"],
+    "currentActionLabel": "None",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-08",
+    "notes": "15 event types. Daily notification for significant events. No actionable CTA on notification or tool page."
+  },
+  {
+    "signalId": "SIG-N02",
+    "signalFamily": "NEIGHBORHOOD",
+    "signalLabel": "Home Event Radar Signal",
+    "signalType": "alert",
+    "sourceKind": "backend_rule",
+    "feature": "Home Event Radar",
+    "screen": "Home Event Radar Tool Page",
+    "filePaths": [
+      "apps/backend/src/services/homeEventRadarMatcher.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-event-radar/"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/homeEventRadarMatcher.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-event-radar/"
+    ],
+    "prismaModels": ["HomeEvent"],
+    "currentActionLabel": "View Details",
+    "currentActionType": "navigation",
+    "actionTarget": "Event-specific resource",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "DUP-08",
+    "notes": "23 HomeEventType values. sourceBadge field (USER_REPORTED/DATA_VERIFIED/AI_DETECTED/THIRD_PARTY/ESTIMATE). Generic 'View Details' CTA."
+  },
+  {
+    "signalId": "SIG-RV01",
+    "signalFamily": "COMPLIANCE",
+    "signalLabel": "Renovation Risk — Permit / Tax / Contractor",
+    "signalType": "alert",
+    "sourceKind": "ai_generated",
+    "feature": "Home Renovation Risk Advisor",
+    "screen": "Renovation Risk Advisor Tool Page",
+    "filePaths": [
+      "apps/backend/src/homeRenovationAdvisor/engine/summary/summaryBuilder.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-renovation-risk-advisor/"
+    ],
+    "backendFiles": [
+      "apps/backend/src/homeRenovationAdvisor/engine/summary/summaryBuilder.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-renovation-risk-advisor/"
+    ],
+    "prismaModels": ["HomeRenovationAdvisorSession", "HomeRenovationPermitOutput", "HomeRenovationComplianceChecklist"],
+    "currentActionLabel": "Text recommendations (no navigation)",
+    "currentActionType": "none",
+    "actionTarget": "",
+    "userStageImplied": "decision",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": true,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Risk levels: CRITICAL, HIGH, MODERATE, LOW. Tax thresholds: >$300/mo=HIGH, >$700/mo=CRITICAL. Structural types: ROOM_ADDITION, ADU_CONSTRUCTION, BASEMENT_FINISHING, etc. Convert text to checklist tasks."
+  },
+  {
+    "signalId": "SIG-DT01",
+    "signalFamily": "INVENTORY",
+    "signalLabel": "Inventory Item Condition (EOL / Poor)",
+    "signalType": "badge",
+    "sourceKind": "frontend_badge",
+    "feature": "Inventory / Digital Twin",
+    "screen": "Inventory Page, Digital Twin Tool",
+    "filePaths": [
+      "apps/backend/src/services/RiskAssessment.service.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/"
+    ],
+    "backendFiles": [
+      "apps/backend/src/services/RiskAssessment.service.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/inventory/"
+    ],
+    "prismaModels": ["InventoryItem"],
+    "currentActionLabel": "Edit | View | Replace",
+    "currentActionType": "modal",
+    "actionTarget": "Inventory management modal",
+    "userStageImplied": "diagnosis",
+    "confidence": "medium",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": true,
+    "duplicateGroupId": "",
+    "notes": "EOL condition should route to Replace/Repair tool before booking. Condition: EXCELLENT/GOOD/FAIR/POOR/EOL/UNKNOWN."
+  },
+  {
+    "signalId": "SIG-DT02",
+    "signalFamily": "GENERAL",
+    "signalLabel": "Daily Snapshot — Pending Issues",
+    "signalType": "card_metric",
+    "sourceKind": "backend_computation",
+    "feature": "Daily Snapshot",
+    "screen": "Daily Snapshot Tool",
+    "filePaths": [],
+    "backendFiles": [],
+    "frontendFiles": [],
+    "prismaModels": ["PropertyDailySnapshot"],
+    "currentActionLabel": "View pending issues",
+    "currentActionType": "navigation",
+    "actionTarget": "Actions page",
+    "userStageImplied": "awareness",
+    "confidence": "medium",
+    "isGenericCta": true,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Simple daily roll-up. No prioritization of which pending issue is most urgent."
+  },
+  {
+    "signalId": "SIG-GA01",
+    "signalFamily": "GENERAL",
+    "signalLabel": "Home Gazette Edition Published",
+    "signalType": "card_metric",
+    "sourceKind": "cron_job",
+    "feature": "Home Gazette",
+    "screen": "Home Gazette Tool Page, Dashboard Card",
+    "filePaths": [
+      "apps/workers/src/jobs/gazetteGeneration.job.ts",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/HomeGazetteClient.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/GazetteDashboardCard.tsx"
+    ],
+    "backendFiles": [
+      "apps/workers/src/jobs/gazetteGeneration.job.ts"
+    ],
+    "frontendFiles": [
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/home-gazette/HomeGazetteClient.tsx",
+      "apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/components/GazetteDashboardCard.tsx"
+    ],
+    "prismaModels": ["GazetteEdition", "GazetteStory"],
+    "currentActionLabel": "Story deep links (context-specific per story)",
+    "currentActionType": "navigation",
+    "actionTarget": "Per-story primaryDeepLink",
+    "userStageImplied": "awareness",
+    "confidence": "high",
+    "isGenericCta": false,
+    "isNoAction": false,
+    "isPrematureBookingCandidate": false,
+    "duplicateGroupId": "",
+    "notes": "Mondays 6AM. Aggregates all signal families into weekly digest. Stories have deep links to relevant tools. Good Guidance Engine output surface."
+  }
+]
