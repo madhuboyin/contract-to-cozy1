@@ -23,6 +23,7 @@ import {
   getRadarStatus,
   getRateHistory,
   runScenario,
+  saveFinanceSnapshot,
   type RadarStatusAvailable,
   type RadarStatusDTO,
   type RadarStatusUnavailable,
@@ -577,6 +578,220 @@ function RateHistoryCard({ rateData }: { rateData: RateHistoryDTO }) {
   );
 }
 
+// ─── Mortgage Setup Form ──────────────────────────────────────────────────────
+
+const TERM_MONTH_OPTIONS: { label: string; value: number }[] = [
+  { label: '5 years', value: 60 },
+  { label: '10 years', value: 120 },
+  { label: '15 years', value: 180 },
+  { label: '20 years', value: 240 },
+  { label: '25 years', value: 300 },
+  { label: '30 years', value: 360 },
+];
+
+function MortgageSetupForm({
+  propertyId,
+  onSaved,
+}: {
+  propertyId: string;
+  onSaved: () => Promise<void>;
+}) {
+  const [balance, setBalance] = useState('');
+  const [ratePct, setRatePct] = useState('');
+  const [termMonths, setTermMonths] = useState('');
+  const [customTerm, setCustomTerm] = useState('');
+  const [monthlyPayment, setMonthlyPayment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedPreset = TERM_MONTH_OPTIONS.find((o) => String(o.value) === termMonths);
+
+  function resolvedTermMonths(): number | null {
+    if (termMonths === 'custom') {
+      const v = parseInt(customTerm, 10);
+      return isNaN(v) ? null : v;
+    }
+    const v = parseInt(termMonths, 10);
+    return isNaN(v) ? null : v;
+  }
+
+  async function handleSave() {
+    const balanceVal = parseFloat(balance);
+    const rateVal = parseFloat(ratePct);
+    const termVal = resolvedTermMonths();
+    const paymentVal = monthlyPayment ? parseFloat(monthlyPayment) : undefined;
+
+    if (!balance || isNaN(balanceVal) || balanceVal <= 0) {
+      setError('Enter a valid loan balance.');
+      return;
+    }
+    if (!ratePct || isNaN(rateVal) || rateVal <= 0 || rateVal > 30) {
+      setError('Enter a valid interest rate between 0.1% and 30%.');
+      return;
+    }
+    if (!termVal || termVal < 1 || termVal > 480) {
+      setError('Enter a valid remaining term (1–480 months).');
+      return;
+    }
+    if (paymentVal !== undefined && (isNaN(paymentVal) || paymentVal < 0)) {
+      setError('Enter a valid monthly payment or leave it blank.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      await saveFinanceSnapshot(propertyId, {
+        mortgageBalance: balanceVal,
+        interestRate: rateVal / 100, // convert % to decimal
+        remainingTermMonths: termVal,
+        ...(paymentVal !== undefined ? { monthlyPayment: paymentVal } : {}),
+      });
+      await onSaved();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save mortgage details.');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <GlassCard>
+      <div className="p-5 sm:p-6">
+        <div className="mb-1 flex items-center gap-2">
+          <Calculator className="h-4 w-4 text-blue-500 shrink-0" />
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Set up your mortgage
+          </h3>
+        </div>
+        <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
+          Enter your current mortgage details to enable the refinance radar.
+        </p>
+
+        <div className="space-y-4">
+          {/* Loan Balance */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Current Loan Balance ($)
+            </label>
+            <input
+              type="number"
+              min="1"
+              step="1000"
+              value={balance}
+              onChange={(e) => setBalance(e.target.value)}
+              placeholder="e.g. 320000"
+              className="w-full rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-400 focus:ring-1 focus:ring-blue-300/60 dark:border-slate-700/70 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500"
+            />
+          </div>
+
+          {/* Interest Rate */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Current Interest Rate (%)
+            </label>
+            <input
+              type="number"
+              min="0.1"
+              max="30"
+              step="0.125"
+              value={ratePct}
+              onChange={(e) => setRatePct(e.target.value)}
+              placeholder="e.g. 6.625"
+              className="w-full rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-400 focus:ring-1 focus:ring-blue-300/60 dark:border-slate-700/70 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500"
+            />
+          </div>
+
+          {/* Remaining Term */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Remaining Term
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {TERM_MONTH_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { setTermMonths(String(opt.value)); setCustomTerm(''); }}
+                  className={`inline-flex min-h-[36px] items-center rounded-full border px-3 text-xs font-medium transition-all ${
+                    termMonths === String(opt.value)
+                      ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                      : 'border-slate-200/80 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300 dark:hover:bg-slate-900/80'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setTermMonths('custom')}
+                className={`inline-flex min-h-[36px] items-center rounded-full border px-3 text-xs font-medium transition-all ${
+                  termMonths === 'custom'
+                    ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                    : 'border-slate-200/80 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300 dark:hover:bg-slate-900/80'
+                }`}
+              >
+                Custom
+              </button>
+            </div>
+            {termMonths === 'custom' && (
+              <input
+                type="number"
+                min="1"
+                max="480"
+                step="1"
+                value={customTerm}
+                onChange={(e) => setCustomTerm(e.target.value)}
+                placeholder="Months remaining (e.g. 278)"
+                className="mt-2 w-full rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-400 focus:ring-1 focus:ring-blue-300/60 dark:border-slate-700/70 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500"
+              />
+            )}
+            {selectedPreset && (
+              <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                = {selectedPreset.value} months
+              </p>
+            )}
+          </div>
+
+          {/* Monthly Payment (optional) */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Monthly Payment (optional, $)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="10"
+              value={monthlyPayment}
+              onChange={(e) => setMonthlyPayment(e.target.value)}
+              placeholder="Leave blank to calculate automatically"
+              className="w-full rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-400 focus:ring-1 focus:ring-blue-300/60 dark:border-slate-700/70 dark:bg-slate-900/60 dark:text-slate-100 dark:placeholder-slate-500 dark:focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        {error && (
+          <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="mt-5 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-blue-300/70 bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50 dark:border-blue-700/70 dark:bg-blue-700 dark:hover:bg-blue-600"
+        >
+          {saving ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Saving & analyzing…
+            </>
+          ) : (
+            'Save & Enable Radar'
+          )}
+        </button>
+      </div>
+    </GlassCard>
+  );
+}
+
 // ─── Unavailable State ────────────────────────────────────────────────────────
 
 function UnavailableCard({ reason }: { reason: string }) {
@@ -730,7 +945,9 @@ export default function MortgageRefinanceRadarClient() {
 
       {/* Unavailable */}
       {data && !data.available && !loading && (
-        <UnavailableCard reason={(data as RadarStatusUnavailable).reason} />
+        (data as RadarStatusUnavailable).reason === 'MISSING_MORTGAGE_DATA'
+          ? <MortgageSetupForm propertyId={propertyId} onSaved={handleEvaluate} />
+          : <UnavailableCard reason={(data as RadarStatusUnavailable).reason} />
       )}
 
       {/* Main content */}

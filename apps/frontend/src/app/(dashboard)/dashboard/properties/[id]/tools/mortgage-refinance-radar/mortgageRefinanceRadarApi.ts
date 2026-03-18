@@ -193,3 +193,15 @@ export async function getSavedScenarios(
   const res = await api.get(`/api/properties/${propertyId}/refinance-scenario/saved`);
   return (res.data?.scenarios as RefinanceScenarioSnapshotDTO[]) ?? [];
 }
+
+export async function saveFinanceSnapshot(
+  propertyId: string,
+  body: {
+    mortgageBalance: number;
+    interestRate: number; // decimal form, e.g. 0.0625 for 6.25%
+    remainingTermMonths: number;
+    monthlyPayment?: number;
+  },
+): Promise<void> {
+  await api.put(`/api/properties/${propertyId}/finance-snapshot`, body);
+}
