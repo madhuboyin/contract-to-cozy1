@@ -68,11 +68,23 @@ export function getToolDefinition(toolId: ToolId): ToolDefinition {
   return HOME_TOOL_REGISTRY[toolId];
 }
 
+function resolvePreferredPropertyId(propertyId?: string | null): string | undefined {
+  if (propertyId) return propertyId;
+  if (typeof window === 'undefined') return undefined;
+
+  const storedPropertyId = window.localStorage.getItem('selectedPropertyId');
+  if (storedPropertyId) return storedPropertyId;
+
+  const pathMatch = window.location.pathname.match(/\/dashboard\/properties\/([^/]+)/);
+  return pathMatch?.[1];
+}
+
 export function buildPropertyAwareToolHref(toolId: ToolId, propertyId?: string | null): string {
   const definition = getToolDefinition(toolId);
+  const resolvedPropertyId = resolvePreferredPropertyId(propertyId);
 
-  if (propertyId) {
-    return `/dashboard/properties/${propertyId}/${definition.hrefSuffix}`;
+  if (resolvedPropertyId) {
+    return `/dashboard/properties/${resolvedPropertyId}/${definition.hrefSuffix}`;
   }
 
   return `/dashboard/properties?navTarget=${encodeURIComponent(definition.navTarget)}`;

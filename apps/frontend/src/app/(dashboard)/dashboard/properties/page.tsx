@@ -16,6 +16,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { cn } from '@/lib/utils';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   SINGLE_FAMILY: 'Single Family',
@@ -56,6 +57,7 @@ function getPropertyAddressLines(property: Property): { lineOne: string; lineTwo
 export default function PropertiesPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { setSelectedPropertyId } = usePropertyContext();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -98,6 +100,10 @@ export default function PropertiesPage() {
       return `/dashboard/properties/${propertyId}/tools/${toolSlug}`;
     }
     return `/dashboard/properties/${propertyId}`;
+  };
+
+  const handlePropertySelect = (propertyId: string) => {
+    setSelectedPropertyId(propertyId);
   };
 
   // Close menu on outside click
@@ -252,6 +258,7 @@ export default function PropertiesPage() {
                   <article key={property.id} className="relative">
                     <Link
                       href={resolvePropertyHref(property.id)}
+                      onClick={() => handlePropertySelect(property.id)}
                       className="group no-brand-style block rounded-[22px] border border-slate-200/90 bg-white p-3.5 pr-14 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45)]"
                     >
                       <div className="flex items-start gap-3">
@@ -394,6 +401,7 @@ export default function PropertiesPage() {
                   {/* Clickable main area */}
                   <Link
                     href={resolvePropertyHref(property.id)}
+                    onClick={() => handlePropertySelect(property.id)}
                     className="block p-6 pb-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset rounded-t-xl"
                   >
                     {coverPhotoUrl ? (
@@ -466,6 +474,7 @@ export default function PropertiesPage() {
                   <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
                     <Link
                       href={resolvePropertyHref(property.id)}
+                      onClick={() => handlePropertySelect(property.id)}
                       className="text-sm font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
                       tabIndex={-1}
                     >
