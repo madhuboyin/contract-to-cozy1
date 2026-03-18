@@ -264,6 +264,8 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Thursdays at 5:00 PM EST (after PMMS release)',
     cronExpression: '0 17 * * 4',
     type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'mortgage-rate-ingest',
     triggerSupported: true,
   },
 
@@ -280,6 +282,8 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     schedule: 'Mondays at 6:00 AM EST',
     cronExpression: '0 6 * * 1',
     type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'home-gazette-generation',
     triggerSupported: true,
   },
 

@@ -1154,6 +1154,37 @@ if (neighborhoodDummyIngestEnabled) {
 // =============================================================================
 // Inventory draft cleanup + home habit generation are scheduled via scheduleCronJobs() above.
 
+// =============================================================================
+// CRON TRIGGER QUEUE — handles manual "Run Job" triggers from the admin UI
+// for cron-type jobs (e.g. home-gazette-generation, mortgage-rate-ingest).
+// =============================================================================
+
+const cronTriggerWorker = new Worker(
+  'cron-trigger-queue',
+  async (job) => {
+    const handler = CRON_HANDLERS[job.name];
+    if (!handler) {
+      throw new Error(`[CRON-TRIGGER] No handler registered for job: ${job.name}`);
+    }
+    console.log(`[CRON-TRIGGER] Running manually triggered job: ${job.name}`);
+    await handler();
+  },
+  {
+    connection: redisConnection,
+    lockDuration: 300000, // 5 minutes — gazette generation can be slow
+    lockRenewTime: 60000,
+    concurrency: 1,
+  },
+);
+
+cronTriggerWorker.on('completed', (job) => {
+  console.log(`[CRON-TRIGGER] Job ${job.id} (${job.name}) completed successfully.`);
+});
+
+cronTriggerWorker.on('failed', (job, err) => {
+  console.error(`[CRON-TRIGGER] Job ${job?.id} (${job?.name}) failed:`, err);
+});
+
 // Start cron jobs from registry, then start BullMQ worker
 scheduleCronJobs();
 startWorker();
