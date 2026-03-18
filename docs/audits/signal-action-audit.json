@@ -2,7 +2,7 @@
   {
     "signalId": "SIG-001",
     "signalFamilyRaw": "RISK",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "valuation_uncertainty",
     "signalLabel": "Property Risk Score — Overall (0–100)",
     "signalType": "computed",
     "feature": "Risk Assessment",
@@ -20,7 +20,7 @@
     "currentActionType": "navigation",
     "actionTarget": "/dashboard/properties/{id}/risk-assessment",
     "userStageImplied": "awareness",
-    "idealNextStep": "Route user to score-band-specific guidance: <60 → show top 3 critical risks with repair-vs-replace decision; 60-79 → show maintenance scheduling prompt; ≥80 → affirm and suggest proactive actions",
+    "idealNextStep": "Route user to score-band-specific guidance: <60 show top 3 critical risks with repair-vs-replace decision; 60-79 show maintenance scheduling prompt; 80+ affirm and suggest proactive actions",
     "idealStage": "diagnosis",
     "missingIntermediateStep": "Score-band routing logic in frontend; no differentiated CTA per band; icon-only action is invisible to new users",
     "contextPrerequisites": ["property details complete", "at least one system/appliance age known"],
@@ -31,7 +31,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-RISK-01",
     "confidence": "high",
-    "notes": "Score 0-100, color coded: green 80+, amber 60-79, red <60. Shows dollar exposure. Backend produces per-asset risk levels with actionCta. Frontend shows generic arrow. Guidance Engine must prescribe next step per score band."
+    "notes": "Score 0-100, color coded: green 80+, amber 60-79, red <60. Shows dollar exposure. Backend produces per-asset risk levels with actionCta. Frontend shows generic arrow. Guidance Engine must prescribe next step per score band.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Risk Detail Drawer"
   },
   {
     "signalId": "SIG-002",
@@ -66,7 +70,11 @@
     "isPrematureBooking": true,
     "duplicateGroupId": "DUP-APPLIANCE-01",
     "confidence": "high",
-    "notes": "HVAC avgLife=15 years. ageRatio>1.0 = past life. Backend computes replacement cost ~$5500. Current CTA skips repair/replace analysis and goes direct to booking. Coverage check against home warranty is missing."
+    "notes": "HVAC avgLife=15 years. ageRatio>1.0 = past life. Backend computes replacement cost ~$5500. Current CTA skips repair/replace analysis and goes direct to booking. Coverage check against home warranty is missing.",
+    "issueDomain": "asset_lifecycle",
+    "canonicalFirstStep": "Compare repair vs replace",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Replace vs Repair"
   },
   {
     "signalId": "SIG-003",
@@ -99,7 +107,11 @@
     "isPrematureBooking": true,
     "duplicateGroupId": "DUP-APPLIANCE-01",
     "confidence": "high",
-    "notes": "Roof lifespan typically 20-30 years. Backend classifies as HIGH/CRITICAL when age ratio >0.85. Jumps to booking without diagnosis."
+    "notes": "Roof lifespan typically 20-30 years. Backend classifies as HIGH/CRITICAL when age ratio >0.85. Jumps to booking without diagnosis.",
+    "issueDomain": "insurance",
+    "canonicalFirstStep": "Check coverage",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Insurance Auditor"
   },
   {
     "signalId": "SIG-004",
@@ -133,7 +145,11 @@
     "isPrematureBooking": true,
     "duplicateGroupId": "DUP-APPLIANCE-01",
     "confidence": "high",
-    "notes": "Water heater avgLife=10 years. Backend has cost data (~$1200). Recall match worker runs async but CTA does not surface recall status."
+    "notes": "Water heater avgLife=10 years. Backend has cost data (~$1200). Recall match worker runs async but CTA does not surface recall status.",
+    "issueDomain": "asset_lifecycle",
+    "canonicalFirstStep": "Compare repair vs replace",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Replace vs Repair"
   },
   {
     "signalId": "SIG-005",
@@ -168,7 +184,11 @@
     "isPrematureBooking": true,
     "duplicateGroupId": "DUP-MAINT-01",
     "confidence": "high",
-    "notes": "Orchestration service sets ctaLabel to 'Overdue - Schedule Now'. Do-nothing simulator exists but is not surfaced inline with overdue tasks."
+    "notes": "Orchestration service sets ctaLabel to 'Overdue - Schedule Now'. Do-nothing simulator exists but is not surfaced inline with overdue tasks.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Estimate out-of-pocket cost",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-006",
@@ -201,7 +221,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "Worker: seasonalChecklistGeneration.job.ts generates checklists. seasonalChecklistExpiration.job.ts fires expiry. Items with professional=true should route to provider search."
+    "notes": "Worker: seasonalChecklistGeneration.job.ts generates checklists. seasonalChecklistExpiration.job.ts fires expiry. Items with professional=true should route to provider search.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Check seasonal readiness",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-007",
@@ -235,7 +259,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "insuranceAuditor.service queries expiryDate >= now. Backend detects expiry but frontend has no prominent alert. CoverageLapseIncidents worker fires but frontend doesn't surface it as a CTA."
+    "notes": "insuranceAuditor.service queries expiryDate >= now. Backend detects expiry but frontend has no prominent alert. CoverageLapseIncidents worker fires but frontend doesn't surface it as a CTA.",
+    "issueDomain": "insurance",
+    "canonicalFirstStep": "Check coverage",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Insurance Auditor"
   },
   {
     "signalId": "SIG-008",
@@ -268,12 +296,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-COVERAGE-01",
     "confidence": "high",
-    "notes": "coverageGap.service.ts detects gapType: NO_COVERAGE, WARRANTY_ONLY, INSURANCE_ONLY, EXPIRED_WARRANTY, EXPIRED_INSURANCE. No frontend action mapped to any gap type."
+    "notes": "coverageGap.service.ts detects gapType: NO_COVERAGE, WARRANTY_ONLY, INSURANCE_ONLY, EXPIRED_WARRANTY, EXPIRED_INSURANCE. No frontend action mapped to any gap type.",
+    "issueDomain": "insurance",
+    "canonicalFirstStep": "Check coverage",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Insurance Auditor"
   },
   {
     "signalId": "SIG-009",
     "signalFamilyRaw": "INSURANCE",
-    "signalIntentFamily": "high_out_of_pocket_exposure",
+    "signalIntentFamily": "deductible_exposure",
     "signalLabel": "Deductible-to-Cash-Buffer Ratio Exceeds Safe Threshold (>40%)",
     "signalType": "computed",
     "feature": "Coverage Intelligence",
@@ -301,7 +333,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-COVERAGE-01",
     "confidence": "high",
-    "notes": "coverageAnalysis.service detects deductibleUsd/cashBufferUsd > 0.4 threshold and generates recommendation 'Review deductible vs emergency cash buffer'. No frontend CTA mapped."
+    "notes": "coverageAnalysis.service detects deductibleUsd/cashBufferUsd > 0.4 threshold and generates recommendation 'Review deductible vs emergency cash buffer'. No frontend CTA mapped.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Validate deductible impact",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Insurance Auditor"
   },
   {
     "signalId": "SIG-010",
@@ -336,12 +372,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "servicePriceRadar.engine has price ranges per category (ELECTRICAL baseLow:175 baseHigh:900). negotiationShield prompts to separate labor/materials/permits. No actionable negotiation flow in frontend."
+    "notes": "servicePriceRadar.engine has price ranges per category (ELECTRICAL baseLow:175 baseHigh:900). negotiationShield prompts to separate labor/materials/permits. No actionable negotiation flow in frontend.",
+    "issueDomain": "pricing",
+    "canonicalFirstStep": "Review quote",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Negotiation Shield"
   },
   {
     "signalId": "SIG-011",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "refinance_opportunity_exposure",
     "signalLabel": "Refinance Break-Even Not Yet Reached",
     "signalType": "computed",
     "feature": "Mortgage Refinance Radar / Break-Even Tool",
@@ -369,7 +409,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "breakEven.service computes breakEvenYearIndex and breakEvenCalendarYear. Workers ingest mortgage rates. No frontend CTA links to lender or pre-qualification."
+    "notes": "breakEven.service computes breakEvenYearIndex and breakEvenCalendarYear. Workers ingest mortgage rates. No frontend CTA links to lender or pre-qualification.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Compare quotes",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Price Radar"
   },
   {
     "signalId": "SIG-012",
@@ -401,12 +445,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "energyAuditor.service exists. Frontend shows 'View Details' only. No action routing to weatherization or HVAC service."
+    "notes": "energyAuditor.service exists. Frontend shows 'View Details' only. No action routing to weatherization or HVAC service.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Energy Audit"
   },
   {
     "signalId": "SIG-013",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "tax_overpayment_exposure",
     "signalLabel": "Property Tax Assessment — Overpayment Risk Detected",
     "signalType": "computed",
     "feature": "Tax Appeal Tool",
@@ -434,7 +482,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "taxAppeal.service.ts exists with full logic. Frontend shows general analysis page. No inline appeal initiation CTA."
+    "notes": "taxAppeal.service.ts exists with full logic. Frontend shows general analysis page. No inline appeal initiation CTA.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Verify permit status",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Home Timeline"
   },
   {
     "signalId": "SIG-014",
@@ -468,7 +520,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "recalls.service has confirmRecallMatch, dismissRecallMatch, resolveRecallMatch APIs. Worker recallMatch.job.ts matches inventory to ingested recalls. Frontend has no prominent safety alert UI."
+    "notes": "recalls.service has confirmRecallMatch, dismissRecallMatch, resolveRecallMatch APIs. Worker recallMatch.job.ts matches inventory to ingested recalls. Frontend has no prominent safety alert UI.",
+    "issueDomain": "safety",
+    "canonicalFirstStep": "Replace immediately",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Asset Detail Page"
   },
   {
     "signalId": "SIG-015",
@@ -500,7 +556,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-MAINT-01",
     "confidence": "medium",
-    "notes": "maintenancePrediction.service uses ageRatio to compute failureProb (0.15 early, 0.35 mid, 0.55+ late). Frontend maintenance page shows 'Not Scheduled' status but no prediction-driven CTA."
+    "notes": "maintenancePrediction.service uses ageRatio to compute failureProb (0.15 early, 0.35 mid, 0.55+ late). Frontend maintenance page shows 'Not Scheduled' status but no prediction-driven CTA.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-016",
@@ -532,12 +592,16 @@
     "isPrematureBooking": true,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "inspectionAnalysis.service stores InspectionReport with findings. Frontend routes to provider search but without time-since-last-inspection context or inspection scope education."
+    "notes": "inspectionAnalysis.service stores InspectionReport with findings. Frontend routes to provider search but without time-since-last-inspection context or inspection scope education.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Schedule inspection",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Booking Flow"
   },
   {
     "signalId": "SIG-017",
     "signalFamilyRaw": "INSPECTION",
-    "signalIntentFamily": "missing_documentation",
+    "signalIntentFamily": "inspection_followup_needed",
     "signalLabel": "Inspection Defect Found — Action Item Unresolved",
     "signalType": "user-input",
     "feature": "Inspection Report / Negotiation Shield",
@@ -566,12 +630,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "InspectionReport model exists in Prisma. negotiationShieldBuyerInspection.service.ts handles buyer leverage analysis. No per-defect CTA routing to repair booking."
+    "notes": "InspectionReport model exists in Prisma. negotiationShieldBuyerInspection.service.ts handles buyer leverage analysis. No per-defect CTA routing to repair booking.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Negotiation Shield"
   },
   {
     "signalId": "SIG-018",
     "signalFamilyRaw": "RISK",
-    "signalIntentFamily": "permit_compliance_gap",
+    "signalIntentFamily": "permit_documentation_gap",
     "signalLabel": "Unpermitted Work Suspected — Missing Permit Record",
     "signalType": "computed",
     "feature": "Home Score Report / Documents",
@@ -599,12 +667,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "homeModificationAdvisor.service has permitRequired:true for certain work types. homeScoreReport tracks COUNTY_PERMITS as PARTIAL. No frontend action exists for permit compliance gap."
+    "notes": "homeModificationAdvisor.service has permitRequired:true for certain work types. homeScoreReport tracks COUNTY_PERMITS as PARTIAL. No frontend action exists for permit compliance gap.",
+    "issueDomain": "compliance",
+    "canonicalFirstStep": "Verify permit status",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Permit/Compliance Advisor"
   },
   {
     "signalId": "SIG-019",
     "signalFamilyRaw": "NEIGHBORHOOD",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "neighborhood_change_risk",
     "signalLabel": "Neighborhood Change Detected — Nearby Property Permit or Sale",
     "signalType": "system-detected",
     "feature": "Home Event Radar / Neighborhood Change Radar",
@@ -634,12 +706,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "homeEventRadar fires HOME_EVENT_RADAR_ action codes. Worker refreshNeighborhoodEvents.job.ts runs. Frontend shows event list but no value-impact analysis or next-step routing."
+    "notes": "homeEventRadar fires HOME_EVENT_RADAR_ action codes. Worker refreshNeighborhoodEvents.job.ts runs. Frontend shows event list but no value-impact analysis or next-step routing.",
+    "issueDomain": "neighborhood",
+    "canonicalFirstStep": "Log to home timeline",
+    "executionReadiness": "tracking_only",
+    "recommendedToolOrFlow": "Home Event Radar"
   },
   {
     "signalId": "SIG-020",
     "signalFamilyRaw": "SELLER_PREP",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "seller_readiness_gap",
     "signalLabel": "Seller Prep Plan — Pre-Listing Item Incomplete",
     "signalType": "user-input",
     "feature": "Seller Prep",
@@ -666,12 +742,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "sellerPrep.service.ts, roiRules.engine.ts, valueCalculator.engine.ts exist. SellerPrepPlan and SellerPrepLead models exist in Prisma. No frontend screens found in dashboard routing."
+    "notes": "sellerPrep.service.ts, roiRules.engine.ts, valueCalculator.engine.ts exist. SellerPrepPlan and SellerPrepLead models exist in Prisma. No frontend screens found in dashboard routing.",
+    "issueDomain": "market_value",
+    "canonicalFirstStep": "Check seasonal readiness",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Seller Prep Checklist"
   },
   {
     "signalId": "SIG-021",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "maintenance_cost_burden",
     "signalLabel": "Do-Nothing Scenario — Projected Cost of Inaction",
     "signalType": "computed",
     "feature": "Do-Nothing Simulator",
@@ -698,7 +778,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "doNothingSimulator models cost growth over time. UI is isolated; not integrated into maintenance overdue signal flow."
+    "notes": "doNothingSimulator models cost growth over time. UI is isolated; not integrated into maintenance overdue signal flow.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Estimate out-of-pocket cost",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-022",
@@ -731,7 +815,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-BOOKING-01",
     "confidence": "high",
-    "notes": "BookingStatus enum: DRAFT, PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, DISPUTED. Frontend shows 'View Details' only with no status-specific actions."
+    "notes": "BookingStatus enum: DRAFT, PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, DISPUTED. Frontend shows 'View Details' only with no status-specific actions.",
+    "issueDomain": "booking",
+    "canonicalFirstStep": "Log to home timeline",
+    "executionReadiness": "tracking_only",
+    "recommendedToolOrFlow": "Booking Flow"
   },
   {
     "signalId": "SIG-023",
@@ -763,12 +851,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-BOOKING-01",
     "confidence": "high",
-    "notes": "orchestrationCompletionPhoto.service.ts exists for photo completion. No frontend CTA connects booking completion to maintenance task resolution, review submission, or document upload."
+    "notes": "orchestrationCompletionPhoto.service.ts exists for photo completion. No frontend CTA connects booking completion to maintenance task resolution, review submission, or document upload.",
+    "issueDomain": "booking",
+    "canonicalFirstStep": "Log to home timeline",
+    "executionReadiness": "tracking_only",
+    "recommendedToolOrFlow": "Home Timeline"
   },
   {
     "signalId": "SIG-024",
     "signalFamilyRaw": "INSURANCE",
-    "signalIntentFamily": "coverage_gap",
+    "signalIntentFamily": "claim_documentation_gap",
     "signalLabel": "Insurance Claim — Denied or Underpaid",
     "signalType": "user-input",
     "feature": "Claims Assistance / Negotiation Shield",
@@ -796,12 +888,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "claims.transitions.ts: DENIED can transition to CLOSED only. negotiationShieldInsuranceClaimSettlement.service.ts exists. No appeal workflow in frontend."
+    "notes": "claims.transitions.ts: DENIED can transition to CLOSED only. negotiationShieldInsuranceClaimSettlement.service.ts exists. No appeal workflow in frontend.",
+    "issueDomain": "claims",
+    "canonicalFirstStep": "Validate deductible impact",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Claims Assistant"
   },
   {
     "signalId": "SIG-025",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "maintenance_cost_burden",
     "signalLabel": "Home Savings Goal — Monthly Contribution Behind Target",
     "signalType": "computed",
     "feature": "Home Savings",
@@ -830,12 +926,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "homeSavings.service and budgetForecaster.service exist. Frontend shows savings plan page but no integration to specific unfunded costs."
+    "notes": "homeSavings.service and budgetForecaster.service exist. Frontend shows savings plan page but no integration to specific unfunded costs.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Estimate out-of-pocket cost",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Home Timeline"
   },
   {
     "signalId": "SIG-026",
     "signalFamilyRaw": "RISK",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "climate_risk_to_value",
     "signalLabel": "Climate Risk Score — High Flood or Wildfire Exposure",
     "signalType": "computed",
     "feature": "Climate Risk Predictor",
@@ -865,7 +965,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "freezeRiskIncidents.job.ts and climateRiskPredictor.service.ts exist. frontend shows risk page but 'View Climate Risk' does not route to specific mitigation actions."
+    "notes": "freezeRiskIncidents.job.ts and climateRiskPredictor.service.ts exist. frontend shows risk page but 'View Climate Risk' does not route to specific mitigation actions.",
+    "issueDomain": "insurance",
+    "canonicalFirstStep": "Check coverage",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Insurance Auditor"
   },
   {
     "signalId": "SIG-027",
@@ -897,12 +1001,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-MAINT-01",
     "confidence": "medium",
-    "notes": "habitRankingEngine prioritizes overdue/snoozed habits. snoozeCount tracked. No escalation path in frontend when habit is chronically deferred."
+    "notes": "habitRankingEngine prioritizes overdue/snoozed habits. snoozeCount tracked. No escalation path in frontend when habit is chronically deferred.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-028",
     "signalFamilyRaw": "RISK",
-    "signalIntentFamily": "missing_documentation",
+    "signalIntentFamily": "asset_info_missing",
     "signalLabel": "Home Digital Twin — Data Quality Below Threshold",
     "signalType": "computed",
     "feature": "Home Digital Twin",
@@ -931,7 +1039,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "homeDigitalTwinQuality.service tracks completeness. homeDigitalTwinBuilder rebuilds twin incrementally. Frontend CTA is generic 'Add Missing Data' with no field-level routing."
+    "notes": "homeDigitalTwinQuality.service tracks completeness. homeDigitalTwinBuilder rebuilds twin incrementally. Frontend CTA is generic 'Add Missing Data' with no field-level routing.",
+    "issueDomain": "documentation",
+    "canonicalFirstStep": "Log to home timeline",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Home Timeline"
   },
   {
     "signalId": "SIG-029",
@@ -965,12 +1077,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "gazetteGeneration.job.ts runs weekly. gazette.types.ts sourceFeature includes MAINTENANCE, INCIDENT, REFINANCE_RADAR. Frontend HomeGazetteClient shows 'View Details' per article without action routing."
+    "notes": "gazetteGeneration.job.ts runs weekly. gazette.types.ts sourceFeature includes MAINTENANCE, INCIDENT, REFINANCE_RADAR. Frontend HomeGazetteClient shows 'View Details' per article without action routing.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Check seasonal readiness",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Gazette"
   },
   {
     "signalId": "SIG-030",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "uncovered_repair_exposure",
     "signalLabel": "Hidden Asset Found — Unclaimed Program or Rebate Eligible",
     "signalType": "system-detected",
     "feature": "Hidden Asset Finder",
@@ -998,12 +1114,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "hiddenAssets.service and hiddenAssetRefresh.job.ts exist. HiddenAssetProgram model in Prisma. Frontend shows 'View Program Details' but no application flow or status tracking."
+    "notes": "hiddenAssets.service and hiddenAssetRefresh.job.ts exist. HiddenAssetProgram model in Prisma. Frontend shows 'View Program Details' but no application flow or status tracking.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Estimate out-of-pocket cost",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Home Timeline"
   },
   {
     "signalId": "SIG-031",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "valuation_uncertainty",
     "signalLabel": "Sell / Hold / Rent Analysis — Optimal Exit Window Detected",
     "signalType": "computed",
     "feature": "Sell Hold Rent Tool",
@@ -1030,12 +1150,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "sellHoldRent.service uses appreciationRate, homeValueNow, rental income. No frontend routing from analysis result to sell prep, rental onboarding, or hold strategy."
+    "notes": "sellHoldRent.service uses appreciationRate, homeValueNow, rental income. No frontend routing from analysis result to sell prep, rental onboarding, or hold strategy.",
+    "issueDomain": "market_value",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Seller Prep Checklist"
   },
   {
     "signalId": "SIG-032",
     "signalFamilyRaw": "MAINTENANCE",
-    "signalIntentFamily": "missing_documentation",
+    "signalIntentFamily": "asset_info_missing",
     "signalLabel": "Inventory Missing — No Appliance/System Documented",
     "signalType": "user-input",
     "feature": "Inventory",
@@ -1064,12 +1188,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "inventoryOcr.service exists for receipt scanning. inventoryVerification.service for cross-validation. Frontend 'Add Item' exists but no guidance on which items are most critical to add first."
+    "notes": "inventoryOcr.service exists for receipt scanning. inventoryVerification.service for cross-validation. Frontend 'Add Item' exists but no guidance on which items are most critical to add first.",
+    "issueDomain": "documentation",
+    "canonicalFirstStep": "Log to home timeline",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Asset Detail Page"
   },
   {
     "signalId": "SIG-033",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "maintenance_cost_burden",
     "signalLabel": "Home Capital Timeline — Major Expense Horizon Within 12 Months",
     "signalType": "computed",
     "feature": "Capital Timeline Tool",
@@ -1096,7 +1224,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "homeCapitalTimeline.service projects replacement costs based on appliance ages. No savings integration or coverage check routing from timeline view."
+    "notes": "homeCapitalTimeline.service projects replacement costs based on appliance ages. No savings integration or coverage check routing from timeline view.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Estimate out-of-pocket cost",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Home Timeline"
   },
   {
     "signalId": "SIG-034",
@@ -1129,12 +1261,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "negotiationShieldContractorUrgency.service.ts exists. Urgency flags detected from quote analysis. No counter-negotiation script or competing quote workflow in frontend."
+    "notes": "negotiationShieldContractorUrgency.service.ts exists. Urgency flags detected from quote analysis. No counter-negotiation script or competing quote workflow in frontend.",
+    "issueDomain": "negotiation",
+    "canonicalFirstStep": "Compare quotes",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Negotiation Shield"
   },
   {
     "signalId": "SIG-035",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "uncovered_repair_exposure",
     "signalLabel": "Insurance Premium — Above Market for Property Profile",
     "signalType": "computed",
     "feature": "Risk Premium Optimizer / Insurance Audit",
@@ -1163,12 +1299,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "riskPremiumOptimizer.service.ts exists. insuranceCostTrend.service.ts tracks premium trend. Frontend shows optimizer page but no ranked action list or insurer comparison link."
+    "notes": "riskPremiumOptimizer.service.ts exists. insuranceCostTrend.service.ts tracks premium trend. Frontend shows optimizer page but no ranked action list or insurer comparison link.",
+    "issueDomain": "insurance",
+    "canonicalFirstStep": "Compare quotes",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Insurance Auditor"
   },
   {
     "signalId": "SIG-036",
     "signalFamilyRaw": "RISK",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "climate_risk_to_value",
     "signalLabel": "Home Risk Replay — Historical Incident Pattern Identified",
     "signalType": "computed",
     "feature": "Home Risk Replay",
@@ -1197,12 +1337,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "homeRiskReplay.engine.ts analyzes historical events. ingestHomeRiskEvents.job.ts ingests data. No frontend routing from pattern to preventive action."
+    "notes": "homeRiskReplay.engine.ts analyzes historical events. ingestHomeRiskEvents.job.ts ingests data. No frontend routing from pattern to preventive action.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Log to home timeline",
+    "executionReadiness": "tracking_only",
+    "recommendedToolOrFlow": "Home Timeline"
   },
   {
     "signalId": "SIG-037",
     "signalFamilyRaw": "INSPECTION",
-    "signalIntentFamily": "missing_documentation",
+    "signalIntentFamily": "inspection_followup_needed",
     "signalLabel": "Visual Inspection — AI Defect Detected from Photo",
     "signalType": "user-input",
     "feature": "Visual Inspector / Room Insights",
@@ -1230,12 +1374,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "visualInspector.service uses Gemini for photo analysis. roomInsights.service provides room-level scoring. No per-finding action flow in frontend."
+    "notes": "visualInspector.service uses Gemini for photo analysis. roomInsights.service provides room-level scoring. No per-finding action flow in frontend.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-038",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "valuation_uncertainty",
     "signalLabel": "Appreciation Index — Local Appreciation Below National Average",
     "signalType": "computed",
     "feature": "Appreciation / Value Intelligence",
@@ -1264,12 +1412,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "appreciationIndex.service, valueIntelligence.service, propertyAppreciation.service exist. No frontend routing to improvement ROI or sell/hold decision from low appreciation signal."
+    "notes": "appreciationIndex.service, valueIntelligence.service, propertyAppreciation.service exist. No frontend routing to improvement ROI or sell/hold decision from low appreciation signal.",
+    "issueDomain": "market_value",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "tracking_only",
+    "recommendedToolOrFlow": "Seller Prep Checklist"
   },
   {
     "signalId": "SIG-039",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "maintenance_cost_burden",
     "signalLabel": "True Cost of Ownership — Monthly Cost Exceeds Market Comparable",
     "signalType": "computed",
     "feature": "True Cost of Ownership Tool",
@@ -1296,12 +1448,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "trueCostOwnership.service.ts exists. Frontend shows full analysis but no line-item action routing to cost-reduction tools."
+    "notes": "trueCostOwnership.service.ts exists. Frontend shows full analysis but no line-item action routing to cost-reduction tools.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Estimate out-of-pocket cost",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Energy Audit"
   },
   {
     "signalId": "SIG-040",
     "signalFamilyRaw": "INSURANCE",
-    "signalIntentFamily": "missing_documentation",
+    "signalIntentFamily": "claim_documentation_gap",
     "signalLabel": "Insurance Document — Policy Not Uploaded / OCR Not Processed",
     "signalType": "user-input",
     "feature": "Insurance OCR / Coverage Intelligence",
@@ -1329,7 +1485,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "high",
-    "notes": "insuranceOcr.service extracts policy data. documentIntelligence.service processes documents. No post-upload confirmation or automatic coverage gap trigger in frontend."
+    "notes": "insuranceOcr.service extracts policy data. documentIntelligence.service processes documents. No post-upload confirmation or automatic coverage gap trigger in frontend.",
+    "issueDomain": "documentation",
+    "canonicalFirstStep": "Check coverage",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Insurance Auditor"
   },
   {
     "signalId": "SIG-041",
@@ -1363,7 +1523,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-RISK-01",
     "confidence": "high",
-    "notes": "RiskAssessment.service returns actionCta: 'CRITICAL: Complete property details to run full assessment' when property details are incomplete. Frontend navigation is generic."
+    "notes": "RiskAssessment.service returns actionCta: 'CRITICAL: Complete property details to run full assessment' when property details are incomplete. Frontend navigation is generic.",
+    "issueDomain": "onboarding",
+    "canonicalFirstStep": "Log to home timeline",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Home Timeline"
   },
   {
     "signalId": "SIG-042",
@@ -1396,12 +1560,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-BOOKING-01",
     "confidence": "medium",
-    "notes": "BookingStatus.DISPUTED exists in enum. No dispute resolution workflow in backend services or frontend UI."
+    "notes": "BookingStatus.DISPUTED exists in enum. No dispute resolution workflow in backend services or frontend UI.",
+    "issueDomain": "claims",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Claims Assistant"
   },
   {
     "signalId": "SIG-043",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "permit_documentation_gap",
     "signalLabel": "Home Renovation — High Risk Modification Planned",
     "signalType": "user-input",
     "feature": "Home Renovation Risk Advisor",
@@ -1428,7 +1596,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "homeModificationAdvisor.service has permitRequired flag for work types. No permit filing link or licensed contractor requirement surfaced in frontend."
+    "notes": "homeModificationAdvisor.service has permitRequired flag for work types. No permit filing link or licensed contractor requirement surfaced in frontend.",
+    "issueDomain": "compliance",
+    "canonicalFirstStep": "Verify permit status",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Permit/Compliance Advisor"
   },
   {
     "signalId": "SIG-044",
@@ -1460,7 +1632,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-MAINT-01",
     "confidence": "high",
-    "notes": "dailyHomePulse.service.ts uses ctaLabel: 'Mark complete' for all task types. No differentiation between DIY and professional tasks in CTA routing."
+    "notes": "dailyHomePulse.service.ts uses ctaLabel: 'Mark complete' for all task types. No differentiation between DIY and professional tasks in CTA routing.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Check seasonal readiness",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-045",
@@ -1493,12 +1669,16 @@
     "isPrematureBooking": true,
     "duplicateGroupId": "DUP-APPLIANCE-01",
     "confidence": "high",
-    "notes": "servicePriceRadar notes electrical work carries permit and safety-driven premiums. No brand-specific risk warnings or recall cross-reference in electrical panel signal flow."
+    "notes": "servicePriceRadar notes electrical work carries permit and safety-driven premiums. No brand-specific risk warnings or recall cross-reference in electrical panel signal flow.",
+    "issueDomain": "safety",
+    "canonicalFirstStep": "Replace immediately",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Asset Detail Page"
   },
   {
     "signalId": "SIG-046",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "maintenance_cost_burden",
     "signalLabel": "Cost Volatility Alert — Service Category Price Spike Detected",
     "signalType": "system-detected",
     "feature": "Cost Volatility Tool",
@@ -1525,7 +1705,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "costVolatility.service.ts and costVolatility.controller.ts exist. No proactive booking CTA for price-volatile categories."
+    "notes": "costVolatility.service.ts and costVolatility.controller.ts exist. No proactive booking CTA for price-volatile categories.",
+    "issueDomain": "pricing",
+    "canonicalFirstStep": "Compare quotes",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Price Radar"
   },
   {
     "signalId": "SIG-047",
@@ -1557,7 +1741,11 @@
     "isPrematureBooking": true,
     "duplicateGroupId": "DUP-APPLIANCE-01",
     "confidence": "medium",
-    "notes": "RiskAssessment.service generates PLUMBING risk category. Routing to provider without pipe material education or insurance check is premature."
+    "notes": "RiskAssessment.service generates PLUMBING risk category. Routing to provider without pipe material education or insurance check is premature.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Schedule inspection",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Booking Flow"
   },
   {
     "signalId": "SIG-048",
@@ -1590,12 +1778,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-GAZETTE-01",
     "confidence": "medium",
-    "notes": "Duplicate signal family with SIG-029. This specifically targets the SEASONAL section of gazette vs general AI digest. Action routing gap is same."
+    "notes": "Duplicate signal family with SIG-029. This specifically targets the SEASONAL section of gazette vs general AI digest. Action routing gap is same.",
+    "issueDomain": "maintenance",
+    "canonicalFirstStep": "Check seasonal readiness",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Gazette"
   },
   {
     "signalId": "SIG-049",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "maintenance_cost_burden",
     "signalLabel": "Moving Concierge — Move-In Task Checklist Incomplete",
     "signalType": "user-input",
     "feature": "Moving Concierge",
@@ -1622,12 +1814,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "movingConcierge.service.ts exists. Checklist tasks vary by urgency but no priority ranking or service-provider linking in frontend."
+    "notes": "movingConcierge.service.ts exists. Checklist tasks vary by urgency but no priority ranking or service-provider linking in frontend.",
+    "issueDomain": "onboarding",
+    "canonicalFirstStep": "Check seasonal readiness",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-050",
     "signalFamilyRaw": "RISK",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "valuation_uncertainty",
     "signalLabel": "Home Score — Overall Score Below 70 (Multi-Domain Risk)",
     "signalType": "computed",
     "feature": "Home Score Report",
@@ -1655,7 +1851,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-RISK-01",
     "confidence": "high",
-    "notes": "homeScoreReport computes homeScore = average(healthScore, riskScore, financialScore) * 10. Three component domains. No domain-level improvement roadmap surfaced in frontend."
+    "notes": "homeScoreReport computes homeScore = average(healthScore, riskScore, financialScore) * 10. Three component domains. No domain-level improvement roadmap surfaced in frontend.",
+    "issueDomain": "market_value",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Risk Detail Drawer"
   },
   {
     "signalId": "SIG-051",
@@ -1687,7 +1887,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "HomeBuyerTask.service.ts manages pre-closing task list. Frontend actions page exists. No deadline urgency or consequence display."
+    "notes": "HomeBuyerTask.service.ts manages pre-closing task list. Frontend actions page exists. No deadline urgency or consequence display.",
+    "issueDomain": "onboarding",
+    "canonicalFirstStep": "Assess urgency",
+    "executionReadiness": "ready",
+    "recommendedToolOrFlow": "Maintenance Checklist"
   },
   {
     "signalId": "SIG-052",
@@ -1719,7 +1923,11 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-RECALL-01",
     "confidence": "medium",
-    "notes": "recalls.service has dismissRecallMatch API (sets status=DISMISSED). No frontend reason capture or follow-up reminder workflow."
+    "notes": "recalls.service has dismissRecallMatch API (sets status=DISMISSED). No frontend reason capture or follow-up reminder workflow.",
+    "issueDomain": "safety",
+    "canonicalFirstStep": "Request recall remediation",
+    "executionReadiness": "tracking_only",
+    "recommendedToolOrFlow": "Asset Detail Page"
   },
   {
     "signalId": "SIG-053",
@@ -1751,12 +1959,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "DUP-COVERAGE-01",
     "confidence": "high",
-    "notes": "coverageLapseIncidents.job.ts runs scheduled. Creates incident record. No frontend alert or action linked to coverage lapse incident type."
+    "notes": "coverageLapseIncidents.job.ts runs scheduled. Creates incident record. No frontend alert or action linked to coverage lapse incident type.",
+    "issueDomain": "insurance",
+    "canonicalFirstStep": "Check coverage",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Insurance Auditor"
   },
   {
     "signalId": "SIG-054",
     "signalFamilyRaw": "FINANCIAL",
-    "signalIntentFamily": "financial_exposure",
+    "signalIntentFamily": "maintenance_cost_burden",
     "signalLabel": "Budget Forecaster — Projected Monthly Shortfall",
     "signalType": "computed",
     "feature": "Budget Forecaster",
@@ -1783,12 +1995,16 @@
     "isPrematureBooking": false,
     "duplicateGroupId": "",
     "confidence": "medium",
-    "notes": "budgetForecaster.service.ts exists. Frontend budget page shows forecast. No routing from shortfall signal to specific cost-reduction tools."
+    "notes": "budgetForecaster.service.ts exists. Frontend budget page shows forecast. No routing from shortfall signal to specific cost-reduction tools.",
+    "issueDomain": "financial",
+    "canonicalFirstStep": "Estimate out-of-pocket cost",
+    "executionReadiness": "needs_context",
+    "recommendedToolOrFlow": "Energy Audit"
   },
   {
     "signalId": "SIG-055",
     "signalFamilyRaw": "RISK",
-    "signalIntentFamily": "home_value_risk",
+    "signalIntentFamily": "seller_readiness_gap",
     "signalLabel": "Property Onboarding Incomplete — Risk / Financial Features Locked",
     "signalType": "user-input",
     "feature": "Property Onboarding",
@@ -1817,6 +2033,10 @@
     "isPrematureBooking": true,
     "duplicateGroupId": "DUP-RISK-01",
     "confidence": "high",
-    "notes": "properties/[id]/page.tsx uses buttonLabel 'Schedule Inspection' or 'Schedule Comprehensive Assessment' for incomplete profiles. Routes to providers before basic property data is entered."
+    "notes": "properties/[id]/page.tsx uses buttonLabel 'Schedule Inspection' or 'Schedule Comprehensive Assessment' for incomplete profiles. Routes to providers before basic property data is entered.",
+    "issueDomain": "onboarding",
+    "canonicalFirstStep": "Log to home timeline",
+    "executionReadiness": "not_ready",
+    "recommendedToolOrFlow": "Home Timeline"
   }
 ]
