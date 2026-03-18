@@ -25,16 +25,23 @@ RUN npm ci
 # Copy shared backend source files into worker source tree
 RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/config \
+             src/shared/backend/middleware \
              src/shared/backend/services \
              src/shared/backend/services/storage \
              src/shared/backend/services/pdf/templates \
              src/shared/backend/services/domainEvents \
              src/shared/backend/services/incidents \
+             src/shared/backend/services/incidents/integrations \
              src/shared/backend/services/hiddenAssets \
              src/shared/backend/services/homeHabitCoach \
              src/shared/backend/services/analytics \
              src/shared/backend/types \
              src/shared/backend/lib \
+             src/shared/backend/modules/gazette/services \
+             src/shared/backend/modules/gazette/editorial \
+             src/shared/backend/modules/gazette/types \
+             src/shared/backend/modules/gazette/dto \
+             src/shared/backend/modules/gazette/mappers \
              src/shared/backend/neighborhoodIntelligence \
              src/shared/backend/refinanceRadar/engine \
              src/shared/backend/refinanceRadar/config \
@@ -89,6 +96,29 @@ COPY apps/backend/src/neighborhoodIntelligence/eventConfidence.ts src/shared/bac
 COPY apps/backend/src/refinanceRadar/engine/mortgageRate.service.ts src/shared/backend/refinanceRadar/engine/
 COPY apps/backend/src/refinanceRadar/config/refinanceRadar.config.ts src/shared/backend/refinanceRadar/config/
 COPY apps/backend/src/refinanceRadar/types/refinanceRadar.types.ts src/shared/backend/refinanceRadar/types/
+# Copy gazette module files needed by gazetteGeneration.job.ts
+COPY apps/backend/src/modules/gazette/services/gazetteGenerationJobRunner.service.ts src/shared/backend/modules/gazette/services/
+COPY apps/backend/src/modules/gazette/services/gazetteSignalCollector.service.ts src/shared/backend/modules/gazette/services/
+COPY apps/backend/src/modules/gazette/services/gazetteCandidateFactory.service.ts src/shared/backend/modules/gazette/services/
+COPY apps/backend/src/modules/gazette/services/gazetteRankingEngine.service.ts src/shared/backend/modules/gazette/services/
+COPY apps/backend/src/modules/gazette/services/gazetteEditionAssembler.service.ts src/shared/backend/modules/gazette/services/
+COPY apps/backend/src/modules/gazette/services/gazettePublish.service.ts src/shared/backend/modules/gazette/services/
+COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialService.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/editorial/GazetteHeadlineGenerator.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/editorial/GazetteSummaryGenerator.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialFallbackBuilder.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialPromptBuilder.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialValidator.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/editorial/GazetteEditorialTypes.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/editorial/GazetteTickerGenerator.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/editorial/gazetteFallbackEditorial.ts src/shared/backend/modules/gazette/editorial/
+COPY apps/backend/src/modules/gazette/types/gazette.types.ts src/shared/backend/modules/gazette/types/
+COPY apps/backend/src/modules/gazette/dto/gazette.dto.ts src/shared/backend/modules/gazette/dto/
+COPY apps/backend/src/modules/gazette/mappers/gazette.mapper.ts src/shared/backend/modules/gazette/mappers/
+COPY apps/backend/src/config/ai-constants.ts src/shared/backend/config/
+# Stubs: replace backend-only deps with workers-safe equivalents
+COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
+COPY apps/workers/stubs/notification-service.ts src/shared/backend/services/notification.service.ts
 # Copy worker source code + TS config
 COPY apps/workers/src ./src
 COPY apps/workers/tsconfig.json ./tsconfig.json
@@ -111,7 +141,8 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeHabitCoach\/habitGenerationEngine/\.\.\/shared\/backend\/services\/homeHabitCoach\/habitGenerationEngine/g' src/jobs/habitGeneration.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/refinanceRadar\/engine\/mortgageRate\.service/\.\.\/shared\/backend\/refinanceRadar\/engine\/mortgageRate\.service/g' src/jobs/ingestMortgageRates.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/refinanceRadar\/engine\/mortgageRate\.service/\.\.\/shared\/backend\/refinanceRadar\/engine\/mortgageRate\.service/g' src/jobs/ingestMortgageRates.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/\.\.\/shared\/backend\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/g' src/jobs/gazetteGeneration.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
