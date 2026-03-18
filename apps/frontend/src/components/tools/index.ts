@@ -7,3 +7,5 @@ export type {
   MethodologyStep,
   MethodologyColumn,
 } from './ToolMethodologyAccordion';
+
+export { default as HomeToolHeader } from './HomeToolHeader';

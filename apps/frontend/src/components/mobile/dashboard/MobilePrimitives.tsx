@@ -555,8 +555,10 @@ export function MobilePageIntro({
   action?: React.ReactNode;
   className?: string;
 }) {
+  const hideOnDesktop = eyebrow === 'Home Tool' || eyebrow === 'Home Tools';
+
   return (
-    <MobileSection className={cn('space-y-2', className)}>
+    <MobileSection className={cn('space-y-2', hideOnDesktop && 'lg:hidden', className)}>
       {eyebrow ? (
         <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
           {eyebrow}

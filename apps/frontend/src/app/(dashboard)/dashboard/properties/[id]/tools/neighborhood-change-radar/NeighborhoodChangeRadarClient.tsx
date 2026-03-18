@@ -37,7 +37,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolsRail from '../../components/HomeToolsRail';
-import RelatedTools from '@/components/tools/RelatedTools';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import type {
   NeighborhoodConfidenceBand,
   NeighborhoodEventCard,
@@ -740,17 +740,14 @@ export default function NeighborhoodChangeRadarClient() {
           />
         </div>
 
-        {/* Desktop-only: RelatedTools horizontal bar */}
-        <div className="hidden lg:col-span-2 lg:block">
-          <RelatedTools
-            context="neighborhood-change-radar"
-            currentToolId="neighborhood-change-radar"
+        <div className="lg:col-span-2">
+          <HomeToolHeader
+            toolId="neighborhood-change-radar"
             propertyId={propertyId}
-            minViewport="lg"
           />
         </div>
 
-        {/* Left column: summary + trend. Tools rail hidden on desktop (RelatedTools above replaces it). */}
+        {/* Left column: summary + trend. Tools rail hidden on desktop (header above replaces it). */}
         <div className="space-y-4 lg:space-y-5">
           <SummaryStrip propertyId={propertyId} />
 

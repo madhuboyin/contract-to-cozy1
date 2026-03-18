@@ -39,7 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ReplayDetailSheet } from '@/components/features/homeRiskReplay/ReplayDetailSheet';
 import { ReplayTimelineItem } from '@/components/features/homeRiskReplay/ReplayTimelineItem';
-import RelatedTools from '@/components/tools/RelatedTools';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
   formatDriverCode,
   formatReplayDate,
@@ -806,7 +806,7 @@ export default function HomeRiskReplayClient() {
       </Button>
 
       <div className="space-y-5 lg:grid lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-5 lg:space-y-0">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 lg:hidden">
           <ReplayIntroCard property={property} />
         </div>
 
@@ -814,12 +814,11 @@ export default function HomeRiskReplayClient() {
           <PropertyContextStrip property={property} isLoading={propertyQuery.isLoading} />
         </div>
 
-        <div className="hidden lg:col-span-2 lg:block">
-          <RelatedTools
-            context="home-risk-replay"
-            currentToolId="home-risk-replay"
+        <div className="lg:col-span-2">
+          <HomeToolHeader
+            toolId="home-risk-replay"
             propertyId={propertyId}
-            minViewport="lg"
+            monitoringAddress={property ? compactPropertyLabel(property) : undefined}
           />
         </div>
 

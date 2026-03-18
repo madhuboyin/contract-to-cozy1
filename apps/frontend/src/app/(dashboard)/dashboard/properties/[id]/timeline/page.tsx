@@ -17,7 +17,7 @@ import {
   ResultHeroCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import RelatedTools from '@/components/tools/RelatedTools';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -345,12 +345,14 @@ export default function Page() {
       className="space-y-6 lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
         <MobilePageIntro
+          className="lg:hidden"
           title="Home Timeline"
           subtitle="Your home's story of repairs, claims, improvements, and key documents."
         />
       }
       summary={
         <>
+          <HomeToolHeader toolId="home-timeline" propertyId={propertyId} />
           <ResultHeroCard
             eyebrow="Property History"
             title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}
@@ -366,12 +368,6 @@ export default function Page() {
               `Mode: ${mode === 'VISUAL' ? 'Visual replay' : 'List view'}`,
               hasCustomLimit ? `Showing up to ${limit} events` : 'Showing default event volume',
             ]}
-          />
-          <RelatedTools
-            context="home-timeline"
-            currentToolId="home-timeline"
-            propertyId={propertyId}
-            minViewport="lg"
           />
         </>
       }

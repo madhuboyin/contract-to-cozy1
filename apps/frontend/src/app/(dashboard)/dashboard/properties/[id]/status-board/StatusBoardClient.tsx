@@ -67,7 +67,7 @@ import humanizeActionType from "@/lib/utils/humanize";
 import InventoryItemDrawer from '../../../components/inventory/InventoryItemDrawer';
 import { getInventoryItem, listInventoryRooms } from '../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
-import RelatedTools from "@/components/tools/RelatedTools";
+import HomeToolHeader from "@/components/tools/HomeToolHeader";
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -1273,17 +1273,10 @@ export default function StatusBoardClient() {
       <div className="hidden lg:block pb-6">
       <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
         <div className="relative z-10 space-y-3">
-        {/* Header */}
+        <HomeToolHeader toolId="status-board" propertyId={propertyId} />
+
         <div className={`p-3 sm:p-4 ${GLASS_PANEL_CLASS}`}>
-          <div className="flex items-start justify-between gap-4 min-w-0">
-            <div className="min-w-0">
-              <h1 className="text-xl font-heading font-bold leading-tight text-slate-900 dark:text-slate-100 sm:text-2xl">
-                Home Status Board
-              </h1>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                All home items with computed condition statuses
-              </p>
-            </div>
+          <div className="flex justify-end">
             <Button
               variant="outline"
               size="sm"
@@ -1296,13 +1289,6 @@ export default function StatusBoardClient() {
             </Button>
           </div>
         </div>
-
-        <RelatedTools
-          context="status-board"
-          currentToolId="status-board"
-          propertyId={propertyId}
-          minViewport="lg"
-        />
 
         {/* Summary strip */}
         {summary && (

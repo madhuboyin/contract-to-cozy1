@@ -61,7 +61,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { MOBILE_CARD_RADIUS, MOBILE_TYPE_TOKENS } from '@/components/mobile/dashboard/mobileDesignTokens';
-import RelatedTools from '@/components/tools/RelatedTools';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
   createEntry,
   createTrustedContact,
@@ -310,6 +310,7 @@ function WillEmptyState({
           title="Home Digital Will"
           subtitle="Capture the knowledge your home needs — emergency contacts, utility info, contractor preferences, and critical instructions."
         />
+        <HomeToolHeader toolId="home-digital-will" propertyId={propertyId} />
         <EmptyStateCard
           title="Get started"
           description="Create your Home Digital Will to store everything someone would need to manage this property — in an emergency or any time you're unavailable."
@@ -2578,6 +2579,8 @@ export default function HomeDigitalWillClient() {
           </Button>
         </div>
 
+        <HomeToolHeader toolId="home-digital-will" propertyId={propertyId} />
+
         {/* Header: always on desktop, hidden on mobile during section detail or contacts panel */}
         <div
           className={cn(
@@ -2750,7 +2753,6 @@ export default function HomeDigitalWillClient() {
           )}
         </div>
 
-        <RelatedTools context="home-digital-will" propertyId={propertyId} />
         <BottomSafeAreaReserve size="chatAware" />
       </MobilePageContainer>
 

@@ -37,7 +37,7 @@ import {
   riskColorClass,
   confidenceColorClass,
 } from '@/components/features/homeRenovationAdvisor/AdvisorUtils';
-import RelatedTools from '@/components/tools/RelatedTools';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import type { RenovationAdvisorSession, Property } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -424,16 +424,14 @@ export default function HomeRenovationRiskAdvisorPage() {
       <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
           {/* Hero */}
-          <MobileSection>
+          <MobileSection className="lg:hidden">
             <AdvisorHero propertyAddress={propertyAddress || undefined} />
           </MobileSection>
 
-          {/* Related tools (desktop only) */}
-          <RelatedTools
-            context="home-renovation-risk-advisor"
-            currentToolId="home-renovation-risk-advisor"
+          <HomeToolHeader
+            toolId="home-renovation-risk-advisor"
             propertyId={propertyId}
-            minViewport="lg"
+            monitoringAddress={propertyAddress || undefined}
           />
 
           {/* Retroactive context banner */}

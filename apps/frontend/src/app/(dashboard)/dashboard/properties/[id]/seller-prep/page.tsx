@@ -8,20 +8,15 @@ import Link from "next/link";
 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
-import {
-  PageHeader,
-  PageHeaderHeading,
-  PageHeaderDescription,
-} from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, AlertCircle, Settings } from "lucide-react";
+import { ArrowLeft, AlertCircle, Settings } from "lucide-react";
 import {
   MobileCard,
   MobilePageContainer,
   MobilePageIntro,
 } from "@/components/mobile/dashboard/MobilePrimitives";
-import RelatedTools from "@/components/tools/RelatedTools";
+import HomeToolHeader from "@/components/tools/HomeToolHeader";
 
 import SellerPrepOverview from "@/components/seller-prep/SellerPrepOverview";
 import { SellerPrepIntakeForm } from "@/components/seller-prep/SellerPrepIntakeForm";
@@ -206,7 +201,7 @@ export default function SellerPrepPage() {
         />
       </div>
 
-      <div className="hidden md:block space-y-2">
+      <div className="hidden md:block space-y-4">
         <Link
           href={`/dashboard/properties/${propertyId}`}
           className="text-xs font-medium text-muted-foreground hover:text-blue-600 inline-flex items-center transition-colors"
@@ -215,39 +210,20 @@ export default function SellerPrepPage() {
           Back to Property
         </Link>
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <PageHeader className="p-0">
-            <PageHeaderHeading className="text-2xl flex items-center gap-2">
-              <TrendingUp className="h-6 w-6 text-green-600" />
-              Home Sale Preparation
-            </PageHeaderHeading>
-            <PageHeaderDescription>
-              Personalized action plan to maximize your home&apos;s resale value
-            </PageHeaderDescription>
-          </PageHeader>
-          
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEditPreferences}
-              className="h-9"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              {data.overview.preferences ? "Edit Preferences" : "Setup Plan"}
-            </Button>
-          </div>
+        <HomeToolHeader toolId="seller-prep" propertyId={propertyId as string} />
+
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleEditPreferences}
+            className="h-9"
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            {data.overview.preferences ? "Edit Preferences" : "Setup Plan"}
+          </Button>
         </div>
       </div>
-
-      {propertyId ? (
-        <RelatedTools
-          context="seller-prep"
-          currentToolId="seller-prep"
-          propertyId={propertyId as string}
-          minViewport="md"
-        />
-      ) : null}
 
       <SellerPrepDisclaimer />
 

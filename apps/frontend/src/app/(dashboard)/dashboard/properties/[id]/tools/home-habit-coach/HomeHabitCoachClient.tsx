@@ -45,7 +45,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { MOBILE_TYPE_TOKENS, MOBILE_CARD_RADIUS } from '@/components/mobile/dashboard/mobileDesignTokens';
-import RelatedTools from '@/components/tools/RelatedTools';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import {
   completeHabit,
   dismissHabit,
@@ -495,38 +495,6 @@ function HabitDetailSheet({
   );
 }
 
-// ─── Desktop hero ─────────────────────────────────────────────────────────────
-
-function HabitCoachHero() {
-  return (
-    <div
-      className={cn(
-        MOBILE_CARD_RADIUS,
-        'border border-[hsl(var(--mobile-border-subtle))]',
-        'bg-[linear-gradient(145deg,hsl(var(--mobile-brand-soft)),#fff)]',
-        'p-4',
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--mobile-brand-border))] bg-white">
-          <ListChecks className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />
-        </div>
-        <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
-            Home Tool
-          </p>
-          <h1 className="mb-0 text-base font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
-            Home Habit Coach
-          </h1>
-          <p className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.caption)}>
-            Seasonal care routines and safety checks — personalised to your home.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Desktop sidebar ─────────────────────────────────────────────────────────
 
 function HabitCoachDesktopSidebar({
@@ -729,17 +697,7 @@ export default function HomeHabitCoachClient() {
 
         <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            {/* Desktop hero — hidden on mobile */}
-            <MobileSection className="hidden lg:block">
-              <HabitCoachHero />
-            </MobileSection>
-
-            <RelatedTools
-              context="home-habit-coach"
-              currentToolId="home-habit-coach"
-              propertyId={propertyId}
-              minViewport="lg"
-            />
+            <HomeToolHeader toolId="home-habit-coach" propertyId={propertyId} />
 
         {/* Disabled banner */}
         {prefs && !prefs.isEnabled ? (
