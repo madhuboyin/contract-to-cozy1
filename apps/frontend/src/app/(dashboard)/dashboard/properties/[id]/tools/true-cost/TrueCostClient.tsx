@@ -77,9 +77,9 @@ export default function TrueCostClient() {
         eyebrow="Home Tool"
         title="True Cost of Home Ownership"
         subtitle="A 5-year reality check including taxes, insurance, maintenance, and utilities."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="true-cost" currentToolId="true-cost" />
       </MobileFilterSurface>
 

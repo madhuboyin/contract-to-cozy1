@@ -141,9 +141,9 @@ export default function CostVolatilityClient() {
         eyebrow="Home Tool"
         title="Cost Volatility Index"
         subtitle="Measure how unpredictable your ownership costs are year to year."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="cost-volatility" currentToolId="cost-volatility" />
       </MobileFilterSurface>
 

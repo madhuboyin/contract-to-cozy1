@@ -227,9 +227,9 @@ export default function PropertyTaxClient() {
         eyebrow="Home Tool"
         title="Property Tax Intelligence"
         subtitle="Review tax estimates, trend projection, and key drivers behind changes."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" />
       </MobileFilterSurface>
 

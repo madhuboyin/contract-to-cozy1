@@ -204,9 +204,9 @@ export default function CapitalTimelineClient() {
         eyebrow="Home Tool"
         title="Capital Timeline"
         subtitle={`Predicted major expenses over the next ${horizonYears} years.`}
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="capital-timeline" currentToolId="capital-timeline" />
         <MobileActionRow className="justify-between">
           <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">

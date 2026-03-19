@@ -1013,7 +1013,7 @@ export default function ServicePriceRadarClient() {
     return (
       <MobileToolWorkspace
         className="lg:max-w-7xl lg:px-8 lg:pb-10"
-        intro={<MobilePageIntro eyebrow="Home Tool" title="Service Price Radar" subtitle="Choose a property first." />}
+        intro={<MobilePageIntro eyebrow="Home Tool" title="Service Price Radar" subtitle="Choose a property first."  className="lg:hidden"/>}
       >
         <EmptyStateCard
           title="Property context required"
@@ -1043,7 +1043,7 @@ export default function ServicePriceRadarClient() {
             eyebrow="Home Tool"
             title="Service Price Radar"
             subtitle="Know if a quote is fair for your home before you book the work."
-            action={<Radar className="h-5 w-5 text-[hsl(var(--mobile-brand-strong))]" />}
+            action={<Radar className="h-5 w-5 text-[hsl(var(--mobile-brand-strong))] lg:hidden" />}
           />
           <MobileCard variant="compact" className="border-[hsl(var(--mobile-brand-border))] bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]">
             <div className="flex items-start gap-3">
@@ -1063,7 +1063,7 @@ export default function ServicePriceRadarClient() {
         </div>
       }
       filters={
-        <MobileFilterSurface>
+        <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
           <HomeToolsRail propertyId={propertyId} context="service-price-radar" currentToolId="service-price-radar" />
         </MobileFilterSurface>
       }

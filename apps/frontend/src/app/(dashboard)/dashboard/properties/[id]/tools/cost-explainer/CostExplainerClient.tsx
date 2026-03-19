@@ -116,9 +116,9 @@ export default function CostExplainerClient() {
         eyebrow="Home Tool"
         title="Why Is My Home Cost Increasing?"
         subtitle="Plain-English breakdown of higher taxes, insurance, and maintenance drivers."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="cost-explainer" currentToolId="cost-explainer" />
       </MobileFilterSurface>
       {/* Top block */}

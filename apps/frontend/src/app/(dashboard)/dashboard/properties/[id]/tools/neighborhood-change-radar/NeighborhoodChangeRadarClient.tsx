@@ -737,7 +737,7 @@ export default function NeighborhoodChangeRadarClient() {
             eyebrow="Home Tools"
             title="Neighborhood Change Radar"
             subtitle="Track major external changes near your home and understand how they may affect value, demand, and livability."
-          />
+           className="lg:hidden"/>
         </div>
 
         <div className="lg:col-span-2">
@@ -767,7 +767,7 @@ export default function NeighborhoodChangeRadarClient() {
             />
 
             {/* Filters */}
-            <MobileFilterSurface>
+            <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
               <FilterTabs value={filterEffect} onChange={setFilterEffect} />
             </MobileFilterSurface>
 

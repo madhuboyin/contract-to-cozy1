@@ -125,9 +125,9 @@ export default function HomeCostGrowthClient() {
         eyebrow="Home Tool"
         title="Home Cost Growth Analyzer"
         subtitle="Compare appreciation vs ownership expense growth to understand net cost trend."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="cost-growth" currentToolId="cost-growth" />
       </MobileFilterSurface>
 

@@ -29,9 +29,9 @@ export default function HomeSavingsToolClient() {
         eyebrow="Home Tool"
         title="Home Savings Check"
         subtitle="See where you may be overpaying and compare simple savings opportunities."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
 

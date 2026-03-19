@@ -810,7 +810,7 @@ export default function HomeRiskReplayClient() {
           <ReplayIntroCard property={property} />
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 lg:hidden">
           <PropertyContextStrip property={property} isLoading={propertyQuery.isLoading} />
         </div>
 
@@ -818,7 +818,6 @@ export default function HomeRiskReplayClient() {
           <HomeToolHeader
             toolId="home-risk-replay"
             propertyId={propertyId}
-            monitoringAddress={property ? compactPropertyLabel(property) : undefined}
           />
         </div>
 

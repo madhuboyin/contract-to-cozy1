@@ -170,9 +170,9 @@ export default function SellHoldRentClient() {
         eyebrow="Home Tool"
         title="Sell vs Hold vs Rent"
         subtitle="Compare outcomes using appreciation, ownership costs, and rental income assumptions."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="sell-hold-rent" currentToolId="sell-hold-rent" />
       </MobileFilterSurface>
 

@@ -123,9 +123,9 @@ export default function BreakEvenClient() {
         eyebrow="Home Tool"
         title="Break-Even Ownership Year"
         subtitle="See when appreciation is projected to outweigh cumulative ownership costs."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="break-even" currentToolId="break-even" />
       </MobileFilterSurface>
 

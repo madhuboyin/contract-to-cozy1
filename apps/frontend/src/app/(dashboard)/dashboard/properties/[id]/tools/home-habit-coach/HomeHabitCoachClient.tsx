@@ -680,7 +680,7 @@ export default function HomeHabitCoachClient() {
               eyebrow="Home Tools"
               title="Home Habit Coach"
               subtitle="Seasonal care routines and safety checks"
-              className="flex-1 space-y-0"
+              className="flex-1 space-y-0 lg:hidden"
             />
           </div>
         </MobileSection>
@@ -689,9 +689,9 @@ export default function HomeHabitCoachClient() {
         <MobileSection className="hidden lg:block">
           <Link
             href={`/dashboard/properties/${propertyId}`}
-            className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]"
+            className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
           >
-            <ArrowLeft className="h-4 w-4" /> Back to Property
+            <ArrowLeft className="h-4 w-4" /> Back to property
           </Link>
         </MobileSection>
 

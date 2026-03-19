@@ -899,10 +899,10 @@ export default function MortgageRefinanceRadarClient() {
         eyebrow="Home Tool"
         title="Mortgage Refinance Radar"
         subtitle="Monitor the market and know when it's worth refinancing your home."
-      />
+       className="lg:hidden"/>
 
       {/* Filter surface + rail */}
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail
           propertyId={propertyId}
           context="mortgage-refinance-radar"

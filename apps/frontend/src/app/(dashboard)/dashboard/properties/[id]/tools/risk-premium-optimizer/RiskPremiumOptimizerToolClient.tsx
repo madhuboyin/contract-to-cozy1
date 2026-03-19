@@ -33,7 +33,7 @@ export default function RiskPremiumOptimizerToolClient() {
         action={
           <Button
             variant="outline"
-            className="min-h-[44px]"
+            className="min-h-[44px] lg:hidden"
             onClick={() =>
               openToolExplainer({
                 id: 'how-it-works',
@@ -46,7 +46,7 @@ export default function RiskPremiumOptimizerToolClient() {
         }
       />
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
 

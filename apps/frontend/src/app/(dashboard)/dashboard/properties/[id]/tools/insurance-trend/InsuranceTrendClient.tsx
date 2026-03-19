@@ -120,9 +120,9 @@ export default function InsuranceTrendClient() {
         eyebrow="Home Tool"
         title="Insurance Cost Trend Analyzer"
         subtitle="Compare premium growth by ZIP against state baseline and climate/claims pressure."
-      />
+       className="lg:hidden"/>
 
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="insurance-trend" currentToolId="insurance-trend" />
       </MobileFilterSurface>
 

@@ -844,10 +844,10 @@ export default function HomeGazetteClient() {
         eyebrow="Home Tool"
         title="Home Gazette"
         subtitle="Your weekly home intelligence briefing — risks, maintenance, finances, and more."
-      />
+       className="lg:hidden"/>
 
       {/* Filter surface: tool rail + tabs + actions */}
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail
           propertyId={propertyId}
           context="home-gazette"

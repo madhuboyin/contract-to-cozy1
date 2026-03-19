@@ -675,10 +675,10 @@ export default function HiddenAssetFinderClient() {
         eyebrow="Home Tool"
         title="Hidden Asset Finder"
         subtitle="Discover potential rebates, tax benefits, discounts, and grants that may apply to your home. All results are potential matches — verify eligibility with each program's official source."
-      />
+       className="lg:hidden"/>
 
       {/* Filter surface: tool rail + filters */}
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
 
         {/* Category filter chips */}

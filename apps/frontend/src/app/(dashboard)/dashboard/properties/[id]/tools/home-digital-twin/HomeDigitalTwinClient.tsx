@@ -1047,10 +1047,10 @@ export default function HomeDigitalTwinClient() {
         eyebrow="Home Tool"
         title="Home Digital Twin"
         subtitle="A living model of your home — systems, age, risk, and what-if scenarios. Data is derived from your property profile and inventory."
-      />
+       className="lg:hidden"/>
 
       {/* Tool rail */}
-      <MobileFilterSurface>
+      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
 

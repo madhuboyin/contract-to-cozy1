@@ -309,7 +309,7 @@ function WillEmptyState({
           eyebrow="Home Tool"
           title="Home Digital Will"
           subtitle="Capture the knowledge your home needs — emergency contacts, utility info, contractor preferences, and critical instructions."
-        />
+         className="lg:hidden"/>
         <HomeToolHeader toolId="home-digital-will" propertyId={propertyId} />
         <EmptyStateCard
           title="Get started"

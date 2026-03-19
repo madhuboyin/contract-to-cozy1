@@ -2909,7 +2909,7 @@ export default function NegotiationShieldToolClient() {
           eyebrow="Home Tool"
           title="Negotiation Shield"
           subtitle="This route is missing the property context Negotiation Shield needs."
-        />
+         className="lg:hidden"/>
         <Card className={SECTION_CARD_CLASS}>
           <CardHeader className={SECTION_HEADER_CLASS}>
             <CardTitle>Property context missing</CardTitle>
@@ -2933,7 +2933,7 @@ export default function NegotiationShieldToolClient() {
           eyebrow="Home Tool"
           title="Negotiation Shield"
           subtitle="Loading the property context for this review..."
-        />
+         className="lg:hidden"/>
         <DetailSkeleton />
       </MobilePageContainer>
     );
@@ -2947,7 +2947,7 @@ export default function NegotiationShieldToolClient() {
           eyebrow="Home Tool"
           title="Negotiation Shield"
           subtitle="We could not load the property context for this tool."
-        />
+         className="lg:hidden"/>
         <Card className={SECTION_CARD_CLASS}>
           <CardHeader className={SECTION_HEADER_CLASS}>
             <CardTitle>Property unavailable</CardTitle>
@@ -2977,7 +2977,7 @@ export default function NegotiationShieldToolClient() {
         title="Negotiation Shield"
         subtitle="Review quotes, insurance disputes, and buyer requests, then get a message you can actually send."
         action={introAction}
-      />
+       className="lg:hidden"/>
 
       <div className={cn(hasOpenCase ? 'grid gap-5 xl:items-start xl:grid-cols-[280px_minmax(0,1fr)]' : 'space-y-4 xl:space-y-5')}>
         {hasOpenCase ? (
