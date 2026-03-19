@@ -568,211 +568,236 @@ export default function PropertyHealthDetailPage() {
         </p>
       </PageHeader>
 
-      <div className="hidden md:grid gap-6 md:grid-cols-3">
-        <Card className="md:col-span-1 border-2 border-primary/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Health Score</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-extrabold flex items-baseline">
-              <span className={healthDetails.color}>{latestScore.toFixed(0)}</span>
-              <span className="text-xl font-semibold text-muted-foreground ml-1">/{scoreMax}</span>
-            </div>
-            <div className="mt-2 text-sm text-muted-foreground">Status: {healthDetails.level}</div>
-            <div className="mt-2">
-              <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
-            </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              Base: {baseScore !== null ? baseScore.toFixed(1) : "0.0"}/{maxBaseScore} • Extended:{" "}
-              {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"}/{maxExtraScore}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">Potential ceiling: {potentialScore.toFixed(0)}/100</div>
-            <div className="mt-3">
-              <Progress value={percentage} className="h-2" indicatorClassName={healthDetails.progressColor} />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="hidden md:block">
+        <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
+          <Card className="md:col-span-1 border-2 border-primary/50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium">Health Score</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-extrabold flex items-baseline">
+                <span className={healthDetails.color}>{latestScore.toFixed(0)}</span>
+                <span className="text-xl font-semibold text-muted-foreground ml-1">/{scoreMax}</span>
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">Status: {healthDetails.level}</div>
+              <div className="mt-2">
+                <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Base: {baseScore !== null ? baseScore.toFixed(1) : "0.0"}/{maxBaseScore} • Extended:{" "}
+                {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"}/{maxExtraScore}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">Potential ceiling: {potentialScore.toFixed(0)}/100</div>
+            </CardContent>
+          </Card>
 
-        <Card className="md:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Current Health Focus</CardTitle>
-            <CardDescription>
-              {usingSnapshotInsights
-                ? "Top actionable and in-progress factors from the latest weekly snapshot."
-                : "Showing latest profile-driven health factors while weekly snapshot history is still building."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {focusInsights.length === 0 ? (
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>No factor details are available yet for this property.</p>
-                <p>
-                  Add property profile fields and service records to unlock full health derivation:
-                  {" "}
-                  <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
-                  {" "}
-                  or
-                  {" "}
-                  <Link href={`/dashboard/documents?propertyId=${propertyId}`} className="underline">upload documents</Link>.
+          <Card className="md:col-span-2 lg:col-span-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium">Current Health Focus</CardTitle>
+              <CardDescription>
+                {usingSnapshotInsights
+                  ? "Top actionable and in-progress factors from the latest weekly snapshot."
+                  : "Showing latest profile-driven health factors while weekly snapshot history is still building."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {focusInsights.length === 0 ? (
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>No factor details are available yet for this property.</p>
+                  <p>
+                    Add property profile fields and service records to unlock full health derivation:
+                    {" "}
+                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
+                    {" "}
+                    or
+                    {" "}
+                    <Link href={`/dashboard/documents?propertyId=${propertyId}`} className="underline">upload documents</Link>.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {focusInsights.map((insight, idx) => (
+                    <div key={`${insight.factor || "insight"}-${idx}`} className="flex items-start justify-between gap-3 rounded-lg border border-black/10 px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
+                          {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          getInsightImpact(insight.status) === "negative"
+                            ? "destructive"
+                            : getInsightImpact(insight.status) === "positive"
+                            ? "success"
+                            : "secondary"
+                        }
+                      >
+                        {getInsightChipLabel(insight.status)}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="md:col-span-3 lg:col-span-1 flex flex-col justify-between">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Report Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}>
+                  <Button className="w-full">View maintenance actions</Button>
+                </Link>
+                <Link href={`/dashboard/properties/${propertyId}/edit`}>
+                  <Button variant="outline" className="w-full">Edit property details</Button>
+                </Link>
+                <p className="text-xs text-muted-foreground text-center">
+                  Source: {usingSnapshotInsights ? "Latest weekly snapshot" : "Current property profile"}
                 </p>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {focusInsights.map((insight, idx) => (
-                  <div key={`${insight.factor || "insight"}-${idx}`} className="flex items-start justify-between gap-3 rounded-lg border border-black/10 px-3 py-2">
-                    <div>
-                      <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
-                        {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
-                      </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mt-8 space-y-6">
+          <div className="space-y-2">
+            <h3 className="text-lg md:text-xl font-semibold">Overall Health Gauge: {healthDetails.level}</h3>
+            <div className="flex justify-between text-xs font-medium text-muted-foreground">
+              <span>Needs Attention (0)</span>
+              <span>Excellent (100)</span>
+            </div>
+            <Progress value={percentage} className="h-4" indicatorClassName={healthDetails.progressColor} />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="text-base font-medium">Health Score Trend</CardTitle>
+                    <CardDescription>Weekly snapshots for the last 6 months or 1 year.</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                      6 Months
+                    </Button>
+                    <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                      1 Year
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+                <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium">Changes Impacting Score</CardTitle>
+                <CardDescription>What moved the score since the previous weekly snapshot.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {changes.map((change, idx) => (
+                  <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">{change.title}</p>
+                      <Badge
+                        variant={
+                          change.impact === "positive"
+                            ? "success"
+                            : change.impact === "negative"
+                            ? "destructive"
+                            : "secondary"
+                        }
+                      >
+                        {change.impact === "positive" ? "Positive" : change.impact === "negative" ? "Negative" : "Neutral"}
+                      </Badge>
                     </div>
-                    <Badge
-                      variant={
-                        getInsightImpact(insight.status) === "negative"
-                          ? "destructive"
-                          : getInsightImpact(insight.status) === "positive"
-                          ? "success"
-                          : "secondary"
-                      }
-                    >
-                      {getInsightChipLabel(insight.status)}
-                    </Badge>
+                    <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
                   </div>
                 ))}
-              </div>
-            )}
-            <div className="mt-4">
-              <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}>
-                <Button variant="outline" size="sm">View maintenance actions</Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </CardContent>
+            </Card>
+          </div>
 
-      <div className="mt-6 hidden md:grid gap-6 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">How Score Is Calculated</CardTitle>
-            <CardDescription>Transparent base + extended factor model on a fixed 0-100 scale.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>Base profile factors (up to {maxBaseScore} pts): Age, Structure, Systems, Usage/Wear, and Size.</p>
-            <p>Extended factors (up to {maxExtraScore} pts): HVAC, Water Heater, Roof, Safety, Exterior, Documents, and Appliances.</p>
-            <p>
-              Current: Base {baseScore !== null ? baseScore.toFixed(1) : "0.0"} + Extended{" "}
-              {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"} = {latestScore.toFixed(1)} / 100.
-            </p>
-            <p>Potential ceiling: {potentialScore.toFixed(0)} / 100.</p>
-          </CardContent>
-        </Card>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium">How Score Is Calculated</CardTitle>
+                <CardDescription>Transparent base + extended factor model on a fixed 0-100 scale.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                <p>Base profile factors (up to {maxBaseScore} pts): Age, Structure, Systems, Usage/Wear, and Size.</p>
+                <p>Extended factors (up to {maxExtraScore} pts): HVAC, Water Heater, Roof, Safety, Exterior, Documents, and Appliances.</p>
+                <p>
+                  Current: Base {baseScore !== null ? baseScore.toFixed(1) : "0.0"} + Extended{" "}
+                  {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"} = {latestScore.toFixed(1)} / 100.
+                </p>
+                <p>Potential ceiling: {potentialScore.toFixed(0)} / 100.</p>
+              </CardContent>
+            </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Health Factor Ledger</CardTitle>
-            <CardDescription>Full factor-by-factor contributions grouped by negative, watch, and positive impact.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {sortedInsights.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-black/10 px-3 py-3 text-sm text-muted-foreground">
-                No factor-level ledger is available yet. Complete property profile fields and upload service documents to unlock this section.
-              </div>
-            ) : (
-              <>
-                {LEDGER_GROUPS.map((group) => {
-                  const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
-                  return (
-                    <div key={group.title} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</p>
-                        <StatusChip tone={group.tone}>{groupInsights.length}</StatusChip>
-                      </div>
-                      {groupInsights.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No factors in this category.</p>
-                      ) : (
-                        groupInsights.map((insight, idx) => (
-                          <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
-                              <Badge
-                                variant={
-                                  getInsightImpact(insight.status) === "negative"
-                                    ? "destructive"
-                                    : getInsightImpact(insight.status) === "positive"
-                                    ? "success"
-                                    : "secondary"
-                                }
-                              >
-                                {getInsightChipLabel(insight.status)}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
-                              {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
-                            </p>
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium">Health Factor Ledger</CardTitle>
+                <CardDescription>Full factor-by-factor contributions grouped by negative, watch, and positive impact.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {sortedInsights.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-black/10 px-3 py-3 text-sm text-muted-foreground">
+                    No factor-level ledger is available yet. Complete property profile fields and upload service documents to unlock this section.
+                  </div>
+                ) : (
+                  <>
+                    {LEDGER_GROUPS.map((group) => {
+                      const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
+                      return (
+                        <div key={group.title} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</p>
+                            <StatusChip tone={group.tone}>{groupInsights.length}</StatusChip>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  );
-                })}
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="mt-8 hidden md:grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="text-base font-medium">Score Trend</CardTitle>
-                <CardDescription>Weekly snapshots for the last 6 months or 1 year.</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
-                  6 Months
-                </Button>
-                <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
-                  1 Year
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Changes Impacting Score</CardTitle>
-            <CardDescription>What moved the score since the previous weekly snapshot.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {changes.map((change, idx) => (
-              <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">{change.title}</p>
-                  <Badge
-                    variant={
-                      change.impact === "positive"
-                        ? "success"
-                        : change.impact === "negative"
-                        ? "destructive"
-                        : "secondary"
-                    }
-                  >
-                    {change.impact === "positive" ? "Positive" : change.impact === "negative" ? "Negative" : "Neutral"}
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+                          {groupInsights.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No factors in this category.</p>
+                          ) : (
+                            groupInsights.map((insight, idx) => (
+                              <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
+                                  <Badge
+                                    variant={
+                                      getInsightImpact(insight.status) === "negative"
+                                        ? "destructive"
+                                        : getInsightImpact(insight.status) === "positive"
+                                        ? "success"
+                                        : "secondary"
+                                    }
+                                  >
+                                    {getInsightChipLabel(insight.status)}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
+                                  {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
+                                </p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </DashboardShell>
   );
