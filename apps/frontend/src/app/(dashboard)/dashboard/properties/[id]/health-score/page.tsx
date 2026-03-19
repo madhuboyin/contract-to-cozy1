@@ -363,6 +363,8 @@ export default function PropertyHealthDetailPage() {
   const negativeInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "negative");
   const neutralInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "neutral");
   const positiveInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "positive");
+  const topNegativeInsight = negativeInsights[0];
+  const topPositiveInsight = positiveInsights[0];
   const healthDetails = getHealthDetails(latestScore);
   const changes = buildHealthChangeItems(series, sortedInsights);
 
@@ -593,15 +595,15 @@ export default function PropertyHealthDetailPage() {
 
           <Card className="md:col-span-2 lg:col-span-2">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-medium">Current Health Focus</CardTitle>
+              <CardTitle className="text-base font-medium">Health Snapshot</CardTitle>
               <CardDescription>
                 {usingSnapshotInsights
-                  ? "Top actionable and in-progress factors from the latest weekly snapshot."
-                  : "Showing latest profile-driven health factors while weekly snapshot history is still building."}
+                  ? "At-a-glance signal mix from the latest weekly snapshot."
+                  : "At-a-glance signal mix from your current property profile."}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              {focusInsights.length === 0 ? (
+            <CardContent className="space-y-3">
+              {sortedInsights.length === 0 ? (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p>No factor details are available yet for this property.</p>
                   <p>
@@ -615,35 +617,43 @@ export default function PropertyHealthDetailPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {focusInsights.map((insight, idx) => (
-                    <div key={`${insight.factor || "insight"}-${idx}`} className="flex items-start justify-between gap-3 rounded-lg border border-black/10 px-3 py-2">
-                      <div>
-                        <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
-                          {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={
-                          getInsightImpact(insight.status) === "negative"
-                            ? "destructive"
-                            : getInsightImpact(insight.status) === "positive"
-                            ? "success"
-                            : "secondary"
-                        }
-                      >
-                        {getInsightChipLabel(insight.status)}
-                      </Badge>
+                <>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                      <p className="text-xs uppercase tracking-wide text-red-700">Needs Attention</p>
+                      <p className="text-lg font-semibold text-red-700">{negativeInsights.length}</p>
                     </div>
-                  ))}
-                </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                      <p className="text-xs uppercase tracking-wide text-amber-700">Monitor Closely</p>
+                      <p className="text-lg font-semibold text-amber-700">{neutralInsights.length}</p>
+                    </div>
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <p className="text-xs uppercase tracking-wide text-emerald-700">Healthy Signals</p>
+                      <p className="text-lg font-semibold text-emerald-700">{positiveInsights.length}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      Top drag:{" "}
+                      <span className="font-medium text-foreground">
+                        {topNegativeInsight?.factor || "No critical drag currently"}
+                      </span>
+                      {topNegativeInsight ? ` (${topNegativeInsight.status || "Review"})` : ""}
+                    </p>
+                    <p>
+                      Strongest signal:{" "}
+                      <span className="font-medium text-foreground">
+                        {topPositiveInsight?.factor || "No strong positive signal yet"}
+                      </span>
+                      {topPositiveInsight ? ` (${topPositiveInsight.status || "Review"})` : ""}
+                    </p>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
 
-          <Card className="md:col-span-3 lg:col-span-1 flex flex-col justify-between">
+          <Card className="md:col-span-3 lg:col-span-1">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">Report Actions</CardTitle>
             </CardHeader>
@@ -725,6 +735,63 @@ export default function PropertyHealthDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium">Current Health Focus</CardTitle>
+              <CardDescription>
+                {usingSnapshotInsights
+                  ? "Top actionable and in-progress factors from the latest weekly snapshot."
+                  : "Showing latest profile-driven health factors while weekly snapshot history is still building."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {focusInsights.length === 0 ? (
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>No factor details are available yet for this property.</p>
+                  <p>
+                    Add property profile fields and service records to unlock full health derivation:
+                    {" "}
+                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
+                    {" "}
+                    or
+                    {" "}
+                    <Link href={`/dashboard/documents?propertyId=${propertyId}`} className="underline">upload documents</Link>.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {focusInsights.map((insight, idx) => (
+                    <div key={`${insight.factor || "insight"}-${idx}`} className="flex items-start justify-between gap-3 rounded-lg border border-black/10 px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
+                          {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          getInsightImpact(insight.status) === "negative"
+                            ? "destructive"
+                            : getInsightImpact(insight.status) === "positive"
+                            ? "success"
+                            : "secondary"
+                        }
+                      >
+                        {getInsightChipLabel(insight.status)}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4">
+                <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}>
+                  <Button variant="outline" size="sm">View maintenance actions</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-3">
             <Card>
