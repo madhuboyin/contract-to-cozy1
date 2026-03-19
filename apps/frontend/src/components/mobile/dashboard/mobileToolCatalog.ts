@@ -268,7 +268,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-event-radar',
     name: 'Home Event Radar',
-    description: 'Track current signals affecting your home',
+    description: 'Events that may affect your property, matched to your specific home.',
     hrefSuffix: 'tools/home-event-radar',
     navTarget: 'tool:home-event-radar',
     icon: resolveToolIcon('home', 'home-event-radar'),
@@ -277,7 +277,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-risk-replay',
     name: 'Home Risk Replay',
-    description: 'See what your home has already been through',
+    description: 'Replay major events your home has already been through and understand impact over time.',
     hrefSuffix: 'tools/home-risk-replay?launchSurface=home_tools',
     navTarget: 'tool:home-risk-replay',
     icon: resolveToolIcon('home', 'home-risk-replay'),
@@ -286,7 +286,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'service-price-radar',
     name: 'Service Price Radar',
-    description: 'Know if a quote is fair for your home',
+    description: 'Compare local service pricing so you can judge whether a quote is fair for your home.',
     hrefSuffix: 'tools/service-price-radar?launchSurface=home_tools',
     navTarget: 'tool:service-price-radar',
     icon: resolveToolIcon('home', 'service-price-radar'),
@@ -295,7 +295,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'property-tax',
     name: 'Property Tax',
-    description: 'Forecast annual tax drag',
+    description: 'Forecast annual property tax burden and monitor drivers of future tax increases.',
     hrefSuffix: 'tools/property-tax',
     navTarget: 'tool:property-tax',
     icon: resolveToolIcon('home', 'property-tax'),
@@ -304,7 +304,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'cost-growth',
     name: 'Cost Growth',
-    description: 'Model ownership cost trend',
+    description: 'Model how ownership costs may grow across taxes, insurance, utilities, and upkeep.',
     hrefSuffix: 'tools/cost-growth',
     navTarget: 'tool:cost-growth',
     icon: resolveToolIcon('home', 'cost-growth'),
@@ -313,7 +313,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'insurance-trend',
     name: 'Insurance Trend',
-    description: 'Track premium pressure',
+    description: 'Track premium pressure and renewal risk based on your property profile and trends.',
     hrefSuffix: 'tools/insurance-trend',
     navTarget: 'tool:insurance-trend',
     icon: resolveToolIcon('home', 'insurance-trend'),
@@ -322,7 +322,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'negotiation-shield',
     name: 'Negotiation Shield',
-    description: 'Review quotes, claims, and inspection asks',
+    description: 'Build stronger responses for quotes, claims, and inspection requests with clear leverage points.',
     hrefSuffix: 'tools/negotiation-shield',
     navTarget: 'tool:negotiation-shield',
     icon: resolveToolIcon('home', 'negotiation-shield'),
@@ -331,7 +331,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'cost-explainer',
     name: 'Cost Explainer',
-    description: 'Understand what drives costs',
+    description: 'Break down what is driving your home costs and where increases are coming from.',
     hrefSuffix: 'tools/cost-explainer',
     navTarget: 'tool:cost-explainer',
     icon: resolveToolIcon('home', 'cost-explainer'),
@@ -340,7 +340,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'true-cost',
     name: 'True Cost',
-    description: 'View full ownership cost',
+    description: 'See your all-in ownership cost, including recurring spend, risk, and long-term obligations.',
     hrefSuffix: 'tools/true-cost',
     navTarget: 'tool:true-cost',
     icon: resolveToolIcon('home', 'true-cost'),
@@ -349,7 +349,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'sell-hold-rent',
     name: 'Sell / Hold / Rent',
-    description: 'Compare next-step scenarios',
+    description: 'Compare sell, hold, and rent paths with projected returns, costs, and tradeoffs.',
     hrefSuffix: 'tools/sell-hold-rent',
     navTarget: 'tool:sell-hold-rent',
     icon: resolveToolIcon('home', 'sell-hold-rent'),
@@ -358,7 +358,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'cost-volatility',
     name: 'Volatility',
-    description: 'Measure cost variability',
+    description: 'Measure cost variability and identify where future expense swings are most likely.',
     hrefSuffix: 'tools/cost-volatility',
     navTarget: 'tool:cost-volatility',
     icon: resolveToolIcon('home', 'cost-volatility'),
@@ -367,7 +367,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'break-even',
     name: 'Break-Even',
-    description: 'Estimate decision break-even',
+    description: 'Estimate when appreciation is projected to outweigh cumulative ownership costs.',
     hrefSuffix: 'tools/break-even',
     navTarget: 'tool:break-even',
     icon: resolveToolIcon('home', 'break-even'),
@@ -376,7 +376,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'capital-timeline',
     name: 'Home Capital Timeline',
-    description: 'Plan major capital events',
+    description: 'Plan major capital events, from replacements to upgrades, on a long-range timeline.',
     hrefSuffix: 'tools/capital-timeline',
     navTarget: 'tool:capital-timeline',
     icon: resolveToolIcon('home', 'capital-timeline'),
@@ -385,7 +385,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'seller-prep',
     name: 'Seller Prep',
-    description: 'Prep high-ROI improvements',
+    description: 'Prioritize pre-sale improvements based on expected ROI, effort, and buyer impact.',
     hrefSuffix: 'seller-prep',
     navTarget: 'seller-prep',
     icon: resolveToolIcon('home', 'seller-prep'),
@@ -394,7 +394,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-timeline',
     name: 'Home Timeline',
-    description: 'Track milestones over time',
+    description: 'Track key milestones, major work, and ownership events over your home timeline.',
     hrefSuffix: 'timeline',
     navTarget: 'home-timeline',
     icon: resolveToolIcon('home', 'home-timeline'),
@@ -403,7 +403,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'status-board',
     name: 'Status Board',
-    description: 'Monitor home status signals',
+    description: "See your home's current health, risk posture, and readiness status at a glance.",
     hrefSuffix: 'status-board',
     navTarget: 'status-board',
     icon: resolveToolIcon('home', 'status-board'),
@@ -412,7 +412,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-digital-will',
     name: 'Home Digital Will',
-    description: 'Store critical home knowledge for trusted parties',
+    description: 'Store trusted contacts, access details, and critical home instructions for handoff or emergencies.',
     hrefSuffix: 'tools/home-digital-will',
     navTarget: 'tool:home-digital-will',
     icon: resolveToolIcon('home', 'home-digital-will'),
@@ -421,7 +421,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'hidden-asset-finder',
     name: 'Hidden Asset Finder',
-    description: 'Find potential rebates, credits, and benefits for your home',
+    description: 'Identify likely rebates, credits, grants, and benefits tied to your property and systems.',
     hrefSuffix: 'tools/hidden-asset-finder',
     navTarget: 'tool:hidden-asset-finder',
     icon: resolveToolIcon('home', 'hidden-asset-finder'),
@@ -431,7 +431,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-digital-twin',
     name: 'Home Digital Twin',
-    description: 'A living model of your home — systems, age, risk, and what-if scenarios',
+    description: 'Use a living digital model of your home to evaluate systems, risk, and what-if scenarios.',
     hrefSuffix: 'tools/home-digital-twin',
     navTarget: 'tool:home-digital-twin',
     icon: resolveToolIcon('home', 'home-digital-twin'),
@@ -441,7 +441,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'neighborhood-change-radar',
     name: 'Neighborhood Change Radar',
-    description: 'Track major external changes near your home and understand how they may affect value, demand, and livability.',
+    description: 'Track major nearby changes and understand potential effects on value, demand, and livability.',
     hrefSuffix: 'tools/neighborhood-change-radar',
     navTarget: 'tool:neighborhood-change-radar',
     icon: resolveToolIcon('home', 'neighborhood-change-radar'),
@@ -451,7 +451,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-habit-coach',
     name: 'Home Habit Coach',
-    description: 'Seasonal care routines and safety checks for your home',
+    description: "Get seasonal care routines and safety habits tailored to your home's needs.",
     hrefSuffix: 'tools/home-habit-coach',
     navTarget: 'tool:home-habit-coach',
     icon: resolveToolIcon('home', 'home-habit-coach'),
@@ -461,7 +461,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-renovation-risk-advisor',
     name: 'Renovation Risk Advisor',
-    description: 'Check permit rules, tax impact, and contractor requirements before a major renovation.',
+    description: 'Check permits, tax impact, and contractor requirements before committing to major renovations.',
     hrefSuffix: 'tools/home-renovation-risk-advisor',
     navTarget: 'tool:home-renovation-risk-advisor',
     icon: resolveToolIcon('home', 'home-renovation-risk-advisor'),
@@ -470,7 +470,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'mortgage-refinance-radar',
     name: 'Mortgage Refinance Radar',
-    description: 'Monitor the market and know when refinancing makes financial sense.',
+    description: 'Monitor refinance signals and know when refinancing is more likely to make financial sense.',
     hrefSuffix: 'tools/mortgage-refinance-radar',
     navTarget: 'tool:mortgage-refinance-radar',
     icon: resolveToolIcon('home', 'mortgage-refinance-radar'),
@@ -480,7 +480,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
   {
     key: 'home-gazette',
     name: 'Home Gazette',
-    description: 'Your weekly home intelligence briefing — risks, maintenance, finances, and more.',
+    description: 'Your weekly home intelligence briefing covering risk, maintenance priorities, and financial signals.',
     hrefSuffix: 'tools/home-gazette',
     navTarget: 'tool:home-gazette',
     icon: resolveToolIcon('home', 'home-gazette'),

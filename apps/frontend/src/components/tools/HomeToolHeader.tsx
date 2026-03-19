@@ -53,7 +53,7 @@ export default function HomeToolHeader({
   const resolvedMonitoringAddress =
     monitoringAddress?.trim() ||
     formatPropertyAddress(propertyQuery.data) ||
-    (propertyId ? 'Current property' : 'Select a property');
+    (propertyId ? 'Current address' : 'Select an address');
 
   return (
     <section className={cn('hidden space-y-5 lg:block', className)}>
@@ -73,7 +73,7 @@ export default function HomeToolHeader({
               {description ?? definition.description}
             </p>
             <p className="mb-0 mt-3 text-[1.03rem] text-[hsl(var(--mobile-brand-strong))]">
-              Monitoring: {resolvedMonitoringAddress}
+              Address: {resolvedMonitoringAddress}
             </p>
           </div>
         </div>
