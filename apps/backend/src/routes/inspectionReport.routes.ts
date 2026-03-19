@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { inspectionAnalysisService } from '../services/inspectionAnalysis.service';
 import { prisma } from '../config/database';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 
 const router = Router();
 
@@ -115,6 +116,39 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       req.file.originalname,
       property
     );
+
+    try {
+      const report = await inspectionAnalysisService.getInspectionReport(reportId, userId);
+      const shouldEmitGuidanceSignal =
+        Number(report.criticalIssues ?? 0) > 0 ||
+        Number(report.highPriorityIssues ?? 0) > 0 ||
+        Number(report.totalRepairCost ?? 0) > 0;
+
+      if (shouldEmitGuidanceSignal) {
+        await guidanceJourneyService.recordToolCompletion({
+          propertyId,
+          actorUserId: userId,
+          signalIntentFamily: 'inspection_followup_needed',
+          issueDomain: 'MAINTENANCE',
+          sourceToolKey: 'inspection-report',
+          sourceEntityType: 'INSPECTION_REPORT',
+          sourceEntityId: reportId,
+          stepKey: 'assess_urgency',
+          status: 'COMPLETED',
+          producedData: {
+            reportId,
+            overallScore: report.overallScore,
+            overallCondition: report.overallCondition,
+            criticalIssues: report.criticalIssues,
+            highPriorityIssues: report.highPriorityIssues,
+            totalRepairCost: Number(report.totalRepairCost ?? 0),
+            suggestedCredit: report.suggestedCredit ? Number(report.suggestedCredit) : null,
+          },
+        });
+      }
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] inspection report hook failed:', guidanceError);
+    }
 
     res.json({
       success: true,

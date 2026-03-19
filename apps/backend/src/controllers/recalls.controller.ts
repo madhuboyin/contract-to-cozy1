@@ -8,6 +8,7 @@ import {
   resolveRecallMatch,
 } from '../services/recalls.service';
 import { RecallResolutionType } from '@prisma/client';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 
 function isNotFoundError(err: any) {
   const msg = String(err?.message || '').toLowerCase();
@@ -30,6 +31,30 @@ export async function confirmMatch(req: Request, res: Response) {
 
   try {
     const row = await confirmRecallMatch(propertyId, matchId);
+
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId,
+        signalIntentFamily: 'recall_detected',
+        issueDomain: 'SAFETY',
+        inventoryItemId: row.inventoryItemId ?? null,
+        homeAssetId: row.homeAssetId ?? null,
+        sourceToolKey: 'recalls',
+        sourceEntityType: 'RECALL_MATCH',
+        sourceEntityId: row.id,
+        stepKey: 'safety_alert',
+        status: 'COMPLETED',
+        producedData: {
+          status: row.status,
+          confidencePct: row.confidencePct,
+          method: row.method,
+          recallId: row.recallId,
+        },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] recall confirm hook failed:', guidanceError);
+    }
+
     return res.json(row);
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
@@ -43,6 +68,30 @@ export async function dismissMatch(req: Request, res: Response) {
 
   try {
     const row = await dismissRecallMatch(propertyId, matchId);
+
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId,
+        signalIntentFamily: 'recall_detected',
+        issueDomain: 'SAFETY',
+        inventoryItemId: row.inventoryItemId ?? null,
+        homeAssetId: row.homeAssetId ?? null,
+        sourceToolKey: 'recalls',
+        sourceEntityType: 'RECALL_MATCH',
+        sourceEntityId: row.id,
+        stepKey: 'recall_resolution',
+        status: 'SKIPPED',
+        reasonCode: 'USER_DISMISSED',
+        reasonMessage: 'User dismissed recall match.',
+        producedData: {
+          status: row.status,
+          recallId: row.recallId,
+        },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] recall dismiss hook failed:', guidanceError);
+    }
+
     return res.json(row);
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
@@ -70,6 +119,30 @@ export async function resolveMatch(req: Request, res: Response) {
       resolutionType,
       resolutionNotes: resolutionNotes || null,
     });
+
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId,
+        signalIntentFamily: 'recall_detected',
+        issueDomain: 'SAFETY',
+        inventoryItemId: row.inventoryItemId ?? null,
+        homeAssetId: row.homeAssetId ?? null,
+        sourceToolKey: 'recalls',
+        sourceEntityType: 'RECALL_MATCH',
+        sourceEntityId: row.id,
+        stepKey: 'recall_resolution',
+        status: 'COMPLETED',
+        producedData: {
+          status: row.status,
+          resolutionType: row.resolutionType,
+          resolutionNotes: row.resolutionNotes,
+          resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
+          recallId: row.recallId,
+        },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] recall resolve hook failed:', guidanceError);
+    }
 
     return res.json(row);
   } catch (err: any) {

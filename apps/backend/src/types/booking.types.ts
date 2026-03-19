@@ -30,6 +30,8 @@ export const createBookingSchema = z.object({
   insightContext: z.string().max(500).optional(),    // e.g., "Property age: 35 years"
   maintenancePredictionId: z.string().uuid('Invalid maintenance prediction ID').optional(),
   inventoryItemId: z.string().uuid('Invalid inventory item ID').optional(),
+  guidanceJourneyId: z.string().uuid('Invalid guidance journey ID').optional(),
+  guidanceEnforceGuard: z.boolean().optional(),
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;

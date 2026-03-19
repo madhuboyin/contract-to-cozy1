@@ -16,6 +16,8 @@ import {
 } from '../types/booking.types';
 import { ZodError } from 'zod';
 import { AuthRequest } from '../types/auth.types';
+import { guidanceBookingGuardService } from '../services/guidanceEngine/guidanceBookingGuard.service';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 
 export class BookingController {
   /**
@@ -42,7 +44,47 @@ export class BookingController {
       // Validate input
       const input = createBookingSchema.parse(req.body) as CreateBookingInput;
 
-      const booking = await BookingService.createBooking(userId, input);
+      const {
+        guidanceJourneyId,
+        guidanceEnforceGuard,
+        ...bookingInput
+      } = input as CreateBookingInput & {
+        guidanceJourneyId?: string;
+        guidanceEnforceGuard?: boolean;
+      };
+
+      if (guidanceEnforceGuard && guidanceJourneyId) {
+        await guidanceBookingGuardService.assertCanExecute({
+          propertyId: bookingInput.propertyId,
+          journeyId: guidanceJourneyId,
+          inventoryItemId: bookingInput.inventoryItemId ?? null,
+          targetAction: 'BOOKING',
+        });
+      }
+
+      const booking = await BookingService.createBooking(userId, bookingInput);
+
+      if (guidanceJourneyId) {
+        try {
+          await guidanceJourneyService.recordToolCompletion({
+            propertyId: bookingInput.propertyId,
+            actorUserId: userId,
+            journeyId: guidanceJourneyId,
+            sourceToolKey: 'booking',
+            stepKey: 'book_service',
+            status: 'COMPLETED',
+            inventoryItemId: bookingInput.inventoryItemId ?? null,
+            producedData: {
+              bookingId: booking.id,
+              status: booking.status,
+              scheduledDate: booking.scheduledDate ? booking.scheduledDate.toISOString() : null,
+              category: booking.category,
+            },
+          });
+        } catch (guidanceError) {
+          console.warn('[GUIDANCE] booking completion hook failed:', guidanceError);
+        }
+      }
 
       res.status(201).json({
         success: true,
@@ -57,9 +99,12 @@ export class BookingController {
           errors: error.issues,
         });
       } else if (error instanceof Error) {
-        res.status(400).json({
+        const statusCode = (error as any)?.statusCode;
+        const details = (error as any)?.details;
+        res.status(typeof statusCode === 'number' ? statusCode : 400).json({
           success: false,
           message: error.message,
+          ...(details ? { details } : {}),
         });
       } else {
         next(error);

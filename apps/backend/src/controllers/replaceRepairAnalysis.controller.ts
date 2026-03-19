@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { ReplaceRepairOverrides, ReplaceRepairService } from '../services/replaceRepairAnalysis.service';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 
 const service = new ReplaceRepairService();
 
@@ -37,6 +38,34 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
 
     const overrides = (req.body?.overrides ?? {}) as ReplaceRepairOverrides;
     const analysis = await service.runItemAnalysis(propertyId, itemId, userId, overrides);
+
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId,
+        actorUserId: userId,
+        inventoryItemId: itemId,
+        signalIntentFamily: 'lifecycle_end_or_past_life',
+        issueDomain: 'ASSET_LIFECYCLE',
+        sourceToolKey: 'replace-repair',
+        sourceEntityType: 'REPLACE_REPAIR_ANALYSIS',
+        sourceEntityId: analysis.id,
+        stepKey: 'repair_replace_decision',
+        status: 'COMPLETED',
+        producedData: {
+          verdict: analysis.verdict,
+          confidence: analysis.confidence,
+          impactLevel: analysis.impactLevel,
+          breakEvenMonths: analysis.breakEvenMonths,
+          estimatedNextRepairCostCents: analysis.estimatedNextRepairCostCents,
+          estimatedReplacementCostCents: analysis.estimatedReplacementCostCents,
+          expectedAnnualRepairRiskCents: analysis.expectedAnnualRepairRiskCents,
+          nextSteps: analysis.nextSteps ?? [],
+        },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] replace/repair analysis hook failed:', guidanceError);
+    }
+
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
     console.error('Error running replace/repair analysis:', error);
