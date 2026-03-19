@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -46,8 +47,9 @@ export default function ProviderDetailPage() {
   const providerId = params.id as string;
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
 
-  const propertyId = searchParams.get('propertyId');
+  const propertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || null;
   const insightFactor = searchParams.get('insightFactor');
   const category = searchParams.get('category');
   const predictionId = searchParams.get('predictionId');

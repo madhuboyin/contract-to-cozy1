@@ -8,6 +8,7 @@ import { TrendingUp, Loader2, ArrowLeft } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
+import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Property } from '@/types';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';  
@@ -19,19 +20,12 @@ function AppreciationContent() {
   const propertyIdFromUrl = searchParams.get('propertyId');
   
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState(propertyIdFromUrl || '');
+  const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadProperties();
   }, []);
-
-  useEffect(() => {
-    if (propertyIdFromUrl && !selectedPropertyId) {
-      setSelectedPropertyId(propertyIdFromUrl);
-    }
-  }, [propertyIdFromUrl]);
-
   const loadProperties = async () => {
     try {
       const response = await api.getProperties();

@@ -8,6 +8,7 @@ import { Scale, Loader2, ArrowLeft } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
+import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Property } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +24,7 @@ function TaxAppealContent() {
   const propertyIdFromUrl = searchParams.get('propertyId');
   
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState(propertyIdFromUrl || '');
+  const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [loading, setLoading] = useState(true);
 
   const loadProperties = useCallback(async () => {
@@ -42,18 +43,11 @@ function TaxAppealContent() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setSelectedPropertyId]);
 
   useEffect(() => {
     void loadProperties();
   }, [loadProperties]);
-
-  useEffect(() => {
-    if (propertyIdFromUrl && !selectedPropertyId) {
-      setSelectedPropertyId(propertyIdFromUrl);
-    }
-  }, [propertyIdFromUrl, selectedPropertyId]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">

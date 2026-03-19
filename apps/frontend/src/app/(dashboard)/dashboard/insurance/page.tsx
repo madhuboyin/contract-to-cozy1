@@ -50,6 +50,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 // Placeholder for "None" option, necessary to avoid Radix UI error on value=""
 const SELECT_NONE_VALUE = '__NONE__';
@@ -593,10 +594,12 @@ export default function InsurancePage() {
   // NEW: Navigation Hooks
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
   const createPrefill = useMemo(() => {
     const returnTo = sanitizeReturnTo(searchParams.get('returnTo'));
     const propertyId =
       searchParams.get('propertyId') ||
+      dashboardSelectedPropertyId ||
       propertyIdFromDashboardPath(returnTo) ||
       undefined;
     const from = searchParams.get('from');
@@ -604,7 +607,7 @@ export default function InsurancePage() {
 
     if (!propertyId && !coverageType) return undefined;
     return { propertyId, coverageType };
-  }, [searchParams]);
+  }, [dashboardSelectedPropertyId, searchParams]);
   const [createModalPrefill, setCreateModalPrefill] = useState<PolicyFormProps['prefill']>(undefined);
   const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
   

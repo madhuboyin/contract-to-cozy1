@@ -3,10 +3,12 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import EmergencyTroubleshooter from '@/components/EmergencyTroubleshooter';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 function EmergencyContent() {
   const searchParams = useSearchParams();
-  const propertyId = searchParams.get('propertyId') || undefined;
+  const { selectedPropertyId } = usePropertyContext();
+  const propertyId = searchParams.get('propertyId') || selectedPropertyId || undefined;
 
   return <EmergencyTroubleshooter propertyId={propertyId} />;
 }

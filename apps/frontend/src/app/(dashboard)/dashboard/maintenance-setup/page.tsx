@@ -23,6 +23,7 @@ import { toast } from '@/components/ui/use-toast';
 import { MaintenanceConfigModal } from './MaintenanceConfigModal';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
   EmptyStateCard,
   MobileCard,
@@ -193,6 +194,8 @@ function DesktopTemplateRow({
 export default function MaintenanceSetupPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { selectedPropertyId: dashboardSelectedPropertyId, setSelectedPropertyId: setDashboardSelectedPropertyId } =
+    usePropertyContext();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MaintenanceTaskTemplate | null>(null);
@@ -218,21 +221,21 @@ export default function MaintenanceSetupPage() {
   );
   const searchParams = useSearchParams();
   const urlPropertyId = searchParams.get('propertyId');
+  const candidatePropertyId = urlPropertyId || dashboardSelectedPropertyId;
   
   // 3. Set default property ID (Primary or first) on load
   React.useEffect(() => {
     if (!selectedPropertyId && properties.length > 0) {
-      // 🔧 FIX: Check URL parameter first, then fallback to primary/first
-      if (urlPropertyId && properties.some(p => p.id === urlPropertyId)) {
-        // Use property from URL if valid
-        setSelectedPropertyId(urlPropertyId);
+      if (candidatePropertyId && properties.some((property) => property.id === candidatePropertyId)) {
+        setSelectedPropertyId(candidatePropertyId);
+        setDashboardSelectedPropertyId(candidatePropertyId);
       } else {
-        // Otherwise use primary or first property
-        const defaultProp = properties.find(p => p.isPrimary) || properties[0];
+        const defaultProp = properties.find((property) => property.isPrimary) || properties[0];
         setSelectedPropertyId(defaultProp.id);
+        setDashboardSelectedPropertyId(defaultProp.id);
       }
     }
-  }, [properties, selectedPropertyId, urlPropertyId]); // 🔧 Add urlPropertyId dependency
+  }, [candidatePropertyId, properties, selectedPropertyId, setDashboardSelectedPropertyId]);
 
   // --- End Property and Selection State ---
   

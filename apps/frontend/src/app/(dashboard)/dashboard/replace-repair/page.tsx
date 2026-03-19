@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Property, InventoryItem } from '@/types';
 import humanizeActionType from '@/lib/utils/humanize';
 import { listInventoryItems } from '../inventory/inventoryApi';
@@ -24,7 +25,7 @@ function ReplaceRepairContent() {
   const propertyIdFromUrl = searchParams.get('propertyId');
 
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState(propertyIdFromUrl || '');
+  const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState('');
   const [loadingProperties, setLoadingProperties] = useState(true);
@@ -56,13 +57,6 @@ function ReplaceRepairContent() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (propertyIdFromUrl && !selectedPropertyId) {
-      setSelectedPropertyId(propertyIdFromUrl);
-    }
-  }, [propertyIdFromUrl, selectedPropertyId]);
-
   useEffect(() => {
     let cancelled = false;
     const loadItems = async () => {

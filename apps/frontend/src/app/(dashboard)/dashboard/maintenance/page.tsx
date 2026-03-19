@@ -44,6 +44,7 @@ import { ArrowLeft } from 'lucide-react';
 import humanizeActionType from '@/lib/utils/humanize';
 import { PRIORITY_CHIP, PriorityLevel } from '@/lib/utils/chipTokens';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 
 import {
   Dialog,
@@ -135,8 +136,9 @@ export default function MaintenancePage() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
 
-  const selectedPropertyId = searchParams.get('propertyId');
+  const selectedPropertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
   const taskIdFromUrl = searchParams.get('taskId');
   const priority = searchParams.get('priority') === 'true';
   const from = searchParams.get('from');

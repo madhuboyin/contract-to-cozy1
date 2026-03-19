@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Property } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -26,7 +27,7 @@ function CoverageIntelligenceContent() {
   const propertyIdFromUrl = searchParams.get('propertyId');
 
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState(propertyIdFromUrl || '');
+  const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,13 +53,6 @@ function CoverageIntelligenceContent() {
     loadProperties();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (propertyIdFromUrl && !selectedPropertyId) {
-      setSelectedPropertyId(propertyIdFromUrl);
-    }
-  }, [propertyIdFromUrl, selectedPropertyId]);
-
   const renderPropertySelector = () => (
     <div>
       <Label className="mb-2 block text-sm font-medium text-gray-700">Select Property</Label>

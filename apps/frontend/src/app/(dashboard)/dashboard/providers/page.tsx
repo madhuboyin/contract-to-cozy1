@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -281,10 +282,11 @@ const ProviderList = ({
 export default function ProvidersPage() {
   const { user, loading } = useAuth();
   const searchParams = useSearchParams();
+  const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
 
   const defaultCategory = normalizeProviderCategoryForSearch(searchParams.get('category') || searchParams.get('service'));
   const insightContext = searchParams.get('insightFactor') || undefined;
-  const targetPropertyId = searchParams.get('propertyId') || undefined;
+  const targetPropertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
   const predictionId = searchParams.get('predictionId') || undefined;
   const inventoryItemId = searchParams.get('itemId') || undefined;
   const fromSource = searchParams.get('from') || undefined;

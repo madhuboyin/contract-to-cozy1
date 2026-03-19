@@ -8,6 +8,7 @@ import { ArrowLeft, Cloud, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api/client';
+import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Button } from '@/components/ui/button';
 import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
 
@@ -17,19 +18,12 @@ function ClimateContent() {
   const propertyIdFromUrl = searchParams.get('propertyId');
   
   const [properties, setProperties] = useState<any[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState(propertyIdFromUrl || '');
+  const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadProperties();
   }, []);
-
-  useEffect(() => {
-    if (propertyIdFromUrl && !selectedPropertyId) {
-      setSelectedPropertyId(propertyIdFromUrl);
-    }
-  }, [propertyIdFromUrl]);
-
   const loadProperties = async () => {
     try {
       const response = await api.getProperties();

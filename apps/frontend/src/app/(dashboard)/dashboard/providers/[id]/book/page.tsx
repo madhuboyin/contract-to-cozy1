@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Calendar, Clock3, Loader2 } from 'lucide-react';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import DateField from '@/components/shared/DateField';
+import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -49,7 +50,7 @@ export default function BookProviderPage() {
   const [error, setError] = useState<string>('');
 
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [selectedPropertyId, setSelectedPropertyId] = useState(preSelectedPropertyId || '');
+  const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(preSelectedPropertyId);
   const [scheduledDate, setScheduledDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -101,7 +102,10 @@ export default function BookProviderPage() {
       if (propertiesRes.success && propertiesRes.data.properties.length > 0) {
         setProperties(propertiesRes.data.properties);
 
-        if (!preSelectedPropertyId) {
+        const hasValidSelection =
+          !!selectedPropertyId && propertiesRes.data.properties.some((property) => property.id === selectedPropertyId);
+
+        if (!hasValidSelection) {
           const primaryProperty = propertiesRes.data.properties.find((p) => p.isPrimary);
           setSelectedPropertyId(primaryProperty?.id || propertiesRes.data.properties[0].id);
         }

@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FileText, Plus, Loader2, Trash2, Edit, Upload, AlertCircle, ArrowLeft, BadgeCheck, CalendarDays, ChevronDown, MoreHorizontal, Sparkles, ShieldCheck, Save, X } from 'lucide-react';
 import { differenceInCalendarDays, format, isPast, isValid, parseISO } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
 import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -834,11 +835,13 @@ export default function WarrantiesPage() {
   // NEW: Navigation Hooks
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
   const safeReturnTo = useMemo(() => sanitizeReturnTo(searchParams.get('returnTo')), [searchParams]);
   const createPrefill = useMemo(() => {
     const returnTo = sanitizeReturnTo(searchParams.get('returnTo'));
     const propertyId =
       searchParams.get('propertyId') ||
+      dashboardSelectedPropertyId ||
       propertyIdFromDashboardPath(returnTo) ||
       undefined;
     const homeAssetId =
@@ -867,7 +870,7 @@ export default function WarrantiesPage() {
       homeAssetId,
       category,
     };
-  }, [searchParams]);
+  }, [dashboardSelectedPropertyId, searchParams]);
   const [createModalPrefill, setCreateModalPrefill] = useState<WarrantyFormProps['prefill']>(undefined);
   const [openedFromSetup, setOpenedFromSetup] = useState(false); // State to track if the modal opened automatically
 

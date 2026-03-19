@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Document, DocumentType, Property, Warranty, InsurancePolicy, DocumentUploadInput } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
   ActionPriorityRow,
   EmptyStateCard,
@@ -53,13 +54,16 @@ const AISmartUpload = ({ properties, onUploadSuccess, onClose }: AISmartUploadPr
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const propertyId = searchParams.get('propertyId');
+  const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
+  const propertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
 
   useEffect(() => {
     if (properties.length > 0 && !selectedPropertyId) {
-      setSelectedPropertyId(properties[0].id);
+      const defaultPropertyId =
+        propertyId && properties.some((property) => property.id === propertyId) ? propertyId : properties[0].id;
+      setSelectedPropertyId(defaultPropertyId);
     }
-  }, [properties, selectedPropertyId]);
+  }, [properties, propertyId, selectedPropertyId]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -512,14 +516,16 @@ export default function DocumentsPage() {
   const router = useRouter();
   // Get propertyId from URL parameters
   const searchParams = useSearchParams();
+  const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
   const propertyIdFromUrl = searchParams.get('propertyId');
+  const activePropertyId = propertyIdFromUrl || dashboardSelectedPropertyId || undefined;
 
   const fetchDependencies = useCallback(async () => {
     setIsLoading(true);
     
     // FIXED: Use correct API method names
     const [documentsRes, propertiesRes, warrantiesRes, policiesRes] = await Promise.all([
-        api.listDocuments(propertyIdFromUrl || undefined),
+        api.listDocuments(activePropertyId),
         api.getProperties(),
         api.listWarranties(),
         api.listInsurancePolicies(),
@@ -538,7 +544,7 @@ export default function DocumentsPage() {
     if (policiesRes.success) setPolicies(policiesRes.data.policies || []);
 
     setIsLoading(false);
-  }, [toast,propertyIdFromUrl]);
+  }, [activePropertyId, toast]);
 
   useEffect(() => {
     fetchDependencies();
