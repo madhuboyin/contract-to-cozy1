@@ -12,7 +12,8 @@
     "test:unit": "node --test $(find tests/unit -type f -name '*.test.js')",
     "test:integration": "node --test $(find tests/integration -type f -name '*.test.js')",
     "test:e2e": "node --test $(find tests/e2e -type f -name '*.test.js')",
-    "test:watch": "node --test --watch $(find tests -type f -name '*.test.js')"
+    "test:watch": "node --test --watch $(find tests -type f -name '*.test.js')",
+    "smoke:health-score-ui": "node scripts/healthScoreUiSmokeCheck.js"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

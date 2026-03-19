@@ -415,7 +415,7 @@ async function capturePropertyScoreSnapshots(
       computedAt: new Date(),
       snapshotJson: {
         requiredActions: health.insights.filter((insight: { status: string }) =>
-          ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'].includes(insight.status)
+          ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'].includes(insight.status)
         ).length,
         insights: health.insights.slice(0, 8),
       },

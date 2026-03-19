@@ -2503,7 +2503,7 @@ export class HomeScoreReportService {
     const health = calculateHealthScore(property, documentCount, activeBookings as never);
     const missingCount = health.insights.filter((insight) => insight.status === 'Missing Data').length;
     const highPriorityCount = health.insights.filter((insight) =>
-      ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data'].includes(insight.status)
+      ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'].includes(insight.status)
     ).length;
 
     return {

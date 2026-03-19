@@ -26,7 +26,11 @@ import {
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
-const HIGH_PRIORITY_STATUSES = ["Needs Attention", "Needs Review", "Needs Inspection", "Missing Data"];
+const REQUIRED_ACTION_STATUSES = ["Needs Attention", "Needs Review", "Needs Inspection", "Missing Data", "Needs Warranty"];
+const IN_PROGRESS_STATUSES = ["Action Pending"];
+const WATCH_STATUSES = ["Aging", "Incomplete", "Partial", "Average", "Standard"];
+const POSITIVE_STATUSES = ["Excellent", "Good", "Modern", "Optimal", "Complete", "Low Density"];
+const INSIGHT_IMPACT_ORDER = { negative: 0, neutral: 1, positive: 2 } as const;
 
 type HealthInsight = {
   factor?: string;
@@ -34,6 +38,23 @@ type HealthInsight = {
   score?: number;
   details?: string[];
 };
+
+type InsightImpact = "positive" | "negative" | "neutral";
+
+type PropertyHealthScoreSnapshot = {
+  totalScore?: unknown;
+  baseScore?: unknown;
+  unlockedScore?: unknown;
+  maxPotentialScore?: unknown;
+  maxBaseScore?: unknown;
+  maxExtraScore?: unknown;
+  insights?: unknown[];
+};
+
+type PropertyWithHealth = {
+  name?: string | null;
+  healthScore?: PropertyHealthScoreSnapshot;
+} | null;
 
 const getHealthDetails = (score: number) => {
   if (score >= 85) return { level: "Excellent", color: "text-green-600", progressColor: "bg-green-500" };
@@ -58,10 +79,39 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-function getInsights(point: PropertyScoreTrendPoint | null | undefined): HealthInsight[] {
+function clampScore(value: number): number {
+  return Math.min(100, Math.max(0, value));
+}
+
+function normalizeInsight(item: unknown): HealthInsight | null {
+  if (!item || typeof item !== "object") return null;
+  const raw = item as Record<string, unknown>;
+  const factor = typeof raw.factor === "string" ? raw.factor : "Health insight";
+  const status = typeof raw.status === "string" ? raw.status : "Status unavailable";
+  const score = asNumber(raw.score) ?? 0;
+  const rawDetails = Array.isArray(raw.details) ? raw.details : [];
+  const details = rawDetails
+    .map((detail) => (typeof detail === "string" ? detail.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 6);
+  return {
+    factor,
+    status,
+    score,
+    details: details.length ? details : undefined,
+  };
+}
+
+function getSnapshotInsights(point: PropertyScoreTrendPoint | null | undefined): HealthInsight[] {
   const raw = point?.snapshot?.insights;
   if (!Array.isArray(raw)) return [];
-  return raw.filter((item): item is HealthInsight => typeof item === "object" && item !== null);
+  return raw.map(normalizeInsight).filter((item): item is HealthInsight => item !== null);
+}
+
+function getPropertyInsights(property: PropertyWithHealth): HealthInsight[] {
+  const raw = property?.healthScore?.insights;
+  if (!Array.isArray(raw)) return [];
+  return raw.map(normalizeInsight).filter((item): item is HealthInsight => item !== null);
 }
 
 function getRequiredActions(point: PropertyScoreTrendPoint | null | undefined): number | null {
@@ -69,16 +119,113 @@ function getRequiredActions(point: PropertyScoreTrendPoint | null | undefined): 
   return asNumber(raw);
 }
 
-function buildHealthChangeItems(series: PropertyScoreSeries | undefined) {
+function getInsightImpact(statusValue: string | undefined): InsightImpact {
+  const status = String(statusValue || "");
+  if (REQUIRED_ACTION_STATUSES.includes(status)) return "negative";
+  if (IN_PROGRESS_STATUSES.includes(status) || WATCH_STATUSES.includes(status)) return "neutral";
+  if (POSITIVE_STATUSES.includes(status)) return "positive";
+  return "neutral";
+}
+
+function getInsightTone(statusValue: string | undefined): "good" | "info" | "elevated" | "danger" {
+  const status = String(statusValue || "");
+  if (REQUIRED_ACTION_STATUSES.includes(status)) return "danger";
+  if (IN_PROGRESS_STATUSES.includes(status)) return "info";
+  if (WATCH_STATUSES.includes(status)) return "elevated";
+  if (POSITIVE_STATUSES.includes(status)) return "good";
+  return "info";
+}
+
+function getInsightChipLabel(statusValue: string | undefined): string {
+  const status = String(statusValue || "");
+  if (REQUIRED_ACTION_STATUSES.includes(status)) return "Needs attention";
+  if (IN_PROGRESS_STATUSES.includes(status)) return "Work in progress";
+  if (WATCH_STATUSES.includes(status)) return "Watchlist";
+  if (POSITIVE_STATUSES.includes(status)) return "Healthy signal";
+  return "Review signal";
+}
+
+function getInsightDetailsSummary(insight: HealthInsight): string | null {
+  if (!insight.details?.length) return null;
+  const visible = insight.details.slice(0, 2);
+  const remaining = insight.details.length - visible.length;
+  return remaining > 0 ? `${visible.join(" • ")} • +${remaining} more` : visible.join(" • ");
+}
+
+function sortInsightsForDisplay(insights: HealthInsight[]): HealthInsight[] {
+  return [...insights].sort((a, b) => {
+    const impactA = INSIGHT_IMPACT_ORDER[getInsightImpact(a.status)];
+    const impactB = INSIGHT_IMPACT_ORDER[getInsightImpact(b.status)];
+    if (impactA !== impactB) return impactA - impactB;
+    const scoreA = asNumber(a.score) ?? 0;
+    const scoreB = asNumber(b.score) ?? 0;
+    if (impactA === INSIGHT_IMPACT_ORDER.positive) return scoreB - scoreA;
+    return scoreA - scoreB;
+  });
+}
+
+const LEDGER_GROUPS: Array<{
+  key: "negative" | "neutral" | "positive";
+  title: string;
+  tone: "good" | "elevated" | "danger";
+}> = [
+  { key: "negative", title: "Needs Attention", tone: "danger" as const },
+  { key: "neutral", title: "Monitor Closely", tone: "elevated" as const },
+  { key: "positive", title: "Healthy Signals", tone: "good" as const },
+];
+
+function getLedgerInsights(
+  groupKey: "negative" | "neutral" | "positive",
+  negativeInsights: HealthInsight[],
+  neutralInsights: HealthInsight[],
+  positiveInsights: HealthInsight[]
+) {
+  if (groupKey === "negative") return negativeInsights;
+  if (groupKey === "neutral") return neutralInsights;
+  return positiveInsights;
+}
+
+function buildHealthChangeItems(series: PropertyScoreSeries | undefined, latestInsights: HealthInsight[]) {
   const changes: Array<{ title: string; detail: string; impact: "positive" | "negative" | "neutral" }> = [];
+
   if (!series?.latest) {
-    return [
-      {
-        title: "Waiting for history",
-        detail: "Weekly snapshots are still being collected for this property.",
-        impact: "neutral" as const,
-      },
-    ];
+    const requiredCount = latestInsights.filter((insight) => REQUIRED_ACTION_STATUSES.includes(String(insight.status || ""))).length;
+    const inProgressCount = latestInsights.filter((insight) => IN_PROGRESS_STATUSES.includes(String(insight.status || ""))).length;
+    const missingDataCount = latestInsights.filter((insight) => String(insight.status || "") === "Missing Data").length;
+
+    if (requiredCount > 0) {
+      changes.push({
+        title: "Current required actions",
+        detail: `${requiredCount} factor${requiredCount === 1 ? "" : "s"} currently need action to improve health score.`,
+        impact: "negative",
+      });
+    }
+
+    if (inProgressCount > 0) {
+      changes.push({
+        title: "Actions already in progress",
+        detail: `${inProgressCount} factor${inProgressCount === 1 ? "" : "s"} already have active work underway.`,
+        impact: "positive",
+      });
+    }
+
+    if (missingDataCount > 0) {
+      changes.push({
+        title: "Missing profile data",
+        detail: `${missingDataCount} factor${missingDataCount === 1 ? "" : "s"} need profile details before they can be fully scored.`,
+        impact: "negative",
+      });
+    }
+
+    if (changes.length === 0) {
+      changes.push({
+        title: "Waiting for weekly history",
+        detail: "Weekly snapshots are still being collected. Current factors below show exactly how this score is derived today.",
+        impact: "neutral",
+      });
+    }
+
+    return changes.slice(0, 4);
   }
 
   const delta = series.deltaFromPreviousWeek;
@@ -111,11 +258,11 @@ function buildHealthChangeItems(series: PropertyScoreSeries | undefined) {
     });
   }
 
-  const latestPriorityCount = getInsights(series.latest).filter((insight) =>
-    HIGH_PRIORITY_STATUSES.includes(String(insight.status || ""))
+  const latestPriorityCount = getSnapshotInsights(series.latest).filter((insight) =>
+    REQUIRED_ACTION_STATUSES.includes(String(insight.status || ""))
   ).length;
-  const previousPriorityCount = getInsights(series.previous).filter((insight) =>
-    HIGH_PRIORITY_STATUSES.includes(String(insight.status || ""))
+  const previousPriorityCount = getSnapshotInsights(series.previous).filter((insight) =>
+    REQUIRED_ACTION_STATUSES.includes(String(insight.status || ""))
   ).length;
   if (series.previous) {
     const deltaPriority = latestPriorityCount - previousPriorityCount;
@@ -128,6 +275,18 @@ function buildHealthChangeItems(series: PropertyScoreSeries | undefined) {
           ? `Flagged health insights increased by ${deltaPriority}.`
           : "Flagged health insights stayed unchanged.",
       impact: deltaPriority < 0 ? "positive" : deltaPriority > 0 ? "negative" : "neutral",
+    });
+  }
+
+  const topNegative = latestInsights
+    .filter((insight) => getInsightImpact(insight.status) === "negative")
+    .sort((a, b) => (asNumber(a.score) ?? 0) - (asNumber(b.score) ?? 0))[0];
+
+  if (topNegative) {
+    changes.push({
+      title: "Top current drag",
+      detail: `${topNegative.factor || "Health factor"} is marked "${topNegative.status || "Review"}" and currently contributes ${(asNumber(topNegative.score) ?? 0).toFixed(1)} points.`,
+      impact: "negative",
     });
   }
 
@@ -186,14 +345,26 @@ export default function PropertyHealthDetailPage() {
   }
 
   const series = snapshotQuery.data?.scores?.HEALTH;
-  const propertyHealthScore = asNumber((property as { healthScore?: { totalScore?: number } } | null)?.healthScore?.totalScore);
-  const propertyHealthMax = asNumber((property as { healthScore?: { maxPotentialScore?: number } } | null)?.healthScore?.maxPotentialScore) ?? 100;
-  const latestScore = series?.latest?.score ?? propertyHealthScore ?? 0;
-  const scoreMax = series?.latest?.scoreMax ?? propertyHealthMax;
-  const percentage = Math.min(100, Math.max(0, (latestScore / Math.max(scoreMax || 100, 1)) * 100));
-  const latestInsights = getInsights(series?.latest);
+  const propertyHealth = (property as PropertyWithHealth)?.healthScore;
+  const latestScore = clampScore(series?.latest?.score ?? asNumber(propertyHealth?.totalScore) ?? 0);
+  const scoreMax = 100;
+  const percentage = latestScore;
+  const potentialScore = clampScore(asNumber(propertyHealth?.maxPotentialScore) ?? series?.latest?.scoreMax ?? 100);
+  const baseScore = asNumber(propertyHealth?.baseScore);
+  const unlockedScore = asNumber(propertyHealth?.unlockedScore);
+  const maxBaseScore = asNumber(propertyHealth?.maxBaseScore) ?? 55;
+  const maxExtraScore = asNumber(propertyHealth?.maxExtraScore) ?? 45;
+  const snapshotInsights = getSnapshotInsights(series?.latest);
+  const propertyInsights = getPropertyInsights(property as PropertyWithHealth);
+  const latestInsights = snapshotInsights.length > 0 ? snapshotInsights : propertyInsights;
+  const usingSnapshotInsights = snapshotInsights.length > 0;
+  const sortedInsights = sortInsightsForDisplay(latestInsights);
+  const focusInsights = sortedInsights.slice(0, 5);
+  const negativeInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "negative");
+  const neutralInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "neutral");
+  const positiveInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "positive");
   const healthDetails = getHealthDetails(latestScore);
-  const changes = buildHealthChangeItems(series);
+  const changes = buildHealthChangeItems(series, sortedInsights);
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
@@ -221,7 +392,7 @@ export default function PropertyHealthDetailPage() {
               title="Health Score"
               value={`${latestScore.toFixed(0)}/${scoreMax}`}
               status={<StatusChip tone={healthTone(healthDetails.level)}>{healthDetails.level}</StatusChip>}
-              summary="Weekly score and insights condensed for quick triage."
+              summary="Transparent 0-100 score with full factor-level derivation."
             />
           }
           footer={<BottomSafeAreaReserve size="chatAware" />}
@@ -230,14 +401,26 @@ export default function PropertyHealthDetailPage() {
             title="Snapshot"
             items={[
               { label: "Week delta", value: <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} /> },
-              { label: "Coverage", value: `${Math.round(percentage)}%`, emphasize: true },
+              {
+                label: "Base factors",
+                value: baseScore !== null ? `${baseScore.toFixed(1)}/${maxBaseScore}` : "Missing inputs",
+              },
+              {
+                label: "Extended factors",
+                value: unlockedScore !== null ? `${unlockedScore.toFixed(1)}/${maxExtraScore}` : "Missing inputs",
+              },
+              { label: "Potential ceiling", value: `${potentialScore.toFixed(0)}/100`, emphasize: true },
             ]}
             columns={2}
           />
 
           <ScenarioInputCard
             title="Current Health Focus"
-            subtitle="Top insights from the latest weekly health snapshot."
+            subtitle={
+              usingSnapshotInsights
+                ? "Top actionable and in-progress factors from the latest weekly snapshot."
+                : "Showing latest health factors from your current property profile while weekly history builds."
+            }
             actions={
               <ActionPriorityRow
                 primaryAction={
@@ -248,18 +431,30 @@ export default function PropertyHealthDetailPage() {
               />
             }
           >
-            {latestInsights.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No insight details available yet for this property.</p>
+            {focusInsights.length === 0 ? (
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>No factor details are available yet for this property.</p>
+                <p>
+                  Add property profile fields and documentation to unlock a complete health breakdown:
+                  {" "}
+                  <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
+                  {" "}
+                  or
+                  {" "}
+                  <Link href={`/dashboard/documents?propertyId=${propertyId}`} className="underline">upload documents</Link>.
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
-                {latestInsights.slice(0, 5).map((insight, idx) => {
-                  const needsAction = HIGH_PRIORITY_STATUSES.includes(String(insight.status || ""));
+                {focusInsights.map((insight, idx) => {
+                  const detailsSummary = getInsightDetailsSummary(insight);
+                  const scoreValue = (asNumber(insight.score) ?? 0).toFixed(1);
                   return (
                     <CompactEntityRow
                       key={`${insight.factor || "insight"}-${idx}`}
                       title={insight.factor || "Health insight"}
-                      subtitle={insight.status || "Status unavailable"}
-                      status={<StatusChip tone={needsAction ? "danger" : "good"}>{needsAction ? "Action needed" : "Stable"}</StatusChip>}
+                      subtitle={`${insight.status || "Status unavailable"} • ${scoreValue} pts${detailsSummary ? ` • ${detailsSummary}` : ""}`}
+                      status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>}
                     />
                   );
                 })}
@@ -304,6 +499,60 @@ export default function PropertyHealthDetailPage() {
               ))}
             </div>
           </ScenarioInputCard>
+
+          <ScenarioInputCard
+            title="How Score Is Derived"
+            subtitle="Health score is always shown on a 0-100 scale."
+          >
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>Base profile factors (up to {maxBaseScore} pts): Age, Structure, Systems, Usage/Wear, and Size.</p>
+              <p>Extended factors (up to {maxExtraScore} pts): HVAC, Water Heater, Roof, Safety, Exterior, Documents, and Appliances.</p>
+              <p>
+                Current composition: Base {baseScore !== null ? baseScore.toFixed(1) : "0.0"} + Extended{" "}
+                {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"} = {latestScore.toFixed(1)} / 100
+                {" "}
+                (potential ceiling {potentialScore.toFixed(0)} / 100).
+              </p>
+            </div>
+          </ScenarioInputCard>
+
+          <ScenarioInputCard
+            title="Health Factor Ledger"
+            subtitle="Full factor-by-factor contributions grouped by impact."
+          >
+            {sortedInsights.length === 0 ? (
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>Ledger details are not available yet.</p>
+                <p>Complete property profile fields and upload service records to unlock full factor attribution.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {LEDGER_GROUPS.map((group) => {
+                  const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
+                  return (
+                    <div key={group.title} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</p>
+                        <StatusChip tone={group.tone}>{groupInsights.length}</StatusChip>
+                      </div>
+                      {groupInsights.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No factors in this category.</p>
+                      ) : (
+                        groupInsights.map((insight, idx) => (
+                          <CompactEntityRow
+                            key={`${group.title}-${insight.factor || "insight"}-${idx}`}
+                            title={insight.factor || "Health insight"}
+                            subtitle={`${insight.status || "Status unavailable"} • ${(asNumber(insight.score) ?? 0).toFixed(1)} pts${getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}`}
+                            status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>}
+                          />
+                        ))
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </ScenarioInputCard>
         </MobileToolWorkspace>
       </div>
 
@@ -315,7 +564,7 @@ export default function PropertyHealthDetailPage() {
           <Activity className="h-6 w-6 md:h-8 md:w-8 text-primary" /> Property Health Report
         </PageHeaderHeading>
         <p className="text-muted-foreground text-sm md:text-base">
-          Track weekly health score movement and the top changes driving it for {property?.name || "this property"}.
+          Track weekly movement and full factor-level derivation for {property?.name || "this property"}.
         </p>
       </PageHeader>
 
@@ -333,6 +582,11 @@ export default function PropertyHealthDetailPage() {
             <div className="mt-2">
               <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
             </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              Base: {baseScore !== null ? baseScore.toFixed(1) : "0.0"}/{maxBaseScore} • Extended:{" "}
+              {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"}/{maxExtraScore}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">Potential ceiling: {potentialScore.toFixed(0)}/100</div>
             <div className="mt-3">
               <Progress value={percentage} className="h-2" indicatorClassName={healthDetails.progressColor} />
             </div>
@@ -342,21 +596,47 @@ export default function PropertyHealthDetailPage() {
         <Card className="md:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium">Current Health Focus</CardTitle>
-            <CardDescription>Top insights from the latest weekly health snapshot.</CardDescription>
+            <CardDescription>
+              {usingSnapshotInsights
+                ? "Top actionable and in-progress factors from the latest weekly snapshot."
+                : "Showing latest profile-driven health factors while weekly snapshot history is still building."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {latestInsights.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No insight details available yet for this property.</p>
+            {focusInsights.length === 0 ? (
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>No factor details are available yet for this property.</p>
+                <p>
+                  Add property profile fields and service records to unlock full health derivation:
+                  {" "}
+                  <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
+                  {" "}
+                  or
+                  {" "}
+                  <Link href={`/dashboard/documents?propertyId=${propertyId}`} className="underline">upload documents</Link>.
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
-                {latestInsights.slice(0, 5).map((insight, idx) => (
+                {focusInsights.map((insight, idx) => (
                   <div key={`${insight.factor || "insight"}-${idx}`} className="flex items-start justify-between gap-3 rounded-lg border border-black/10 px-3 py-2">
                     <div>
                       <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
-                      <p className="text-xs text-muted-foreground">{insight.status || "Status unavailable"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
+                        {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
+                      </p>
                     </div>
-                    <Badge variant={HIGH_PRIORITY_STATUSES.includes(String(insight.status || "")) ? "destructive" : "secondary"}>
-                      {HIGH_PRIORITY_STATUSES.includes(String(insight.status || "")) ? "Action needed" : "Stable"}
+                    <Badge
+                      variant={
+                        getInsightImpact(insight.status) === "negative"
+                          ? "destructive"
+                          : getInsightImpact(insight.status) === "positive"
+                          ? "success"
+                          : "secondary"
+                      }
+                    >
+                      {getInsightChipLabel(insight.status)}
                     </Badge>
                   </div>
                 ))}
@@ -367,6 +647,78 @@ export default function PropertyHealthDetailPage() {
                 <Button variant="outline" size="sm">View maintenance actions</Button>
               </Link>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-6 hidden md:grid gap-6 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">How Score Is Calculated</CardTitle>
+            <CardDescription>Transparent base + extended factor model on a fixed 0-100 scale.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>Base profile factors (up to {maxBaseScore} pts): Age, Structure, Systems, Usage/Wear, and Size.</p>
+            <p>Extended factors (up to {maxExtraScore} pts): HVAC, Water Heater, Roof, Safety, Exterior, Documents, and Appliances.</p>
+            <p>
+              Current: Base {baseScore !== null ? baseScore.toFixed(1) : "0.0"} + Extended{" "}
+              {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"} = {latestScore.toFixed(1)} / 100.
+            </p>
+            <p>Potential ceiling: {potentialScore.toFixed(0)} / 100.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Health Factor Ledger</CardTitle>
+            <CardDescription>Full factor-by-factor contributions grouped by negative, watch, and positive impact.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {sortedInsights.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-black/10 px-3 py-3 text-sm text-muted-foreground">
+                No factor-level ledger is available yet. Complete property profile fields and upload service documents to unlock this section.
+              </div>
+            ) : (
+              <>
+                {LEDGER_GROUPS.map((group) => {
+                  const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
+                  return (
+                    <div key={group.title} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</p>
+                        <StatusChip tone={group.tone}>{groupInsights.length}</StatusChip>
+                      </div>
+                      {groupInsights.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No factors in this category.</p>
+                      ) : (
+                        groupInsights.map((insight, idx) => (
+                          <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
+                              <Badge
+                                variant={
+                                  getInsightImpact(insight.status) === "negative"
+                                    ? "destructive"
+                                    : getInsightImpact(insight.status) === "positive"
+                                    ? "success"
+                                    : "secondary"
+                                }
+                              >
+                                {getInsightChipLabel(insight.status)}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
+                              {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
