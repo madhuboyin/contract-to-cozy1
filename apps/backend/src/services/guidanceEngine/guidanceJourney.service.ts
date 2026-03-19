@@ -2,6 +2,11 @@ import { APIError } from '../../middleware/error.middleware';
 import { getGuidanceTemplateBySignalFamily, TOOL_DEFAULT_STEP_KEY } from './guidanceTemplateRegistry';
 import { guidanceSignalResolverService } from './guidanceSignalResolver.service';
 import { guidanceStepResolverService } from './guidanceStepResolver.service';
+import { guidanceFinancialContextService } from './guidanceFinancialContext.service';
+import { guidanceConfidenceService } from './guidanceConfidence.service';
+import { guidancePriorityService } from './guidancePriority.service';
+import { guidanceSuppressionService } from './guidanceSuppression.service';
+import { guidanceCopyService } from './guidanceCopy.service';
 import {
   GuidanceSignalSourceInput,
   GuidanceToolCompletionInput,
@@ -26,7 +31,148 @@ function mergeRecord(
   return Object.keys(merged).length > 0 ? merged : null;
 }
 
+type EnrichedGuidanceAction = {
+  journey: any;
+  signal: any | null;
+  next: any | null;
+  priorityScore: number;
+  priorityBucket: 'HIGH' | 'MEDIUM' | 'LOW';
+  priorityGroup: 'IMMEDIATE' | 'UPCOMING' | 'OPTIMIZATION';
+  confidenceScore: number;
+  confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW';
+  financialImpactScore: number;
+  fundingGapFlag: boolean;
+  costOfDelay: number;
+  coverageImpact: 'COVERED' | 'PARTIAL' | 'NOT_COVERED' | 'UNKNOWN';
+  explanation: {
+    what: string;
+    why: string;
+    risk: string;
+    nextStep: string;
+  };
+};
+
 export class GuidanceJourneyService {
+  private applyStepCopy(step: any) {
+    if (!step) return step;
+    const label = guidanceCopyService.polishStepLabel({
+      stepKey: step.stepKey ?? null,
+      label: step.label ?? null,
+      toolKey: step.toolKey ?? null,
+    });
+    return {
+      ...step,
+      label,
+      displayLabel: label,
+    };
+  }
+
+  private enrichAction(params: {
+    journey: any;
+    signal?: any | null;
+    next?: any | null;
+  }): EnrichedGuidanceAction {
+    const journey = params.journey;
+    const signal = params.signal ?? journey.primarySignal ?? null;
+    const next = params.next ?? null;
+
+    const financial = guidanceFinancialContextService.evaluate({
+      journey,
+      signal,
+    });
+
+    const confidence = guidanceConfidenceService.evaluate({
+      journey,
+      signal,
+      next,
+    });
+
+    const priority = guidancePriorityService.score({
+      issueDomain: journey.issueDomain,
+      severity: signal?.severity ?? null,
+      severityScore: signal?.severityScore ?? null,
+      signalIntentFamily: signal?.signalIntentFamily ?? null,
+      executionReadiness: journey.executionReadiness,
+      confidence,
+      financial,
+      signalPayload: signal?.payloadJson ?? null,
+    });
+
+    const polishedSteps = (journey.steps ?? []).map((step: any) => this.applyStepCopy(step));
+    const polishedNextStep = next?.nextStep ? this.applyStepCopy(next.nextStep) : null;
+    const polishedCurrentStep = next?.currentStep ? this.applyStepCopy(next.currentStep) : null;
+
+    const explanation = guidanceCopyService.buildActionExplanation({
+      issueDomain: journey.issueDomain,
+      signalIntentFamily: signal?.signalIntentFamily ?? null,
+      stepKey: polishedNextStep?.stepKey ?? polishedCurrentStep?.stepKey ?? null,
+      stepLabel: polishedNextStep?.label ?? polishedCurrentStep?.label ?? null,
+      priorityBucket: priority.priorityBucket,
+      fundingGapFlag: financial.fundingGapFlag,
+      costOfDelay: financial.costOfDelay,
+      coverageImpact: financial.coverageImpact,
+      confidenceLabel: confidence.confidenceLabel,
+    });
+
+    const polishedNext = next
+      ? {
+          ...next,
+          currentStep: polishedCurrentStep,
+          nextStep: polishedNextStep,
+          warnings: guidanceCopyService.polishWarnings(next.warnings ?? [], {
+            confidenceLabel: confidence.confidenceLabel,
+            fundingGapFlag: financial.fundingGapFlag,
+          }),
+          blockedReason: guidanceCopyService.polishBlockedReason(next.blockedReason ?? null, {
+            missingPrerequisites: next.missingPrerequisites ?? [],
+          }),
+          priorityScore: priority.priorityScore,
+          priorityBucket: priority.priorityBucket,
+          priorityGroup: priority.priorityGroup,
+          confidenceScore: confidence.confidenceScore,
+          confidenceLabel: confidence.confidenceLabel,
+          financialImpactScore: financial.financialImpactScore,
+          fundingGapFlag: financial.fundingGapFlag,
+          costOfDelay: financial.costOfDelay,
+          coverageImpact: financial.coverageImpact,
+          explanation,
+          nextStepLabel: explanation.nextStep,
+        }
+      : null;
+
+    const enrichedJourney = {
+      ...journey,
+      steps: polishedSteps,
+      priorityScore: priority.priorityScore,
+      priorityBucket: priority.priorityBucket,
+      priorityGroup: priority.priorityGroup,
+      confidenceScore: confidence.confidenceScore,
+      confidenceLabel: confidence.confidenceLabel,
+      financialImpactScore: financial.financialImpactScore,
+      fundingGapFlag: financial.fundingGapFlag,
+      costOfDelay: financial.costOfDelay,
+      coverageImpact: financial.coverageImpact,
+      explanation,
+      nextStepLabel: explanation.nextStep,
+    };
+
+    return {
+      journey: enrichedJourney,
+      signal,
+      next: polishedNext,
+      priorityScore: priority.priorityScore,
+      priorityBucket: priority.priorityBucket,
+      priorityGroup: priority.priorityGroup,
+      confidenceScore: confidence.confidenceScore,
+      confidenceLabel: confidence.confidenceLabel,
+      financialImpactScore: financial.financialImpactScore,
+      fundingGapFlag: financial.fundingGapFlag,
+      costOfDelay: financial.costOfDelay,
+      coverageImpact: financial.coverageImpact,
+      explanation,
+    };
+  }
+
   private async findReusableJourney(args: {
     propertyId: string;
     journeyTypeKey: string;
@@ -284,7 +430,21 @@ export class GuidanceJourneyService {
       throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
     }
 
-    return journey;
+    const next = await guidanceStepResolverService.resolveNextStep({
+      propertyId,
+      journeyId: journey.id,
+    });
+
+    const enriched = this.enrichAction({
+      journey,
+      signal: journey.primarySignal ?? null,
+      next,
+    });
+
+    return {
+      ...enriched.journey,
+      events: journey.events ?? [],
+    };
   }
 
   async listActiveJourneysForProperty(propertyId: string) {
@@ -330,16 +490,62 @@ export class GuidanceJourneyService {
       )
     );
 
+    const nextMap = new Map<string, any>();
+    for (const next of nextByJourney) {
+      nextMap.set(next.journeyId, next);
+    }
+
+    const enriched = journeys.map((journey: any) =>
+      this.enrichAction({
+        journey,
+        signal: journey.primarySignal ?? null,
+        next: nextMap.get(journey.id) ?? null,
+      })
+    );
+
+    const suppression = guidanceSuppressionService.suppress(enriched);
+    const surfaced = suppression.filteredActions;
+    const surfacedSignalIds = new Set(
+      surfaced
+        .map((item) => item.signal?.id ?? item.journey?.primarySignalId ?? null)
+        .filter((value): value is string => Boolean(value))
+    );
+
+    const visibleSignals =
+      surfacedSignalIds.size > 0
+        ? signals.filter((signal: any) => surfacedSignalIds.has(signal.id))
+        : [];
+
     return {
       propertyId,
       counts: {
         activeSignals: signals.length,
         activeJourneys: journeys.length,
+        surfacedSignals: visibleSignals.length,
+        surfacedJourneys: surfaced.length,
+        suppressedSignals: suppression.suppressedSignals.length,
       },
-      signals,
-      journeys,
-      next: nextByJourney,
+      signals: visibleSignals,
+      journeys: surfaced.map((item) => item.journey),
+      next: surfaced
+        .map((item) => item.next)
+        .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+      suppressedSignals: suppression.suppressedSignals,
     };
+  }
+
+  async resolveNextStepWithIntelligence(params: { propertyId: string; journeyId: string }) {
+    const journey = await this.getJourneyById(params.propertyId, params.journeyId);
+    const next = await guidanceStepResolverService.resolveNextStep({
+      propertyId: params.propertyId,
+      journeyId: params.journeyId,
+    });
+
+    return this.enrichAction({
+      journey,
+      signal: journey.primarySignal ?? null,
+      next,
+    }).next;
   }
 }
 

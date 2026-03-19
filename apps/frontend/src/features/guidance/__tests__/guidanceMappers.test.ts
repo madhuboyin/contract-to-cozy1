@@ -58,6 +58,17 @@ function buildJourney(steps: GuidanceStepDTO[]): GuidanceJourneyDTO {
       totalCount: steps.length,
       percent: 0,
     },
+    priorityScore: 0,
+    priorityBucket: 'MEDIUM',
+    priorityGroup: 'UPCOMING',
+    confidenceScore: 0.6,
+    confidenceLabel: 'MEDIUM',
+    financialImpactScore: 0,
+    fundingGapFlag: false,
+    costOfDelay: 0,
+    coverageImpact: 'UNKNOWN',
+    explanation: null,
+    nextStepLabel: null,
     primarySignal: {
       id: 'signal-1',
       propertyId: 'property-1',
@@ -154,5 +165,43 @@ describe('guidance mappers', () => {
 
     expect(filtered).toHaveLength(1);
     expect(filtered[0].journeyId).toBe('journey-2');
+  });
+
+  it('orders actions by priority score when available', () => {
+    const highStep = buildStep({ id: 's-priority-high', stepKey: 'check_coverage', toolKey: 'coverage-intelligence' });
+    const lowStep = buildStep({ id: 's-priority-low', stepKey: 'track_resolution', toolKey: 'home-event-radar' });
+
+    const highJourney = {
+      ...buildJourney([highStep]),
+      id: 'journey-high',
+      issueDomain: 'INSURANCE' as const,
+      priorityScore: 92,
+      priorityBucket: 'HIGH' as const,
+      priorityGroup: 'IMMEDIATE' as const,
+    };
+
+    const lowJourney = {
+      ...buildJourney([lowStep]),
+      id: 'journey-low',
+      issueDomain: 'MAINTENANCE' as const,
+      priorityScore: 18,
+      priorityBucket: 'LOW' as const,
+      priorityGroup: 'OPTIMIZATION' as const,
+    };
+
+    const highAction = mapGuidanceJourneyToActionModel({
+      propertyId: 'property-1',
+      journey: highJourney,
+      next: null,
+    });
+    const lowAction = mapGuidanceJourneyToActionModel({
+      propertyId: 'property-1',
+      journey: lowJourney,
+      next: null,
+    });
+
+    const ordered = filterGuidanceActions([lowAction, highAction]);
+    expect(ordered[0].journeyId).toBe('journey-high');
+    expect(ordered[1].journeyId).toBe('journey-low');
   });
 });

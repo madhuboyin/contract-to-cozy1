@@ -4,6 +4,7 @@ import {
   GuidanceExecutionGuardResult,
   getGuidanceModels,
 } from './guidanceTypes';
+import { guidanceCopyService } from './guidanceCopy.service';
 
 function pickExecutionStepsForTarget(targetAction: GuidanceExecutionGuardRequest['targetAction'], steps: any[]) {
   if (targetAction === 'BOOKING') {
@@ -88,12 +89,19 @@ export class GuidanceBookingGuardService {
             journeyId: journey.id,
             journeyTypeKey: journey.journeyTypeKey ?? null,
             stepKey: prerequisite.stepKey,
-            stepLabel: prerequisite.label,
+            stepLabel: guidanceCopyService.polishStepLabel({
+              stepKey: prerequisite.stepKey,
+              label: prerequisite.label,
+              toolKey: prerequisite.toolKey ?? null,
+            }),
           });
         }
 
         if (executionStep.status === 'BLOCKED') {
-          reasons.push(executionStep.blockedReason ?? `Execution step ${executionStep.label} is blocked.`);
+          reasons.push(
+            guidanceCopyService.polishBlockedReason(executionStep.blockedReason ?? null) ??
+              `Execution step ${executionStep.label} is blocked.`
+          );
         }
       }
     }
@@ -106,7 +114,10 @@ export class GuidanceBookingGuardService {
     return {
       blocked: missingPrerequisites.length > 0 || reasons.length > 0,
       targetAction: request.targetAction,
-      reasons: Array.from(new Set(reasons)),
+      reasons: guidanceCopyService.polishExecutionGuardReasons(
+        Array.from(new Set(reasons)),
+        missingPrerequisites
+      ),
       missingPrerequisites,
       evaluatedJourneyIds: journeys.map((journey: any) => journey.id),
     };

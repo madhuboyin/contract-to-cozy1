@@ -28,6 +28,7 @@ export async function getPropertyGuidance(req: CustomRequest, res: Response, nex
         signals: payload.signals.map(mapGuidanceSignal),
         journeys: payload.journeys.map(mapGuidanceJourney),
         next: payload.next,
+        suppressedSignals: payload.suppressedSignals ?? [],
       },
     });
   } catch (error) {
@@ -40,11 +41,12 @@ export async function listActiveGuidanceJourneys(req: CustomRequest, res: Respon
     requireUserId(req);
     const propertyId = req.params.propertyId;
 
-    const journeys = await guidanceJourneyService.listActiveJourneysForProperty(propertyId);
+    const payload = await guidanceJourneyService.getPropertyGuidance(propertyId);
     res.json({
       success: true,
       data: {
-        journeys: journeys.map(mapGuidanceJourney),
+        journeys: payload.journeys.map(mapGuidanceJourney),
+        suppressedSignals: payload.suppressedSignals ?? [],
       },
     });
   } catch (error) {
@@ -190,7 +192,7 @@ export async function getGuidanceNextStep(req: CustomRequest, res: Response, nex
       });
     }
 
-    const result = await guidanceStepResolverService.resolveNextStep({
+    const result = await guidanceJourneyService.resolveNextStepWithIntelligence({
       propertyId,
       journeyId,
     });

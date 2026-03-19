@@ -81,6 +81,7 @@ export type GuidanceStepDTO = {
   toolKey: string | null;
   flowKey: string | null;
   routePath: string | null;
+  displayLabel?: string | null;
   requiredContextKeys: string[];
   missingContextKeys: string[];
   blockedReasonCode: string | null;
@@ -120,6 +121,22 @@ export type GuidanceJourneyDTO = {
     totalCount: number;
     percent: number;
   };
+  priorityScore?: number | null;
+  priorityBucket?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  priorityGroup?: 'IMMEDIATE' | 'UPCOMING' | 'OPTIMIZATION' | null;
+  confidenceScore?: number | null;
+  confidenceLabel?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  financialImpactScore?: number | null;
+  fundingGapFlag?: boolean;
+  costOfDelay?: number | null;
+  coverageImpact?: 'COVERED' | 'PARTIAL' | 'NOT_COVERED' | 'UNKNOWN' | null;
+  explanation?: {
+    what: string;
+    why: string;
+    risk: string;
+    nextStep: string;
+  } | null;
+  nextStepLabel?: string | null;
   primarySignal: GuidanceSignalDTO | null;
   steps: GuidanceStepDTO[];
 };
@@ -139,6 +156,22 @@ export type GuidanceNextStepResult = {
   blockedReason: string | null;
   recommendedToolKey: string | null;
   recommendedFlowKey: string | null;
+  priorityScore?: number | null;
+  priorityBucket?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  priorityGroup?: 'IMMEDIATE' | 'UPCOMING' | 'OPTIMIZATION' | null;
+  confidenceScore?: number | null;
+  confidenceLabel?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  financialImpactScore?: number | null;
+  fundingGapFlag?: boolean;
+  costOfDelay?: number | null;
+  coverageImpact?: 'COVERED' | 'PARTIAL' | 'NOT_COVERED' | 'UNKNOWN' | null;
+  explanation?: {
+    what: string;
+    why: string;
+    risk: string;
+    nextStep: string;
+  } | null;
+  nextStepLabel?: string | null;
 };
 
 export type GuidancePropertyResponse = {
@@ -146,10 +179,18 @@ export type GuidancePropertyResponse = {
   counts: {
     activeSignals: number;
     activeJourneys: number;
+    surfacedSignals?: number;
+    surfacedJourneys?: number;
+    suppressedSignals?: number;
   };
   signals: GuidanceSignalDTO[];
   journeys: GuidanceJourneyDTO[];
   next: GuidanceNextStepResult[];
+  suppressedSignals?: Array<{
+    signalId: string | null;
+    journeyId: string;
+    reason: string;
+  }>;
 };
 
 export type GuidanceJourneyDetailResponse = {

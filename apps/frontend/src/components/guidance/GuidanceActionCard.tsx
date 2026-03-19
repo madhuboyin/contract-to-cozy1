@@ -16,6 +16,7 @@ type GuidanceActionCardProps = {
 
 export function GuidanceActionCard({ action, onOpenJourney, compact = false }: GuidanceActionCardProps) {
   const warningMessage = action.blockedReason ?? action.warnings[0] ?? null;
+  const advisorySubtitle = action.explanation?.why ?? action.subtitle;
 
   return (
     <Card>
@@ -27,7 +28,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
             <GuidanceStatusBadge kind="severity" value={action.severity ?? null} />
           </div>
         </div>
-        <p className="mb-0 text-sm text-muted-foreground">{action.subtitle}</p>
+        <p className="mb-0 text-sm text-muted-foreground">{advisorySubtitle}</p>
       </CardHeader>
 
       <CardContent className="space-y-3">
@@ -50,6 +51,10 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
         ) : null}
 
         <GuidanceJourneyStrip steps={action.steps} />
+
+        {action.explanation?.risk ? (
+          <p className="mb-0 text-xs text-muted-foreground">{action.explanation.risk}</p>
+        ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="mb-0 text-xs text-muted-foreground">

@@ -28,6 +28,21 @@ export type GuidanceActionModel = {
   missingPrerequisites: Array<{ stepKey: string; label: string }>;
   progress: GuidanceJourneyDTO['progress'];
   isLowContext: boolean;
+  priorityScore: number;
+  priorityBucket: 'HIGH' | 'MEDIUM' | 'LOW';
+  priorityGroup: 'IMMEDIATE' | 'UPCOMING' | 'OPTIMIZATION';
+  confidenceScore: number | null;
+  confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  financialImpactScore: number | null;
+  fundingGapFlag: boolean;
+  costOfDelay: number | null;
+  coverageImpact: 'COVERED' | 'PARTIAL' | 'NOT_COVERED' | 'UNKNOWN' | null;
+  explanation: {
+    what: string;
+    why: string;
+    risk: string;
+    nextStep: string;
+  } | null;
 };
 
 function resolveCurrentStep(journey: GuidanceJourneyDTO, next: GuidanceNextStepResult | null): GuidanceStepDTO | null {
@@ -70,6 +85,20 @@ export function mapGuidanceJourneyToActionModel(args: {
     missingPrerequisites: args.next?.missingPrerequisites ?? [],
     progress: args.journey.progress,
     isLowContext: args.journey.isLowContext,
+    priorityScore: args.next?.priorityScore ?? args.journey.priorityScore ?? 0,
+    priorityBucket:
+      args.next?.priorityBucket ?? args.journey.priorityBucket ?? 'MEDIUM',
+    priorityGroup:
+      args.next?.priorityGroup ?? args.journey.priorityGroup ?? 'UPCOMING',
+    confidenceScore: args.next?.confidenceScore ?? args.journey.confidenceScore ?? null,
+    confidenceLabel: args.next?.confidenceLabel ?? args.journey.confidenceLabel ?? null,
+    financialImpactScore:
+      args.next?.financialImpactScore ?? args.journey.financialImpactScore ?? null,
+    fundingGapFlag:
+      Boolean(args.next?.fundingGapFlag) || Boolean(args.journey.fundingGapFlag),
+    costOfDelay: args.next?.costOfDelay ?? args.journey.costOfDelay ?? null,
+    coverageImpact: args.next?.coverageImpact ?? args.journey.coverageImpact ?? null,
+    explanation: args.next?.explanation ?? args.journey.explanation ?? null,
   };
 }
 
@@ -93,6 +122,17 @@ export function filterGuidanceActions(
   });
 
   filtered = filtered.sort((a, b) => {
+    const priorityDiff = (b.priorityScore ?? 0) - (a.priorityScore ?? 0);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    const bucketRank = (value: GuidanceActionModel['priorityBucket']) => {
+      if (value === 'HIGH') return 3;
+      if (value === 'MEDIUM') return 2;
+      return 1;
+    };
+    const bucketDiff = bucketRank(b.priorityBucket) - bucketRank(a.priorityBucket);
+    if (bucketDiff !== 0) return bucketDiff;
+
     const blockedA = a.executionReadiness === 'NOT_READY' ? 1 : 0;
     const blockedB = b.executionReadiness === 'NOT_READY' ? 1 : 0;
     if (blockedA !== blockedB) return blockedA - blockedB;
