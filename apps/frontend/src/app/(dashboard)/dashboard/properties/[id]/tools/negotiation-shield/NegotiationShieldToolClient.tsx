@@ -2158,6 +2158,7 @@ function CaseWorkspace({
   trackEvent: (event: string, section?: string, metadata?: Record<string, unknown>) => void;
 }) {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
