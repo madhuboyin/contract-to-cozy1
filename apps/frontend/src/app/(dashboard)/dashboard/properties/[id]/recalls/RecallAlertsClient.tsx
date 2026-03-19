@@ -23,6 +23,7 @@ import {
   MobilePageIntro,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
 export default function RecallAlertsClient() {
   const params = useParams<{ id: string }>();
@@ -97,6 +98,14 @@ export default function RecallAlertsClient() {
         eyebrow="Safety"
         title="Recall & Safety Alerts"
         subtitle="Inventory-linked recall matches and guided resolution actions."
+      />
+
+      <GuidanceInlinePanel
+        propertyId={propertyId}
+        title="Urgent Safety Journey"
+        subtitle="Complete the required safety steps in order."
+        issueDomains={['SAFETY', 'WEATHER'] as const}
+        limit={1}
       />
 
       <MobileFilterSurface>

@@ -25,6 +25,7 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
 export default function CoverageClient({ propertyId }: { propertyId: string }) {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
@@ -154,6 +155,15 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >
+      <GuidanceInlinePanel
+        propertyId={propertyId}
+        title="Coverage Gap Next Steps"
+        subtitle="Resolve missing policy context before making execution decisions."
+        issueDomains={['INSURANCE', 'FINANCIAL'] as const}
+        limit={2}
+        compact
+      />
+
       {loading ? (
         <ScenarioInputCard title="Loading" subtitle="Loading coverage summary..." badge={<StatusChip tone="info">Please wait</StatusChip>}>
           <p className="text-sm text-slate-600">Coverage analysis is syncing.</p>

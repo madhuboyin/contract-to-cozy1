@@ -12,6 +12,7 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
 export default function CoverageIntelligenceToolClient() {
   const params = useParams<{ id: string }>();
@@ -49,6 +50,14 @@ export default function CoverageIntelligenceToolClient() {
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
+
+      <GuidanceInlinePanel
+        propertyId={propertyId}
+        title="Where This Tool Fits"
+        subtitle="Coverage Intelligence is part of active guidance journeys. Complete the next required step after review."
+        toolKey="coverage-intelligence"
+        limit={1}
+      />
 
       <ToolExplainerSection toolKey="coverageIntelligence" id="how-it-works" />
 

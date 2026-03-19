@@ -38,6 +38,7 @@ import {
     ScenarioInputCard,
     StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
+import { GuidanceInlinePanel } from "@/components/guidance/GuidanceInlinePanel";
 
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
@@ -1060,6 +1061,14 @@ export default function RiskAssessmentPage() {
                     }
                     footer={<BottomSafeAreaReserve size="chatAware" />}
                 >
+                    <GuidanceInlinePanel
+                        propertyId={propertyId}
+                        title="Risk Resolution Steps"
+                        subtitle="Complete these steps before scheduling execution actions."
+                        issueDomains={['ASSET_LIFECYCLE', 'MAINTENANCE', 'SAFETY', 'INSURANCE'] as const}
+                        limit={2}
+                    />
+
                     <ReadOnlySummaryBlock
                         title="Snapshot"
                         items={[
@@ -1235,6 +1244,14 @@ export default function RiskAssessmentPage() {
             </div>
             
             <div className="mt-8 space-y-6">
+                <GuidanceInlinePanel
+                    propertyId={propertyId}
+                    title="Guided Next Steps"
+                    subtitle="Deterministic journey actions to resolve risk drivers before execution."
+                    issueDomains={['ASSET_LIFECYCLE', 'MAINTENANCE', 'SAFETY', 'INSURANCE'] as const}
+                    limit={3}
+                />
+
                 {/* --- Risk Gauge Visualization --- */}
                 <div className="space-y-2">
                     <h3 className="text-xl font-semibold">Overall Risk Gauge: {level}</h3>

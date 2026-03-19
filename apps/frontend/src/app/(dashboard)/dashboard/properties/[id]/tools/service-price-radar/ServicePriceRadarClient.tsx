@@ -39,6 +39,7 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
@@ -1069,6 +1070,15 @@ export default function ServicePriceRadarClient() {
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >
+      <GuidanceInlinePanel
+        propertyId={propertyId}
+        title="Journey Context"
+        subtitle="Price validation should be completed before negotiation or booking."
+        toolKey="service-price-radar"
+        limit={1}
+        compact
+      />
+
       {toolError ? (
         <div
           role="alert"

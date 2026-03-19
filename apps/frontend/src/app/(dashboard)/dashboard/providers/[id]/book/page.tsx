@@ -22,6 +22,9 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
+import { useGuidance } from '@/features/guidance/hooks/useGuidance';
+import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
 
 function getInitials(firstName: string, lastName: string) {
   return (firstName?.[0] || '') + (lastName?.[0] || '');
@@ -59,6 +62,22 @@ export default function BookProviderPage() {
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
   const [descriptionTouched, setDescriptionTouched] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+
+  const bookingGuardQuery = useExecutionGuard(selectedPropertyId, 'BOOKING', {
+    enabled: Boolean(selectedPropertyId),
+  });
+  const bookingGuidanceQuery = useGuidance(selectedPropertyId, {
+    enabled: Boolean(selectedPropertyId),
+    limit: 3,
+  });
+
+  const isExecutionBlocked = Boolean(bookingGuardQuery.data?.blocked);
+  const blockedReason = bookingGuardQuery.data?.reasons?.[0] ?? null;
+  const blockedJourneyIds = new Set(bookingGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []);
+  const blockedAction = bookingGuidanceQuery.actions.find((action) => blockedJourneyIds.has(action.journeyId)) ?? null;
+  const blockedActionHref =
+    blockedAction?.href ??
+    (selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/risk-assessment` : '/dashboard/maintenance');
 
   useEffect(() => {
     loadData();
@@ -157,6 +176,11 @@ export default function BookProviderPage() {
 
     if (description.trim().length < 10) {
       setError('Description must be at least 10 characters');
+      return;
+    }
+
+    if (isExecutionBlocked) {
+      setError(blockedReason || 'Complete prerequisite guidance steps before booking.');
       return;
     }
 
@@ -290,6 +314,18 @@ export default function BookProviderPage() {
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3">
           <p className="text-sm text-rose-800">{error}</p>
         </div>
+      ) : null}
+
+      {isExecutionBlocked ? (
+        <GuidanceWarningBanner
+          title="Booking blocked until prerequisite steps are complete"
+          message={
+            blockedReason ||
+            'Coverage, decision, or pricing validation steps are still incomplete for this property.'
+          }
+          actionLabel={blockedAction?.nextStep ? `Go to Step ${blockedAction.nextStep.stepOrder}` : 'Open required step'}
+          actionHref={blockedActionHref}
+        />
       ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-4 pb-2">
@@ -464,12 +500,16 @@ export default function BookProviderPage() {
             primaryAction={
               <button
                 type="submit"
-                disabled={isSubmitting || services.length === 0 || properties.length === 0}
+                disabled={isSubmitting || services.length === 0 || properties.length === 0 || isExecutionBlocked}
                 className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-brand-primary py-3 text-base font-semibold text-white transition-opacity disabled:opacity-60"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" /> Creating Booking...
+                  </>
+                ) : isExecutionBlocked ? (
+                  <>
+                    <AlertCircle className="h-4 w-4" /> Complete prior step first
                   </>
                 ) : (
                   <>

@@ -62,6 +62,7 @@ import {
   MobileSection,
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
 
 // --- Helper Functions ---
@@ -485,6 +486,14 @@ export default function MaintenancePage() {
             </Link>
           </Button>
         }
+      />
+
+      <GuidanceInlinePanel
+        propertyId={selectedPropertyId}
+        title="Maintenance Resolution Steps"
+        subtitle="Follow ordered actions before jumping to provider execution."
+        issueDomains={['MAINTENANCE', 'ASSET_LIFECYCLE'] as const}
+        limit={2}
       />
 
       <MobileFilterSurface className="border border-slate-200/80 bg-white">

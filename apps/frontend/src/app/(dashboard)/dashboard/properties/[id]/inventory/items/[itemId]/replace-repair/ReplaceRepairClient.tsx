@@ -24,6 +24,7 @@ import {
   ReplaceRepairOverrides,
   runReplaceRepairAnalysis,
 } from '@/lib/api/replaceRepairApi';
+import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
 const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
   APPLIANCE: 12,
@@ -266,6 +267,14 @@ export default function ReplaceRepairClient() {
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >
+      <GuidanceInlinePanel
+        propertyId={propertyId}
+        title="Journey Context"
+        subtitle="This decision step should happen before coverage checks, pricing validation, and booking."
+        toolKey="replace-repair"
+        limit={1}
+      />
+
       <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
         Educational decision support only. This estimate does not guarantee outcomes or recommend specific vendors.
       </div>
