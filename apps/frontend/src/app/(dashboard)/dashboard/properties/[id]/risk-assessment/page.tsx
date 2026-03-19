@@ -39,6 +39,9 @@ import {
     StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
 import { GuidanceInlinePanel } from "@/components/guidance/GuidanceInlinePanel";
+import { useGuidance } from "@/features/guidance/hooks/useGuidance";
+import type { GuidanceActionModel } from "@/features/guidance/utils/guidanceMappers";
+import type { GuidanceIssueDomain } from "@/lib/api/guidanceApi";
 
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
@@ -147,6 +150,39 @@ function buildRiskChangeItems(series: PropertyScoreSeries | undefined) {
 }
 
 const displayLabel = (value?: string | null): string => humanizeActionType(value ?? "");
+
+const RISK_MATRIX_GUIDANCE_DOMAINS: readonly GuidanceIssueDomain[] = [
+    'ASSET_LIFECYCLE',
+    'MAINTENANCE',
+    'SAFETY',
+    'INSURANCE',
+];
+
+const ASSET_CATEGORY_GUIDANCE_DOMAIN_PRIORITY: Record<RiskCategory, GuidanceIssueDomain[]> = {
+    STRUCTURE: ['MAINTENANCE', 'SAFETY'],
+    SYSTEMS: ['ASSET_LIFECYCLE', 'MAINTENANCE', 'INSURANCE'],
+    SAFETY: ['SAFETY', 'MAINTENANCE'],
+    FINANCIAL_GAP: ['FINANCIAL', 'INSURANCE'],
+};
+
+function buildGuidanceCtaText(action: GuidanceActionModel): string {
+    const step = action.nextStep ?? action.currentStep;
+    if (!step) return action.title;
+    return `Step ${step.stepOrder}: ${step.label}`;
+}
+
+function pickGuidanceActionForAsset(
+    item: AssetRiskDetail,
+    actions: GuidanceActionModel[]
+): GuidanceActionModel | null {
+    if (!actions.length) return null;
+    const domainPriority = ASSET_CATEGORY_GUIDANCE_DOMAIN_PRIORITY[item.category] ?? [];
+    for (const domain of domainPriority) {
+        const match = actions.find((action) => action.issueDomain === domain);
+        if (match) return match;
+    }
+    return actions[0] ?? null;
+}
 
 // 🔑 NEW: Component to show scheduled status
 const ScheduledBadge: React.FC<{ task: PropertyMaintenanceTask }> = ({ task }) => (
@@ -331,6 +367,11 @@ const AssetMatrixTable = ({
     onViewTask: (task: PropertyMaintenanceTask) => void;
     onViewBooking: (booking: any) => void;
 }) => {
+    const guidance = useGuidance(propertyId, {
+        enabled: Boolean(propertyId),
+        issueDomains: RISK_MATRIX_GUIDANCE_DOMAINS,
+    });
+
     const getRiskBadge = (level: AssetRiskDetail['riskLevel']) => {
         if (level === 'LOW') return <Badge variant="outline" className={SEVERITY_CHIP.good}>Low</Badge>;
         if (level === 'MODERATE') return <Badge variant="outline" className={SEVERITY_CHIP.medium}>Moderate</Badge>;
@@ -349,11 +390,16 @@ const AssetMatrixTable = ({
         const existingWarranty = warrantiesBySystemType.get(item.systemType);
         const hasWarranty = !!existingWarranty;
         const isPastLife = item.age > item.expectedLife;
+        const guidanceAction = pickGuidanceActionForAsset(item, guidance.actions);
+        const guidanceHref = guidanceAction?.href ?? null;
 
         let ctaText = '';
         let ctaVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'secondary';
 
-        if (hasBooking) {
+        if (guidanceAction) {
+            ctaText = buildGuidanceCtaText(guidanceAction);
+            ctaVariant = guidanceAction.executionReadiness === 'READY' ? 'default' : 'outline';
+        } else if (hasBooking) {
             ctaText = 'View Booking';
             ctaVariant = 'outline';
         } else if (hasTask) {
@@ -380,13 +426,50 @@ const AssetMatrixTable = ({
             }
         }
 
-        return { insightFactor, existingBooking, hasBooking, existingTask, hasTask, existingWarranty, hasWarranty, isPastLife, ctaText, ctaVariant };
+        return {
+            insightFactor,
+            existingBooking,
+            hasBooking,
+            existingTask,
+            hasTask,
+            existingWarranty,
+            hasWarranty,
+            isPastLife,
+            guidanceAction,
+            guidanceHref,
+            ctaText,
+            ctaVariant,
+        };
     };
 
     // Shared CTA button renderer
     const renderCtaButton = (item: AssetRiskDetail, data: ReturnType<typeof getAssetRowData>, fullWidth = false) => {
-        const { ctaText, ctaVariant, hasBooking, hasTask, existingBooking, existingTask } = data;
+        const { ctaText, ctaVariant, hasBooking, hasTask, existingBooking, existingTask, guidanceAction, guidanceHref } = data;
         const sizeClass = fullWidth ? 'w-full min-h-[44px]' : '';
+
+        if (guidanceAction) {
+            if (guidanceHref) {
+                return (
+                    <Button size="sm" variant={ctaVariant} asChild className={`gap-1 ${sizeClass}`}>
+                        <Link href={guidanceHref}>
+                            {ctaText}
+                        </Link>
+                    </Button>
+                );
+            }
+
+            return (
+                <Button
+                    size="sm"
+                    variant={ctaVariant}
+                    className={`gap-1 ${sizeClass}`}
+                    disabled
+                    title={guidanceAction.blockedReason ?? 'Guidance step is currently unavailable.'}
+                >
+                    {ctaText}
+                </Button>
+            );
+        }
 
         if (ctaText === 'Schedule Inspection' || ctaText === 'Schedule Replacement') {
             return (
