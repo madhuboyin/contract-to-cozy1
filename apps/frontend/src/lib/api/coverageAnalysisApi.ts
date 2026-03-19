@@ -15,6 +15,12 @@ export type CoverageAnalysisOverrides = {
   riskTolerance?: CoverageRiskTolerance;
 };
 
+export type GuidanceToolContext = {
+  guidanceJourneyId?: string | null;
+  guidanceStepKey?: string | null;
+  guidanceSignalIntentFamily?: string | null;
+};
+
 export type ItemCoverageType = 'WARRANTY' | 'SERVICE_PLAN';
 
 export type ItemCoverageAnalysisOverrides = {
@@ -144,11 +150,23 @@ export async function getCoverageAnalysis(
 
 export async function runCoverageAnalysis(
   propertyId: string,
-  overrides?: CoverageAnalysisOverrides
+  overrides?: CoverageAnalysisOverrides,
+  guidanceContext?: GuidanceToolContext
 ): Promise<CoverageAnalysisDTO> {
   const res = await api.post<{ analysis: CoverageAnalysisDTO }>(
     `/api/properties/${propertyId}/coverage-analysis/run`,
-    { overrides: overrides ?? {} }
+    {
+      overrides: overrides ?? {},
+      ...(guidanceContext?.guidanceJourneyId
+        ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
+        : {}),
+      ...(guidanceContext?.guidanceStepKey
+        ? { guidanceStepKey: guidanceContext.guidanceStepKey }
+        : {}),
+      ...(guidanceContext?.guidanceSignalIntentFamily
+        ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
+        : {}),
+    }
   );
   return res.data.analysis;
 }
@@ -183,11 +201,23 @@ export async function getItemCoverageAnalysis(
 export async function runItemCoverageAnalysis(
   propertyId: string,
   itemId: string,
-  overrides?: ItemCoverageAnalysisOverrides
+  overrides?: ItemCoverageAnalysisOverrides,
+  guidanceContext?: GuidanceToolContext
 ): Promise<ItemCoverageAnalysisDTO> {
   const res = await api.post<{ analysis: ItemCoverageAnalysisDTO }>(
     `/api/properties/${propertyId}/inventory/items/${itemId}/coverage-analysis/run`,
-    { overrides: overrides ?? {} }
+    {
+      overrides: overrides ?? {},
+      ...(guidanceContext?.guidanceJourneyId
+        ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
+        : {}),
+      ...(guidanceContext?.guidanceStepKey
+        ? { guidanceStepKey: guidanceContext.guidanceStepKey }
+        : {}),
+      ...(guidanceContext?.guidanceSignalIntentFamily
+        ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
+        : {}),
+    }
   );
   return res.data.analysis;
 }

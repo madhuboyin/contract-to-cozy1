@@ -188,6 +188,9 @@ const ProviderList = ({
   fromSource,
   predictionId,
   inventoryItemId,
+  guidanceJourneyId,
+  guidanceStepKey,
+  guidanceSignalIntentFamily,
 }: {
   providers: Provider[];
   targetPropertyId?: string;
@@ -196,6 +199,9 @@ const ProviderList = ({
   fromSource?: string;
   predictionId?: string;
   inventoryItemId?: string;
+  guidanceJourneyId?: string;
+  guidanceStepKey?: string;
+  guidanceSignalIntentFamily?: string;
 }) => {
   return (
     <div className="space-y-2.5">
@@ -207,6 +213,11 @@ const ProviderList = ({
         if (fromSource) queryParams.append('from', fromSource);
         if (predictionId) queryParams.append('predictionId', predictionId);
         if (inventoryItemId) queryParams.append('itemId', inventoryItemId);
+        if (guidanceJourneyId) queryParams.append('guidanceJourneyId', guidanceJourneyId);
+        if (guidanceStepKey) queryParams.append('guidanceStepKey', guidanceStepKey);
+        if (guidanceSignalIntentFamily) {
+          queryParams.append('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
+        }
 
         const profileLink = queryParams.toString()
           ? `/dashboard/providers/${provider.id}?${queryParams.toString()}`
@@ -290,6 +301,9 @@ export default function ProvidersPage() {
   const predictionId = searchParams.get('predictionId') || undefined;
   const inventoryItemId = searchParams.get('itemId') || undefined;
   const fromSource = searchParams.get('from') || undefined;
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
+  const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
@@ -500,6 +514,9 @@ export default function ProvidersPage() {
           fromSource={fromSource}
           predictionId={predictionId}
           inventoryItemId={inventoryItemId}
+          guidanceJourneyId={guidanceJourneyId}
+          guidanceStepKey={guidanceStepKey}
+          guidanceSignalIntentFamily={guidanceSignalIntentFamily}
         />
       ) : (
         <EmptyStateCard

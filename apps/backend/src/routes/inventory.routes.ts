@@ -77,6 +77,9 @@ const itemCoverageOverridesSchema = z.object({
 
 const runItemCoverageBodySchema = z.object({
   overrides: itemCoverageOverridesSchema.optional(),
+  guidanceJourneyId: z.string().uuid().optional(),
+  guidanceStepKey: z.string().trim().min(1).max(80).optional(),
+  guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),
 });
 
 const replaceRepairOverridesSchema = z.object({
@@ -90,6 +93,9 @@ const replaceRepairOverridesSchema = z.object({
 
 const runReplaceRepairBodySchema = z.object({
   overrides: replaceRepairOverridesSchema.optional(),
+  guidanceJourneyId: z.string().uuid().optional(),
+  guidanceStepKey: z.string().trim().min(1).max(80).optional(),
+  guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),
 });
 
 const uploadXlsx = multer({

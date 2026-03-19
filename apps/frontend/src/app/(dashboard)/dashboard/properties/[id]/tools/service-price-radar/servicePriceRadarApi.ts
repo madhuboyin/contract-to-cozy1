@@ -123,6 +123,9 @@ export type CreateServicePriceRadarCheckPayload = {
   quoteVendorName?: string;
   quoteSource?: ServiceRadarQuoteSource;
   linkedEntities?: ServicePriceRadarLinkedEntityPayload[];
+  guidanceJourneyId?: string;
+  guidanceStepKey?: string;
+  guidanceSignalIntentFamily?: string;
 };
 
 export const SERVICE_PRICE_RADAR_CATEGORY_OPTIONS: Array<{

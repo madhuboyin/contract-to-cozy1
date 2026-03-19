@@ -25,6 +25,10 @@ const TEMPLATE_BY_FAMILY = {
     key: 'recall_safety_resolution',
     steps: ['safety_alert', 'review_remedy_instructions', 'recall_resolution'],
   },
+  freeze_risk: {
+    key: 'recall_safety_resolution',
+    steps: ['safety_alert', 'review_remedy_instructions', 'recall_resolution'],
+  },
   inspection_followup_needed: {
     key: 'inspection_followup_resolution',
     steps: ['assess_urgency', 'estimate_repair_cost', 'route_specialist', 'track_resolution'],
@@ -62,6 +66,30 @@ function shouldReuseJourney(existing, incoming) {
     existing.mergedSignalGroupKey === incoming.mergedSignalGroupKey &&
     existing.status === 'ACTIVE'
   );
+}
+
+function mapIncidentTypeToSignalFamily(typeKey) {
+  const normalized = String(typeKey || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_');
+
+  if (normalized.includes('RECALL')) return 'recall_detected';
+  if (normalized.includes('FREEZE') || normalized.includes('WEATHER') || normalized.includes('CLIMATE')) {
+    return 'freeze_risk';
+  }
+  if (normalized.includes('COVERAGE') || normalized.includes('POLICY')) {
+    return 'coverage_lapse_detected';
+  }
+  if (normalized.includes('INSPECTION')) return 'inspection_followup_needed';
+  if (normalized.includes('LIFECYCLE') || normalized.includes('END_OF_LIFE')) {
+    return 'lifecycle_end_or_past_life';
+  }
+  if (normalized.includes('MAINTENANCE')) return 'maintenance_failure_risk';
+  if (normalized.includes('FINANCIAL') || normalized.includes('BUDGET') || normalized.includes('CAPITAL')) {
+    return 'financial_exposure';
+  }
+  return 'generic_actionable_signal';
 }
 
 test('lifecycle signal maps to deterministic lifecycle journey template', () => {
@@ -142,4 +170,17 @@ test('duplicate active journey reuse evaluates true for same property/scope/grou
   };
 
   assert.equal(shouldReuseJourney(existing, incoming), true);
+});
+
+test('incident mapping routes freeze and weather incidents to freeze risk guidance', () => {
+  assert.equal(mapIncidentTypeToSignalFamily('FREEZE_RISK'), 'freeze_risk');
+  assert.equal(mapIncidentTypeToSignalFamily('weather_alert_high_wind'), 'freeze_risk');
+  const template = resolveTemplate('freeze_risk');
+  assert.equal(template.key, 'recall_safety_resolution');
+  assert.deepEqual(template.steps, ['safety_alert', 'review_remedy_instructions', 'recall_resolution']);
+});
+
+test('incident mapping routes coverage and recall incidents to correct guidance families', () => {
+  assert.equal(mapIncidentTypeToSignalFamily('COVERAGE_LAPSE'), 'coverage_lapse_detected');
+  assert.equal(mapIncidentTypeToSignalFamily('recall_match_detected'), 'recall_detected');
 });

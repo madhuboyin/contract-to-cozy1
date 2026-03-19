@@ -173,6 +173,14 @@ export default function ItemGetCoverageClient() {
     const query = searchParams.toString();
     return query ? `${pathname}?${query}` : pathname;
   }, [pathname, searchParams]);
+  const guidanceContext = useMemo(
+    () => ({
+      guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+      guidanceStepKey: searchParams.get('guidanceStepKey'),
+      guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+    }),
+    [searchParams]
+  );
   const fallbackBackHref = propertyId
     ? `/dashboard/properties/${propertyId}/inventory?tab=coverage`
     : '/dashboard/properties';
@@ -250,7 +258,12 @@ export default function ItemGetCoverageClient() {
     setRunning(true);
     setError(null);
     try {
-      const next = await runItemCoverageAnalysis(propertyId, itemId, normalizeOverrides(overrides));
+      const next = await runItemCoverageAnalysis(
+        propertyId,
+        itemId,
+        normalizeOverrides(overrides),
+        guidanceContext
+      );
       setHasAnalysis(true);
       setAnalysis(next);
     } catch (err: any) {

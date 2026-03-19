@@ -36,6 +36,23 @@ function stripUnresolvedSegments(path: string): string | null {
   return path;
 }
 
+function appendGuidanceContext(
+  path: string,
+  journey: GuidanceJourneyDTO,
+  step: GuidanceStepDTO
+): string {
+  const params = new URLSearchParams();
+  params.set('guidanceJourneyId', journey.id);
+  params.set('guidanceStepKey', step.stepKey);
+  if (journey.primarySignal?.signalIntentFamily) {
+    params.set('guidanceSignalIntentFamily', journey.primarySignal.signalIntentFamily);
+  }
+
+  const query = params.toString();
+  if (!query) return path;
+  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
+}
+
 export function formatIssueDomain(domain: GuidanceIssueDomain): string {
   return formatEnumLabel(domain) || 'Guidance';
 }
@@ -73,17 +90,22 @@ export function resolveGuidanceStepHref(args: {
   route = replaceRouteParam(route, 'homeAssetId', journey.homeAssetId ?? null);
 
   if (step.toolKey === 'replace-repair' && journey.inventoryItemId) {
-    return `/dashboard/properties/${propertyId}/inventory/items/${journey.inventoryItemId}/replace-repair`;
+    return appendGuidanceContext(
+      `/dashboard/properties/${propertyId}/inventory/items/${journey.inventoryItemId}/replace-repair`,
+      journey,
+      step
+    );
   }
 
   const safeRoute = stripUnresolvedSegments(route);
-  if (safeRoute) return safeRoute;
+  if (safeRoute) return appendGuidanceContext(safeRoute, journey, step);
 
   if (next?.recommendedToolKey) {
     const recommended = FALLBACK_TOOL_ROUTE[next.recommendedToolKey] ?? null;
     if (!recommended) return null;
     const withProperty = replaceRouteParam(recommended, 'propertyId', propertyId);
-    return stripUnresolvedSegments(withProperty);
+    const safeRecommended = stripUnresolvedSegments(withProperty);
+    return safeRecommended ? appendGuidanceContext(safeRecommended, journey, step) : null;
   }
 
   return null;

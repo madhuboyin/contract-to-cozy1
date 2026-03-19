@@ -42,6 +42,9 @@ const runSimulationBodySchema = z.object({
   scenarioId: z.string().uuid().optional(),
   horizonMonths: horizonSchema,
   inputOverrides: inputOverridesSchema.optional(),
+  guidanceJourneyId: z.string().uuid().optional(),
+  guidanceStepKey: z.string().trim().min(1).max(80).optional(),
+  guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),
 });
 
 router.use(apiRateLimiter);

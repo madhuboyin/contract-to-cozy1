@@ -6,6 +6,7 @@ import {
   RunComparisonInput,
 } from '../services/homeSavings/types';
 import { HomeSavingsService } from '../services/homeSavings.service';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 
 const service = new HomeSavingsService();
 
@@ -90,8 +91,45 @@ export async function upsertHomeSavingsAccount(req: CustomRequest, res: Response
 export async function runHomeSavingsComparison(req: CustomRequest, res: Response) {
   try {
     const userId = requireUserId(req);
-    const payload = (req.body ?? {}) as RunComparisonInput;
-    const result = await service.runComparison(req.params.propertyId, userId, payload);
+    const payload = (req.body ?? {}) as RunComparisonInput & {
+      guidanceJourneyId?: string;
+      guidanceStepKey?: string;
+      guidanceSignalIntentFamily?: string;
+    };
+
+    const {
+      guidanceJourneyId,
+      guidanceStepKey,
+      guidanceSignalIntentFamily,
+      ...comparisonInput
+    } = payload;
+
+    const result = await service.runComparison(req.params.propertyId, userId, comparisonInput);
+
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId: req.params.propertyId,
+        actorUserId: userId,
+        journeyId: guidanceJourneyId ?? null,
+        signalIntentFamily:
+          guidanceSignalIntentFamily?.trim().toLowerCase() || 'financial_exposure',
+        issueDomain: 'FINANCIAL',
+        sourceToolKey: 'home-savings',
+        sourceEntityType: 'HOME_SAVINGS_RUN',
+        sourceEntityId: result.runId,
+        stepKey: guidanceStepKey ?? 'evaluate_savings_funding',
+        status: 'COMPLETED',
+        producedData: {
+          runId: result.runId,
+          potentialMonthlySavings: result.summary.potentialMonthlySavings,
+          potentialAnnualSavings: result.summary.potentialAnnualSavings,
+          categoriesWithSavings: result.summary.categories.filter((entry) => entry.status === 'FOUND_SAVINGS').length,
+        },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] home savings hook failed:', guidanceError);
+    }
+
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;

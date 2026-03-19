@@ -1398,6 +1398,8 @@ export interface CreateBookingInput {
   insightContext?: string;    // e.g., "Property age: 35 years"
   maintenancePredictionId?: string;
   inventoryItemId?: string;
+  guidanceJourneyId?: string;
+  guidanceEnforceGuard?: boolean;
 }
 
 /**

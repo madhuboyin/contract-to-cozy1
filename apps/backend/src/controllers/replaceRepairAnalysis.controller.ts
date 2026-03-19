@@ -36,6 +36,15 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
+    const guidanceJourneyId =
+      typeof req.body?.guidanceJourneyId === 'string' ? req.body.guidanceJourneyId : null;
+    const guidanceStepKey =
+      typeof req.body?.guidanceStepKey === 'string' ? req.body.guidanceStepKey : null;
+    const guidanceSignalIntentFamily =
+      typeof req.body?.guidanceSignalIntentFamily === 'string'
+        ? req.body.guidanceSignalIntentFamily.trim().toLowerCase()
+        : null;
+
     const overrides = (req.body?.overrides ?? {}) as ReplaceRepairOverrides;
     const analysis = await service.runItemAnalysis(propertyId, itemId, userId, overrides);
 
@@ -43,13 +52,14 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
       await guidanceJourneyService.recordToolCompletion({
         propertyId,
         actorUserId: userId,
+        journeyId: guidanceJourneyId,
         inventoryItemId: itemId,
-        signalIntentFamily: 'lifecycle_end_or_past_life',
+        signalIntentFamily: guidanceSignalIntentFamily || 'lifecycle_end_or_past_life',
         issueDomain: 'ASSET_LIFECYCLE',
         sourceToolKey: 'replace-repair',
         sourceEntityType: 'REPLACE_REPAIR_ANALYSIS',
         sourceEntityId: analysis.id,
-        stepKey: 'repair_replace_decision',
+        stepKey: guidanceStepKey || 'repair_replace_decision',
         status: 'COMPLETED',
         producedData: {
           verdict: analysis.verdict,

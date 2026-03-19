@@ -428,7 +428,11 @@ export default function CoverageIntelligencePanel({
     setRunning(true);
     setError(null);
     try {
-      const latest = await runCoverageAnalysis(propertyId);
+      const latest = await runCoverageAnalysis(propertyId, undefined, {
+        guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+        guidanceStepKey: searchParams.get('guidanceStepKey'),
+        guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+      });
       setHasAnalysis(true);
       setAnalysis(latest);
     } catch (err: any) {

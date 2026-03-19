@@ -2348,7 +2348,11 @@ function CaseWorkspace({
         hasDocument: caseDetail.documents.length > 0,
         analysisType: caseDetail.case.scenarioType,
       });
-      return analyzeNegotiationShieldCase(propertyId, caseDetail.case.id);
+      return analyzeNegotiationShieldCase(propertyId, caseDetail.case.id, {
+        guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+        guidanceStepKey: searchParams.get('guidanceStepKey'),
+        guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+      });
     },
     onMutate: () => {
       setAnalysisFeedback({

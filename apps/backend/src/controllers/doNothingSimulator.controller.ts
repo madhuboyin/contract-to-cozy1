@@ -6,6 +6,7 @@ import {
   RunDoNothingSimulationInput,
   UpdateDoNothingScenarioInput,
 } from '../services/doNothingSimulator.service';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 
 const service = new DoNothingSimulatorService();
 
@@ -136,8 +137,49 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
-    const payload = req.body as RunDoNothingSimulationInput;
-    const result = await service.run(propertyId, userId, payload);
+    const payload = req.body as RunDoNothingSimulationInput & {
+      guidanceJourneyId?: string;
+      guidanceStepKey?: string;
+      guidanceSignalIntentFamily?: string;
+    };
+
+    const {
+      guidanceJourneyId,
+      guidanceStepKey,
+      guidanceSignalIntentFamily,
+      ...runInput
+    } = payload;
+
+    const result = await service.run(propertyId, userId, runInput);
+
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId,
+        actorUserId: userId,
+        journeyId: guidanceJourneyId ?? null,
+        signalIntentFamily:
+          guidanceSignalIntentFamily?.trim().toLowerCase() || 'cost_of_inaction_risk',
+        issueDomain: 'FINANCIAL',
+        sourceToolKey: 'do-nothing-simulator',
+        sourceEntityType: 'DO_NOTHING_SIMULATION_RUN',
+        sourceEntityId: result.run.id,
+        stepKey: guidanceStepKey ?? 'compare_action_options',
+        status: 'COMPLETED',
+        producedData: {
+          runId: result.run.id,
+          horizonMonths: result.run.horizonMonths,
+          confidence: result.run.confidence,
+          riskScoreDelta: result.run.riskScoreDelta,
+          incidentLikelihood: result.run.incidentLikelihood,
+          expectedCostDeltaCentsMin: result.run.expectedCostDeltaCentsMin,
+          expectedCostDeltaCentsMax: result.run.expectedCostDeltaCentsMax,
+          summary: result.run.summary,
+        },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] do-nothing hook failed:', guidanceError);
+    }
+
     return res.json({ success: true, data: result });
   } catch (error: any) {
     console.error('Error running do-nothing simulation:', error);

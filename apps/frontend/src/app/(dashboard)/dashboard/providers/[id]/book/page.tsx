@@ -43,6 +43,7 @@ export default function BookProviderPage() {
   const insightContext = searchParams.get('insightContext');
   const maintenancePredictionId = searchParams.get('predictionId');
   const inventoryItemId = searchParams.get('itemId');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const providerId = params.id as string;
 
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -202,6 +203,8 @@ export default function BookProviderPage() {
       ...(insightContext && { insightContext }),
       ...(maintenancePredictionId && { maintenancePredictionId }),
       ...(inventoryItemId && { inventoryItemId }),
+      ...(guidanceJourneyId && { guidanceJourneyId }),
+      ...(guidanceJourneyId && { guidanceEnforceGuard: true }),
     };
 
     setIsSubmitting(true);

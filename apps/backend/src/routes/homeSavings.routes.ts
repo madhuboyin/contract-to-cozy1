@@ -35,6 +35,9 @@ const upsertAccountBodySchema = z.object({
 
 const runComparisonBodySchema = z.object({
   categoryKey: categoryKeySchema.optional(),
+  guidanceJourneyId: z.string().uuid().optional(),
+  guidanceStepKey: z.string().trim().min(1).max(80).optional(),
+  guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),
 });
 
 const setOpportunityStatusBodySchema = z.object({

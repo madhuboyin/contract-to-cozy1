@@ -56,18 +56,20 @@ function normalizeToolOutput(toolKey: string, producedData: Record<string, unkno
   }
 
   if (key === 'service-price-radar') {
+    const confidenceScore = pickNumber(producedData.confidenceScore);
     return {
       fairPriceMin: pickNumber(producedData.fairPriceMin),
       fairPriceMax: pickNumber(producedData.fairPriceMax),
       fairPriceCurrency: pickString(producedData.currency),
-      fairPriceConfidence: pickString(producedData.confidence),
+      fairPriceConfidence: pickString(producedData.confidence) ?? (confidenceScore != null ? String(confidenceScore) : null),
+      fairPriceConfidenceScore: confidenceScore,
     };
   }
 
   if (key === 'negotiation-shield') {
     return {
       negotiationLeverage: producedData.negotiationLeverage ?? null,
-      negotiationScriptType: pickString(producedData.scriptType),
+      negotiationScriptType: pickString(producedData.scriptType) ?? pickString(producedData.draftType),
       negotiationConfidence: pickNumber(producedData.confidence),
     };
   }
@@ -95,6 +97,38 @@ function normalizeToolOutput(toolKey: string, producedData: Record<string, unkno
       bookingId: pickString(producedData.bookingId),
       bookingStatus: pickString(producedData.status),
       bookingScheduledAt: pickString(producedData.scheduledDate),
+    };
+  }
+
+  if (key === 'do-nothing-simulator') {
+    return {
+      doNothingRunId: pickString(producedData.runId),
+      costOfInactionMinCents: pickNumber(producedData.expectedCostDeltaCentsMin),
+      costOfInactionMaxCents: pickNumber(producedData.expectedCostDeltaCentsMax),
+      doNothingIncidentLikelihood: pickString(producedData.incidentLikelihood),
+      doNothingRiskScoreDelta: pickNumber(producedData.riskScoreDelta),
+      doNothingSummary: pickString(producedData.summary),
+    };
+  }
+
+  if (key === 'home-savings') {
+    return {
+      homeSavingsRunId: pickString(producedData.runId),
+      potentialMonthlySavings: pickNumber(producedData.potentialMonthlySavings),
+      potentialAnnualSavings: pickNumber(producedData.potentialAnnualSavings),
+      categoriesWithSavings: pickNumber(producedData.categoriesWithSavings),
+    };
+  }
+
+  if (key === 'true-cost') {
+    return {
+      annualTotalNow: pickNumber(producedData.annualTotalNow),
+      total5yCost: pickNumber(producedData.total5y),
+      taxes5y: pickNumber(producedData.taxes5y),
+      insurance5y: pickNumber(producedData.insurance5y),
+      maintenance5y: pickNumber(producedData.maintenance5y),
+      utilities5y: pickNumber(producedData.utilities5y),
+      trueCostConfidence: pickString(producedData.confidence),
     };
   }
 

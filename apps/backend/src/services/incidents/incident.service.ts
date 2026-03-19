@@ -22,6 +22,7 @@ import { clampInt, toDateOrNull } from './incident.utils';
 import { logIncidentEvent } from './incident.events';
 import { evaluateIncident } from './incident.evaluator';
 import { orchestrateIncident } from './incident.orchestrator';
+import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
 
 function computeStatusTimestamps(nextStatus: IncidentStatus) {
   const now = new Date();
@@ -76,6 +77,210 @@ async function shouldSuppress(args: { propertyId: string; userId?: string | null
     ruleId: r.id,
     reason: r.reason,
   };
+}
+
+function normalizeIncidentTypeKey(typeKey: string): string {
+  return String(typeKey || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function mapIncidentTypeToGuidance(typeKey: string): {
+  signalIntentFamily: string;
+  issueDomain:
+    | 'WEATHER'
+    | 'INSURANCE'
+    | 'SAFETY'
+    | 'MAINTENANCE'
+    | 'ASSET_LIFECYCLE'
+    | 'FINANCIAL'
+    | 'OTHER';
+  readiness: 'READY' | 'NEEDS_CONTEXT' | 'UNKNOWN';
+  sourceToolKey: string;
+} {
+  const normalized = normalizeIncidentTypeKey(typeKey);
+
+  if (normalized.includes('RECALL')) {
+    return {
+      signalIntentFamily: 'recall_detected',
+      issueDomain: 'SAFETY',
+      readiness: 'READY',
+      sourceToolKey: 'recalls',
+    };
+  }
+
+  if (normalized.includes('FREEZE') || normalized.includes('WEATHER') || normalized.includes('CLIMATE')) {
+    return {
+      signalIntentFamily: 'freeze_risk',
+      issueDomain: 'WEATHER',
+      readiness: 'READY',
+      sourceToolKey: 'home-event-radar',
+    };
+  }
+
+  if (normalized.includes('COVERAGE') || normalized.includes('POLICY') || normalized.includes('DEDUCTIBLE')) {
+    return {
+      signalIntentFamily: 'coverage_lapse_detected',
+      issueDomain: 'INSURANCE',
+      readiness: 'NEEDS_CONTEXT',
+      sourceToolKey: 'coverage-intelligence',
+    };
+  }
+
+  if (normalized.includes('INSPECTION')) {
+    return {
+      signalIntentFamily: 'inspection_followup_needed',
+      issueDomain: 'MAINTENANCE',
+      readiness: 'NEEDS_CONTEXT',
+      sourceToolKey: 'inspection-report',
+    };
+  }
+
+  if (normalized.includes('LIFECYCLE') || normalized.includes('END_OF_LIFE')) {
+    return {
+      signalIntentFamily: 'lifecycle_end_or_past_life',
+      issueDomain: 'ASSET_LIFECYCLE',
+      readiness: 'NEEDS_CONTEXT',
+      sourceToolKey: 'replace-repair',
+    };
+  }
+
+  if (normalized.includes('MAINTENANCE')) {
+    return {
+      signalIntentFamily: 'maintenance_failure_risk',
+      issueDomain: 'MAINTENANCE',
+      readiness: 'NEEDS_CONTEXT',
+      sourceToolKey: 'maintenance',
+    };
+  }
+
+  if (
+    normalized.includes('FINANCIAL') ||
+    normalized.includes('BUDGET') ||
+    normalized.includes('CAPITAL') ||
+    normalized.includes('COST_OF_INACTION')
+  ) {
+    return {
+      signalIntentFamily: 'financial_exposure',
+      issueDomain: 'FINANCIAL',
+      readiness: 'NEEDS_CONTEXT',
+      sourceToolKey: 'true-cost',
+    };
+  }
+
+  return {
+    signalIntentFamily: 'generic_actionable_signal',
+    issueDomain: 'OTHER',
+    readiness: 'UNKNOWN',
+    sourceToolKey: 'home-event-radar',
+  };
+}
+
+async function bridgeIncidentToGuidance(incident: any) {
+  if (!incident?.propertyId || !incident?.id) return;
+  if (
+    incident.isSuppressed ||
+    incident.status === IncidentStatus.SUPPRESSED ||
+    incident.status === IncidentStatus.RESOLVED ||
+    incident.status === IncidentStatus.EXPIRED
+  ) {
+    return;
+  }
+
+  const mapped = mapIncidentTypeToGuidance(incident.typeKey);
+  const details = asRecord(incident.details);
+  const inventoryItemId =
+    typeof details.inventoryItemId === 'string' && details.inventoryItemId.trim().length > 0
+      ? details.inventoryItemId
+      : null;
+  const homeAssetId =
+    typeof details.homeAssetId === 'string' && details.homeAssetId.trim().length > 0
+      ? details.homeAssetId
+      : null;
+
+  await guidanceJourneyService.ingestSignal({
+    propertyId: incident.propertyId,
+    actorUserId: incident.userId ?? null,
+    inventoryItemId,
+    homeAssetId,
+    signalIntentFamily: mapped.signalIntentFamily,
+    issueDomain: mapped.issueDomain,
+    executionReadiness: mapped.readiness,
+    severity: incident.severity ?? null,
+    severityScore: incident.severityScore ?? null,
+    confidenceScore: incident.confidence ?? null,
+    sourceType: incident.sourceType ?? 'INCIDENT',
+    sourceFeatureKey: 'incident-service',
+    sourceToolKey: mapped.sourceToolKey,
+    sourceEntityType: 'INCIDENT',
+    sourceEntityId: incident.id,
+    payloadJson: {
+      incidentId: incident.id,
+      typeKey: incident.typeKey,
+      status: incident.status,
+      severity: incident.severity ?? null,
+      confidence: incident.confidence ?? null,
+    },
+    metadataJson: {
+      incidentCategory: incident.category ?? null,
+      incidentTitle: incident.title ?? null,
+    },
+  });
+}
+
+async function archiveIncidentGuidance(incidentId: string) {
+  const db = prisma as any;
+  const guidanceSignal = db.guidanceSignal;
+  const guidanceJourney = db.guidanceJourney;
+  if (!guidanceSignal || !guidanceJourney) return;
+
+  const now = new Date();
+
+  await guidanceSignal.updateMany({
+    where: {
+      sourceEntityType: 'INCIDENT',
+      sourceEntityId: incidentId,
+      status: 'ACTIVE',
+    },
+    data: {
+      status: 'ARCHIVED',
+      archivedAt: now,
+    },
+  });
+
+  const sourceSignals = await guidanceSignal.findMany({
+    where: {
+      sourceEntityType: 'INCIDENT',
+      sourceEntityId: incidentId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  const sourceSignalIds = sourceSignals.map((signal: { id: string }) => signal.id);
+  if (sourceSignalIds.length === 0) return;
+
+  await guidanceJourney.updateMany({
+    where: {
+      status: 'ACTIVE',
+      primarySignalId: {
+        in: sourceSignalIds,
+      },
+    },
+    data: {
+      status: 'ARCHIVED',
+      completedAt: now,
+      lastTransitionAt: now,
+    },
+  });
 }
 
 export class IncidentService {
@@ -194,7 +399,18 @@ export class IncidentService {
       });
     await evaluateIncident(incident.id);
     await orchestrateIncident(incident.id);
-    return this.getIncidentById(incident.id);
+
+    const hydrated = await this.getIncidentById(incident.id);
+
+    if (hydrated) {
+      try {
+        await bridgeIncidentToGuidance(hydrated);
+      } catch (guidanceError) {
+        console.warn('[GUIDANCE] incident bridge hook failed:', guidanceError);
+      }
+    }
+
+    return hydrated;
   }
 
   static async addSignal(incidentId: string, signal: AddIncidentSignalInput) {
@@ -265,10 +481,24 @@ export class IncidentService {
       data.suppressionRuleId = null;
     }
 
-    return prisma.incident.update({
+    const updated = await prisma.incident.update({
       where: { id },
       data,
     });
+
+    if (
+      status === IncidentStatus.SUPPRESSED ||
+      status === IncidentStatus.RESOLVED ||
+      status === IncidentStatus.EXPIRED
+    ) {
+      try {
+        await archiveIncidentGuidance(id);
+      } catch (guidanceError) {
+        console.warn('[GUIDANCE] incident archive hook failed:', guidanceError);
+      }
+    }
+
+    return updated;
   }
 
 static async acknowledge(incidentId: string, userId: string, input: AcknowledgeIncidentInput) {
@@ -366,6 +596,12 @@ static async acknowledge(incidentId: string, userId: string, input: AcknowledgeI
           input.type === AcknowledgementType.SNOOZED ? (ack as any).snoozeUntil : 'PERMANENT',
       },
     });
+
+    try {
+      await archiveIncidentGuidance(incidentId);
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] incident suppression archive hook failed:', guidanceError);
+    }
   }
 
   return ack;

@@ -136,7 +136,7 @@ const templates: GuidanceJourneyTemplate[] = [
   {
     journeyTypeKey: 'recall_safety_resolution',
     journeyKey: 'journey_recall_safety_resolution',
-    signalIntentFamilies: ['recall_detected'],
+    signalIntentFamilies: ['recall_detected', 'freeze_risk'],
     issueDomain: 'SAFETY',
     defaultDecisionStage: 'AWARENESS',
     defaultReadiness: 'READY',
@@ -332,6 +332,7 @@ export const TOOL_DEFAULT_STEP_KEY: Record<string, string> = {
   'negotiation-shield': 'prepare_negotiation',
   'do-nothing-simulator': 'compare_action_options',
   'home-savings': 'evaluate_savings_funding',
+  'true-cost': 'estimate_out_of_pocket_cost',
 };
 
 export function getGuidanceTemplateBySignalFamily(signalIntentFamily?: string | null): GuidanceJourneyTemplate {

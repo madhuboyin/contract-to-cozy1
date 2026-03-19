@@ -2,6 +2,7 @@ import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
 import { ServicePriceRadarService } from '../services/servicePriceRadar.service';
+import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import {
   CreateServicePriceRadarBody,
   listServicePriceRadarQuerySchema,
@@ -27,6 +28,47 @@ export async function createServicePriceRadarCheck(
     const userId = requireUserId(req);
     const payload = req.body as CreateServicePriceRadarBody;
     const result = await service.createCheck(req.params.propertyId, userId, payload);
+
+    const guidanceSignalIntentFamily =
+      payload.guidanceSignalIntentFamily?.trim().toLowerCase() || null;
+
+    const issueDomain =
+      guidanceSignalIntentFamily === 'inspection_followup_needed'
+        ? 'MAINTENANCE'
+        : 'ASSET_LIFECYCLE';
+
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId: req.params.propertyId,
+        actorUserId: userId,
+        journeyId: payload.guidanceJourneyId ?? null,
+        signalIntentFamily: guidanceSignalIntentFamily ?? 'lifecycle_end_or_past_life',
+        issueDomain,
+        sourceToolKey: 'service-price-radar',
+        sourceEntityType: 'SERVICE_PRICE_RADAR_CHECK',
+        sourceEntityId: result.check.id,
+        stepKey: payload.guidanceStepKey ?? null,
+        status: 'COMPLETED',
+        producedData: {
+          checkId: result.check.id,
+          serviceCategory: result.check.serviceCategory,
+          verdict: result.check.verdict,
+          confidenceScore: result.check.confidenceScore,
+          fairPriceMin: result.check.expectedLow,
+          fairPriceMax: result.check.expectedHigh,
+          fairPriceMedian: result.check.expectedMedian,
+          currency: result.check.quoteCurrency,
+          quoteAmount: result.check.quoteAmount,
+          explanationShort: result.check.explanationShort,
+        },
+        metadata: {
+          linkedEntityCount: result.check.linkedEntities?.length ?? 0,
+        },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] service price radar hook failed:', guidanceError);
+    }
+
     return res.status(201).json({ success: true, data: result });
   } catch (error) {
     return next(error);

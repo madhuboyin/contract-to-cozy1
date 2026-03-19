@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, ArrowLeft, Loader2, Wrench } from 'lucide-react';
 import { getInventoryItem } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
@@ -142,6 +142,7 @@ const INPUT_BASE_CLASS =
 export default function ReplaceRepairClient() {
   const router = useRouter();
   const params = useParams<{ id: string; itemId: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
   const itemId = params.itemId;
 
@@ -214,12 +215,21 @@ export default function ReplaceRepairClient() {
     };
   }, [inputs]);
 
+  const guidanceContext = useMemo(
+    () => ({
+      guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+      guidanceStepKey: searchParams.get('guidanceStepKey'),
+      guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+    }),
+    [searchParams]
+  );
+
   const runAnalysis = async () => {
     if (!propertyId || !itemId) return;
     setRunning(true);
     setError(null);
     try {
-      const next = await runReplaceRepairAnalysis(propertyId, itemId, overrides);
+      const next = await runReplaceRepairAnalysis(propertyId, itemId, overrides, guidanceContext);
       setAnalysis(next);
       setHasAnalysis(true);
     } catch (err: any) {

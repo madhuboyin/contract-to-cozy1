@@ -235,10 +235,30 @@ export async function parseNegotiationShieldCaseDocument(
 
 export async function analyzeNegotiationShieldCase(
   propertyId: string,
-  caseId: string
+  caseId: string,
+  guidanceContext?: {
+    guidanceJourneyId?: string | null;
+    guidanceStepKey?: string | null;
+    guidanceSignalIntentFamily?: string | null;
+  }
 ): Promise<NegotiationShieldCaseDetail> {
+  const query = new URLSearchParams();
+  if (guidanceContext?.guidanceJourneyId) {
+    query.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+  }
+  if (guidanceContext?.guidanceStepKey) {
+    query.set('guidanceStepKey', guidanceContext.guidanceStepKey);
+  }
+  if (guidanceContext?.guidanceSignalIntentFamily) {
+    query.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+  }
+
+  const endpoint = query.toString()
+    ? `/api/properties/${propertyId}/negotiation-shield/cases/${caseId}/analyze?${query.toString()}`
+    : `/api/properties/${propertyId}/negotiation-shield/cases/${caseId}/analyze`;
+
   const res = await api.post<NegotiationShieldCaseDetail>(
-    `/api/properties/${propertyId}/negotiation-shield/cases/${caseId}/analyze`
+    endpoint
   );
   return res.data;
 }

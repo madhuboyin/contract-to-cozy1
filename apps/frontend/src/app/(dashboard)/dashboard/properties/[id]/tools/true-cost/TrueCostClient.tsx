@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { getTrueCostOwnership, TrueCostOwnershipDTO } from './trueCostApi';
@@ -24,7 +24,11 @@ function money(n?: number | null, currency = 'USD') {
 
 export default function TrueCostClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
 
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TrueCostOwnershipDTO | null>(null);
@@ -35,7 +39,11 @@ export default function TrueCostClient() {
     setLoading(true);
     setError(null);
     try {
-      const r = await getTrueCostOwnership(propertyId);
+      const r = await getTrueCostOwnership(propertyId, {
+        guidanceJourneyId,
+        guidanceStepKey,
+        guidanceSignalIntentFamily,
+      });
       setData(r);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load true cost');
@@ -47,7 +55,7 @@ export default function TrueCostClient() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId]);
+  }, [propertyId, guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily]);
 
   const chartModel = useMemo(() => {
     const h = data?.history ?? [];

@@ -88,6 +88,11 @@ type LinkedDocumentOption = {
 };
 
 type ValidationErrors = Partial<Record<'serviceCategory' | 'quoteAmount', string>>;
+type GuidanceToolContext = {
+  guidanceJourneyId: string | null;
+  guidanceStepKey: string | null;
+  guidanceSignalIntentFamily: string | null;
+};
 
 const QUICK_CATEGORY_VALUES: ServiceRadarCategory[] = [
   'HVAC',
@@ -258,7 +263,8 @@ function selectedLinkedEntityType(
 function buildPayload(
   form: FormState,
   linkedOptions: LinkedEntityOption[],
-  prefilledLinkedOption?: LinkedEntityOption | null
+  prefilledLinkedOption?: LinkedEntityOption | null,
+  guidanceContext?: GuidanceToolContext
 ): CreateServicePriceRadarCheckPayload {
   const selectedLinked =
     linkedOptions.find((option) => option.key === form.linkedEntityKey) ??
@@ -280,6 +286,15 @@ function buildPayload(
           },
         ]
       : undefined,
+    ...(guidanceContext?.guidanceJourneyId
+      ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
+      : {}),
+    ...(guidanceContext?.guidanceStepKey
+      ? { guidanceStepKey: guidanceContext.guidanceStepKey }
+      : {}),
+    ...(guidanceContext?.guidanceSignalIntentFamily
+      ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
+      : {}),
   };
 }
 
@@ -294,7 +309,11 @@ function buildFormFromCheck(check: ServicePriceRadarCheckDetail | ServicePriceRa
   };
 }
 
-function buildNegotiationShieldHref(propertyId: string, check: ServicePriceRadarCheckDetail): string {
+function buildNegotiationShieldHref(
+  propertyId: string,
+  check: ServicePriceRadarCheckDetail,
+  guidanceContext?: GuidanceToolContext
+): string {
   const params = new URLSearchParams({
     create: '1',
     scenario: 'contractor-quote-review',
@@ -305,6 +324,14 @@ function buildNegotiationShieldHref(propertyId: string, check: ServicePriceRadar
   }
   params.set('quoteAmount', String(check.quoteAmount));
   params.set('serviceCategory', check.serviceCategory);
+
+  if (guidanceContext?.guidanceJourneyId) {
+    params.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+  }
+  if (guidanceContext?.guidanceSignalIntentFamily) {
+    params.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+  }
+  params.set('guidanceStepKey', 'prepare_negotiation');
 
   return `/dashboard/properties/${propertyId}/tools/negotiation-shield?${params.toString()}`;
 }
@@ -558,6 +585,11 @@ export default function ServicePriceRadarClient() {
   const [linkedOptionsLoaded, setLinkedOptionsLoaded] = useState(false);
 
   const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
+  const guidanceContext: GuidanceToolContext = {
+    guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+    guidanceStepKey: searchParams.get('guidanceStepKey'),
+    guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+  };
   const prefilledCategoryValue = searchParams.get('category');
   const prefilledQuoteAmount = searchParams.get('quoteAmount');
   const prefilledLinkedEntityType = searchParams.get('linkedEntityType');
@@ -989,7 +1021,7 @@ export default function ServicePriceRadarClient() {
         linked_entity_type: linkedEntityType || undefined,
         had_vendor_name: Boolean(form.quoteVendorName.trim()),
       });
-      const payload = buildPayload(form, linkedOptions, prefilledLinkedOption);
+      const payload = buildPayload(form, linkedOptions, prefilledLinkedOption, guidanceContext);
       const detail = await createServicePriceRadarCheck(propertyId, payload);
       setCurrentCheck(detail);
       await refreshRecentChecks({ afterSubmit: true });
@@ -1410,7 +1442,7 @@ export default function ServicePriceRadarClient() {
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button asChild variant="outline" className="min-h-[40px] rounded-xl">
                       <Link
-                        href={buildNegotiationShieldHref(propertyId, currentCheck)}
+                        href={buildNegotiationShieldHref(propertyId, currentCheck, guidanceContext)}
                         onClick={() =>
                           trackRadarEvent('NEGOTIATION_HANDOFF_CLICKED', 'handoff', {
                             service_category: currentCheck.serviceCategory,

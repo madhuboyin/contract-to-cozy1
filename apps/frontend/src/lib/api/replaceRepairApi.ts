@@ -12,6 +12,12 @@ export type ReplaceRepairOverrides = {
   usageIntensity?: ReplaceRepairUsageIntensity;
 };
 
+export type GuidanceToolContext = {
+  guidanceJourneyId?: string | null;
+  guidanceStepKey?: string | null;
+  guidanceSignalIntentFamily?: string | null;
+};
+
 export type ReplaceRepairAnalysisDTO = {
   id: string;
   propertyId: string;
@@ -64,11 +70,23 @@ export async function getReplaceRepairAnalysis(
 export async function runReplaceRepairAnalysis(
   propertyId: string,
   itemId: string,
-  overrides?: ReplaceRepairOverrides
+  overrides?: ReplaceRepairOverrides,
+  guidanceContext?: GuidanceToolContext
 ): Promise<ReplaceRepairAnalysisDTO> {
   const res = await api.post<{ analysis: ReplaceRepairAnalysisDTO }>(
     `/api/properties/${propertyId}/inventory/items/${itemId}/replace-repair/run`,
-    { overrides: overrides ?? {} }
+    {
+      overrides: overrides ?? {},
+      ...(guidanceContext?.guidanceJourneyId
+        ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
+        : {}),
+      ...(guidanceContext?.guidanceStepKey
+        ? { guidanceStepKey: guidanceContext.guidanceStepKey }
+        : {}),
+      ...(guidanceContext?.guidanceSignalIntentFamily
+        ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
+        : {}),
+    }
   );
   return res.data.analysis;
 }

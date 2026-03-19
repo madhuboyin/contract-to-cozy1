@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, Loader2, PiggyBank, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -172,6 +173,7 @@ function categoryFormDescription(categoryKey: HomeSavingsCategoryKey): string {
 }
 
 export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPanelProps) {
+  const searchParams = useSearchParams();
   const [summary, setSummary] = useState<HomeSavingsSummaryDTO | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<HomeSavingsCategoryKey | null>(null);
   const [detail, setDetail] = useState<HomeSavingsCategoryDetailDTO | null>(null);
@@ -261,7 +263,11 @@ export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPa
     setRunningCategory(true);
     setError(null);
     try {
-      await runHomeSavings(propertyId, selectedCategory);
+      await runHomeSavings(propertyId, selectedCategory, {
+        guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+        guidanceStepKey: searchParams.get('guidanceStepKey'),
+        guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+      });
       await loadSummary();
       await loadDetail(selectedCategory);
     } catch (err: any) {
@@ -275,7 +281,11 @@ export default function HomeSavingsCheckPanel({ propertyId }: HomeSavingsCheckPa
     setRunningAll(true);
     setError(null);
     try {
-      await runHomeSavings(propertyId);
+      await runHomeSavings(propertyId, undefined, {
+        guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+        guidanceStepKey: searchParams.get('guidanceStepKey'),
+        guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+      });
       await loadSummary();
       if (selectedCategory) {
         await loadDetail(selectedCategory);

@@ -54,6 +54,9 @@ export default function ProviderDetailPage() {
   const category = searchParams.get('category');
   const predictionId = searchParams.get('predictionId');
   const itemId = searchParams.get('itemId');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
 
   const [provider, setProvider] = useState<CompleteProvider | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -192,6 +195,11 @@ export default function ProviderDetailPage() {
     if (category) queryParams.append('category', category);
     if (predictionId) queryParams.append('predictionId', predictionId);
     if (itemId) queryParams.append('itemId', itemId);
+    if (guidanceJourneyId) queryParams.append('guidanceJourneyId', guidanceJourneyId);
+    if (guidanceStepKey) queryParams.append('guidanceStepKey', guidanceStepKey);
+    if (guidanceSignalIntentFamily) {
+      queryParams.append('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
+    }
 
     const fromParam = searchParams.get('from');
     if (fromParam) queryParams.append('from', fromParam);

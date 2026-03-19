@@ -39,6 +39,15 @@ export async function runCoverageAnalysis(req: CustomRequest, res: Response) {
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
+    const guidanceJourneyId =
+      typeof req.body?.guidanceJourneyId === 'string' ? req.body.guidanceJourneyId : null;
+    const guidanceStepKey =
+      typeof req.body?.guidanceStepKey === 'string' ? req.body.guidanceStepKey : null;
+    const guidanceSignalIntentFamily =
+      typeof req.body?.guidanceSignalIntentFamily === 'string'
+        ? req.body.guidanceSignalIntentFamily.trim().toLowerCase()
+        : null;
+
     const overrides = (req.body?.overrides ?? {}) as CoverageAnalysisOverrides;
     const analysis = await service.run(propertyId, userId, overrides);
 
@@ -52,12 +61,13 @@ export async function runCoverageAnalysis(req: CustomRequest, res: Response) {
         await guidanceJourneyService.recordToolCompletion({
           propertyId,
           actorUserId: userId,
-          signalIntentFamily: 'coverage_gap',
+          journeyId: guidanceJourneyId,
+          signalIntentFamily: guidanceSignalIntentFamily || 'coverage_gap',
           issueDomain: 'INSURANCE',
           sourceToolKey: 'coverage-intelligence',
           sourceEntityType: 'COVERAGE_ANALYSIS',
           sourceEntityId: analysis.id,
-          stepKey: 'check_coverage',
+          stepKey: guidanceStepKey || 'check_coverage',
           status: 'COMPLETED',
           producedData: {
             overallVerdict: analysis.overallVerdict,
@@ -136,6 +146,15 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
+    const guidanceJourneyId =
+      typeof req.body?.guidanceJourneyId === 'string' ? req.body.guidanceJourneyId : null;
+    const guidanceStepKey =
+      typeof req.body?.guidanceStepKey === 'string' ? req.body.guidanceStepKey : null;
+    const guidanceSignalIntentFamily =
+      typeof req.body?.guidanceSignalIntentFamily === 'string'
+        ? req.body.guidanceSignalIntentFamily.trim().toLowerCase()
+        : null;
+
     const overrides = (req.body?.overrides ?? {}) as ItemCoverageAnalysisOverrides;
     const analysis = await service.runItemAnalysis(propertyId, itemId, userId, overrides);
 
@@ -149,13 +168,14 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
         await guidanceJourneyService.recordToolCompletion({
           propertyId,
           actorUserId: userId,
+          journeyId: guidanceJourneyId,
           inventoryItemId: itemId,
-          signalIntentFamily: 'coverage_gap',
+          signalIntentFamily: guidanceSignalIntentFamily || 'coverage_gap',
           issueDomain: 'INSURANCE',
           sourceToolKey: 'coverage-intelligence',
           sourceEntityType: 'COVERAGE_ANALYSIS',
           sourceEntityId: analysis.id,
-          stepKey: 'check_coverage',
+          stepKey: guidanceStepKey || 'check_coverage',
           status: 'COMPLETED',
           producedData: {
             overallVerdict: analysis.overallVerdict,

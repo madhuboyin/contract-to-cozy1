@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
   ChevronDown,
@@ -145,6 +146,7 @@ function buildOverrides(form: FormState): DoNothingInputOverrides {
 }
 
 export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulatorPanelProps) {
+  const searchParams = useSearchParams();
   const [scenarios, setScenarios] = useState<DoNothingScenarioDTO[]>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>(CUSTOM_SCENARIO_KEY);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM_STATE);
@@ -319,6 +321,10 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
             : undefined,
         horizonMonths: form.horizonMonths,
         inputOverrides: buildOverrides(form),
+      }, {
+        guidanceJourneyId: searchParams.get('guidanceJourneyId'),
+        guidanceStepKey: searchParams.get('guidanceStepKey'),
+        guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
       });
 
       setHasRun(true);
