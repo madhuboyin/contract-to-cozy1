@@ -52,7 +52,7 @@ const HOME_TOOL_REGISTRY = Object.fromEntries(
     {
       id: tool.key,
       label: tool.name,
-      description: tool.description,
+      description: tool.desktopDescription ?? tool.description,
       hrefSuffix: tool.hrefSuffix,
       navTarget: tool.navTarget,
       icon: tool.icon,
