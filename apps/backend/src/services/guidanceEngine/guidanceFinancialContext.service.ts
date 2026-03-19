@@ -1,3 +1,5 @@
+import { guidanceValidationService } from './guidanceValidation.service';
+
 type CoverageImpact = 'COVERED' | 'PARTIAL' | 'NOT_COVERED' | 'UNKNOWN';
 
 export type GuidanceFinancialContext = {
@@ -79,16 +81,16 @@ export class GuidanceFinancialContextService {
     const coverageWeight =
       coverageImpact === 'NOT_COVERED' ? 15 : coverageImpact === 'PARTIAL' ? 8 : 0;
 
-    const financialImpactScore = clamp(
+    const rawFinancialImpactScore = clamp(
       Math.round(exposureWeight + delayWeight + fundingWeight + coverageWeight),
       0,
       100
     );
 
     return {
-      financialImpactScore,
+      financialImpactScore: guidanceValidationService.sanitizeFinancialImpactScore(rawFinancialImpactScore),
       fundingGapFlag,
-      costOfDelay: Math.round(costOfDelay),
+      costOfDelay: guidanceValidationService.sanitizeCostOfDelay(costOfDelay),
       coverageImpact,
     };
   }

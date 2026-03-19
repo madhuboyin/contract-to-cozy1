@@ -1,4 +1,5 @@
 import { getGuidanceModels } from './guidanceTypes';
+import { guidanceValidationService } from './guidanceValidation.service';
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -182,6 +183,15 @@ export class GuidanceDerivedDataService {
       ? compactObject(normalizeToolOutput(params.toolKey, producedData))
       : producedData;
 
+    const observedAt =
+      guidanceValidationService.inferObservedAtFromPayload(producedData) ??
+      guidanceValidationService.inferObservedAtFromPayload(normalized) ??
+      nowIso;
+    const toolFreshness = guidanceValidationService.assessToolFreshness({
+      toolKey: params.toolKey ?? null,
+      observedAt,
+    });
+
     const nextByStep = {
       ...byStep,
       [params.stepKey]: {
@@ -189,6 +199,7 @@ export class GuidanceDerivedDataService {
         toolKey: params.toolKey ?? null,
         data: normalized,
         raw: producedData,
+        freshness: toolFreshness,
       },
     };
 
@@ -199,6 +210,7 @@ export class GuidanceDerivedDataService {
             updatedAt: nowIso,
             stepKey: params.stepKey,
             data: normalized,
+            freshness: toolFreshness,
           },
         }
       : byTool;
@@ -206,6 +218,12 @@ export class GuidanceDerivedDataService {
     const nextLatest = {
       ...latest,
       ...normalized,
+      ...(params.toolKey
+        ? {
+            [`${params.toolKey}ObservedAt`]: observedAt,
+            [`${params.toolKey}Stale`]: toolFreshness.isStale,
+          }
+        : {}),
     };
 
     const nextSnapshot = {
@@ -238,6 +256,18 @@ export class GuidanceDerivedDataService {
         },
       },
     });
+
+    if (toolFreshness.isStale) {
+      console.info('[GUIDANCE] stale derived data merged', {
+        propertyId: params.propertyId,
+        journeyId: params.journeyId,
+        stepKey: params.stepKey,
+        toolKey: params.toolKey ?? null,
+        observedAt: toolFreshness.observedAt,
+        ageDays: toolFreshness.ageDays,
+        maxAgeDays: toolFreshness.maxAgeDays,
+      });
+    }
 
     return nextSnapshot;
   }

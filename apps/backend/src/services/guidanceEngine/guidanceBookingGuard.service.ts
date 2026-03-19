@@ -76,6 +76,38 @@ export class GuidanceBookingGuardService {
     for (const journey of journeys) {
       const steps = (journey.steps ?? []) as any[];
       const executionSteps = pickExecutionStepsForTarget(request.targetAction, steps);
+      const journeyMissingContext = Array.isArray(journey.missingContextKeys)
+        ? journey.missingContextKeys.filter((item: unknown): item is string => typeof item === 'string')
+        : [];
+
+      if (
+        journey.executionReadiness === 'UNKNOWN' ||
+        Boolean(journey.isLowContext) ||
+        journeyMissingContext.length > 0
+      ) {
+        const fallbackPrior = steps.find(
+          (step) =>
+            step.isRequired &&
+            (step.status === 'PENDING' || step.status === 'IN_PROGRESS' || step.status === 'BLOCKED')
+        );
+
+        reasons.push(
+          'Execution is temporarily blocked because guidance context is incomplete.'
+        );
+
+        if (fallbackPrior) {
+          missingPrerequisites.push({
+            journeyId: journey.id,
+            journeyTypeKey: journey.journeyTypeKey ?? null,
+            stepKey: fallbackPrior.stepKey,
+            stepLabel: guidanceCopyService.polishStepLabel({
+              stepKey: fallbackPrior.stepKey,
+              label: fallbackPrior.label,
+              toolKey: fallbackPrior.toolKey ?? null,
+            }),
+          });
+        }
+      }
 
       for (const executionStep of executionSteps) {
         const prerequisiteSteps = steps.filter(
@@ -104,21 +136,44 @@ export class GuidanceBookingGuardService {
           );
         }
       }
+
+      if (executionSteps.length > 0 && journey.executionReadiness !== 'READY') {
+        reasons.push('Complete required guidance steps before execution.');
+      }
     }
 
-    if (missingPrerequisites.length > 0) {
-      const missingLabels = missingPrerequisites.map((item) => item.stepLabel);
+    const dedupedMissing = Array.from(
+      new Map(
+        missingPrerequisites.map((item) => [
+          `${item.journeyId}:${item.stepKey}`,
+          item,
+        ])
+      ).values()
+    );
+
+    if (dedupedMissing.length > 0) {
+      const missingLabels = dedupedMissing.map((item) => item.stepLabel);
       reasons.push(`Complete prerequisite steps first: ${Array.from(new Set(missingLabels)).join(', ')}`);
     }
 
+    const blocked = dedupedMissing.length > 0 || reasons.length > 0;
+    if (blocked) {
+      console.info('[GUIDANCE] execution blocked', {
+        propertyId: request.propertyId,
+        targetAction: request.targetAction,
+        journeyCount: journeys.length,
+        missingPrerequisites: dedupedMissing.length,
+      });
+    }
+
     return {
-      blocked: missingPrerequisites.length > 0 || reasons.length > 0,
+      blocked,
       targetAction: request.targetAction,
       reasons: guidanceCopyService.polishExecutionGuardReasons(
         Array.from(new Set(reasons)),
-        missingPrerequisites
+        dedupedMissing
       ),
-      missingPrerequisites,
+      missingPrerequisites: dedupedMissing,
       evaluatedJourneyIds: journeys.map((journey: any) => journey.id),
     };
   }

@@ -156,6 +156,99 @@ function polishCtaLabel(label, stepKey) {
   return label;
 }
 
+function validateMathAndSafety(input) {
+  const issues = [];
+  const sanitized = {
+    priorityScore: Math.max(0, Math.min(100, Math.round(input.priorityScore ?? 0))),
+    financialImpactScore: Math.max(0, Math.min(100, Math.round(input.financialImpactScore ?? 0))),
+    costOfDelay: Math.max(0, Math.round(input.costOfDelay ?? 0)),
+  };
+
+  if ((input.priorityScore ?? 0) < 0 || (input.priorityScore ?? 0) > 100) {
+    issues.push('PRIORITY_OUT_OF_RANGE');
+  }
+  if ((input.financialImpactScore ?? 0) < 0 || (input.financialImpactScore ?? 0) > 100) {
+    issues.push('FINANCIAL_SCORE_OUT_OF_RANGE');
+  }
+  if ((input.costOfDelay ?? 0) < 0) {
+    issues.push('NEGATIVE_COST_OF_DELAY');
+  }
+
+  const shouldSuppress =
+    sanitized.priorityScore <= 10 &&
+    sanitized.financialImpactScore <= 10 &&
+    (input.confidenceScore ?? 0.5) < 0.2 &&
+    input.executionReadiness !== 'READY';
+
+  return { issues, sanitized, shouldSuppress };
+}
+
+function applyTransitionGuard({ step, nextStatus, reasonCode, reasonMessage, producedData, allowBackwardTransition = false }) {
+  if (
+    nextStatus === 'PENDING' &&
+    ['IN_PROGRESS', 'SKIPPED', 'BLOCKED'].includes(step.status) &&
+    !allowBackwardTransition
+  ) {
+    return { ok: false, code: 'GUIDANCE_BACKWARD_STEP_TRANSITION_BLOCKED' };
+  }
+
+  if (nextStatus === 'SKIPPED' && step.isRequired && !reasonCode && !reasonMessage) {
+    return { ok: false, code: 'GUIDANCE_REQUIRED_STEP_SKIP_REASON_REQUIRED' };
+  }
+
+  if (nextStatus === 'COMPLETED' && step.requiresData && !producedData) {
+    return { ok: false, code: 'GUIDANCE_COMPLETION_DATA_REQUIRED' };
+  }
+
+  return { ok: true };
+}
+
+function applyFreshness(observedAtIso, maxAgeDays, nowIso = '2026-03-19T00:00:00.000Z') {
+  const observed = new Date(observedAtIso);
+  const now = new Date(nowIso);
+  const ageDays = Math.floor((now.getTime() - observed.getTime()) / (24 * 60 * 60 * 1000));
+  return {
+    ageDays,
+    isStale: ageDays > maxAgeDays,
+  };
+}
+
+function suppressConflicts(actions) {
+  const byScope = new Map();
+  const suppressed = [];
+
+  for (const action of actions) {
+    const existing = byScope.get(action.scopeKey);
+    if (!existing) {
+      byScope.set(action.scopeKey, action);
+      continue;
+    }
+
+    const conflict =
+      (existing.intent === 'REPLACE' && action.intent === 'DEFER') ||
+      (existing.intent === 'DEFER' && action.intent === 'REPLACE');
+
+    if (!conflict) {
+      if (action.priorityScore > existing.priorityScore) {
+        byScope.set(action.scopeKey, action);
+      }
+      continue;
+    }
+
+    if (action.priorityScore > existing.priorityScore) {
+      suppressed.push({ id: existing.id, reason: 'CONFLICTING_ACTION_SUPPRESSED' });
+      byScope.set(action.scopeKey, action);
+    } else {
+      suppressed.push({ id: action.id, reason: 'CONFLICTING_ACTION_SUPPRESSED' });
+    }
+  }
+
+  return {
+    filtered: Array.from(byScope.values()),
+    suppressed,
+  };
+}
+
 test('lifecycle signal maps to deterministic lifecycle journey template', () => {
   const template = resolveTemplate('lifecycle_end_or_past_life');
   assert.equal(template.key, 'asset_lifecycle_resolution');
@@ -310,4 +403,99 @@ test('low confidence downgrades label and copy stays action-oriented', () => {
   assert.equal(confidenceLabel(0.31), 'LOW');
   assert.equal(polishCtaLabel('View Details', 'review_signal'), 'Review Next Step');
   assert.equal(polishCtaLabel('Anything', 'repair_replace_decision'), 'Compare Repair vs Replace');
+});
+
+test('math validation clamps invalid values and suppresses very weak actions safely', () => {
+  const result = validateMathAndSafety({
+    priorityScore: 130,
+    financialImpactScore: -14,
+    costOfDelay: -250,
+    confidenceScore: 0.1,
+    executionReadiness: 'NEEDS_CONTEXT',
+  });
+
+  assert.deepEqual(result.issues.sort(), [
+    'FINANCIAL_SCORE_OUT_OF_RANGE',
+    'NEGATIVE_COST_OF_DELAY',
+    'PRIORITY_OUT_OF_RANGE',
+  ]);
+  assert.equal(result.sanitized.priorityScore, 100);
+  assert.equal(result.sanitized.financialImpactScore, 0);
+  assert.equal(result.sanitized.costOfDelay, 0);
+  assert.equal(result.shouldSuppress, false);
+
+  const veryWeak = validateMathAndSafety({
+    priorityScore: 8,
+    financialImpactScore: 6,
+    costOfDelay: 0,
+    confidenceScore: 0.12,
+    executionReadiness: 'NOT_READY',
+  });
+  assert.equal(veryWeak.shouldSuppress, true);
+});
+
+test('transition guards block silent required-skip and missing completion data', () => {
+  const silentSkip = applyTransitionGuard({
+    step: { status: 'PENDING', isRequired: true, requiresData: false },
+    nextStatus: 'SKIPPED',
+    reasonCode: null,
+    reasonMessage: null,
+  });
+  assert.equal(silentSkip.ok, false);
+  assert.equal(silentSkip.code, 'GUIDANCE_REQUIRED_STEP_SKIP_REASON_REQUIRED');
+
+  const missingData = applyTransitionGuard({
+    step: { status: 'IN_PROGRESS', isRequired: true, requiresData: true },
+    nextStatus: 'COMPLETED',
+    producedData: null,
+  });
+  assert.equal(missingData.ok, false);
+  assert.equal(missingData.code, 'GUIDANCE_COMPLETION_DATA_REQUIRED');
+});
+
+test('transition guards block backward transitions unless explicitly allowed', () => {
+  const blocked = applyTransitionGuard({
+    step: { status: 'IN_PROGRESS', isRequired: false, requiresData: false },
+    nextStatus: 'PENDING',
+    allowBackwardTransition: false,
+  });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, 'GUIDANCE_BACKWARD_STEP_TRANSITION_BLOCKED');
+
+  const allowed = applyTransitionGuard({
+    step: { status: 'IN_PROGRESS', isRequired: false, requiresData: false },
+    nextStatus: 'PENDING',
+    allowBackwardTransition: true,
+  });
+  assert.equal(allowed.ok, true);
+});
+
+test('stale freshness handling downgrades outdated signals', () => {
+  const stale = applyFreshness('2022-01-01T00:00:00.000Z', 365);
+  assert.equal(stale.isStale, true);
+  assert.ok(stale.ageDays > 365);
+
+  const fresh = applyFreshness('2026-03-10T00:00:00.000Z', 30);
+  assert.equal(fresh.isStale, false);
+});
+
+test('conflict suppression prevents replace-vs-delay action conflicts', () => {
+  const { filtered, suppressed } = suppressConflicts([
+    {
+      id: 'replace',
+      scopeKey: 'ASSET_LIFECYCLE:item-1',
+      intent: 'REPLACE',
+      priorityScore: 84,
+    },
+    {
+      id: 'delay',
+      scopeKey: 'ASSET_LIFECYCLE:item-1',
+      intent: 'DEFER',
+      priorityScore: 42,
+    },
+  ]);
+
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].id, 'replace');
+  assert.ok(suppressed.some((item) => item.id === 'delay' && item.reason === 'CONFLICTING_ACTION_SUPPRESSED'));
 });

@@ -7,6 +7,7 @@ import { guidanceConfidenceService } from './guidanceConfidence.service';
 import { guidancePriorityService } from './guidancePriority.service';
 import { guidanceSuppressionService } from './guidanceSuppression.service';
 import { guidanceCopyService } from './guidanceCopy.service';
+import { guidanceValidationService } from './guidanceValidation.service';
 import {
   GuidanceSignalSourceInput,
   GuidanceToolCompletionInput,
@@ -50,9 +51,37 @@ type EnrichedGuidanceAction = {
     risk: string;
     nextStep: string;
   };
+  validationIssues?: Array<{ code: string; message: string; level: 'WARN' | 'ERROR' }>;
+  validationShouldSuppress?: boolean;
 };
 
 export class GuidanceJourneyService {
+  private confidenceLabel(score: number): 'HIGH' | 'MEDIUM' | 'LOW' {
+    if (score >= 0.72) return 'HIGH';
+    if (score < 0.45) return 'LOW';
+    return 'MEDIUM';
+  }
+
+  private resolveDerivedFreshnessForNextStep(journey: any, toolKey?: string | null) {
+    if (!toolKey) return { isStale: false, ageDays: null as number | null, maxAgeDays: 180 };
+    const byTool = asRecord(asRecord(journey.derivedSnapshotJson).byTool);
+    const entry = asRecord(byTool[toolKey]);
+    const freshness = asRecord(entry.freshness);
+    if (typeof freshness.isStale === 'boolean') {
+      return {
+        isStale: freshness.isStale,
+        ageDays: typeof freshness.ageDays === 'number' ? freshness.ageDays : null,
+        maxAgeDays: typeof freshness.maxAgeDays === 'number' ? freshness.maxAgeDays : 180,
+      };
+    }
+
+    const updatedAt = typeof entry.updatedAt === 'string' ? entry.updatedAt : null;
+    return guidanceValidationService.assessToolFreshness({
+      toolKey,
+      observedAt: updatedAt,
+    });
+  }
+
   private applyStepCopy(step: any) {
     if (!step) return step;
     const label = guidanceCopyService.polishStepLabel({
@@ -101,75 +130,139 @@ export class GuidanceJourneyService {
     const polishedSteps = (journey.steps ?? []).map((step: any) => this.applyStepCopy(step));
     const polishedNextStep = next?.nextStep ? this.applyStepCopy(next.nextStep) : null;
     const polishedCurrentStep = next?.currentStep ? this.applyStepCopy(next.currentStep) : null;
+    const breakEvenMonths = guidanceValidationService.readNumeric(
+      asRecord(asRecord(journey.derivedSnapshotJson).latest),
+      'breakEvenMonths'
+    );
+    const signalFreshness = guidanceValidationService.assessSignalFreshness({
+      signalIntentFamily: signal?.signalIntentFamily ?? null,
+      observedAt:
+        signal?.metadataJson?.observedAt ??
+        signal?.lastObservedAt ??
+        signal?.firstObservedAt ??
+        null,
+    });
+    const derivedFreshness = this.resolveDerivedFreshnessForNextStep(
+      journey,
+      polishedNextStep?.toolKey ?? null
+    );
+
+    const validation = guidanceValidationService.validateMathAndSafety({
+      priorityScore: priority.priorityScore,
+      financialImpactScore: financial.financialImpactScore,
+      costOfDelay: financial.costOfDelay,
+      breakEvenMonths,
+      confidenceScore: confidence.confidenceScore,
+      executionReadiness: journey.executionReadiness,
+      isSignalStale: signalFreshness.isStale,
+      isDerivedStale: derivedFreshness.isStale,
+      hasMissingContext:
+        Boolean(journey.isLowContext) ||
+        Array.isArray(journey.missingContextKeys) && journey.missingContextKeys.length > 0,
+    });
+
+    if (validation.issues.length > 0) {
+      console.info('[GUIDANCE] validation adjusted action', {
+        journeyId: journey.id,
+        signalId: signal?.id ?? null,
+        issueCodes: validation.issues.map((item) => item.code),
+        suppressed: validation.shouldSuppress,
+      });
+    }
+
+    const adjustedConfidenceScore = guidanceValidationService.sanitizeConfidenceScore(
+      validation.sanitized.confidenceScore - validation.confidencePenalty
+    );
+    const adjustedConfidenceLabel = this.confidenceLabel(adjustedConfidenceScore);
+
+    const adjustedPriorityScore = validation.sanitized.priorityScore;
+    const adjustedPriorityBucket: 'HIGH' | 'MEDIUM' | 'LOW' =
+      adjustedPriorityScore >= 72 ? 'HIGH' : adjustedPriorityScore < 40 ? 'LOW' : 'MEDIUM';
+    const adjustedPriorityGroup: 'IMMEDIATE' | 'UPCOMING' | 'OPTIMIZATION' =
+      adjustedPriorityBucket === 'HIGH'
+        ? 'IMMEDIATE'
+        : adjustedPriorityBucket === 'MEDIUM'
+          ? 'UPCOMING'
+          : 'OPTIMIZATION';
 
     const explanation = guidanceCopyService.buildActionExplanation({
       issueDomain: journey.issueDomain,
       signalIntentFamily: signal?.signalIntentFamily ?? null,
       stepKey: polishedNextStep?.stepKey ?? polishedCurrentStep?.stepKey ?? null,
       stepLabel: polishedNextStep?.label ?? polishedCurrentStep?.label ?? null,
-      priorityBucket: priority.priorityBucket,
+      priorityBucket: adjustedPriorityBucket,
       fundingGapFlag: financial.fundingGapFlag,
-      costOfDelay: financial.costOfDelay,
+      costOfDelay: validation.sanitized.costOfDelay,
       coverageImpact: financial.coverageImpact,
-      confidenceLabel: confidence.confidenceLabel,
+      confidenceLabel: adjustedConfidenceLabel,
     });
+
+    const baseWarnings = guidanceCopyService.polishWarnings(next?.warnings ?? [], {
+      confidenceLabel: adjustedConfidenceLabel,
+      fundingGapFlag: financial.fundingGapFlag,
+    });
+    const validationWarnings = validation.issues.map((item) => item.message);
+    const warnings = Array.from(new Set([...baseWarnings, ...validationWarnings]));
 
     const polishedNext = next
       ? {
           ...next,
           currentStep: polishedCurrentStep,
           nextStep: polishedNextStep,
-          warnings: guidanceCopyService.polishWarnings(next.warnings ?? [], {
-            confidenceLabel: confidence.confidenceLabel,
-            fundingGapFlag: financial.fundingGapFlag,
-          }),
+          warnings,
           blockedReason: guidanceCopyService.polishBlockedReason(next.blockedReason ?? null, {
             missingPrerequisites: next.missingPrerequisites ?? [],
           }),
-          priorityScore: priority.priorityScore,
-          priorityBucket: priority.priorityBucket,
-          priorityGroup: priority.priorityGroup,
-          confidenceScore: confidence.confidenceScore,
-          confidenceLabel: confidence.confidenceLabel,
-          financialImpactScore: financial.financialImpactScore,
+          priorityScore: adjustedPriorityScore,
+          priorityBucket: adjustedPriorityBucket,
+          priorityGroup: adjustedPriorityGroup,
+          confidenceScore: adjustedConfidenceScore,
+          confidenceLabel: adjustedConfidenceLabel,
+          financialImpactScore: validation.sanitized.financialImpactScore,
           fundingGapFlag: financial.fundingGapFlag,
-          costOfDelay: financial.costOfDelay,
+          costOfDelay: validation.sanitized.costOfDelay,
           coverageImpact: financial.coverageImpact,
           explanation,
           nextStepLabel: explanation.nextStep,
+          validationIssues: validation.issues,
         }
       : null;
 
     const enrichedJourney = {
       ...journey,
       steps: polishedSteps,
-      priorityScore: priority.priorityScore,
-      priorityBucket: priority.priorityBucket,
-      priorityGroup: priority.priorityGroup,
-      confidenceScore: confidence.confidenceScore,
-      confidenceLabel: confidence.confidenceLabel,
-      financialImpactScore: financial.financialImpactScore,
+      priorityScore: adjustedPriorityScore,
+      priorityBucket: adjustedPriorityBucket,
+      priorityGroup: adjustedPriorityGroup,
+      confidenceScore: adjustedConfidenceScore,
+      confidenceLabel: adjustedConfidenceLabel,
+      financialImpactScore: validation.sanitized.financialImpactScore,
       fundingGapFlag: financial.fundingGapFlag,
-      costOfDelay: financial.costOfDelay,
+      costOfDelay: validation.sanitized.costOfDelay,
       coverageImpact: financial.coverageImpact,
       explanation,
       nextStepLabel: explanation.nextStep,
+      validationIssues: validation.issues,
+      signalFreshness,
+      derivedFreshness,
     };
 
     return {
       journey: enrichedJourney,
       signal,
       next: polishedNext,
-      priorityScore: priority.priorityScore,
-      priorityBucket: priority.priorityBucket,
-      priorityGroup: priority.priorityGroup,
-      confidenceScore: confidence.confidenceScore,
-      confidenceLabel: confidence.confidenceLabel,
-      financialImpactScore: financial.financialImpactScore,
+      priorityScore: adjustedPriorityScore,
+      priorityBucket: adjustedPriorityBucket,
+      priorityGroup: adjustedPriorityGroup,
+      confidenceScore: adjustedConfidenceScore,
+      confidenceLabel: adjustedConfidenceLabel,
+      financialImpactScore: validation.sanitized.financialImpactScore,
       fundingGapFlag: financial.fundingGapFlag,
-      costOfDelay: financial.costOfDelay,
+      costOfDelay: validation.sanitized.costOfDelay,
       coverageImpact: financial.coverageImpact,
       explanation,
+      validationIssues: validation.issues,
+      validationShouldSuppress: validation.shouldSuppress,
     };
   }
 
@@ -182,12 +275,30 @@ export class GuidanceJourneyService {
   }) {
     const { guidanceJourney } = getGuidanceModels();
 
-    return guidanceJourney.findFirst({
+    const strictMatch = await guidanceJourney.findFirst({
       where: {
         propertyId: args.propertyId,
         status: 'ACTIVE',
         journeyTypeKey: args.journeyTypeKey,
         mergedSignalGroupKey: args.duplicateGroupKey,
+        inventoryItemId: args.inventoryItemId,
+        homeAssetId: args.homeAssetId,
+      },
+      include: {
+        steps: {
+          orderBy: [{ stepOrder: 'asc' }],
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+
+    if (strictMatch) return strictMatch;
+
+    return guidanceJourney.findFirst({
+      where: {
+        propertyId: args.propertyId,
+        status: 'ACTIVE',
+        journeyTypeKey: args.journeyTypeKey,
         inventoryItemId: args.inventoryItemId,
         homeAssetId: args.homeAssetId,
       },

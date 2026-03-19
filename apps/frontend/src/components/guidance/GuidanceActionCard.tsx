@@ -15,14 +15,21 @@ type GuidanceActionCardProps = {
 };
 
 export function GuidanceActionCard({ action, onOpenJourney, compact = false }: GuidanceActionCardProps) {
-  const warningMessage = action.blockedReason ?? action.warnings[0] ?? null;
-  const advisorySubtitle = action.explanation?.why ?? action.subtitle;
+  const warningMessage = action.blockedReason ?? action.warnings?.[0] ?? null;
+  const safeTitle = action.title?.trim() ? action.title.trim() : 'Guided Next Step';
+  const advisorySubtitle =
+    action.explanation?.why ??
+    (action.subtitle?.trim() ? action.subtitle : 'Follow the next recommended step to keep this issue on track.');
+  const safeSteps = Array.isArray(action.steps) ? action.steps : [];
+  const safeProgress = action.progress ?? { completedCount: 0, totalCount: safeSteps.length, percent: 0 };
+  const nextStepLabel =
+    action.nextStep?.label?.trim() ? action.nextStep.label : action.explanation?.nextStep ?? 'Review Next Step';
 
   return (
     <Card>
       <CardHeader className={compact ? 'pb-2' : undefined}>
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <CardTitle className={compact ? 'text-base' : 'text-lg'}>{action.title}</CardTitle>
+          <CardTitle className={compact ? 'text-base' : 'text-lg'}>{safeTitle}</CardTitle>
           <div className="flex items-center gap-2">
             <GuidanceStatusBadge kind="readiness" value={action.executionReadiness} />
             <GuidanceStatusBadge kind="severity" value={action.severity ?? null} />
@@ -41,16 +48,21 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
 
         {action.nextStep ? (
           <GuidancePrimaryCta
-            label={action.nextStep.label}
+            label={nextStepLabel}
             stepNumber={action.nextStep.stepOrder}
             href={action.href}
             executionReadiness={action.executionReadiness}
             blockedReason={action.blockedReason}
             className="min-h-[44px] w-full"
           />
-        ) : null}
+        ) : (
+          <GuidanceWarningBanner
+            title="Next step unavailable"
+            message="Guidance is updating. Refresh in a moment or open the full journey details."
+          />
+        )}
 
-        <GuidanceJourneyStrip steps={action.steps} />
+        <GuidanceJourneyStrip steps={safeSteps} />
 
         {action.explanation?.risk ? (
           <p className="mb-0 text-xs text-muted-foreground">{action.explanation.risk}</p>
@@ -58,7 +70,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="mb-0 text-xs text-muted-foreground">
-            Progress: {action.progress.completedCount}/{action.progress.totalCount} steps ({action.progress.percent}
+            Progress: {safeProgress.completedCount}/{safeProgress.totalCount} steps ({safeProgress.percent}
             %)
           </p>
 

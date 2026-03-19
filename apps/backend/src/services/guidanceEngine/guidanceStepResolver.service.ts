@@ -8,6 +8,7 @@ import {
   isActionableStepStatus,
 } from './guidanceTypes';
 import { guidanceDerivedDataService } from './guidanceDerivedData.service';
+import { guidanceValidationService } from './guidanceValidation.service';
 
 const VALID_STEP_TRANSITIONS: Record<GuidanceStepStatus, GuidanceStepStatus[]> = {
   PENDING: ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'],
@@ -16,6 +17,19 @@ const VALID_STEP_TRANSITIONS: Record<GuidanceStepStatus, GuidanceStepStatus[]> =
   SKIPPED: ['SKIPPED', 'PENDING', 'IN_PROGRESS'],
   BLOCKED: ['BLOCKED', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED'],
 };
+
+const CRITICAL_REQUIRED_STEP_KEYS = new Set([
+  'repair_replace_decision',
+  'check_coverage',
+  'validate_price',
+  'estimate_out_of_pocket_cost',
+  'compare_action_options',
+  'assess_urgency',
+  'estimate_repair_cost',
+  'safety_alert',
+  'review_remedy_instructions',
+  'recall_resolution',
+]);
 
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -29,6 +43,18 @@ function statusToEventType(nextStatus: GuidanceStepStatus, previousStatus: Guida
   if (nextStatus === 'IN_PROGRESS') return 'STEP_STARTED';
   if (nextStatus === 'PENDING' && previousStatus === 'BLOCKED') return 'STEP_UNBLOCKED';
   return 'STEP_STATUS_CHANGED';
+}
+
+function isBackwardTransition(previous: GuidanceStepStatus, next: GuidanceStepStatus) {
+  if (next !== 'PENDING') return false;
+  return previous === 'IN_PROGRESS' || previous === 'SKIPPED' || previous === 'BLOCKED';
+}
+
+function requiresCompletionData(step: any) {
+  if (!step?.isRequired) return false;
+  const stepKey = String(step.stepKey ?? '').toLowerCase();
+  if (CRITICAL_REQUIRED_STEP_KEYS.has(stepKey)) return true;
+  return false;
 }
 
 export class GuidanceStepResolverService {
@@ -113,6 +139,7 @@ export class GuidanceStepResolverService {
     producedData?: Record<string, unknown> | null;
     missingContextKeys?: string[] | null;
     signalId?: string | null;
+    allowBackwardTransition?: boolean;
   }) {
     const { guidanceJourneyStep, guidanceJourneyEvent } = getGuidanceModels();
 
@@ -143,6 +170,42 @@ export class GuidanceStepResolverService {
         400,
         'GUIDANCE_INVALID_STEP_TRANSITION'
       );
+    }
+
+    if (
+      isBackwardTransition(step.status as GuidanceStepStatus, params.nextStatus) &&
+      !params.allowBackwardTransition
+    ) {
+      throw new APIError(
+        `Backward step transition from ${step.status} to ${params.nextStatus} is not allowed.`,
+        400,
+        'GUIDANCE_BACKWARD_STEP_TRANSITION_BLOCKED'
+      );
+    }
+
+    if (
+      params.nextStatus === 'SKIPPED' &&
+      step.isRequired &&
+      !params.reasonCode &&
+      !params.reasonMessage
+    ) {
+      throw new APIError(
+        'Required steps cannot be skipped without a reason.',
+        400,
+        'GUIDANCE_REQUIRED_STEP_SKIP_REASON_REQUIRED'
+      );
+    }
+
+    if (params.nextStatus === 'COMPLETED' && requiresCompletionData(step)) {
+      const hasIncomingData = guidanceValidationService.hasMeaningfulProducedData(params.producedData ?? null);
+      const hasExistingData = guidanceValidationService.hasMeaningfulProducedData(step.producedDataJson ?? null);
+      if (!hasIncomingData && !hasExistingData) {
+        throw new APIError(
+          'This required step needs completion data before it can be marked completed.',
+          400,
+          'GUIDANCE_COMPLETION_DATA_REQUIRED'
+        );
+      }
     }
 
     const now = new Date();
@@ -298,12 +361,25 @@ export class GuidanceStepResolverService {
       nextReadiness = 'NEEDS_CONTEXT';
     }
 
-    const requiredTerminal = steps.every(
-      (step) => !step.isRequired || step.status === 'COMPLETED' || step.status === 'SKIPPED'
-    );
+    const requiredTerminal = steps.every((step) => {
+      if (!step.isRequired) return true;
+      if (step.status === 'COMPLETED') return true;
+      if (step.status !== 'SKIPPED') return false;
+      const stepKey = String(step.stepKey ?? '').toLowerCase();
+      return !CRITICAL_REQUIRED_STEP_KEYS.has(stepKey);
+    });
     const hasBlockedRequired = steps.some((step) => step.isRequired && step.status === 'BLOCKED');
+    const hasCriticalIncomplete = steps.some((step) => {
+      if (!step.isRequired) return false;
+      const stepKey = String(step.stepKey ?? '').toLowerCase();
+      return CRITICAL_REQUIRED_STEP_KEYS.has(stepKey) && step.status !== 'COMPLETED';
+    });
 
-    const nextStatus = requiredTerminal && !hasBlockedRequired ? 'COMPLETED' : 'ACTIVE';
+    if (hasCriticalIncomplete && nextReadiness === 'TRACKING_ONLY') {
+      nextReadiness = 'NOT_READY';
+    }
+
+    const nextStatus = requiredTerminal && !hasBlockedRequired && !hasCriticalIncomplete ? 'COMPLETED' : 'ACTIVE';
     const now = new Date();
 
     const shouldWriteJourneyUpdate =

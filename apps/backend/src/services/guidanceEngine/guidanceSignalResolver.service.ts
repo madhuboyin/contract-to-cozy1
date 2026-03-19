@@ -1,4 +1,5 @@
 import { getGuidanceModels, clampConfidenceToDecimal, clampSeverityScore, GuidanceSignalSourceInput, NormalizedGuidanceSignalInput, GuidanceDecisionStage, GuidanceExecutionReadiness, GuidanceIssueDomain, GuidanceSeverity } from './guidanceTypes';
+import { guidanceValidationService } from './guidanceValidation.service';
 
 const ISSUE_DOMAIN_BY_FAMILY: Record<string, GuidanceIssueDomain> = {
   lifecycle_end_or_past_life: 'ASSET_LIFECYCLE',
@@ -164,6 +165,11 @@ function inferSeverity(input: GuidanceSignalSourceInput, family: string): Guidan
   return null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
 export class GuidanceSignalResolverService {
   normalizeSignal(input: GuidanceSignalSourceInput): NormalizedGuidanceSignalInput {
     const signalIntentFamily = inferSignalIntentFamily(input);
@@ -198,6 +204,50 @@ export class GuidanceSignalResolverService {
         homeAssetId: input.homeAssetId ?? null,
       });
 
+    const payloadJson = input.payloadJson ?? null;
+    const metadataJson = input.metadataJson ?? null;
+    const observedAt =
+      guidanceValidationService.inferObservedAtFromPayload(payloadJson) ??
+      guidanceValidationService.inferObservedAtFromPayload(metadataJson) ??
+      new Date().toISOString();
+
+    const freshness = guidanceValidationService.assessSignalFreshness({
+      signalIntentFamily,
+      observedAt,
+    });
+
+    const confidenceScoreBase = clampConfidenceToDecimal(input.confidenceScore);
+    const confidenceScore = freshness.isStale
+      ? guidanceValidationService.sanitizeConfidenceScore((confidenceScoreBase ?? 0.58) - 0.2)
+      : confidenceScoreBase;
+
+    const actionWeaknessFlags = Array.from(
+      new Set([
+        ...(input.actionWeaknessFlags ?? []),
+        ...(freshness.isStale ? ['STALE_SIGNAL'] : []),
+      ])
+    );
+
+    const missingContextKeys = Array.from(
+      new Set([
+        ...(input.missingContextKeys ?? []),
+        ...(freshness.isStale ? ['refresh_signal_context'] : []),
+      ])
+    );
+
+    const nextReadiness =
+      freshness.isStale && executionReadiness === 'READY' ? 'NEEDS_CONTEXT' : executionReadiness;
+
+    if (freshness.isStale) {
+      console.info('[GUIDANCE] stale signal normalized', {
+        propertyId: input.propertyId,
+        signalIntentFamily,
+        observedAt: freshness.observedAt,
+        ageDays: freshness.ageDays,
+        maxAgeDays: freshness.maxAgeDays,
+      });
+    }
+
     return {
       propertyId: input.propertyId,
       homeAssetId: input.homeAssetId ?? null,
@@ -205,10 +255,10 @@ export class GuidanceSignalResolverService {
       signalIntentFamily,
       issueDomain,
       decisionStage,
-      executionReadiness,
+      executionReadiness: nextReadiness,
       severity: inferSeverity(input, signalIntentFamily),
       severityScore: clampSeverityScore(input.severityScore),
-      confidenceScore: clampConfidenceToDecimal(input.confidenceScore),
+      confidenceScore,
       sourceType: input.sourceType ?? null,
       sourceFeatureKey,
       sourceToolKey,
@@ -218,14 +268,22 @@ export class GuidanceSignalResolverService {
       sourceProvenanceId: input.sourceProvenanceId ?? null,
       dedupeKey,
       duplicateGroupKey,
-      actionWeaknessFlags: input.actionWeaknessFlags ?? [],
+      actionWeaknessFlags,
       contextPrerequisites: input.contextPrerequisites ?? [],
-      missingContextKeys: input.missingContextKeys ?? [],
+      missingContextKeys,
       canonicalFirstStepKey: input.canonicalFirstStepKey ?? FIRST_STEP_BY_FAMILY[signalIntentFamily] ?? null,
       recommendedToolKey: input.recommendedToolKey ?? RECOMMENDED_TOOL_BY_FAMILY[signalIntentFamily] ?? null,
       recommendedFlowKey: input.recommendedFlowKey ?? null,
-      payloadJson: input.payloadJson ?? null,
-      metadataJson: input.metadataJson ?? null,
+      payloadJson,
+      metadataJson: {
+        ...asRecord(metadataJson),
+        observedAt,
+        freshness: {
+          isStale: freshness.isStale,
+          ageDays: freshness.ageDays,
+          maxAgeDays: freshness.maxAgeDays,
+        },
+      },
     };
   }
 

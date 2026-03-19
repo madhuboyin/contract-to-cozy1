@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
-import { validateBody } from '../middleware/validate.middleware';
+import { validate, validateBody } from '../middleware/validate.middleware';
 import {
   blockGuidanceStep,
   completeGuidanceStep,
@@ -18,6 +18,49 @@ import {
 } from '../controllers/guidance.controller';
 
 const router = Router();
+
+const propertyParamsSchema = z.object({
+  params: z.object({
+    propertyId: z.string().uuid(),
+  }),
+});
+
+const propertyJourneyParamsSchema = z.object({
+  params: z.object({
+    propertyId: z.string().uuid(),
+    journeyId: z.string().uuid(),
+  }),
+});
+
+const propertyStepParamsSchema = z.object({
+  params: z.object({
+    propertyId: z.string().uuid(),
+    stepId: z.string().uuid(),
+  }),
+});
+
+const nextStepQuerySchema = z.object({
+  params: z.object({
+    propertyId: z.string().uuid(),
+  }),
+  query: z.object({
+    journeyId: z.string().uuid(),
+  }),
+});
+
+const executionGuardQuerySchema = z.object({
+  params: z.object({
+    propertyId: z.string().uuid(),
+  }),
+  query: z.object({
+    targetAction: z
+      .enum(['BOOKING', 'CLAIM_ESCALATION', 'INSPECTION_SCHEDULING', 'PROVIDER_HANDOFF', 'EXECUTION'])
+      .optional(),
+    journeyId: z.string().uuid().optional(),
+    inventoryItemId: z.string().uuid().optional(),
+    homeAssetId: z.string().uuid().optional(),
+  }),
+});
 
 const resolveSignalBodySchema = z.object({
   homeAssetId: z.string().uuid().optional(),
@@ -74,15 +117,42 @@ const toolCompletionBodySchema = z.object({
 router.use(apiRateLimiter);
 router.use(authenticate);
 
-router.get('/properties/:propertyId/guidance', propertyAuthMiddleware, getPropertyGuidance);
-router.get('/properties/:propertyId/guidance/journeys', propertyAuthMiddleware, listActiveGuidanceJourneys);
-router.get('/properties/:propertyId/guidance/journeys/:journeyId', propertyAuthMiddleware, getGuidanceJourneyDetail);
-router.post('/properties/:propertyId/guidance/signals/resolve', propertyAuthMiddleware, validateBody(resolveSignalBodySchema), resolveGuidanceSignal);
-router.get('/properties/:propertyId/guidance/next-step', propertyAuthMiddleware, getGuidanceNextStep);
-router.get('/properties/:propertyId/guidance/execution-guard', propertyAuthMiddleware, getGuidanceExecutionGuard);
+router.get('/properties/:propertyId/guidance', validate(propertyParamsSchema), propertyAuthMiddleware, getPropertyGuidance);
+router.get(
+  '/properties/:propertyId/guidance/journeys',
+  validate(propertyParamsSchema),
+  propertyAuthMiddleware,
+  listActiveGuidanceJourneys
+);
+router.get(
+  '/properties/:propertyId/guidance/journeys/:journeyId',
+  validate(propertyJourneyParamsSchema),
+  propertyAuthMiddleware,
+  getGuidanceJourneyDetail
+);
+router.post(
+  '/properties/:propertyId/guidance/signals/resolve',
+  validate(propertyParamsSchema),
+  propertyAuthMiddleware,
+  validateBody(resolveSignalBodySchema),
+  resolveGuidanceSignal
+);
+router.get(
+  '/properties/:propertyId/guidance/next-step',
+  validate(nextStepQuerySchema),
+  propertyAuthMiddleware,
+  getGuidanceNextStep
+);
+router.get(
+  '/properties/:propertyId/guidance/execution-guard',
+  validate(executionGuardQuerySchema),
+  propertyAuthMiddleware,
+  getGuidanceExecutionGuard
+);
 
 router.post(
   '/properties/:propertyId/guidance/steps/:stepId/complete',
+  validate(propertyStepParamsSchema),
   propertyAuthMiddleware,
   validateBody(completeStepBodySchema),
   completeGuidanceStep
@@ -90,6 +160,7 @@ router.post(
 
 router.post(
   '/properties/:propertyId/guidance/steps/:stepId/skip',
+  validate(propertyStepParamsSchema),
   propertyAuthMiddleware,
   validateBody(skipStepBodySchema),
   skipGuidanceStep
@@ -97,6 +168,7 @@ router.post(
 
 router.post(
   '/properties/:propertyId/guidance/steps/:stepId/block',
+  validate(propertyStepParamsSchema),
   propertyAuthMiddleware,
   validateBody(blockStepBodySchema),
   blockGuidanceStep
@@ -104,6 +176,7 @@ router.post(
 
 router.post(
   '/properties/:propertyId/guidance/tool-completions',
+  validate(propertyParamsSchema),
   propertyAuthMiddleware,
   validateBody(toolCompletionBodySchema),
   recordGuidanceToolCompletion

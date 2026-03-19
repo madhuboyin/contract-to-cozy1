@@ -16,6 +16,7 @@ type EnrichedGuidanceAction = {
     risk: string;
     nextStep: string;
   };
+  validationShouldSuppress?: boolean;
 };
 
 export type GuidanceSuppressionResult = {
@@ -37,6 +38,37 @@ function signalDedupKey(action: EnrichedGuidanceAction) {
   const homeAssetId = String(action.journey?.homeAssetId ?? action.signal?.homeAssetId ?? '');
 
   return `journey:${issueDomain}:${signalFamily}:${inventoryItemId}:${homeAssetId}`;
+}
+
+function conflictScopeKey(action: EnrichedGuidanceAction) {
+  const inventoryItemId = String(action.journey?.inventoryItemId ?? action.signal?.inventoryItemId ?? '');
+  const homeAssetId = String(action.journey?.homeAssetId ?? action.signal?.homeAssetId ?? '');
+  const issueDomain = String(action.journey?.issueDomain ?? action.signal?.issueDomain ?? 'OTHER');
+  return `${issueDomain}:${inventoryItemId}:${homeAssetId}`;
+}
+
+function classifyActionIntent(action: EnrichedGuidanceAction) {
+  const nextStep = String(action.next?.nextStep?.stepKey ?? '').toLowerCase();
+  const label = String(action.explanation?.nextStep ?? action.next?.nextStep?.label ?? '').toLowerCase();
+
+  const replaceLike =
+    nextStep.includes('replace') ||
+    label.includes('replace');
+  const deferLike =
+    nextStep.includes('do_nothing') ||
+    nextStep.includes('track') ||
+    nextStep.includes('monitor') ||
+    label.includes('delay') ||
+    label.includes('monitor');
+  const executeLike =
+    nextStep.includes('book') ||
+    nextStep.includes('route_specialist') ||
+    label.includes('book service');
+
+  if (replaceLike) return 'REPLACE';
+  if (deferLike) return 'DEFER';
+  if (executeLike) return 'EXECUTE';
+  return 'NEUTRAL';
 }
 
 function isWeakSignal(action: EnrichedGuidanceAction) {
@@ -126,6 +158,15 @@ export class GuidanceSuppressionService {
         continue;
       }
 
+      if (action.validationShouldSuppress) {
+        suppressedSignals.push({
+          signalId: action.signal?.id ?? null,
+          journeyId: action.journey.id,
+          reason: 'VALIDATION_SUPPRESSED',
+        });
+        continue;
+      }
+
       if (isRedundantAction(action)) {
         suppressedSignals.push({
           signalId: action.signal?.id ?? null,
@@ -138,10 +179,104 @@ export class GuidanceSuppressionService {
       filteredActions.push(action);
     }
 
-    filteredActions.sort((a, b) => b.priorityScore - a.priorityScore);
+    const finalByJourney = new Map<string, EnrichedGuidanceAction>();
+    for (const action of filteredActions) {
+      if (!finalByJourney.has(action.journey.id)) {
+        finalByJourney.set(action.journey.id, action);
+        continue;
+      }
+
+      const existing = finalByJourney.get(action.journey.id);
+      if (!existing) continue;
+
+      if (action.priorityScore > existing.priorityScore) {
+        suppressedSignals.push({
+          signalId: existing.signal?.id ?? null,
+          journeyId: existing.journey.id,
+          reason: 'DUPLICATE_JOURNEY_ACTION',
+        });
+        finalByJourney.set(action.journey.id, action);
+      } else {
+        suppressedSignals.push({
+          signalId: action.signal?.id ?? null,
+          journeyId: action.journey.id,
+          reason: 'DUPLICATE_JOURNEY_ACTION',
+        });
+      }
+    }
+
+    const conflictByScope = new Map<string, EnrichedGuidanceAction>();
+    for (const action of finalByJourney.values()) {
+      const scopeKey = conflictScopeKey(action);
+      const existing = conflictByScope.get(scopeKey);
+      if (!existing) {
+        conflictByScope.set(scopeKey, action);
+        continue;
+      }
+
+      const intentA = classifyActionIntent(existing);
+      const intentB = classifyActionIntent(action);
+      const conflict =
+        (intentA === 'REPLACE' && intentB === 'DEFER') ||
+        (intentA === 'DEFER' && intentB === 'REPLACE');
+
+      if (!conflict) {
+        if (action.priorityScore > existing.priorityScore) {
+          conflictByScope.set(scopeKey, action);
+        }
+        continue;
+      }
+
+      if (action.priorityScore > existing.priorityScore) {
+        suppressedSignals.push({
+          signalId: existing.signal?.id ?? null,
+          journeyId: existing.journey.id,
+          reason: 'CONFLICTING_ACTION_SUPPRESSED',
+        });
+        conflictByScope.set(scopeKey, action);
+      } else {
+        suppressedSignals.push({
+          signalId: action.signal?.id ?? null,
+          journeyId: action.journey.id,
+          reason: 'CONFLICTING_ACTION_SUPPRESSED',
+        });
+      }
+    }
+
+    const dedupedActions = Array.from(conflictByScope.values());
+
+    const uniqueActionKeys = new Set<string>();
+    const finalActions: EnrichedGuidanceAction[] = [];
+    for (const action of dedupedActions) {
+      const key = [
+        action.journey.id,
+        action.next?.nextStep?.stepKey ?? '',
+        action.next?.recommendedToolKey ?? '',
+      ].join(':');
+      if (uniqueActionKeys.has(key)) {
+        suppressedSignals.push({
+          signalId: action.signal?.id ?? null,
+          journeyId: action.journey.id,
+          reason: 'FINAL_RESPONSE_DUPLICATE',
+        });
+        continue;
+      }
+      uniqueActionKeys.add(key);
+      finalActions.push(action);
+    }
+
+    finalActions.sort((a, b) => b.priorityScore - a.priorityScore);
+
+    if (suppressedSignals.length > 0) {
+      const summary: Record<string, number> = {};
+      for (const item of suppressedSignals) {
+        summary[item.reason] = (summary[item.reason] ?? 0) + 1;
+      }
+      console.info('[GUIDANCE] suppression applied', summary);
+    }
 
     return {
-      filteredActions,
+      filteredActions: finalActions,
       suppressedSignals,
     };
   }

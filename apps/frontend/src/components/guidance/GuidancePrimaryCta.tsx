@@ -22,7 +22,9 @@ export function GuidancePrimaryCta({
   blockedReason,
   className,
 }: GuidancePrimaryCtaProps) {
-  const ctaLabel = stepNumber ? `Step ${stepNumber}: ${label}` : label;
+  const safeLabel = label?.trim() ? label.trim() : 'Review Next Step';
+  const safeStepNumber = typeof stepNumber === 'number' && Number.isFinite(stepNumber) ? stepNumber : null;
+  const ctaLabel = safeStepNumber ? `Step ${safeStepNumber}: ${safeLabel}` : safeLabel;
   const isBlocked = executionReadiness === 'NOT_READY';
 
   if (!href || isBlocked) {
@@ -32,7 +34,11 @@ export function GuidancePrimaryCta({
           <Lock className="mr-2 h-4 w-4" />
           {ctaLabel}
         </Button>
-        {blockedReason ? <p className="mb-0 text-xs text-muted-foreground">{blockedReason}</p> : null}
+        {blockedReason ? (
+          <p className="mb-0 text-xs text-muted-foreground">{blockedReason}</p>
+        ) : executionReadiness === 'NEEDS_CONTEXT' ? (
+          <p className="mb-0 text-xs text-muted-foreground">Complete missing context before execution.</p>
+        ) : null}
       </div>
     );
   }

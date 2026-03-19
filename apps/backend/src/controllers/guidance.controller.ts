@@ -4,11 +4,20 @@ import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourn
 import { guidanceStepResolverService } from '../services/guidanceEngine/guidanceStepResolver.service';
 import { guidanceBookingGuardService } from '../services/guidanceEngine/guidanceBookingGuard.service';
 import { mapGuidanceJourney, mapGuidanceSignal, mapGuidanceStep, mapGuidanceEvent } from '../services/guidanceEngine/guidanceMapper';
+import { APIError } from '../middleware/error.middleware';
+
+const GUIDANCE_TARGET_ACTIONS = new Set([
+  'BOOKING',
+  'CLAIM_ESCALATION',
+  'INSPECTION_SCHEDULING',
+  'PROVIDER_HANDOFF',
+  'EXECUTION',
+]);
 
 function requireUserId(req: CustomRequest): string {
   const userId = req.user?.userId;
   if (!userId) {
-    throw new Error('Authentication required.');
+    throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
   }
   return userId;
 }
@@ -185,12 +194,7 @@ export async function getGuidanceNextStep(req: CustomRequest, res: Response, nex
     const propertyId = req.params.propertyId;
     const journeyId = String(req.query.journeyId || '');
 
-    if (!journeyId) {
-      return res.status(400).json({
-        success: false,
-        message: 'journeyId is required',
-      });
-    }
+    if (!journeyId) throw new APIError('journeyId is required.', 400, 'GUIDANCE_JOURNEY_ID_REQUIRED');
 
     const result = await guidanceJourneyService.resolveNextStepWithIntelligence({
       propertyId,
@@ -217,6 +221,10 @@ export async function getGuidanceExecutionGuard(req: CustomRequest, res: Respons
       | 'INSPECTION_SCHEDULING'
       | 'PROVIDER_HANDOFF'
       | 'EXECUTION';
+
+    if (!GUIDANCE_TARGET_ACTIONS.has(targetAction)) {
+      throw new APIError('Invalid targetAction supplied.', 400, 'GUIDANCE_INVALID_TARGET_ACTION');
+    }
 
     const result = await guidanceBookingGuardService.evaluateExecutionGuard({
       propertyId,

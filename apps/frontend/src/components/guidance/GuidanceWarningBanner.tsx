@@ -19,12 +19,14 @@ export function GuidanceWarningBanner({
   actionHref,
   className,
 }: GuidanceWarningBannerProps) {
+  const safeMessage = message?.trim() ? message.trim() : 'Complete the recommended prior step before proceeding.';
+
   return (
     <Alert className={className}>
       <AlertTriangle className="h-4 w-4" />
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription className="space-y-2">
-        <p className="mb-0 text-sm">{message}</p>
+        <p className="mb-0 text-sm">{safeMessage}</p>
         {actionHref && actionLabel ? (
           <Link href={actionHref} className="text-sm font-medium text-brand-primary hover:underline">
             {actionLabel}
