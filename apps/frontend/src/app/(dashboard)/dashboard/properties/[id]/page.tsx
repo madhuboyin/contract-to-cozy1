@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
-import { ClipboardCheck, LayoutDashboard } from "lucide-react";
+import { ClipboardCheck } from "lucide-react";
 import IncidentsClient from "./incidents/IncidentsClient";
 import SetupChecklistPanel from "@/components/onboarding/SetupChecklistPanel";
 import NarrativeRevealOverlay from "@/components/narrative/NarrativeRevealOverlay";
@@ -1328,11 +1328,6 @@ export default function PropertyDetailPage() {
                 Claims
               </TabsTrigger>
 
-              <TabsTrigger value="status-board" className={tabTriggerClassName} onClick={() => router.push(`/dashboard/properties/${property.id}/status-board`)}>
-                <LayoutDashboard className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Status Board</span>
-                <span className="sm:hidden">Status</span>
-              </TabsTrigger>
             </TabsList>
           </div>
           </div>
