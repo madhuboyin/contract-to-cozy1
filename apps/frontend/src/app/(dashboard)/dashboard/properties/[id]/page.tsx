@@ -26,12 +26,11 @@ import {
   Settings,
   ShieldAlert,
   ArrowRight,
+  ChevronRight,
   TrendingUp,
   LayoutGrid,
   MapPin,
-  Radar,
   Sparkles,
-  ChevronRight,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
@@ -62,19 +61,6 @@ import {
 } from "@/components/mobile/dashboard/MobilePrimitives";
 import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
-import {
-  listHomeRiskReplayRuns,
-  trackHomeRiskReplayEvent,
-} from './tools/home-risk-replay/homeRiskReplayApi';
-import {
-  listServicePriceRadarChecks,
-  type ServicePriceRadarCheckSummary,
-} from './tools/service-price-radar/servicePriceRadarApi';
-import NeighborhoodRadarDashboardCard from './components/NeighborhoodRadarDashboardCard';
-import RefinanceRadarDashboardCard from './components/RefinanceRadarDashboardCard';
-import GazetteDashboardCard from './components/GazetteDashboardCard';
-import { getSpotlightHabit } from './tools/home-habit-coach/homeHabitCoachApi';
-import { ListChecks } from 'lucide-react';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -1147,29 +1133,6 @@ export default function PropertyDetailPage() {
   const property = bootstrap?.property || null;
   const onboardingStatus = bootstrap?.onboarding || null;
   const narrativeRun = bootstrap?.narrativeRun || null;
-  const latestServicePriceRadarQuery = useQuery({
-    queryKey: ['service-price-radar-latest', propertyId],
-    queryFn: async () => {
-      const items = await listServicePriceRadarChecks(propertyId, 1);
-      return items[0] ?? null;
-    },
-    enabled: Boolean(propertyId),
-  });
-  const latestRiskReplayQuery = useQuery({
-    queryKey: ['home-risk-replay-latest', propertyId],
-    queryFn: async () => {
-      const items = await listHomeRiskReplayRuns(propertyId, 1);
-      return items[0] ?? null;
-    },
-    enabled: Boolean(propertyId),
-  });
-
-  const spotlightHabitQuery = useQuery({
-    queryKey: ['home-habits-spotlight', propertyId],
-    queryFn: () => getSpotlightHabit(propertyId),
-    enabled: Boolean(propertyId) && FEATURE_FLAGS.HOME_HABIT_COACH,
-    staleTime: 5 * 60 * 1000,
-  });
 
   const selectedNudgeConfig = useMemo(
     () => (nudgeFieldKey ? NARRATIVE_NUDGE_CONFIG[nudgeFieldKey] : null),
@@ -1262,20 +1225,6 @@ export default function PropertyDetailPage() {
   }
 
   const propertyHubSubtitle = [property.city, property.state].filter(Boolean).join(", ");
-  const trackReplayEntryClick = () => {
-    trackHomeRiskReplayEvent(property.id, {
-      event: 'CONTEXTUAL_ENTRY_CLICKED',
-      section: 'entry',
-      metadata: {
-        tool_name: 'home_risk_replay',
-        property_id: property.id,
-        launch_surface: 'property_hub',
-        suggested_focus_type: null,
-        linked_system_type: null,
-      },
-    }).catch(() => undefined);
-  };
-
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
       {FEATURE_FLAGS.PROPERTY_NARRATIVE_ENGINE && narrativeRun?.status === "ACTIVE" && (
@@ -1325,195 +1274,6 @@ export default function PropertyDetailPage() {
       <PropertyHeroCard property={property} />
 
       <SellingPrepBanner propertyId={property.id} />
-
-      <div className="rounded-[24px] border border-slate-200/90 bg-[linear-gradient(145deg,#ffffff,#f7fafc)] p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.45)]">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
-                <Radar className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="mb-0 text-sm font-semibold text-slate-900">Service Price Radar</p>
-                <p className="mb-0 text-xs text-slate-500">Know if a quote is fair for your home</p>
-              </div>
-            </div>
-            <p className="mb-0 text-sm text-slate-600">
-              Compare a service quote against the expected range for this property using your home context.
-            </p>
-          </div>
-
-          <Button asChild className="min-h-[44px] md:shrink-0">
-            <Link href={buildServicePriceRadarHref({ propertyId: property.id, launchSurface: 'property_hub' })}>Check quote</Link>
-          </Button>
-        </div>
-
-        {latestServicePriceRadarQuery.data ? (
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500">Recent quote check</p>
-                <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">
-                  {formatEnumLabel(latestServicePriceRadarQuery.data.serviceCategory)}
-                  {latestServicePriceRadarQuery.data.serviceSubcategory
-                    ? ` · ${formatEnumLabel(latestServicePriceRadarQuery.data.serviceSubcategory)}`
-                    : ''}
-                </p>
-              </div>
-              <StatusChip tone={getRadarVerdictTone(latestServicePriceRadarQuery.data.verdict)}>
-                {getRadarVerdictLabel(latestServicePriceRadarQuery.data.verdict)}
-              </StatusChip>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-              <span>Quote {formatMoneyValue(latestServicePriceRadarQuery.data.quoteAmount, latestServicePriceRadarQuery.data.quoteCurrency)}</span>
-              {latestServicePriceRadarQuery.data.expectedLow !== null &&
-              latestServicePriceRadarQuery.data.expectedHigh !== null ? (
-                <span>
-                  Expected {formatMoneyValue(latestServicePriceRadarQuery.data.expectedLow, latestServicePriceRadarQuery.data.quoteCurrency)}-
-                  {formatMoneyValue(latestServicePriceRadarQuery.data.expectedHigh, latestServicePriceRadarQuery.data.quoteCurrency)}
-                </span>
-              ) : null}
-            </div>
-            {latestServicePriceRadarQuery.data.explanationShort ? (
-              <p className="mb-0 mt-2 text-xs text-slate-600">
-                {latestServicePriceRadarQuery.data.explanationShort}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700">
-                <History className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="mb-0 text-sm font-semibold text-slate-900">Home Risk Replay</p>
-                <p className="mb-0 text-xs text-slate-500">See what your home has already been through</p>
-              </div>
-            </div>
-            <p className="mb-0 text-sm text-slate-600">
-              Replay historical weather and stress events matched to this property and its home details.
-            </p>
-          </div>
-
-          <Button asChild variant="outline" className="min-h-[44px] md:shrink-0">
-            <Link
-              href={buildHomeRiskReplayHref({
-                propertyId: property.id,
-                runId: latestRiskReplayQuery.data?.id ?? null,
-                launchSurface: 'property_hub',
-              })}
-              onClick={trackReplayEntryClick}
-            >
-              {latestRiskReplayQuery.data ? 'View replay' : 'Replay home history'}
-            </Link>
-          </Button>
-        </div>
-
-        {latestRiskReplayQuery.data ? (
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500">Latest replay</p>
-                <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">
-                  {latestRiskReplayQuery.data.totalEvents} matched historical events
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <StatusChip tone={latestRiskReplayQuery.data.highImpactEvents > 0 ? 'danger' : 'info'}>
-                  {latestRiskReplayQuery.data.highImpactEvents} high impact
-                </StatusChip>
-                <StatusChip tone={latestRiskReplayQuery.data.moderateImpactEvents > 0 ? 'elevated' : 'info'}>
-                  {latestRiskReplayQuery.data.moderateImpactEvents} moderate
-                </StatusChip>
-              </div>
-            </div>
-            {latestRiskReplayQuery.data.summaryText ? (
-              <p className="mb-0 mt-2 text-xs text-slate-600">
-                {latestRiskReplayQuery.data.summaryText}
-              </p>
-            ) : (
-              <p className="mb-0 mt-2 text-xs text-slate-600">
-                Historical stress history is available for this property.
-              </p>
-            )}
-          </div>
-        ) : latestRiskReplayQuery.isLoading ? (
-          <div className="mt-3 h-16 animate-pulse rounded-2xl bg-slate-100" />
-        ) : (
-          <p className="mb-0 mt-3 text-xs text-slate-500">
-            No replay has been saved yet for this property.
-          </p>
-        )}
-      </div>
-
-      {FEATURE_FLAGS.HOME_HABIT_COACH && (
-        <div className="rounded-[24px] border border-slate-200/90 bg-[linear-gradient(145deg,#ffffff,#f0fdf4)] p-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2">
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700">
-                  <ListChecks className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="mb-0 text-sm font-semibold text-slate-900">Home Habit Coach</p>
-                  <p className="mb-0 text-xs text-slate-500">Seasonal care routines and safety checks</p>
-                </div>
-              </div>
-              <p className="mb-0 text-sm text-slate-600">
-                Small, actionable habits tailored to your home&apos;s systems, location, and season.
-              </p>
-            </div>
-
-            <Button asChild variant="outline" className="min-h-[44px] md:shrink-0">
-              <Link href={`/dashboard/properties/${property.id}/tools/home-habit-coach`}>
-                {spotlightHabitQuery.data?.habit ? 'View habits' : 'Open Habit Coach'}
-              </Link>
-            </Button>
-          </div>
-
-          {spotlightHabitQuery.data?.habit ? (
-            <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500">Top habit right now</p>
-                  <p className="mb-0 mt-1 truncate text-sm font-semibold text-slate-900">
-                    {spotlightHabitQuery.data.habit.titleOverride ?? spotlightHabitQuery.data.habit.habitTemplate.title}
-                  </p>
-                </div>
-                <StatusChip tone="info">
-                  {spotlightHabitQuery.data.habit.habitTemplate.category}
-                </StatusChip>
-              </div>
-              {(spotlightHabitQuery.data.habit.reasonSummary ?? spotlightHabitQuery.data.habit.habitTemplate.shortDescription) ? (
-                <p className="mb-0 mt-2 text-xs text-slate-600 line-clamp-2">
-                  {spotlightHabitQuery.data.habit.reasonSummary ?? spotlightHabitQuery.data.habit.habitTemplate.shortDescription}
-                </p>
-              ) : null}
-            </div>
-          ) : spotlightHabitQuery.isLoading ? (
-            <div className="mt-3 h-16 animate-pulse rounded-2xl bg-slate-100" />
-          ) : (
-            <p className="mb-0 mt-3 text-xs text-slate-500">
-              No habits yet — open Habit Coach to generate personalized routines for this property.
-            </p>
-          )}
-        </div>
-      )}
-
-      <NeighborhoodRadarDashboardCard propertyId={property.id} />
-
-      {FEATURE_FLAGS.MORTGAGE_REFINANCE_RADAR && (
-        <RefinanceRadarDashboardCard propertyId={property.id} />
-      )}
-
-      {FEATURE_FLAGS.HOME_GAZETTE && (
-        <GazetteDashboardCard propertyId={property.id} />
-      )}
 
       {onboardingStatus && onboardingStatus.status !== "COMPLETED" && (
         <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
