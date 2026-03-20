@@ -36,8 +36,6 @@ import { toast } from "@/components/ui/use-toast";
 import { FileDown } from "lucide-react";
 import { ClipboardCheck, LayoutDashboard } from "lucide-react";
 import IncidentsClient from "./incidents/IncidentsClient";
-
-import RoomsHubClient from "./rooms/RoomsHubClient";
 import SetupChecklistPanel from "@/components/onboarding/SetupChecklistPanel";
 import NarrativeRevealOverlay from "@/components/narrative/NarrativeRevealOverlay";
 import { FEATURE_FLAGS } from "@/lib/featureFlags";
@@ -1085,8 +1083,6 @@ export default function PropertyDetailPage() {
       [
         'overview',
         'maintenance',
-        'timeline',
-        'rooms',
         'incidents',
         'risk-protection',
         'financial-efficiency', 
@@ -1290,18 +1286,13 @@ export default function PropertyDetailPage() {
               </TabsTrigger>
 
               <TabsTrigger
-                value="timeline"
+                value="home-tools"
                 className={tabTriggerClassName}
-                onClick={() => router.push(`/dashboard/properties/${property.id}/timeline`)}
+                onClick={() => router.push(`/dashboard/home-tools?propertyId=${property.id}`)}
               >
-                <Calendar className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Timeline</span>
-                <span className="sm:hidden">Time</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="rooms" className={tabTriggerClassName}>
-                <LayoutGrid className="h-4 w-4 shrink-0" />
-                Rooms
+                <Wrench className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Home Tools</span>
+                <span className="sm:hidden">Tools</span>
               </TabsTrigger>
 
               <TabsTrigger value="incidents" className={tabTriggerClassName}>
@@ -1355,12 +1346,6 @@ export default function PropertyDetailPage() {
           <MaintenancePlanTab property={scoredProperty} />
         </TabsContent>
 
-        {/* ✅ NEW: Rooms tab content */}
-        <TabsContent value="rooms" className="mt-4">
-          {/* Render the full Rooms hub directly inside the property page */}
-          <RoomsHubClient />
-        </TabsContent>
-
         <TabsContent value="incidents" className="mt-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-0">
           <IncidentsClient />
         </TabsContent>
@@ -1385,35 +1370,6 @@ export default function PropertyDetailPage() {
           <ClaimsTab propertyId={property.id} />
         </TabsContent>
         
-        <TabsContent value="timeline" className="mt-4">
-          <MobileCard className="space-y-3 border-slate-200/80 bg-white md:hidden">
-            <MobileSectionHeader
-              title="Home Timeline"
-              subtitle="Purchases, repairs, claims, improvements, and key documents."
-            />
-            <Link href={`/dashboard/properties/${property.id}/timeline`}>
-              <Button className="w-full min-h-[44px]">Open Timeline</Button>
-            </Link>
-          </MobileCard>
-
-          <Card className="hidden md:block">
-            <CardHeader className="p-4">
-              <CardTitle className="font-heading text-xl flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-blue-600" />
-                Home Timeline
-              </CardTitle>
-              <CardDescription className="font-body text-sm">
-                View your home&apos;s story: purchases, repairs, claims, improvements, and key documents.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <Link href={`/dashboard/properties/${property.id}/timeline`}>
-                <Button variant="default">Open Timeline</Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
       </Tabs>
 
       {askCozyDockVisible && (
