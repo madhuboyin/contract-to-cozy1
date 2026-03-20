@@ -494,7 +494,7 @@ function HistoryList({
           <History className="mx-auto mb-3 h-10 w-10 text-slate-300 dark:text-slate-600" />
           <p className="text-sm font-medium text-slate-700 dark:text-slate-300">No editions yet</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Past editions will appear here as they're published.
+            Past editions will appear here as they&apos;re published.
           </p>
         </div>
       </GlassCard>
@@ -751,7 +751,7 @@ function BootstrapState({ propertyId }: { propertyId: string }) {
           Your Home Gazette is being set up
         </h3>
         <p className="mx-auto mb-5 max-w-sm text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-          The Gazette will automatically generate a weekly edition summarising what's been happening with your home — risks, maintenance, financials, and more.
+          The Gazette will automatically generate a weekly edition summarising what&apos;s been happening with your home — risks, maintenance, financials, and more.
         </p>
         <p className="text-xs text-slate-400 dark:text-slate-500">
           Check back after the next weekly generation run.

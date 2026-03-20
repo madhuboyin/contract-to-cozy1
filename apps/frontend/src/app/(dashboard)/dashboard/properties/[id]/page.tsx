@@ -277,21 +277,6 @@ const formatMoneyValue = (value: number | null | undefined, currency = 'USD') =>
   }).format(value);
 };
 
-function getRadarVerdictTone(verdict: ServicePriceRadarCheckSummary['verdict']) {
-  if (verdict === 'FAIR') return 'good';
-  if (verdict === 'HIGH') return 'elevated';
-  if (verdict === 'VERY_HIGH') return 'needsAction';
-  return 'info';
-}
-
-function getRadarVerdictLabel(verdict: ServicePriceRadarCheckSummary['verdict']) {
-  if (verdict === 'FAIR') return 'Fair';
-  if (verdict === 'HIGH') return 'High';
-  if (verdict === 'VERY_HIGH') return 'Very high';
-  if (verdict === 'UNDERPRICED') return 'Below range';
-  return 'Needs context';
-}
-
 function openCozyChat() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event("cozy-chat-open"));
