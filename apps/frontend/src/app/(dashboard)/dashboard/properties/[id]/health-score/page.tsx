@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Activity, ArrowLeft, ChevronDown, Loader2 } from "lucide-react";
+import { Activity, ArrowLeft, ChevronDown, Clock3, FileText, Flame, Gauge, Home, Loader2, ShieldCheck, Wind, Wrench } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { api } from "@/lib/api/client";
@@ -178,6 +178,56 @@ function getInsightStatusExplanation(statusValue: string | undefined): string {
     return "This factor is currently a health strength and is helping hold up your overall score.";
   }
   return "This factor is under review. Add more property records to unlock a more precise score explanation.";
+}
+
+function getInsightIconClasses(statusValue: string | undefined): { container: string; icon: string } {
+  const impact = getInsightImpact(statusValue);
+  if (impact === "negative") {
+    return {
+      container: "border-red-200 bg-red-50",
+      icon: "text-red-600",
+    };
+  }
+  if (impact === "positive") {
+    return {
+      container: "border-emerald-200 bg-emerald-50",
+      icon: "text-emerald-600",
+    };
+  }
+  return {
+    container: "border-amber-200 bg-amber-50",
+    icon: "text-amber-700",
+  };
+}
+
+function getInsightFactorIcon(factorValue: string | undefined, statusValue: string | undefined) {
+  const factor = String(factorValue || "").toLowerCase();
+  const iconClasses = getInsightIconClasses(statusValue);
+  let Icon = Activity;
+
+  if (factor.includes("water heater") || factor.includes("boiler")) {
+    Icon = Flame;
+  } else if (factor.includes("hvac") || factor.includes("air") || factor.includes("vent")) {
+    Icon = Wind;
+  } else if (factor.includes("document") || factor.includes("record")) {
+    Icon = FileText;
+  } else if (factor.includes("age")) {
+    Icon = Clock3;
+  } else if (factor.includes("usage") || factor.includes("wear") || factor.includes("density")) {
+    Icon = Gauge;
+  } else if (factor.includes("safety") || factor.includes("warranty")) {
+    Icon = ShieldCheck;
+  } else if (factor.includes("system") || factor.includes("appliance")) {
+    Icon = Wrench;
+  } else if (factor.includes("structure") || factor.includes("roof") || factor.includes("exterior")) {
+    Icon = Home;
+  }
+
+  return (
+    <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${iconClasses.container}`}>
+      <Icon className={`h-4 w-4 ${iconClasses.icon}`} aria-hidden="true" />
+    </span>
+  );
 }
 
 function sortInsightsForDisplay(insights: HealthInsight[]): HealthInsight[] {
@@ -422,9 +472,12 @@ export default function PropertyHealthDetailPage() {
       <details key={`${insight.factor || "insight"}-${idx}`} className="rounded-lg border border-black/10 bg-white">
         <summary className="list-none cursor-pointer px-3 py-2">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
-              <p className="text-xs text-muted-foreground">{statusCopy} • {contributionLabel}</p>
+            <div className="flex items-start gap-2">
+              {getInsightFactorIcon(insight.factor, insight.status)}
+              <div>
+                <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
+                <p className="text-xs text-muted-foreground">{statusCopy} • {contributionLabel}</p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {statusBadge}
