@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Activity, ArrowLeft, Loader2 } from "lucide-react";
+import { Activity, ArrowLeft, ChevronDown, Loader2 } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { api } from "@/lib/api/client";
@@ -150,6 +150,34 @@ function getInsightDetailsSummary(insight: HealthInsight): string | null {
   const visible = insight.details.slice(0, 2);
   const remaining = insight.details.length - visible.length;
   return remaining > 0 ? `${visible.join(" • ")} • +${remaining} more` : visible.join(" • ");
+}
+
+function formatSignedPoints(value: number): string {
+  if (Math.abs(value) < 0.05) return "0.0";
+  const abs = Math.abs(value).toFixed(1);
+  return value > 0 ? `+${abs}` : `-${abs}`;
+}
+
+function getInsightContributionLabel(insight: HealthInsight): string {
+  const score = asNumber(insight.score) ?? 0;
+  return `Contributes ${formatSignedPoints(score)} points`;
+}
+
+function getInsightStatusExplanation(statusValue: string | undefined): string {
+  const status = String(statusValue || "");
+  if (REQUIRED_ACTION_STATUSES.includes(status)) {
+    return "This factor needs action. Resolving the recommended maintenance can improve this score contribution.";
+  }
+  if (IN_PROGRESS_STATUSES.includes(status)) {
+    return "Work is already underway on this factor. Its contribution should improve once the task is completed.";
+  }
+  if (WATCH_STATUSES.includes(status)) {
+    return "This factor is stable but should be monitored. Keeping records and periodic checks helps protect this score.";
+  }
+  if (POSITIVE_STATUSES.includes(status)) {
+    return "This factor is currently a health strength and is helping hold up your overall score.";
+  }
+  return "This factor is under review. Add more property records to unlock a more precise score explanation.";
 }
 
 function sortInsightsForDisplay(insights: HealthInsight[]): HealthInsight[] {
@@ -367,6 +395,65 @@ export default function PropertyHealthDetailPage() {
   const topPositiveInsight = positiveInsights[0];
   const healthDetails = getHealthDetails(latestScore);
   const changes = buildHealthChangeItems(series, sortedInsights);
+  const focusPointsExplainer = "Points show each factor's current contribution to your 0-100 Health Score.";
+
+  const renderFocusInsightAccordionRow = (insight: HealthInsight, idx: number, useStatusChip: boolean) => {
+    const contributionLabel = getInsightContributionLabel(insight);
+    const scoreValue = asNumber(insight.score) ?? 0;
+    const statusCopy = insight.status || "Status unavailable";
+    const detailLines = insight.details?.length ? insight.details.slice(0, 6) : [];
+    const statusBadge = useStatusChip ? (
+      <StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>
+    ) : (
+      <Badge
+        variant={
+          getInsightImpact(insight.status) === "negative"
+            ? "destructive"
+            : getInsightImpact(insight.status) === "positive"
+            ? "success"
+            : "secondary"
+        }
+      >
+        {getInsightChipLabel(insight.status)}
+      </Badge>
+    );
+
+    return (
+      <details key={`${insight.factor || "insight"}-${idx}`} className="rounded-lg border border-black/10 bg-white">
+        <summary className="list-none cursor-pointer px-3 py-2">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
+              <p className="text-xs text-muted-foreground">{statusCopy} • {contributionLabel}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {statusBadge}
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </div>
+        </summary>
+        <div className="border-t border-black/10 px-3 py-2 space-y-2 text-xs text-muted-foreground">
+          <p>
+            This factor currently contributes{" "}
+            <span className="font-semibold text-foreground">{formatSignedPoints(scoreValue)} points</span> to your overall Health Score (0-100).
+          </p>
+          <p>{getInsightStatusExplanation(insight.status)}</p>
+          {detailLines.length > 0 ? (
+            <div className="space-y-1">
+              <p className="font-medium text-foreground">How this was scored</p>
+              <ul className="list-disc pl-4 space-y-1">
+                {detailLines.map((detail, detailIdx) => (
+                  <li key={`${insight.factor || "insight"}-detail-${detailIdx}`}>{detail}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p>No additional scoring evidence is available yet. Add profile details and service records to improve transparency.</p>
+          )}
+        </div>
+      </details>
+    );
+  };
 
   return (
     <DashboardShell className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8">
@@ -433,6 +520,7 @@ export default function PropertyHealthDetailPage() {
               />
             }
           >
+            <p className="mb-2 text-xs text-muted-foreground">{focusPointsExplainer}</p>
             {focusInsights.length === 0 ? (
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>No factor details are available yet for this property.</p>
@@ -448,18 +536,7 @@ export default function PropertyHealthDetailPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {focusInsights.map((insight, idx) => {
-                  const detailsSummary = getInsightDetailsSummary(insight);
-                  const scoreValue = (asNumber(insight.score) ?? 0).toFixed(1);
-                  return (
-                    <CompactEntityRow
-                      key={`${insight.factor || "insight"}-${idx}`}
-                      title={insight.factor || "Health insight"}
-                      subtitle={`${insight.status || "Status unavailable"} • ${scoreValue} pts${detailsSummary ? ` • ${detailsSummary}` : ""}`}
-                      status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>}
-                    />
-                  );
-                })}
+                {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, true))}
               </div>
             )}
           </ScenarioInputCard>
@@ -746,6 +823,7 @@ export default function PropertyHealthDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <p className="mb-2 text-xs text-muted-foreground">{focusPointsExplainer}</p>
               {focusInsights.length === 0 ? (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p>No factor details are available yet for this property.</p>
@@ -761,28 +839,7 @@ export default function PropertyHealthDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {focusInsights.map((insight, idx) => (
-                    <div key={`${insight.factor || "insight"}-${idx}`} className="flex items-start justify-between gap-3 rounded-lg border border-black/10 px-3 py-2">
-                      <div>
-                        <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
-                          {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={
-                          getInsightImpact(insight.status) === "negative"
-                            ? "destructive"
-                            : getInsightImpact(insight.status) === "positive"
-                            ? "success"
-                            : "secondary"
-                        }
-                      >
-                        {getInsightChipLabel(insight.status)}
-                      </Badge>
-                    </div>
-                  ))}
+                  {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, false))}
                 </div>
               )}
               <div className="mt-4">
