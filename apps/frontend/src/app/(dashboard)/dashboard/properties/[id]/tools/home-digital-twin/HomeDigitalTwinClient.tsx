@@ -8,8 +8,13 @@ import {
   AlertTriangle,
   ArrowLeft,
   ChevronRight,
+  CheckCircle2,
+  FileCheck,
+  Info,
+  Landmark,
   Loader2,
   RefreshCw,
+  ShieldCheck,
   Zap,
 } from 'lucide-react';
 
@@ -182,6 +187,66 @@ function readinessTone(score: number | null): 'good' | 'elevated' | 'info' {
   if (score >= 0.70) return 'good';
   if (score >= 0.35) return 'elevated';
   return 'info';
+}
+
+function splitDescriptionIntoPoints(description: string): string[] {
+  const normalized = description.replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+
+  const sentenceLike = normalized
+    .replace(/\s+[—–]\s+/g, '. ')
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim().replace(/[.!?]+$/g, ''))
+    .filter(Boolean);
+
+  const deduped = Array.from(new Set(sentenceLike));
+  if (deduped.length <= 1) return deduped;
+  const withoutIntro = deduped.filter((item) => !/^here is what to expect\b/i.test(item));
+  return withoutIntro.length > 0 ? withoutIntro : deduped;
+}
+
+function descriptionPointMeta(point: string): {
+  Icon: typeof Info;
+  toneClassName: string;
+} {
+  const text = point.toLowerCase();
+
+  if (/(permit|code|inspection|building department)/.test(text)) {
+    return { Icon: FileCheck, toneClassName: 'text-blue-600' };
+  }
+  if (/(tax|assessment|monthly)/.test(text)) {
+    return { Icon: Landmark, toneClassName: 'text-amber-600' };
+  }
+  if (/(licensed|license|credential|insured|contractor)/.test(text)) {
+    return { Icon: ShieldCheck, toneClassName: 'text-emerald-600' };
+  }
+  if (/(confirm|review|verify|proceed|next step)/.test(text)) {
+    return { Icon: CheckCircle2, toneClassName: 'text-indigo-600' };
+  }
+
+  return { Icon: Info, toneClassName: 'text-slate-500' };
+}
+
+function DescriptionPointList({ description }: { description: string }) {
+  const points = splitDescriptionIntoPoints(description);
+  if (points.length === 0) return null;
+
+  return (
+    <ul className="space-y-2" aria-label="Scenario description highlights">
+      {points.map((point, idx) => {
+        const { Icon, toneClassName } = descriptionPointMeta(point);
+        return (
+          <li
+            key={`${point}-${idx}`}
+            className="flex items-start gap-2.5 rounded-lg border border-[hsl(var(--mobile-border-subtle))] px-2.5 py-2"
+          >
+            <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', toneClassName)} aria-hidden="true" />
+            <span className="text-sm leading-[1.5] text-[hsl(var(--foreground))]">{point}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 // ============================================================================
@@ -739,7 +804,7 @@ function ScenarioDetailSheet({
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
                 Description
               </h3>
-              <p className="text-sm leading-[1.5]">{scenario.description}</p>
+              <DescriptionPointList description={scenario.description} />
             </div>
           )}
 
