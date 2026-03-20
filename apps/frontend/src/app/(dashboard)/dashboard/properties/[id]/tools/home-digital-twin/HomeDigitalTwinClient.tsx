@@ -7,14 +7,25 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowLeft,
+  Building2,
   ChevronRight,
   CheckCircle2,
+  Droplets,
   FileCheck,
+  Flame,
+  Hammer,
+  Home,
   Info,
   Landmark,
+  Layers,
   Loader2,
   RefreshCw,
   ShieldCheck,
+  Square,
+  Sun,
+  type LucideIcon,
+  Wind,
+  Wrench,
   Zap,
 } from 'lucide-react';
 
@@ -76,6 +87,22 @@ const COMPONENT_LABEL: Record<HomeTwinComponentType, string> = {
   EXTERIOR: 'Exterior',
   FOUNDATION: 'Foundation',
   OTHER: 'Other',
+};
+
+const COMPONENT_ICON: Record<HomeTwinComponentType, LucideIcon> = {
+  HVAC: Wind,
+  WATER_HEATER: Flame,
+  ROOF: Home,
+  PLUMBING: Droplets,
+  ELECTRICAL: Zap,
+  INSULATION: Layers,
+  WINDOWS: Square,
+  SOLAR: Sun,
+  APPLIANCE: Wrench,
+  FLOORING: Square,
+  EXTERIOR: Building2,
+  FOUNDATION: Hammer,
+  OTHER: Wrench,
 };
 
 const SCENARIO_TYPE_LABEL: Record<HomeTwinScenarioType, string> = {
@@ -342,6 +369,7 @@ function ComponentCard({
 }) {
   const tone = componentStatusTone(component);
   const pct = ageRatioPct(component);
+  const ComponentIcon = COMPONENT_ICON[component.componentType] ?? Home;
 
   return (
     <button
@@ -366,9 +394,17 @@ function ComponentCard({
                 </span>
               )}
             </div>
-            <p className="text-base font-semibold leading-tight">
-              {component.label ?? COMPONENT_LABEL[component.componentType]}
-            </p>
+            <div className="mt-0.5 flex items-center gap-2">
+              <span
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[hsl(var(--mobile-bg-muted))] text-[hsl(var(--mobile-text-secondary))]"
+                aria-hidden="true"
+              >
+                <ComponentIcon className="h-4 w-4" />
+              </span>
+              <p className="text-base font-semibold leading-tight">
+                {component.label ?? COMPONENT_LABEL[component.componentType]}
+              </p>
+            </div>
             {component.estimatedAgeYears != null && (
               <p className="mt-0.5 text-sm text-[hsl(var(--mobile-text-secondary))]">
                 ~{Math.round(component.estimatedAgeYears)} years old
