@@ -39,7 +39,6 @@ import { ClipboardCheck, LayoutDashboard } from "lucide-react";
 import IncidentsClient from "./incidents/IncidentsClient";
 
 import RoomsHubClient from "./rooms/RoomsHubClient";
-import HomeToolsRail from './components/HomeToolsRail';
 import SetupChecklistPanel from "@/components/onboarding/SetupChecklistPanel";
 import NarrativeRevealOverlay from "@/components/narrative/NarrativeRevealOverlay";
 import { FEATURE_FLAGS } from "@/lib/featureFlags";
@@ -1515,14 +1514,6 @@ export default function PropertyDetailPage() {
       {FEATURE_FLAGS.HOME_GAZETTE && (
         <GazetteDashboardCard propertyId={property.id} />
       )}
-
-      <div className="md:hidden">
-        <HomeToolsRail propertyId={property.id} context="property-hub" />
-      </div>
-
-      <div className="hidden md:block">
-        <HomeToolsRail propertyId={property.id} context="property-hub" />
-      </div>
 
       {onboardingStatus && onboardingStatus.status !== "COMPLETED" && (
         <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
