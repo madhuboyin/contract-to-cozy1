@@ -10,17 +10,17 @@ interface HomeScoreReportCardProps {
   propertyId?: string;
 }
 
-const CARD_BASE = "rounded-xl border p-4 flex flex-col gap-3";
+const CARD_BASE = "h-full rounded-xl border p-4 flex flex-col gap-3";
 
 function getTone(scoreBand?: string) {
-  if (scoreBand === "EXCELLENT") return "bg-emerald-50/30 border-emerald-200/50";
-  if (scoreBand === "GOOD") return "bg-teal-50/30 border-teal-200/50";
-  if (scoreBand === "FAIR") return "bg-amber-50/30 border-amber-200/50";
-  return "bg-red-50/30 border-red-200/50";
+  if (scoreBand === "EXCELLENT") return "bg-emerald-50/30 border-emerald-200/60";
+  if (scoreBand === "GOOD") return "bg-teal-50/30 border-teal-200/60";
+  if (scoreBand === "FAIR") return "bg-amber-50/30 border-amber-200/60";
+  return "bg-rose-50/25 border-rose-200/55";
 }
 
 function getAccent(scoreBand?: string): string {
-  if (scoreBand === "NEEDS ATTENTION") return "border-l-4 border-l-rose-400";
+  if (scoreBand === "NEEDS ATTENTION") return "border-l-4 border-l-rose-300";
   if (scoreBand === "FAIR") return "border-l-4 border-l-amber-400";
   return "";
 }
@@ -46,9 +46,37 @@ function getConfidenceWidth(confidence: HomeScoreConfidence) {
 }
 
 function buildHomeScoreInsight(reasonsCount: number, scoreBand?: string): string {
-  if (reasonsCount === 0) return "All tracked systems are performing well";
-  if (reasonsCount === 1) return "1 elevated asset is keeping this score from improving";
-  return `${reasonsCount} elevated assets are keeping this score from improving`;
+  if (scoreBand === "EXCELLENT") return "Overall home fundamentals look stable this week.";
+  if (scoreBand === "GOOD") return "The home is in a solid range with a few optimization opportunities.";
+  if (scoreBand === "FAIR") return "A few systems are pulling this score down and are worth reviewing soon.";
+  if (reasonsCount <= 1) return "One key pressure point is currently weighing on overall home readiness.";
+  return `${reasonsCount} pressure points are lowering overall home readiness.`;
+}
+
+function buildHomeScoreMeaning(scoreBand?: string): string {
+  if (scoreBand === "EXCELLENT") return "How this reads: your home profile is broadly resilient right now.";
+  if (scoreBand === "GOOD") return "How this reads: core systems are healthy with moderate watch items.";
+  if (scoreBand === "FAIR") return "How this reads: quality is mixed and may need near-term upkeep.";
+  return "How this reads: unresolved issues are creating meaningful drag on readiness.";
+}
+
+function buildHomeScorePriority(reasonsCount: number, scoreBand?: string) {
+  if (scoreBand === "NEEDS ATTENTION" || reasonsCount >= 2) {
+    return {
+      label: "Needs Focus",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
+    };
+  }
+  if (scoreBand === "FAIR") {
+    return {
+      label: "Watch",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+  return {
+    label: "Stable",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
 }
 
 function formatWeeklyDelta(delta: number | null) {
@@ -117,25 +145,32 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
   const confidence = report?.confidence ?? "LOW";
   const reasonsCount = report?.topReasonsScoreNotHigher?.length ?? 0;
   const insight = buildHomeScoreInsight(reasonsCount, scoreBand);
+  const meaning = buildHomeScoreMeaning(scoreBand);
+  const priority = buildHomeScorePriority(reasonsCount, scoreBand);
 
   return (
     <div className={`${CARD_BASE} ${getTone(scoreBand)} ${getAccent(scoreBand)}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
           <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
             HomeScore
           </span>
+          </div>
+          <p className="line-clamp-2 text-[11px] text-gray-600">{meaning}</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="whitespace-nowrap text-xs text-gray-400">{weeklyChange}</span>
-          <Link href={reportLink} className="inline-flex">
-            <ArrowRight className="h-3.5 w-3.5 text-gray-400" />
-          </Link>
+        <div className="flex flex-col items-end gap-1.5">
+          <span
+            className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${priority.className}`}
+          >
+            {priority.label}
+          </span>
+          <span className="whitespace-nowrap text-[11px] text-gray-400">{weeklyChange}</span>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <div className="flex items-end gap-1">
           <span className={`text-4xl font-display font-bold ${scoreColor}`}>{score}</span>
           <span className="mb-1 text-sm text-gray-400">/100</span>
@@ -155,9 +190,9 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
       </div>
 
       {/* Contextual insight line */}
-      <p className="text-[11px] leading-snug text-gray-500">{insight}</p>
+      <p className="text-[11px] leading-snug text-gray-600">{insight}</p>
 
-      <div className="flex flex-col gap-1.5 border-t border-amber-200/50 pt-2">
+      <div className="mt-auto flex flex-col gap-1.5 border-t border-amber-200/50 pt-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
             Elevated assets
@@ -178,6 +213,13 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
             {weeklyChange === "No change" ? "— No change" : weeklyChange}
           </span>
         </div>
+        <Link
+          href={reportLink}
+          className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 transition-colors hover:text-gray-900"
+        >
+          Open HomeScore details
+          <ArrowRight className="h-3 w-3" />
+        </Link>
       </div>
     </div>
   );

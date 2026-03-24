@@ -400,15 +400,23 @@ const KeyPropertyIntelligenceSection = ({ property }: { property: Property }) =>
       <div className="space-y-1">
         <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">Key Property Intelligence</h2>
         <p className="text-sm text-muted-foreground">
-          Health, risk, and financial signals for this home in one snapshot.
+          Start with your overall HomeScore, then review the supporting risk, health, and cost signals.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <HomeScoreReportCard propertyId={property.id} />
-        <PropertyHealthScoreCard property={dashboardScoredProperty} />
-        <PropertyRiskScoreCard propertyId={property.id} />
-        <FinancialEfficiencyScoreCard propertyId={property.id} />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div className="md:col-span-2 xl:col-span-3">
+          <HomeScoreReportCard propertyId={property.id} />
+        </div>
+        <div className="xl:col-span-1">
+          <PropertyRiskScoreCard propertyId={property.id} />
+        </div>
+        <div className="xl:col-span-1">
+          <PropertyHealthScoreCard property={dashboardScoredProperty} />
+        </div>
+        <div className="xl:col-span-1">
+          <FinancialEfficiencyScoreCard propertyId={property.id} />
+        </div>
       </div>
     </section>
   );

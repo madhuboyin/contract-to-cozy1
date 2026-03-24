@@ -34,6 +34,11 @@ type WhyFactor = {
   impact?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 };
 
+type RoomOperationalInsight = {
+  summary: string;
+  implication: string;
+};
+
 function safeString(v: unknown): string | null {
   const s = String(v ?? '').trim();
   return s.length > 0 ? s : null;
@@ -97,8 +102,8 @@ function statusPillClass(label: string): string {
 }
 
 /**
- * Builds a single concise, actionable insight for the room card.
- * Prefers context from why-factors, falls back to stats-based copy.
+ * Builds one compact decision insight for the room card:
+ * what is happening + what to do next.
  */
 function buildRoomInsight(
   score: number,
@@ -106,19 +111,66 @@ function buildRoomInsight(
   docsCount: number,
   gapCount: number,
   whyFactors: WhyFactor[],
-): string {
+): RoomOperationalInsight {
   // Use top negative why-factor if available
   const topNegative = whyFactors.find((f) => f.impact === 'NEGATIVE');
-  if (topNegative) return topNegative.detail || topNegative.label;
+  if (topNegative) {
+    const raw = `${topNegative.label} ${topNegative.detail ?? ''}`.toLowerCase();
+    if (raw.includes('moisture') || raw.includes('leak') || raw.includes('water')) {
+      return {
+        summary: 'Moisture watch item detected',
+        implication: 'Inspect source areas soon and document any change.',
+      };
+    }
+    if (raw.includes('filter')) {
+      return {
+        summary: 'Filter replacement may be due soon',
+        implication: 'Plan a quick service check to keep performance stable.',
+      };
+    }
+    return {
+      summary: topNegative.detail || topNegative.label,
+      implication: 'Open room details to review the highest-impact next step.',
+    };
+  }
 
   // Stats-based insight
-  if (gapCount > 0) return `${gapCount} coverage gap${gapCount === 1 ? '' : 's'} detected`;
-  if (docsCount === 0 && itemCount > 0) return 'No warranties uploaded — add docs to improve coverage';
-  if (itemCount < 3) return 'Add key appliances to improve room visibility';
+  if (gapCount > 0) {
+    return {
+      summary: `${gapCount} coverage gap${gapCount === 1 ? '' : 's'} detected`,
+      implication: 'Review protected items before the next claim scenario.',
+    };
+  }
+  if (docsCount === 0 && itemCount > 0) {
+    return {
+      summary: 'Warranty docs are missing',
+      implication: 'Upload key documents to improve claim readiness.',
+    };
+  }
+  if (itemCount < 3) {
+    return {
+      summary: 'Inventory detail is still light',
+      implication: 'Add key items to improve room-level tracking accuracy.',
+    };
+  }
 
   // Healthy state
-  if (score >= 80) return 'No active issues';
-  return 'Keep inventory details current';
+  if (score >= 80) {
+    return {
+      summary: 'No active issues',
+      implication: 'Keep checklist and documents current to maintain this status.',
+    };
+  }
+  if (score < 40) {
+    return {
+      summary: 'Room health is slipping',
+      implication: 'Review this room for the most urgent maintenance task.',
+    };
+  }
+  return {
+    summary: 'A few watch items are emerging',
+    implication: 'Check room timeline and complete one preventive action.',
+  };
 }
 
 function guessRoomType(name: string): string {
@@ -266,7 +318,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
           </div>
           <div>
             <h2 className="text-2xl font-semibold text-gray-900">Rooms</h2>
-            <p className="text-sm text-gray-500">Room-level health and next steps for this property.</p>
+            <p className="text-sm text-gray-500">Room-level health with one clear cue per room.</p>
           </div>
         </div>
 
@@ -372,7 +424,14 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                         <div className="min-w-0 flex-1 space-y-1">
                           {/* Insight text */}
                           {roomInsight ? (
-                            <p className="text-xs text-gray-600 leading-snug">{roomInsight}</p>
+                            <>
+                              <p className="line-clamp-2 text-xs font-semibold text-gray-800 leading-snug">
+                                {roomInsight.summary}
+                              </p>
+                              <p className="line-clamp-2 text-[11px] text-gray-600 leading-snug">
+                                {roomInsight.implication}
+                              </p>
+                            </>
                           ) : null}
                           {/* Quick stats */}
                           <div className="flex flex-wrap gap-2 text-[11px] text-gray-500">
@@ -402,9 +461,9 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                   <div className="mt-3">
                     <Link
                       href={roomHref}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline underline-offset-2"
+                      className="inline-flex min-h-[36px] items-center gap-1 rounded-md border border-brand-600/30 px-2.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-50"
                     >
-                      Open room
+                      Open room details
                       <ArrowRight className="h-3 w-3" />
                     </Link>
                   </div>
