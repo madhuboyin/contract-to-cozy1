@@ -40,6 +40,7 @@ import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 import MobileDashboardHome from './components/MobileDashboardHome';
 import MobileHomeBuyerDashboard from './components/MobileHomeBuyerDashboard';
+import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -549,6 +550,15 @@ export default function DashboardPage() {
           <PropertyHealthScoreCard property={selectedProperty} />
           <PropertyRiskScoreCard propertyId={selectedPropertyId} />
           <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+        </motion.div>
+
+        <motion.div {...sectionMotion(3)}>
+          <GuidanceInlinePanel
+            propertyId={selectedPropertyId}
+            title="Deterministic Next Steps"
+            subtitle="Complete decision, coverage, and pricing steps in order before execution actions."
+            limit={3}
+          />
         </motion.div>
         <div className="section-divider my-5 md:my-6" />
 

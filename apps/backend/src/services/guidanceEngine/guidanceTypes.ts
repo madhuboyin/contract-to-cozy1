@@ -42,6 +42,7 @@ export const GUIDANCE_SIGNAL_STATUS = ['ACTIVE', 'RESOLVED', 'SUPPRESSED', 'ARCH
 export const GUIDANCE_JOURNEY_STATUS = ['ACTIVE', 'COMPLETED', 'ABORTED', 'ARCHIVED'] as const;
 export const GUIDANCE_STEP_STATUS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'] as const;
 export const GUIDANCE_SEVERITY = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'UNKNOWN'] as const;
+export const GUIDANCE_STEP_SKIP_POLICY = ['ALLOWED', 'DISCOURAGED', 'DISALLOWED'] as const;
 
 export type GuidanceIssueDomain = (typeof GUIDANCE_ISSUE_DOMAINS)[number];
 export type GuidanceDecisionStage = (typeof GUIDANCE_DECISION_STAGES)[number];
@@ -50,6 +51,7 @@ export type GuidanceSignalStatus = (typeof GUIDANCE_SIGNAL_STATUS)[number];
 export type GuidanceJourneyStatus = (typeof GUIDANCE_JOURNEY_STATUS)[number];
 export type GuidanceStepStatus = (typeof GUIDANCE_STEP_STATUS)[number];
 export type GuidanceSeverity = (typeof GUIDANCE_SEVERITY)[number];
+export type GuidanceStepSkipPolicy = (typeof GUIDANCE_STEP_SKIP_POLICY)[number];
 
 export type GuidanceSignalSourceInput = {
   propertyId: string;
@@ -133,6 +135,7 @@ export type GuidanceStepTemplate = {
   flowKey?: string;
   routePath?: string;
   requiredContextKeys?: string[];
+  skipPolicy?: GuidanceStepSkipPolicy;
 };
 
 export type GuidanceJourneyTemplate = {
@@ -188,6 +191,7 @@ export type GuidanceExecutionGuardRequest = {
 export type GuidanceExecutionGuardResult = {
   blocked: boolean;
   targetAction: GuidanceExecutionGuardRequest['targetAction'];
+  blockedReason: string | null;
   reasons: string[];
   missingPrerequisites: Array<{
     journeyId: string;
@@ -195,6 +199,12 @@ export type GuidanceExecutionGuardResult = {
     stepKey: string;
     stepLabel: string;
   }>;
+  safeNextStep: {
+    journeyId: string;
+    journeyTypeKey: string | null;
+    stepKey: string;
+    stepLabel: string;
+  } | null;
   evaluatedJourneyIds: string[];
 };
 

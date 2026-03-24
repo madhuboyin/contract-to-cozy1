@@ -34,7 +34,7 @@ const READINESS_BY_FAMILY: Record<string, GuidanceExecutionReadiness> = {
   inspection_followup_needed: 'NEEDS_CONTEXT',
   financial_exposure: 'NEEDS_CONTEXT',
   cost_of_inaction_risk: 'NEEDS_CONTEXT',
-  freeze_risk: 'READY',
+  freeze_risk: 'NEEDS_CONTEXT',
 };
 
 const FIRST_STEP_BY_FAMILY: Record<string, string> = {
@@ -46,7 +46,7 @@ const FIRST_STEP_BY_FAMILY: Record<string, string> = {
   inspection_followup_needed: 'assess_urgency',
   financial_exposure: 'estimate_out_of_pocket_cost',
   cost_of_inaction_risk: 'estimate_out_of_pocket_cost',
-  freeze_risk: 'review_signal',
+  freeze_risk: 'weather_safety_check',
 };
 
 const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
@@ -59,6 +59,15 @@ const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
   financial_exposure: 'true-cost',
   cost_of_inaction_risk: 'do-nothing-simulator',
   freeze_risk: 'home-event-radar',
+};
+
+const MERGE_CLUSTER_BY_FAMILY: Record<string, string> = {
+  lifecycle_end_or_past_life: 'system_failure_bundle',
+  maintenance_failure_risk: 'system_failure_bundle',
+  coverage_gap: 'system_failure_bundle',
+  coverage_lapse_detected: 'system_failure_bundle',
+  financial_exposure: 'system_failure_bundle',
+  cost_of_inaction_risk: 'system_failure_bundle',
 };
 
 function toFamilySlug(value: string): string {
@@ -137,13 +146,12 @@ function computeDedupeKey(input: {
 
 function computeDuplicateGroupKey(input: {
   propertyId: string;
-  signalIntentFamily: string;
-  issueDomain: GuidanceIssueDomain;
+  mergeCluster: string;
   inventoryItemId: string | null;
   homeAssetId: string | null;
 }): string {
   const scope = input.inventoryItemId ?? input.homeAssetId ?? 'PROPERTY';
-  return [input.propertyId, input.issueDomain, input.signalIntentFamily, scope].join(':');
+  return [input.propertyId, input.mergeCluster, scope].join(':');
 }
 
 function inferSeverity(input: GuidanceSignalSourceInput, family: string): GuidanceSeverity | null {
@@ -198,8 +206,9 @@ export class GuidanceSignalResolverService {
       input.duplicateGroupKey ??
       computeDuplicateGroupKey({
         propertyId: input.propertyId,
-        signalIntentFamily,
-        issueDomain,
+        mergeCluster:
+          MERGE_CLUSTER_BY_FAMILY[signalIntentFamily] ??
+          [issueDomain, signalIntentFamily].join(':'),
         inventoryItemId: input.inventoryItemId ?? null,
         homeAssetId: input.homeAssetId ?? null,
       });

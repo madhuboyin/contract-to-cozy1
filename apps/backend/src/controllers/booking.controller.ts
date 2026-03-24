@@ -46,21 +46,17 @@ export class BookingController {
 
       const {
         guidanceJourneyId,
-        guidanceEnforceGuard,
         ...bookingInput
       } = input as CreateBookingInput & {
         guidanceJourneyId?: string;
-        guidanceEnforceGuard?: boolean;
       };
 
-      if (guidanceEnforceGuard && guidanceJourneyId) {
-        await guidanceBookingGuardService.assertCanExecute({
-          propertyId: bookingInput.propertyId,
-          journeyId: guidanceJourneyId,
-          inventoryItemId: bookingInput.inventoryItemId ?? null,
-          targetAction: 'BOOKING',
-        });
-      }
+      await guidanceBookingGuardService.assertCanExecute({
+        propertyId: bookingInput.propertyId,
+        journeyId: guidanceJourneyId ?? null,
+        inventoryItemId: bookingInput.inventoryItemId ?? null,
+        targetAction: 'BOOKING',
+      });
 
       const booking = await BookingService.createBooking(userId, bookingInput);
 

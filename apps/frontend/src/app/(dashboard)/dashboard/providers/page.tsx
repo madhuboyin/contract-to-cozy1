@@ -33,6 +33,9 @@ import {
   ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
+import { useGuidance } from '@/features/guidance/hooks/useGuidance';
+import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
 
 const DEFAULT_RADIUS = 25;
 
@@ -191,6 +194,8 @@ const ProviderList = ({
   guidanceJourneyId,
   guidanceStepKey,
   guidanceSignalIntentFamily,
+  executionBlocked,
+  blockedActionHref,
 }: {
   providers: Provider[];
   targetPropertyId?: string;
@@ -202,6 +207,8 @@ const ProviderList = ({
   guidanceJourneyId?: string;
   guidanceStepKey?: string;
   guidanceSignalIntentFamily?: string;
+  executionBlocked?: boolean;
+  blockedActionHref?: string;
 }) => {
   return (
     <div className="space-y-2.5">
@@ -275,12 +282,32 @@ const ProviderList = ({
 
             <ActionPriorityRow
               primaryAction={
-                <Link
-                  href={profileLink}
-                  className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
-                >
-                  View profile
-                </Link>
+                executionBlocked ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-slate-300 px-4 text-sm font-semibold text-slate-600"
+                  >
+                    View profile (blocked)
+                  </button>
+                ) : (
+                  <Link
+                    href={profileLink}
+                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
+                  >
+                    View profile
+                  </Link>
+                )
+              }
+              secondaryActions={
+                executionBlocked && blockedActionHref ? (
+                  <Link
+                    href={blockedActionHref}
+                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+                  >
+                    Resolve required step
+                  </Link>
+                ) : undefined
               }
             />
           </MobileCard>
@@ -304,12 +331,32 @@ export default function ProvidersPage() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
+  const providerGuardQuery = useExecutionGuard(targetPropertyId, 'BOOKING', {
+    enabled: Boolean(targetPropertyId),
+  });
+  const providerGuidanceQuery = useGuidance(targetPropertyId, {
+    enabled: Boolean(targetPropertyId),
+    limit: 3,
+  });
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contextItemName, setContextItemName] = useState<string | null>(null);
   const [propertyZipCode, setPropertyZipCode] = useState<string>('');
+  const isExecutionBlocked = Boolean(providerGuardQuery.data?.blocked);
+  const blockedReason =
+    providerGuardQuery.data?.blockedReason ?? providerGuardQuery.data?.reasons?.[0] ?? null;
+  const blockedJourneyIds = new Set(
+    providerGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []
+  );
+  const blockedAction =
+    providerGuidanceQuery.actions.find((action) => blockedJourneyIds.has(action.journeyId)) ?? null;
+  const blockedActionHref =
+    blockedAction?.href ??
+    (targetPropertyId
+      ? `/dashboard/properties/${targetPropertyId}/risk-assessment`
+      : '/dashboard/maintenance');
 
   const isHomeBuyer = user?.segment === 'HOME_BUYER';
   const initialZipCode = '';
@@ -484,6 +531,18 @@ export default function ProvidersPage() {
         </MobileCard>
       ) : null}
 
+      {isExecutionBlocked ? (
+        <GuidanceWarningBanner
+          title="Provider search is blocked until required guidance steps are complete"
+          message={
+            blockedReason ??
+            'Complete decision, coverage, or pricing steps before choosing a provider.'
+          }
+          actionLabel="Go to required step"
+          actionHref={blockedActionHref}
+        />
+      ) : null}
+
       <MobileSection>
         <MobileSectionHeader
           title={dataLoading ? 'Searching providers...' : `${providers.length} provider${providers.length !== 1 ? 's' : ''} found`}
@@ -517,6 +576,8 @@ export default function ProvidersPage() {
           guidanceJourneyId={guidanceJourneyId}
           guidanceStepKey={guidanceStepKey}
           guidanceSignalIntentFamily={guidanceSignalIntentFamily}
+          executionBlocked={isExecutionBlocked}
+          blockedActionHref={blockedActionHref}
         />
       ) : (
         <EmptyStateCard

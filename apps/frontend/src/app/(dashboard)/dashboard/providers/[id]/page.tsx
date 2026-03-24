@@ -24,6 +24,9 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
+import { useGuidance } from '@/features/guidance/hooks/useGuidance';
+import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
 
 interface CompleteUser extends User {
   phone: string | null;
@@ -57,11 +60,29 @@ export default function ProviderDetailPage() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
+  const bookingGuardQuery = useExecutionGuard(propertyId, 'BOOKING', {
+    enabled: Boolean(propertyId),
+  });
+  const bookingGuidanceQuery = useGuidance(propertyId, {
+    enabled: Boolean(propertyId),
+    limit: 3,
+  });
 
   const [provider, setProvider] = useState<CompleteProvider | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const isExecutionBlocked = Boolean(bookingGuardQuery.data?.blocked);
+  const blockedReason =
+    bookingGuardQuery.data?.blockedReason ?? bookingGuardQuery.data?.reasons?.[0] ?? null;
+  const blockedJourneyIds = new Set(
+    bookingGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []
+  );
+  const blockedAction =
+    bookingGuidanceQuery.actions.find((action) => blockedJourneyIds.has(action.journeyId)) ?? null;
+  const blockedActionHref =
+    blockedAction?.href ??
+    (propertyId ? `/dashboard/properties/${propertyId}/risk-assessment` : '/dashboard/maintenance');
 
   const FAVORITES_QUERY_KEY = ['favorites'];
 
@@ -247,13 +268,24 @@ export default function ProviderDetailPage() {
           actions={
             <ActionPriorityRow
               primaryAction={
-                <Link
-                  href={bookingUrl}
-                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white"
-                >
-                  <Calendar className="h-4 w-4" />
-                  Book now
-                </Link>
+                isExecutionBlocked ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600"
+                  >
+                    <Calendar className="h-4 w-4" />
+                    Book now (blocked)
+                  </button>
+                ) : (
+                  <Link
+                    href={bookingUrl}
+                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white"
+                  >
+                    <Calendar className="h-4 w-4" />
+                    Book now
+                  </Link>
+                )
               }
               secondaryActions={
                 favoritesQuery.isError ? (
@@ -286,6 +318,18 @@ export default function ProviderDetailPage() {
         />
       }
     >
+      {isExecutionBlocked ? (
+        <GuidanceWarningBanner
+          title="Booking is blocked until prerequisite steps are complete"
+          message={
+            blockedReason ||
+            'Finish required guidance steps before proceeding to provider booking.'
+          }
+          actionLabel="Go to required step"
+          actionHref={blockedActionHref}
+        />
+      ) : null}
+
       <ScenarioInputCard title="Provider Snapshot" subtitle="Rating, service area, and specialties.">
         <ReadOnlySummaryBlock
           columns={2}

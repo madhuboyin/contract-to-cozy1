@@ -9,6 +9,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
+import { useJourney } from '@/features/guidance/hooks/useJourney';
 import { GuidanceStepList } from './GuidanceStepList';
 import { GuidanceWarningBanner } from './GuidanceWarningBanner';
 
@@ -21,6 +22,7 @@ type GuidanceDrawerProps = {
 
 export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: GuidanceDrawerProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const journeyDetail = useJourney(propertyId, open && action ? action.journeyId : null);
 
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 1024);
@@ -31,7 +33,15 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
 
   if (!action) return null;
 
-  const firstWarning = action.blockedReason || action.warnings[0] || null;
+  const detailJourney = journeyDetail.data?.journey ?? action.journey;
+  const detailNext = journeyDetail.data?.next ?? null;
+  const detailSteps = detailJourney.steps?.length ? detailJourney.steps : action.steps;
+  const firstWarning =
+    detailNext?.blockedReason ||
+    action.blockedReason ||
+    detailNext?.warnings?.[0] ||
+    action.warnings[0] ||
+    null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -54,9 +64,9 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
 
           <GuidanceStepList
             propertyId={propertyId}
-            journey={action.journey}
-            steps={action.steps}
-            currentStepId={action.currentStep?.id ?? null}
+            journey={detailJourney}
+            steps={detailSteps}
+            currentStepId={detailNext?.currentStep?.id ?? action.currentStep?.id ?? null}
           />
         </div>
       </SheetContent>

@@ -157,6 +157,8 @@ export class GuidanceBookingGuardService {
     }
 
     const blocked = dedupedMissing.length > 0 || reasons.length > 0;
+    const safeNextStep = dedupedMissing[0] ?? null;
+    const blockedReason = Array.from(new Set(reasons))[0] ?? (safeNextStep ? `Complete ${safeNextStep.stepLabel} first.` : null);
     if (blocked) {
       console.info('[GUIDANCE] execution blocked', {
         propertyId: request.propertyId,
@@ -169,11 +171,13 @@ export class GuidanceBookingGuardService {
     return {
       blocked,
       targetAction: request.targetAction,
+      blockedReason,
       reasons: guidanceCopyService.polishExecutionGuardReasons(
         Array.from(new Set(reasons)),
         dedupedMissing
       ),
       missingPrerequisites: dedupedMissing,
+      safeNextStep,
       evaluatedJourneyIds: journeys.map((journey: any) => journey.id),
     };
   }

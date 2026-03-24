@@ -96,6 +96,33 @@ export class GuidanceJourneyService {
     };
   }
 
+  private resolveDigitalTwinCompleteness(journey: any, signal: any) {
+    const journeyContext = asRecord(journey?.contextSnapshotJson);
+    const journeyTwin = asRecord(journeyContext.digitalTwin);
+    const signalPayload = asRecord(signal?.payloadJson);
+    const signalMetadata = asRecord(signal?.metadataJson);
+
+    const candidates = [
+      journeyContext.digitalTwinCompleteness,
+      journeyContext.digitalTwinCompletenessScore,
+      journeyTwin.completeness,
+      journeyTwin.completenessScore,
+      signalPayload.digitalTwinCompleteness,
+      signalPayload.digitalTwinCompletenessScore,
+      signalMetadata.digitalTwinCompleteness,
+      signalMetadata.digitalTwinCompletenessScore,
+    ];
+
+    for (const candidate of candidates) {
+      const parsed = guidanceValidationService.readNumeric({ value: candidate }, 'value');
+      if (parsed == null) continue;
+      if (parsed > 1) return Math.max(0, Math.min(1, parsed / 100));
+      return Math.max(0, Math.min(1, parsed));
+    }
+
+    return null;
+  }
+
   private enrichAction(params: {
     journey: any;
     signal?: any | null;
@@ -110,10 +137,30 @@ export class GuidanceJourneyService {
       signal,
     });
 
+    const polishedSteps = (journey.steps ?? []).map((step: any) => this.applyStepCopy(step));
+    const polishedNextStep = next?.nextStep ? this.applyStepCopy(next.nextStep) : null;
+    const polishedCurrentStep = next?.currentStep ? this.applyStepCopy(next.currentStep) : null;
+    const signalFreshness = guidanceValidationService.assessSignalFreshness({
+      signalIntentFamily: signal?.signalIntentFamily ?? null,
+      observedAt:
+        signal?.metadataJson?.observedAt ??
+        signal?.lastObservedAt ??
+        signal?.firstObservedAt ??
+        null,
+    });
+    const derivedFreshness = this.resolveDerivedFreshnessForNextStep(
+      journey,
+      polishedNextStep?.toolKey ?? null
+    );
+    const digitalTwinCompleteness = this.resolveDigitalTwinCompleteness(journey, signal);
+
     const confidence = guidanceConfidenceService.evaluate({
       journey,
       signal,
       next,
+      digitalTwinCompleteness,
+      signalFreshness,
+      derivedFreshness,
     });
 
     const priority = guidancePriorityService.score({
@@ -127,24 +174,9 @@ export class GuidanceJourneyService {
       signalPayload: signal?.payloadJson ?? null,
     });
 
-    const polishedSteps = (journey.steps ?? []).map((step: any) => this.applyStepCopy(step));
-    const polishedNextStep = next?.nextStep ? this.applyStepCopy(next.nextStep) : null;
-    const polishedCurrentStep = next?.currentStep ? this.applyStepCopy(next.currentStep) : null;
     const breakEvenMonths = guidanceValidationService.readNumeric(
       asRecord(asRecord(journey.derivedSnapshotJson).latest),
       'breakEvenMonths'
-    );
-    const signalFreshness = guidanceValidationService.assessSignalFreshness({
-      signalIntentFamily: signal?.signalIntentFamily ?? null,
-      observedAt:
-        signal?.metadataJson?.observedAt ??
-        signal?.lastObservedAt ??
-        signal?.firstObservedAt ??
-        null,
-    });
-    const derivedFreshness = this.resolveDerivedFreshnessForNextStep(
-      journey,
-      polishedNextStep?.toolKey ?? null
     );
 
     const validation = guidanceValidationService.validateMathAndSafety({
@@ -275,6 +307,24 @@ export class GuidanceJourneyService {
   }) {
     const { guidanceJourney } = getGuidanceModels();
 
+    const mergedGroupMatch = await guidanceJourney.findFirst({
+      where: {
+        propertyId: args.propertyId,
+        status: 'ACTIVE',
+        mergedSignalGroupKey: args.duplicateGroupKey,
+        inventoryItemId: args.inventoryItemId,
+        homeAssetId: args.homeAssetId,
+      },
+      include: {
+        steps: {
+          orderBy: [{ stepOrder: 'asc' }],
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+
+    if (mergedGroupMatch) return mergedGroupMatch;
+
     const strictMatch = await guidanceJourney.findFirst({
       where: {
         propertyId: args.propertyId,
@@ -378,13 +428,20 @@ export class GuidanceJourneyService {
         },
       });
     } else {
+      const isSameJourneyType = journey.journeyTypeKey === template.journeyTypeKey;
       journey = await guidanceJourney.update({
         where: { id: journey.id },
         data: {
           primarySignalId: journey.primarySignalId ?? params.signal.id,
-          issueDomain: params.signal.issueDomain ?? journey.issueDomain,
-          decisionStage: params.signal.decisionStage ?? journey.decisionStage,
-          executionReadiness: params.signal.executionReadiness ?? journey.executionReadiness,
+          issueDomain: isSameJourneyType
+            ? params.signal.issueDomain ?? journey.issueDomain
+            : journey.issueDomain,
+          decisionStage: isSameJourneyType
+            ? params.signal.decisionStage ?? journey.decisionStage
+            : journey.decisionStage,
+          executionReadiness: isSameJourneyType
+            ? params.signal.executionReadiness ?? journey.executionReadiness
+            : journey.executionReadiness,
           mergedSignalGroupKey: params.signal.duplicateGroupKey ?? journey.mergedSignalGroupKey,
           isLowContext:
             Boolean(journey.isLowContext) || (params.signal.missingContextKeys ?? []).length > 0,

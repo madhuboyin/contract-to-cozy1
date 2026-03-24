@@ -195,6 +195,7 @@ export type GuidancePropertyResponse = {
 
 export type GuidanceJourneyDetailResponse = {
   journey: GuidanceJourneyDTO;
+  next: GuidanceNextStepResult | null;
   events: Array<{
     id: string;
     journeyId: string;
@@ -223,6 +224,7 @@ export type GuidanceExecutionTargetAction =
 export type GuidanceExecutionGuardResult = {
   blocked: boolean;
   targetAction: GuidanceExecutionTargetAction;
+  blockedReason: string | null;
   reasons: string[];
   missingPrerequisites: Array<{
     journeyId: string;
@@ -230,6 +232,12 @@ export type GuidanceExecutionGuardResult = {
     stepKey: string;
     stepLabel: string;
   }>;
+  safeNextStep: {
+    journeyId: string;
+    journeyTypeKey: string | null;
+    stepKey: string;
+    stepLabel: string;
+  } | null;
   evaluatedJourneyIds: string[];
 };
 

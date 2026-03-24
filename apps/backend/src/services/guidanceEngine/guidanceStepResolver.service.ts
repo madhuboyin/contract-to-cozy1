@@ -9,6 +9,7 @@ import {
 } from './guidanceTypes';
 import { guidanceDerivedDataService } from './guidanceDerivedData.service';
 import { guidanceValidationService } from './guidanceValidation.service';
+import { getStepSkipPolicy } from './guidanceTemplateRegistry';
 
 const VALID_STEP_TRANSITIONS: Record<GuidanceStepStatus, GuidanceStepStatus[]> = {
   PENDING: ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'],
@@ -27,6 +28,8 @@ const CRITICAL_REQUIRED_STEP_KEYS = new Set([
   'assess_urgency',
   'estimate_repair_cost',
   'safety_alert',
+  'weather_safety_check',
+  'protect_exposed_systems',
   'review_remedy_instructions',
   'recall_resolution',
 ]);
@@ -141,13 +144,23 @@ export class GuidanceStepResolverService {
     signalId?: string | null;
     allowBackwardTransition?: boolean;
   }) {
-    const { guidanceJourneyStep, guidanceJourneyEvent } = getGuidanceModels();
+    const { guidanceJourneyStep, guidanceJourneyEvent, guidanceJourney } = getGuidanceModels();
 
     let step: any | null = null;
 
     if (params.stepId) {
       step = await guidanceJourneyStep.findFirst({
         where: { id: params.stepId, journey: { propertyId: params.propertyId } },
+        include: {
+          journey: {
+            select: {
+              id: true,
+              journeyTypeKey: true,
+              missingContextKeys: true,
+              isLowContext: true,
+            },
+          },
+        },
       });
     } else if (params.journeyId && params.stepKey) {
       step = await guidanceJourneyStep.findFirst({
@@ -155,6 +168,16 @@ export class GuidanceStepResolverService {
           journeyId: params.journeyId,
           stepKey: params.stepKey,
           journey: { propertyId: params.propertyId },
+        },
+        include: {
+          journey: {
+            select: {
+              id: true,
+              journeyTypeKey: true,
+              missingContextKeys: true,
+              isLowContext: true,
+            },
+          },
         },
       });
     }
@@ -183,14 +206,27 @@ export class GuidanceStepResolverService {
       );
     }
 
+    const skipPolicy = getStepSkipPolicy(step.journey?.journeyTypeKey ?? null, step.stepKey ?? null);
+
     if (
       params.nextStatus === 'SKIPPED' &&
-      step.isRequired &&
+      skipPolicy === 'DISALLOWED'
+    ) {
+      throw new APIError(
+        'This step cannot be skipped by policy.',
+        400,
+        'GUIDANCE_STEP_SKIP_DISALLOWED'
+      );
+    }
+
+    if (
+      params.nextStatus === 'SKIPPED' &&
+      (step.isRequired || skipPolicy === 'DISCOURAGED') &&
       !params.reasonCode &&
       !params.reasonMessage
     ) {
       throw new APIError(
-        'Required steps cannot be skipped without a reason.',
+        'This step cannot be skipped without an explicit reason.',
         400,
         'GUIDANCE_REQUIRED_STEP_SKIP_REASON_REQUIRED'
       );
@@ -264,6 +300,22 @@ export class GuidanceStepResolverService {
       where: { id: step.id },
       data,
     });
+
+    if (
+      params.nextStatus === 'SKIPPED' &&
+      (step.isRequired || skipPolicy !== 'ALLOWED')
+    ) {
+      const existingMissing = asStringArray(step.journey?.missingContextKeys ?? []);
+      const skipMarker = `skipped:${updated.stepKey}`;
+      const nextMissing = Array.from(new Set([...existingMissing, skipMarker]));
+      await guidanceJourney.update({
+        where: { id: updated.journeyId },
+        data: {
+          isLowContext: true,
+          missingContextKeys: nextMissing,
+        },
+      });
+    }
 
     await guidanceJourneyEvent.create({
       data: {

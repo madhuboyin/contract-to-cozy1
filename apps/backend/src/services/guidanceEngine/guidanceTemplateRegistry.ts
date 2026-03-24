@@ -1,4 +1,4 @@
-import { GuidanceJourneyTemplate } from './guidanceTypes';
+import { GuidanceJourneyTemplate, GuidanceStepSkipPolicy } from './guidanceTypes';
 
 const templates: GuidanceJourneyTemplate[] = [
   {
@@ -22,6 +22,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'replace-repair',
         flowKey: 'replace-repair-analysis',
         routePath: '/dashboard/properties/:propertyId/inventory/items/:itemId/replace-repair',
+        skipPolicy: 'DISALLOWED',
       },
       {
         stepOrder: 2,
@@ -35,6 +36,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'coverage-intelligence',
         flowKey: 'coverage-analysis',
         routePath: '/dashboard/properties/:propertyId/tools/coverage-intelligence',
+        skipPolicy: 'DISALLOWED',
       },
       {
         stepOrder: 3,
@@ -47,6 +49,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'service-price-radar',
         flowKey: 'service-price-radar',
         routePath: '/dashboard/properties/:propertyId/tools/service-price-radar',
+        skipPolicy: 'DISALLOWED',
       },
       {
         stepOrder: 4,
@@ -59,6 +62,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'negotiation-shield',
         flowKey: 'negotiation-shield',
         routePath: '/dashboard/properties/:propertyId/tools/negotiation-shield',
+        skipPolicy: 'ALLOWED',
       },
       {
         stepOrder: 5,
@@ -71,6 +75,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'booking',
         flowKey: 'booking',
         routePath: '/dashboard/bookings',
+        skipPolicy: 'DISALLOWED',
       },
     ],
   },
@@ -94,6 +99,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'coverage-intelligence',
         flowKey: 'coverage-analysis',
         routePath: '/dashboard/properties/:propertyId/tools/coverage-intelligence',
+        skipPolicy: 'DISALLOWED',
       },
       {
         stepOrder: 2,
@@ -106,6 +112,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'true-cost',
         flowKey: 'true-cost-ownership',
         routePath: '/dashboard/properties/:propertyId/tools/true-cost',
+        skipPolicy: 'DISCOURAGED',
       },
       {
         stepOrder: 3,
@@ -118,6 +125,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'insurance-trend',
         flowKey: 'insurance-cost-trend',
         routePath: '/dashboard/properties/:propertyId/tools/insurance-trend',
+        skipPolicy: 'DISCOURAGED',
       },
       {
         stepOrder: 4,
@@ -130,13 +138,14 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'documents',
         flowKey: 'vault',
         routePath: '/dashboard/vault',
+        skipPolicy: 'DISALLOWED',
       },
     ],
   },
   {
     journeyTypeKey: 'recall_safety_resolution',
     journeyKey: 'journey_recall_safety_resolution',
-    signalIntentFamilies: ['recall_detected', 'freeze_risk'],
+    signalIntentFamilies: ['recall_detected'],
     issueDomain: 'SAFETY',
     defaultDecisionStage: 'AWARENESS',
     defaultReadiness: 'READY',
@@ -152,7 +161,8 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'recalls',
         flowKey: 'recall-alert',
-        routePath: '/dashboard/properties/:propertyId/tools/home-event-radar',
+        routePath: '/dashboard/properties/:propertyId/recalls',
+        skipPolicy: 'DISALLOWED',
       },
       {
         stepOrder: 2,
@@ -164,6 +174,7 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'recalls',
         flowKey: 'recall-remedy',
+        skipPolicy: 'DISALLOWED',
       },
       {
         stepOrder: 3,
@@ -175,6 +186,57 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'recalls',
         flowKey: 'recall-resolution',
+        skipPolicy: 'DISALLOWED',
+      },
+    ],
+  },
+  {
+    journeyTypeKey: 'weather_risk_resolution',
+    journeyKey: 'journey_weather_risk_resolution',
+    signalIntentFamilies: ['freeze_risk'],
+    issueDomain: 'WEATHER',
+    defaultDecisionStage: 'AWARENESS',
+    defaultReadiness: 'NEEDS_CONTEXT',
+    canonicalFirstStepKey: 'weather_safety_check',
+    steps: [
+      {
+        stepOrder: 1,
+        stepKey: 'weather_safety_check',
+        stepType: 'AWARENESS',
+        label: 'Review weather risk details',
+        decisionStage: 'AWARENESS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'home-event-radar',
+        flowKey: 'home-event-radar',
+        routePath: '/dashboard/properties/:propertyId/tools/home-event-radar',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 2,
+        stepKey: 'protect_exposed_systems',
+        stepType: 'DIAGNOSIS',
+        label: 'Protect exposed systems',
+        decisionStage: 'DIAGNOSIS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'maintenance',
+        flowKey: 'maintenance-weather-checklist',
+        routePath: '/dashboard/maintenance?propertyId=:propertyId',
+        skipPolicy: 'DISCOURAGED',
+      },
+      {
+        stepOrder: 3,
+        stepKey: 'schedule_weather_followup',
+        stepType: 'EXECUTION',
+        label: 'Schedule urgent weather follow-up',
+        decisionStage: 'EXECUTION',
+        executionReadiness: 'READY',
+        isRequired: false,
+        toolKey: 'booking',
+        flowKey: 'booking',
+        routePath: '/dashboard/providers?category=PLUMBING',
+        skipPolicy: 'ALLOWED',
       },
     ],
   },
@@ -198,6 +260,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'inspection-report',
         flowKey: 'inspection-report-analysis',
         routePath: '/dashboard/inspection-report',
+        skipPolicy: 'DISALLOWED',
       },
       {
         stepOrder: 2,
@@ -209,6 +272,7 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'service-price-radar',
         flowKey: 'service-price-radar',
+        skipPolicy: 'DISCOURAGED',
       },
       {
         stepOrder: 3,
@@ -221,6 +285,7 @@ const templates: GuidanceJourneyTemplate[] = [
         toolKey: 'booking',
         flowKey: 'booking',
         routePath: '/dashboard/bookings',
+        skipPolicy: 'DISALLOWED',
       },
       {
         stepOrder: 4,
@@ -232,6 +297,7 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'home-event-radar',
         flowKey: 'home-event-radar',
+        skipPolicy: 'ALLOWED',
       },
     ],
   },
@@ -254,6 +320,7 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'true-cost',
         flowKey: 'true-cost-ownership',
+        skipPolicy: 'DISCOURAGED',
       },
       {
         stepOrder: 2,
@@ -265,6 +332,7 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'do-nothing-simulator',
         flowKey: 'do-nothing-simulator',
+        skipPolicy: 'DISCOURAGED',
       },
       {
         stepOrder: 3,
@@ -276,6 +344,7 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'home-savings',
         flowKey: 'home-savings',
+        skipPolicy: 'DISCOURAGED',
       },
       {
         stepOrder: 4,
@@ -287,6 +356,7 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: false,
         toolKey: 'capital-timeline',
         flowKey: 'home-capital-timeline',
+        skipPolicy: 'ALLOWED',
       },
     ],
   },
@@ -318,6 +388,7 @@ export const DEFAULT_TEMPLATE: GuidanceJourneyTemplate = {
       isRequired: true,
       toolKey: 'home-event-radar',
       flowKey: 'home-event-radar',
+      skipPolicy: 'DISCOURAGED',
     },
   ],
 };
@@ -327,6 +398,7 @@ export const TOOL_DEFAULT_STEP_KEY: Record<string, string> = {
   'coverage-intelligence': 'check_coverage',
   recalls: 'recall_resolution',
   booking: 'book_service',
+  'home-event-radar': 'weather_safety_check',
   'inspection-report': 'assess_urgency',
   'service-price-radar': 'validate_price',
   'negotiation-shield': 'prepare_negotiation',
@@ -342,4 +414,33 @@ export function getGuidanceTemplateBySignalFamily(signalIntentFamily?: string | 
 
 export function listGuidanceTemplates(): GuidanceJourneyTemplate[] {
   return templates;
+}
+
+const stepSkipPolicyByJourney = new Map<string, Map<string, GuidanceStepSkipPolicy>>();
+for (const template of templates) {
+  const stepMap = new Map<string, GuidanceStepSkipPolicy>();
+  for (const step of template.steps) {
+    stepMap.set(step.stepKey, step.skipPolicy ?? (step.isRequired ? 'DISCOURAGED' : 'ALLOWED'));
+  }
+  stepSkipPolicyByJourney.set(template.journeyTypeKey, stepMap);
+}
+
+stepSkipPolicyByJourney.set(
+  DEFAULT_TEMPLATE.journeyTypeKey,
+  new Map(
+    DEFAULT_TEMPLATE.steps.map((step) => [
+      step.stepKey,
+      step.skipPolicy ?? (step.isRequired ? 'DISCOURAGED' : 'ALLOWED'),
+    ])
+  )
+);
+
+export function getStepSkipPolicy(
+  journeyTypeKey: string | null | undefined,
+  stepKey: string | null | undefined
+): GuidanceStepSkipPolicy {
+  if (!journeyTypeKey || !stepKey) return 'DISCOURAGED';
+  const journeyPolicies = stepSkipPolicyByJourney.get(journeyTypeKey);
+  if (!journeyPolicies) return 'DISCOURAGED';
+  return journeyPolicies.get(stepKey) ?? 'DISCOURAGED';
 }

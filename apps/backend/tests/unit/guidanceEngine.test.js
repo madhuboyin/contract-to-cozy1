@@ -26,8 +26,8 @@ const TEMPLATE_BY_FAMILY = {
     steps: ['safety_alert', 'review_remedy_instructions', 'recall_resolution'],
   },
   freeze_risk: {
-    key: 'recall_safety_resolution',
-    steps: ['safety_alert', 'review_remedy_instructions', 'recall_resolution'],
+    key: 'weather_risk_resolution',
+    steps: ['weather_safety_check', 'protect_exposed_systems', 'schedule_weather_followup'],
   },
   inspection_followup_needed: {
     key: 'inspection_followup_resolution',
@@ -333,8 +333,8 @@ test('incident mapping routes freeze and weather incidents to freeze risk guidan
   assert.equal(mapIncidentTypeToSignalFamily('FREEZE_RISK'), 'freeze_risk');
   assert.equal(mapIncidentTypeToSignalFamily('weather_alert_high_wind'), 'freeze_risk');
   const template = resolveTemplate('freeze_risk');
-  assert.equal(template.key, 'recall_safety_resolution');
-  assert.deepEqual(template.steps, ['safety_alert', 'review_remedy_instructions', 'recall_resolution']);
+  assert.equal(template.key, 'weather_risk_resolution');
+  assert.deepEqual(template.steps, ['weather_safety_check', 'protect_exposed_systems', 'schedule_weather_followup']);
 });
 
 test('incident mapping routes coverage and recall incidents to correct guidance families', () => {

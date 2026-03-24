@@ -70,11 +70,16 @@ export async function getGuidanceJourneyDetail(req: CustomRequest, res: Response
     const journeyId = req.params.journeyId;
 
     const journey = await guidanceJourneyService.getJourneyById(propertyId, journeyId);
+    const next = await guidanceJourneyService.resolveNextStepWithIntelligence({
+      propertyId,
+      journeyId,
+    });
 
     res.json({
       success: true,
       data: {
         journey: mapGuidanceJourney(journey),
+        next: next ?? null,
         events: (journey.events ?? []).map(mapGuidanceEvent),
       },
     });

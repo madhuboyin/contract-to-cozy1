@@ -73,7 +73,8 @@ export default function BookProviderPage() {
   });
 
   const isExecutionBlocked = Boolean(bookingGuardQuery.data?.blocked);
-  const blockedReason = bookingGuardQuery.data?.reasons?.[0] ?? null;
+  const blockedReason =
+    bookingGuardQuery.data?.blockedReason ?? bookingGuardQuery.data?.reasons?.[0] ?? null;
   const blockedJourneyIds = new Set(bookingGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []);
   const blockedAction = bookingGuidanceQuery.actions.find((action) => blockedJourneyIds.has(action.journeyId)) ?? null;
   const blockedActionHref =

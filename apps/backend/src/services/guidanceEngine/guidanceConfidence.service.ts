@@ -41,7 +41,14 @@ const RELIABLE_SOURCE_TOOLS = new Set([
 ]);
 
 export class GuidanceConfidenceService {
-  evaluate(input: { journey: any; signal?: any | null; next?: any | null }): GuidanceConfidence {
+  evaluate(input: {
+    journey: any;
+    signal?: any | null;
+    next?: any | null;
+    digitalTwinCompleteness?: number | null;
+    signalFreshness?: { isStale?: boolean; ageDays?: number | null } | null;
+    derivedFreshness?: { isStale?: boolean; ageDays?: number | null } | null;
+  }): GuidanceConfidence {
     const signalConfidence = asNumber(input.signal?.confidenceScore);
     let score = signalConfidence != null ? clamp(signalConfidence, 0, 1) : 0.58;
 
@@ -62,6 +69,25 @@ export class GuidanceConfidenceService {
     const sourceToolKey = String(input.signal?.sourceToolKey ?? '').toLowerCase();
     if (RELIABLE_SOURCE_TOOLS.has(sourceToolKey)) {
       score += 0.06;
+    }
+
+    const twinCompleteness = asNumber(input.digitalTwinCompleteness);
+    if (twinCompleteness != null) {
+      const normalized = twinCompleteness > 1 ? clamp(twinCompleteness / 100, 0, 1) : clamp(twinCompleteness, 0, 1);
+      // Completeness sits at the core of deterministic confidence.
+      score += (normalized - 0.5) * 0.22;
+    }
+
+    if (input.signalFreshness?.isStale) {
+      score -= 0.1;
+    } else if ((input.signalFreshness?.ageDays ?? 999) <= 7) {
+      score += 0.03;
+    }
+
+    if (input.derivedFreshness?.isStale) {
+      score -= 0.08;
+    } else if ((input.derivedFreshness?.ageDays ?? 999) <= 14) {
+      score += 0.02;
     }
 
     const readiness = String(input.journey?.executionReadiness ?? '');
