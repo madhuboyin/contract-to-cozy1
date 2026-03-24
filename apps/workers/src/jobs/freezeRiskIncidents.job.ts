@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { IncidentStatus } from '@prisma/client';
 import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
+import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 
 type Geo = { lat: number; lon: number; name?: string; admin1?: string; country?: string };
 
@@ -188,6 +189,26 @@ export async function freezeRiskIncidentsJob() {
     );
 
     createdOrUpdated++;
+
+    try {
+      await guidanceJourneyService.ingestSignal({
+        propertyId: p.id,
+        signalIntentFamily: 'freeze_risk',
+        issueDomain: 'WEATHER',
+        decisionStage: 'AWARENESS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        severity: score >= 80 ? 'HIGH' : score >= 60 ? 'MEDIUM' : 'LOW',
+        severityScore: score,
+        confidenceScore: 0.70,
+        sourceType: 'WEATHER',
+        sourceFeatureKey: 'freeze-risk-incidents',
+        sourceEntityType: 'INCIDENT',
+        sourceProvenanceId: `property:${p.id}|FREEZE_RISK|${today}`,
+        payloadJson: { minF, timeWindowHours: 36, zip, provider: 'open-meteo' },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] freeze risk signal ingest failed:', guidanceError);
+    }
 
     // Rate limit Open-Meteo API calls (free tier)
     await sleep(200);

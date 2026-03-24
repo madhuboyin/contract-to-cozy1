@@ -14,6 +14,7 @@
 //   - Respects per-user notification preferences (emailEnabled)
 
 import { prisma } from '../lib/prisma';
+import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 
 const NOTIFICATION_THRESHOLD = 60;
 // 25 hours: catch up on links created since yesterday's run plus 1h jitter
@@ -188,6 +189,33 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
           },
         },
       });
+
+      try {
+        const impactScore: number = link.impactScore ?? 0;
+        await guidanceJourneyService.ingestSignal({
+          propertyId,
+          signalIntentFamily: 'neighborhood_change_detected',
+          issueDomain: 'NEIGHBORHOOD',
+          decisionStage: 'AWARENESS',
+          executionReadiness: 'TRACKING_ONLY',
+          severity: impactScore >= 80 ? 'HIGH' : impactScore >= 60 ? 'MEDIUM' : 'LOW',
+          severityScore: impactScore,
+          confidenceScore: freshnessScore,
+          sourceType: 'NEIGHBORHOOD',
+          sourceFeatureKey: 'neighborhood-change-notification',
+          sourceEntityType: 'NEIGHBORHOOD_EVENT',
+          sourceEntityId: eventId,
+          sourceProvenanceId: `property:${propertyId}|NEIGHBORHOOD_CHANGE|event:${eventId}`,
+          payloadJson: {
+            neighborhoodEventId: eventId,
+            propertyNeighborhoodEventId: linkId,
+            eventType: link.event?.eventType ?? null,
+            impactScore,
+          },
+        });
+      } catch (guidanceError) {
+        console.warn('[GUIDANCE] neighborhood change signal ingest failed:', guidanceError);
+      }
 
       notified++;
     } catch (err: any) {

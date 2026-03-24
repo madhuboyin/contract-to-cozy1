@@ -1,6 +1,7 @@
 // apps/workers/src/jobs/coverageLapseIncidents.job.ts
 import { prisma } from '../lib/prisma';
 import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
+import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
 
 function daysBetween(a: Date, b: Date) {
   const ms = b.getTime() - a.getTime();
@@ -69,6 +70,32 @@ export async function coverageLapseIncidentsJob() {
         },
       ]
     );
+
+    try {
+      await guidanceJourneyService.ingestSignal({
+        propertyId: p.propertyId,
+        signalIntentFamily: 'coverage_gap',
+        issueDomain: 'INSURANCE',
+        decisionStage: 'AWARENESS',
+        executionReadiness: days <= 7 ? 'NEEDS_CONTEXT' : 'NOT_READY',
+        severity: days <= 3 ? 'HIGH' : days <= 7 ? 'MEDIUM' : 'LOW',
+        severityScore: score,
+        confidenceScore: 0.85,
+        sourceType: 'COVERAGE',
+        sourceFeatureKey: 'coverage-lapse-incidents',
+        sourceEntityType: 'INSURANCE_POLICY',
+        sourceEntityId: p.id,
+        sourceProvenanceId: `property:${p.propertyId}|COVERAGE_LAPSE|policy:${p.id}`,
+        payloadJson: {
+          insurancePolicyId: p.id,
+          carrierName: p.carrierName,
+          expiryDate: p.expiryDate.toISOString(),
+          daysToExpiry: days,
+        },
+      });
+    } catch (guidanceError) {
+      console.warn('[GUIDANCE] coverage lapse signal ingest failed:', guidanceError);
+    }
 
     createdOrUpdated++;
   }
