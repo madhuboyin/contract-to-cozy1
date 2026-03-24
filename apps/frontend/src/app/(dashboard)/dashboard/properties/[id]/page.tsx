@@ -60,6 +60,7 @@ import {
 import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
 import { DashboardHeroSection } from './components/DashboardHeroSection';
+import { MorningPulseSection } from './components/MorningPulseSection';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -1256,7 +1257,10 @@ export default function PropertyDetailPage() {
       {/* Hero Action Card + Today's Attention — answers "what should I do right now?" */}
       <DashboardHeroSection propertyId={property.id} />
 
-      {/* Morning Pulse — property identity snapshot (mobile only) */}
+      {/* Morning Pulse — cross-domain signal summaries (maintenance, coverage, financial…) */}
+      <MorningPulseSection propertyId={property.id} />
+
+      {/* Property identity card — mobile only */}
       <PropertyHeroCard property={property} />
 
       <SellingPrepBanner propertyId={property.id} />

@@ -1,15 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Loader2, Zap } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, CheckCircle2, Loader2, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
 import { GuidancePrimaryCta } from '@/components/guidance/GuidancePrimaryCta';
 import { GuidanceStatusBadge } from '@/components/guidance/GuidanceStatusBadge';
-import { GuidanceActionCard } from '@/components/guidance/GuidanceActionCard';
 import { GuidanceDrawer } from '@/components/guidance/GuidanceDrawer';
 
 // ---------------------------------------------------------------------------
@@ -23,7 +24,7 @@ import { GuidanceDrawer } from '@/components/guidance/GuidanceDrawer';
  *  1. IMMEDIATE group + executable (not NOT_READY) + has a next step
  *  2. HIGH priority bucket + executable + has a next step
  *  3. Any actionable (not NOT_READY) + has a next step
- *  4. Any top action (even if blocked) — never leaves the hero empty
+ *  4. Any top action (even if blocked) — never leaves hero empty
  */
 export function selectHeroAction(actions: GuidanceActionModel[]): GuidanceActionModel | null {
   if (actions.length === 0) return null;
@@ -41,6 +42,16 @@ export function selectHeroAction(actions: GuidanceActionModel[]): GuidanceAction
   if (withNextStep.length > 0) return withNextStep[0];
 
   return actions[0];
+}
+
+// ---------------------------------------------------------------------------
+// Shared severity helpers
+// ---------------------------------------------------------------------------
+
+function severityDotClass(severity: GuidanceActionModel['severity']): string {
+  if (severity === 'CRITICAL' || severity === 'HIGH') return 'bg-rose-500';
+  if (severity === 'MEDIUM') return 'bg-amber-400';
+  return 'bg-slate-300';
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +155,85 @@ function HeroActionCard({ action, onOpenJourney }: HeroActionCardProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Today's attention — remaining actions below the hero
+// Attention item row — compact, scannable, shows what/why/urgency/next step
+// ---------------------------------------------------------------------------
+
+function urgencyLabel(action: GuidanceActionModel): string | null {
+  if (action.priorityGroup === 'IMMEDIATE') return 'Urgent';
+  if (action.priorityGroup === 'UPCOMING') return 'Soon';
+  return null;
+}
+
+function AttentionItemRow({
+  action,
+  onOpenJourney,
+}: {
+  action: GuidanceActionModel;
+  onOpenJourney?: (a: GuidanceActionModel) => void;
+}) {
+  const safeTitle = action.title?.trim() || 'Needs Attention';
+  const safeWhy = action.explanation?.why?.trim() || action.subtitle?.trim() || null;
+  const urgency = urgencyLabel(action);
+  const costChip =
+    !urgency && action.costOfDelay && action.costOfDelay > 0
+      ? `~$${action.costOfDelay.toLocaleString()} cost of delay`
+      : null;
+  const ctaLabel =
+    action.nextStep?.label?.trim() || action.explanation?.nextStep?.trim() || 'Review';
+  const isExecutable = action.href !== null && action.executionReadiness !== 'NOT_READY';
+
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-border bg-background p-3.5">
+      {/* Severity dot */}
+      <span
+        className={cn(
+          'mt-[7px] h-2 w-2 shrink-0 rounded-full',
+          severityDotClass(action.severity),
+        )}
+      />
+
+      {/* Content */}
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <p className="text-sm font-semibold text-foreground">{safeTitle}</p>
+          {urgency ? (
+            <span className="text-[11px] font-medium text-rose-600">{urgency}</span>
+          ) : costChip ? (
+            <span className="text-[11px] font-medium text-amber-600">{costChip}</span>
+          ) : null}
+        </div>
+        {safeWhy ? (
+          <p className="line-clamp-2 text-xs text-muted-foreground">{safeWhy}</p>
+        ) : null}
+      </div>
+
+      {/* CTA */}
+      <div className="shrink-0 pt-0.5">
+        {isExecutable ? (
+          <Button asChild size="sm" variant="outline" className="h-8 gap-1 px-2.5 text-xs">
+            <Link href={action.href!}>
+              {ctaLabel}
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </Button>
+        ) : onOpenJourney ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2.5 text-xs"
+            onClick={() => onOpenJourney(action)}
+          >
+            Details
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Today's Attention — items below the hero, trimmed and clarified
 // ---------------------------------------------------------------------------
 
 type TodayAttentionSectionProps = {
@@ -163,10 +252,9 @@ function TodayAttentionSection({ actions, onOpenJourney }: TodayAttentionSection
       </p>
       <div className="space-y-2">
         {actions.map((action) => (
-          <GuidanceActionCard
+          <AttentionItemRow
             key={action.journeyId}
             action={action}
-            compact
             onOpenJourney={onOpenJourney}
           />
         ))}
@@ -181,7 +269,7 @@ function TodayAttentionSection({ actions, onOpenJourney }: TodayAttentionSection
 
 type DashboardHeroSectionProps = {
   propertyId: string;
-  /** How many additional actions to show below the hero. Defaults to 2. */
+  /** Max additional actions to show below the hero. Defaults to 2. */
   attentionLimit?: number;
 };
 
