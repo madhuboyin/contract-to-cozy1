@@ -59,7 +59,7 @@ import {
 } from "@/components/mobile/dashboard/MobilePrimitives";
 import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
-import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
+import { DashboardHeroSection } from './components/DashboardHeroSection';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -1253,14 +1253,11 @@ export default function PropertyDetailPage() {
         />
       </div>
 
-      <PropertyHeroCard property={property} />
+      {/* Hero Action Card + Today's Attention — answers "what should I do right now?" */}
+      <DashboardHeroSection propertyId={property.id} />
 
-      <GuidanceInlinePanel
-        propertyId={property.id}
-        title="Property Guidance"
-        subtitle="Follow ordered actions to resolve risk, maintenance, coverage, and financial issues."
-        limit={3}
-      />
+      {/* Morning Pulse — property identity snapshot (mobile only) */}
+      <PropertyHeroCard property={property} />
 
       <SellingPrepBanner propertyId={property.id} />
 
