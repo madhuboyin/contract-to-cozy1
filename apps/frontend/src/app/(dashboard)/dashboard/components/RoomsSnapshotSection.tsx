@@ -251,7 +251,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
   };
 
   const roomsHubHref = propertyId
-    ? `/dashboard/properties/${propertyId}?tab=rooms`
+    ? `/dashboard/properties/${propertyId}/rooms`
     : '/dashboard/properties';
   const roomsManageHref = propertyId
     ? `/dashboard/properties/${propertyId}/inventory/rooms`

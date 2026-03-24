@@ -28,7 +28,6 @@ import {
   ArrowRight,
   ChevronRight,
   TrendingUp,
-  LayoutGrid,
   MapPin,
   Sparkles,
 } from "lucide-react";
@@ -62,6 +61,12 @@ import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
 import { DashboardHeroSection } from './components/DashboardHeroSection';
 import { MorningPulseSection } from './components/MorningPulseSection';
 import { SmartContextToolsSection } from './components/SmartContextToolsSection';
+import { HomeScoreReportCard } from '@/app/(dashboard)/dashboard/components/HomeScoreReportCard';
+import { PropertyHealthScoreCard } from '@/app/(dashboard)/dashboard/components/PropertyHealthScoreCard';
+import { PropertyRiskScoreCard } from '@/app/(dashboard)/dashboard/components/PropertyRiskScoreCard';
+import { FinancialEfficiencyScoreCard } from '@/app/(dashboard)/dashboard/components/FinancialEfficiencyScoreCard';
+import { RoomsSnapshotSection } from '@/app/(dashboard)/dashboard/components/RoomsSnapshotSection';
+import type { ScoredProperty as DashboardScoredProperty } from '@/app/(dashboard)/dashboard/types';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -386,6 +391,28 @@ const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
     </div>
   </>
 );
+
+const KeyPropertyIntelligenceSection = ({ property }: { property: Property }) => {
+  const dashboardScoredProperty = property as DashboardScoredProperty;
+
+  return (
+    <section className="space-y-3">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">Key Property Intelligence</h2>
+        <p className="text-sm text-muted-foreground">
+          Health, risk, and financial signals for this home in one snapshot.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <HomeScoreReportCard propertyId={property.id} />
+        <PropertyHealthScoreCard property={dashboardScoredProperty} />
+        <PropertyRiskScoreCard propertyId={property.id} />
+        <FinancialEfficiencyScoreCard propertyId={property.id} />
+      </div>
+    </section>
+  );
+};
 
 // UPDATED: PropertyOverview with mobile summary-first structure
 const PropertyOverview = ({ property }: { property: Property }) => {
@@ -1261,7 +1288,13 @@ export default function PropertyDetailPage() {
       {/* Level 2 — Secondary: cross-domain signal summaries */}
       <MorningPulseSection propertyId={property.id} />
 
-      {/* Level 3 — Exploratory: signal-matched tool suggestions */}
+      {/* Level 3 — Property intelligence scorecards */}
+      <KeyPropertyIntelligenceSection property={property} />
+
+      {/* Level 4 — Room-level context */}
+      <RoomsSnapshotSection propertyId={property.id} />
+
+      {/* Level 5 — Exploratory: signal-matched tool suggestions */}
       <SmartContextToolsSection propertyId={property.id} />
 
       {/* Property identity card — mobile only */}
