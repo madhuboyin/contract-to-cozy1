@@ -47,17 +47,86 @@ const PULSE_DOMAIN_ORDER: GuidanceIssueDomain[] = [
 type PulseRow = {
   domain: GuidanceIssueDomain;
   label: string;
-  insight: string;
+  signal: string;
+  driver: string;
+  implication: string;
+  urgency: string | null;
   severity: GuidanceSeverity | null;
   href: string | null;
+  ctaLabel: string | null;
 };
 
+function clampLine(value: string, max = 120): string {
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 1).trimEnd()}…`;
+}
+
+function deriveSignal(action: GuidanceActionModel, label: string): string {
+  const raw = action.explanation?.what?.trim() || action.title?.trim() || `${label} signal shifted`;
+  return clampLine(raw, 84);
+}
+
+function deriveDriver(action: GuidanceActionModel): string {
+  const raw =
+    action.explanation?.why?.trim() ||
+    action.subtitle?.trim() ||
+    'Recent property signals moved this domain.';
+  return clampLine(raw, 98);
+}
+
+function deriveImplication(action: GuidanceActionModel): string {
+  const risk = action.explanation?.risk?.trim();
+  if (risk) return clampLine(`Implication: ${risk}`, 112);
+
+  if (action.costOfDelay && action.costOfDelay > 0) {
+    return clampLine(
+      `Implication: delay may add about $${Math.round(action.costOfDelay).toLocaleString()} in avoidable cost.`,
+      112,
+    );
+  }
+
+  if (action.coverageImpact === 'NOT_COVERED') {
+    return 'Implication: current protection may not fully cover this exposure.';
+  }
+  if (action.coverageImpact === 'PARTIAL') {
+    return 'Implication: coverage may only partially offset this risk.';
+  }
+
+  if (action.priorityGroup === 'IMMEDIATE') {
+    return 'Implication: this could escalate if left unresolved this week.';
+  }
+  if (action.priorityGroup === 'UPCOMING') {
+    return 'Implication: planning early should reduce next-month friction.';
+  }
+
+  const nextStep = action.nextStep?.label?.trim() || action.explanation?.nextStep?.trim();
+  if (nextStep) {
+    return clampLine(`Consider: ${nextStep}.`, 112);
+  }
+
+  return 'Implication: keep this domain on your weekly review radar.';
+}
+
+function deriveCtaLabel(action: GuidanceActionModel): string | null {
+  if (!action.href) return null;
+  if (action.priorityGroup === 'IMMEDIATE') return 'Review now';
+  if (action.executionReadiness === 'NEEDS_CONTEXT') return 'Add context';
+  return 'Open path';
+}
+
+function deriveUrgency(action: GuidanceActionModel): string | null {
+  if (action.priorityGroup === 'IMMEDIATE') return 'Now';
+  if (action.priorityGroup === 'UPCOMING') return 'Soon';
+  if (action.severity === 'HIGH' || action.severity === 'CRITICAL') return 'Watch';
+  return null;
+}
+
 /**
- * Derives one summary row per issue domain from the top guidance actions.
- * Prefers domains in PULSE_DOMAIN_ORDER, fills remaining slots from others.
- * Only includes rows that have a meaningful insight string.
+ * Derives one summary row per issue domain from top guidance actions.
+ * Framed as cause -> implication to avoid passive status reporting.
  */
-function derivePulseRows(actions: GuidanceActionModel[], maxRows = 4): PulseRow[] {
+function derivePulseRows(actions: GuidanceActionModel[], maxRows = 3): PulseRow[] {
   // One representative action per domain (already sorted by priority from useGuidance)
   const domainMap = new Map<GuidanceIssueDomain, GuidanceActionModel>();
   for (const action of actions) {
@@ -73,14 +142,17 @@ function derivePulseRows(actions: GuidanceActionModel[], maxRows = 4): PulseRow[
     if (rows.length >= maxRows) break;
     const action = domainMap.get(domain);
     if (!action) continue;
-    const insight = action.explanation?.why?.trim() || action.subtitle?.trim() || '';
-    if (!insight) continue;
+    const label = DOMAIN_LABELS[domain] ?? domain;
     rows.push({
       domain,
-      label: DOMAIN_LABELS[domain] ?? domain,
-      insight,
+      label,
+      signal: deriveSignal(action, label),
+      driver: deriveDriver(action),
+      implication: deriveImplication(action),
+      urgency: deriveUrgency(action),
       severity: action.severity,
       href: action.href,
+      ctaLabel: deriveCtaLabel(action),
     });
   }
 
@@ -88,14 +160,17 @@ function derivePulseRows(actions: GuidanceActionModel[], maxRows = 4): PulseRow[
   for (const [domain, action] of domainMap) {
     if (rows.length >= maxRows) break;
     if (PULSE_DOMAIN_ORDER.includes(domain)) continue;
-    const insight = action.explanation?.why?.trim() || action.subtitle?.trim() || '';
-    if (!insight) continue;
+    const label = DOMAIN_LABELS[domain] ?? domain;
     rows.push({
       domain,
-      label: DOMAIN_LABELS[domain] ?? domain,
-      insight,
+      label,
+      signal: deriveSignal(action, label),
+      driver: deriveDriver(action),
+      implication: deriveImplication(action),
+      urgency: deriveUrgency(action),
       severity: action.severity,
       href: action.href,
+      ctaLabel: deriveCtaLabel(action),
     });
   }
 
@@ -113,39 +188,49 @@ function pulseDotClass(severity: GuidanceSeverity | null): string {
   return 'bg-emerald-400';
 }
 
+function pulseUrgencyClass(value: string): string {
+  if (value === 'Now') return 'border-rose-200 bg-rose-50 text-rose-700';
+  if (value === 'Soon') return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-slate-200 bg-slate-50 text-slate-600';
+}
+
 // ---------------------------------------------------------------------------
 // Single pulse row
 // ---------------------------------------------------------------------------
 
 function PulseRowItem({ row }: { row: PulseRow }) {
   return (
-    <div className="flex items-center gap-3 py-2 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/50">
-      {/* Severity dot */}
-      <span
-        className={cn('h-1.5 w-1.5 shrink-0 rounded-full', pulseDotClass(row.severity))}
-      />
+    <article className="rounded-lg border border-border/70 bg-background p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', pulseDotClass(row.severity))} />
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            {row.label}
+          </span>
+        </div>
+        {row.urgency ? (
+          <span className={cn('rounded-full border px-1.5 py-0.5 text-[10px] font-medium', pulseUrgencyClass(row.urgency))}>
+            {row.urgency}
+          </span>
+        ) : null}
+      </div>
 
-      {/* Domain label — fixed width, scannable */}
-      <span className="w-[72px] shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
-        {row.label}
-      </span>
+      <p className="mt-1.5 line-clamp-2 text-sm font-medium text-foreground">{row.signal}</p>
+      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground/80">Driver:</span> {row.driver}
+      </p>
+      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{row.implication}</p>
 
-      {/* Insight text — fills remaining space, single line */}
-      <p className="min-w-0 flex-1 truncate text-xs text-foreground/80">{row.insight}</p>
-
-      {/* Optional CTA arrow */}
-      {row.href ? (
+      {row.href && row.ctaLabel ? (
         <Link
           href={row.href}
-          className="shrink-0 -m-1 flex min-h-[36px] min-w-[36px] items-center justify-center rounded text-muted-foreground/50 transition-colors hover:text-foreground"
-          aria-label={`Go to ${row.label} action`}
+          className="mt-2 inline-flex min-h-[32px] items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
+          {row.ctaLabel}
           <ArrowRight className="h-3 w-3" />
         </Link>
-      ) : (
-        <span className="w-3 shrink-0" />
-      )}
-    </div>
+      ) : null}
+    </article>
   );
 }
 
@@ -155,11 +240,11 @@ function PulseRowItem({ row }: { row: PulseRow }) {
 
 type MorningPulseSectionProps = {
   propertyId: string;
-  /** Maximum domain rows to display. Defaults to 4. */
+  /** Maximum domain rows to display. Defaults to 3 for compact scanning. */
   maxRows?: number;
 };
 
-export function MorningPulseSection({ propertyId, maxRows = 4 }: MorningPulseSectionProps) {
+export function MorningPulseSection({ propertyId, maxRows = 3 }: MorningPulseSectionProps) {
   const guidance = useGuidance(propertyId);
 
   const rows = useMemo(
@@ -171,15 +256,20 @@ export function MorningPulseSection({ propertyId, maxRows = 4 }: MorningPulseSec
   if (guidance.isLoading || rows.length === 0) return null;
 
   return (
-    <div className="mt-2 rounded-xl border border-border/50 bg-background px-4 py-3">
-      <p className="mb-2 text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
-        Home signals
-      </p>
-      <div>
+    <section className="mt-2 rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
+          Morning pulse
+        </p>
+        <p className="text-[11px] text-muted-foreground/75">
+          {rows.length} active domain{rows.length === 1 ? '' : 's'}
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
         {rows.map((row) => (
           <PulseRowItem key={row.domain} row={row} />
         ))}
       </div>
-    </div>
+    </section>
   );
 }

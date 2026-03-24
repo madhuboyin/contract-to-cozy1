@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, Loader2, Zap } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Clock3, Loader2, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -228,6 +228,26 @@ function isAttentionCandidate(action: GuidanceActionModel): boolean {
   return (action.costOfDelay ?? 0) >= 250;
 }
 
+function attentionStrength(action: GuidanceActionModel): number {
+  let score = estimateHeroStrength(action);
+  if (action.priorityGroup === 'IMMEDIATE') score += 10;
+  if (action.priorityBucket === 'HIGH') score += 7;
+  if (action.severity === 'CRITICAL' || action.severity === 'HIGH') score += 6;
+  return score;
+}
+
+function rankAttentionActions(actions: GuidanceActionModel[]): GuidanceActionModel[] {
+  return [...actions].sort((a, b) => {
+    const scoreDiff = attentionStrength(b) - attentionStrength(a);
+    if (scoreDiff !== 0) return scoreDiff;
+
+    const priorityDiff = (b.priorityScore ?? 0) - (a.priorityScore ?? 0);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    return a.journeyId.localeCompare(b.journeyId);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Shared severity helpers
 // ---------------------------------------------------------------------------
@@ -448,12 +468,19 @@ function AttentionItemRow({
     !urgency && action.costOfDelay && action.costOfDelay > 0
       ? `~$${action.costOfDelay.toLocaleString()} cost of delay`
       : null;
+  const timingLabel =
+    action.priorityGroup === 'IMMEDIATE'
+      ? 'Best this week'
+      : action.priorityGroup === 'UPCOMING'
+        ? 'Plan this month'
+        : 'Keep on radar';
   const ctaLabel =
     action.nextStep?.label?.trim() || action.explanation?.nextStep?.trim() || 'Review';
   const isExecutable = action.href !== null && action.executionReadiness !== 'NOT_READY';
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-border bg-background p-3.5">
+    <div className="rounded-xl border border-border/80 bg-background p-3.5">
+      <div className="flex items-start gap-3">
       {/* Severity dot */}
       <span
         className={cn(
@@ -464,20 +491,30 @@ function AttentionItemRow({
 
       {/* Content */}
       <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="text-sm font-semibold text-foreground">{safeTitle}</p>
           {urgency ? (
-            <span className="text-[11px] font-medium text-rose-600">{urgency}</span>
+            <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+              {urgency}
+            </span>
           ) : costChip ? (
-            <span className="text-[11px] font-medium text-amber-600">{costChip}</span>
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+              {costChip}
+            </span>
           ) : null}
         </div>
         {safeWhy ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{safeWhy}</p>
         ) : null}
-        {/* Explainability: What's the risk? */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground/80">
+          <span className="inline-flex items-center gap-1">
+            <Clock3 className="h-3 w-3" />
+            {timingLabel}
+          </span>
+        </div>
+        {/* Explainability: What&apos;s the risk? */}
         {safeRisk ? (
-          <details className="mt-0.5">
+          <details className="mt-1">
             <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground">
               <span className="underline underline-offset-2 decoration-dotted">What&apos;s the risk?</span>
             </summary>
@@ -507,6 +544,7 @@ function AttentionItemRow({
           </Button>
         ) : null}
       </div>
+      </div>
     </div>
   );
 }
@@ -524,8 +562,17 @@ function TodayAttentionSection({ actions, onOpenJourney }: TodayAttentionSection
   if (actions.length === 0) return null;
 
   return (
-    <section className="space-y-2">
-      <p className="text-sm font-medium text-muted-foreground">Today&apos;s attention</p>
+    <section className="space-y-3 rounded-xl border border-border/70 bg-background/95 p-3.5 sm:p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Today&apos;s attention</p>
+          <p className="text-xs text-muted-foreground">Highest-value items to keep your home on track.</p>
+        </div>
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700">
+          <AlertCircle className="h-3 w-3" />
+          {actions.length} item{actions.length === 1 ? '' : 's'}
+        </span>
+      </div>
       <div className="space-y-2">
         {actions.map((action) => (
           <AttentionItemRow
@@ -551,7 +598,7 @@ type DashboardHeroSectionProps = {
 
 export function DashboardHeroSection({
   propertyId,
-  attentionLimit = 2,
+  attentionLimit = 3,
 }: DashboardHeroSectionProps) {
   const [drawerAction, setDrawerAction] = useState<GuidanceActionModel | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -568,9 +615,11 @@ export function DashboardHeroSection({
       };
     }
 
-    const attention = guidance.actions
+    const attention = rankAttentionActions(
+      guidance.actions
       .filter((a) => a.journeyId !== hero.journeyId)
       .filter(isAttentionCandidate)
+    )
       .slice(0, attentionLimit);
 
     return { heroAction: hero, attentionActions: attention, fallbackObservations: [] };
