@@ -61,6 +61,7 @@ import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
 import { DashboardHeroSection } from './components/DashboardHeroSection';
 import { MorningPulseSection } from './components/MorningPulseSection';
+import { SmartContextToolsSection } from './components/SmartContextToolsSection';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -1259,6 +1260,9 @@ export default function PropertyDetailPage() {
 
       {/* Morning Pulse — cross-domain signal summaries (maintenance, coverage, financial…) */}
       <MorningPulseSection propertyId={property.id} />
+
+      {/* Smart Context Tools — signal-driven tool recommendations */}
+      <SmartContextToolsSection propertyId={property.id} />
 
       {/* Property identity card — mobile only */}
       <PropertyHeroCard property={property} />
