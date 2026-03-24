@@ -21,9 +21,10 @@ import {
 type ToolRowProps = {
   recommendation: SmartToolRecommendation;
   propertyId: string;
+  showExplainability?: boolean;
 };
 
-function ToolRow({ recommendation, propertyId }: ToolRowProps) {
+function ToolRow({ recommendation, propertyId, showExplainability = false }: ToolRowProps) {
   const { toolId, trigger, value, confidence } = recommendation;
   const def = getToolDefinition(toolId);
   if (!def) return null;
@@ -32,36 +33,51 @@ function ToolRow({ recommendation, propertyId }: ToolRowProps) {
   const Icon = def.icon;
 
   return (
-    <Link
-      href={href}
-      className="group flex min-h-[44px] items-start gap-3 rounded-lg border border-border/50 bg-background px-3.5 py-3 transition-colors hover:border-border hover:bg-muted/30"
-    >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/60 text-muted-foreground group-hover:bg-muted transition-colors">
-        <Icon className="h-3.5 w-3.5" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-semibold text-foreground/90 truncate">{def.label}</p>
-          <Badge
-            variant="outline"
-            className={
-              confidence === 'HIGH'
-                ? 'border-emerald-200 bg-emerald-50 text-[10px] font-medium text-emerald-700'
-                : 'border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-600'
-            }
-          >
-            {confidence === 'HIGH' ? 'Recommended' : 'Worth a look'}
-          </Badge>
+    <article className="group rounded-lg border border-border/50 bg-background px-3.5 py-3 transition-colors hover:border-border hover:bg-muted/20">
+      <div className="flex items-start gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/60 text-muted-foreground transition-colors group-hover:bg-muted">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="truncate text-xs font-semibold text-foreground/90">{def.label}</p>
+            <Badge
+              variant="outline"
+              className={
+                confidence === 'HIGH'
+                  ? 'border-emerald-200 bg-emerald-50 text-[10px] font-medium text-emerald-700'
+                  : 'border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-600'
+              }
+            >
+              {confidence === 'HIGH' ? 'Recommended' : 'Worth a look'}
+            </Badge>
+          </div>
+          <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground/75">Why now:</span> {trigger}
+          </p>
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground/75">Value:</span> {value}
+          </p>
+          {showExplainability ? (
+            <details className="mt-1">
+              <summary className="cursor-pointer select-none list-none text-[11px] text-muted-foreground/65 transition-colors hover:text-muted-foreground [&::-webkit-details-marker]:hidden">
+                <span className="underline decoration-dotted underline-offset-2">Why this recommendation?</span>
+              </summary>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                Based on your current dashboard signals, this tool is surfaced as a high-confidence fit for what needs attention now.
+              </p>
+            </details>
+          ) : null}
         </div>
-        <p className="mt-1 text-[11px] leading-snug text-muted-foreground line-clamp-2">
-          <span className="font-medium text-foreground/75">Why now:</span> {trigger}
-        </p>
-        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground line-clamp-2">
-          <span className="font-medium text-foreground/75">Value:</span> {value}
-        </p>
+        <Link
+          href={href}
+          className="mt-0.5 inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Open
+          <ArrowRight className="h-3 w-3" />
+        </Link>
       </div>
-      <ArrowRight className="mt-1 h-3 w-3 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
-    </Link>
+    </article>
   );
 }
 
@@ -82,7 +98,7 @@ export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectio
   );
 
   return (
-    <section>
+    <section className="rounded-xl border border-border/60 bg-muted/20 px-3.5 py-3 sm:px-4">
       <div className="mb-2 space-y-1">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
           Smart context tools
@@ -102,11 +118,12 @@ export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectio
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {recommendations.map((recommendation) => (
+          {recommendations.map((recommendation, index) => (
             <ToolRow
               key={recommendation.toolId}
               recommendation={recommendation}
               propertyId={propertyId}
+              showExplainability={index === 0}
             />
           ))}
         </div>

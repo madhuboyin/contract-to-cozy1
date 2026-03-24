@@ -310,15 +310,15 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
     : '/dashboard/properties';
 
   return (
-    <section className="mb-8">
-      <div className="flex items-center justify-between mb-4">
+    <section className="space-y-3">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <LayoutGrid className="w-5 h-5 text-blue-600" />
+          <div className="rounded-md bg-blue-100/70 p-1.5">
+            <LayoutGrid className="h-4 w-4 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900">Rooms</h2>
-            <p className="text-sm text-gray-500">Room-level health with one clear cue per room.</p>
+            <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">Rooms</h2>
+            <p className="text-xs text-gray-500">Room-level health with one clear cue per room.</p>
           </div>
         </div>
 

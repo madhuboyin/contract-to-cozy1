@@ -396,9 +396,12 @@ const KeyPropertyIntelligenceSection = ({ property }: { property: Property }) =>
   const dashboardScoredProperty = property as DashboardScoredProperty;
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2.5">
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">Key Property Intelligence</h2>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          Key scores
+        </p>
+        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Key Property Intelligence</h2>
         <p className="text-sm text-muted-foreground">
           Start with your overall HomeScore, then review the supporting risk, health, and cost signals.
         </p>
@@ -1245,7 +1248,7 @@ export default function PropertyDetailPage() {
 
   const propertyHubSubtitle = [property.city, property.state].filter(Boolean).join(", ");
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-6 lg:px-8">
       {FEATURE_FLAGS.PROPERTY_NARRATIVE_ENGINE && narrativeRun?.status === "ACTIVE" && (
         <NarrativeRevealOverlay
           run={narrativeRun}
@@ -1290,20 +1293,22 @@ export default function PropertyDetailPage() {
         />
       </div>
 
-      {/* Level 1 — Primary: hero action + today's attention */}
-      <DashboardHeroSection propertyId={property.id} />
+      {/* Level 1 — Primary */}
+      <section aria-label="Primary priorities" className="space-y-3 sm:space-y-4">
+        <DashboardHeroSection propertyId={property.id} />
+      </section>
 
-      {/* Level 2 — Secondary: cross-domain signal summaries */}
-      <MorningPulseSection propertyId={property.id} />
+      {/* Level 2 — Secondary */}
+      <section aria-label="Secondary insights" className="space-y-4 sm:space-y-5">
+        <MorningPulseSection propertyId={property.id} />
+        <KeyPropertyIntelligenceSection property={property} />
+      </section>
 
-      {/* Level 3 — Property intelligence scorecards */}
-      <KeyPropertyIntelligenceSection property={property} />
-
-      {/* Level 4 — Room-level context */}
-      <RoomsSnapshotSection propertyId={property.id} />
-
-      {/* Level 5 — Exploratory: signal-matched tool suggestions */}
-      <SmartContextToolsSection propertyId={property.id} />
+      {/* Level 3 — Exploratory */}
+      <section aria-label="Exploratory context" className="space-y-3.5 sm:space-y-4">
+        <RoomsSnapshotSection propertyId={property.id} />
+        <SmartContextToolsSection propertyId={property.id} />
+      </section>
 
       {/* Property identity card — mobile only */}
       <PropertyHeroCard property={property} />

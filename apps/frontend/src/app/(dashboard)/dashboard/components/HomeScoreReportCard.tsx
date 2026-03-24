@@ -53,6 +53,13 @@ function buildHomeScoreInsight(reasonsCount: number, scoreBand?: string): string
   return `${reasonsCount} pressure points are lowering overall home readiness.`;
 }
 
+function toReasonLine(reason: string): string {
+  const normalized = reason.trim().replace(/\s+/g, " ");
+  if (!normalized) return "";
+  if (normalized.length <= 96) return normalized;
+  return `${normalized.slice(0, 95).trimEnd()}…`;
+}
+
 function buildHomeScoreMeaning(scoreBand?: string): string {
   if (scoreBand === "EXCELLENT") return "How this reads: your home profile is broadly resilient right now.";
   if (scoreBand === "GOOD") return "How this reads: core systems are healthy with moderate watch items.";
@@ -144,6 +151,10 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
   const weeklyChange = formatWeeklyDelta(report?.deltaFromPreviousWeek ?? null);
   const confidence = report?.confidence ?? "LOW";
   const reasonsCount = report?.topReasonsScoreNotHigher?.length ?? 0;
+  const reasonPreview = (report?.topReasonsScoreNotHigher ?? [])
+    .map((reason) => toReasonLine(String(reason ?? "")))
+    .filter(Boolean)
+    .slice(0, 2);
   const insight = buildHomeScoreInsight(reasonsCount, scoreBand);
   const meaning = buildHomeScoreMeaning(scoreBand);
   const priority = buildHomeScorePriority(reasonsCount, scoreBand);
@@ -191,6 +202,20 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
       {/* Contextual insight line */}
       <p className="text-[11px] leading-snug text-gray-600">{insight}</p>
+      {reasonPreview.length > 0 ? (
+        <details className="mt-0.5">
+          <summary className="cursor-pointer select-none list-none text-[10px] text-gray-500 transition-colors hover:text-gray-700 [&::-webkit-details-marker]:hidden">
+            <span className="underline decoration-dotted underline-offset-2">Why this score today?</span>
+          </summary>
+          <ul className="mt-1.5 space-y-1 border-l border-gray-200 pl-2.5">
+            {reasonPreview.map((reason) => (
+              <li key={reason} className="text-[10px] leading-relaxed text-gray-600">
+                {reason}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       <div className="mt-auto flex flex-col gap-1.5 border-t border-amber-200/50 pt-2">
         <div className="flex items-center justify-between">
