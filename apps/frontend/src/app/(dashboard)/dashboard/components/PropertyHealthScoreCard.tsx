@@ -18,12 +18,17 @@ const HIGH_PRIORITY_STATUSES = [
   "Missing Data",
 ];
 
-const CARD_SHELL = "rounded-xl border p-4 flex flex-col gap-3";
+const CARD_BASE = "rounded-xl border p-4 flex flex-col gap-3";
 
 function getHealthTone(score: number) {
   if (score >= 80) return "bg-emerald-50/30 border-emerald-200/50";
   if (score >= 60) return "bg-teal-50/30 border-teal-200/50";
   return "bg-amber-50/30 border-amber-200/50";
+}
+
+function getHealthAccent(score: number, maintenanceCount: number): string {
+  if (maintenanceCount > 0 || score < 60) return "border-l-4 border-l-amber-400";
+  return "";
 }
 
 function getHealthPathColor(score: number) {
@@ -40,6 +45,16 @@ function getHealthLabel(score: number) {
   return { label: "Poor", color: "text-red-500" };
 }
 
+function buildHealthInsight(score: number, maintenanceCount: number): string {
+  if (maintenanceCount > 1)
+    return `${maintenanceCount} maintenance items pending — address to improve score`;
+  if (maintenanceCount === 1)
+    return "1 maintenance item pending — address to improve score";
+  if (score >= 80) return "Most systems are in good condition";
+  if (score >= 60) return "A few areas worth monitoring this season";
+  return "Multiple systems need attention";
+}
+
 function formatWeeklyDelta(delta: number | null) {
   if (delta === null || Math.abs(delta) < 0.05) return "No change";
   return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
@@ -49,9 +64,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
   const snapshotQuery = useQuery({
     queryKey: ["property-score-snapshot", property?.id ?? "none", "HEALTH"],
     queryFn: async () => {
-      if (!property?.id) {
-        return null;
-      }
+      if (!property?.id) return null;
       return api.getPropertyScoreSnapshots(property.id, 16);
     },
     enabled: !!property?.id,
@@ -60,7 +73,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
 
   if (!property) {
     return (
-      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+      <div className={`${CARD_BASE} bg-white border-gray-200`}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -84,9 +97,12 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
   const weeklyChange = formatWeeklyDelta(
     snapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? null
   );
+  const insight = buildHealthInsight(healthScore, maintenanceCount);
 
   return (
-    <div className={`${CARD_SHELL} ${getHealthTone(healthScore)}`}>
+    <div
+      className={`${CARD_BASE} ${getHealthTone(healthScore)} ${getHealthAccent(healthScore, maintenanceCount)}`}
+    >
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -125,12 +141,19 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         </div>
       </div>
 
+      {/* Contextual insight line */}
+      <p className="text-[11px] leading-snug text-gray-500">{insight}</p>
+
       <div className="flex items-center justify-between border-t border-teal-200/50 pt-2">
         <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
           Maintenance
         </span>
-        <span className="text-xs font-bold text-amber-600">
-          {maintenanceCount} Required
+        <span
+          className={`text-xs font-bold ${
+            maintenanceCount > 0 ? "text-amber-600" : "text-emerald-600"
+          }`}
+        >
+          {maintenanceCount > 0 ? `${maintenanceCount} Required` : "None pending"}
         </span>
       </div>
     </div>

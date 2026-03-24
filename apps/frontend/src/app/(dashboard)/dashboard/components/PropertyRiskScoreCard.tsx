@@ -12,7 +12,7 @@ interface PropertyRiskScoreCardProps {
   propertyId?: string;
 }
 
-const CARD_SHELL = "rounded-xl border p-4 flex flex-col gap-3";
+const CARD_BASE = "rounded-xl border p-4 flex flex-col gap-3";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -29,6 +29,12 @@ function getRiskTone(score: number) {
   return "bg-red-50/30 border-red-200/50";
 }
 
+function getRiskAccent(score: number): string {
+  if (score < 60) return "border-l-4 border-l-rose-400";
+  if (score < 80) return "border-l-4 border-l-amber-400";
+  return "";
+}
+
 function getRiskStatus(score: number) {
   if (score >= 80) return { label: "Low Risk", color: "text-emerald-600" };
   if (score >= 60) return { label: "Elevated", color: "text-amber-600" };
@@ -39,6 +45,13 @@ function getRiskPathColor(score: number) {
   if (score >= 80) return "#10b981";
   if (score >= 60) return "#f59e0b";
   return "#ef4444";
+}
+
+function buildRiskInsight(score: number, exposure: number): string {
+  const formatted = formatCurrency(exposure);
+  if (score >= 80) return `Exposure is well-managed — ${formatted} tracked`;
+  if (score >= 60) return `Exposure is elevated — ${formatted} at risk`;
+  return `High exposure detected — review risk factors to reduce ${formatted}`;
 }
 
 function formatWeeklyDelta(delta: number | null) {
@@ -102,7 +115,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
 
   if (!propertyId || summary.status === "NO_PROPERTY") {
     return (
-      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+      <div className={`${CARD_BASE} bg-white border-gray-200`}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -119,7 +132,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
 
   if (isLoading) {
     return (
-      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+      <div className={`${CARD_BASE} bg-white border-gray-200`}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -144,9 +157,12 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
   const weeklyChange = formatWeeklyDelta(
     snapshotQuery.data?.scores?.RISK?.deltaFromPreviousWeek ?? null
   );
+  const insight = buildRiskInsight(riskScore, exposure);
 
   return (
-    <div className={`${CARD_SHELL} ${getRiskTone(riskScore)}`}>
+    <div
+      className={`${CARD_BASE} ${getRiskTone(riskScore)} ${getRiskAccent(riskScore)}`}
+    >
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -185,6 +201,9 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
           <p className={`text-sm font-bold ${riskStatus.color}`}>{riskStatus.label}</p>
         </div>
       </div>
+
+      {/* Contextual insight line */}
+      <p className="text-[11px] leading-snug text-gray-500">{insight}</p>
 
       <div className="flex flex-col gap-1.5 border-t border-red-200/50 pt-2">
         <div className="flex items-center justify-between">

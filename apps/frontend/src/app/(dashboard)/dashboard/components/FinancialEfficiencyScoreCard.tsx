@@ -19,7 +19,7 @@ interface FinancialEfficiencyScoreCardProps {
   propertyId?: string;
 }
 
-const CARD_SHELL = "rounded-xl border p-4 flex flex-col gap-3";
+const CARD_BASE = "rounded-xl border p-4 flex flex-col gap-3";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -36,6 +36,11 @@ function getFinancialTone(score: number) {
   return "bg-amber-50/30 border-amber-200/50";
 }
 
+function getFinancialAccent(score: number): string {
+  if (score < 60) return "border-l-4 border-l-amber-400";
+  return "";
+}
+
 function getFinancialPathColor(score: number) {
   if (score >= 80) return "#10b981";
   if (score >= 60) return "#14b8a6";
@@ -48,6 +53,13 @@ function getFinancialLabel(score: number) {
   if (score >= 60) return { label: "Good", color: "text-teal-600" };
   if (score >= 40) return { label: "Fair", color: "text-amber-500" };
   return { label: "Poor", color: "text-red-500" };
+}
+
+function buildFinancialInsight(score: number, annualCost: number): string {
+  if (score >= 80) return "Ownership outlook is strong this quarter";
+  if (score >= 60)
+    return `At ${formatCurrency(annualCost)}/yr — some cost optimization possible`;
+  return "Financial pressure elevated — review spending efficiency";
 }
 
 function formatWeeklyDelta(delta: number | null) {
@@ -93,7 +105,6 @@ export const FinancialEfficiencyScoreCard: React.FC<
 
   const score = Math.max(0, Math.round(summary.financialEfficiencyScore || 0));
 
-  // Celebrate the first time a savings-worthy score loads
   useEffect(() => {
     if (
       !isLoading &&
@@ -111,7 +122,7 @@ export const FinancialEfficiencyScoreCard: React.FC<
 
   if (!propertyId || summary.status === "NO_PROPERTY") {
     return (
-      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+      <div className={`${CARD_BASE} bg-white border-gray-200`}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <DollarSign className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -128,7 +139,7 @@ export const FinancialEfficiencyScoreCard: React.FC<
 
   if (isLoading || summary.status === "QUEUED") {
     return (
-      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+      <div className={`${CARD_BASE} bg-white border-gray-200`}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <DollarSign className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -151,9 +162,12 @@ export const FinancialEfficiencyScoreCard: React.FC<
   const weeklyChange = formatWeeklyDelta(
     snapshotQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null
   );
+  const insight = buildFinancialInsight(score, annualCost);
 
   return (
-    <div className={`${CARD_SHELL} ${getFinancialTone(score)}`}>
+    <div
+      className={`${CARD_BASE} ${getFinancialTone(score)} ${getFinancialAccent(score)}`}
+    >
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <DollarSign className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -192,6 +206,9 @@ export const FinancialEfficiencyScoreCard: React.FC<
         </div>
       </div>
 
+      {/* Contextual insight line */}
+      <p className="text-[11px] leading-snug text-gray-500">{insight}</p>
+
       <div className="flex flex-col gap-1.5 border-t border-emerald-200/50 pt-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
@@ -201,9 +218,9 @@ export const FinancialEfficiencyScoreCard: React.FC<
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-            Potential Savings
+            Weekly change
           </span>
-          <span className="text-xs font-bold text-emerald-600">$220-$760</span>
+          <span className="text-xs font-medium text-gray-400">{weeklyChange}</span>
         </div>
       </div>
       <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />

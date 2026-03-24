@@ -10,14 +10,19 @@ interface HomeScoreReportCardProps {
   propertyId?: string;
 }
 
-const CARD_SHELL =
-  "rounded-xl border p-4 flex flex-col gap-3";
+const CARD_BASE = "rounded-xl border p-4 flex flex-col gap-3";
 
 function getTone(scoreBand?: string) {
   if (scoreBand === "EXCELLENT") return "bg-emerald-50/30 border-emerald-200/50";
   if (scoreBand === "GOOD") return "bg-teal-50/30 border-teal-200/50";
   if (scoreBand === "FAIR") return "bg-amber-50/30 border-amber-200/50";
   return "bg-red-50/30 border-red-200/50";
+}
+
+function getAccent(scoreBand?: string): string {
+  if (scoreBand === "NEEDS ATTENTION") return "border-l-4 border-l-rose-400";
+  if (scoreBand === "FAIR") return "border-l-4 border-l-amber-400";
+  return "";
 }
 
 function getLabel(scoreBand?: string) {
@@ -38,6 +43,12 @@ function getConfidenceWidth(confidence: HomeScoreConfidence) {
   if (confidence === "HIGH") return "w-full";
   if (confidence === "MEDIUM") return "w-2/3";
   return "w-1/3";
+}
+
+function buildHomeScoreInsight(reasonsCount: number, scoreBand?: string): string {
+  if (reasonsCount === 0) return "All tracked systems are performing well";
+  if (reasonsCount === 1) return "1 elevated asset is keeping this score from improving";
+  return `${reasonsCount} elevated assets are keeping this score from improving`;
 }
 
 function formatWeeklyDelta(delta: number | null) {
@@ -62,7 +73,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
   if (!propertyId) {
     return (
-      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+      <div className={`${CARD_BASE} bg-white border-gray-200`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -79,7 +90,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
   if (reportQuery.isLoading) {
     return (
-      <div className={`${CARD_SHELL} bg-white border-gray-200`}>
+      <div className={`${CARD_BASE} bg-white border-gray-200`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -105,11 +116,10 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
   const weeklyChange = formatWeeklyDelta(report?.deltaFromPreviousWeek ?? null);
   const confidence = report?.confidence ?? "LOW";
   const reasonsCount = report?.topReasonsScoreNotHigher?.length ?? 0;
-  const elevatedAssetsLabel =
-    reasonsCount > 0 ? `${reasonsCount} driving risk` : "None flagged";
+  const insight = buildHomeScoreInsight(reasonsCount, scoreBand);
 
   return (
-    <div className={`${CARD_SHELL} ${getTone(scoreBand)}`}>
+    <div className={`${CARD_BASE} ${getTone(scoreBand)} ${getAccent(scoreBand)}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
@@ -130,7 +140,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
           <span className={`text-4xl font-display font-bold ${scoreColor}`}>{score}</span>
           <span className="mb-1 text-sm text-gray-400">/100</span>
         </div>
-        <span className="text-sm text-gray-500">{scoreLabel}</span>
+        <span className={`text-sm font-semibold ${scoreColor}`}>{scoreLabel}</span>
         <div className="mt-1">
           <div className="mb-1 flex items-center justify-between text-xs">
             <span className="text-gray-400 uppercase tracking-wider">Confidence</span>
@@ -144,12 +154,21 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         </div>
       </div>
 
+      {/* Contextual insight line */}
+      <p className="text-[11px] leading-snug text-gray-500">{insight}</p>
+
       <div className="flex flex-col gap-1.5 border-t border-amber-200/50 pt-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
             Elevated assets
           </span>
-          <span className="text-xs font-bold text-amber-600">{elevatedAssetsLabel}</span>
+          <span
+            className={`text-xs font-bold ${
+              reasonsCount > 0 ? "text-amber-600" : "text-emerald-600"
+            }`}
+          >
+            {reasonsCount > 0 ? `${reasonsCount} driving risk` : "None flagged"}
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">

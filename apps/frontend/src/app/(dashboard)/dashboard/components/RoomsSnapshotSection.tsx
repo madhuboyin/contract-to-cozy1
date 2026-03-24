@@ -96,11 +96,29 @@ function statusPillClass(label: string): string {
   return 'bg-red-50 text-red-700 border border-red-200';
 }
 
-function roomTip(itemCount: number, docsCount: number, gapCount: number): string {
-  if (docsCount === 0) return '0 docs → Upload your appliance warranties';
-  if (gapCount > 0) return `${gapCount} gaps → Add purchase receipts for tracked items`;
-  if (itemCount < 3) return `${itemCount} items → Add key appliances to improve visibility`;
-  return 'Keep inventory details current to maintain room health.';
+/**
+ * Builds a single concise, actionable insight for the room card.
+ * Prefers context from why-factors, falls back to stats-based copy.
+ */
+function buildRoomInsight(
+  score: number,
+  itemCount: number,
+  docsCount: number,
+  gapCount: number,
+  whyFactors: WhyFactor[],
+): string {
+  // Use top negative why-factor if available
+  const topNegative = whyFactors.find((f) => f.impact === 'NEGATIVE');
+  if (topNegative) return topNegative.detail || topNegative.label;
+
+  // Stats-based insight
+  if (gapCount > 0) return `${gapCount} coverage gap${gapCount === 1 ? '' : 's'} detected`;
+  if (docsCount === 0 && itemCount > 0) return 'No warranties uploaded — add docs to improve coverage';
+  if (itemCount < 3) return 'Add key appliances to improve room visibility';
+
+  // Healthy state
+  if (score >= 80) return 'No active issues';
+  return 'Keep inventory details current';
 }
 
 function guessRoomType(name: string): string {
@@ -118,24 +136,15 @@ function guessRoomType(name: string): string {
 
 function roomIconFor(type: string) {
   switch (type) {
-    case 'KITCHEN':
-      return UtensilsCrossed;
-    case 'LIVING_ROOM':
-      return Sofa;
-    case 'BEDROOM':
-      return BedDouble;
-    case 'BATHROOM':
-      return Bath;
-    case 'LAUNDRY':
-      return Shirt;
-    case 'OFFICE':
-      return Briefcase;
-    case 'GARAGE':
-      return Car;
-    case 'BASEMENT':
-      return Warehouse;
-    default:
-      return Home;
+    case 'KITCHEN': return UtensilsCrossed;
+    case 'LIVING_ROOM': return Sofa;
+    case 'BEDROOM': return BedDouble;
+    case 'BATHROOM': return Bath;
+    case 'LAUNDRY': return Shirt;
+    case 'OFFICE': return Briefcase;
+    case 'GARAGE': return Car;
+    case 'BASEMENT': return Warehouse;
+    default: return Home;
   }
 }
 
@@ -193,9 +202,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
         setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [propertyId]);
 
   React.useEffect(() => {
@@ -205,9 +212,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
 
     const fetchInsights = async () => {
       const loadingMap: Record<string, boolean> = {};
-      for (const room of rooms) {
-        loadingMap[room.id] = true;
-      }
+      for (const room of rooms) loadingMap[room.id] = true;
       setInsightsLoading(loadingMap);
 
       const results = await Promise.allSettled(
@@ -222,9 +227,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
 
       const nextInsights: Record<string, any> = {};
       const nextLoading: Record<string, boolean> = {};
-      for (const room of rooms) {
-        nextLoading[room.id] = false;
-      }
+      for (const room of rooms) nextLoading[room.id] = false;
 
       for (const result of results) {
         if (result.status === 'fulfilled') {
@@ -238,9 +241,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
 
     fetchInsights();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [propertyId, rooms]);
 
   const scrollBy = (direction: 'left' | 'right') => {
@@ -249,8 +250,12 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
     scrollerRef.current.scrollBy({ left: delta, behavior: 'smooth' });
   };
 
-  const roomsHubHref = propertyId ? `/dashboard/properties/${propertyId}?tab=rooms` : '/dashboard/properties';
-  const roomsManageHref = propertyId ? `/dashboard/properties/${propertyId}/inventory/rooms` : '/dashboard/properties';
+  const roomsHubHref = propertyId
+    ? `/dashboard/properties/${propertyId}?tab=rooms`
+    : '/dashboard/properties';
+  const roomsManageHref = propertyId
+    ? `/dashboard/properties/${propertyId}/inventory/rooms`
+    : '/dashboard/properties';
 
   return (
     <section className="mb-8">
@@ -261,7 +266,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
           </div>
           <div>
             <h2 className="text-2xl font-semibold text-gray-900">Rooms</h2>
-            <p className="text-sm text-gray-500">Room-level health and item access for this property.</p>
+            <p className="text-sm text-gray-500">Room-level health and next steps for this property.</p>
           </div>
         </div>
 
@@ -286,27 +291,33 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500">Loading rooms...</div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500">
+          Loading rooms…
+        </div>
       ) : error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
       ) : rooms.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <h3 className="text-base font-semibold text-gray-900">No rooms configured yet</h3>
           <p className="text-sm text-gray-600 mt-1">
-            Configure rooms for this property to unlock room-level health, items, and AI scan workflows.
+            Add rooms to unlock room-level health scores, coverage tracking, and AI scan workflows.
           </p>
           <div className="mt-4">
             <Link
               href={roomsManageHref}
-              className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
             >
-              Manage rooms
+              Set up rooms
+              <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         </div>
       ) : (
         <>
-          <div ref={scrollerRef} className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x scroll-smooth">
+          <div
+            ref={scrollerRef}
+            className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x scroll-smooth"
+          >
             {rooms.map((room) => {
               const rawType = safeString((room as InventoryRoom & { type?: string }).type);
               const roomType = rawType || guessRoomType(room.name || '');
@@ -317,80 +328,87 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
               const score = insights
                 ? (Number.isFinite(backendScore) ? backendScore : computeHealthScore(insights))
                 : 0;
-
               const statusLabel = safeString(insights?.healthScore?.label) || deriveLabel(score);
               const whyFactors = insights ? buildWhyFactors(insights) : [];
+              const itemCount = Number(stats?.itemCount ?? 0);
+              const docsCount = Number(stats?.docsLinkedCount ?? 0);
+              const gapCount = Number(stats?.coverageGapsCount ?? 0);
+              const roomHref = `/dashboard/properties/${propertyId}/rooms/${room.id}`;
+              const roomInsight = insights
+                ? buildRoomInsight(score, itemCount, docsCount, gapCount, whyFactors)
+                : null;
 
               return (
-                <Link
+                <div
                   key={room.id}
-                  href={`/dashboard/properties/${propertyId}/rooms/${room.id}`}
-                  className="snap-start min-w-[86%] sm:min-w-[70%] md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)] flex-shrink-0 rounded-2xl border border-white/60 bg-white/85 p-4 shadow-sm backdrop-blur-sm will-change-transform transform-gpu transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md cursor-pointer select-none"
+                  className="snap-start min-w-[86%] sm:min-w-[70%] md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)] flex-shrink-0 rounded-2xl border border-white/60 bg-white/85 p-4 shadow-sm backdrop-blur-sm will-change-transform transform-gpu"
                 >
-                  <div className="min-w-0 flex items-start justify-between gap-3">
+                  {/* Room header */}
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
                       <RoomIcon className="w-4 h-4 text-gray-500 shrink-0" />
-                      <div className="text-base font-semibold text-gray-900 truncate">
+                      <p className="text-base font-semibold text-gray-900 truncate">
                         {room.name || 'Unnamed room'}
-                      </div>
+                      </p>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${statusPillClass(statusLabel)}`}>
+                      {statusLabel}
+                    </span>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] p-3">
+                  {/* Score + insight */}
+                  <div className="mt-3 rounded-xl border border-black/10 bg-black/[0.02] p-3">
                     {insightsLoading[room.id] ? (
-                      <div className="text-sm opacity-70">Loading insights...</div>
+                      <div className="text-sm text-gray-400">Loading insights…</div>
                     ) : insights ? (
-                      <div className="space-y-3 text-center">
-                        <div className="flex justify-center">
-                          <RoomHealthScoreRing
-                            value={score}
-                            size={80}
-                            strokeWidth={10}
-                            ringOnly
-                            animateMs={600}
-                          />
+                      <div className="flex items-center gap-3">
+                        <RoomHealthScoreRing
+                          value={score}
+                          size={56}
+                          strokeWidth={8}
+                          ringOnly
+                          animateMs={600}
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          {/* Insight text */}
+                          {roomInsight ? (
+                            <p className="text-xs text-gray-600 leading-snug">{roomInsight}</p>
+                          ) : null}
+                          {/* Quick stats */}
+                          <div className="flex flex-wrap gap-2 text-[11px] text-gray-500">
+                            <span className="inline-flex items-center gap-0.5">
+                              <Package className="h-3 w-3" />
+                              {itemCount} items
+                            </span>
+                            <span className="inline-flex items-center gap-0.5">
+                              <FileText className="h-3 w-3" />
+                              {docsCount} docs
+                            </span>
+                            {gapCount > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-amber-600">
+                                <AlertCircle className="h-3 w-3" />
+                                {gapCount} gap{gapCount === 1 ? '' : 's'}
+                              </span>
+                            )}
+                          </div>
                         </div>
-
-                        <div className="flex justify-center">
-                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide ${statusPillClass(statusLabel)}`}>
-                            {statusLabel}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-gray-600">
-                          <span className="inline-flex items-center gap-1">
-                            <Package className="h-3.5 w-3.5 text-gray-500" />
-                            {stats?.itemCount ?? 0} items
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <FileText className="h-3.5 w-3.5 text-gray-500" />
-                            {stats?.docsLinkedCount ?? 0} docs
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <AlertCircle className="h-3.5 w-3.5 text-gray-500" />
-                            {stats?.coverageGapsCount ?? 0} gaps
-                          </span>
-                        </div>
-
-                        <p className="text-xs italic text-gray-500">
-                          {roomTip(
-                            Number(stats?.itemCount ?? 0),
-                            Number(stats?.docsLinkedCount ?? 0),
-                            Number(stats?.coverageGapsCount ?? 0)
-                          )}
-                        </p>
                       </div>
                     ) : (
-                      <div className="text-sm opacity-70">No room insights yet.</div>
+                      <p className="text-xs text-gray-400">No insights yet — add items to get started.</p>
                     )}
                   </div>
-                  {whyFactors.length > 0 && (
-                    <p className="mt-2 line-clamp-1 text-xs text-gray-500">
-                      Why: {whyFactors[0]?.label}
-                    </p>
-                  )}
-                </Link>
+
+                  {/* Explicit CTA */}
+                  <div className="mt-3">
+                    <Link
+                      href={roomHref}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline underline-offset-2"
+                    >
+                      Open room
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                </div>
               );
             })}
           </div>
