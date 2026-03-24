@@ -60,8 +60,8 @@ function severityDotClass(severity: GuidanceActionModel['severity']): string {
 
 function HeroFallbackCard() {
   return (
-    <Card className="border-border">
-      <CardContent className="flex items-start gap-4 p-5">
+    <Card className="border-border shadow-sm">
+      <CardContent className="flex items-start gap-4 p-6">
         <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50">
           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
         </span>
@@ -77,7 +77,7 @@ function HeroFallbackCard() {
 }
 
 // ---------------------------------------------------------------------------
-// Hero action card
+// Hero action card — Level 1 prominence
 // ---------------------------------------------------------------------------
 
 function heroAccentClass(severity: GuidanceActionModel['severity']): string {
@@ -99,12 +99,16 @@ function HeroActionCard({ action, onOpenJourney }: HeroActionCardProps) {
     action.subtitle?.trim() ||
     'This action has been identified as the highest-priority item for your home.';
   const safeRisk = action.explanation?.risk?.trim() || null;
+  const safeWhat = action.explanation?.what?.trim() || null;
   const nextStepLabel =
     action.nextStep?.label?.trim() || action.explanation?.nextStep?.trim() || 'Review Next Step';
 
+  // Only show "Why am I seeing this?" when explanation.what adds context beyond the why text
+  const showExplain = safeWhat && safeWhat !== safeWhy;
+
   return (
-    <Card className={cn('shadow-sm', heroAccentClass(action.severity))}>
-      <CardContent className="space-y-4 p-5">
+    <Card className={cn('shadow-md', heroAccentClass(action.severity))}>
+      <CardContent className="space-y-4 p-6">
         {/* Label row */}
         <div className="flex flex-wrap items-center gap-2">
           <Badge
@@ -120,12 +124,23 @@ function HeroActionCard({ action, onOpenJourney }: HeroActionCardProps) {
           <GuidanceStatusBadge kind="readiness" value={action.executionReadiness} />
         </div>
 
-        {/* Title + why */}
-        <div className="space-y-1.5">
-          <h2 className="text-lg font-semibold leading-snug text-foreground">{safeTitle}</h2>
-          <p className="text-sm text-muted-foreground">{safeWhy}</p>
+        {/* Title + why + explainability */}
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold leading-snug text-foreground">{safeTitle}</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">{safeWhy}</p>
           {safeRisk ? (
-            <p className="text-xs text-muted-foreground/80">{safeRisk}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground/75">{safeRisk}</p>
+          ) : null}
+          {/* Explainability: Why am I seeing this? */}
+          {showExplain ? (
+            <details className="mt-1 group">
+              <summary className="cursor-pointer select-none text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground list-none flex items-center gap-1">
+                <span className="underline underline-offset-2 decoration-dotted">Why am I seeing this?</span>
+              </summary>
+              <p className="mt-2 border-l-2 border-muted pl-3 text-xs leading-relaxed text-muted-foreground">
+                {safeWhat}
+              </p>
+            </details>
           ) : null}
         </div>
 
@@ -173,6 +188,7 @@ function AttentionItemRow({
 }) {
   const safeTitle = action.title?.trim() || 'Needs Attention';
   const safeWhy = action.explanation?.why?.trim() || action.subtitle?.trim() || null;
+  const safeRisk = action.explanation?.risk?.trim() || null;
   const urgency = urgencyLabel(action);
   const costChip =
     !urgency && action.costOfDelay && action.costOfDelay > 0
@@ -204,6 +220,15 @@ function AttentionItemRow({
         </div>
         {safeWhy ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{safeWhy}</p>
+        ) : null}
+        {/* Explainability: What's the risk? */}
+        {safeRisk ? (
+          <details className="mt-0.5">
+            <summary className="cursor-pointer select-none text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground list-none">
+              <span className="underline underline-offset-2 decoration-dotted">What's the risk?</span>
+            </summary>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{safeRisk}</p>
+          </details>
         ) : null}
       </div>
 
@@ -247,9 +272,7 @@ function TodayAttentionSection({ actions, onOpenJourney }: TodayAttentionSection
 
   return (
     <section className="space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Also needs attention
-      </p>
+      <p className="text-sm font-medium text-muted-foreground">Also needs attention</p>
       <div className="space-y-2">
         {actions.map((action) => (
           <AttentionItemRow

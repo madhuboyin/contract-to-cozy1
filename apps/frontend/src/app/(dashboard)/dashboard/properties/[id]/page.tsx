@@ -1255,13 +1255,15 @@ export default function PropertyDetailPage() {
         />
       </div>
 
-      {/* Hero Action Card + Today's Attention — answers "what should I do right now?" */}
+      {/* Level 1 — Primary: hero action + today's attention */}
       <DashboardHeroSection propertyId={property.id} />
 
-      {/* Morning Pulse — cross-domain signal summaries (maintenance, coverage, financial…) */}
-      <MorningPulseSection propertyId={property.id} />
+      {/* Level 2 — Secondary: cross-domain signal summaries */}
+      <div className="mt-2">
+        <MorningPulseSection propertyId={property.id} />
+      </div>
 
-      {/* Smart Context Tools — signal-driven tool recommendations */}
+      {/* Level 3 — Exploratory: signal-matched tool suggestions */}
       <SmartContextToolsSection propertyId={property.id} />
 
       {/* Property identity card — mobile only */}

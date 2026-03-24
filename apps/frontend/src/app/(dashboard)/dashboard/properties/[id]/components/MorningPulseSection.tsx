@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
@@ -120,38 +119,38 @@ function pulseDotClass(severity: GuidanceSeverity | null): string {
 
 function PulseRowItem({ row }: { row: PulseRow }) {
   return (
-    <div className="flex items-center gap-3 py-2.5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border">
+    <div className="flex items-center gap-3 py-2 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/50">
       {/* Severity dot */}
       <span
         className={cn('h-1.5 w-1.5 shrink-0 rounded-full', pulseDotClass(row.severity))}
       />
 
       {/* Domain label — fixed width, scannable */}
-      <span className="w-[76px] shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="w-[72px] shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
         {row.label}
       </span>
 
       {/* Insight text — fills remaining space, single line */}
-      <p className="min-w-0 flex-1 truncate text-xs text-foreground">{row.insight}</p>
+      <p className="min-w-0 flex-1 truncate text-xs text-foreground/80">{row.insight}</p>
 
       {/* Optional CTA arrow */}
       {row.href ? (
         <Link
           href={row.href}
-          className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+          className="shrink-0 text-muted-foreground/50 transition-colors hover:text-foreground"
           aria-label={`Go to ${row.label} action`}
         >
-          <ArrowRight className="h-3.5 w-3.5" />
+          <ArrowRight className="h-3 w-3" />
         </Link>
       ) : (
-        <span className="w-3.5 shrink-0" />
+        <span className="w-3 shrink-0" />
       )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// MorningPulseSection — exported
+// MorningPulseSection — Level 2, secondary visual weight
 // ---------------------------------------------------------------------------
 
 type MorningPulseSectionProps = {
@@ -172,17 +171,15 @@ export function MorningPulseSection({ propertyId, maxRows = 4 }: MorningPulseSec
   if (guidance.isLoading || rows.length === 0) return null;
 
   return (
-    <Card className="border-border">
-      <CardContent className="px-4 py-3.5">
-        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Home signals
-        </p>
-        <div>
-          {rows.map((row) => (
-            <PulseRowItem key={row.domain} row={row} />
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="rounded-xl border border-border/50 bg-background px-4 py-3">
+      <p className="mb-2 text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
+        Home signals
+      </p>
+      <div>
+        {rows.map((row) => (
+          <PulseRowItem key={row.domain} row={row} />
+        ))}
+      </div>
+    </div>
   );
 }
