@@ -61,7 +61,7 @@ function severityDotClass(severity: GuidanceActionModel['severity']): string {
 function HeroFallbackCard() {
   return (
     <Card className="border-border shadow-sm">
-      <CardContent className="flex items-start gap-4 p-6">
+      <CardContent className="flex items-start gap-4 p-4 sm:p-6">
         <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50">
           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
         </span>
@@ -108,7 +108,7 @@ function HeroActionCard({ action, onOpenJourney }: HeroActionCardProps) {
 
   return (
     <Card className={cn('shadow-md', heroAccentClass(action.severity))}>
-      <CardContent className="space-y-4 p-6">
+      <CardContent className="space-y-4 p-4 sm:p-6">
         {/* Label row */}
         <div className="flex flex-wrap items-center gap-2">
           <Badge
@@ -134,7 +134,7 @@ function HeroActionCard({ action, onOpenJourney }: HeroActionCardProps) {
           {/* Explainability: Why am I seeing this? */}
           {showExplain ? (
             <details className="mt-1 group">
-              <summary className="cursor-pointer select-none text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground list-none flex items-center gap-1">
+              <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground">
                 <span className="underline underline-offset-2 decoration-dotted">Why am I seeing this?</span>
               </summary>
               <p className="mt-2 border-l-2 border-muted pl-3 text-xs leading-relaxed text-muted-foreground">
@@ -224,7 +224,7 @@ function AttentionItemRow({
         {/* Explainability: What's the risk? */}
         {safeRisk ? (
           <details className="mt-0.5">
-            <summary className="cursor-pointer select-none text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground list-none">
+            <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden text-[11px] text-muted-foreground/60 transition-colors hover:text-muted-foreground">
               <span className="underline underline-offset-2 decoration-dotted">What's the risk?</span>
             </summary>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{safeRisk}</p>

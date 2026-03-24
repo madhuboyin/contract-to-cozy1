@@ -1259,9 +1259,7 @@ export default function PropertyDetailPage() {
       <DashboardHeroSection propertyId={property.id} />
 
       {/* Level 2 — Secondary: cross-domain signal summaries */}
-      <div className="mt-2">
-        <MorningPulseSection propertyId={property.id} />
-      </div>
+      <MorningPulseSection propertyId={property.id} />
 
       {/* Level 3 — Exploratory: signal-matched tool suggestions */}
       <SmartContextToolsSection propertyId={property.id} />

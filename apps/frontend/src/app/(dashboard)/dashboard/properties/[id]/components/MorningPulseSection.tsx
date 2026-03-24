@@ -137,7 +137,7 @@ function PulseRowItem({ row }: { row: PulseRow }) {
       {row.href ? (
         <Link
           href={row.href}
-          className="shrink-0 text-muted-foreground/50 transition-colors hover:text-foreground"
+          className="shrink-0 -m-1 flex min-h-[36px] min-w-[36px] items-center justify-center rounded text-muted-foreground/50 transition-colors hover:text-foreground"
           aria-label={`Go to ${row.label} action`}
         >
           <ArrowRight className="h-3 w-3" />
@@ -171,7 +171,7 @@ export function MorningPulseSection({ propertyId, maxRows = 4 }: MorningPulseSec
   if (guidance.isLoading || rows.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border/50 bg-background px-4 py-3">
+    <div className="mt-2 rounded-xl border border-border/50 bg-background px-4 py-3">
       <p className="mb-2 text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
         Home signals
       </p>

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
@@ -148,7 +148,7 @@ function ToolRow({ toolId, reason, propertyId }: ToolRowProps) {
   return (
     <Link
       href={href}
-      className="group flex items-center gap-3 rounded-lg border border-border/50 bg-background px-3.5 py-2.5 transition-colors hover:border-border hover:bg-muted/30"
+      className="group flex min-h-[44px] items-center gap-3 rounded-lg border border-border/50 bg-background px-3.5 py-2.5 transition-colors hover:border-border hover:bg-muted/30"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/60 text-muted-foreground group-hover:bg-muted transition-colors">
         <Icon className="h-3.5 w-3.5" />
@@ -173,10 +173,12 @@ interface SmartContextToolsSectionProps {
 export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectionProps) {
   const { actions, isLoading } = useGuidance(propertyId);
 
-  if (isLoading) return null;
+  const recommendations = useMemo(
+    () => (isLoading ? [] : selectSmartContextTools(actions)),
+    [actions, isLoading],
+  );
 
-  const recommendations = selectSmartContextTools(actions);
-  if (recommendations.length === 0) return null;
+  if (isLoading || recommendations.length === 0) return null;
 
   return (
     <section>
