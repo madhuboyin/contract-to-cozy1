@@ -2,35 +2,59 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, PauseCircle } from 'lucide-react';
+import { ArrowRight, Loader2, PauseCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   DoNothingRunDTO,
   getLatestDoNothingRun,
   runDoNothingSimulation,
 } from '@/lib/api/doNothingSimulatorApi';
-import { Button } from '@/components/ui/button';
 
 type DoNothingSimulatorToolCardProps = {
   propertyId: string;
 };
 
-function statusText(run: DoNothingRunDTO | null, hasRun: boolean) {
-  if (!hasRun || !run) return 'Not run yet';
-  if (run.status === 'STALE') return 'Review recommended';
-  if (run.status === 'ERROR') return 'Needs refresh';
-  return 'Ready';
+const CARD_BASE =
+  'flex h-full flex-col gap-3.5 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm sm:p-5';
+const HEADER_ICON_WRAP = 'rounded-lg border border-gray-200/80 bg-gray-50/80 p-1.5';
+const HEADER_ICON = 'h-4 w-4 text-teal-700';
+const TITLE_CLASS = 'text-sm font-semibold text-gray-900';
+const SUPPORT_LABEL = 'text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500';
+const BADGE_BASE = 'inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium';
+
+function statusMeta(loading: boolean, run: DoNothingRunDTO | null, hasRun: boolean) {
+  if (loading) {
+    return { label: 'Checking', className: 'border-slate-200/80 bg-slate-50/75 text-slate-700' };
+  }
+  if (!hasRun || !run) {
+    return { label: 'Not run yet', className: 'border-slate-200/80 bg-slate-50/75 text-slate-700' };
+  }
+  if (run.status === 'STALE') {
+    return {
+      label: 'Review recommended',
+      className: 'border-amber-200/80 bg-amber-50/75 text-amber-700',
+    };
+  }
+  if (run.status === 'ERROR') {
+    return { label: 'Needs refresh', className: 'border-rose-200/80 bg-rose-50/75 text-rose-700' };
+  }
+  return { label: 'Ready', className: 'border-emerald-200/80 bg-emerald-50/75 text-emerald-700' };
 }
 
 function likelihoodTone(likelihood?: DoNothingRunDTO['incidentLikelihood']): string {
-  if (likelihood === 'HIGH') return 'bg-rose-100 text-rose-700';
-  if (likelihood === 'MEDIUM') return 'bg-amber-100 text-amber-700';
-  if (likelihood === 'LOW') return 'bg-emerald-100 text-emerald-700';
-  return 'bg-gray-100 text-gray-700';
+  if (likelihood === 'HIGH') return 'border-rose-200/80 bg-rose-50/75 text-rose-700';
+  if (likelihood === 'MEDIUM') return 'border-amber-200/80 bg-amber-50/75 text-amber-700';
+  if (likelihood === 'LOW') return 'border-emerald-200/80 bg-emerald-50/75 text-emerald-700';
+  return 'border-slate-200/80 bg-slate-50/75 text-slate-700';
 }
 
 function moneyFromCents(value?: number | null): string {
   if (value === null || value === undefined) return '—';
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(value / 100);
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value / 100);
 }
 
 export default function DoNothingSimulatorToolCard({
@@ -114,64 +138,92 @@ export default function DoNothingSimulatorToolCard({
     router.push(`/dashboard/properties/${propertyId}/tools/do-nothing`);
   };
 
+  const status = statusMeta(loading, run, hasRun);
+
+  const riskDeltaLabel =
+    run?.riskScoreDelta === null || run?.riskScoreDelta === undefined
+      ? '—'
+      : run.riskScoreDelta > 0
+        ? `+${run.riskScoreDelta}`
+        : `${run.riskScoreDelta}`;
+
+  const projectedRange =
+    hasRun && run
+      ? `${moneyFromCents(run.expectedCostDeltaCentsMin)} - ${moneyFromCents(run.expectedCostDeltaCentsMax)}`
+      : '—';
+
   return (
-    <div className="rounded-2xl border border-black/10 bg-white p-4">
+    <div className={CARD_BASE}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-teal-100">
-            <PauseCircle className="h-5 w-5 text-teal-700" />
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className={HEADER_ICON_WRAP}>
+            <PauseCircle className={HEADER_ICON} />
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Do-Nothing Simulator</h3>
-            <p className="text-sm text-gray-500">See what happens if you delay action.</p>
-          </div>
+          <h3 className={TITLE_CLASS}>Do-Nothing Simulator</h3>
         </div>
+        <span className={cn(BADGE_BASE, status.className)}>{status.label}</span>
       </div>
 
-      <div className="mt-4 text-sm text-gray-700">
+      <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">
+        See what happens if you delay action.
+      </p>
+
+      <div className="rounded-xl border border-gray-200/80 bg-gray-50/80 px-3 py-2.5">
         {loading ? (
-          <span className="inline-flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
-            Checking status…
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
+            Checking simulation profile…
           </span>
+        ) : hasRun && run ? (
+          <>
+            <p className={SUPPORT_LABEL}>Projected Cost</p>
+            <p className="mt-1 text-xl font-semibold tracking-tight text-gray-900">{projectedRange}</p>
+            <p className="mt-1 text-xs leading-relaxed text-gray-600">
+              {run.horizonMonths}-month horizon · Risk delta{' '}
+              <span className="font-medium text-gray-800">{riskDeltaLabel}</span>
+            </p>
+          </>
         ) : (
           <>
-            <span className="font-medium">Status:</span> {statusText(run, hasRun)}
+            <p className={SUPPORT_LABEL}>Simulation</p>
+            <p className="mt-1 text-base font-semibold text-gray-900">Run 12-month scenario</p>
+            <p className="mt-1 text-xs text-gray-600">Estimate delayed-action cost and risk pressure.</p>
           </>
         )}
       </div>
 
-      {hasRun && run && (
-        <div className="mt-3 space-y-1 text-xs text-gray-600">
-          <div>
-            Horizon: <span className="font-medium text-gray-800">{run.horizonMonths} months</span>
-          </div>
-          <div>
-            Risk delta:{' '}
-            <span className="font-medium text-gray-800">
-              {run.riskScoreDelta === null || run.riskScoreDelta === undefined ? '—' : `+${run.riskScoreDelta}`}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span>Projected cost: <span className="font-medium text-gray-800">{moneyFromCents(run.expectedCostDeltaCentsMin)} - {moneyFromCents(run.expectedCostDeltaCentsMax)}</span></span>
-            <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${likelihoodTone(run.incidentLikelihood)}`}>
-              {run.incidentLikelihood ?? 'N/A'}
-            </span>
-          </div>
+      <div className="space-y-2 border-t border-gray-200/80 pt-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className={SUPPORT_LABEL}>Incident Likelihood</span>
+          <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium', likelihoodTone(run?.incidentLikelihood))}>
+            {run?.incidentLikelihood ?? 'N/A'}
+          </span>
         </div>
-      )}
+        <div className="flex items-baseline justify-between gap-3">
+          <span className={SUPPORT_LABEL}>Horizon</span>
+          <span className="text-sm font-semibold text-gray-900">{hasRun && run ? `${run.horizonMonths} mo` : '—'}</span>
+        </div>
+      </div>
 
-      <div className="mt-4">
-        <Button onClick={handlePrimaryCta} disabled={loading || running || !propertyId}>
+      <div className="mt-auto border-t border-gray-200/80 pt-3">
+        <button
+          type="button"
+          onClick={handlePrimaryCta}
+          disabled={loading || running || !propertyId}
+          className="group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+        >
           {running ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Running…
             </>
           ) : (
-            ctaLabel
+            <>
+              {ctaLabel}
+              <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+            </>
           )}
-        </Button>
+        </button>
       </div>
     </div>
   );

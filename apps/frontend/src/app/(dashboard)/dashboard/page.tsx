@@ -582,22 +582,26 @@ export default function DashboardPage() {
         
         {/* AI INSURANCE/PREMIUM DECISION TOOLS */}
         <motion.section className="mb-4" {...sectionMotion(6)}>
-          <div className="flex items-start gap-3 mb-4">
-            <div className="p-2 bg-teal-100 rounded-lg">
-              <ShieldAlert className="w-5 h-5 text-teal-700" />
+          <div className="mb-4 flex items-start gap-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
+              <ShieldAlert className="h-5 w-5 text-slate-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Coverage, Premium & Inaction Intelligence</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+                Coverage, Premium & Inaction Intelligence
+              </h2>
+              <p className="text-sm text-gray-500">
                 Educational guidance to compare coverage, premium pressure, and delayed-action downside.
               </p>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <HomeSavingsCheckToolCard propertyId={selectedPropertyId || ''} />
-            <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
-            <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
-            <DoNothingSimulatorToolCard propertyId={selectedPropertyId || ''} />
+          <div className="rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <HomeSavingsCheckToolCard propertyId={selectedPropertyId || ''} />
+              <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
+              <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
+              <DoNothingSimulatorToolCard propertyId={selectedPropertyId || ''} />
+            </div>
           </div>
         </motion.section>
         <div className="section-divider my-5 md:my-6" />
