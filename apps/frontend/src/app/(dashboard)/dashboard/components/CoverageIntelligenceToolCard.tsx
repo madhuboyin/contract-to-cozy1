@@ -15,13 +15,13 @@ type CoverageIntelligenceToolCardProps = {
 };
 
 const CARD_BASE =
-  'flex h-full flex-col rounded-2xl border border-gray-200/80 bg-white p-4 shadow-[0_6px_18px_-16px_rgba(15,23,42,0.4)] sm:p-5';
-const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/80';
+  'flex h-full flex-col rounded-2xl border border-gray-200/65 bg-white/95 p-4 shadow-[0_6px_16px_-14px_rgba(15,23,42,0.28)] sm:p-5';
+const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/60';
 const HEADER_ICON = 'h-3.5 w-3.5 text-slate-600';
-const TITLE_CLASS = 'text-[15px] font-semibold leading-none text-gray-900';
+const TITLE_CLASS = 'text-[15px] font-medium leading-none text-gray-800';
 const BADGE_BASE =
-  'inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10px] font-medium leading-none';
-const VALUE_ZONE = 'mt-3 rounded-xl bg-slate-50/75 px-3 py-2.5 ring-1 ring-inset ring-slate-200/75';
+  'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none';
+const VALUE_ZONE = 'mt-2.5 rounded-lg bg-slate-50/45 px-2.5 py-2';
 const CTA_CLASS =
   'group inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 transition-colors hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -34,27 +34,27 @@ function normalizeVerdict(verdict: string): string {
 
 function statusMeta(loading: boolean, analysis: CoverageAnalysisDTO | null, hasAnalysis: boolean) {
   if (loading) {
-    return { label: 'Checking', className: 'border-slate-200/80 bg-slate-50/85 text-slate-700' };
+    return { label: 'Checking', className: 'border-slate-200/65 bg-slate-50/70 text-slate-600' };
   }
   if (!hasAnalysis || !analysis) {
-    return { label: 'Not run yet', className: 'border-slate-200/80 bg-slate-50/85 text-slate-700' };
+    return { label: 'Not run yet', className: 'border-slate-200/65 bg-slate-50/70 text-slate-600' };
   }
   if (analysis.status === 'STALE') {
     return {
       label: 'Review recommended',
-      className: 'border-amber-200/80 bg-amber-50/85 text-amber-700',
+      className: 'border-amber-200/65 bg-amber-50/70 text-amber-700',
     };
   }
   if (analysis.status === 'ERROR') {
-    return { label: 'Needs refresh', className: 'border-rose-200/80 bg-rose-50/85 text-rose-700' };
+    return { label: 'Needs refresh', className: 'border-rose-200/65 bg-rose-50/70 text-rose-700' };
   }
   if (analysis.overallVerdict === 'WORTH_IT') {
-    return { label: 'Worth it', className: 'border-emerald-200/80 bg-emerald-50/85 text-emerald-700' };
+    return { label: 'Worth it', className: 'border-emerald-200/65 bg-emerald-50/70 text-emerald-700' };
   }
   if (analysis.overallVerdict === 'SITUATIONAL') {
-    return { label: 'Situational', className: 'border-amber-200/80 bg-amber-50/85 text-amber-700' };
+    return { label: 'Situational', className: 'border-amber-200/65 bg-amber-50/70 text-amber-700' };
   }
-  return { label: 'Not worth it', className: 'border-rose-200/80 bg-rose-50/85 text-rose-700' };
+  return { label: 'Not worth it', className: 'border-rose-200/65 bg-rose-50/70 text-rose-700' };
 }
 
 function primaryInsight(analysis: CoverageAnalysisDTO | null, hasAnalysis: boolean) {
@@ -184,7 +184,7 @@ export default function CoverageIntelligenceToolCard({
           </span>
         ) : (
           <div>
-            <p className="text-[1.9rem] font-semibold leading-tight tracking-tight text-gray-900">{insight.headline}</p>
+            <p className="text-[1.78rem] font-medium leading-tight tracking-tight text-gray-800">{insight.headline}</p>
             <p className="mt-1 line-clamp-2 text-sm leading-6 text-gray-600">{insight.detail}</p>
           </div>
         )}
