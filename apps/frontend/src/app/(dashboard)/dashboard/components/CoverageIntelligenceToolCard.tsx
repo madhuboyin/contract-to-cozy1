@@ -184,7 +184,7 @@ export default function CoverageIntelligenceToolCard({
           </span>
         ) : (
           <div>
-            <p className="text-3xl font-semibold leading-tight tracking-tight text-gray-900">{insight.headline}</p>
+            <p className="text-2xl font-medium leading-tight tracking-tight text-gray-800">{insight.headline}</p>
             <p className="mt-1 line-clamp-2 text-sm leading-6 text-gray-600">{insight.detail}</p>
           </div>
         )}

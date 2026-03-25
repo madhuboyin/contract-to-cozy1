@@ -157,12 +157,12 @@ export default function RiskPremiumOptimizerToolCard({
           </span>
         ) : hasAnalysis && analysis ? (
           <div>
-            <p className="text-3xl font-semibold leading-tight tracking-tight text-gray-900">{savingsRange}</p>
+            <p className="text-2xl font-medium leading-tight tracking-tight text-gray-800">{savingsRange}</p>
             <p className="mt-1 text-sm text-gray-600">Potential annual savings range.</p>
           </div>
         ) : (
           <div>
-            <p className="text-lg font-semibold leading-tight tracking-tight text-gray-900">Run optimizer</p>
+            <p className="text-base font-medium leading-tight tracking-tight text-gray-800">Run optimizer</p>
             <p className="mt-1 text-sm text-gray-600">Get the highest-impact premium moves for this home.</p>
           </div>
         )}

@@ -185,7 +185,7 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
           hasPositiveSavings ? (
             <div>
               <div className="flex items-end gap-1.5">
-                <span className="text-3xl font-semibold leading-none tracking-tight text-gray-900">
+                <span className="text-2xl font-medium leading-[1.05] tracking-tight text-gray-800">
                   {money(monthlyPotential)}
                 </span>
                 <span className="mb-1 text-sm font-medium text-gray-500">/mo</span>
@@ -194,13 +194,13 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
             </div>
           ) : (
             <div>
-              <p className="text-lg font-semibold leading-tight tracking-tight text-gray-900">No savings identified</p>
+              <p className="text-base font-medium leading-tight tracking-tight text-gray-800">No savings identified</p>
               <p className="mt-1 text-sm text-gray-600">Refresh after adding current provider pricing.</p>
             </div>
           )
         ) : (
           <div>
-            <p className="text-lg font-semibold leading-tight tracking-tight text-gray-900">Add bill categories</p>
+            <p className="text-base font-medium leading-tight tracking-tight text-gray-800">Add bill categories</p>
             <p className="mt-1 text-sm text-gray-600">Connect one category to unlock comparisons.</p>
           </div>
         )}
