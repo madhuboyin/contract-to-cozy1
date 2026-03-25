@@ -1286,6 +1286,10 @@ All resolved routes have guidance context appended as query params: `?guidanceJo
 | Informational-only pages (no step completion) | 3 (coverage-intelligence, maintenance, recalls) |
 | Dead-end pages (zero guidance integration) | 7 (inspection-report, home-event-radar, insurance-trend, do-nothing, home-savings, capital-timeline, vault) |
 | Journey steps permanently stuck (frontend gaps) | 10 across 5 templates |
+| Steps with correct relevance and scope (Section 12) | 7 of 22 |
+| Steps with wrong tool or scope mismatch | 10 of 22 |
+| Missing steps across all journeys | 12 |
+| TOOL_DEFAULT_STEP_KEY cross-journey collisions | 4 |
 
 ---
 
@@ -1429,6 +1433,230 @@ The `book_service` step in most templates resolves to `providers` via `FALLBACK_
 ---
 
 *Section 11 generated from direct review of all 15 route-destination page files, `GuidanceInlinePanel`/`GuidanceWarningBanner` usage grep, guidance query param grep, and `useExecutionGuard` hook grep across the entire `apps/frontend/src/app/(dashboard)/` tree.*
+
+---
+
+## 12. Journey Template Step Relevance and routePath Fitness Audit
+
+This section reviews each `journeyTypeKey` at the semantic level: are the steps the right steps for the journey's goal, and does each `routePath` (or fallback) send the user to a tool that actually serves that specific step's purpose in that journey's context?
+
+**Assessment dimensions per step:**
+- **Step relevance** — Is this step logically appropriate for the journey's domain and goal?
+- **Tool fitness** — Does the tool behind the step actually perform the action the step label promises?
+- **routePath scope** — Is the destination page scoped to the right context (property-level vs. item-level vs. global)?
+- **Missing steps** — Are critical steps absent from the template?
+
+---
+
+### 12.1 Journey: `asset_lifecycle_resolution`
+
+**Purpose:** An inventory item (appliance or system) is at or past end-of-life, or is showing failure risk. Guide the homeowner from deciding what to do with the specific item through to booking a service.
+
+**Trigger families:** `lifecycle_end_or_past_life`, `maintenance_failure_risk`
+
+| # | stepKey | Tool | Step Relevance | Tool Fitness | routePath Scope | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | `repair_replace_decision` | replace-repair | ✅ The first and most important question for a failing asset | ✅ Tool is purpose-built for repair-vs-replace analysis | ✅ Item-scoped (`/items/:itemId/replace-repair`) | **CORRECT** |
+| 2 | `check_coverage` | coverage-intelligence | ✅ Checking warranty/insurance before committing to spend is correct | ⚠️ Tool is property-wide; does not filter to the specific item's warranty or applicable policy | ❌ Property-scoped tool with no item context — coverage review is unguided | **SCOPE MISMATCH** |
+| 3 | `validate_price` | service-price-radar | ✅ Market price validation before booking is correct | ⚠️ Tool is a general service price lookup; no item context passed, user must manually enter repair type | ❌ Property-scoped, no `itemId` — user lands on blank price radar with no context about what to price | **SCOPE MISMATCH** |
+| 4 | `prepare_negotiation` | negotiation-shield | ✅ Optional cost reduction step is appropriate | ⚠️ Same as above — no item/repair context | ❌ Property-scoped, no item anchor | **SCOPE MISMATCH (minor — optional)** |
+| 5 | `book_service` | booking | ✅ Final execution step | ⚠️ `routePath: '/dashboard/bookings'` goes to booking list, not a new-booking form | ❌ No item or service category context — user starts from a blank list with no pre-population | **CONTEXT LOST** |
+
+**Missing steps:**
+- **`estimate_cost_impact`** (true-cost or do-nothing-simulator): For a lifecycle decision, the user needs to understand the total cost of replacing now vs. continuing to repair. Neither `true-cost` nor `do-nothing-simulator` is in this journey, so there is no financial framing for the repair-vs-replace decision. The decision in step 1 is made without cost-of-delay context.
+- **`evaluate_funding`** (home-savings or capital-timeline): If replacement is expensive, the user has no guided pathway to explore funding options. The journey moves directly from negotiation to booking with no affordability consideration.
+
+---
+
+### 12.2 Journey: `coverage_gap_resolution`
+
+**Purpose:** A coverage gap or lapse has been detected. Guide the homeowner from understanding the gap through estimating the financial exposure, comparing options, and updating their policy/documents.
+
+**Trigger families:** `coverage_gap`, `coverage_lapse_detected`
+
+| # | stepKey | Tool | Step Relevance | Tool Fitness | routePath Scope | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | `check_coverage` | coverage-intelligence | ✅ Starting with a review of current coverage is correct | ✅ Tool is purpose-built for coverage review | ✅ Property-scoped (appropriate — gap may be property-wide) | **CORRECT** |
+| 2 | `estimate_exposure` | true-cost | ✅ Understanding the uncovered exposure in dollar terms is correct | ❌ **WRONG TOOL** — `true-cost` calculates property-wide total cost of ownership (depreciation, maintenance, etc.). It does NOT estimate uncovered exposure for a specific gap. A gap exposure estimator would need to know: what asset has the gap, what is the replacement/repair cost if not covered. The right tool for this step is `service-price-radar` (to estimate cost if out-of-pocket). | ❌ Property-wide tool, not gap-specific; if gap is for a specific asset there is no `itemId` context | **WRONG TOOL + SCOPE MISMATCH** |
+| 3 | `compare_coverage_options` | insurance-trend | ✅ Comparing policy/warranty options is a logical next step | ❌ **WRONG TOOL** — `insurance-trend` shows historical insurance cost trends (premium changes over time). It is a read-only analytical/visualization tool, not a comparison tool for selecting between coverage options. The step label promises "Compare policy and warranty options" but the tool cannot deliver this. There is no "select a new policy" or "compare options" functionality in this tool. | ❌ Property-scoped, historical view only | **WRONG TOOL** |
+| 4 | `update_policy_or_documents` | documents (vault) | ✅ Uploading new policy documents after updating coverage is a correct final step | ⚠️ Vault/documents tool may only store documents — there is no active "policy update" workflow. User is expected to complete the policy update off-platform and then upload proof. | ❌ `routePath: '/dashboard/vault'` is **broken** (R-1). The toolKey `documents` has no entry in `TOOL_DEFAULT_STEP_KEY`, so if this step is completed via the API without a stepKey, the backend cannot resolve it. | **BROKEN ROUTE + NO STEPKEY FALLBACK** |
+
+**Missing steps:**
+- **No re-verification step:** After updating coverage, there is no `check_coverage` re-run to confirm the gap is closed. The journey ends at document upload with no confirmation that the gap is actually resolved.
+- **No execution pathway for seeking new coverage:** The journey assumes the user will find a new insurer/warranty provider off-platform. There is no `route_specialist` or `book_service` step for connecting with an insurance advisor or warranty provider through the platform.
+
+---
+
+### 12.3 Journey: `recall_safety_resolution`
+
+**Purpose:** A safety recall has been detected for an appliance or product at the property. Guide the homeowner from acknowledging the alert through reviewing the remedy instructions and confirming resolution.
+
+**Trigger families:** `recall_detected`
+
+| # | stepKey | Tool | Step Relevance | Tool Fitness | routePath Scope | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | `safety_alert` | recalls | ✅ Acknowledging the safety alert is the correct first step | ✅ The recalls page is the right place to surface the alert | ⚠️ `routePath: '/dashboard/properties/:propertyId/recalls'` — property-level recall list. If the recall is for a specific inventory item (`inventoryItemId`), the page should deep-link to that specific item's recall, but there is no `itemId` in the route. | **SCOPE TOO BROAD** |
+| 2 | `review_remedy_instructions` | recalls | ✅ Reviewing how to fix the recall is correct | ⚠️ The same `recalls` tool/page is used for all 3 steps — there is no page differentiation between "acknowledge" (step 1), "review remedy" (step 2), and "confirm resolution" (step 3). The user lands on the identical page for all three steps with no guided flow. | ❌ No `routePath` — relies on fallback which also resolves to the same recalls page | **SAME TOOL ALL 3 STEPS — NO UX DIFFERENTIATION** |
+| 3 | `recall_resolution` | recalls | ✅ Confirming the recall is resolved is the correct final step | ⚠️ Same page as steps 1 and 2 | ❌ No `routePath`. Combined with `TOOL_DEFAULT_STEP_KEY['recalls'] = 'recall_resolution'`, the backend always defaults to completing step 3 when the recalls tool fires — steps 1 and 2 are never auto-completed. | **`TOOL_DEFAULT_STEP_KEY` SEMANTIC BUG** |
+
+**Missing steps:**
+- **`book_service` or `route_specialist`:** Many recalls require a technician visit (e.g., a manufacturer-authorized repair). There is no execution step in this journey to book a service visit. The journey ends at "confirm recall outcome" assuming resolution happens off-platform with no supported booking pathway.
+- **`check_coverage`:** Recall repairs are sometimes covered under manufacturer warranty or extended warranty. There is no step to check if the repair is covered before the homeowner pays out-of-pocket.
+
+---
+
+### 12.4 Journey: `weather_risk_resolution`
+
+**Purpose:** A freeze or severe weather risk has been detected. Guide the homeowner from reviewing the risk details through protecting exposed systems and scheduling urgent professional follow-up if needed.
+
+**Trigger families:** `freeze_risk` only
+
+| # | stepKey | Tool | Step Relevance | Tool Fitness | routePath Scope | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | `weather_safety_check` | home-event-radar | ✅ Reviewing weather risk details is a correct awareness step | ⚠️ `home-event-radar` covers ALL home events (market, local, weather). It is not a dedicated weather risk viewer. The event radar's signal filtering may not surface the specific freeze risk clearly. | ❌ Page immediately **redirects** to `/dashboard/home-event-radar?propertyId=...`, discarding all guidance query params. Step can never be completed via this route. | **REDIRECT DROPS PARAMS** |
+| 2 | `protect_exposed_systems` | maintenance | ✅ A maintenance checklist for weatherization is the correct response | ⚠️ The maintenance tool is a general property maintenance tracker, not a freeze-specific protection checklist. There is no pre-filtered "weather protection" view. | ⚠️ `routePath: '/dashboard/maintenance?propertyId=:propertyId'` — inconsistent format (query param instead of path param). No `maintenance` toolKey in `FALLBACK_TOOL_ROUTE`, so if resolution fails there is no fallback. Step has zero guidance integration (informational panel only). | **FORMAT INCONSISTENCY + NO FALLBACK + NO STEP COMPLETION** |
+| 3 | `schedule_weather_followup` | booking | ⚠️ Scheduling follow-up is relevant for serious freeze risk but `isRequired: false` treats it as optional | ⚠️ `routePath: '/dashboard/providers?category=PLUMBING'` hardcodes PLUMBING. Freeze risk can require HVAC, ROOFING, ELECTRICAL, or GENERAL providers — not only plumbers. | ❌ Hardcoded `category=PLUMBING` — wrong category for non-pipe freeze risks. No `propertyId` in the route (providers page won't know which property). | **HARDCODED CATEGORY + MISSING propertyId** |
+
+**Missing steps:**
+- **`check_coverage`:** Freeze damage events often trigger homeowner's insurance claims. There is no step to check whether freeze-related damage is covered before the homeowner spends out-of-pocket.
+- **`estimate_damage_cost`:** No financial impact step to assess potential damage cost if systems are not protected.
+- **Narrow `signalIntentFamilies`:** Only `freeze_risk` is handled. Hurricane, flood, high winds, extreme heat, and wildfire risk all fall through to `DEFAULT_TEMPLATE` (a single `home-event-radar` review step with no guidance). These weather events need their own template or `weather_risk_resolution` needs to expand its families.
+
+---
+
+### 12.5 Journey: `inspection_followup_resolution`
+
+**Purpose:** A property inspection has found issues requiring follow-up. Guide the homeowner from assessing the urgency of inspection findings through estimating repair cost and booking the right specialist.
+
+**Trigger families:** `inspection_followup_needed`
+
+| # | stepKey | Tool | Step Relevance | Tool Fitness | routePath Scope | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | `assess_urgency` | inspection-report | ✅ Reviewing the inspection report to assess severity is correct | ✅ The inspection-report tool is purpose-built for this | ❌ `routePath: '/dashboard/inspection-report'` is **not property-scoped** — no `:propertyId` in the path. Users with multiple properties will land on a global/ambiguous report page. All other tool routes are property-scoped. No guidance integration on this page (zero params, no completion). | **WRONG SCOPE + NO GUIDANCE INTEGRATION** |
+| 2 | `estimate_repair_cost` | service-price-radar | ✅ Getting a cost estimate before booking is correct | ⚠️ Service-price-radar is a general market price tool. It has no connection to the inspection report findings — the user must manually enter what to price rather than having inspection items pre-loaded. | ⚠️ No `routePath` in template — resolved via `FALLBACK_TOOL_ROUTE['service-price-radar']` → property-scoped URL. Inspection findings are not passed as context. | **CONTEXT DISCONNECT — INSPECTION FINDINGS NOT PASSED** |
+| 3 | `route_specialist` | booking | ✅ Booking the right specialist after inspection is correct | ⚠️ `routePath: '/dashboard/bookings'` routes to the bookings list, not to a new-booking form. The trade category identified in the inspection (structural, roofing, electrical, plumbing) is not passed to the booking page. | ❌ Generic booking list with no inspection context, no pre-selected trade category. | **CONTEXT LOST** |
+| 4 | `track_resolution` | home-event-radar | ⚠️ Tracking resolution is a valid concept for a TRACKING stage step | ❌ **WRONG TOOL** — `home-event-radar` tracks external property events (local updates, weather events, market signals). It cannot track the completion of an internally-booked inspection repair job. There is no internal "job status" or "resolution tracker" capability in this tool. | ❌ No `routePath` — resolved via fallback to home-event-radar which redirects and drops guidance params | **WRONG TOOL + FALLBACK ALSO BROKEN** |
+
+**Missing steps:**
+- **`repair_replace_decision`:** Inspection may uncover a failing system that is past its useful life. The inspection journey jumps directly from "assess urgency" to "estimate repair cost" without asking whether the system should be repaired or replaced — which is the entire premise of `asset_lifecycle_resolution`. If the inspection finds end-of-life equipment, this journey should either fork into the lifecycle template or include a lifecycle decision step.
+- **`check_coverage`:** Inspection findings may reveal pre-existing damage that should be covered by insurance or home warranty. There is no coverage check in this journey.
+- **`prepare_negotiation`:** Unlike `asset_lifecycle_resolution`, this journey skips the negotiation step entirely — even though getting a service estimate and then booking is an identical flow.
+
+---
+
+### 12.6 Journey: `financial_exposure_resolution`
+
+**Purpose:** A financial risk has been identified — deferred maintenance is creating cost-of-inaction exposure, or there is an unplanned out-of-pocket financial liability. Guide the homeowner from quantifying the cost through comparing action options, evaluating funding, and planning a capital expenditure timeline.
+
+**Trigger families:** `financial_exposure`, `cost_of_inaction_risk`
+
+| # | stepKey | Tool | Step Relevance | Tool Fitness | routePath Scope | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | `estimate_out_of_pocket_cost` | true-cost | ✅ Quantifying the financial exposure is the correct first step | ✅ True-cost is an appropriate property-level cost-of-ownership tool | ❌ No `routePath` in template — resolved via `FALLBACK_TOOL_ROUTE['true-cost']` → property-scoped. If exposure is tied to a specific asset, there is no item context. Zero guidance integration on the true-cost page (missing guidanceSignalIntentFamily param). | **NO routePath + PARTIAL FRONTEND INTEGRATION** |
+| 2 | `compare_action_options` | do-nothing-simulator | ✅ Highly relevant for `cost_of_inaction_risk` — directly compares acting now vs. deferring | ✅ Tool is purpose-built for action vs. inaction comparison | ❌ No `routePath` in template — fallback resolves correctly. But the do-nothing-simulator page has zero guidance integration — no params read, no completion call, step never advances. | **NO routePath + ZERO FRONTEND INTEGRATION** |
+| 3 | `evaluate_savings_funding` | home-savings | ⚠️ Partially relevant — if `home-savings` surfaces savings opportunities (rebates, incentives, energy savings), it is only loosely connected to "evaluating funding options" for a one-time capital expense. The step label implies funding/financing options but the tool provides savings optimization. | ⚠️ Tool scope mismatch — `home-savings` is about ongoing savings and efficiency, not about funding a specific upcoming expense | ❌ No `routePath` — fallback resolves. Page has zero guidance integration. | **TOOL FITNESS MISMATCH + NO FRONTEND INTEGRATION** |
+| 4 | `route_financial_plan` | capital-timeline | ✅ Routing to a capital expenditure timeline is a logical final tracking step | ✅ Tool is appropriate for long-term financial planning | ❌ No `routePath` — fallback resolves. Page has zero guidance integration. `isRequired: false` (ALLOWED skip). | **NO routePath + ZERO FRONTEND INTEGRATION** |
+
+**Missing steps:**
+- **`check_coverage`:** Financial exposure is often reduceable by insurance or warranty. There is no step to check if any part of the exposure is covered before committing to full out-of-pocket cost. This is a significant gap — the entire cost framing may be wrong if coverage applies.
+- **`book_service` or `route_specialist`:** The journey has no execution step. After quantifying cost, comparing options, and planning the timeline, the user has no guided path to actually DO anything — book a service, contact a lender, schedule a fix. The journey ends at planning with no actionable outcome.
+- **`cost_of_inaction_risk` vs `financial_exposure` differentiation:** Both trigger the same template with the same step order. For `cost_of_inaction_risk`, the `do-nothing-simulator` (step 2) is the most important step and should arguably be step 1. For `financial_exposure`, `true-cost` (step 1) is primary. There is no branching based on the signal family that triggered the journey.
+
+---
+
+### 12.7 DEFAULT Journey: `generic_guidance_resolution`
+
+**Purpose:** Catch-all for signals that don't map to a domain-specific template.
+
+**Trigger families:** `generic_actionable_signal` (and any unmapped family via fallback)
+
+| # | stepKey | Tool | Step Relevance | Tool Fitness | routePath Scope | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | `review_signal` | home-event-radar | ⚠️ "Review guidance signal" is intentionally generic | ❌ **WRONG DEFAULT TOOL** — `home-event-radar` is a weather/market/local-event tracker. Using it as the catch-all for all unmapped guidance signals means that lifecycle signals, financial signals, and recall signals that somehow miss their template are routed to an event tracking tool that has no context for them. | ❌ No `routePath` — fallback resolves to home-event-radar which **redirects and drops guidance params** | **WRONG DEFAULT TOOL + FALLBACK ALSO BROKEN** |
+
+---
+
+### 12.8 `TOOL_DEFAULT_STEP_KEY` Cross-Journey Collision Analysis
+
+`TOOL_DEFAULT_STEP_KEY` is a **global flat map** (`toolKey → stepKey`) used by `recordToolCompletion` when no `stepKey` is provided in the request. It is not journey-aware. This creates collisions when the same tool appears in multiple journeys under different stepKeys.
+
+| Tool | Default stepKey mapped | Journey that uses it | Conflict: another journey that uses the same tool under a different stepKey |
+|---|---|---|---|
+| `true-cost` | `estimate_out_of_pocket_cost` | `financial_exposure_resolution` (step 1) | `coverage_gap_resolution` uses `true-cost` for step 2 (`estimate_exposure`). If a `coverage_gap` journey calls `recordToolCompletion` for `true-cost` without a stepKey, the backend tries to complete `estimate_out_of_pocket_cost` — a step that does **not exist** in the coverage_gap template. Journey breaks silently. |
+| `service-price-radar` | `validate_price` | `asset_lifecycle_resolution` (step 3) | `inspection_followup_resolution` uses `service-price-radar` for step 2 (`estimate_repair_cost`). Cross-journey completion without stepKey fails to advance the inspection step. |
+| `home-event-radar` | `weather_safety_check` | `weather_risk_resolution` (step 1) | `inspection_followup_resolution` uses `home-event-radar` for step 4 (`track_resolution`). Cross-journey completion without stepKey tries to advance a step that doesn't exist in the inspection template. |
+| `booking` | `book_service` | `asset_lifecycle_resolution` (step 5) | `inspection_followup_resolution` uses `booking` for step 3 (`route_specialist`). If called without stepKey from the inspection journey, the backend tries to advance `book_service` which doesn't exist in that template. |
+| `coverage-intelligence` | `check_coverage` | `asset_lifecycle_resolution` (step 2) AND `coverage_gap_resolution` (step 1) | Both journeys use the same `stepKey` (`check_coverage`) for `coverage-intelligence`. **No collision** — stepKey is the same in both. This is the one safe case. |
+| `recalls` | `recall_resolution` | `recall_safety_resolution` (step 3) | Same journey — but defaults directly to step 3, bypassing steps 1 and 2 (`safety_alert`, `review_remedy_instructions`). **Semantic bug within a single journey** (see R-11). |
+
+**Impact:** 4 of 11 entries in `TOOL_DEFAULT_STEP_KEY` will produce silent journey breakage when tool-completion is fired from the wrong journey without an explicit `stepKey`. The backend's `recordToolCompletion` would fail to find the step in the journey and either error or no-op.
+
+---
+
+### 12.9 Consolidated Gap Summary
+
+| ID | Severity | Journey | Step | Gap Type | Description |
+|---|---|---|---|---|---|
+| J1-1 | HIGH | asset_lifecycle | `check_coverage` (step 2) | Scope mismatch | coverage-intelligence is property-wide — no item context for which asset needs coverage checked |
+| J1-2 | MEDIUM | asset_lifecycle | `validate_price` (step 3) | Scope mismatch | service-price-radar lands blank — no item or repair type pre-loaded from the lifecycle decision |
+| J1-3 | MEDIUM | asset_lifecycle | `prepare_negotiation` (step 4) | Scope mismatch | negotiation-shield has no item context |
+| J1-4 | MEDIUM | asset_lifecycle | `book_service` (step 5) | Context lost | Routes to booking list, not a pre-populated booking for the specific item and repair type |
+| J1-5 | HIGH | asset_lifecycle | — | Missing step | No `true-cost` / `do-nothing-simulator` step — lifecycle decision made without cost-of-delay context |
+| J1-6 | MEDIUM | asset_lifecycle | — | Missing step | No `home-savings` / `capital-timeline` step for funding if replacement is expensive |
+| J2-1 | CRITICAL | coverage_gap | `estimate_exposure` (step 2) | Wrong tool | `true-cost` is a property-wide cost-of-ownership tool, not a coverage exposure estimator. Should be `service-price-radar` to estimate out-of-pocket cost if gap is unresolved. |
+| J2-2 | CRITICAL | coverage_gap | `compare_coverage_options` (step 3) | Wrong tool | `insurance-trend` shows historical premium trends — it cannot compare coverage options. Step label is undeliverable by this tool. |
+| J2-3 | HIGH | coverage_gap | `update_policy_or_documents` (step 4) | Broken route + no fallback stepKey | `routePath: '/dashboard/vault'` is broken (R-1). `toolKey: 'documents'` absent from `TOOL_DEFAULT_STEP_KEY` — completion API fails without explicit stepKey. |
+| J2-4 | MEDIUM | coverage_gap | — | Missing step | No re-verification step to confirm gap is closed after policy update |
+| J2-5 | MEDIUM | coverage_gap | — | Missing step | No execution step to connect with an insurance advisor or warranty provider |
+| J3-1 | HIGH | recall_safety | steps 1, 2, 3 | No UX differentiation | All 3 steps use the same `recalls` page/tool — no guided flow through acknowledge → remedy review → resolution confirmation |
+| J3-2 | HIGH | recall_safety | step 1 | Scope too broad | `recalls` page is property-level; no `itemId` to filter to the specific recalled appliance |
+| J3-3 | CRITICAL | recall_safety | — | Missing step | No `book_service` or `route_specialist` step — if recall requires a technician visit, there is no execution pathway |
+| J3-4 | MEDIUM | recall_safety | — | Missing step | No `check_coverage` step — recall repairs may be covered under manufacturer warranty or extended warranty |
+| J4-1 | CRITICAL | weather_risk | `weather_safety_check` (step 1) | Redirect drops params | `home-event-radar` page redirects and discards all guidance query params — step can never be completed |
+| J4-2 | HIGH | weather_risk | `protect_exposed_systems` (step 2) | Wrong format + no fallback | `routePath` uses query-param format; `maintenance` toolKey absent from `FALLBACK_TOOL_ROUTE`; page has no guidance integration |
+| J4-3 | HIGH | weather_risk | `schedule_weather_followup` (step 3) | Hardcoded category + missing propertyId | `category=PLUMBING` hardcoded — wrong for HVAC, roofing, electrical, general freeze risks. No `propertyId` in route. |
+| J4-4 | HIGH | weather_risk | — | Missing step | No `check_coverage` for freeze damage insurance claims |
+| J4-5 | HIGH | weather_risk | — | Narrow trigger scope | Only `freeze_risk` handled — all other severe weather events fall to DEFAULT_TEMPLATE (single broken step) |
+| J5-1 | HIGH | inspection_followup | `assess_urgency` (step 1) | Wrong scope | `routePath: '/dashboard/inspection-report'` not property-scoped; page has zero guidance integration |
+| J5-2 | MEDIUM | inspection_followup | `estimate_repair_cost` (step 2) | Context disconnect | No `routePath`; service-price-radar lands blank — inspection findings not passed as context |
+| J5-3 | MEDIUM | inspection_followup | `route_specialist` (step 3) | Context lost | Routes to booking list with no inspection trade category pre-selected |
+| J5-4 | HIGH | inspection_followup | `track_resolution` (step 4) | Wrong tool | `home-event-radar` tracks external events — cannot track internal repair resolution. Fallback also broken (redirects). |
+| J5-5 | HIGH | inspection_followup | — | Missing step | No `repair_replace_decision` — inspection may reveal end-of-life equipment needing lifecycle decision, not just a repair cost estimate |
+| J5-6 | MEDIUM | inspection_followup | — | Missing step | No `check_coverage` for inspection-identified items that may be covered by insurance or home warranty |
+| J5-7 | MEDIUM | inspection_followup | — | Missing step | No `prepare_negotiation` step — unlike asset_lifecycle, the negotiation step is absent despite identical booking flow |
+| J6-1 | HIGH | financial_exposure | steps 1–4 | No routePath anywhere | All 4 steps rely on fallback. Every page with a fallback route has zero guidance integration — no params, no completion calls. |
+| J6-2 | MEDIUM | financial_exposure | `evaluate_savings_funding` (step 3) | Tool fitness mismatch | `home-savings` is about ongoing savings/efficiency optimization, not about funding a specific capital expense |
+| J6-3 | HIGH | financial_exposure | — | Missing step | No `check_coverage` — financial exposure may be partially or fully coverable by insurance or warranty |
+| J6-4 | CRITICAL | financial_exposure | — | Missing step | No execution step — journey ends at capital planning with no pathway to booking a service or taking action |
+| J6-5 | MEDIUM | financial_exposure | — | Signal family mismatch | `financial_exposure` and `cost_of_inaction_risk` share a template with a fixed step order. `cost_of_inaction_risk` should prioritize `do-nothing-simulator` (currently step 2) as its canonical first step. |
+| J7-1 | HIGH | DEFAULT | `review_signal` (step 1) | Wrong default tool | `home-event-radar` is not an appropriate catch-all for unmapped guidance signals — it is a weather/event tracker |
+| J7-2 | HIGH | DEFAULT | `review_signal` (step 1) | Fallback broken | No `routePath`; fallback resolves to home-event-radar which redirects and drops params |
+| TK-1 | HIGH | cross-journey | — | `TOOL_DEFAULT_STEP_KEY` collision | `true-cost` default `estimate_out_of_pocket_cost` conflicts with `coverage_gap_resolution`'s `estimate_exposure` |
+| TK-2 | HIGH | cross-journey | — | `TOOL_DEFAULT_STEP_KEY` collision | `service-price-radar` default `validate_price` conflicts with `inspection_followup`'s `estimate_repair_cost` |
+| TK-3 | HIGH | cross-journey | — | `TOOL_DEFAULT_STEP_KEY` collision | `home-event-radar` default `weather_safety_check` conflicts with `inspection_followup`'s `track_resolution` |
+| TK-4 | HIGH | cross-journey | — | `TOOL_DEFAULT_STEP_KEY` collision | `booking` default `book_service` conflicts with `inspection_followup`'s `route_specialist` |
+
+---
+
+### 12.10 Summary Statistics for Section 12
+
+| Category | Count |
+|---|---|
+| Journeys reviewed | 7 (6 domain + 1 default) |
+| Total steps reviewed | 22 |
+| Steps with correct relevance and scope | 7 |
+| Steps with scope mismatch (right concept, wrong context) | 6 |
+| Steps with wrong tool (tool cannot deliver what the step label promises) | 4 |
+| Steps with broken/missing routePath impacting delivery | 8 |
+| Missing steps identified across all journeys | 12 |
+| CRITICAL gaps | 5 (J2-1, J2-2, J3-3, J4-1, J6-4) |
+| HIGH gaps | 18 |
+| MEDIUM gaps | 13 |
+| TOOL_DEFAULT_STEP_KEY collisions | 4 |
+
+---
+
+*Section 12 generated from direct review of `guidanceTemplateRegistry.ts`, all 15 route-destination pages, `guidanceDisplay.ts` (`FALLBACK_TOOL_ROUTE`), and `TOOL_DEFAULT_STEP_KEY` cross-reference analysis.*
 
 ---
 
