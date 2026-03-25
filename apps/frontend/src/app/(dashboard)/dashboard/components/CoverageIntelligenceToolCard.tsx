@@ -18,7 +18,7 @@ const CARD_BASE =
   'flex self-start flex-col gap-2.5 rounded-2xl border border-gray-200/85 bg-white p-3.5 shadow-sm sm:p-4';
 const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/60';
 const HEADER_ICON = 'h-3.5 w-3.5 text-slate-600';
-const TITLE_CLASS = 'text-sm font-semibold leading-none text-gray-900';
+const TITLE_CLASS = 'text-[13px] font-semibold leading-tight text-gray-900';
 const BADGE_BASE =
   'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none';
 const VALUE_ZONE = 'mt-1 rounded-lg border border-gray-200/70 bg-gray-50/70 px-2.5 py-2';
@@ -163,11 +163,13 @@ export default function CoverageIntelligenceToolCard({
   return (
     <div className={CARD_BASE}>
       <div className="flex items-center justify-between gap-2.5">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <div className={HEADER_ICON_WRAP}>
             <ShieldCheck className={HEADER_ICON} />
           </div>
-          <h3 className={TITLE_CLASS}>Coverage Intelligence</h3>
+          <h3 className={cn(TITLE_CLASS, 'truncate whitespace-nowrap')} title="Coverage Intelligence">
+            Coverage Intelligence
+          </h3>
         </div>
         <span className={cn(BADGE_BASE, status.className)}>{status.label}</span>
       </div>

@@ -18,7 +18,7 @@ const CARD_BASE =
   'flex self-start flex-col gap-2.5 rounded-2xl border border-gray-200/85 bg-white p-3.5 shadow-sm sm:p-4';
 const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/60';
 const HEADER_ICON = 'h-3.5 w-3.5 text-slate-600';
-const TITLE_CLASS = 'text-sm font-semibold leading-none text-gray-900';
+const TITLE_CLASS = 'text-[13px] font-semibold leading-tight text-gray-900';
 const BADGE_BASE =
   'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none';
 const VALUE_ZONE = 'mt-1 rounded-lg border border-gray-200/70 bg-gray-50/70 px-2.5 py-2';
