@@ -1033,7 +1033,232 @@ The following tools are referenced in templates and `TOOL_DEFAULT_STEP_KEY` but 
 
 ---
 
-## 9. Summary Statistics
+## 9. Template Registry Deep Review — Step Keys & Route Validation
+
+**Source file:** `apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts`
+**Frontend resolver:** `apps/frontend/src/features/guidance/utils/guidanceDisplay.ts` → `resolveGuidanceStepHref()`
+**Review date:** 2026-03-25
+
+### 9.1 How `routePath` is resolved at runtime
+
+`resolveGuidanceStepHref()` applies this priority chain:
+
+1. Use `step.routePath` if present → replace `:propertyId`, `:itemId`, `:inventoryItemId`, `:homeAssetId` params
+2. Fall back to `FALLBACK_TOOL_ROUTE[step.toolKey]` if `routePath` is absent
+3. After substitution, call `stripUnresolvedSegments()` — if any `:param` placeholders remain unresolved (e.g., `:itemId` with no inventoryItemId on the journey), returns `null` (no href generated)
+4. Special override: if `step.toolKey === 'replace-repair'` AND `journey.inventoryItemId` is set, bypasses both routePath and fallback and builds the path directly as `/dashboard/properties/{propertyId}/inventory/items/{inventoryItemId}/replace-repair`
+5. Final fallback: if route still null, try `FALLBACK_TOOL_ROUTE[next.recommendedToolKey]`
+
+All resolved routes have guidance context appended as query params: `?guidanceJourneyId=...&guidanceStepKey=...&guidanceSignalIntentFamily=...`
+
+**`FALLBACK_TOOL_ROUTE` map (from `guidanceDisplay.ts`):**
+
+| toolKey | Fallback route |
+|---|---|
+| `replace-repair` | `/dashboard/replace-repair` ← global page (different from template's item-scoped routePath) |
+| `coverage-intelligence` | `/dashboard/properties/:propertyId/tools/coverage-intelligence` |
+| `service-price-radar` | `/dashboard/properties/:propertyId/tools/service-price-radar` |
+| `negotiation-shield` | `/dashboard/properties/:propertyId/tools/negotiation-shield` |
+| `inspection-report` | `/dashboard/inspection-report` |
+| `booking` | `/dashboard/bookings?propertyId=:propertyId` |
+| `recalls` | `/dashboard/properties/:propertyId/recalls` |
+| `documents` | `/dashboard/vault` ← **BROKEN** (vault is at root `/vault`, not `/dashboard/vault`) |
+| `home-event-radar` | `/dashboard/properties/:propertyId/tools/home-event-radar` |
+| `do-nothing-simulator` | `/dashboard/properties/:propertyId/tools/do-nothing` |
+| `home-savings` | `/dashboard/properties/:propertyId/tools/home-savings` |
+| `capital-timeline` | `/dashboard/properties/:propertyId/tools/capital-timeline` |
+| `true-cost` | `/dashboard/properties/:propertyId/tools/true-cost` |
+| `insurance-trend` | `/dashboard/properties/:propertyId/tools/insurance-trend` |
+| `maintenance` | **NOT IN MAP** — no fallback |
+
+---
+
+### 9.2 Step-by-Step Validation — All 22 Steps
+
+**Legend:** ✅ Valid | ⚠️ Issue | ❌ Broken
+
+#### Template 1 — `asset_lifecycle_resolution`
+
+| # | stepKey | stepType | decisionStage | isRequired | skipPolicy | toolKey | flowKey | routePath | Route exists? | Assessment |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `repair_replace_decision` | DECISION | DECISION | true | DISALLOWED | `replace-repair` | `replace-repair-analysis` | `/dashboard/properties/:propertyId/inventory/items/:itemId/replace-repair` | ✅ | ⚠️ Requires `:itemId` (from `journey.inventoryItemId`). If null, `stripUnresolvedSegments` returns null; special-case override builds item-scoped path when `inventoryItemId` is set, BUT if `inventoryItemId` is null the override doesn't fire and fallback hits `FALLBACK_TOOL_ROUTE['replace-repair']` = `/dashboard/replace-repair` (global page — different tool context). |
+| 2 | `check_coverage` | VALIDATION | VALIDATION | true | DISALLOWED | `coverage-intelligence` | `coverage-analysis` | `/dashboard/properties/:propertyId/tools/coverage-intelligence` | ✅ | ✅ Valid. |
+| 3 | `validate_price` | VALIDATION | VALIDATION | true | DISALLOWED | `service-price-radar` | `service-price-radar` | `/dashboard/properties/:propertyId/tools/service-price-radar` | ✅ | ✅ Valid. |
+| 4 | `prepare_negotiation` | VALIDATION | VALIDATION | false | ALLOWED | `negotiation-shield` | `negotiation-shield` | `/dashboard/properties/:propertyId/tools/negotiation-shield` | ✅ | ✅ Valid. |
+| 5 | `book_service` | EXECUTION | EXECUTION | true | DISALLOWED | `booking` | `booking` | `/dashboard/bookings` | ✅ | ⚠️ Global bookings list — no property context in path. `FALLBACK_TOOL_ROUTE['booking']` = `/dashboard/bookings?propertyId=:propertyId` is more contextual than the template's own routePath. Template routePath should be updated to match fallback. |
+
+**Template 1 issues: 2 (steps 1, 5)**
+
+---
+
+#### Template 2 — `coverage_gap_resolution`
+
+| # | stepKey | stepType | decisionStage | isRequired | skipPolicy | toolKey | flowKey | routePath | Route exists? | Assessment |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `check_coverage` | DIAGNOSIS | DIAGNOSIS | true | DISALLOWED | `coverage-intelligence` | `coverage-analysis` | `/dashboard/properties/:propertyId/tools/coverage-intelligence` | ✅ | ✅ Valid. |
+| 2 | `estimate_exposure` | DECISION | DECISION | true | DISCOURAGED | `true-cost` | `true-cost-ownership` | `/dashboard/properties/:propertyId/tools/true-cost` | ✅ | ✅ Valid. `flowKey` (`true-cost-ownership`) differs from `toolKey` (`true-cost`) — minor inconsistency but `flowKey` is not used for routing. |
+| 3 | `compare_coverage_options` | DECISION | DECISION | true | DISCOURAGED | `insurance-trend` | `insurance-cost-trend` | `/dashboard/properties/:propertyId/tools/insurance-trend` | ✅ | ✅ Valid. `flowKey` (`insurance-cost-trend`) differs from `toolKey` (`insurance-trend`). |
+| 4 | `update_policy_or_documents` | EXECUTION | EXECUTION | true | DISALLOWED | `documents` | `vault` | `/dashboard/vault` | ❌ **DOES NOT EXIST** | ❌ **BROKEN.** Vault lives at `/vault` (root-level route) and `/vault/[propertyId]`, not under `/dashboard/`. Both the template `routePath` and `FALLBACK_TOOL_ROUTE['documents']` point to `/dashboard/vault` which does not exist. User receives a 404. No `:propertyId` in either path. Correct path should be `/vault/:propertyId` or `/vault`. |
+
+**Template 2 issues: 1 broken (step 4), 2 flowKey inconsistencies (steps 2, 3)**
+
+---
+
+#### Template 3 — `recall_safety_resolution`
+
+| # | stepKey | stepType | decisionStage | isRequired | skipPolicy | toolKey | flowKey | routePath | Route exists? | Assessment |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `safety_alert` | AWARENESS | AWARENESS | true | DISALLOWED | `recalls` | `recall-alert` | `/dashboard/properties/:propertyId/recalls` | ✅ | ✅ Valid. |
+| 2 | `review_remedy_instructions` | DIAGNOSIS | DIAGNOSIS | true | DISALLOWED | `recalls` | `recall-remedy` | **MISSING** | — | ⚠️ No `routePath`. Falls back to `FALLBACK_TOOL_ROUTE['recalls']` = `/dashboard/properties/:propertyId/recalls` — **same page as step 1**. No distinct UI destination for "review remedy instructions". The `flowKey: 'recall-remedy'` implies a sub-view exists but there is no routing path to differentiate it. |
+| 3 | `recall_resolution` | EXECUTION | EXECUTION | true | DISALLOWED | `recalls` | `recall-resolution` | **MISSING** | — | ⚠️ No `routePath`. Same fallback as steps 1 and 2 — all three recall steps route to the identical recalls list page. The `flowKey: 'recall-resolution'` implies a confirmation view but has no route. |
+
+**Template 3 issues: 2 missing routePaths (steps 2, 3) — all 3 steps resolve to the same page**
+
+---
+
+#### Template 4 — `weather_risk_resolution`
+
+| # | stepKey | stepType | decisionStage | isRequired | skipPolicy | toolKey | flowKey | routePath | Route exists? | Assessment |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `weather_safety_check` | AWARENESS | AWARENESS | true | DISALLOWED | `home-event-radar` | `home-event-radar` | `/dashboard/properties/:propertyId/tools/home-event-radar` | ✅ | ✅ Valid. |
+| 2 | `protect_exposed_systems` | DIAGNOSIS | DIAGNOSIS | true | DISCOURAGED | `maintenance` | `maintenance-weather-checklist` | `/dashboard/maintenance?propertyId=:propertyId` | ✅ (`/dashboard/maintenance` exists) | ⚠️ **Inconsistent format.** All other routes embed `:propertyId` in the URL path segment; this step uses a query param (`?propertyId=:propertyId`). Whether the maintenance page reads and respects this query param is unverified. Additionally, `FALLBACK_TOOL_ROUTE['maintenance']` does **not exist** — if this step ever loses its `routePath`, there is no fallback and `resolveGuidanceStepHref` returns `null`. |
+| 3 | `schedule_weather_followup` | EXECUTION | EXECUTION | false | ALLOWED | `booking` | `booking` | `/dashboard/providers?category=PLUMBING` | ✅ (`/dashboard/providers` exists) | ⚠️ **Hardcoded category.** `PLUMBING` is hardcoded regardless of the actual weather event type (freeze risk could require electrical, roofing, HVAC, etc.). No `:propertyId` in path at all — no property context. `FALLBACK_TOOL_ROUTE['booking']` = `/dashboard/bookings?propertyId=:propertyId` would be more appropriate and contextual. |
+
+**Template 4 issues: 2 (steps 2, 3)**
+
+---
+
+#### Template 5 — `inspection_followup_resolution`
+
+| # | stepKey | stepType | decisionStage | isRequired | skipPolicy | toolKey | flowKey | routePath | Route exists? | Assessment |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `assess_urgency` | DIAGNOSIS | DIAGNOSIS | true | DISALLOWED | `inspection-report` | `inspection-report-analysis` | `/dashboard/inspection-report` | ✅ | ⚠️ **Missing property context.** This is the global inspection report page — not property-scoped. All other first steps use `/dashboard/properties/:propertyId/tools/...` or `/dashboard/properties/:propertyId/...`. The inspection-report page at `/dashboard/inspection-report` is the generic top-level page. The user is not landed in the context of their specific property's inspection report. `FALLBACK_TOOL_ROUTE['inspection-report']` also uses `/dashboard/inspection-report` (same global path). |
+| 2 | `estimate_repair_cost` | DECISION | DECISION | true | DISCOURAGED | `service-price-radar` | `service-price-radar` | **MISSING** | — | ⚠️ No `routePath`. Falls back to `FALLBACK_TOOL_ROUTE['service-price-radar']` = `/dashboard/properties/:propertyId/tools/service-price-radar` ✅ — valid fallback. Note: `TOOL_DEFAULT_STEP_KEY['service-price-radar'] = 'validate_price'` which does not exist in this template — cross-journey step resolution falls to `currentStep` by accident. |
+| 3 | `route_specialist` | EXECUTION | EXECUTION | true | DISALLOWED | `booking` | `booking` | `/dashboard/bookings` | ✅ | ⚠️ Global bookings list, no property context (same issue as `book_service` in template 1). `FALLBACK_TOOL_ROUTE['booking']` = `/dashboard/bookings?propertyId=:propertyId` is better. `TOOL_DEFAULT_STEP_KEY['booking'] = 'book_service'` — `book_service` does not exist in this template; falls back to `currentStep` which is `route_specialist`. Works by coincidence. |
+| 4 | `track_resolution` | TRACKING | TRACKING | true | ALLOWED | `home-event-radar` | `home-event-radar` | **MISSING** | — | ⚠️ No `routePath`. Falls back to `FALLBACK_TOOL_ROUTE['home-event-radar']` = `/dashboard/properties/:propertyId/tools/home-event-radar` ✅ — valid fallback. But see [MED-8] — this step's `executionReadiness: TRACKING_ONLY` causes the journey to be suppressed from the surface list once it becomes the current step. |
+
+**Template 5 issues: 3 (steps 1, 3 routing; steps 2, 4 missing routePath; TOOL_DEFAULT_STEP_KEY cross-journey mismatches for steps 2, 3, 4)**
+
+---
+
+#### Template 6 — `financial_exposure_resolution`
+
+| # | stepKey | stepType | decisionStage | isRequired | skipPolicy | toolKey | flowKey | routePath | Route exists? | Assessment |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `estimate_out_of_pocket_cost` | DIAGNOSIS | DIAGNOSIS | true | DISCOURAGED | `true-cost` | `true-cost-ownership` | **MISSING** | — | ⚠️ No `routePath`. Falls back to `FALLBACK_TOOL_ROUTE['true-cost']` = `/dashboard/properties/:propertyId/tools/true-cost` ✅ — valid fallback. `TOOL_DEFAULT_STEP_KEY['true-cost'] = 'estimate_out_of_pocket_cost'` matches this template ✅. In `coverage_gap_resolution`, true-cost maps to `estimate_exposure` — mismatch resolved by currentStep fallback. |
+| 2 | `compare_action_options` | DECISION | DECISION | true | DISCOURAGED | `do-nothing-simulator` | `do-nothing-simulator` | **MISSING** | — | ⚠️ No `routePath`. Falls back to `FALLBACK_TOOL_ROUTE['do-nothing-simulator']` = `/dashboard/properties/:propertyId/tools/do-nothing` ✅ (`tools/do-nothing` directory exists). Note: `toolKey` is `do-nothing-simulator` but the actual route segment is `do-nothing` — the inconsistency is absorbed by `FALLBACK_TOOL_ROUTE`. |
+| 3 | `evaluate_savings_funding` | DECISION | DECISION | true | DISCOURAGED | `home-savings` | `home-savings` | **MISSING** | — | ⚠️ No `routePath`. Falls back to `FALLBACK_TOOL_ROUTE['home-savings']` = `/dashboard/properties/:propertyId/tools/home-savings` ✅ — valid fallback. |
+| 4 | `route_financial_plan` | TRACKING | TRACKING | false | ALLOWED | `capital-timeline` | `home-capital-timeline` | **MISSING** | — | ⚠️ No `routePath`. Falls back to `FALLBACK_TOOL_ROUTE['capital-timeline']` = `/dashboard/properties/:propertyId/tools/capital-timeline` ✅ — valid fallback. `flowKey` (`home-capital-timeline`) differs from `toolKey` (`capital-timeline`). |
+
+**Template 6 issues: 4 missing routePaths (all steps) — all resolved via fallback**
+
+---
+
+#### Default Template — `generic_guidance_resolution`
+
+| # | stepKey | stepType | decisionStage | isRequired | skipPolicy | toolKey | flowKey | routePath | Route exists? | Assessment |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `review_signal` | AWARENESS | AWARENESS | true | DISCOURAGED | `home-event-radar` | `home-event-radar` | **MISSING** | — | ⚠️ No `routePath`. Falls back to `FALLBACK_TOOL_ROUTE['home-event-radar']` = `/dashboard/properties/:propertyId/tools/home-event-radar` ✅ — valid fallback. |
+
+---
+
+### 9.3 `TOOL_DEFAULT_STEP_KEY` — Cross-Journey Mapping Validation
+
+`TOOL_DEFAULT_STEP_KEY` is used in `recordToolCompletion()` to find the step to transition when a tool reports completion but no explicit `stepKey` is provided. The mapping is global — it does not account for which journey template the journey belongs to.
+
+| toolKey | Mapped stepKey | Correct for template(s) | Wrong for template(s) | Behaviour when wrong |
+|---|---|---|---|---|
+| `replace-repair` | `repair_replace_decision` | `asset_lifecycle_resolution` ✅ | — | — |
+| `coverage-intelligence` | `check_coverage` | `asset_lifecycle_resolution`, `coverage_gap_resolution` ✅ | — | — |
+| `recalls` | `recall_resolution` | `recall_safety_resolution` ⚠️ | — | Maps directly to step 3 (`recall_resolution`), **skipping** steps 1 (`safety_alert`) and 2 (`review_remedy_instructions`). Semantically a recall tool completion should first acknowledge (`safety_alert`), not immediately resolve. |
+| `booking` | `book_service` | `asset_lifecycle_resolution` ✅ | `inspection_followup_resolution` (uses `route_specialist`) | `book_service` not found in inspection journey → falls back to `currentStep`, which may be `route_specialist` ✅ by coincidence |
+| `home-event-radar` | `weather_safety_check` | `weather_risk_resolution` ✅ | `inspection_followup_resolution` (uses `track_resolution`) | `weather_safety_check` not found → falls back to `currentStep` which may be `track_resolution` ✅ by coincidence |
+| `inspection-report` | `assess_urgency` | `inspection_followup_resolution` ✅ | — | — |
+| `service-price-radar` | `validate_price` | `asset_lifecycle_resolution` ✅ | `inspection_followup_resolution` (uses `estimate_repair_cost`) | `validate_price` not found → falls back to `currentStep` which may be `estimate_repair_cost` ✅ by coincidence |
+| `negotiation-shield` | `prepare_negotiation` | `asset_lifecycle_resolution` ✅ | — | — |
+| `do-nothing-simulator` | `compare_action_options` | `financial_exposure_resolution` ✅ | — | — |
+| `home-savings` | `evaluate_savings_funding` | `financial_exposure_resolution` ✅ | — | — |
+| `true-cost` | `estimate_out_of_pocket_cost` | `financial_exposure_resolution` ✅ | `coverage_gap_resolution` (uses `estimate_exposure`) | `estimate_out_of_pocket_cost` not found → falls back to `currentStep` which may be `estimate_exposure` ✅ by coincidence |
+
+**Net finding:** `TOOL_DEFAULT_STEP_KEY` works correctly for single-template tools. For tools used across multiple templates (`coverage-intelligence`, `service-price-radar`, `booking`, `home-event-radar`, `true-cost`), the cross-template mapping is incorrect but saved by `currentStep` fallback logic. One genuine semantic bug: `recalls` → `recall_resolution` skips the acknowledgment and remedy review steps.
+
+---
+
+### 9.4 `flowKey` Validation
+
+`flowKey` is stored in the DB step record but is **not used** by `resolveGuidanceStepHref()` or any routing function in the frontend. It is pure metadata at present.
+
+| stepKey | toolKey | flowKey | Consistent with toolKey? | Notes |
+|---|---|---|---|---|
+| `repair_replace_decision` | `replace-repair` | `replace-repair-analysis` | ⚠️ Different | No routing consequence |
+| `check_coverage` (asset) | `coverage-intelligence` | `coverage-analysis` | ⚠️ Different | No routing consequence |
+| `validate_price` | `service-price-radar` | `service-price-radar` | ✅ Same | — |
+| `prepare_negotiation` | `negotiation-shield` | `negotiation-shield` | ✅ Same | — |
+| `book_service` | `booking` | `booking` | ✅ Same | — |
+| `check_coverage` (coverage) | `coverage-intelligence` | `coverage-analysis` | ⚠️ Different | No routing consequence |
+| `estimate_exposure` | `true-cost` | `true-cost-ownership` | ⚠️ Different | No routing consequence |
+| `compare_coverage_options` | `insurance-trend` | `insurance-cost-trend` | ⚠️ Different | No routing consequence |
+| `update_policy_or_documents` | `documents` | `vault` | ⚠️ Different | No routing consequence (both broken anyway) |
+| `safety_alert` | `recalls` | `recall-alert` | ⚠️ Different | Implies tab/view, not used |
+| `review_remedy_instructions` | `recalls` | `recall-remedy` | ⚠️ Different | Implies tab/view, not used |
+| `recall_resolution` | `recalls` | `recall-resolution` | ⚠️ Different | Implies tab/view, not used |
+| `weather_safety_check` | `home-event-radar` | `home-event-radar` | ✅ Same | — |
+| `protect_exposed_systems` | `maintenance` | `maintenance-weather-checklist` | ⚠️ Different | No routing consequence |
+| `schedule_weather_followup` | `booking` | `booking` | ✅ Same | — |
+| `assess_urgency` | `inspection-report` | `inspection-report-analysis` | ⚠️ Different | No routing consequence |
+| `estimate_repair_cost` | `service-price-radar` | `service-price-radar` | ✅ Same | — |
+| `route_specialist` | `booking` | `booking` | ✅ Same | — |
+| `track_resolution` | `home-event-radar` | `home-event-radar` | ✅ Same | — |
+| `estimate_out_of_pocket_cost` | `true-cost` | `true-cost-ownership` | ⚠️ Different | No routing consequence |
+| `compare_action_options` | `do-nothing-simulator` | `do-nothing-simulator` | ✅ Same | toolKey is `do-nothing-simulator`; actual route is `tools/do-nothing` — inconsistency between toolKey and URL handled in FALLBACK_TOOL_ROUTE |
+| `evaluate_savings_funding` | `home-savings` | `home-savings` | ✅ Same | — |
+| `route_financial_plan` | `capital-timeline` | `home-capital-timeline` | ⚠️ Different | No routing consequence |
+| `review_signal` (default) | `home-event-radar` | `home-event-radar` | ✅ Same | — |
+
+**Summary:** `flowKey` is inconsistent for 11 of 24 steps. Since it is not used for routing, there is no functional impact today, but if `flowKey` is ever wired for navigation or deep-linking, these inconsistencies will cause bugs.
+
+---
+
+### 9.5 `stepType` Validation
+
+`stepType` is stored as `String?` in the DB — no enum constraint. Values used across templates:
+
+| Value | Used on steps | Maps to `decisionStage`? |
+|---|---|---|
+| `AWARENESS` | `safety_alert`, `weather_safety_check`, `review_signal` | ✅ matches stage |
+| `DIAGNOSIS` | `assess_urgency`, `check_coverage` (coverage template), `protect_exposed_systems`, `estimate_out_of_pocket_cost` | ✅ matches stage |
+| `DECISION` | `repair_replace_decision`, `estimate_exposure`, `compare_coverage_options`, `compare_action_options`, `evaluate_savings_funding`, `estimate_repair_cost` | ✅ matches stage |
+| `VALIDATION` | `check_coverage` (asset template), `validate_price`, `prepare_negotiation` | ⚠️ `VALIDATION` is a valid `GuidanceDecisionStage` but is NOT one of the recognised stepType values elsewhere — `VALIDATION` stage steps will never trigger `READY` readiness (see [HIGH-7] in §8) |
+| `EXECUTION` | `book_service`, `update_policy_or_documents`, `recall_resolution`, `schedule_weather_followup`, `route_specialist` | ✅ matches stage |
+| `TRACKING` | `track_resolution`, `route_financial_plan` | ✅ matches stage |
+| (none/null) | — | — |
+
+**Finding:** `stepType` duplicates `decisionStage` for all steps except the three `VALIDATION` steps in `asset_lifecycle_resolution`. Those steps have `stepType: 'VALIDATION'` but use `decisionStage: 'VALIDATION'` — and the `recomputeJourneyState()` only considers `decisionStage === 'EXECUTION'` for READY readiness. The `stepType` field adds no independent logic and is effectively redundant metadata.
+
+---
+
+### 9.6 Consolidated Route Findings Summary
+
+| # | Severity | Step(s) | Issue |
+|---|---|---|---|
+| R-1 | ❌ BROKEN | `update_policy_or_documents` (coverage template step 4) | `routePath: '/dashboard/vault'` does not exist. Vault is at `/vault` (root) and `/vault/[propertyId]`. `FALLBACK_TOOL_ROUTE['documents']` also points to same broken path. User receives 404. |
+| R-2 | ⚠️ MISSING routePath | `review_remedy_instructions`, `recall_resolution` (recall steps 2, 3) | No `routePath`. All 3 recall steps resolve to the same page `/dashboard/properties/:propertyId/recalls`. No distinct page exists for remedy review or resolution confirmation. |
+| R-3 | ⚠️ MISSING routePath | `estimate_repair_cost`, `track_resolution` (inspection steps 2, 4) | No `routePath`. Both fall back correctly via `FALLBACK_TOOL_ROUTE`. |
+| R-4 | ⚠️ MISSING routePath | All 4 financial steps (`estimate_out_of_pocket_cost`, `compare_action_options`, `evaluate_savings_funding`, `route_financial_plan`) | No `routePath` on any financial template step. All fall back correctly via `FALLBACK_TOOL_ROUTE`. |
+| R-5 | ⚠️ MISSING routePath | Default template `review_signal` | No `routePath`. Falls back correctly via `FALLBACK_TOOL_ROUTE`. |
+| R-6 | ⚠️ NO property context | `book_service` (asset step 5), `route_specialist` (inspection step 3) | `routePath: '/dashboard/bookings'` has no `:propertyId`. `FALLBACK_TOOL_ROUTE['booking']` = `/dashboard/bookings?propertyId=:propertyId` is more contextual. Template routePaths should match the fallback. |
+| R-7 | ⚠️ NO property context | `assess_urgency` (inspection step 1) | `routePath: '/dashboard/inspection-report'` is a global page, not property-scoped. All other tool routePaths use `/dashboard/properties/:propertyId/...`. |
+| R-8 | ⚠️ INCONSISTENT format | `protect_exposed_systems` (weather step 2) | `routePath: '/dashboard/maintenance?propertyId=:propertyId'` embeds `propertyId` as a query param while all other routes embed it in the path. No FALLBACK_TOOL_ROUTE entry for `maintenance`. |
+| R-9 | ⚠️ HARDCODED value | `schedule_weather_followup` (weather step 3) | `routePath: '/dashboard/providers?category=PLUMBING'` hardcodes `PLUMBING`. Weather events may require electrical, HVAC, roofing. No property context. |
+| R-10 | ⚠️ CONDITIONAL null | `repair_replace_decision` (asset step 1) | `routePath` requires `:itemId`. If `journey.inventoryItemId` is null, special-case fires but fails to build path → falls back to global `/dashboard/replace-repair`. The template is only valid for item-scoped journeys. |
+| R-11 | ⚠️ SEMANTIC BUG | `TOOL_DEFAULT_STEP_KEY['recalls'] = 'recall_resolution'` | When a recall tool completion is recorded, it immediately transitions `recall_resolution` (step 3) instead of starting from `safety_alert` (step 1). Steps 1 and 2 are never auto-transitioned. |
+| R-12 | ⚠️ FALLBACK only | `replace-repair` FALLBACK_TOOL_ROUTE | `FALLBACK_TOOL_ROUTE['replace-repair']` = `/dashboard/replace-repair` (global page). If `routePath` resolution fails (no inventoryItemId), user lands on the wrong tool page. |
+| R-13 | ℹ️ NOT USED | All `flowKey` values | `flowKey` is stored in DB but not read by `resolveGuidanceStepHref()` or any other routing function. 11 of 24 steps have flowKey inconsistent with toolKey. No functional impact today. |
+| R-14 | ℹ️ REDUNDANT | All `stepType` values | `stepType` duplicates `decisionStage` for every step — the field is not used in any business logic. The `VALIDATION` stepType on asset lifecycle steps is notable because `decisionStage: VALIDATION` steps will never reach READY readiness (see [HIGH-7]). |
+
+---
+
+## 10. Summary Statistics
 
 | Category | Count |
 |---|---|
@@ -1042,15 +1267,21 @@ The following tools are referenced in templates and `TOOL_DEFAULT_STEP_KEY` but 
 | DB models | 4 |
 | DB enums | 8 |
 | Journey templates | 7 (6 domain + 1 default) |
-| Total template steps | 20 (across all templates) |
+| Total template steps | 22 (21 across 6 templates + 1 default) |
 | Signal intent families covered | 9 named + 1 generic |
 | Suppression stages | 8 |
 | Validation rules | 8 |
+| **Broken routes** | **1** (R-1: `/dashboard/vault`) |
+| **Steps missing routePath** | **9** (R-2 through R-5) |
+| **Steps with routing context issues** | **5** (R-6, R-7, R-8, R-9, R-10) |
+| **TOOL_DEFAULT_STEP_KEY mismatches** | **5 cross-journey** (1 semantic bug, 4 benign fallbacks) |
+| **flowKey inconsistencies** | **11 of 24 steps** |
 | Critical issues identified | 5 |
 | High priority issues identified | 8 |
 | Medium priority issues identified | 10 |
 | Low priority considerations | 8 |
+| Template registry route findings | 14 (1 broken, 8 warnings, 5 info) |
 
 ---
 
-*Generated from direct source code review of all 14 service files, controller, routes, Prisma schema, and frontend integration code.*
+*Generated from direct source code review of all 14 service files, controller, routes, Prisma schema, frontend routing structure (`/apps/frontend/src/app`), and `guidanceDisplay.ts` resolver.*
