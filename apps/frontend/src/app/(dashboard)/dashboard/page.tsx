@@ -528,13 +528,18 @@ export default function DashboardPage() {
         )}
         
         {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
-        <motion.div className="flex items-center justify-between gap-3 mb-6" {...sectionMotion(2)}>
+        <motion.div
+          className="mb-4 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-center sm:justify-between"
+          {...sectionMotion(2)}
+        >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
+            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
+              <TrendingUp className="h-5 w-5 text-slate-600" />
             </div>
             <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Property Intelligence Scores</h2>
+              <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+                Property Intelligence Scores
+              </h2>
               <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
             </div>
           </div>
@@ -545,11 +550,16 @@ export default function DashboardPage() {
             />
           )}
         </motion.div>
-        <motion.div className="grid grid-cols-1 gap-3 mt-4 mb-8 md:grid-cols-2 lg:grid-cols-4" {...sectionMotion(2)}>
-          <HomeScoreReportCard propertyId={selectedPropertyId} />
-          <PropertyHealthScoreCard property={selectedProperty} />
-          <PropertyRiskScoreCard propertyId={selectedPropertyId} />
-          <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+        <motion.div
+          className="mb-8 rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4"
+          {...sectionMotion(2)}
+        >
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <HomeScoreReportCard propertyId={selectedPropertyId} />
+            <PropertyHealthScoreCard property={selectedProperty} />
+            <PropertyRiskScoreCard propertyId={selectedPropertyId} />
+            <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+          </div>
         </motion.div>
 
         <motion.div {...sectionMotion(3)}>

@@ -7,12 +7,19 @@ import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import { api } from "@/lib/api/client";
 import { PrimaryRiskSummary, RiskSummaryStatus } from "@/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface PropertyRiskScoreCardProps {
   propertyId?: string;
 }
 
-const CARD_BASE = "h-full rounded-xl border p-4 flex flex-col gap-3";
+const CARD_BASE =
+  "flex h-full flex-col gap-3.5 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm sm:p-5";
+const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-gray-400";
+const TITLE_CLASS = "truncate whitespace-nowrap text-sm font-semibold text-gray-900";
+const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500";
+const META_VALUE = "text-sm font-semibold text-gray-900";
+const BADGE_BASE = "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -23,65 +30,64 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function getRiskTone(score: number) {
-  if (score >= 80) return "bg-emerald-50/30 border-emerald-200/60";
-  if (score >= 60) return "bg-amber-50/30 border-amber-200/60";
-  return "bg-rose-50/25 border-rose-200/55";
-}
-
-function getRiskAccent(score: number): string {
-  if (score < 60) return "border-l-4 border-l-rose-300";
-  if (score < 80) return "border-l-4 border-l-amber-400";
-  return "";
-}
-
 function getRiskStatus(score: number) {
   if (score >= 80) return { label: "Low Risk", color: "text-emerald-600" };
   if (score >= 60) return { label: "Elevated", color: "text-amber-600" };
-  return { label: "High Risk", color: "text-red-600" };
+  return { label: "High Risk", color: "text-rose-700" };
 }
 
 function getRiskPathColor(score: number) {
   if (score >= 80) return "#10b981";
-  if (score >= 60) return "#f59e0b";
-  return "#ef4444";
+  if (score >= 60) return "#d97706";
+  return "#e11d48";
 }
 
 function buildRiskInsight(score: number, exposure: number): string {
   const formatted = formatCurrency(exposure);
-  if (score >= 80) return `Exposure appears contained with ${formatted} currently modeled at risk.`;
-  if (score >= 60) return `Some exposure pressure is emerging with ${formatted} modeled at risk.`;
-  return `Modeled exposure is elevated at ${formatted} and deserves near-term mitigation review.`;
+  if (score >= 80) return `Exposure is contained at ${formatted}.`;
+  if (score >= 60) return `Exposure is trending elevated at ${formatted}.`;
+  return `Exposure is elevated at ${formatted} and needs near-term mitigation.`;
 }
 
 function getRiskPriority(score: number) {
   if (score < 60) {
     return {
       label: "Needs Focus",
-      className: "border-rose-200 bg-rose-50 text-rose-700",
+      className: "border-rose-200/80 bg-rose-50/70 text-rose-700",
     };
   }
   if (score < 80) {
     return {
       label: "Watch",
-      className: "border-amber-200 bg-amber-50 text-amber-700",
+      className: "border-amber-200/80 bg-amber-50/70 text-amber-700",
     };
   }
   return {
     label: "Stable",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    className: "border-emerald-200/80 bg-emerald-50/70 text-emerald-700",
   };
 }
 
 function buildRiskMeaning(score: number): string {
-  if (score >= 80) return "How this reads: protection currently offsets most modeled downside.";
-  if (score >= 60) return "How this reads: some gaps may increase impact if an event occurs.";
-  return "How this reads: coverage and exposure are out of balance and may need adjustment.";
+  if (score >= 80) return "Coverage and exposure are currently in balance.";
+  if (score >= 60) return "A few gaps could increase downside in an event.";
+  return "Coverage and exposure are out of balance.";
 }
 
 function formatWeeklyDelta(delta: number | null) {
   if (delta === null || Math.abs(delta) < 0.05) return "No change";
   return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
+}
+
+function weeklyDeltaClass(weeklyChange: string) {
+  if (weeklyChange === "No change") return "text-gray-500";
+  if (weeklyChange.startsWith("-")) return "text-rose-700";
+  return "text-emerald-700";
+}
+
+function weeklyDeltaLabel(weeklyChange: string) {
+  if (weeklyChange === "No change") return "No change";
+  return `${weeklyChange} pts`;
 }
 
 export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps) {
@@ -140,13 +146,11 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
 
   if (!propertyId || summary.status === "NO_PROPERTY") {
     return (
-      <div className={`${CARD_BASE} bg-white border-gray-200`}>
+      <div className={cn(CARD_BASE, "border-gray-200")}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
-            <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
-            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
-              Risk Exposure
-            </span>
+            <Shield className={HEADER_ICON} />
+            <span className={TITLE_CLASS}>Risk Exposure</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
         </div>
@@ -157,13 +161,11 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
 
   if (isLoading) {
     return (
-      <div className={`${CARD_BASE} bg-white border-gray-200`}>
+      <div className={cn(CARD_BASE, "border-gray-200")}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
-            <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
-            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
-              Risk Exposure
-            </span>
+            <Shield className={HEADER_ICON} />
+            <span className={TITLE_CLASS}>Risk Exposure</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
         </div>
@@ -187,73 +189,72 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
   const priority = getRiskPriority(riskScore);
 
   return (
-    <div
-      className={`${CARD_BASE} ${getRiskTone(riskScore)} ${getRiskAccent(riskScore)}`}
-    >
-      <div className="flex items-start justify-between gap-2">
+    <div className={CARD_BASE}>
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex min-w-0 items-center gap-2">
-            <Shield className="h-4 w-4 flex-shrink-0 text-gray-400" />
-            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
-              Risk Exposure
-            </span>
+            <Shield className={HEADER_ICON} />
+            <span className={TITLE_CLASS}>Risk Exposure</span>
           </div>
-          <p className="line-clamp-2 text-[11px] text-gray-600">{meaning}</p>
+          <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">{meaning}</p>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <span
-            className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${priority.className}`}
-          >
-            {priority.label}
+        <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+          <span className={cn(BADGE_BASE, priority.className)}>{priority.label}</span>
+          <span className={cn("text-[11px] font-medium", weeklyDeltaClass(weeklyChange))}>
+            {weeklyDeltaLabel(weeklyChange)}
           </span>
-          <span className="whitespace-nowrap text-[11px] text-gray-400">{weeklyChange}</span>
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-1.5">
-        <div className="h-[88px] w-[88px]">
+      <div className="flex items-center gap-3">
+        <div className="h-[78px] w-[78px] sm:h-[84px] sm:w-[84px]">
           <CircularProgressbar
             value={displayValue}
             text={`${riskScore}`}
-            strokeWidth={8}
+            strokeWidth={7}
             styles={buildStyles({
-              textSize: "28px",
-              textColor: "#111827",
+              textSize: "30px",
+              textColor: "#0f172a",
               pathColor: getRiskPathColor(riskScore),
-              trailColor: "#e5e7eb",
+              trailColor: "#e2e8f0",
               strokeLinecap: "butt",
               pathTransitionDuration: 0.6,
             })}
           />
         </div>
-        <div className="text-center">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-            PROTECTION SCORE
-          </p>
-          <p className={`text-sm font-bold ${riskStatus.color}`}>{riskStatus.label}</p>
+        <div className="space-y-1">
+          <p className={SUPPORT_LABEL}>Protection Score</p>
+          <p className={cn("text-sm font-semibold", riskStatus.color)}>{riskStatus.label}</p>
+          <p className="text-xs text-gray-500">Risk profile</p>
         </div>
       </div>
 
-      {/* Contextual insight line */}
-      <p className="text-[11px] leading-snug text-gray-600">{insight}</p>
+      <p className="text-[11px] leading-relaxed text-gray-600">{insight}</p>
 
-      <div className="mt-auto flex flex-col gap-1.5 border-t border-rose-200/50 pt-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-            Exposure
+      <div className="mt-auto space-y-2.5 border-t border-gray-200/80 pt-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className={SUPPORT_LABEL}>Exposure</span>
+          <span className={cn(META_VALUE, riskScore < 60 ? "text-rose-700" : "text-gray-900")}>
+            {formatCurrency(exposure)}
           </span>
-          <span className="text-xs font-bold text-rose-700">{formatCurrency(exposure)}</span>
         </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <span className={SUPPORT_LABEL}>Weekly Change</span>
+          <span className={cn(META_VALUE, weeklyDeltaClass(weeklyChange))}>
+            {weeklyDeltaLabel(weeklyChange)}
+          </span>
+        </div>
+
         <TooltipProvider delayDuration={120}>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 aria-label="How risk exposure is calculated"
-                className="mt-1 inline-flex items-center gap-1 text-[10px] text-brand-600 hover:underline"
+                className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 transition-colors hover:text-gray-800"
               >
-                <HelpCircle className="h-3 w-3" />
-                How is this calculated?
+                <HelpCircle className="h-3.5 w-3.5" />
+                How this is calculated
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" align="start" className="max-w-[280px] text-[11px] leading-relaxed">
@@ -262,12 +263,13 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
         <Link
           href={reportLink}
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 transition-colors hover:text-gray-900"
+          className="group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900"
         >
           Open risk details
-          <ArrowRight className="h-3 w-3" />
+          <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
         </Link>
       </div>
     </div>

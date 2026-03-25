@@ -9,6 +9,7 @@ import dynamic from "next/dynamic";
 import { api } from "@/lib/api/client";
 import { FinancialReportSummary, FinancialSummaryStatus } from "@/types";
 import { useCelebration } from "@/hooks/useCelebration";
+import { cn } from "@/lib/utils";
 
 const MilestoneCelebration = dynamic(
   () => import("@/components/ui/MilestoneCelebration").then((m) => m.MilestoneCelebration),
@@ -19,7 +20,13 @@ interface FinancialEfficiencyScoreCardProps {
   propertyId?: string;
 }
 
-const CARD_BASE = "h-full rounded-xl border p-4 flex flex-col gap-3";
+const CARD_BASE =
+  "flex h-full flex-col gap-3.5 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm sm:p-5";
+const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-gray-400";
+const TITLE_CLASS = "truncate whitespace-nowrap text-sm font-semibold text-gray-900";
+const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500";
+const META_VALUE = "text-sm font-semibold text-gray-900";
+const BADGE_BASE = "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -30,66 +37,65 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function getFinancialTone(score: number) {
-  if (score >= 80) return "bg-emerald-50/30 border-emerald-200/60";
-  if (score >= 60) return "bg-teal-50/30 border-teal-200/60";
-  return "bg-amber-50/30 border-amber-200/60";
-}
-
-function getFinancialAccent(score: number): string {
-  if (score < 60) return "border-l-4 border-l-amber-400";
-  return "";
-}
-
 function getFinancialPathColor(score: number) {
   if (score >= 80) return "#10b981";
-  if (score >= 60) return "#14b8a6";
-  if (score >= 40) return "#f59e0b";
-  return "#ef4444";
+  if (score >= 60) return "#0d9488";
+  if (score >= 40) return "#d97706";
+  return "#dc2626";
 }
 
 function getFinancialLabel(score: number) {
   if (score >= 80) return { label: "Excellent", color: "text-emerald-600" };
   if (score >= 60) return { label: "Good", color: "text-teal-600" };
-  if (score >= 40) return { label: "Fair", color: "text-amber-500" };
-  return { label: "Poor", color: "text-red-500" };
+  if (score >= 40) return { label: "Fair", color: "text-amber-600" };
+  return { label: "Poor", color: "text-rose-600" };
 }
 
 function buildFinancialInsight(score: number, annualCost: number): string {
-  if (score >= 80) return "Ownership costs are trending efficiently for this quarter.";
-  if (score >= 60)
-    return `At ${formatCurrency(annualCost)}/yr, there is room for targeted optimization.`;
-  return "Cost pressure is elevated and may benefit from near-term budget tuning.";
+  if (score >= 80) return "Ownership costs are trending efficiently.";
+  if (score >= 60) return `Annual cost is ${formatCurrency(annualCost)} with optimization headroom.`;
+  return "Cost pressure is elevated and needs near-term tuning.";
 }
 
 function getFinancialPriority(score: number) {
   if (score < 60) {
     return {
       label: "Needs Focus",
-      className: "border-amber-200 bg-amber-50 text-amber-700",
+      className: "border-amber-200/80 bg-amber-50/70 text-amber-700",
     };
   }
   if (score < 80) {
     return {
       label: "Watch",
-      className: "border-teal-200 bg-teal-50 text-teal-700",
+      className: "border-teal-200/80 bg-teal-50/70 text-teal-700",
     };
   }
   return {
     label: "Stable",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    className: "border-emerald-200/80 bg-emerald-50/70 text-emerald-700",
   };
 }
 
 function buildFinancialMeaning(score: number): string {
-  if (score >= 80) return "How this reads: spend is generally aligned with healthy ownership economics.";
-  if (score >= 60) return "How this reads: costs are manageable but have optimization headroom.";
-  return "How this reads: current spending pattern could compress cash flexibility.";
+  if (score >= 80) return "Spend is aligned with healthy ownership economics.";
+  if (score >= 60) return "Costs are manageable with room to optimize.";
+  return "Current spending may compress cash flexibility.";
 }
 
 function formatWeeklyDelta(delta: number | null) {
   if (delta === null || Math.abs(delta) < 0.05) return "No change";
   return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
+}
+
+function weeklyDeltaClass(weeklyChange: string) {
+  if (weeklyChange === "No change") return "text-gray-500";
+  if (weeklyChange.startsWith("-")) return "text-rose-700";
+  return "text-emerald-700";
+}
+
+function weeklyDeltaLabel(weeklyChange: string) {
+  if (weeklyChange === "No change") return "No change";
+  return `${weeklyChange} pts`;
 }
 
 export const FinancialEfficiencyScoreCard: React.FC<
@@ -147,13 +153,11 @@ export const FinancialEfficiencyScoreCard: React.FC<
 
   if (!propertyId || summary.status === "NO_PROPERTY") {
     return (
-      <div className={`${CARD_BASE} bg-white border-gray-200`}>
+      <div className={cn(CARD_BASE, "border-gray-200")}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
-            <DollarSign className="h-4 w-4 flex-shrink-0 text-gray-400" />
-            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
-              Financial
-            </span>
+            <DollarSign className={HEADER_ICON} />
+            <span className={TITLE_CLASS}>Financial</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
         </div>
@@ -164,13 +168,11 @@ export const FinancialEfficiencyScoreCard: React.FC<
 
   if (isLoading || summary.status === "QUEUED") {
     return (
-      <div className={`${CARD_BASE} bg-white border-gray-200`}>
+      <div className={cn(CARD_BASE, "border-gray-200")}>
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
-            <DollarSign className="h-4 w-4 flex-shrink-0 text-gray-400" />
-            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
-              Financial
-            </span>
+            <DollarSign className={HEADER_ICON} />
+            <span className={TITLE_CLASS}>Financial</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
         </div>
@@ -192,74 +194,64 @@ export const FinancialEfficiencyScoreCard: React.FC<
   const priority = getFinancialPriority(score);
 
   return (
-    <div
-      className={`${CARD_BASE} ${getFinancialTone(score)} ${getFinancialAccent(score)}`}
-    >
-      <div className="flex items-start justify-between gap-2">
+    <div className={CARD_BASE}>
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex min-w-0 items-center gap-2">
-            <DollarSign className="h-4 w-4 flex-shrink-0 text-gray-400" />
-            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
-              Financial
-            </span>
+            <DollarSign className={HEADER_ICON} />
+            <span className={TITLE_CLASS}>Financial</span>
           </div>
-          <p className="line-clamp-2 text-[11px] text-gray-600">{meaning}</p>
+          <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">{meaning}</p>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <span
-            className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${priority.className}`}
-          >
-            {priority.label}
+        <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+          <span className={cn(BADGE_BASE, priority.className)}>{priority.label}</span>
+          <span className={cn("text-[11px] font-medium", weeklyDeltaClass(weeklyChange))}>
+            {weeklyDeltaLabel(weeklyChange)}
           </span>
-          <span className="whitespace-nowrap text-[11px] text-gray-400">{weeklyChange}</span>
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-1.5">
-        <div className="h-[88px] w-[88px]">
+      <div className="flex items-center gap-3">
+        <div className="h-[78px] w-[78px] sm:h-[84px] sm:w-[84px]">
           <CircularProgressbar
             value={score}
             text={`${score}`}
-            strokeWidth={8}
+            strokeWidth={7}
             styles={buildStyles({
-              textSize: "28px",
-              textColor: "#111827",
+              textSize: "30px",
+              textColor: "#0f172a",
               pathColor: getFinancialPathColor(score),
-              trailColor: "#e5e7eb",
+              trailColor: "#e2e8f0",
               pathTransitionDuration: 0.6,
             })}
           />
         </div>
-        <div className="text-center">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-            FINANCIAL
-          </p>
-          <p className={`text-sm font-bold ${status.color}`}>{status.label}</p>
+        <div className="space-y-1">
+          <p className={SUPPORT_LABEL}>Financial</p>
+          <p className={cn("text-sm font-semibold", status.color)}>{status.label}</p>
+          <p className="text-xs text-gray-500">Efficiency score</p>
         </div>
       </div>
 
-      {/* Contextual insight line */}
-      <p className="text-[11px] leading-snug text-gray-600">{insight}</p>
+      <p className="text-[11px] leading-relaxed text-gray-600">{insight}</p>
 
-      <div className="mt-auto flex flex-col gap-1.5 border-t border-emerald-200/50 pt-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-            Annual Cost
-          </span>
-          <span className="text-xs font-bold text-gray-700">{formatCurrency(annualCost)}</span>
+      <div className="mt-auto space-y-2.5 border-t border-gray-200/80 pt-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className={SUPPORT_LABEL}>Annual Cost</span>
+          <span className={META_VALUE}>{formatCurrency(annualCost)}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-            Weekly change
+        <div className="flex items-baseline justify-between gap-3">
+          <span className={SUPPORT_LABEL}>Weekly Change</span>
+          <span className={cn(META_VALUE, weeklyDeltaClass(weeklyChange))}>
+            {weeklyDeltaLabel(weeklyChange)}
           </span>
-          <span className="text-xs font-medium text-gray-400">{weeklyChange}</span>
         </div>
         <Link
           href={reportLink}
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 transition-colors hover:text-gray-900"
+          className="group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900"
         >
           Open financial details
-          <ArrowRight className="h-3 w-3" />
+          <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
         </Link>
       </div>
       <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
