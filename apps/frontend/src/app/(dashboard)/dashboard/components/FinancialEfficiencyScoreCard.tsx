@@ -196,12 +196,11 @@ export const FinancialEfficiencyScoreCard: React.FC<
   return (
     <div className={CARD_BASE}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <DollarSign className={HEADER_ICON} />
             <span className={TITLE_CLASS}>Financial</span>
           </div>
-          <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">{meaning}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1 text-right">
           <span className={cn(BADGE_BASE, priority.className)}>{priority.label}</span>
@@ -212,6 +211,7 @@ export const FinancialEfficiencyScoreCard: React.FC<
           ) : null}
         </div>
       </div>
+      <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">{meaning}</p>
 
       <div className="flex items-center gap-3">
         <div className="h-[78px] w-[78px] sm:h-[84px] sm:w-[84px]">
