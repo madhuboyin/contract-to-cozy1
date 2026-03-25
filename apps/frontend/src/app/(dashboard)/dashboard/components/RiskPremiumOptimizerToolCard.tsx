@@ -168,13 +168,13 @@ export default function RiskPremiumOptimizerToolCard({
         )}
       </div>
 
-      <div className="mt-1.5 space-y-1 text-[10px] leading-relaxed text-gray-600">
-        <p className="line-clamp-2">
+      <div className="mt-1.5 space-y-1 text-[10px] leading-snug text-gray-600">
+        <p className="line-clamp-1">
           Top move:{' '}
-          <span className="font-medium text-gray-800">{hasAnalysis ? topRecommendation : 'Shown after first run'}</span>
+          <span className="text-gray-700">{hasAnalysis ? topRecommendation : 'Shown after first run'}</span>
         </p>
         <p>
-          <span className="font-medium capitalize text-gray-800">{confidence}</span> confidence{' '}
+          <span className="capitalize text-gray-700">{confidence}</span> confidence{' '}
           <span className="text-gray-300">·</span>{' '}
           {hasAnalysis ? analysis?.recommendations.length ?? 0 : '—'} recommendations
         </p>
