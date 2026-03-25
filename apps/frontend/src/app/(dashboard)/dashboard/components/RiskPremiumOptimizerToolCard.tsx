@@ -15,33 +15,33 @@ type RiskPremiumOptimizerToolCardProps = {
 };
 
 const CARD_BASE =
-  'flex h-full flex-col rounded-2xl border border-gray-200/65 bg-white/95 p-4 shadow-[0_6px_16px_-14px_rgba(15,23,42,0.28)] sm:p-5';
+  'flex h-full flex-col gap-3.5 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm sm:p-5';
 const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/60';
 const HEADER_ICON = 'h-3.5 w-3.5 text-slate-600';
-const TITLE_CLASS = 'text-[15px] font-medium leading-none text-gray-800';
+const TITLE_CLASS = 'text-sm font-semibold leading-none text-gray-900';
 const BADGE_BASE =
   'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none';
-const VALUE_ZONE = 'mt-2.5 rounded-lg bg-slate-50/45 px-2.5 py-2';
+const VALUE_ZONE = 'mt-1 rounded-xl border border-gray-200/80 bg-gray-50/80 px-3 py-2.5';
 const CTA_CLASS =
-  'group inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 transition-colors hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50';
+  'group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50';
 
 function statusMeta(loading: boolean, analysis: RiskPremiumOptimizationDTO | null, hasAnalysis: boolean) {
   if (loading) {
-    return { label: 'Checking', className: 'border-slate-200/65 bg-slate-50/70 text-slate-600' };
+    return { label: 'Checking', className: 'border-slate-200/80 bg-slate-50/70 text-slate-700' };
   }
   if (!hasAnalysis || !analysis) {
-    return { label: 'Not run yet', className: 'border-slate-200/65 bg-slate-50/70 text-slate-600' };
+    return { label: 'Not run yet', className: 'border-slate-200/80 bg-slate-50/70 text-slate-700' };
   }
   if (analysis.status === 'STALE') {
     return {
       label: 'Review recommended',
-      className: 'border-amber-200/65 bg-amber-50/70 text-amber-700',
+      className: 'border-amber-200/80 bg-amber-50/70 text-amber-700',
     };
   }
   if (analysis.status === 'ERROR') {
-    return { label: 'Needs refresh', className: 'border-rose-200/65 bg-rose-50/70 text-rose-700' };
+    return { label: 'Needs refresh', className: 'border-rose-200/80 bg-rose-50/70 text-rose-700' };
   }
-  return { label: 'Ready', className: 'border-emerald-200/65 bg-emerald-50/70 text-emerald-700' };
+  return { label: 'Ready', className: 'border-emerald-200/80 bg-emerald-50/70 text-emerald-700' };
 }
 
 function money(value?: number | null): string {
@@ -145,7 +145,7 @@ export default function RiskPremiumOptimizerToolCard({
         <span className={cn(BADGE_BASE, status.className)}>{status.label}</span>
       </div>
 
-      <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-gray-500">
+      <p className="mt-2 line-clamp-2 text-[11px] leading-snug text-gray-500">
         Lower premium pressure without increasing risk.
       </p>
 
@@ -157,18 +157,18 @@ export default function RiskPremiumOptimizerToolCard({
           </span>
         ) : hasAnalysis && analysis ? (
           <div>
-            <p className="text-[1.95rem] font-medium leading-tight tracking-tight text-gray-800">{savingsRange}</p>
+            <p className="text-4xl font-display font-semibold leading-tight tracking-tight text-gray-900">{savingsRange}</p>
             <p className="mt-1 text-sm text-gray-600">Potential annual savings range.</p>
           </div>
         ) : (
           <div>
-            <p className="text-[1.32rem] font-medium leading-tight tracking-tight text-gray-800">Run optimizer</p>
+            <p className="text-xl font-semibold leading-tight tracking-tight text-gray-900">Run optimizer</p>
             <p className="mt-1 text-sm text-gray-600">Get the highest-impact premium moves for this home.</p>
           </div>
         )}
       </div>
 
-      <div className="mt-2 space-y-1 text-[12px] leading-5 text-gray-500">
+      <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-gray-600">
         <p className="line-clamp-2">
           Top move:{' '}
           <span className="font-medium text-gray-800">{hasAnalysis ? topRecommendation : 'Shown after first run'}</span>

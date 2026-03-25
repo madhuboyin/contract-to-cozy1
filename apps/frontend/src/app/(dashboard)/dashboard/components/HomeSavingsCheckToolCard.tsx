@@ -16,15 +16,15 @@ type HomeSavingsCheckToolCardProps = {
 };
 
 const CARD_BASE =
-  'flex h-full flex-col rounded-2xl border border-gray-200/65 bg-white/95 p-4 shadow-[0_6px_16px_-14px_rgba(15,23,42,0.28)] sm:p-5';
+  'flex h-full flex-col gap-3.5 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm sm:p-5';
 const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/60';
 const HEADER_ICON = 'h-3.5 w-3.5 text-slate-600';
-const TITLE_CLASS = 'text-[15px] font-medium leading-none text-gray-800';
+const TITLE_CLASS = 'text-sm font-semibold leading-none text-gray-900';
 const BADGE_BASE =
   'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none';
-const VALUE_ZONE = 'mt-2.5 rounded-lg bg-slate-50/45 px-2.5 py-2';
+const VALUE_ZONE = 'mt-1 rounded-xl border border-gray-200/80 bg-gray-50/80 px-3 py-2.5';
 const CTA_CLASS =
-  'group inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 transition-colors hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50';
+  'group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50';
 
 function money(value?: number | null): string {
   if (value === null || value === undefined) return '$0';
@@ -51,24 +51,24 @@ function statusMeta(
   if (loading) {
     return {
       label: 'Checking',
-      className: 'border-slate-200/65 bg-slate-50/70 text-slate-600',
+      className: 'border-slate-200/80 bg-slate-50/70 text-slate-700',
     };
   }
   if (!summary || configuredCount === 0) {
     return {
       label: 'Not set up',
-      className: 'border-slate-200/65 bg-slate-50/70 text-slate-600',
+      className: 'border-slate-200/80 bg-slate-50/70 text-slate-700',
     };
   }
   if (foundSavingsCount > 0) {
     return {
       label: 'Found savings',
-      className: 'border-emerald-200/65 bg-emerald-50/70 text-emerald-700',
+      className: 'border-emerald-200/80 bg-emerald-50/70 text-emerald-700',
     };
   }
   return {
     label: 'Connected',
-    className: 'border-teal-200/65 bg-teal-50/70 text-teal-700',
+    className: 'border-teal-200/80 bg-teal-50/70 text-teal-700',
   };
 }
 
@@ -171,7 +171,7 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
         <span className={cn(BADGE_BASE, status.className)}>{status.label}</span>
       </div>
 
-      <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-gray-500">
+      <p className="mt-2 line-clamp-2 text-[11px] leading-snug text-gray-500">
         You may be paying more than necessary.
       </p>
 
@@ -185,7 +185,7 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
           hasPositiveSavings ? (
             <div>
               <div className="flex items-end gap-1.5">
-                <span className="text-[2.05rem] font-medium leading-none tracking-tight text-gray-800">
+                <span className="text-4xl font-display font-semibold leading-none tracking-tight text-gray-900">
                   {money(monthlyPotential)}
                 </span>
                 <span className="mb-1 text-sm font-medium text-gray-500">/mo</span>
@@ -194,19 +194,19 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
             </div>
           ) : (
             <div>
-              <p className="text-[1.32rem] font-medium leading-tight tracking-tight text-gray-800">No savings identified</p>
+              <p className="text-xl font-semibold leading-tight tracking-tight text-gray-900">No savings identified</p>
               <p className="mt-1 text-sm text-gray-600">Refresh after adding current provider pricing.</p>
             </div>
           )
         ) : (
           <div>
-            <p className="text-[1.32rem] font-medium leading-tight tracking-tight text-gray-800">Add bill categories</p>
+            <p className="text-xl font-semibold leading-tight tracking-tight text-gray-900">Add bill categories</p>
             <p className="mt-1 text-sm text-gray-600">Connect one category to unlock comparisons.</p>
           </div>
         )}
       </div>
 
-      <div className="mt-2 space-y-1 text-[12px] leading-5 text-gray-500">
+      <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-gray-600">
         <p>
           <span className="font-medium text-gray-800">
             {summary ? `${configuredCount}/${summary.categories.length}` : '—'}

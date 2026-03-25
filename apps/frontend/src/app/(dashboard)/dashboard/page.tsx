@@ -583,7 +583,7 @@ export default function DashboardPage() {
         {/* AI INSURANCE/PREMIUM DECISION TOOLS */}
         <motion.section className="mb-4" {...sectionMotion(6)}>
           <div className="mb-4 flex items-start gap-3">
-            <div className="rounded-xl border border-slate-200/75 bg-slate-100/55 p-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
               <ShieldAlert className="h-5 w-5 text-slate-600" />
             </div>
             <div>
@@ -595,7 +595,7 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
-          <div className="rounded-2xl border border-gray-200/65 bg-gray-50/45 p-3 sm:p-4">
+          <div className="rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4">
             <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
               <HomeSavingsCheckToolCard propertyId={selectedPropertyId || ''} />
               <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
