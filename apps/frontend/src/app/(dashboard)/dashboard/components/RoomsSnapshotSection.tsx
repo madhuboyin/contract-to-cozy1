@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { getRoomInsights, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
+import { cn } from '@/lib/utils';
 import type { InventoryRoom } from '@/types';
 
 interface RoomsSnapshotSectionProps {
@@ -95,10 +96,28 @@ function deriveLabel(score: number): string {
   return 'AT RISK';
 }
 
+function normalizeStatusLabel(label: string): 'HEALTHY' | 'NEEDS ATTENTION' | 'AT RISK' {
+  const normalized = String(label || '')
+    .toUpperCase()
+    .replace(/_/g, ' ')
+    .trim();
+  if (normalized === 'HEALTHY') return 'HEALTHY';
+  if (normalized === 'NEEDS ATTENTION') return 'NEEDS ATTENTION';
+  return 'AT RISK';
+}
+
 function statusPillClass(label: string): string {
-  if (label === 'HEALTHY') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-  if (label === 'NEEDS ATTENTION') return 'bg-amber-50 text-amber-700 border border-amber-200';
-  return 'bg-red-50 text-red-700 border border-red-200';
+  const normalized = normalizeStatusLabel(label);
+  if (normalized === 'HEALTHY') return 'border-emerald-200/80 bg-emerald-50/75 text-emerald-700';
+  if (normalized === 'NEEDS ATTENTION') return 'border-amber-200/80 bg-amber-50/75 text-amber-700';
+  return 'border-rose-200/80 bg-rose-50/75 text-rose-700';
+}
+
+function statusPillLabel(label: string): string {
+  const normalized = normalizeStatusLabel(label);
+  if (normalized === 'HEALTHY') return 'Healthy';
+  if (normalized === 'NEEDS ATTENTION') return 'Needs attention';
+  return 'At risk';
 }
 
 /**
@@ -119,18 +138,18 @@ function buildRoomInsight(
     if (raw.includes('moisture') || raw.includes('leak') || raw.includes('water')) {
       return {
         summary: 'Moisture watch item detected',
-        implication: 'Inspect source areas soon and document any change.',
+        implication: 'Inspect source areas and document any change.',
       };
     }
     if (raw.includes('filter')) {
       return {
         summary: 'Filter replacement may be due soon',
-        implication: 'Plan a quick service check to keep performance stable.',
+        implication: 'Plan a quick service check to keep performance steady.',
       };
     }
     return {
       summary: topNegative.detail || topNegative.label,
-      implication: 'Open room details to review the highest-impact next step.',
+      implication: 'Review this room for the highest-impact next step.',
     };
   }
 
@@ -150,7 +169,7 @@ function buildRoomInsight(
   if (itemCount < 3) {
     return {
       summary: 'Inventory detail is still light',
-      implication: 'Add key items to improve room-level tracking accuracy.',
+      implication: 'Add key items to improve room-level tracking.',
     };
   }
 
@@ -158,7 +177,7 @@ function buildRoomInsight(
   if (score >= 80) {
     return {
       summary: 'No active issues',
-      implication: 'Keep checklist and documents current to maintain this status.',
+      implication: 'Keep checklist and documents current to hold this status.',
     };
   }
   if (score < 40) {
@@ -169,7 +188,7 @@ function buildRoomInsight(
   }
   return {
     summary: 'A few watch items are emerging',
-    implication: 'Check room timeline and complete one preventive action.',
+    implication: 'Complete one preventive action this week.',
   };
 }
 
@@ -310,30 +329,32 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
     : '/dashboard/properties';
 
   return (
-    <section className="space-y-3">
-      <div className="mb-3 flex items-center justify-between">
+    <section className="space-y-3 rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:space-y-4 sm:p-4">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="rounded-md bg-blue-100/70 p-1.5">
-            <LayoutGrid className="h-4 w-4 text-blue-600" />
+          <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
+            <LayoutGrid className="h-5 w-5 text-slate-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">Rooms</h2>
-            <p className="text-xs text-gray-500">Room-level health with one clear cue per room.</p>
+            <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">Rooms</h2>
+            <p className="text-sm text-gray-500">Room-level health with one clear cue per room.</p>
           </div>
         </div>
 
         {rooms.length > 0 && (
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden items-center gap-1 rounded-xl border border-gray-200/80 bg-white/90 p-1 shadow-sm md:flex">
             <button
+              type="button"
               onClick={() => scrollBy('left')}
-              className="p-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors shadow-sm"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
               aria-label="Scroll rooms left"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => scrollBy('right')}
-              className="p-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors shadow-sm"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
               aria-label="Scroll rooms right"
             >
               <ChevronRight className="w-4 h-4" />
@@ -343,13 +364,15 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-500">
+        <div className="rounded-xl border border-gray-200/80 bg-white p-4 text-sm text-gray-500 shadow-sm">
           Loading rooms…
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        <div className="rounded-xl border border-rose-200/80 bg-rose-50/80 p-4 text-sm text-rose-700">
+          {error}
+        </div>
       ) : rooms.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="rounded-xl border border-gray-200/80 bg-white p-5 shadow-sm">
           <h3 className="text-base font-semibold text-gray-900">No rooms configured yet</h3>
           <p className="text-sm text-gray-600 mt-1">
             Add rooms to unlock room-level health scores, coverage tracking, and AI scan workflows.
@@ -357,10 +380,10 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
           <div className="mt-4">
             <Link
               href={roomsManageHref}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
+              className="group inline-flex items-center gap-1.5 rounded-xl border border-gray-200/85 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900"
             >
               Set up rooms
-              <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
             </Link>
           </div>
         </div>
@@ -389,82 +412,116 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
               const roomInsight = insights
                 ? buildRoomInsight(score, itemCount, docsCount, gapCount, whyFactors)
                 : null;
+              const statusKey = normalizeStatusLabel(statusLabel);
+              const isInsightLoading = Boolean(insightsLoading[room.id]);
+              const hasInsights = Boolean(insights);
+              const headerMetaText = isInsightLoading
+                ? 'Insights loading…'
+                : hasInsights
+                  ? `${itemCount} tracked item${itemCount === 1 ? '' : 's'}`
+                  : 'Insights pending';
+              const itemMetric = hasInsights ? String(itemCount) : '—';
+              const docsMetric = hasInsights ? String(docsCount) : '—';
+              const gapsMetric = hasInsights ? String(gapCount) : '—';
+              const metadataValueClass =
+                hasInsights && gapCount > 0
+                  ? statusKey === 'AT RISK'
+                    ? 'text-rose-700'
+                    : 'text-amber-700'
+                  : 'text-gray-900';
 
               return (
                 <div
                   key={room.id}
-                  className="snap-start min-w-[86%] sm:min-w-[70%] md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)] flex-shrink-0 rounded-2xl border border-white/60 bg-white/85 p-4 shadow-sm backdrop-blur-sm will-change-transform transform-gpu"
+                  className="snap-start min-w-[92%] flex-shrink-0 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm will-change-transform transform-gpu sm:min-w-[72%] sm:p-5 md:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-2rem)/3)]"
                 >
-                  {/* Room header */}
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <RoomIcon className="w-4 h-4 text-gray-500 shrink-0" />
-                      <p className="text-base font-semibold text-gray-900 truncate">
-                        {room.name || 'Unnamed room'}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="rounded-lg border border-gray-200/80 bg-gray-50/80 p-1.5">
+                        <RoomIcon className="h-4 w-4 shrink-0 text-gray-500" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold text-gray-900">
+                          {room.name || 'Unnamed room'}
+                        </p>
+                        <p className="text-[11px] text-gray-500">{headerMetaText}</p>
+                      </div>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${statusPillClass(statusLabel)}`}>
-                      {statusLabel}
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                        statusPillClass(statusLabel),
+                      )}
+                    >
+                      {statusPillLabel(statusLabel)}
                     </span>
                   </div>
 
-                  {/* Score + insight */}
-                  <div className="mt-3 rounded-xl border border-black/10 bg-black/[0.02] p-3">
-                    {insightsLoading[room.id] ? (
-                      <div className="text-sm text-gray-400">Loading insights…</div>
-                    ) : insights ? (
-                      <div className="flex items-center gap-3">
+                  <div className="mt-3">
+                    {isInsightLoading ? (
+                      <div className="text-xs text-gray-400">Loading insights…</div>
+                    ) : insights && roomInsight ? (
+                      <div className="flex items-start gap-3">
                         <RoomHealthScoreRing
                           value={score}
-                          size={56}
-                          strokeWidth={8}
+                          size={52}
+                          strokeWidth={7}
                           ringOnly
                           animateMs={600}
                         />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          {/* Insight text */}
-                          {roomInsight ? (
-                            <>
-                              <p className="line-clamp-2 text-xs font-semibold text-gray-800 leading-snug">
-                                {roomInsight.summary}
-                              </p>
-                              <p className="line-clamp-2 text-[11px] text-gray-600 leading-snug">
-                                {roomInsight.implication}
-                              </p>
-                            </>
-                          ) : null}
-                          {/* Quick stats */}
-                          <div className="flex flex-wrap gap-2 text-[11px] text-gray-500">
-                            <span className="inline-flex items-center gap-0.5">
-                              <Package className="h-3 w-3" />
-                              {itemCount} items
-                            </span>
-                            <span className="inline-flex items-center gap-0.5">
-                              <FileText className="h-3 w-3" />
-                              {docsCount} docs
-                            </span>
-                            {gapCount > 0 && (
-                              <span className="inline-flex items-center gap-0.5 text-amber-600">
-                                <AlertCircle className="h-3 w-3" />
-                                {gapCount} gap{gapCount === 1 ? '' : 's'}
-                              </span>
-                            )}
-                          </div>
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <p className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900">
+                            {roomInsight.summary}
+                          </p>
+                          <p className="line-clamp-2 text-[11px] leading-relaxed text-gray-600">
+                            {roomInsight.implication}
+                          </p>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-400">No insights yet — add items to get started.</p>
+                      <p className="text-xs text-gray-500">
+                        No insights yet. Add items to start room-level tracking.
+                      </p>
                     )}
                   </div>
 
-                  {/* Explicit CTA */}
-                  <div className="mt-3">
+                  <div className="mt-3 grid grid-cols-3 gap-3 border-t border-gray-200/80 pt-3">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500">
+                        Items
+                      </p>
+                      <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
+                        <Package className="h-3.5 w-3.5 text-gray-400" />
+                        {itemMetric}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500">
+                        Docs
+                      </p>
+                      <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
+                        <FileText className="h-3.5 w-3.5 text-gray-400" />
+                        {docsMetric}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500">
+                        Gaps
+                      </p>
+                      <p className={cn('inline-flex items-center gap-1 text-sm font-semibold', metadataValueClass)}>
+                        <AlertCircle className={cn('h-3.5 w-3.5', hasInsights && gapCount > 0 ? 'text-current' : 'text-gray-400')} />
+                        {gapsMetric}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 border-t border-gray-200/80 pt-3">
                     <Link
                       href={roomHref}
-                      className="inline-flex min-h-[40px] items-center gap-1 rounded-md border border-brand-600/30 px-2.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-50"
+                      className="group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900"
                     >
                       Open room details
-                      <ArrowRight className="h-3 w-3" />
+                      <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
                     </Link>
                   </div>
                 </div>
@@ -475,9 +532,10 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
           <div className="mt-3">
             <Link
               href={roomsHubHref}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 transition-colors hover:bg-brand-50"
+              className="group inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-gray-200/85 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900"
             >
               View all rooms
+              <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
             </Link>
           </div>
         </>
