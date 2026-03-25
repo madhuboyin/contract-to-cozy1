@@ -1281,6 +1281,154 @@ All resolved routes have guidance context appended as query params: `?guidanceJo
 | Medium priority issues identified | 10 |
 | Low priority considerations | 8 |
 | Template registry route findings | 14 (1 broken, 8 warnings, 5 info) |
+| Route-destination pages audited | 15 |
+| Fully integrated pages | 4 (replace-repair, service-price-radar, negotiation-shield, true-cost) |
+| Informational-only pages (no step completion) | 3 (coverage-intelligence, maintenance, recalls) |
+| Dead-end pages (zero guidance integration) | 7 (inspection-report, home-event-radar, insurance-trend, do-nothing, home-savings, capital-timeline, vault) |
+| Journey steps permanently stuck (frontend gaps) | 10 across 5 templates |
+
+---
+
+## 11. Route-Destination Page Guidance Integration Audit
+
+This section reviews each page referenced by a `routePath` in `guidanceTemplateRegistry.ts` (or reachable via `FALLBACK_TOOL_ROUTE`) to determine whether the page actually fulfills its role in the guidance journey. Five integration dimensions are assessed per page:
+
+| Dimension | Meaning |
+|---|---|
+| **Reads params** | Page reads `guidanceJourneyId`, `guidanceStepKey`, `guidanceSignalIntentFamily` from URL query string |
+| **Calls completion API** | Page calls `POST /guidance/tool-completion` (or equivalent) when the user takes the relevant action |
+| **Checks execution guard** | Page (or a child component) calls `GET /guidance/execution-guard` before allowing a booking/execution action |
+| **Shows guidance UI** | Page renders `GuidanceInlinePanel` or `GuidanceWarningBanner` |
+| **Advances step** | Step status changes to `COMPLETED` in the DB as a result of user action on this page |
+
+---
+
+### 11.1 Per-Page Integration Status Matrix
+
+| Page | Template step(s) routed here | Reads params | Calls completion API | Checks execution guard | Shows guidance UI | Advances step |
+|---|---|---|---|---|---|---|
+| `replace-repair` | `repair_replace_decision` (asset lifecycle step 1) | ✅ Yes (lines 220–222) | ✅ Yes (via `runReplaceRepairAnalysis`) | ❌ No | ✅ `GuidanceInlinePanel` | ✅ Yes |
+| `coverage-intelligence` | `review_coverage` (coverage step 1), `identify_coverage_gap` (coverage step 2) | ❌ No | ❌ No | ❌ No | ✅ `GuidanceInlinePanel` (informational only) | ❌ No |
+| `service-price-radar` | `get_service_estimate` (cost-optimization step 1) | ✅ Yes (lines 589–591) | ✅ Yes (lines 289–296) | ❌ No | ✅ `GuidanceInlinePanel` | ✅ Yes |
+| `negotiation-shield` | `prepare_negotiation` (cost-optimization step 2) | ✅ Partial (journeyId + stepKey only) | ✅ Yes (via `negotiationShieldApi`) | ❌ No | ✅ `GuidanceInlinePanel` | ✅ Yes |
+| `true-cost` | `evaluate_true_cost` (cost-optimization step 3) | ✅ Partial (journeyId + stepKey only) | ✅ Yes (via `getTrueCostOwnership`) | ❌ No | ✅ `GuidanceInlinePanel` | ✅ Yes |
+| `providers` | `route_specialist`, `schedule_weather_followup` (booking / weather step) | ✅ Yes (all 3 params) | ✅ Yes (passes to booking flow) | ✅ `useExecutionGuard()` | ✅ `GuidanceWarningBanner` | ✅ Yes (via booking) |
+| `inspection-report` | `assess_urgency` (inspection step 1) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| `home-event-radar` | `review_market_event` (market-shift step 1) | ❌ No (redirects away) | ❌ No | ❌ No | ❌ No | ❌ No |
+| `maintenance` | `protect_exposed_systems` (weather step 2) | ❌ No | ❌ No | ❌ No | ✅ `GuidanceInlinePanel` (informational only) | ❌ No |
+| `insurance-trend` | `update_coverage_profile` (coverage step 3) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| `do-nothing` | `simulate_inaction` (cost-optimization step 4) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| `home-savings` | `review_savings_opportunity` (market-shift step 2) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| `capital-timeline` | `plan_capital_expense` (asset lifecycle step 3) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| `recalls` | `safety_alert`, `identify_recalled_item` (recall steps 1–2) | ❌ No | ❌ No | ❌ No | ✅ `GuidanceInlinePanel` (informational only) | ❌ No |
+| `vault` (broken) | `review_contract` (coverage step 4) | N/A — route broken | N/A | N/A | N/A | N/A |
+
+**Legend:** ✅ = implemented, ❌ = not implemented, Partial = some but not all params
+
+---
+
+### 11.2 Fully Integrated Pages (Steps Complete the Journey)
+
+Three pages (plus the `providers` booking endpoint) complete the guidance loop correctly:
+
+**`replace-repair` (`/dashboard/properties/[id]/inventory/items/[itemId]/replace-repair`)**
+- Reads all 3 guidance params from `searchParams`.
+- Passes `guidanceJourneyId`, `guidanceStepKey`, and `guidanceSignalIntentFamily` to `runReplaceRepairAnalysis()` which calls `POST /guidance/tool-completion`.
+- `GuidanceInlinePanel` shown with journey context.
+- Step transitions to `COMPLETED` on analysis run.
+- **No gap** for the happy path. Missing: execution guard (booking-stage validation) is absent, though `repair_replace_decision` is a `VALIDATION` stage step so this is acceptable.
+
+**`service-price-radar` (`/dashboard/properties/[id]/tools/service-price-radar`)**
+- Reads all 3 guidance params.
+- Passes to `createPriceRadarAnalysis()` API call.
+- Also chains forward: on completion, navigates to `negotiation-shield` with `guidanceStepKey: 'prepare_negotiation'` hardcoded (line 334 of `ServicePriceRadarClient.tsx`).
+- **Gap:** The hardcoded `guidanceStepKey: 'prepare_negotiation'` for the chain navigation bypasses `resolveNextStep()` — the frontend decides what the next step key is rather than letting the journey engine resolve it. If the template step order changes, this will silently break.
+
+**`negotiation-shield` and `true-cost`**
+- Both read `guidanceJourneyId` and `guidanceStepKey` but **not `guidanceSignalIntentFamily`**.
+- Pass the two params to their respective API calls.
+- Steps advance correctly.
+- **Gap:** Missing `guidanceSignalIntentFamily` means the backend cannot log the intent family on the step completion event. Suppression logic that keys on `intentFamily` may behave differently for steps completed here vs. the reference implementation (`replace-repair`).
+
+**`providers` (`/dashboard/properties/[id]/providers`)**
+- Full integration: reads all 3 params, passes to booking, uses `useExecutionGuard()`, shows `GuidanceWarningBanner`.
+- This is the only execution-stage page with a guard.
+- **Gap:** The booking step itself (under `bookings/`) does not complete a guidance step — the journey step for `book_service`/`route_specialist` is completed via the providers page's API call, but if the user navigates directly to `/dashboard/bookings` (bypassing providers), no guidance completion is recorded.
+
+---
+
+### 11.3 Informational-Only Pages (Show Panel But Never Advance Steps)
+
+These pages show a `GuidanceInlinePanel` to surface journey context to the user, but **do not read guidance query params and do not call the completion API**. Steps routed to these pages will remain in `PENDING` or `IN_PROGRESS` state indefinitely unless advanced by another mechanism.
+
+| Page | Step(s) stuck | Impact |
+|---|---|---|
+| `coverage-intelligence` | `review_coverage`, `identify_coverage_gap` | Coverage journey steps 1 and 2 never complete. Journey can never reach `READY` readiness. |
+| `maintenance` | `protect_exposed_systems` | Weather journey step 2 never completes. Journey stays in `IN_PROGRESS`. |
+| `recalls` | `safety_alert`, `identify_recalled_item` | Recall steps 1 and 2 never complete. Combined with `TOOL_DEFAULT_STEP_KEY` bug (see R-11), step 3 (`recall_resolution`) gets transitioned directly — but steps 1 and 2 remain `PENDING` in the DB causing readiness to stay `NOT_READY`. |
+
+---
+
+### 11.4 Dead-End Pages (Zero Guidance Integration)
+
+These pages have **no guidance logic at all** — they do not read params, show a panel, call completion, or check the guard. When a guidance journey routes a user here, the user lands on the page with no context about why they were sent there, no in-context explanation, and the journey step never advances.
+
+| Page | Step(s) affected | Template | Notes |
+|---|---|---|---|
+| `inspection-report` | `assess_urgency` | Inspection urgency | Global, non-property-scoped page. Also has the wrong `routePath` format (see R-7). |
+| `home-event-radar` | `review_market_event` | Market shift | Immediately redirects to a different URL (`/dashboard/home-event-radar?propertyId=...`), discarding all guidance query params in the redirect target. |
+| `insurance-trend` | `update_coverage_profile` | Coverage | Full guidance integration absent. Step can never complete. |
+| `do-nothing` | `simulate_inaction` | Cost optimization | Full guidance integration absent. |
+| `home-savings` | `review_savings_opportunity` | Market shift | Full guidance integration absent. |
+| `capital-timeline` | `plan_capital_expense` | Asset lifecycle | Full guidance integration absent. |
+| `vault` | `review_contract` | Coverage | Route is broken (R-1 — path mismatch `/dashboard/vault` vs. actual `/vault`). Page is unreachable via guidance routing. |
+
+---
+
+### 11.5 Booking Completion Gap
+
+The `book_service` step in most templates resolves to `providers` via `FALLBACK_TOOL_ROUTE`, which correctly enforces the execution guard and calls the completion API. However, there is an end-to-end gap:
+
+1. `bookings/` page has **no guidance integration** — if a user reaches it directly (e.g., via notification link, deep link, or browser back-button navigation), no guidance context is applied and the `book_service` step is never formally completed.
+2. When a booking is created through the `providers` page, the step is completed via the guidance API call made from the providers page, **not from the bookings confirmation screen**. This means if the booking API succeeds but the guidance completion call fails (network error, race condition), the step remains stuck.
+3. There is no idempotency retry or eventual-consistency mechanism for step completion — a transient failure on `POST /guidance/tool-completion` silently leaves the journey in a broken state.
+
+---
+
+### 11.6 Summary of Route-Destination Gaps
+
+| Severity | Gap | Affected pages / steps |
+|---|---|---|
+| **CRITICAL** | `review_contract` step unreachable — route `/dashboard/vault` is broken | vault / coverage journey step 4 |
+| **CRITICAL** | `home-event-radar` redirect discards all guidance query params | `review_market_event` / market-shift journey step 1 |
+| **HIGH** | Coverage journey steps 1–2 (`review_coverage`, `identify_coverage_gap`) never complete — `coverage-intelligence` page is informational only | Coverage journey blocked at step 1 |
+| **HIGH** | `insurance-trend`, `do-nothing`, `home-savings`, `capital-timeline` — zero guidance integration | 4 steps across 3 templates permanently stuck |
+| **HIGH** | `inspection-report` — zero guidance integration + wrong route format | `assess_urgency` step never completes |
+| **HIGH** | `recalls` — informational only; combined with `TOOL_DEFAULT_STEP_KEY` bug, steps 1–2 stay `PENDING` | Recall journey broken in both frontend and backend |
+| **MEDIUM** | `negotiation-shield` and `true-cost` do not pass `guidanceSignalIntentFamily` | Incomplete step completion events; potential suppression side-effects |
+| **MEDIUM** | `service-price-radar` hardcodes next `guidanceStepKey` in chain navigation — bypasses engine step resolution | Silent breakage if template step order changes |
+| **MEDIUM** | `maintenance` (`protect_exposed_systems`) never completes — informational panel only | Weather journey step 2 stuck |
+| **MEDIUM** | `bookings/` page has no guidance integration — direct booking bypasses guidance tracking | `book_service` step not completed on direct access |
+| **LOW** | Booking step completion is non-atomic — transient failure on completion API leaves journey in broken state with no retry | All booking-stage steps |
+
+---
+
+### 11.7 Recommended Remediation
+
+1. **Fix `vault` route** — Change `routePath` in `coverage_journey` step 4 from `/dashboard/vault` to the actual route (see R-1 in Section 9).
+2. **Fix `home-event-radar` redirect** — The `page.tsx` redirect must forward guidance query params (`guidanceJourneyId`, `guidanceStepKey`, `guidanceSignalIntentFamily`) to the destination URL.
+3. **Integrate `coverage-intelligence`** — Read all 3 guidance params; call `POST /guidance/tool-completion` when the user completes the coverage review interaction (e.g., closes the analysis modal or acknowledges the recommendation).
+4. **Integrate `inspection-report`** — Add guidance param reading and completion API call. Fix the `routePath` to a property-scoped path (see R-7).
+5. **Integrate `insurance-trend`, `do-nothing`, `home-savings`, `capital-timeline`** — Each needs param reading + a completion trigger (e.g., "I've reviewed this" acknowledgment button, or auto-complete on page load if the step is informational).
+6. **Fix `recalls` informational panel** — Add completion API call when user acknowledges the safety alert or identifies the recalled item. Also fix the `TOOL_DEFAULT_STEP_KEY['recalls']` semantic bug (see R-11).
+7. **Add `guidanceSignalIntentFamily` to `negotiation-shield` and `true-cost`** — Both should pass the full param set to the completion API.
+8. **Remove hardcoded `guidanceStepKey` from chain navigation in `service-price-radar`** — Instead fetch the next step from the journey engine (`GET /guidance/journey/:id`) after completing the current step, then navigate to the resolved `href`.
+9. **Add guidance integration to `bookings/` confirmation** — Either add a completion call on booking confirmation, or implement at-least-once delivery (retry queue) for the step completion call from `providers/`.
+10. **Add execution guard to `inspection-report` and `insurance-trend`** — Both are potential booking precursors; guard enforcement prevents users from bypassing prerequisite steps.
+
+---
+
+*Section 11 generated from direct review of all 15 route-destination page files, `GuidanceInlinePanel`/`GuidanceWarningBanner` usage grep, guidance query param grep, and `useExecutionGuard` hook grep across the entire `apps/frontend/src/app/(dashboard)/` tree.*
 
 ---
 
