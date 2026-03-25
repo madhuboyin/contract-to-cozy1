@@ -310,6 +310,32 @@ function HeroFallbackCard({
   );
 }
 
+function GuidanceUnavailableCard({ propertyId }: { propertyId: string }) {
+  return (
+    <Card className="border-border">
+      <CardContent className="space-y-3 p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+          </span>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Home guidance is temporarily unavailable</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              We couldn&apos;t load your latest action ranking right now. You can still review current signals below.
+            </p>
+          </div>
+        </div>
+        <Button asChild variant="outline" className="min-h-[40px] w-full sm:w-auto">
+          <Link href={`/dashboard/properties/${propertyId}/status-board`}>
+            Open status board
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Hero action card — Level 1 prominence
 // ---------------------------------------------------------------------------
@@ -388,7 +414,7 @@ function HeroActionCard({ action, onOpenJourney }: HeroActionCardProps) {
 
         {/* Title + why + explainability */}
         <div className="space-y-2">
-          <h2 className="text-xl font-bold leading-snug text-foreground">{safeTitle}</h2>
+          <h2 className="text-lg font-bold leading-snug text-foreground sm:text-xl">{safeTitle}</h2>
           <p className="text-sm leading-relaxed text-muted-foreground">{safeWhy}</p>
           {safeRisk ? (
             <p className="text-xs leading-relaxed text-muted-foreground/75">{safeRisk}</p>
@@ -632,13 +658,29 @@ export function DashboardHeroSection({
 
   if (guidance.isLoading) {
     return (
-      <Card className="border-border">
-        <CardContent className="flex items-center gap-3 p-5 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading your home intelligence…
-        </CardContent>
-      </Card>
+      <section className="space-y-3">
+        <Card className="border-border">
+          <CardContent className="space-y-3 p-4 sm:p-5">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading your home intelligence…
+            </div>
+            <div className="h-5 w-1/3 animate-pulse rounded bg-muted/50" />
+            <div className="h-4 w-5/6 animate-pulse rounded bg-muted/40" />
+            <div className="h-4 w-2/3 animate-pulse rounded bg-muted/30" />
+            <div className="h-9 w-full animate-pulse rounded bg-muted/45 sm:w-44" />
+          </CardContent>
+        </Card>
+        <div className="rounded-xl border border-border/70 bg-background/95 p-3.5 sm:p-4">
+          <div className="h-4 w-32 animate-pulse rounded bg-muted/40" />
+          <div className="mt-2 h-14 animate-pulse rounded-lg bg-muted/30" />
+        </div>
+      </section>
     );
+  }
+
+  if (guidance.isError && guidance.actions.length === 0) {
+    return <GuidanceUnavailableCard propertyId={propertyId} />;
   }
 
   return (

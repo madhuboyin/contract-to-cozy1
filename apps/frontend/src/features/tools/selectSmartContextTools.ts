@@ -12,6 +12,18 @@ export type SmartToolRecommendation = {
 
 type RuleCandidate = Omit<SmartToolRecommendation, 'confidence'>;
 
+function isCompletedAction(action: GuidanceActionModel): boolean {
+  return action.progress.totalCount > 0 && action.progress.completedCount >= action.progress.totalCount;
+}
+
+function isRecommendationSignalActionable(action: GuidanceActionModel): boolean {
+  if (isCompletedAction(action)) return false;
+  if (action.executionReadiness === 'NOT_READY') return false;
+  if (action.priorityGroup === 'OPTIMIZATION' && action.priorityBucket === 'LOW') return false;
+  if (action.confidenceLabel === 'LOW' && action.isLowContext) return false;
+  return true;
+}
+
 function byDomain(actions: GuidanceActionModel[], domain: GuidanceIssueDomain): GuidanceActionModel[] {
   return actions.filter((action) => action.issueDomain === domain);
 }
@@ -54,28 +66,41 @@ export function selectSmartContextTools(
   actions: GuidanceActionModel[],
   maxItems = 3,
 ): SmartToolRecommendation[] {
+  const activeActions = actions.filter(isRecommendationSignalActionable);
+  if (activeActions.length === 0) {
+    return [
+      {
+        toolId: 'status-board',
+        trigger: 'No concentrated risk cluster detected right now.',
+        value: 'Run a quick readiness check before exploring deeper tools.',
+        score: 58,
+        confidence: 'MEDIUM',
+      },
+    ];
+  }
+
   const candidates: RuleCandidate[] = [];
   const added = new Set<ToolId>();
 
-  const insuranceActions = byDomain(actions, 'INSURANCE');
+  const insuranceActions = byDomain(activeActions, 'INSURANCE');
   const insuranceHigh = byHighSeverity(insuranceActions);
-  const coverageGapCount = actions.filter(hasCoverageGap).length;
+  const coverageGapCount = activeActions.filter(hasCoverageGap).length;
 
-  const maintenancePressure = actions.filter(isMaintenancePressure);
+  const maintenancePressure = activeActions.filter(isMaintenancePressure);
   const maintenanceHigh = byHighSeverity(maintenancePressure);
 
-  const safetyActions = byDomain(actions, 'SAFETY');
+  const safetyActions = byDomain(activeActions, 'SAFETY');
   const safetyHigh = byHighSeverity(safetyActions);
-  const weatherActions = byDomain(actions, 'WEATHER');
-  const neighborhoodActions = byDomain(actions, 'NEIGHBORHOOD');
-  const financialPressure = actions.filter(isFinancialPressure);
-  const assetLifecycleActions = byDomain(actions, 'ASSET_LIFECYCLE');
-  const marketValueActions = byDomain(actions, 'MARKET_VALUE');
+  const weatherActions = byDomain(activeActions, 'WEATHER');
+  const neighborhoodActions = byDomain(activeActions, 'NEIGHBORHOOD');
+  const financialPressure = activeActions.filter(isFinancialPressure);
+  const assetLifecycleActions = byDomain(activeActions, 'ASSET_LIFECYCLE');
+  const marketValueActions = byDomain(activeActions, 'MARKET_VALUE');
 
-  const urgentCount = actions.filter(
+  const urgentCount = activeActions.filter(
     (action) => action.priorityGroup === 'IMMEDIATE' || action.priorityBucket === 'HIGH',
   ).length;
-  const immediateCount = byImmediate(actions).length;
+  const immediateCount = byImmediate(activeActions).length;
 
   const add = (candidate: RuleCandidate) => {
     if (added.has(candidate.toolId)) return;

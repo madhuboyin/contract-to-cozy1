@@ -31,6 +31,8 @@ function ToolRow({ recommendation, propertyId, showExplainability = false }: Too
 
   const href = buildPropertyAwareToolHref(toolId, propertyId);
   const Icon = def.icon;
+  const safeTrigger = trigger?.trim() || 'Current property signals indicate this tool may be timely.';
+  const safeValue = value?.trim() || 'Use this tool for a quick, focused decision pass.';
 
   return (
     <article className="group rounded-lg border border-border/50 bg-background px-3.5 py-3 transition-colors hover:border-border hover:bg-muted/20">
@@ -53,10 +55,10 @@ function ToolRow({ recommendation, propertyId, showExplainability = false }: Too
             </Badge>
           </div>
           <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-            <span className="font-medium text-foreground/75">Why now:</span> {trigger}
+            <span className="font-medium text-foreground/75">Why now:</span> {safeTrigger}
           </p>
           <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-            <span className="font-medium text-foreground/75">Value:</span> {value}
+            <span className="font-medium text-foreground/75">Value:</span> {safeValue}
           </p>
           {showExplainability ? (
             <details className="mt-1">
@@ -71,7 +73,7 @@ function ToolRow({ recommendation, propertyId, showExplainability = false }: Too
         </div>
         <Link
           href={href}
-          className="mt-0.5 inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="mt-0.5 inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           Open
           <ArrowRight className="h-3 w-3" />
@@ -90,12 +92,19 @@ interface SmartContextToolsSectionProps {
 }
 
 export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectionProps) {
-  const { actions, isLoading } = useGuidance(propertyId);
+  const { actions, isLoading, isError } = useGuidance(propertyId);
 
   const recommendations = useMemo(
     () => (isLoading ? [] : selectSmartContextTools(actions, 3)),
     [actions, isLoading],
   );
+
+  const renderableRecommendations = useMemo(
+    () => recommendations.filter((recommendation) => Boolean(getToolDefinition(recommendation.toolId))),
+    [recommendations],
+  );
+
+  const guidanceUnavailable = isError && !isLoading && actions.length === 0;
 
   return (
     <section className="rounded-xl border border-border/60 bg-muted/20 px-3.5 py-3 sm:px-4">
@@ -109,16 +118,21 @@ export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectio
       </div>
 
       {isLoading ? (
-        <div className="rounded-lg border border-border/60 bg-muted/20 px-3.5 py-3 text-xs text-muted-foreground">
-          Calibrating smart tool recommendations…
+        <div className="space-y-1.5">
+          <div className="h-[76px] animate-pulse rounded-lg border border-border/60 bg-background/70" />
+          <div className="h-[76px] animate-pulse rounded-lg border border-border/60 bg-background/70" />
         </div>
-      ) : recommendations.length === 0 ? (
+      ) : guidanceUnavailable ? (
+        <div className="rounded-lg border border-border/60 bg-background px-3.5 py-3 text-xs text-muted-foreground">
+          Smart tool recommendations are temporarily unavailable. You can still browse all tools.
+        </div>
+      ) : renderableRecommendations.length === 0 ? (
         <div className="rounded-lg border border-border/60 bg-muted/20 px-3.5 py-3 text-xs text-muted-foreground">
           No high-confidence tool picks right now. You can still explore the full tools library.
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {recommendations.map((recommendation, index) => (
+          {renderableRecommendations.map((recommendation, index) => (
             <ToolRow
               key={recommendation.toolId}
               recommendation={recommendation}

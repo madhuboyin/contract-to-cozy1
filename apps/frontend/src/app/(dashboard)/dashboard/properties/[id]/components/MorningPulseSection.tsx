@@ -224,7 +224,7 @@ function PulseRowItem({ row }: { row: PulseRow }) {
       {row.href && row.ctaLabel ? (
         <Link
           href={row.href}
-          className="mt-2 inline-flex min-h-[32px] items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="mt-2 inline-flex min-h-[36px] items-center gap-1 rounded-md px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           {row.ctaLabel}
           <ArrowRight className="h-3 w-3" />
@@ -252,11 +252,62 @@ export function MorningPulseSection({ propertyId, maxRows = 3 }: MorningPulseSec
     [guidance.actions, maxRows],
   );
 
-  // Don't render during load or when no signal insights are available
-  if (guidance.isLoading || rows.length === 0) return null;
+  if (guidance.isLoading) {
+    return (
+      <section className="rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
+        <div className="mb-2.5 flex items-center justify-between gap-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            Morning pulse
+          </p>
+          <p className="text-[11px] text-muted-foreground/75">Loading…</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="h-[108px] animate-pulse rounded-lg border border-border/60 bg-muted/20" />
+          <div className="h-[108px] animate-pulse rounded-lg border border-border/60 bg-muted/20" />
+        </div>
+      </section>
+    );
+  }
+
+  if (guidance.isError && rows.length === 0) {
+    return (
+      <section className="rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            Morning pulse
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Morning Pulse is temporarily unavailable. Review status board signals instead.
+          </p>
+        </div>
+        <Link
+          href={`/dashboard/properties/${propertyId}/status-board`}
+          className="mt-2 inline-flex min-h-[36px] items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Open status board
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </section>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <section className="rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+            Morning pulse
+          </p>
+          <p className="text-xs text-muted-foreground">
+            No notable movement this morning. Core domains look steady.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="mt-2 rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
+    <section className="rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <p className="text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
           Morning pulse

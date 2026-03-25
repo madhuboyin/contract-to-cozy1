@@ -12,27 +12,40 @@ interface HomeScoreReportCardProps {
 
 const CARD_BASE = "h-full rounded-xl border p-4 flex flex-col gap-3";
 
-function getTone(scoreBand?: string) {
+type NormalizedScoreBand = "EXCELLENT" | "GOOD" | "FAIR" | "NEEDS_ATTENTION";
+
+function normalizeScoreBand(scoreBand?: string | null): NormalizedScoreBand {
+  const normalized = String(scoreBand ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+  if (normalized === "EXCELLENT") return "EXCELLENT";
+  if (normalized === "GOOD") return "GOOD";
+  if (normalized === "FAIR") return "FAIR";
+  return "NEEDS_ATTENTION";
+}
+
+function getTone(scoreBand: NormalizedScoreBand) {
   if (scoreBand === "EXCELLENT") return "bg-emerald-50/30 border-emerald-200/60";
   if (scoreBand === "GOOD") return "bg-teal-50/30 border-teal-200/60";
   if (scoreBand === "FAIR") return "bg-amber-50/30 border-amber-200/60";
   return "bg-rose-50/25 border-rose-200/55";
 }
 
-function getAccent(scoreBand?: string): string {
-  if (scoreBand === "NEEDS ATTENTION") return "border-l-4 border-l-rose-300";
+function getAccent(scoreBand: NormalizedScoreBand): string {
+  if (scoreBand === "NEEDS_ATTENTION") return "border-l-4 border-l-rose-300";
   if (scoreBand === "FAIR") return "border-l-4 border-l-amber-400";
   return "";
 }
 
-function getLabel(scoreBand?: string) {
+function getLabel(scoreBand: NormalizedScoreBand) {
   if (scoreBand === "EXCELLENT") return "Excellent";
   if (scoreBand === "GOOD") return "Good";
   if (scoreBand === "FAIR") return "Fair";
   return "Needs Attention";
 }
 
-function getScoreColor(scoreBand?: string) {
+function getScoreColor(scoreBand: NormalizedScoreBand) {
   if (scoreBand === "EXCELLENT") return "text-emerald-600";
   if (scoreBand === "GOOD") return "text-teal-600";
   if (scoreBand === "FAIR") return "text-amber-500";
@@ -45,7 +58,7 @@ function getConfidenceWidth(confidence: HomeScoreConfidence) {
   return "w-1/3";
 }
 
-function buildHomeScoreInsight(reasonsCount: number, scoreBand?: string): string {
+function buildHomeScoreInsight(reasonsCount: number, scoreBand: NormalizedScoreBand): string {
   if (scoreBand === "EXCELLENT") return "Overall home fundamentals look stable this week.";
   if (scoreBand === "GOOD") return "The home is in a solid range with a few optimization opportunities.";
   if (scoreBand === "FAIR") return "A few systems are pulling this score down and are worth reviewing soon.";
@@ -53,22 +66,35 @@ function buildHomeScoreInsight(reasonsCount: number, scoreBand?: string): string
   return `${reasonsCount} pressure points are lowering overall home readiness.`;
 }
 
-function toReasonLine(reason: string): string {
-  const normalized = reason.trim().replace(/\s+/g, " ");
+function toReasonLine(reason: unknown): string {
+  if (reason === null || reason === undefined) return "";
+
+  if (typeof reason === "object") {
+    const reasonObj = reason as { title?: unknown; detail?: unknown };
+    const title = String(reasonObj.title ?? "").trim();
+    const detail = String(reasonObj.detail ?? "").trim();
+    const combined = [title, detail].filter(Boolean).join(": ");
+    if (!combined) return "";
+    const normalized = combined.replace(/\s+/g, " ");
+    if (normalized.length <= 120) return normalized;
+    return `${normalized.slice(0, 119).trimEnd()}…`;
+  }
+
+  const normalized = String(reason).trim().replace(/\s+/g, " ");
   if (!normalized) return "";
   if (normalized.length <= 96) return normalized;
   return `${normalized.slice(0, 95).trimEnd()}…`;
 }
 
-function buildHomeScoreMeaning(scoreBand?: string): string {
+function buildHomeScoreMeaning(scoreBand: NormalizedScoreBand): string {
   if (scoreBand === "EXCELLENT") return "How this reads: your home profile is broadly resilient right now.";
   if (scoreBand === "GOOD") return "How this reads: core systems are healthy with moderate watch items.";
   if (scoreBand === "FAIR") return "How this reads: quality is mixed and may need near-term upkeep.";
   return "How this reads: unresolved issues are creating meaningful drag on readiness.";
 }
 
-function buildHomeScorePriority(reasonsCount: number, scoreBand?: string) {
-  if (scoreBand === "NEEDS ATTENTION" || reasonsCount >= 2) {
+function buildHomeScorePriority(reasonsCount: number, scoreBand: NormalizedScoreBand) {
+  if (scoreBand === "NEEDS_ATTENTION" || reasonsCount >= 2) {
     return {
       label: "Needs Focus",
       className: "border-rose-200 bg-rose-50 text-rose-700",
@@ -143,16 +169,42 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
     );
   }
 
+  if (reportQuery.isError) {
+    return (
+      <div className={`${CARD_BASE} bg-white border-gray-200`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 flex-shrink-0 text-gray-400" />
+            <span className="truncate whitespace-nowrap text-sm font-semibold text-gray-800">
+              HomeScore
+            </span>
+          </div>
+          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+        </div>
+        <div className="text-sm text-gray-500">
+          HomeScore is temporarily unavailable. You can still open full details.
+        </div>
+        <Link
+          href={reportLink}
+          className="mt-auto inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 transition-colors hover:text-gray-900"
+        >
+          Open HomeScore details
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+    );
+  }
+
   const report = reportQuery.data;
   const score = Math.round(report?.homeScore ?? 0);
-  const scoreBand = report?.scoreBand;
+  const scoreBand = normalizeScoreBand(report?.scoreBand ?? null);
   const scoreLabel = getLabel(scoreBand);
   const scoreColor = getScoreColor(scoreBand);
   const weeklyChange = formatWeeklyDelta(report?.deltaFromPreviousWeek ?? null);
   const confidence = report?.confidence ?? "LOW";
   const reasonsCount = report?.topReasonsScoreNotHigher?.length ?? 0;
   const reasonPreview = (report?.topReasonsScoreNotHigher ?? [])
-    .map((reason) => toReasonLine(String(reason ?? "")))
+    .map((reason) => toReasonLine(reason))
     .filter(Boolean)
     .slice(0, 2);
   const insight = buildHomeScoreInsight(reasonsCount, scoreBand);

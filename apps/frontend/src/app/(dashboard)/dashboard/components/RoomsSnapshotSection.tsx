@@ -461,7 +461,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                   <div className="mt-3">
                     <Link
                       href={roomHref}
-                      className="inline-flex min-h-[36px] items-center gap-1 rounded-md border border-brand-600/30 px-2.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-50"
+                      className="inline-flex min-h-[40px] items-center gap-1 rounded-md border border-brand-600/30 px-2.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-50"
                     >
                       Open room details
                       <ArrowRight className="h-3 w-3" />
