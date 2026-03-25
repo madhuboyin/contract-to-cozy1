@@ -596,7 +596,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4">
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
               <HomeSavingsCheckToolCard propertyId={selectedPropertyId || ''} />
               <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
               <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
