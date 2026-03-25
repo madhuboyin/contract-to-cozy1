@@ -16,11 +16,13 @@ type HomeSavingsCheckToolCardProps = {
 };
 
 const CARD_BASE =
-  'flex h-full flex-col gap-3 rounded-2xl border border-slate-300/70 bg-white p-4 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.45)] sm:p-5';
+  'flex h-full flex-col rounded-2xl border border-slate-300/70 bg-white p-4 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.45)] sm:p-5';
 const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/80';
 const HEADER_ICON = 'h-3.5 w-3.5 text-slate-600';
 const TITLE_CLASS = 'text-[15px] font-semibold leading-none text-gray-900';
-const BADGE_BASE = 'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-medium leading-none';
+const BADGE_BASE =
+  'inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10px] font-medium leading-none';
+const VALUE_ZONE = 'mt-3 rounded-xl bg-slate-50/80 px-3 py-2.5 ring-1 ring-inset ring-slate-200/75';
 const CTA_CLASS =
   'group inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 transition-colors hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -49,24 +51,24 @@ function statusMeta(
   if (loading) {
     return {
       label: 'Checking',
-      className: 'bg-slate-100 text-slate-700',
+      className: 'border-slate-200/80 bg-slate-50/85 text-slate-700',
     };
   }
   if (!summary || configuredCount === 0) {
     return {
       label: 'Not set up',
-      className: 'bg-slate-100 text-slate-700',
+      className: 'border-slate-200/80 bg-slate-50/85 text-slate-700',
     };
   }
   if (foundSavingsCount > 0) {
     return {
       label: 'Found savings',
-      className: 'bg-emerald-50 text-emerald-700',
+      className: 'border-emerald-200/80 bg-emerald-50/85 text-emerald-700',
     };
   }
   return {
     label: 'Connected',
-    className: 'bg-teal-50 text-teal-700',
+    className: 'border-teal-200/80 bg-teal-50/85 text-teal-700',
   };
 }
 
@@ -159,7 +161,7 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
 
   return (
     <div className={CARD_BASE}>
-      <div className="flex items-start justify-between gap-2.5">
+      <div className="flex items-center justify-between gap-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <div className={HEADER_ICON_WRAP}>
             <PiggyBank className={HEADER_ICON} />
@@ -169,40 +171,42 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
         <span className={cn(BADGE_BASE, status.className)}>{status.label}</span>
       </div>
 
-      <p className="line-clamp-2 text-[13px] leading-5 text-gray-500">
+      <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-gray-500">
         You may be paying more than necessary.
       </p>
 
-      {loading ? (
-        <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
-          Checking savings profile…
-        </span>
-      ) : showPotential ? (
-        hasPositiveSavings ? (
-          <div>
-            <div className="flex items-end gap-1.5">
-              <span className="text-[2rem] font-semibold leading-none tracking-tight text-gray-900">
-                {money(monthlyPotential)}
-              </span>
-              <span className="mb-1 text-sm font-medium text-gray-500">/mo</span>
+      <div className={VALUE_ZONE}>
+        {loading ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
+            Checking savings profile…
+          </span>
+        ) : showPotential ? (
+          hasPositiveSavings ? (
+            <div>
+              <div className="flex items-end gap-1.5">
+                <span className="text-[2.15rem] font-semibold leading-none tracking-tight text-gray-900">
+                  {money(monthlyPotential)}
+                </span>
+                <span className="mb-1 text-sm font-medium text-gray-500">/mo</span>
+              </div>
+              <p className="mt-1 text-sm text-gray-600">{money(annualPotential)}/yr potential</p>
             </div>
-            <p className="mt-1 text-sm text-gray-600">{money(annualPotential)}/yr potential</p>
-          </div>
+          ) : (
+            <div>
+              <p className="text-[1.4rem] font-semibold leading-tight tracking-tight text-gray-900">No savings identified</p>
+              <p className="mt-1 text-sm text-gray-600">Refresh after adding current provider pricing.</p>
+            </div>
+          )
         ) : (
           <div>
-            <p className="text-xl font-semibold tracking-tight text-gray-900">No savings identified</p>
-            <p className="mt-1 text-sm text-gray-600">Refresh after adding current provider pricing.</p>
+            <p className="text-[1.4rem] font-semibold leading-tight tracking-tight text-gray-900">Add bill categories</p>
+            <p className="mt-1 text-sm text-gray-600">Connect one category to unlock comparisons.</p>
           </div>
-        )
-      ) : (
-        <div>
-          <p className="text-xl font-semibold tracking-tight text-gray-900">Add bill categories</p>
-          <p className="mt-1 text-sm text-gray-600">Connect one category to unlock comparisons.</p>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div className="space-y-1.5 text-[13px] leading-5 text-gray-600">
+      <div className="mt-2 space-y-1 text-[12px] leading-5 text-gray-500">
         <p>
           <span className="font-medium text-gray-800">
             {summary ? `${configuredCount}/${summary.categories.length}` : '—'}
@@ -221,7 +225,7 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
         </p>
       </div>
 
-      <div className="mt-auto pt-1">
+      <div className="mt-auto pt-3">
         <button
           type="button"
           onClick={handleCta}
