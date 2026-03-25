@@ -141,9 +141,11 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1 text-right">
           <span className={cn(BADGE_BASE, priority.className)}>{priority.label}</span>
-          <span className={cn("text-[11px] font-medium", weeklyDeltaClass(weeklyChange))}>
-            {weeklyDeltaLabel(weeklyChange)}
-          </span>
+          {weeklyChange !== "No change" ? (
+            <span className={cn("text-[11px] font-medium", weeklyDeltaClass(weeklyChange))}>
+              {weeklyDeltaLabel(weeklyChange)}
+            </span>
+          ) : null}
         </div>
       </div>
 
