@@ -15,12 +15,13 @@ type CoverageIntelligenceToolCardProps = {
 };
 
 const CARD_BASE =
-  'flex h-full flex-col gap-3.5 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm sm:p-5';
-const HEADER_ICON_WRAP = 'rounded-lg border border-gray-200/80 bg-gray-50/80 p-1.5';
-const HEADER_ICON = 'h-4 w-4 text-teal-700';
-const TITLE_CLASS = 'text-sm font-semibold text-gray-900';
-const SUPPORT_LABEL = 'text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500';
-const BADGE_BASE = 'inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium';
+  'flex h-full flex-col gap-3 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-[0_6px_18px_-16px_rgba(15,23,42,0.4)] sm:p-5';
+const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/80';
+const HEADER_ICON = 'h-3.5 w-3.5 text-slate-600';
+const TITLE_CLASS = 'text-[15px] font-semibold leading-none text-gray-900';
+const BADGE_BASE = 'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-medium leading-none';
+const CTA_CLASS =
+  'group inline-flex items-center gap-1.5 text-sm font-medium text-teal-700 transition-colors hover:text-teal-800 disabled:cursor-not-allowed disabled:opacity-50';
 
 function normalizeVerdict(verdict: string): string {
   return verdict
@@ -31,27 +32,27 @@ function normalizeVerdict(verdict: string): string {
 
 function statusMeta(loading: boolean, analysis: CoverageAnalysisDTO | null, hasAnalysis: boolean) {
   if (loading) {
-    return { label: 'Checking', className: 'border-slate-200/80 bg-slate-50/75 text-slate-700' };
+    return { label: 'Checking', className: 'bg-slate-100 text-slate-700' };
   }
   if (!hasAnalysis || !analysis) {
-    return { label: 'Not run yet', className: 'border-slate-200/80 bg-slate-50/75 text-slate-700' };
+    return { label: 'Not run yet', className: 'bg-slate-100 text-slate-700' };
   }
   if (analysis.status === 'STALE') {
     return {
       label: 'Review recommended',
-      className: 'border-amber-200/80 bg-amber-50/75 text-amber-700',
+      className: 'bg-amber-50 text-amber-700',
     };
   }
   if (analysis.status === 'ERROR') {
-    return { label: 'Needs refresh', className: 'border-rose-200/80 bg-rose-50/75 text-rose-700' };
+    return { label: 'Needs refresh', className: 'bg-rose-50 text-rose-700' };
   }
   if (analysis.overallVerdict === 'WORTH_IT') {
-    return { label: 'Worth it', className: 'border-emerald-200/80 bg-emerald-50/75 text-emerald-700' };
+    return { label: 'Worth it', className: 'bg-emerald-50 text-emerald-700' };
   }
   if (analysis.overallVerdict === 'SITUATIONAL') {
-    return { label: 'Situational', className: 'border-amber-200/80 bg-amber-50/75 text-amber-700' };
+    return { label: 'Situational', className: 'bg-amber-50 text-amber-700' };
   }
-  return { label: 'Not worth it', className: 'border-rose-200/80 bg-rose-50/75 text-rose-700' };
+  return { label: 'Not worth it', className: 'bg-rose-50 text-rose-700' };
 }
 
 function primaryInsight(analysis: CoverageAnalysisDTO | null, hasAnalysis: boolean) {
@@ -159,8 +160,8 @@ export default function CoverageIntelligenceToolCard({
 
   return (
     <div className={CARD_BASE}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex items-start justify-between gap-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           <div className={HEADER_ICON_WRAP}>
             <ShieldCheck className={HEADER_ICON} />
           </div>
@@ -169,42 +170,37 @@ export default function CoverageIntelligenceToolCard({
         <span className={cn(BADGE_BASE, status.className)}>{status.label}</span>
       </div>
 
-      <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">
+      <p className="line-clamp-2 text-[13px] leading-5 text-gray-500">
         Insurance + warranty coverage assessment.
       </p>
 
-      <div className="rounded-xl border border-gray-200/80 bg-gray-50/80 px-3 py-2.5">
-        {loading ? (
-          <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
-            Checking coverage profile…
-          </span>
-        ) : (
-          <>
-            <p className={SUPPORT_LABEL}>Primary Insight</p>
-            <p className="mt-1 text-base font-semibold text-gray-900">{insight.headline}</p>
-            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-600">{insight.detail}</p>
-          </>
-        )}
+      {loading ? (
+        <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
+          Checking coverage profile…
+        </span>
+      ) : (
+        <div>
+          <p className="text-2xl font-semibold tracking-tight text-gray-900">{insight.headline}</p>
+          <p className="mt-1 line-clamp-2 text-sm leading-6 text-gray-600">{insight.detail}</p>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-gray-600">
+        <span className="font-medium capitalize text-gray-800">{confidence}</span>
+        <span>confidence</span>
+        <span aria-hidden className="text-gray-300">
+          ·
+        </span>
+        <span>{hasAnalysis ? `${nextSteps} next step${nextSteps === 1 ? '' : 's'}` : 'Next steps after first run'}</span>
       </div>
 
-      <div className="space-y-2 border-t border-gray-200/80 pt-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className={SUPPORT_LABEL}>Confidence</span>
-          <span className="text-sm font-semibold capitalize text-gray-900">{confidence}</span>
-        </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <span className={SUPPORT_LABEL}>Next Steps</span>
-          <span className="text-sm font-semibold text-gray-900">{hasAnalysis ? nextSteps : '—'}</span>
-        </div>
-      </div>
-
-      <div className="mt-auto border-t border-gray-200/80 pt-3">
+      <div className="mt-auto pt-1">
         <button
           type="button"
           onClick={handlePrimaryCta}
           disabled={loading || running || !propertyId}
-          className="group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+          className={CTA_CLASS}
         >
           {running ? (
             <>
@@ -214,7 +210,7 @@ export default function CoverageIntelligenceToolCard({
           ) : (
             <>
               {ctaLabel}
-              <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+              <ArrowRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
             </>
           )}
         </button>
