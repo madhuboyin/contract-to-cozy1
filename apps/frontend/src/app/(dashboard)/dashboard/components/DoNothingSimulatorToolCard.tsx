@@ -179,12 +179,12 @@ export default function DoNothingSimulatorToolCard({
           </span>
         ) : hasRun && run ? (
           <div>
-            <p className="text-4xl font-display font-semibold leading-tight tracking-tight text-gray-900">{projectedRange}</p>
+            <p className="text-3xl font-semibold leading-tight tracking-tight text-gray-900">{projectedRange}</p>
             <p className="mt-1 text-sm text-gray-600">Projected cost impact over the selected horizon.</p>
           </div>
         ) : (
           <div>
-            <p className="text-xl font-semibold leading-tight tracking-tight text-gray-900">Run 12-month scenario</p>
+            <p className="text-lg font-semibold leading-tight tracking-tight text-gray-900">Run 12-month scenario</p>
             <p className="mt-1 text-sm text-gray-600">Estimate delayed-action cost and risk pressure.</p>
           </div>
         )}
