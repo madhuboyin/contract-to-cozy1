@@ -64,7 +64,7 @@ import {
   getServicePriceRadarUserMessage,
 } from './servicePriceRadarUi';
 import { getGuidanceNextStep } from '@/lib/api/guidanceApi';
-import { getInventoryItem } from '../../../inventory/inventoryApi';
+import { getInventoryItem } from '../../../../inventory/inventoryApi';
 import type { InventoryItemCategory } from '@/types';
 
 // Maps inventory item category to the closest ServiceRadarCategory for pre-selection.
