@@ -44,6 +44,7 @@ export default function BookProviderPage() {
   const maintenancePredictionId = searchParams.get('predictionId');
   const inventoryItemId = searchParams.get('itemId');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
   const providerId = params.id as string;
 
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -205,6 +206,7 @@ export default function BookProviderPage() {
       ...(maintenancePredictionId && { maintenancePredictionId }),
       ...(inventoryItemId && { inventoryItemId }),
       ...(guidanceJourneyId && { guidanceJourneyId }),
+      ...(guidanceJourneyId && guidanceStepKey && { guidanceStepKey }),
       ...(guidanceJourneyId && { guidanceEnforceGuard: true }),
     };
 

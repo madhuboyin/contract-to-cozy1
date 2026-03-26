@@ -31,6 +31,7 @@ export const createBookingSchema = z.object({
   maintenancePredictionId: z.string().uuid('Invalid maintenance prediction ID').optional(),
   inventoryItemId: z.string().uuid('Invalid inventory item ID').optional(),
   guidanceJourneyId: z.string().uuid('Invalid guidance journey ID').optional(),
+  guidanceStepKey: z.string().optional(),
   guidanceEnforceGuard: z.boolean().optional(),
 });
 

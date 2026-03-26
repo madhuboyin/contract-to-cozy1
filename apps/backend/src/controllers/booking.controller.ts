@@ -46,9 +46,11 @@ export class BookingController {
 
       const {
         guidanceJourneyId,
+        guidanceStepKey,
         ...bookingInput
       } = input as CreateBookingInput & {
         guidanceJourneyId?: string;
+        guidanceStepKey?: string;
       };
 
       await guidanceBookingGuardService.assertCanExecute({
@@ -67,7 +69,7 @@ export class BookingController {
             actorUserId: userId,
             journeyId: guidanceJourneyId,
             sourceToolKey: 'booking',
-            stepKey: 'book_service',
+            stepKey: guidanceStepKey ?? undefined,
             status: 'COMPLETED',
             inventoryItemId: bookingInput.inventoryItemId ?? null,
             producedData: {
