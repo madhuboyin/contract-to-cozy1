@@ -238,6 +238,7 @@ export class GuidanceDerivedDataService {
       where: { id: params.journeyId },
       data: {
         derivedSnapshotJson: nextSnapshot,
+        version: { increment: 1 },
       },
     });
 

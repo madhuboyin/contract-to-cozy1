@@ -458,6 +458,7 @@ export class GuidanceJourneyService {
             sourceToolKey: params.signal.sourceToolKey,
             updatedFromSignalAt: now.toISOString(),
           }),
+          version: { increment: 1 },
         },
         include: {
           steps: {

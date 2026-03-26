@@ -311,6 +311,7 @@ export class GuidanceStepResolverService {
         data: {
           isLowContext: true,
           missingContextKeys: nextMissing,
+          version: { increment: 1 },
         },
       });
     }
@@ -454,6 +455,7 @@ export class GuidanceStepResolverService {
           lastTransitionAt: now,
           isLowContext,
           missingContextKeys,
+          version: { increment: 1 },
         },
       });
     }
