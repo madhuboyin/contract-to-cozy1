@@ -1,5 +1,5 @@
 import { APIError } from '../../middleware/error.middleware';
-import { getGuidanceTemplateBySignalFamily, TOOL_DEFAULT_STEP_KEY } from './guidanceTemplateRegistry';
+import { getGuidanceTemplateBySignalFamily, getDefaultStepKey } from './guidanceTemplateRegistry';
 import { guidanceSignalResolverService } from './guidanceSignalResolver.service';
 import { guidanceStepResolverService } from './guidanceStepResolver.service';
 import { guidanceFinancialContextService } from './guidanceFinancialContext.service';
@@ -541,7 +541,7 @@ export class GuidanceJourneyService {
       journey = ingest.journey;
     }
 
-    const defaultStepKey = TOOL_DEFAULT_STEP_KEY[input.sourceToolKey] ?? null;
+    const defaultStepKey = getDefaultStepKey(input.sourceToolKey, journey.journeyTypeKey ?? null);
     const currentStep = (journey.steps ?? []).find((step: any) => step.status === 'IN_PROGRESS' || step.status === 'PENDING');
 
     const resolvedStepKey = input.stepKey ?? defaultStepKey ?? currentStep?.stepKey ?? journey.currentStepKey;
