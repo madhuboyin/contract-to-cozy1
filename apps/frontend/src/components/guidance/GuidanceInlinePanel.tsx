@@ -22,7 +22,7 @@ type GuidanceInlinePanelProps = {
 export function GuidanceInlinePanel({
   propertyId,
   title = 'Guided Next Steps',
-  subtitle = 'Deterministic steps based on current signals and tool outputs.',
+  subtitle = 'Recommended steps based on your current home signals and tool results.',
   issueDomains,
   toolKey,
   limit = 2,

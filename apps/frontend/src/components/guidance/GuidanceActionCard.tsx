@@ -17,6 +17,7 @@ type GuidanceActionCardProps = {
 export function GuidanceActionCard({ action, onOpenJourney, compact = false }: GuidanceActionCardProps) {
   const warningMessage = action.blockedReason ?? action.warnings?.[0] ?? null;
   const safeTitle = action.title?.trim() ? action.title.trim() : 'Guided Next Step';
+  const showSeverityBadge = Boolean(action.severity && action.severity !== 'UNKNOWN');
   const advisorySubtitle =
     action.explanation?.why ??
     (action.subtitle?.trim() ? action.subtitle : 'Follow the next recommended step to keep this issue on track.');
@@ -32,7 +33,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
           <CardTitle className={compact ? 'text-base' : 'text-lg'}>{safeTitle}</CardTitle>
           <div className="flex items-center gap-2">
             <GuidanceStatusBadge kind="readiness" value={action.executionReadiness} />
-            <GuidanceStatusBadge kind="severity" value={action.severity ?? null} />
+            {showSeverityBadge ? <GuidanceStatusBadge kind="severity" value={action.severity ?? null} /> : null}
           </div>
         </div>
         <p className="mb-0 text-sm text-muted-foreground">{advisorySubtitle}</p>
@@ -47,18 +48,21 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
         ) : null}
 
         {action.nextStep ? (
-          <GuidancePrimaryCta
-            label={nextStepLabel}
-            stepNumber={action.nextStep.stepOrder}
-            href={action.href}
-            executionReadiness={action.executionReadiness}
-            blockedReason={action.blockedReason}
-            className="min-h-[44px] w-full"
-          />
+          <div className="space-y-1.5">
+            <p className="mb-0 text-xs font-medium text-muted-foreground">Recommended next action</p>
+            <GuidancePrimaryCta
+              label={nextStepLabel}
+              stepNumber={action.nextStep.stepOrder}
+              href={action.href}
+              executionReadiness={action.executionReadiness}
+              blockedReason={action.blockedReason}
+              className="min-h-[44px] w-full"
+            />
+          </div>
         ) : (
           <GuidanceWarningBanner
             title="Next step unavailable"
-            message="Guidance is updating. Refresh in a moment or open the full journey details."
+            message="We're preparing your next step. Refresh in a moment or open all steps for details."
           />
         )}
 
@@ -76,7 +80,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
 
           {onOpenJourney ? (
             <Button type="button" variant="ghost" size="sm" onClick={() => onOpenJourney(action)}>
-              View full journey
+              See all steps
             </Button>
           ) : null}
         </div>

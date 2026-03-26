@@ -74,11 +74,11 @@ export function formatIssueDomain(domain: GuidanceIssueDomain): string {
 }
 
 export function formatReadinessLabel(readiness: GuidanceExecutionReadiness): string {
-  if (readiness === 'NOT_READY') return 'Not Ready';
-  if (readiness === 'NEEDS_CONTEXT') return 'Needs Context';
+  if (readiness === 'NOT_READY') return 'Blocked';
+  if (readiness === 'NEEDS_CONTEXT') return 'Needs Info';
   if (readiness === 'READY') return 'Ready';
-  if (readiness === 'TRACKING_ONLY') return 'Tracking';
-  return 'Unknown';
+  if (readiness === 'TRACKING_ONLY') return 'Monitoring';
+  return 'Updating';
 }
 
 export function formatStepStatusLabel(status: GuidanceStepStatus): string {
@@ -142,19 +142,34 @@ export function resolveGuidanceStepHref(args: {
 }
 
 export function buildJourneyTitle(journey: GuidanceJourneyDTO): string {
+  const familyKey = String(journey.primarySignal?.signalIntentFamily ?? '').toLowerCase();
+  const familyTitle: Record<string, string> = {
+    cost_of_inaction_risk: 'Cost Of Waiting Risk',
+    financial_exposure: 'Out-of-Pocket Cost Risk',
+    coverage_gap: 'Coverage Gap Detected',
+    coverage_lapse_detected: 'Coverage Lapse Detected',
+    lifecycle_end_or_past_life: 'Aging System Risk',
+    maintenance_failure_risk: 'Maintenance Failure Risk',
+    inspection_followup_needed: 'Inspection Follow-up Needed',
+    recall_detected: 'Safety Recall Alert',
+    freeze_risk: 'Freeze Risk Alert',
+  };
+
+  if (familyTitle[familyKey]) return familyTitle[familyKey];
+
   const domain = formatIssueDomain(journey.issueDomain);
   const signalFamily = journey.primarySignal?.signalIntentFamily
     ? formatEnumLabel(journey.primarySignal.signalIntentFamily)
     : null;
 
-  return signalFamily ? `${signalFamily} - ${domain}` : `${domain} Guidance`;
+  return signalFamily ? signalFamily : `${domain} Action Plan`;
 }
 
 export function buildJourneySubtitle(
   journey: GuidanceJourneyDTO,
   nextStepLabel?: string | null
 ): string {
-  if (nextStepLabel) return `Next: ${nextStepLabel}`;
-  if (journey.currentStepKey) return `Current step: ${formatEnumLabel(journey.currentStepKey)}`;
-  return 'Track and resolve this issue with ordered next steps.';
+  if (nextStepLabel) return `Start with: ${nextStepLabel}`;
+  if (journey.currentStepKey) return `In progress: ${formatEnumLabel(journey.currentStepKey)}`;
+  return 'Follow these steps to resolve this issue.';
 }

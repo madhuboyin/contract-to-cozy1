@@ -565,8 +565,8 @@ export default function DashboardPage() {
         <motion.div {...sectionMotion(3)}>
           <GuidanceInlinePanel
             propertyId={selectedPropertyId}
-            title="Deterministic Next Steps"
-            subtitle="Complete decision, coverage, and pricing steps in order before execution actions."
+            title="What To Do Next"
+            subtitle="Based on your home data and recent tool results. Start with the highlighted step to reduce risk and avoid unnecessary spend."
             limit={3}
           />
         </motion.div>
