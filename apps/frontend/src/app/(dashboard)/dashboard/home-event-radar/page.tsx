@@ -22,6 +22,7 @@ import { RadarFeedItem } from '@/components/features/homeEventRadar/RadarFeedIte
 import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFeedSkeleton';
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -306,6 +307,8 @@ export default function HomeEventRadarPage() {
   const { selectedPropertyId } = usePropertyContext();
   const propertyId = selectedPropertyId ?? searchParams.get('propertyId') ?? undefined;
 
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
 
   const [filter, setFilter] = React.useState<FilterKey>('all');
@@ -601,6 +604,13 @@ export default function HomeEventRadarPage() {
           activeFilter={filter}
         />
       </div>
+
+      <GuidanceStepCompletionCard
+        propertyId={propertyId}
+        guidanceStepKey={guidanceStepKey}
+        guidanceJourneyId={guidanceJourneyId}
+        actionLabel="Mark radar review complete"
+      />
 
       {/* Detail sheet */}
       {propertyId && (
