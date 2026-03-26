@@ -65,6 +65,17 @@ import {
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
+// Signal families that map to specific maintenance service categories.
+// When a guidance journey routes here via one of these families, the completion
+// card is gated on tasks in those categories being done — not all open tasks.
+// Families absent from this map fall back to gating on all open tasks.
+const SIGNAL_FAMILY_MAINTENANCE_CATEGORIES: Record<string, MaintenanceTaskServiceCategory[]> = {
+  freeze_risk: ['PLUMBING', 'HVAC'],
+  flood_risk: ['PLUMBING'],
+  heat_risk: ['HVAC'],
+  energy_inefficiency_detected: ['HVAC', 'ELECTRICAL'],
+  high_utility_cost: ['HVAC', 'ELECTRICAL'],
+};
 
 // --- Helper Functions ---
 
@@ -144,6 +155,7 @@ export default function MaintenancePage() {
   const taskIdFromUrl = searchParams.get('taskId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const priority = searchParams.get('priority') === 'true';
   const from = searchParams.get('from');
 
@@ -299,6 +311,19 @@ export default function MaintenancePage() {
     if (view === 'completed') return completedTasks;
     return openTasks; // all view handled separately
   }, [view, openTasks, completedTasks]);
+
+  // Tasks that block guidance step completion. Scoped to signal-relevant service
+  // categories when a known mapping exists; otherwise falls back to all open tasks.
+  const guidanceScopedOpenTasks = useMemo(() => {
+    if (!guidanceStepKey) return [];
+    const categories = guidanceSignalIntentFamily
+      ? SIGNAL_FAMILY_MAINTENANCE_CATEGORIES[guidanceSignalIntentFamily]
+      : undefined;
+    if (categories && categories.length > 0) {
+      return openTasks.filter((t) => t.serviceCategory != null && categories.includes(t.serviceCategory));
+    }
+    return openTasks;
+  }, [guidanceStepKey, guidanceSignalIntentFamily, openTasks]);
 
   // ✅ UPDATED: Open modal in edit mode (open tasks)
   const handleOpenModal = (task: PropertyMaintenanceTask) => {
@@ -1133,12 +1158,14 @@ export default function MaintenancePage() {
         onRemove={modalMode === 'view' ? () => toast({ title: 'View Only', description: 'Completed tasks cannot be removed here.' }) : handleRemoveTask}
       />
 
-      <GuidanceStepCompletionCard
-        propertyId={selectedPropertyId}
-        guidanceStepKey={guidanceStepKey}
-        guidanceJourneyId={guidanceJourneyId}
-        actionLabel="Mark checklist complete"
-      />
+      {mainData && guidanceScopedOpenTasks.length === 0 && (
+        <GuidanceStepCompletionCard
+          propertyId={selectedPropertyId}
+          guidanceStepKey={guidanceStepKey}
+          guidanceJourneyId={guidanceJourneyId}
+          actionLabel="Mark checklist complete"
+        />
+      )}
     </MobilePageContainer>
   );
 }
