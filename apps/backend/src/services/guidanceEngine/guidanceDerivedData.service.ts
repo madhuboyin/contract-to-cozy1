@@ -248,7 +248,9 @@ export class GuidanceDerivedDataService {
         stepId: params.stepId ?? null,
         signalId: params.signalId ?? null,
         eventType: 'DERIVED_DATA_UPDATED',
+        actorType: params.actorUserId ? 'USER' : 'SYSTEM',
         actorUserId: params.actorUserId ?? null,
+        changedKeys: Object.keys(normalized),
         payloadJson: {
           stepKey: params.stepKey,
           toolKey: params.toolKey ?? null,

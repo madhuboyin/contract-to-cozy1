@@ -422,6 +422,7 @@ export class GuidanceJourneyService {
           journeyId: journey.id,
           signalId: params.signal.id,
           eventType: 'JOURNEY_CREATED',
+          actorType: params.actorUserId ? 'USER' : 'SYSTEM',
           actorUserId: params.actorUserId ?? null,
           payloadJson: {
             journeyTypeKey: template.journeyTypeKey,
