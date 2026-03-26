@@ -3002,24 +3002,35 @@ model SignalAttribution {
 // =============================================================================
 
 enum GuidanceIssueDomain {
+  // Templates implemented: recall_safety_resolution
   SAFETY
+  // Templates implemented: inspection_followup_resolution
   MAINTENANCE
+  // Templates implemented: coverage_gap_resolution
   INSURANCE
+  // Templates implemented: financial_exposure_resolution, financial_inaction_resolution
   FINANCIAL
-  // --- Templates implemented for the domains above ---
-  // --- Domains below have no journey template yet; signals fall to DEFAULT_TEMPLATE ---
-  COMPLIANCE
-  MARKET_VALUE
+  // Templates implemented: asset_lifecycle_resolution
   ASSET_LIFECYCLE
+  // Templates implemented: weather_risk_resolution (S6-38: all severe weather families)
+  WEATHER
+  // Templates implemented: compliance_resolution (S6-37)
+  COMPLIANCE
+  // Templates implemented: energy_efficiency_resolution (S6-37)
+  ENERGY
+  // --- Formally out of scope for journey templates; signals route to DEFAULT_TEMPLATE ---
+  // CLAIMS: handled by claims-assistance feature (separate from guidance engine)
   CLAIMS
+  // MARKET_VALUE: no actionable journey template defined; signals surface as informational
+  MARKET_VALUE
+  // PRICING, NEGOTIATION, BOOKING: covered by standalone tools, not journey templates
   PRICING
   NEGOTIATION
   BOOKING
+  // DOCUMENTATION, NEIGHBORHOOD, ONBOARDING: out of scope for journey templates
   DOCUMENTATION
   NEIGHBORHOOD
   ONBOARDING
-  WEATHER
-  ENERGY
   OTHER
 }
 
@@ -3035,13 +3046,26 @@ enum GuidanceSignalIntentFamily {
   coverage_lapse_detected
   // recall_safety_resolution
   recall_detected
-  // weather_risk_resolution
+  // weather_risk_resolution (S6-38: expanded from freeze_risk only)
   freeze_risk
+  flood_risk
+  hurricane_risk
+  wind_risk
+  heat_risk
+  wildfire_risk
   // inspection_followup_resolution
   inspection_followup_needed
   // financial_exposure_resolution
   financial_exposure
+  // financial_inaction_resolution
   cost_of_inaction_risk
+  // compliance_resolution (S6-37)
+  permit_required
+  hoa_violation_detected
+  safety_inspection_due
+  // energy_efficiency_resolution (S6-37)
+  energy_inefficiency_detected
+  high_utility_cost
   // DEFAULT_TEMPLATE catch-all
   generic_actionable_signal
 }
@@ -3308,7 +3332,7 @@ model GuidanceJourneyStep {
   isRequired         Boolean                    @default(true)
 
   toolKey   String?
-  flowKey   String? // Stored for future sub-flow routing; not read by current routing logic.
+  // S6-39: flowKey removed — was stored for future sub-flow routing but never consumed.
   routePath String? // Copied from template at journey creation. May become stale if template changes (see templateVersion on GuidanceJourney).
 
   requiredContextKeys String[] @default([])

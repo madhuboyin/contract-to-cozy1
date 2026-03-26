@@ -97,7 +97,6 @@ export class GuidanceStepResolverService {
             status: 'PENDING',
             isRequired: step.isRequired,
             toolKey: step.toolKey ?? null,
-            flowKey: step.flowKey ?? null,
             routePath: step.routePath ?? null,
             requiredContextKeys: step.requiredContextKeys ?? [],
             missingContextKeys: [],
@@ -117,7 +116,6 @@ export class GuidanceStepResolverService {
           executionReadiness: step.executionReadiness,
           isRequired: step.isRequired,
           toolKey: step.toolKey ?? null,
-          flowKey: step.flowKey ?? null,
           routePath: step.routePath ?? null,
           requiredContextKeys: step.requiredContextKeys ?? [],
         },
@@ -562,7 +560,7 @@ export class GuidanceStepResolverService {
       warnings,
       blockedReason,
       recommendedToolKey: currentStep.toolKey ?? updatedJourney.primarySignal?.recommendedToolKey ?? null,
-      recommendedFlowKey: currentStep.flowKey ?? updatedJourney.primarySignal?.recommendedFlowKey ?? null,
+      recommendedFlowKey: updatedJourney.primarySignal?.recommendedFlowKey ?? null,
     };
   }
 }

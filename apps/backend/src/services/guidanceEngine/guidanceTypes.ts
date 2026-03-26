@@ -132,7 +132,7 @@ export type GuidanceStepTemplate = {
   executionReadiness: GuidanceExecutionReadiness;
   isRequired: boolean;
   toolKey?: string;
-  flowKey?: string;
+  // S6-39: flowKey removed — was stored for future sub-flow routing but never read.
   routePath?: string;
   requiredContextKeys?: string[];
   skipPolicy?: GuidanceStepSkipPolicy;
@@ -141,6 +141,9 @@ export type GuidanceStepTemplate = {
 export type GuidanceJourneyTemplate = {
   journeyTypeKey: string;
   journeyKey: string;
+  // S6-40: version string in semver format, e.g. "1.0.0". Stored as
+  // "<journeyTypeKey>@<version>" on GuidanceJourney.templateVersion at creation.
+  version: string;
   signalIntentFamilies: string[];
   issueDomain: GuidanceIssueDomain;
   defaultDecisionStage: GuidanceDecisionStage;

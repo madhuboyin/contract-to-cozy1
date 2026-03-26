@@ -26,11 +26,11 @@ function pickExecutionStepsForTarget(targetAction: GuidanceExecutionGuardRequest
   }
 
   if (targetAction === 'CLAIM_ESCALATION') {
+    // S6-39: flowKey removed; claim escalation steps identified by stepKey convention only
     return steps.filter(
       (step) =>
         step.stepKey.includes('claim') ||
-        step.stepKey.includes('escalat') ||
-        (step.flowKey ?? '').includes('claim')
+        step.stepKey.includes('escalat')
     );
   }
 

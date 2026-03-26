@@ -388,6 +388,8 @@ export class GuidanceJourneyService {
           primarySignalId: params.signal.id,
           journeyKey: template.journeyKey,
           journeyTypeKey: template.journeyTypeKey,
+          // S6-40: Record which template version created these steps for staleness detection
+          templateVersion: `${template.journeyTypeKey}@${template.version}`,
           issueDomain: params.signal.issueDomain ?? template.issueDomain,
           decisionStage: params.signal.decisionStage ?? template.defaultDecisionStage,
           executionReadiness: params.signal.executionReadiness ?? template.defaultReadiness,

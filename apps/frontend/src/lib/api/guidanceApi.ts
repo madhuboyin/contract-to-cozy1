@@ -79,7 +79,6 @@ export type GuidanceStepDTO = {
   status: GuidanceStepStatus;
   isRequired: boolean;
   toolKey: string | null;
-  flowKey: string | null;
   routePath: string | null;
   displayLabel?: string | null;
   requiredContextKeys: string[];
@@ -103,6 +102,7 @@ export type GuidanceJourneyDTO = {
   inventoryItemId: string | null;
   journeyKey: string | null;
   journeyTypeKey: string | null;
+  templateVersion: string | null;
   issueDomain: GuidanceIssueDomain;
   decisionStage: GuidanceDecisionStage;
   executionReadiness: GuidanceExecutionReadiness;
