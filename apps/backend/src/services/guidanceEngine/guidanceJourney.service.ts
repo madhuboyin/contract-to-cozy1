@@ -466,6 +466,18 @@ export class GuidanceJourneyService {
           },
         },
       });
+
+      await guidanceJourneyEvent.create({
+        data: {
+          propertyId: params.propertyId,
+          journeyId: journey.id,
+          signalId: params.signal.id,
+          eventType: 'CONTEXT_UPDATED',
+          actorType: params.actorUserId ? 'USER' : 'SYSTEM',
+          actorUserId: params.actorUserId ?? null,
+          changedKeys: ['sourceSignalId', 'sourceEntityType', 'sourceEntityId', 'sourceToolKey', 'updatedFromSignalAt'],
+        },
+      });
     }
 
     await guidanceStepResolverService.ensureTemplateSteps({
