@@ -3140,13 +3140,9 @@ model GuidanceSignal {
 
   signalKey String? // Optional external signal id (for imports/backfills). No unique constraint — not guaranteed stable across sources.
 
-  // P4-1: GuidanceSignalIntentFamily enum is defined above and documents all valid routing keys.
-  // Column kept as String to avoid a Prisma-incompatible cast on existing data.
-  // To apply the enum type, run this SQL manually after ensuring all rows have valid values:
-  //   ALTER TABLE guidance_signals
-  //     ALTER COLUMN signal_intent_family TYPE "GuidanceSignalIntentFamily"
-  //     USING signal_intent_family::"GuidanceSignalIntentFamily";
-  signalIntentFamily String
+  // P4-1: Typed to GuidanceSignalIntentFamily enum. Manual ALTER TABLE ... USING cast
+  // was applied to existing data before this schema change was committed.
+  signalIntentFamily GuidanceSignalIntentFamily
   issueDomain        GuidanceIssueDomain
   decisionStage      GuidanceDecisionStage
   executionReadiness GuidanceExecutionReadiness @default(UNKNOWN)
