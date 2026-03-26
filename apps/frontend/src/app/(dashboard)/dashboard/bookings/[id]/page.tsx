@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { Booking } from '@/types';
 import { ChevronLeft } from 'lucide-react';
@@ -21,6 +21,7 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 const formatDate = (dateString: string | null) => {
   if (!dateString) return 'Not scheduled';
@@ -65,6 +66,9 @@ const getBookingTone = (status: Booking['status']) => {
 export default function BookingDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<{
@@ -286,6 +290,15 @@ export default function BookingDetailsPage() {
           />
         </ScenarioInputCard>
       ) : null}
+
+      {(booking.status === 'CONFIRMED' || booking.status === 'COMPLETED') && (
+        <GuidanceStepCompletionCard
+          propertyId={booking.property.id}
+          guidanceStepKey={guidanceStepKey}
+          guidanceJourneyId={guidanceJourneyId}
+          actionLabel="Mark booking step complete"
+        />
+      )}
 
       <ActionPriorityRow
         primaryAction={

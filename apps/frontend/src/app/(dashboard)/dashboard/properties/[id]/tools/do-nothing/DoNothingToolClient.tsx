@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
@@ -12,10 +12,14 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 export default function DoNothingToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -53,6 +57,13 @@ export default function DoNothingToolClient() {
       <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
 
       <DoNothingSimulatorPanel propertyId={propertyId} />
+
+      <GuidanceStepCompletionCard
+        propertyId={propertyId}
+        guidanceStepKey={guidanceStepKey}
+        guidanceJourneyId={guidanceJourneyId}
+        actionLabel="Mark delay cost reviewed"
+      />
     </MobilePageContainer>
   );
 }

@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 import MultiLineChart from './MultiLineChart';
@@ -15,6 +15,7 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -28,6 +29,9 @@ function pct(n: number | null | undefined) {
 export default function InsuranceTrendClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
 
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<InsuranceCostTrendDTO | null>(null);
@@ -276,6 +280,13 @@ export default function InsuranceTrendClient() {
           <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">{(data?.meta?.dataSources || []).join(' · ')}</div>
         </div>
       </div>
+
+      <GuidanceStepCompletionCard
+        propertyId={propertyId}
+        guidanceStepKey={guidanceStepKey}
+        guidanceJourneyId={guidanceJourneyId}
+        actionLabel="Mark premium trend reviewed"
+      />
     </MobilePageContainer>
   );
 }

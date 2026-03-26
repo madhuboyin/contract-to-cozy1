@@ -12,11 +12,14 @@ import { api } from '@/lib/api/client';
 import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Property } from '@/types';
 import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 function InspectionReportContent() {
   const searchParams = useSearchParams();
   const propertyIdFromUrl = searchParams.get('propertyId');
-  
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+
   const [properties, setProperties] = useState<Property[]>([]);
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [loading, setLoading] = useState(true);
@@ -142,6 +145,13 @@ function InspectionReportContent() {
           <p className="text-gray-600">Select a property to analyze inspection report</p>
         </div>
       )}
+
+      <GuidanceStepCompletionCard
+        propertyId={selectedPropertyId}
+        guidanceStepKey={guidanceStepKey}
+        guidanceJourneyId={guidanceJourneyId}
+        actionLabel="Mark inspection findings reviewed"
+      />
     </div>
   );
 }

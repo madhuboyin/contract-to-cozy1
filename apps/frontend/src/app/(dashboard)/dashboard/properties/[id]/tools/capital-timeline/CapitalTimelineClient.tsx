@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Calendar,
@@ -32,6 +32,7 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -116,6 +117,9 @@ function confidenceBadge(c: string) {
 export default function CapitalTimelineClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
 
   const [horizonYears, setHorizonYears] = useState<5 | 10>(10);
   const [loading, setLoading] = useState(false);
@@ -391,6 +395,13 @@ export default function CapitalTimelineClient() {
           )}
         </>
       )}
+
+      <GuidanceStepCompletionCard
+        propertyId={propertyId}
+        guidanceStepKey={guidanceStepKey}
+        guidanceJourneyId={guidanceJourneyId}
+        actionLabel="Mark capital plan reviewed"
+      />
     </MobilePageContainer>
   );
 }

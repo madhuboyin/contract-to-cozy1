@@ -63,6 +63,7 @@ import {
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 
 // --- Helper Functions ---
@@ -141,6 +142,8 @@ export default function MaintenancePage() {
 
   const selectedPropertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
   const taskIdFromUrl = searchParams.get('taskId');
+  const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const priority = searchParams.get('priority') === 'true';
   const from = searchParams.get('from');
 
@@ -1128,6 +1131,13 @@ export default function MaintenancePage() {
         // ✅ When in view mode, disable destructive/save actions by making handlers no-op
         onSave={modalMode === 'view' ? () => toast({ title: 'View Only', description: 'Completed tasks are read-only.' }) : handleSaveTaskUpdate}
         onRemove={modalMode === 'view' ? () => toast({ title: 'View Only', description: 'Completed tasks cannot be removed here.' }) : handleRemoveTask}
+      />
+
+      <GuidanceStepCompletionCard
+        propertyId={selectedPropertyId}
+        guidanceStepKey={guidanceStepKey}
+        guidanceJourneyId={guidanceJourneyId}
+        actionLabel="Mark checklist complete"
       />
     </MobilePageContainer>
   );
