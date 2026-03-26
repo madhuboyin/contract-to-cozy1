@@ -62,4 +62,8 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'mortgage-refinance-radar': ['break-even', 'capital-timeline', 'true-cost'],
   // Gazette surfaces the monitoring and event tools that feed it.
   'home-gazette': ['home-event-radar', 'home-risk-replay', 'status-board'],
+  // Coverage options should connect to insurance signals and risk history.
+  'coverage-options': ['insurance-trend', 'home-risk-replay', 'status-board'],
+  // Guidance overview should connect to the main monitoring and planning hub.
+  'guidance-overview': ['status-board', 'home-event-radar', 'home-risk-replay'],
 };
