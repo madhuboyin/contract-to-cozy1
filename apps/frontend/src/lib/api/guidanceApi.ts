@@ -352,7 +352,7 @@ export async function recordGuidanceToolCompletion(
 ): Promise<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }> {
   const res = await api.post<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }>(
     `/api/properties/${propertyId}/guidance/tool-completions`,
-    payload
+    { sourceToolKey: 'frontend', status: 'COMPLETED', ...payload }
   );
   return res.data;
 }
