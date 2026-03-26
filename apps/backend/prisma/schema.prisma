@@ -3006,6 +3006,8 @@ enum GuidanceIssueDomain {
   MAINTENANCE
   INSURANCE
   FINANCIAL
+  // --- Templates implemented for the domains above ---
+  // --- Domains below have no journey template yet; signals fall to DEFAULT_TEMPLATE ---
   COMPLIANCE
   MARKET_VALUE
   ASSET_LIFECYCLE
@@ -3021,12 +3023,48 @@ enum GuidanceIssueDomain {
   OTHER
 }
 
+// P4-1: Constrains signalIntentFamily to known routing keys.
+// Each value maps to exactly one journey template in guidanceTemplateRegistry.ts.
+// Adding a new template requires adding its family here first.
+enum GuidanceSignalIntentFamily {
+  // asset_lifecycle_resolution
+  lifecycle_end_or_past_life
+  maintenance_failure_risk
+  // coverage_gap_resolution
+  coverage_gap
+  coverage_lapse_detected
+  // recall_safety_resolution
+  recall_detected
+  // weather_risk_resolution
+  freeze_risk
+  // inspection_followup_resolution
+  inspection_followup_needed
+  // financial_exposure_resolution
+  financial_exposure
+  cost_of_inaction_risk
+  // DEFAULT_TEMPLATE catch-all
+  generic_actionable_signal
+}
+
 enum GuidanceDecisionStage {
   AWARENESS
   DIAGNOSIS
   DECISION
   EXECUTION
   VALIDATION
+  TRACKING
+}
+
+// P4-6: Enum for GuidanceJourneyStep.stepType (previously untyped String?).
+// Values intentionally mirror GuidanceDecisionStage — stepType describes
+// the nature of the action taken at this step, while decisionStage describes
+// where the journey is in its overall lifecycle.
+enum GuidanceStepType {
+  AWARENESS
+  DIAGNOSIS
+  DECISION
+  VALIDATION
+  EXECUTION
   TRACKING
 }
 
@@ -3069,6 +3107,15 @@ enum GuidanceSeverity {
   UNKNOWN
 }
 
+// P4-17: Identifies who or what triggered a guidance event.
+// USER = homeowner or admin acting via UI; SYSTEM = engine-internal recompute;
+// WORKER = background BullMQ job.
+enum GuidanceActorType {
+  USER
+  SYSTEM
+  WORKER
+}
+
 enum GuidanceJourneyEventType {
   JOURNEY_CREATED
   JOURNEY_STATUS_CHANGED
@@ -3091,16 +3138,25 @@ model GuidanceSignal {
   homeAssetId     String?
   inventoryItemId String?
 
-  signalKey          String? // Optional external signal id (for imports/backfills)
-  signalIntentFamily String
+  signalKey String? // Optional external signal id (for imports/backfills). No unique constraint — not guaranteed stable across sources.
+
+  // P4-1: Typed to GuidanceSignalIntentFamily enum. Previously String — any typo
+  // silently routed to DEFAULT_TEMPLATE. Enum enforces only known routing keys.
+  signalIntentFamily GuidanceSignalIntentFamily
   issueDomain        GuidanceIssueDomain
   decisionStage      GuidanceDecisionStage
   executionReadiness GuidanceExecutionReadiness @default(UNKNOWN)
   status             GuidanceSignalStatus       @default(ACTIVE)
 
-  severity        GuidanceSeverity?
-  severityScore   Int?
-  confidenceScore Decimal?          @db.Decimal(5, 4)
+  severity GuidanceSeverity?
+
+  // P4-4: Application must clamp to 0–100 before write. No native Prisma CHECK
+  // constraint — enforce via DB migration: CHECK (severity_score >= 0 AND severity_score <= 100)
+  severityScore Int?
+
+  // P4-3: Application must clamp to 0.0000–1.0000 before write. No native Prisma CHECK
+  // constraint — enforce via DB migration: CHECK (confidence_score >= 0 AND confidence_score <= 1)
+  confidenceScore Decimal? @db.Decimal(5, 4)
 
   sourceType         SignalSourceType?
   sourceFeatureKey   String?
@@ -3110,6 +3166,9 @@ model GuidanceSignal {
   sourceRunId        String?
   sourceProvenanceId String?
 
+  // P4-2: Promoted from @@index to @@unique. Enforces deduplication at DB level.
+  // Concurrent ingests of the same event will conflict and be handled as idempotent upserts.
+  // NULL dedupeKey rows are exempt — PostgreSQL treats each NULL as distinct in a unique index.
   dedupeKey         String?
   duplicateGroupKey String?
 
@@ -3128,6 +3187,10 @@ model GuidanceSignal {
   resolvedAt      DateTime?
   archivedAt      DateTime?
 
+  // P4-16: Time-bounded signals (e.g. freeze_risk) should set expiresAt. A background
+  // worker checks this field and transitions expired ACTIVE signals to ARCHIVED.
+  expiresAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3138,17 +3201,18 @@ model GuidanceSignal {
   journeys         GuidanceJourney[]
   events           GuidanceJourneyEvent[]
 
+  @@unique([propertyId, dedupeKey]) // P4-2: replaces former @@index([propertyId, dedupeKey])
   @@index([propertyId, status, lastObservedAt(sort: Desc)])
   @@index([propertyId, executionReadiness])
   @@index([propertyId, issueDomain])
   @@index([propertyId, signalIntentFamily])
-  @@index([propertyId, dedupeKey])
   @@index([duplicateGroupKey])
   @@index([homeAssetId])
   @@index([inventoryItemId])
   @@index([sourceEntityType, sourceEntityId])
   @@index([sourceToolKey, sourceFeatureKey])
   @@index([sourceProvenanceId])
+  @@index([expiresAt]) // P4-16: supports worker query for expired signal archival
   @@map("guidance_signals")
 }
 
@@ -3161,8 +3225,13 @@ model GuidanceJourney {
   inventoryItemId String?
   primarySignalId String?
 
-  journeyKey         String?
-  journeyTypeKey     String?
+  journeyKey String?
+
+  // P4-5: Should be NOT NULL — a journey without journeyTypeKey cannot be matched
+  // back to its template for step resolution or skip policy lookup.
+  // Kept nullable for now; set NOT NULL after data migration clears legacy null rows.
+  journeyTypeKey String?
+
   issueDomain        GuidanceIssueDomain
   decisionStage      GuidanceDecisionStage      @default(AWARENESS)
   executionReadiness GuidanceExecutionReadiness @default(UNKNOWN)
@@ -3177,6 +3246,17 @@ model GuidanceJourney {
 
   contextSnapshotJson Json?
   derivedSnapshotJson Json?
+
+  // P4-11: Tracks which template version created the steps on this journey.
+  // Format: "<journeyTypeKey>@<semver>", e.g. "asset_lifecycle_resolution@1.0.0".
+  // When the template version in code is newer than this value, the journey engine
+  // can flag the journey for step re-hydration or surface a staleness warning.
+  templateVersion String?
+
+  // P4-12: Optimistic locking counter. Incremented on every state write.
+  // Update queries should use WHERE version = :expected and retry on mismatch
+  // to prevent lost updates from concurrent recomputeJourneyState() calls.
+  version Int @default(0)
 
   startedAt        DateTime  @default(now())
   completedAt      DateTime?
@@ -3198,6 +3278,7 @@ model GuidanceJourney {
   @@index([propertyId, status, updatedAt(sort: Desc)])
   @@index([propertyId, executionReadiness, status])
   @@index([propertyId, issueDomain, status])
+  @@index([propertyId, journeyTypeKey, status]) // P4-13: supports ensureJourneyForSignal() lookup
   @@index([propertyId, currentStepOrder])
   @@index([primarySignalId])
   @@index([mergedSignalGroupKey])
@@ -3212,7 +3293,12 @@ model GuidanceJourneyStep {
   journeyId   String
   stepOrder   Int
   stepKey     String
-  stepType    String?
+
+  // P4-6: Typed to GuidanceStepType enum. Previously untyped String? — any value
+  // was accepted silently. Note: stepType mirrors decisionStage values and is not
+  // read by any business logic today; tracked for future sub-flow routing use.
+  stepType GuidanceStepType?
+
   label       String
   description String?
 
@@ -3222,15 +3308,18 @@ model GuidanceJourneyStep {
   isRequired         Boolean                    @default(true)
 
   toolKey   String?
-  flowKey   String?
-  routePath String?
+  flowKey   String? // Stored for future sub-flow routing; not read by current routing logic.
+  routePath String? // Copied from template at journey creation. May become stale if template changes (see templateVersion on GuidanceJourney).
 
   requiredContextKeys String[] @default([])
   missingContextKeys  String[] @default([])
-  blockedReasonCode   String?
-  blockedReason       String?
-  skippedReasonCode   String?
-  skippedReason       String?
+
+  // TODO: blockedReasonCode and skippedReasonCode are candidates for enums
+  // once the full set of reason codes is stabilised across all journey types.
+  blockedReasonCode String?
+  blockedReason     String?
+  skippedReasonCode String?
+  skippedReason     String?
 
   inputContextJson Json?
   producedDataJson Json?
@@ -3252,11 +3341,13 @@ model GuidanceJourneyStep {
   @@index([journeyId, status, stepOrder])
   @@index([journeyId, decisionStage, status])
   @@index([journeyId, executionReadiness])
+  @@index([journeyId, toolKey]) // P4-14: supports GuidanceBookingGuardService step filtering by toolKey
   @@index([toolKey])
   @@map("guidance_journey_steps")
 }
 
 // Guidance-specific transition ledger; existing event tables are feature-specific.
+// Append-only — no updatedAt. Rows are never mutated after insert.
 model GuidanceJourneyEvent {
   id String @id @default(uuid())
 
@@ -3267,15 +3358,34 @@ model GuidanceJourneyEvent {
 
   eventType GuidanceJourneyEventType
 
+  // Journey status transition fields (populated for JOURNEY_STATUS_CHANGED)
   fromJourneyStatus GuidanceJourneyStatus?
   toJourneyStatus   GuidanceJourneyStatus?
-  fromStepStatus    GuidanceStepStatus?
-  toStepStatus      GuidanceStepStatus?
 
-  actorUserId   String?
+  // P4-7: Journey readiness transition fields (populated for JOURNEY_READINESS_CHANGED).
+  // Previously missing — the event type existed but before/after values were never recorded.
+  fromJourneyReadiness GuidanceExecutionReadiness?
+  toJourneyReadiness   GuidanceExecutionReadiness?
+
+  // Step status transition fields (populated for STEP_* events)
+  fromStepStatus GuidanceStepStatus?
+  toStepStatus   GuidanceStepStatus?
+
+  // P4-17: Identifies the actor that triggered this event.
+  // USER = homeowner/admin via UI; SYSTEM = engine-internal recompute; WORKER = BullMQ job.
+  // Defaults to SYSTEM so existing engine-generated events are correctly typed.
+  actorType   GuidanceActorType? @default(SYSTEM)
+  actorUserId String? // Populated only when actorType = USER
+
   reasonCode    String?
   reasonMessage String?
-  payloadJson   Json?
+
+  // P4-8: List of context/derived-data keys that changed.
+  // Populated for CONTEXT_UPDATED and DERIVED_DATA_UPDATED events.
+  // Enables audit queries like "which context keys changed and when?"
+  changedKeys String[] @default([])
+
+  payloadJson Json?
 
   createdAt DateTime @default(now())
 
@@ -3286,6 +3396,7 @@ model GuidanceJourneyEvent {
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([journeyId, createdAt(sort: Desc)])
+  @@index([journeyId, eventType, createdAt(sort: Desc)]) // P4-15: supports per-journey event type queries
   @@index([stepId, createdAt(sort: Desc)])
   @@index([signalId, createdAt(sort: Desc)])
   @@index([eventType, createdAt(sort: Desc)])
