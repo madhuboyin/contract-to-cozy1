@@ -58,15 +58,7 @@ import {
 } from "@/components/mobile/dashboard/MobilePrimitives";
 import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
-import { DashboardHeroSection } from './components/DashboardHeroSection';
-import { MorningPulseSection } from './components/MorningPulseSection';
 import { SmartContextToolsSection } from './components/SmartContextToolsSection';
-import { HomeScoreReportCard } from '@/app/(dashboard)/dashboard/components/HomeScoreReportCard';
-import { PropertyHealthScoreCard } from '@/app/(dashboard)/dashboard/components/PropertyHealthScoreCard';
-import { PropertyRiskScoreCard } from '@/app/(dashboard)/dashboard/components/PropertyRiskScoreCard';
-import { FinancialEfficiencyScoreCard } from '@/app/(dashboard)/dashboard/components/FinancialEfficiencyScoreCard';
-import { RoomsSnapshotSection } from '@/app/(dashboard)/dashboard/components/RoomsSnapshotSection';
-import type { ScoredProperty as DashboardScoredProperty } from '@/app/(dashboard)/dashboard/types';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -274,15 +266,6 @@ const formatEnumLabel = (value: string | null | undefined, fallback = "—") =>
         .replace(/\b\w/g, (char) => char.toUpperCase())
     : fallback;
 
-const formatMoneyValue = (value: number | null | undefined, currency = 'USD') => {
-  if (value === null || value === undefined || Number.isNaN(value)) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: value % 1 === 0 ? 0 : 2,
-  }).format(value);
-};
-
 function openCozyChat() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event("cozy-chat-open"));
@@ -391,39 +374,6 @@ const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
     </div>
   </>
 );
-
-const KeyPropertyIntelligenceSection = ({ property }: { property: Property }) => {
-  const dashboardScoredProperty = property as DashboardScoredProperty;
-
-  return (
-    <section className="space-y-2.5">
-      <div className="space-y-1">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-          Key scores
-        </p>
-        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">Key Property Intelligence</h2>
-        <p className="text-sm text-muted-foreground">
-          Start with your overall HomeScore, then review the supporting risk, health, and cost signals.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <div className="md:col-span-2 xl:col-span-3">
-          <HomeScoreReportCard propertyId={property.id} />
-        </div>
-        <div className="xl:col-span-1">
-          <PropertyRiskScoreCard propertyId={property.id} />
-        </div>
-        <div className="xl:col-span-1">
-          <PropertyHealthScoreCard property={dashboardScoredProperty} />
-        </div>
-        <div className="xl:col-span-1">
-          <FinancialEfficiencyScoreCard propertyId={property.id} />
-        </div>
-      </div>
-    </section>
-  );
-};
 
 // UPDATED: PropertyOverview with mobile summary-first structure
 const PropertyOverview = ({ property }: { property: Property }) => {
@@ -1293,20 +1243,8 @@ export default function PropertyDetailPage() {
         />
       </div>
 
-      {/* Level 1 — Primary */}
-      <section aria-label="Primary priorities" className="space-y-3 sm:space-y-4">
-        <DashboardHeroSection propertyId={property.id} />
-      </section>
-
-      {/* Level 2 — Secondary */}
-      <section aria-label="Secondary insights" className="space-y-4 sm:space-y-5">
-        <MorningPulseSection propertyId={property.id} />
-        <KeyPropertyIntelligenceSection property={property} />
-      </section>
-
-      {/* Level 3 — Exploratory */}
+      {/* Exploratory context */}
       <section aria-label="Exploratory context" className="space-y-3.5 sm:space-y-4">
-        <RoomsSnapshotSection propertyId={property.id} />
         <SmartContextToolsSection propertyId={property.id} />
       </section>
 
