@@ -8,6 +8,16 @@ import {
   GuidanceStepStatus,
 } from '@/lib/api/guidanceApi';
 
+// Item 21: Maps weather signal families to provider service categories
+const WEATHER_SIGNAL_PROVIDER_CATEGORY: Record<string, string> = {
+  freeze_risk: 'PLUMBING',
+  flood_risk: 'PLUMBING',
+  hurricane_risk: 'GENERAL',
+  wind_risk: 'GENERAL',
+  heat_risk: 'HVAC',
+  wildfire_risk: 'GENERAL',
+};
+
 const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'replace-repair': '/dashboard/replace-repair',
   'coverage-intelligence': '/dashboard/properties/:propertyId/tools/coverage-intelligence',
@@ -48,6 +58,10 @@ function appendGuidanceContext(
   params.set('guidanceStepKey', step.stepKey);
   if (journey.primarySignal?.signalIntentFamily) {
     params.set('guidanceSignalIntentFamily', journey.primarySignal.signalIntentFamily);
+  }
+  // Items 20 + 22: Pass itemId so destination tools can pre-load item context
+  if (journey.inventoryItemId) {
+    params.set('itemId', journey.inventoryItemId);
   }
 
   const query = params.toString();
@@ -100,7 +114,21 @@ export function resolveGuidanceStepHref(args: {
   }
 
   const safeRoute = stripUnresolvedSegments(route);
-  if (safeRoute) return appendGuidanceContext(safeRoute, journey, step);
+  if (safeRoute) {
+    // Item 21: Inject weather-signal-derived provider category for weather booking steps
+    const routeWithCategory =
+      journey.journeyTypeKey === 'weather_risk_resolution' && step.toolKey === 'booking'
+        ? (() => {
+            const category =
+              journey.primarySignal?.signalIntentFamily
+                ? WEATHER_SIGNAL_PROVIDER_CATEGORY[journey.primarySignal.signalIntentFamily] ?? null
+                : null;
+            if (!category) return safeRoute;
+            return safeRoute.includes('?') ? `${safeRoute}&category=${category}` : `${safeRoute}?category=${category}`;
+          })()
+        : safeRoute;
+    return appendGuidanceContext(routeWithCategory, journey, step);
+  }
 
   if (next?.recommendedToolKey) {
     const recommended = FALLBACK_TOOL_ROUTE[next.recommendedToolKey] ?? null;

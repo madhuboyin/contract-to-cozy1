@@ -60,6 +60,7 @@ import {
   type NegotiationShieldSourceType,
   type SaveNegotiationShieldInputPayload,
 } from './negotiationShieldApi';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 type ScenarioRouteValue =
   | 'contractor-quote-review'
@@ -3106,6 +3107,18 @@ export default function NegotiationShieldToolClient() {
           )}
         </div>
       </div>
+
+      <GuidanceStepCompletionCard
+        propertyId={propertyId}
+        guidanceStepKey={searchParams.get('guidanceStepKey')}
+        guidanceJourneyId={searchParams.get('guidanceJourneyId')}
+        actionLabel="Mark negotiation step complete"
+        producedData={
+          searchParams.get('guidanceSignalIntentFamily')
+            ? { signalIntentFamily: searchParams.get('guidanceSignalIntentFamily') }
+            : undefined
+        }
+      />
 
       <BottomSafeAreaReserve size="chatAware" />
     </MobilePageContainer>

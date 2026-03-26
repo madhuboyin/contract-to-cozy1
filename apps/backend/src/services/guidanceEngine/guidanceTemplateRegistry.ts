@@ -310,7 +310,8 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: false,
         toolKey: 'booking',
         flowKey: 'booking',
-        routePath: '/dashboard/providers?category=PLUMBING',
+        // P3-21: propertyId added; category derived from signal family in resolveGuidanceStepHref
+        routePath: '/dashboard/providers?propertyId=:propertyId',
         skipPolicy: 'ALLOWED',
       },
     ],

@@ -13,6 +13,7 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 // Use the upgraded chart you already shipped (legend + tooltip)
 import MultiLineChart from '../cost-growth/MultiLineChart';
@@ -185,6 +186,14 @@ export default function TrueCostClient() {
           </div>
         </div>
       </div>
+
+      <GuidanceStepCompletionCard
+        propertyId={propertyId}
+        guidanceStepKey={guidanceStepKey}
+        guidanceJourneyId={guidanceJourneyId}
+        actionLabel="Mark cost review complete"
+        producedData={guidanceSignalIntentFamily ? { signalIntentFamily: guidanceSignalIntentFamily } : undefined}
+      />
     </MobilePageContainer>
   );
 }

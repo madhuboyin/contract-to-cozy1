@@ -63,6 +63,7 @@ import {
   buildServicePriceRadarValidationErrors,
   getServicePriceRadarUserMessage,
 } from './servicePriceRadarUi';
+import { getGuidanceNextStep } from '@/lib/api/guidanceApi';
 
 type FormState = {
   serviceCategory: ServiceRadarCategory | '';
@@ -312,7 +313,9 @@ function buildFormFromCheck(check: ServicePriceRadarCheckDetail | ServicePriceRa
 function buildNegotiationShieldHref(
   propertyId: string,
   check: ServicePriceRadarCheckDetail,
-  guidanceContext?: GuidanceToolContext
+  guidanceContext?: GuidanceToolContext,
+  // P3-23: engine-resolved next step key replaces hardcoded 'prepare_negotiation'
+  resolvedNextStepKey?: string | null
 ): string {
   const params = new URLSearchParams({
     create: '1',
@@ -331,7 +334,7 @@ function buildNegotiationShieldHref(
   if (guidanceContext?.guidanceSignalIntentFamily) {
     params.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
   }
-  params.set('guidanceStepKey', 'prepare_negotiation');
+  params.set('guidanceStepKey', resolvedNextStepKey ?? 'prepare_negotiation');
 
   return `/dashboard/properties/${propertyId}/tools/negotiation-shield?${params.toString()}`;
 }
@@ -584,6 +587,9 @@ export default function ServicePriceRadarClient() {
   const [linkedOptionsLoading, setLinkedOptionsLoading] = useState(false);
   const [linkedOptionsLoaded, setLinkedOptionsLoaded] = useState(false);
 
+  // P3-23: Engine-resolved next step key; replaces hardcoded 'prepare_negotiation' in negotiation-shield link
+  const [nextStepKey, setNextStepKey] = useState<string | null>(null);
+
   const launchSurface = normalizeLaunchSurface(searchParams.get('launchSurface'));
   const guidanceContext: GuidanceToolContext = {
     guidanceJourneyId: searchParams.get('guidanceJourneyId'),
@@ -711,6 +717,17 @@ export default function ServicePriceRadarClient() {
   useEffect(() => {
     setExplanationOpen(false);
   }, [currentCheck?.id]);
+
+  // P3-23: Fetch engine-resolved next step so negotiation-shield link uses the correct stepKey
+  useEffect(() => {
+    if (!propertyId || !guidanceContext.guidanceJourneyId) return;
+    getGuidanceNextStep(propertyId, guidanceContext.guidanceJourneyId)
+      .then((result) => {
+        if (result.nextStep?.stepKey) setNextStepKey(result.nextStep.stepKey);
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId, guidanceContext.guidanceJourneyId]);
 
   useEffect(() => {
     if (!currentCheck || viewedResultIdsRef.current.has(currentCheck.id)) return;
@@ -1442,7 +1459,7 @@ export default function ServicePriceRadarClient() {
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button asChild variant="outline" className="min-h-[40px] rounded-xl">
                       <Link
-                        href={buildNegotiationShieldHref(propertyId, currentCheck, guidanceContext)}
+                        href={buildNegotiationShieldHref(propertyId, currentCheck, guidanceContext, nextStepKey)}
                         onClick={() =>
                           trackRadarEvent('NEGOTIATION_HANDOFF_CLICKED', 'handoff', {
                             service_category: currentCheck.serviceCategory,
