@@ -240,6 +240,7 @@ export async function analyzeNegotiationShieldCase(
     guidanceJourneyId?: string | null;
     guidanceStepKey?: string | null;
     guidanceSignalIntentFamily?: string | null;
+    inventoryItemId?: string | null;
   }
 ): Promise<NegotiationShieldCaseDetail> {
   const query = new URLSearchParams();
@@ -251,6 +252,9 @@ export async function analyzeNegotiationShieldCase(
   }
   if (guidanceContext?.guidanceSignalIntentFamily) {
     query.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+  }
+  if (guidanceContext?.inventoryItemId) {
+    query.set('inventoryItemId', guidanceContext.inventoryItemId);
   }
 
   const endpoint = query.toString()

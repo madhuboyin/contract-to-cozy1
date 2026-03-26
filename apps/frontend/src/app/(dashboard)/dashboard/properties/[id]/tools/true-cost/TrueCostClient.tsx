@@ -30,6 +30,7 @@ export default function TrueCostClient() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
+  const inventoryItemId = searchParams.get('itemId');
 
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TrueCostOwnershipDTO | null>(null);
@@ -44,6 +45,7 @@ export default function TrueCostClient() {
         guidanceJourneyId,
         guidanceStepKey,
         guidanceSignalIntentFamily,
+        inventoryItemId,
       });
       setData(r);
     } catch (e: unknown) {
@@ -56,7 +58,7 @@ export default function TrueCostClient() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId, guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily]);
+  }, [propertyId, guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily, inventoryItemId]);
 
   const chartModel = useMemo(() => {
     const h = data?.history ?? [];

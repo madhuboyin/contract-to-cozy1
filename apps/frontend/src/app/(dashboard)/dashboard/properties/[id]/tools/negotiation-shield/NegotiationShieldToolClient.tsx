@@ -2354,6 +2354,7 @@ function CaseWorkspace({
         guidanceJourneyId: searchParams.get('guidanceJourneyId'),
         guidanceStepKey: searchParams.get('guidanceStepKey'),
         guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+        inventoryItemId: searchParams.get('itemId'),
       });
     },
     onMutate: () => {

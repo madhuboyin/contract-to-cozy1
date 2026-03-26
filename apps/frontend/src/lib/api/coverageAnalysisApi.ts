@@ -19,6 +19,7 @@ export type GuidanceToolContext = {
   guidanceJourneyId?: string | null;
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
+  inventoryItemId?: string | null;
 };
 
 export type ItemCoverageType = 'WARRANTY' | 'SERVICE_PLAN';
@@ -165,6 +166,9 @@ export async function runCoverageAnalysis(
         : {}),
       ...(guidanceContext?.guidanceSignalIntentFamily
         ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
+        : {}),
+      ...(guidanceContext?.inventoryItemId
+        ? { inventoryItemId: guidanceContext.inventoryItemId }
         : {}),
     }
   );

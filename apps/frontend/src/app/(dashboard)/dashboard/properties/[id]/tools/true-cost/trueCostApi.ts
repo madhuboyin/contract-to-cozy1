@@ -38,6 +38,7 @@ export type GuidanceToolContext = {
   guidanceJourneyId?: string | null;
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
+  inventoryItemId?: string | null;
 };
 
 export async function getTrueCostOwnership(propertyId: string, guidanceContext?: GuidanceToolContext) {
@@ -53,6 +54,9 @@ export async function getTrueCostOwnership(propertyId: string, guidanceContext?:
   }
   if (guidanceContext?.guidanceSignalIntentFamily) {
     query.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+  }
+  if (guidanceContext?.inventoryItemId) {
+    query.set('inventoryItemId', guidanceContext.inventoryItemId);
   }
 
   const endpoint = query.toString()

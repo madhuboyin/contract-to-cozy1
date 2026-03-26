@@ -432,6 +432,7 @@ export default function CoverageIntelligencePanel({
         guidanceJourneyId: searchParams.get('guidanceJourneyId'),
         guidanceStepKey: searchParams.get('guidanceStepKey'),
         guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
+        inventoryItemId: searchParams.get('itemId'),
       });
       setHasAnalysis(true);
       setAnalysis(latest);

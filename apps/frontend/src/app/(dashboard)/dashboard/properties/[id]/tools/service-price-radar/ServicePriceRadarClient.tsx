@@ -64,6 +64,19 @@ import {
   getServicePriceRadarUserMessage,
 } from './servicePriceRadarUi';
 import { getGuidanceNextStep } from '@/lib/api/guidanceApi';
+import { getInventoryItem } from '../../../inventory/inventoryApi';
+import type { InventoryItemCategory } from '@/types';
+
+// Maps inventory item category to the closest ServiceRadarCategory for pre-selection.
+const INVENTORY_CATEGORY_TO_SERVICE_RADAR: Partial<Record<InventoryItemCategory, ServiceRadarCategory>> = {
+  HVAC: 'HVAC',
+  PLUMBING: 'PLUMBING',
+  ELECTRICAL: 'ELECTRICAL',
+  ROOF_EXTERIOR: 'ROOFING',
+  APPLIANCE: 'HANDYMAN',
+  SAFETY: 'INSPECTION',
+  SMART_HOME: 'ELECTRICAL',
+};
 
 type FormState = {
   serviceCategory: ServiceRadarCategory | '';
@@ -596,6 +609,7 @@ export default function ServicePriceRadarClient() {
     guidanceStepKey: searchParams.get('guidanceStepKey'),
     guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
   };
+  const guidanceItemId = searchParams.get('itemId');
   const prefilledCategoryValue = searchParams.get('category');
   const prefilledQuoteAmount = searchParams.get('quoteAmount');
   const prefilledLinkedEntityType = searchParams.get('linkedEntityType');
@@ -717,6 +731,20 @@ export default function ServicePriceRadarClient() {
   useEffect(() => {
     setExplanationOpen(false);
   }, [currentCheck?.id]);
+
+  // Pre-select service category from linked inventory item when arriving via guidance journey
+  useEffect(() => {
+    if (!propertyId || !guidanceItemId) return;
+    getInventoryItem(propertyId, guidanceItemId)
+      .then((item) => {
+        const mapped = INVENTORY_CATEGORY_TO_SERVICE_RADAR[item.category as InventoryItemCategory];
+        if (mapped) {
+          setForm((current) => current.serviceCategory ? current : { ...current, serviceCategory: mapped });
+        }
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId, guidanceItemId]);
 
   // P3-23: Fetch engine-resolved next step so negotiation-shield link uses the correct stepKey
   useEffect(() => {
