@@ -237,6 +237,11 @@ export default function DashboardPage() {
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const { data: homeownerSegment } = useHomeownerSegment(); // Get user segment for conditional features
+  const properties = data.properties;
+  const effectiveSelectedPropertyId =
+    selectedPropertyId && properties.some((property) => property.id === selectedPropertyId)
+      ? selectedPropertyId
+      : properties[0]?.id;
   
   // --- DATA FETCHING LOGIC (unchanged) ---
   const fetchDashboardData = useCallback(async () => {
@@ -314,10 +319,6 @@ export default function DashboardPage() {
         }
       }
   
-      if (scoredProperties.length > 0 && !selectedPropertyId) {
-        setSelectedPropertyId(scoredProperties[0].id);
-      }
-
     } catch (error) {
       console.error('❌ Dashboard: Error fetching data:', error);
       setData(prev => ({
@@ -326,13 +327,19 @@ export default function DashboardPage() {
         error: 'Failed to load dashboard data',
       }));
     }
-  }, [user, selectedPropertyId, setSelectedPropertyId]);
+  }, [user]);
   
   useEffect(() => {
     if (!userLoading && user) {
       fetchDashboardData();
     }
   }, [userLoading, user, fetchDashboardData]);
+
+  useEffect(() => {
+    if (effectiveSelectedPropertyId !== selectedPropertyId) {
+      setSelectedPropertyId(effectiveSelectedPropertyId);
+    }
+  }, [effectiveSelectedPropertyId, selectedPropertyId, setSelectedPropertyId]);
 
   useEffect(() => {
     if (!userLoading && user && !redirectChecked) {
@@ -358,13 +365,13 @@ export default function DashboardPage() {
   }, [userLoading, user, redirectChecked]);
 
   useEffect(() => {
-    if (!selectedPropertyId) {
+    if (!effectiveSelectedPropertyId) {
       setLocalUpdates(withLocalUpdatesFallback([]));
       return;
     }
 
     api
-      .getLocalUpdates(selectedPropertyId)
+      .getLocalUpdates(effectiveSelectedPropertyId)
       .then((res) => {
         if (res.success) {
           setLocalUpdates(withLocalUpdatesFallback(res.data.updates || []));
@@ -375,7 +382,7 @@ export default function DashboardPage() {
       .catch(() => {
         setLocalUpdates(withLocalUpdatesFallback([]));
       });
-  }, [selectedPropertyId]);
+  }, [effectiveSelectedPropertyId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -423,9 +430,8 @@ export default function DashboardPage() {
   const isOwnerSegment = !isHomeBuyerSegment;
   const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
   
-  // Derived property values using the context state
-  const properties = data.properties;
-  const selectedProperty = properties.find(p => p.id === selectedPropertyId); 
+  // Derived property values using a validated property selection
+  const selectedProperty = properties.find(p => p.id === effectiveSelectedPropertyId); 
   const sectionMotion = (index: number) => ({
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
@@ -438,7 +444,7 @@ export default function DashboardPage() {
         <MobileHomeBuyerDashboard
           userFirstName={user.firstName}
           properties={data.properties}
-          selectedPropertyId={selectedPropertyId}
+          selectedPropertyId={effectiveSelectedPropertyId}
           onPropertyChange={setSelectedPropertyId}
           bookings={data.bookings}
           checklistItems={checklistItems}
@@ -462,7 +468,7 @@ export default function DashboardPage() {
       <MobileDashboardHome
         userFirstName={user.firstName}
         properties={properties}
-        selectedPropertyId={selectedPropertyId}
+        selectedPropertyId={effectiveSelectedPropertyId}
         onPropertyChange={setSelectedPropertyId}
         localUpdates={localUpdates}
       />
@@ -477,23 +483,23 @@ export default function DashboardPage() {
         <WelcomeSection
           userName={user?.firstName || 'there'}
           properties={properties}
-          selectedPropertyId={selectedPropertyId}
+          selectedPropertyId={effectiveSelectedPropertyId}
           onPropertyChange={setSelectedPropertyId}
         />
       )}
 
       {/* 2. CONSTRAINED WIDTH AREA (Aligns with other cards) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
-        {isOwnerSegment && selectedPropertyId && (
+        {isOwnerSegment && effectiveSelectedPropertyId && (
           <motion.div {...sectionMotion(0)}>
-            <PriorityAlertBanner propertyId={selectedPropertyId} />
+            <PriorityAlertBanner propertyId={effectiveSelectedPropertyId} />
           </motion.div>
         )}
 
         {/* MORNING HOME PULSE */}
-        {isOwnerSegment && selectedPropertyId && (
+        {isOwnerSegment && effectiveSelectedPropertyId && (
           <motion.section className="mb-5 md:mb-6" {...sectionMotion(1)}>
-            <MorningHomePulseCard propertyId={selectedPropertyId} />
+            <MorningHomePulseCard propertyId={effectiveSelectedPropertyId} />
           </motion.section>
         )}
 
@@ -543,9 +549,9 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
             </div>
           </div>
-          {selectedPropertyId && (
+          {effectiveSelectedPropertyId && (
             <ShareVaultButton
-              propertyId={selectedPropertyId}
+              propertyId={effectiveSelectedPropertyId}
               propertyAddress={selectedProperty?.address}
             />
           )}
@@ -555,16 +561,16 @@ export default function DashboardPage() {
           {...sectionMotion(2)}
         >
           <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <HomeScoreReportCard propertyId={selectedPropertyId} />
+            <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
             <PropertyHealthScoreCard property={selectedProperty} />
-            <PropertyRiskScoreCard propertyId={selectedPropertyId} />
-            <FinancialEfficiencyScoreCard propertyId={selectedPropertyId} />
+            <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />
+            <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
           </div>
         </motion.div>
 
         <motion.div {...sectionMotion(3)}>
           <GuidanceInlinePanel
-            propertyId={selectedPropertyId}
+            propertyId={effectiveSelectedPropertyId}
             title="What To Do Next"
             subtitle="Based on your home data and recent tool results. Start with the highlighted step to reduce risk and avoid unnecessary spend."
             limit={3}
@@ -574,7 +580,7 @@ export default function DashboardPage() {
 
         {/* ROOMS SNAPSHOT */}
         <motion.div {...sectionMotion(3)}>
-          <RoomsSnapshotSection propertyId={selectedPropertyId} />
+          <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
         </motion.div>
 
         {/* HORIZONTAL SEPARATOR */}
@@ -597,10 +603,10 @@ export default function DashboardPage() {
           </div>
           <div className="rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4">
             <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <HomeSavingsCheckToolCard propertyId={selectedPropertyId || ''} />
-              <CoverageIntelligenceToolCard propertyId={selectedPropertyId || ''} />
-              <RiskPremiumOptimizerToolCard propertyId={selectedPropertyId || ''} />
-              <DoNothingSimulatorToolCard propertyId={selectedPropertyId || ''} />
+              <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId || ''} />
+              <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId || ''} />
+              <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId || ''} />
+              <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId || ''} />
             </div>
           </div>
         </motion.section>
@@ -615,8 +621,8 @@ export default function DashboardPage() {
         const filteredProperties = selectedProperty ? [selectedProperty] : [];
         
         // FIX: Filter checklist items by selected property ID
-        const filteredChecklistItems = selectedPropertyId
-            ? checklistItems.filter(item => item.propertyId === selectedPropertyId)
+        const filteredChecklistItems = effectiveSelectedPropertyId
+            ? checklistItems.filter(item => item.propertyId === effectiveSelectedPropertyId)
             : []; 
 
         return (
@@ -625,16 +631,16 @@ export default function DashboardPage() {
               bookings={data.bookings}
               properties={filteredProperties} // Pass only selected property
               checklistItems={filteredChecklistItems} // Pass the newly filtered list
-              selectedPropertyId={selectedPropertyId}
+              selectedPropertyId={effectiveSelectedPropertyId}
             />
 
             {/* ========================================= */}
             {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
             {/* ========================================= */}
-            {homeownerSegment === 'EXISTING_OWNER' && selectedPropertyId && (
+            {homeownerSegment === 'EXISTING_OWNER' && effectiveSelectedPropertyId && (
               <motion.div {...sectionMotion(6)}>
-                <SeasonalBanner propertyId={selectedPropertyId} />
-                <SeasonalWidget propertyId={selectedPropertyId} />
+                <SeasonalBanner propertyId={effectiveSelectedPropertyId} />
+                <SeasonalWidget propertyId={effectiveSelectedPropertyId} />
               </motion.div>
             )}
           </>
