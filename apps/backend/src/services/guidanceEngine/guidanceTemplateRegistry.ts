@@ -322,7 +322,7 @@ const templates: GuidanceJourneyTemplate[] = [
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
         toolKey: 'inspection-report',
-        routePath: '/dashboard/inspection-report',
+        routePath: '/dashboard/inspection-report?propertyId=:propertyId',
         skipPolicy: 'DISALLOWED',
       },
       // P1-5: Many inspection findings involve end-of-life equipment — ask repair vs replace

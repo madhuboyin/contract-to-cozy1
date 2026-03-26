@@ -23,7 +23,7 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'coverage-intelligence': '/dashboard/properties/:propertyId/tools/coverage-intelligence',
   'service-price-radar': '/dashboard/properties/:propertyId/tools/service-price-radar',
   'negotiation-shield': '/dashboard/properties/:propertyId/tools/negotiation-shield',
-  'inspection-report': '/dashboard/inspection-report',
+  'inspection-report': '/dashboard/inspection-report?propertyId=:propertyId',
   booking: '/dashboard/bookings?propertyId=:propertyId',
   recalls: '/dashboard/properties/:propertyId/recalls',
   documents: '/dashboard/properties/:propertyId/inventory/coverage',
