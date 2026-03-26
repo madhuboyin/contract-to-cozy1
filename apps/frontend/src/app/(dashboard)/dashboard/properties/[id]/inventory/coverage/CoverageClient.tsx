@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 import { api } from '@/lib/api/client';
+import { recordGuidanceToolCompletion } from '@/lib/api/guidanceApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import InsuranceQuoteModal from '@/app/(dashboard)/dashboard/components/coverage/InsuranceQuoteModal';
@@ -40,6 +41,11 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
   const [err, setErr] = React.useState<string | null>(null);
   const [data, setData] = React.useState<any>(null);
   const [rooms, setRooms] = React.useState<InventoryRoom[]>([]);
+
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
+  const guidanceStepKey = searchParams.get('guidanceStepKey') ?? undefined;
+  const [guidanceCompleting, setGuidanceCompleting] = React.useState(false);
+  const [guidanceCompleted, setGuidanceCompleted] = React.useState(false);
 
   const [quoteOpen, setQuoteOpen] = React.useState(false);
   const [coveredOpen, setCoveredOpen] = React.useState(false);
@@ -106,6 +112,23 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
     }
   }
 
+  async function handleGuidanceComplete() {
+    if (!propertyId || !guidanceStepKey) return;
+    setGuidanceCompleting(true);
+    try {
+      await recordGuidanceToolCompletion(propertyId, {
+        stepKey: guidanceStepKey,
+        journeyId: guidanceJourneyId,
+        producedData: { completedAt: new Date().toISOString() },
+      });
+      setGuidanceCompleted(true);
+    } catch (e) {
+      console.error('[CoverageClient] failed to record guidance completion', e);
+    } finally {
+      setGuidanceCompleting(false);
+    }
+  }
+
   return (
     <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
       intro={
@@ -163,6 +186,26 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         limit={2}
         compact
       />
+
+      {guidanceStepKey && (
+        <div className="rounded-2xl border border-black/10 bg-white p-4 space-y-2">
+          <p className="text-sm font-medium">Guidance Step</p>
+          <p className="text-sm text-muted-foreground">
+            {guidanceCompleted
+              ? 'Policy or document update recorded. Return to your guidance journey.'
+              : 'Once you have updated your policy or uploaded coverage documents, mark this step complete.'}
+          </p>
+          {!guidanceCompleted && (
+            <Button
+              className="min-h-[44px] w-full mt-1"
+              onClick={handleGuidanceComplete}
+              disabled={guidanceCompleting}
+            >
+              {guidanceCompleting ? 'Saving...' : 'Mark policy/documents updated'}
+            </Button>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <ScenarioInputCard title="Loading" subtitle="Loading coverage summary..." badge={<StatusChip tone="info">Please wait</StatusChip>}>

@@ -29,6 +29,8 @@ export const TOOL_IDS = [
   'home-renovation-risk-advisor',
   'mortgage-refinance-radar',
   'home-gazette',
+  'coverage-options',
+  'guidance-overview',
 ] as const;
 
 export type ToolId = (typeof TOOL_IDS)[number];

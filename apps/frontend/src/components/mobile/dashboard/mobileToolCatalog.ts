@@ -512,4 +512,26 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     isActive: (pathname) =>
       /^\/dashboard\/properties\/[^/]+\/tools\/home-gazette(\/|$)/.test(pathname),
   },
+  {
+    key: 'coverage-options',
+    name: 'Coverage Options',
+    description: "Compare policy and warranty options for your coverage gaps",
+    desktopDescription: "Compare available home warranty and insurance policy options to close identified coverage gaps.",
+    hrefSuffix: 'tools/coverage-options',
+    navTarget: 'tool:coverage-options',
+    icon: resolveToolIcon('home', 'coverage-options'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/coverage-options(\/|$)/.test(pathname),
+  },
+  {
+    key: 'guidance-overview',
+    name: 'Guidance Overview',
+    description: "Review active guidance signals and your next recommended steps",
+    desktopDescription: "See all active guidance signals across your property and track recommended resolution steps.",
+    hrefSuffix: 'tools/guidance-overview',
+    navTarget: 'tool:guidance-overview',
+    icon: resolveToolIcon('home', 'guidance-overview'),
+    isActive: (pathname) =>
+      /^\/dashboard\/properties\/[^/]+\/tools\/guidance-overview(\/|$)/.test(pathname),
+  },
 ];

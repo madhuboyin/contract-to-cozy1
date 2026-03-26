@@ -341,3 +341,18 @@ export async function blockGuidanceStep(
   );
   return res.data;
 }
+
+export async function recordGuidanceToolCompletion(
+  propertyId: string,
+  payload: {
+    stepKey: string;
+    journeyId?: string;
+    producedData?: Record<string, unknown>;
+  }
+): Promise<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }> {
+  const res = await api.post<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }>(
+    `/api/properties/${propertyId}/guidance/tool-completions`,
+    payload
+  );
+  return res.data;
+}

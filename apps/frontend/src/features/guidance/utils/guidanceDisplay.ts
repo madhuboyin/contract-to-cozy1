@@ -16,13 +16,15 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'inspection-report': '/dashboard/inspection-report',
   booking: '/dashboard/bookings?propertyId=:propertyId',
   recalls: '/dashboard/properties/:propertyId/recalls',
-  documents: '/dashboard/vault',
+  documents: '/dashboard/properties/:propertyId/inventory/coverage',
   'home-event-radar': '/dashboard/properties/:propertyId/tools/home-event-radar',
   'do-nothing-simulator': '/dashboard/properties/:propertyId/tools/do-nothing',
   'home-savings': '/dashboard/properties/:propertyId/tools/home-savings',
   'capital-timeline': '/dashboard/properties/:propertyId/tools/capital-timeline',
   'true-cost': '/dashboard/properties/:propertyId/tools/true-cost',
   'insurance-trend': '/dashboard/properties/:propertyId/tools/insurance-trend',
+  'coverage-options': '/dashboard/properties/:propertyId/tools/coverage-options',
+  'guidance-overview': '/dashboard/properties/:propertyId/tools/guidance-overview',
 };
 
 function replaceRouteParam(path: string, key: string, value: string | null | undefined): string {
