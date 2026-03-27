@@ -1,8 +1,8 @@
 # Guidance Engine — Functional Requirements Document
 
-**Version:** 2.0
-**Last Updated:** 2026-03-25
-**Status:** Living Document — reflects current implementation plus all identified gaps
+**Version:** 2.1
+**Last Updated:** 2026-03-26
+**Status:** Living Document — reflects current implementation; resolved gaps removed as of v2.1
 **Audience:** Backend engineers, frontend engineers, QA, product
 
 ---
@@ -723,19 +723,6 @@ All gaps are assigned a priority:
 
 ### 10.2 P1 — Structural
 
-#### P1-1: `TOOL_DEFAULT_STEP_KEY` Cross-Journey Collisions
-
-`TOOL_DEFAULT_STEP_KEY` is a flat global map used when `recordToolCompletion` is called without an explicit `stepKey`. It is not journey-aware. Four tool keys appear in multiple journeys under different `stepKey` names — when a tool fires from the wrong journey without a stepKey, the backend tries to complete a step that does not exist in that journey.
-
-| Tool | Default stepKey | Conflicts with journey | Conflict stepKey |
-|---|---|---|---|
-| `true-cost` | `estimate_out_of_pocket_cost` | `coverage_gap_resolution` | `estimate_exposure` |
-| `service-price-radar` | `validate_price` | `inspection_followup_resolution` | `estimate_repair_cost` |
-| `home-event-radar` | `weather_safety_check` | `inspection_followup_resolution` | `track_resolution` |
-| `booking` | `book_service` | `inspection_followup_resolution` | `route_specialist` |
-
-**Fix:** Make `TOOL_DEFAULT_STEP_KEY` journey-aware: `getDefaultStepKey(toolKey, journeyTypeKey)`. Fall back to current global map only when `journeyTypeKey` is not provided.
-
 #### P1-2: `recall_safety_resolution` — All 3 Steps Use the Same Page with No Differentiation
 
 - **Steps 1, 2, 3** all use `toolKey: 'recalls'`, pointing to the same recalls page. There is no UX guidance for progressing from "acknowledge" → "review remedy" → "confirm resolution". The page shows the same content for all three steps.
@@ -746,18 +733,6 @@ All gaps are assigned a priority:
 
 - `signalIntentFamilies: ['freeze_risk']` only. Hurricane, flood, high winds, extreme heat, and wildfire risk all fall through to `DEFAULT_TEMPLATE` — a single broken step on `home-event-radar`.
 - **Fix:** Expand `signalIntentFamilies` to cover all severe weather types, or create separate domain templates per weather type.
-
-#### P1-4: `inspection_followup_resolution` Step 4 — Wrong Tool: `home-event-radar` Cannot Track Repair Resolution
-
-- **Step:** `track_resolution` (step 4)
-- **Assigned tool:** `home-event-radar`
-- **Problem:** `home-event-radar` tracks external property events (weather forecasts, market signals, local updates). It has no concept of a repair job status or inspection resolution. Using it to track internal repair completion is a tool/purpose mismatch.
-- **Fix:** Either (a) replace with a maintenance tracking tool or job-status page, or (b) mark the step as `isRequired: false` with `executionReadiness: 'TRACKING_ONLY'` and surface it as a passive "mark as resolved" acknowledgment rather than a tool navigation.
-
-#### P1-5: `inspection_followup_resolution` — Missing `repair_replace_decision` Step
-
-- Inspection reports frequently uncover end-of-life equipment (aging HVAC, failing water heater). The inspection journey jumps from "assess urgency" directly to "estimate repair cost" — it never asks whether the system should be repaired or replaced. This is the central question of `asset_lifecycle_resolution` and is entirely absent from the inspection journey.
-- **Fix:** Add a conditional step between steps 1 and 2: `assess_repair_or_replace` → `replace-repair` tool (optional, `isRequired: false`, skip policy `ALLOWED`). If the item has an `inventoryItemId`, this step resolves to the item-scoped replace-repair page.
 
 #### P1-6: `asset_lifecycle_resolution` — Missing Financial Framing Before Decision
 
@@ -801,23 +776,11 @@ The following pages are assigned as step destinations but have zero or partial g
 - **Gap:** Page renders `GuidanceInlinePanel` for context display but does not read guidance query params and does not call `POST /guidance/tool-completion` on any user action.
 - **Fix:** When the user completes a coverage review interaction (acknowledges a recommendation, views the full coverage report), call `recordToolCompletion` with `guidanceJourneyId` and `guidanceStepKey` from the URL.
 
-#### P2-2: `maintenance` — Informational Panel Only
-
-- **Step stuck:** `protect_exposed_systems` (weather_risk step 2)
-- **Gap:** Same as coverage-intelligence — panel displayed, no param reading, no completion call.
-- **Fix:** Add a "Mark as done" / "Checklist complete" action that calls `recordToolCompletion`.
-
 #### P2-3: `recalls` — Informational Panel Only
 
 - **Steps stuck:** `safety_alert`, `review_remedy_instructions`, `recall_resolution`
 - **Gap:** No guidance param reading, no completion call. All three steps point to the same page with no differentiation.
 - **Fix:** Read `guidanceStepKey` from URL params. Render step-appropriate content: acknowledge button for step 1, remedy review for step 2, resolution confirmation for step 3. Call `recordToolCompletion` at each stage.
-
-#### P2-4: `inspection-report` — Zero Integration
-
-- **Step stuck:** `assess_urgency` (inspection_followup step 1)
-- **Gap:** No guidance params, no panel, no completion call. Page is also not property-scoped (see P3-3).
-- **Fix:** Add guidance param reading and completion trigger when user reviews/acknowledges inspection findings.
 
 #### P2-5: `insurance-trend` — Zero Integration
 
@@ -831,31 +794,9 @@ The following pages are assigned as step destinations but have zero or partial g
 - **Gap:** No guidance params, no panel, no completion call. All three pages are also missing `routePath` in the template (relying on fallback only).
 - **Fix:** Add guidance param reading + completion trigger on each page. Add `routePath` to the template steps.
 
-#### P2-7: `home-event-radar` — Redirect Discards Guidance Params
-
-- **Steps stuck:** `weather_safety_check` (weather_risk step 1), `review_signal` (DEFAULT step 1), `track_resolution` (inspection_followup step 4 via fallback)
-- **Gap:** The page at `/dashboard/properties/:propertyId/tools/home-event-radar` immediately redirects to `/dashboard/home-event-radar?propertyId=...`, discarding `guidanceJourneyId`, `guidanceStepKey`, and `guidanceSignalIntentFamily` query params. Steps can never be completed via this route.
-- **Fix:** The redirect must forward all guidance query params to the destination URL.
-
-#### P2-8: `bookings` — No Guidance Integration on Confirmation
-
-- **Step affected:** `book_service` (asset_lifecycle step 5), `route_specialist` (inspection_followup step 3)
-- **Gap:** The booking page has no guidance integration. Steps are completed via the `providers` page's API call before navigating to bookings — but if a user reaches the bookings page directly (notification link, bookmark, back-navigation), no guidance step is completed. Additionally, if the step completion API call from `providers` fails (network error), the step is permanently stuck with no retry.
-- **Fix:** Add guidance step completion on booking confirmation in the `bookings` page, or implement idempotent retry for the completion call from `providers`.
-
 ---
 
 ### 10.4 P3 — Scope/Context Loss
-
-#### P3-1: `asset_lifecycle_resolution` Steps 2–5 Lose Item Context
-
-- **Affected steps:** `check_coverage`, `validate_price`, `prepare_negotiation`, `book_service`
-- **Problem:** This journey requires `inventoryItemId` (it's item-specific — a failing appliance or system). Step 1 is correctly item-scoped. Steps 2–5 route to property-level tools with no `itemId` in the URL:
-  - Coverage-intelligence shows all property coverage, not filtered to the specific item's warranty/insurance
-  - Service-price-radar lands blank — user must manually enter repair type, having no pre-loaded item context
-  - Negotiation-shield has no item context
-  - Bookings page has no item or service type pre-populated
-- **Fix:** Pass `inventoryItemId` (and relevant item metadata) as query params to steps 2–5 so tools can pre-load item context. Alternatively, store item context in `contextSnapshotJson` on the journey and expose it via the `GuidanceInlinePanel` on each page.
 
 #### P3-2: `weather_risk_resolution` Step 3 — Hardcoded `PLUMBING` Category
 
@@ -865,12 +806,13 @@ The following pages are assigned as step destinations but have zero or partial g
 - **Additionally:** No `propertyId` in the route — the providers page won't know which property context to use.
 - **Fix:** The provider category should be derived from the signal payload (which identifies the at-risk system). Pass `propertyId` in the route. Update `routePath` to `/dashboard/properties/:propertyId/providers?category=:serviceCategory`.
 
-#### P3-3: `inspection_followup_resolution` Step 1 — Not Property-Scoped
+#### P3-3: `inspection_followup_resolution` Step 1 — Route Not Property-Scoped Path
 
 - **Step:** `assess_urgency`
-- **Route:** `/dashboard/inspection-report` (global, no `:propertyId`)
-- **Problem:** Every other tool route uses `/dashboard/properties/:propertyId/tools/...`. The inspection-report page is global — users with multiple properties will see a list of all reports with no pre-selection of the relevant property's report.
-- **Fix:** Change `routePath` to `/dashboard/properties/:propertyId/tools/inspection-report` (or equivalent property-scoped path).
+- **Current route:** `/dashboard/inspection-report?propertyId=:propertyId` (global page, property via query param)
+- **Status:** Guidance integration is wired — params are read, `GuidanceStepCompletionCard` renders with `propertyIdFromUrl ?? selectedPropertyId`. The URL building works correctly (`appendGuidanceContext` appends `&` after existing `?`).
+- **Remaining gap:** Route is still a global page with `?propertyId=` instead of a property-scoped path (`/dashboard/properties/:propertyId/tools/inspection-report`). Inconsistent with all other tool routes. Users with multiple properties land on a page that initially shows a property selector rather than pre-loading the guidance-relevant property's report.
+- **Fix:** Move the inspection-report page to `/dashboard/properties/[id]/tools/inspection-report` (property-scoped App Router route). Update `routePath` in `guidanceTemplateRegistry.ts` and `FALLBACK_TOOL_ROUTE` in `guidanceDisplay.ts` to `/dashboard/properties/:propertyId/tools/inspection-report`.
 
 #### P3-4: `inspection_followup_resolution` Step 3 — Booking Without Trade Category
 
@@ -934,18 +876,6 @@ The following pages are assigned as step destinations but have zero or partial g
 - **Problem:** `stepType String?` stores values like `AWARENESS`, `DIAGNOSIS`, `DECISION`, `VALIDATION`, `EXECUTION`, `TRACKING` — the same set as `GuidanceDecisionStage`. As a plain string, there is no DB enforcement, and typos or novel values are accepted silently. The field is also redundant with `decisionStage` and is not read by any business logic.
 - **Fix:** Either (a) create `GuidanceStepType` enum and enforce it, or (b) remove `stepType` from the model entirely since it duplicates `decisionStage`.
 
-#### P4-7: No `JOURNEY_READINESS_CHANGED` Event Fields for Before/After Readiness
-
-- **Model:** `GuidanceJourneyEvent`
-- **Problem:** `GuidanceJourneyEventType.JOURNEY_READINESS_CHANGED` exists as an event type, but the model only records `fromJourneyStatus` / `toJourneyStatus` — not `fromJourneyReadiness` / `toJourneyReadiness`. Readiness transitions are not auditable from the event log.
-- **Fix:** Add `fromJourneyReadiness GuidanceExecutionReadiness?` and `toJourneyReadiness GuidanceExecutionReadiness?` columns to `GuidanceJourneyEvent`.
-
-#### P4-8: `CONTEXT_UPDATED` / `DERIVED_DATA_UPDATED` Events Don't Record What Changed
-
-- **Model:** `GuidanceJourneyEvent`
-- **Problem:** These event types indicate that context or derived data was updated, but neither the before-state nor the list of changed keys is captured. The events are only useful for counting ("context was updated 3 times") — they cannot be used to reconstruct what changed or debug guidance failures.
-- **Fix:** Add `changedKeys String[]` to the event model, populated with the list of context/derived keys that changed.
-
 #### P4-9: `GuidanceIssueDomain` Has 11 Orphaned Enum Values
 
 - **Enum:** `GuidanceIssueDomain`
@@ -974,23 +904,11 @@ Steps with no `routePath` in the template rely entirely on `FALLBACK_TOOL_ROUTE`
 - **Problem:** When a journey is created, template step data (including `routePath`, `toolKey`, `label`, `skipPolicy`) is copied into `GuidanceJourneyStep` rows. If the template is updated in code (e.g., a `routePath` is fixed), existing step rows in the DB retain the old, potentially broken path indefinitely.
 - **Fix:** Add `templateVersion String?` to `GuidanceJourney`. When the journey engine detects a version mismatch (template updated since journey was created), flag the journey for step re-hydration or surface a warning.
 
-#### P4-12: No Optimistic Locking on Journey State Updates
-
-- **Model:** `GuidanceJourney`
-- **Problem:** `recomputeJourneyState()` reads the journey, computes new state, and writes back. Concurrent requests (two tool completions racing) can cause lost updates — one write overwrites the other's computed state.
-- **Fix:** Add `version Int @default(0)` to `GuidanceJourney`. Increment on every write. Use `WHERE version = :expectedVersion` in updates and retry on mismatch.
-
 #### P4-13: Missing Index on `(propertyId, journeyTypeKey, status)`
 
 - **Model:** `GuidanceJourney`
 - **Problem:** `ensureJourneyForSignal()` queries: "find an ACTIVE journey for this property with this journeyTypeKey." The existing indexes `(propertyId, status, updatedAt)` and `(propertyId, issueDomain, status)` do not include `journeyTypeKey`. This query scans all journeys for the property.
 - **Fix:** Add `@@index([propertyId, journeyTypeKey, status])`.
-
-#### P4-14: No Expiry/TTL Mechanism for Time-Bounded Signals
-
-- **Model:** `GuidanceSignal`
-- **Problem:** Some signals are only relevant for a specific time window (e.g., `freeze_risk` is only actionable for a few days before/during the weather event). There is no `expiresAt DateTime?` field or TTL. Stale signals remain `ACTIVE` in the DB indefinitely. The suppression pipeline handles staleness in-memory, but the DB retains the signal as active, causing it to be re-evaluated on every `getPropertyGuidance` call.
-- **Fix:** Add `expiresAt DateTime?` to `GuidanceSignal`. A background worker should check `expiresAt` and transition signals to `ARCHIVED` automatically.
 
 ---
 
@@ -1011,10 +929,6 @@ Steps with no `routePath` in the template rely entirely on `FALLBACK_TOOL_ROUTE`
 #### P5-4: `coverage_gap_resolution` — No Platform Pathway to Seek New Coverage
 
 - The journey assumes the homeowner will find and purchase new coverage off-platform. There is no step to connect them with an insurance advisor, broker, or warranty provider through the platform.
-
-#### P5-5: `GuidanceJourneyEvent` Cannot Distinguish System vs. User Actions
-
-- `actorUserId String?` is nullable but there is no `actorType` field. System-generated events (worker-triggered signal ingestion, scheduled recomputation) are indistinguishable from user-triggered events in the audit log.
 
 #### P5-6: `flowKey` Is Dead Metadata
 
@@ -1038,53 +952,41 @@ Ordered by impact and dependency. P0 items block correctness; P1 items block jou
 
 ### Sprint 2 — Fix Cross-Journey Collisions and Structural Issues (P1)
 
-7. **Make `TOOL_DEFAULT_STEP_KEY` journey-aware.** Signature: `getDefaultStepKey(toolKey, journeyTypeKey?)`.
-8. **Fix `recalls` semantic bug:** Change `TOOL_DEFAULT_STEP_KEY['recalls']` from `recall_resolution` to `safety_alert`.
-9. **Add differentiated step content to `recalls` page:** Read `guidanceStepKey` and render acknowledge / remedy / confirm flows.
-10. **Fix `home-event-radar` redirect:** Forward all guidance query params through the redirect.
-11. **Add `repair_replace_decision` option to `inspection_followup_resolution`** (optional step).
-12. **Replace `track_resolution` tool** in inspection journey with an appropriate tracking mechanism.
-13. **Add `check_coverage` step** to asset_lifecycle, inspection_followup, weather_risk, financial_exposure, and recall journeys (optional, positioned after diagnosis).
+7. **Fix `recalls` semantic bug:** Change `TOOL_DEFAULT_STEP_KEY['recalls']` from `recall_resolution` to `safety_alert`.
+8. **Add differentiated step content to `recalls` page:** Read `guidanceStepKey` and render acknowledge / remedy / confirm flows.
+9. **Add `check_coverage` step** to asset_lifecycle, inspection_followup, weather_risk, financial_exposure, and recall journeys (optional, positioned after diagnosis).
 
 ### Sprint 3 — Wire Destination Pages (P2)
 
-14. **`coverage-intelligence`:** Add guidance param reading + completion trigger on coverage review acknowledgment.
-15. **`maintenance`:** Add guidance param reading + "checklist complete" completion trigger.
-16. **`inspection-report`:** Add guidance param reading + completion trigger on findings acknowledgment. Fix route to property-scoped path.
-17. **`do-nothing`, `home-savings`, `capital-timeline`:** Add guidance param reading + completion trigger. Add explicit `routePath` to template steps.
-18. **`insurance-trend`:** Add guidance param reading + acknowledgment completion trigger.
-19. **`bookings` confirmation:** Add guidance step completion on booking confirmation for idempotent fallback.
+10. **`coverage-intelligence`:** Add guidance param reading + completion trigger on coverage review acknowledgment.
+11. **`do-nothing`, `home-savings`, `capital-timeline`:** Add guidance param reading + completion trigger. Add explicit `routePath` to template steps.
+12. **`insurance-trend`:** Add guidance param reading + acknowledgment completion trigger.
 
 ### Sprint 4 — Fix Context Passing and Scope (P3)
 
-20. **Pass item context to steps 2–5 in `asset_lifecycle_resolution`:** Add `itemId` query param so coverage, price radar, and negotiation tools can pre-load item context.
-21. **Fix `weather_risk` step 3 route:** Derive provider category from signal payload. Add `propertyId` to route.
-22. **Fix `recalls` step 1 route:** Add `itemId` query param when `inventoryItemId` is set.
-23. **Fix `service-price-radar` chain navigation:** Replace hardcoded `guidanceStepKey: 'prepare_negotiation'` with engine-resolved next step from `GET /guidance/journeys/:id/next-step`.
-24. **Add `guidanceSignalIntentFamily` to `negotiation-shield` and `true-cost`** completion API calls.
+13. **Fix `weather_risk` step 3 route:** Derive provider category from signal payload. Add `propertyId` to route.
+14. **Fix `recalls` step 1 route:** Add `itemId` query param when `inventoryItemId` is set.
+15. **Fix `service-price-radar` chain navigation:** Replace hardcoded `guidanceStepKey: 'prepare_negotiation'` with engine-resolved next step from `GET /guidance/journeys/:id/next-step`.
+16. **Add `guidanceSignalIntentFamily` to `negotiation-shield` and `true-cost`** completion API calls.
+17. **Move `inspection-report` page to property-scoped path `/dashboard/properties/[id]/tools/inspection-report`; update `routePath` in template registry and fallback route map. (P3-3)**
 
 ### Sprint 5 — Database Hardening (P4)
 
-25. **Add `GuidanceSignalIntentFamily` enum** and constrain `signalIntentFamily` column.
-26. **Add `UNIQUE` constraint on `dedupeKey`** (or `propertyId + dedupeKey`).
-27. **Add check constraints** on `confidenceScore` (0–1) and `severityScore` (0–100).
-28. **Add `fromJourneyReadiness` / `toJourneyReadiness`** to `GuidanceJourneyEvent`.
-29. **Add `changedKeys String[]`** to `GuidanceJourneyEvent` for CONTEXT_UPDATED events.
-30. **Add `GuidanceStepType` enum** or remove `stepType` field.
-31. **Add `@@index([propertyId, journeyTypeKey, status])`** to `GuidanceJourney`.
-32. **Add `@@index([journeyId, toolKey])`** to `GuidanceJourneyStep`.
-33. **Add `@@index([journeyId, eventType])`** to `GuidanceJourneyEvent`.
-34. **Add `expiresAt DateTime?`** to `GuidanceSignal` + worker for auto-archival.
-35. **Add `version Int`** optimistic lock to `GuidanceJourney`.
-36. **Add `actorType` enum field** to `GuidanceJourneyEvent` (USER / SYSTEM / WORKER).
+18. **Add `GuidanceSignalIntentFamily` enum** and constrain `signalIntentFamily` column.
+19. **Add `UNIQUE` constraint on `dedupeKey`** (or `propertyId + dedupeKey`).
+20. **Add check constraints** on `confidenceScore` (0–1) and `severityScore` (0–100).
+21. **Add `GuidanceStepType` enum** or remove `stepType` field.
+22. **Add `@@index([propertyId, journeyTypeKey, status])`** to `GuidanceJourney`.
+23. **Add `@@index([journeyId, toolKey])`** to `GuidanceJourneyStep`.
+24. **Add `@@index([journeyId, eventType])`** to `GuidanceJourneyEvent`.
 
 ### Sprint 6 — Journey Template Expansion (P4/P5)
 
-37. **Create journey templates** for `COMPLIANCE`, `ENERGY`, and other high-priority orphaned `GuidanceIssueDomain` values (or formally document them as out-of-scope).
-38. **Expand `weather_risk_resolution`** to cover all severe weather families beyond `freeze_risk`.
-39. **Remove `flowKey`** from template and DB schema (or implement its intended purpose).
-40. **Add `templateVersion`** to `GuidanceJourney` for template upgrade detection.
+25. **Create journey templates** for `COMPLIANCE`, `ENERGY`, and other high-priority orphaned `GuidanceIssueDomain` values (or formally document them as out-of-scope).
+26. **Expand `weather_risk_resolution`** to cover all severe weather families beyond `freeze_risk`.
+27. **Remove `flowKey`** from template and DB schema (or implement its intended purpose).
+28. **Add `templateVersion`** to `GuidanceJourney` for template upgrade detection.
 
 ---
 
-*Document generated from direct review of: 14 guidanceEngine service files, `guidance.routes.ts`, `guidance.controller.ts`, `prisma/schema.prisma` (lines 3004–3293), `guidanceDisplay.ts`, 15 frontend tool page files, and `FALLBACK_TOOL_ROUTE` / `TOOL_DEFAULT_STEP_KEY` cross-reference analysis.*
+*Document last updated 2026-03-26 (v2.1). Resolved gaps removed: P1-1, P1-4, P1-5, P2-2, P2-4, P2-7, P2-8, P3-1, P4-7, P4-8, P4-12, P4-14, P5-5. Generated from direct review of: 14 guidanceEngine service files, `guidance.routes.ts`, `guidance.controller.ts`, `prisma/schema.prisma` (lines 3004–3293), `guidanceDisplay.ts`, 15 frontend tool page files, and `FALLBACK_TOOL_ROUTE` / `TOOL_DEFAULT_STEP_KEY` cross-reference analysis.*
