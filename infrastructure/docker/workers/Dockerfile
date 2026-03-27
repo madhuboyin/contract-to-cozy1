@@ -35,6 +35,7 @@ RUN mkdir -p src/shared/backend/utils \
              src/shared/backend/services/hiddenAssets \
              src/shared/backend/services/homeHabitCoach \
              src/shared/backend/services/analytics \
+             src/shared/backend/services/guidanceEngine \
              src/shared/backend/types \
              src/shared/backend/lib \
              src/shared/backend/modules/gazette/services \
@@ -116,6 +117,22 @@ COPY apps/backend/src/modules/gazette/types/gazette.types.ts src/shared/backend/
 COPY apps/backend/src/modules/gazette/dto/gazette.dto.ts src/shared/backend/modules/gazette/dto/
 COPY apps/backend/src/modules/gazette/mappers/gazette.mapper.ts src/shared/backend/modules/gazette/mappers/
 COPY apps/backend/src/config/ai-constants.ts src/shared/backend/config/
+# Copy guidance engine service files needed by coverageLapseIncidents, freezeRiskIncidents,
+# neighborhoodChangeNotification jobs and by incident.service.ts
+COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceSignalResolver.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceStepResolver.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceDerivedData.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceFinancialContext.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceConfidence.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidancePriority.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceSuppression.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceCopy.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceValidation.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceMapper.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceBookingGuard.service.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceJourney.service.ts src/shared/backend/services/guidanceEngine/
 # Stubs: replace backend-only deps with workers-safe equivalents
 COPY apps/workers/stubs/error-middleware.ts src/shared/backend/middleware/error.middleware.ts
 COPY apps/workers/stubs/notification-service.ts src/shared/backend/services/notification.service.ts
@@ -142,7 +159,10 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/ingestNeighborhoodDummyEvents.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeHabitCoach\/habitGenerationEngine/\.\.\/shared\/backend\/services\/homeHabitCoach\/habitGenerationEngine/g' src/jobs/habitGeneration.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/refinanceRadar\/engine\/mortgageRate\.service/\.\.\/shared\/backend\/refinanceRadar\/engine\/mortgageRate\.service/g' src/jobs/ingestMortgageRates.job.ts && \
-    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/\.\.\/shared\/backend\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/g' src/jobs/gazetteGeneration.job.ts
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/\.\.\/shared\/backend\/modules\/gazette\/services\/gazetteGenerationJobRunner\.service/g' src/jobs/gazetteGeneration.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/guidanceEngine\/guidanceJourney\.service/\.\.\/shared\/backend\/services\/guidanceEngine\/guidanceJourney\.service/g' src/jobs/neighborhoodChangeNotification.job.ts
 
 # Compile TS -> dist/
 RUN npx tsc --project ./tsconfig.json
