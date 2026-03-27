@@ -205,6 +205,7 @@ export async function freezeRiskIncidentsJob() {
         sourceEntityType: 'INCIDENT',
         sourceProvenanceId: `property:${p.id}|FREEZE_RISK|${today}`,
         payloadJson: { minF, timeWindowHours: 36, zip, provider: 'open-meteo' },
+        expiresAt: new Date(Date.now() + 36 * 60 * 60 * 1000),
       });
     } catch (guidanceError) {
       console.warn('[GUIDANCE] freeze risk signal ingest failed:', guidanceError);

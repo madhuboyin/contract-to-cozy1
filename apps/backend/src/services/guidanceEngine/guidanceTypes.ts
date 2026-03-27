@@ -86,6 +86,7 @@ export type GuidanceSignalSourceInput = {
 
   payloadJson?: Record<string, unknown> | null;
   metadataJson?: Record<string, unknown> | null;
+  expiresAt?: Date | null;
 };
 
 export type NormalizedGuidanceSignalInput = {
@@ -120,6 +121,7 @@ export type NormalizedGuidanceSignalInput = {
 
   payloadJson: Record<string, unknown> | null;
   metadataJson: Record<string, unknown> | null;
+  expiresAt: Date | null;
 };
 
 export type GuidanceStepTemplate = {

@@ -39,6 +39,7 @@ import { ingestNeighborhoodDummyEventsJob } from './jobs/ingestNeighborhoodDummy
 import { runHabitGenerationJob } from './jobs/habitGeneration.job';
 import { ingestMortgageRatesJob } from './jobs/ingestMortgageRates.job';
 import { runGazetteGenerationJob } from './jobs/gazetteGeneration.job';
+import { expireGuidanceSignalsJob } from './jobs/expireGuidanceSignals.job';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -784,6 +785,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
     }
   },
   'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
+  'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
 };
 
 // Per-job cron expression overrides (env-var-based schedules)

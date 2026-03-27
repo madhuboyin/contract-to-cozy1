@@ -651,11 +651,13 @@ export class GuidanceJourneyService {
 
   async listSignalsForProperty(propertyId: string) {
     const { guidanceSignal } = getGuidanceModels();
+    const now = new Date();
 
     return guidanceSignal.findMany({
       where: {
         propertyId,
         status: 'ACTIVE',
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
       orderBy: [{ lastObservedAt: 'desc' }],
     });

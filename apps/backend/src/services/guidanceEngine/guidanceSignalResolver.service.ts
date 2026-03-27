@@ -293,6 +293,7 @@ export class GuidanceSignalResolverService {
           maxAgeDays: freshness.maxAgeDays,
         },
       },
+      expiresAt: input.expiresAt ?? null,
     };
   }
 
@@ -341,6 +342,7 @@ export class GuidanceSignalResolverService {
           archivedAt: null,
           resolvedAt: null,
           status: 'ACTIVE',
+          expiresAt: normalized.expiresAt ?? undefined,
         },
       });
     }
@@ -377,6 +379,7 @@ export class GuidanceSignalResolverService {
         metadataJson: normalized.metadataJson,
         firstObservedAt: now,
         lastObservedAt: now,
+        expiresAt: normalized.expiresAt ?? null,
       },
     });
   }

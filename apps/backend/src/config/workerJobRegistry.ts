@@ -287,6 +287,19 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     triggerSupported: true,
   },
 
+  // ── Guidance Engine (cron) ────────────────────────────────────────────────
+  {
+    key: 'expire-guidance-signals',
+    name: 'Expire Guidance Signals',
+    description:
+      'Archives ACTIVE GuidanceSignal records whose expiresAt timestamp has passed (e.g. freeze-risk signals after the 36-hour weather window).',
+    category: 'RISK_SAFETY',
+    schedule: 'Daily at 1:30 AM EST',
+    cronExpression: '30 1 * * *',
+    type: 'cron',
+    triggerSupported: false,
+  },
+
   // ── Home Care (cron) ──────────────────────────────────────────────────────
   {
     key: 'home-habit-generation',
