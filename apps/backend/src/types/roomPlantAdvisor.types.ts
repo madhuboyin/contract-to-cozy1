@@ -8,6 +8,8 @@ import {
   RoomType,
 } from '@prisma/client';
 
+export type PlantRecommendationConfidenceBand = 'HIGH' | 'MEDIUM' | 'LOW';
+
 export interface RoomPlantProfileDTO {
   id: string;
   propertyId: string;
@@ -57,6 +59,7 @@ export interface RoomPlantRecommendationDTO {
   rank: number;
   score: number;
   confidence: number;
+  confidenceBand: PlantRecommendationConfidenceBand;
   status: PlantRecommendationStatus;
   reasonSummary: string;
   reason: RecommendationReasonDTO;
@@ -82,4 +85,3 @@ export interface PlantAdvisorRoomSummaryDTO {
     dismissed: number;
   };
 }
-

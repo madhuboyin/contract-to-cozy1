@@ -22,6 +22,7 @@ export type PlantGoalType =
   | 'LOW_MAINTENANCE';
 
 export type PlantRecommendationStatus = 'RECOMMENDED' | 'SAVED' | 'DISMISSED';
+export type PlantRecommendationConfidenceBand = 'HIGH' | 'MEDIUM' | 'LOW';
 
 export interface RoomPlantProfileDTO {
   id: string;
@@ -52,6 +53,7 @@ export interface RoomPlantRecommendationDTO {
   rank: number;
   score: number;
   confidence: number;
+  confidenceBand: PlantRecommendationConfidenceBand;
   status: PlantRecommendationStatus;
   reasonSummary: string;
   reason: RecommendationReasonDTO;

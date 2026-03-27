@@ -62,6 +62,7 @@ import {
 import type {
   PlantAdvisorRoomStateDTO,
   PlantAdvisorRoomSummaryDTO,
+  PlantRecommendationConfidenceBand,
   PlantGoalType,
   PlantLightLevel,
   PlantMaintenanceLevel,
@@ -123,6 +124,12 @@ const STATUS_LABELS: Record<PlantRecommendationStatus, string> = {
   RECOMMENDED: 'Recommended',
   SAVED: 'Saved',
   DISMISSED: 'Dismissed',
+};
+
+const CONFIDENCE_LABELS: Record<PlantRecommendationConfidenceBand, string> = {
+  HIGH: 'High confidence',
+  MEDIUM: 'Medium confidence',
+  LOW: 'Low confidence',
 };
 
 const ROOM_TYPE_LABELS: Record<RoomType, string> = {
@@ -235,6 +242,9 @@ function RecommendationCard({
         <StatusChip tone="info">Rank #{recommendation.rank}</StatusChip>
         <StatusChip tone="protected">Score {recommendation.score.toFixed(2)}</StatusChip>
         <StatusChip tone="good">Fit {confidencePercent(recommendation.confidence)}%</StatusChip>
+        <StatusChip tone={recommendation.confidenceBand === 'HIGH' ? 'good' : recommendation.confidenceBand === 'MEDIUM' ? 'info' : 'elevated'}>
+          {CONFIDENCE_LABELS[recommendation.confidenceBand]}
+        </StatusChip>
       </MobileActionRow>
 
       {recommendation.reason.fitSignals.length > 0 ? (

@@ -14,6 +14,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
   PlantAdvisorRoomSummaryDTO,
+  PlantRecommendationConfidenceBand,
   PlantCatalogSummaryDTO,
   RecommendationReasonDTO,
   RoomPlantProfileDTO,
@@ -188,12 +189,83 @@ function roomGoalBoost(roomType: RoomType | null, goal: PlantGoalType, matched: 
   return 0;
 }
 
+const RELATED_ROOM_TYPES: Partial<Record<RoomType, RoomType[]>> = {
+  BEDROOM: ['OFFICE', 'LIVING_ROOM'],
+  OFFICE: ['BEDROOM', 'LIVING_ROOM'],
+  LIVING_ROOM: ['OFFICE', 'BEDROOM', 'DINING'],
+  DINING: ['LIVING_ROOM', 'KITCHEN'],
+  KITCHEN: ['DINING', 'LAUNDRY'],
+  BATHROOM: ['LAUNDRY'],
+  LAUNDRY: ['BATHROOM', 'KITCHEN'],
+  BASEMENT: ['GARAGE', 'OFFICE'],
+  GARAGE: ['BASEMENT'],
+  OTHER: ['LIVING_ROOM'],
+};
+
+type FutureScoringSignals = {
+  climateZone?: string | null;
+  windowDirection?: string | null;
+  roomScanSignals?: Record<string, unknown> | null;
+  maintenanceReminderReadiness?: number | null;
+};
+
+function pushUnique(target: string[], message: string) {
+  if (!message) return;
+  if (!target.includes(message)) target.push(message);
+}
+
+function confidenceBand(confidence: number): PlantRecommendationConfidenceBand {
+  if (confidence >= 0.75) return 'HIGH';
+  if (confidence >= 0.5) return 'MEDIUM';
+  return 'LOW';
+}
+
+function applyClimateWeighting(_args: {
+  plant: PlantCatalog;
+  roomType: RoomType | null;
+  futureSignals: FutureScoringSignals;
+}): number {
+  return 0;
+}
+
+function applyWindowDirectionWeighting(_args: {
+  plant: PlantCatalog;
+  profileLightLevel: PlantLightLevel | null;
+  futureSignals: FutureScoringSignals;
+}): number {
+  return 0;
+}
+
+function applyRoomScanWeighting(_args: {
+  plant: PlantCatalog;
+  futureSignals: FutureScoringSignals;
+}): number {
+  return 0;
+}
+
+function applyMaintenanceReadinessWeighting(_args: {
+  plant: PlantCatalog;
+  futureSignals: FutureScoringSignals;
+}): number {
+  return 0;
+}
+
+function isNearRoomFit(plant: PlantCatalog, roomType: RoomType): boolean {
+  if (plant.suitableRoomTypes.length === 0) return false;
+  const near = RELATED_ROOM_TYPES[roomType] ?? [];
+  return near.some((candidate) => plant.suitableRoomTypes.includes(candidate));
+}
+
 type ScoreResult = {
   score: number;
   confidence: number;
+  confidenceBand: PlantRecommendationConfidenceBand;
   fitSignals: string[];
   warningFlags: string[];
   reasonSummary: string;
+  majorWarningCount: number;
+  softBlockerCount: number;
+  fitCategory: 'STRONG' | 'NEAR_FIT' | 'WEAK';
 };
 
 function scorePlantCandidate(args: {
@@ -206,114 +278,234 @@ function scorePlantCandidate(args: {
     goals: PlantGoalType[];
   };
   roomType: RoomType | null;
+  futureSignals?: FutureScoringSignals;
 }): ScoreResult {
   const { plant, profile } = args;
   const effectiveRoomType = profile.detectedRoomType ?? args.roomType ?? null;
 
-  let score = round(clamp(plant.baseConfidence, 0, 1) * 40, 1);
+  let score = round(clamp(plant.baseConfidence, 0, 1) * 30, 1);
   const fitSignals: string[] = [];
   const warningFlags: string[] = [];
+  let majorWarningCount = 0;
+  let softBlockerCount = 0;
+  let roomFitReason: string | null = null;
+  let preferenceFitReason: string | null = null;
+  let tradeoffReason: string | null = null;
+  const futureSignals = args.futureSignals ?? {};
 
   if (effectiveRoomType) {
     if (plant.suitableRoomTypes.includes(effectiveRoomType)) {
-      score += 20;
-      fitSignals.push(`Suitable for ${formatRoomType(effectiveRoomType).toLowerCase()} placement.`);
+      score += 24;
+      roomFitReason = `Fits ${formatRoomType(effectiveRoomType).toLowerCase()} conditions.`;
+      pushUnique(fitSignals, roomFitReason);
       if (
         effectiveRoomType === 'BATHROOM' ||
         effectiveRoomType === 'KITCHEN' ||
         effectiveRoomType === 'BEDROOM' ||
         effectiveRoomType === 'OFFICE'
       ) {
-        score += 8;
-        fitSignals.push(`Specifically tuned for ${formatRoomType(effectiveRoomType).toLowerCase()} conditions.`);
+        score += 6;
+        pushUnique(
+          fitSignals,
+          `Comfortable in the micro-climate common to ${formatRoomType(effectiveRoomType).toLowerCase()} spaces.`,
+        );
       }
+    } else if (plant.suitableRoomTypes.length === 0) {
+      score += 4;
+      pushUnique(fitSignals, 'Flexible room placement profile.');
+    } else if (isNearRoomFit(plant, effectiveRoomType)) {
+      score -= 6;
+      softBlockerCount += 1;
+      tradeoffReason = `works in similar spaces, but is not a primary ${formatRoomType(effectiveRoomType).toLowerCase()} pick`;
+      pushUnique(
+        warningFlags,
+        `Works, but not ideal for ${formatRoomType(effectiveRoomType).toLowerCase()} placement.`,
+      );
     } else if (plant.suitableRoomTypes.length > 0) {
-      score -= 12;
-      warningFlags.push(`Lower room fit for ${formatRoomType(effectiveRoomType).toLowerCase()}.`);
+      score -= 16;
+      majorWarningCount += 1;
+      tradeoffReason = `room-type fit is limited for ${formatRoomType(effectiveRoomType).toLowerCase()} use`;
+      pushUnique(
+        warningFlags,
+        `Room-type fit is limited for ${formatRoomType(effectiveRoomType).toLowerCase()}.`,
+      );
     }
   } else {
-    warningFlags.push('Room type not set; recommendations are more general.');
+    pushUnique(warningFlags, 'Room type not set; recommendations are more general.');
   }
 
   if (profile.lightLevel) {
-    const diff = Math.abs(LIGHT_SCORE[plant.lightLevel] - LIGHT_SCORE[profile.lightLevel]);
+    const lightDelta = LIGHT_SCORE[profile.lightLevel] - LIGHT_SCORE[plant.lightLevel];
+    const diff = Math.abs(lightDelta);
     if (diff === 0) {
-      score += 20;
-      fitSignals.push('Light requirement aligns with this room.');
+      score += 22;
+      pushUnique(fitSignals, 'Light requirement aligns with this room.');
     } else if (diff === 1) {
-      score += 8;
-      fitSignals.push('Light level is close to ideal.');
+      score += 10;
+      pushUnique(fitSignals, 'Light level is close to ideal with mindful placement.');
+      softBlockerCount += 1;
+      if (!tradeoffReason) {
+        tradeoffReason = 'light is close to ideal but may need careful placement';
+      }
     } else if (diff === 2) {
-      score -= 12;
-      warningFlags.push('Light mismatch may reduce plant performance.');
+      score -= 14;
+      majorWarningCount += 1;
+      const message =
+        lightDelta < 0
+          ? 'Current room light appears lower than this plant prefers; try a brighter spot near a window.'
+          : 'Current room light may be stronger than ideal; diffuse direct sun to reduce stress.';
+      pushUnique(warningFlags, message);
+      if (!tradeoffReason) {
+        tradeoffReason =
+          lightDelta < 0
+            ? 'insufficient light may slow growth'
+            : 'stronger light may require filtered placement';
+      }
     } else {
-      score -= 22;
-      warningFlags.push('Strong light mismatch for this room.');
+      score -= 28;
+      majorWarningCount += 1;
+      const message =
+        lightDelta < 0
+          ? 'Insufficient light for this plant under current conditions.'
+          : 'Light intensity likely too high for this plant under current conditions.';
+      pushUnique(warningFlags, message);
+      if (!tradeoffReason) {
+        tradeoffReason =
+          lightDelta < 0
+            ? 'light conditions are substantially below this plant’s target'
+            : 'light conditions are substantially above this plant’s target';
+      }
     }
   } else {
-    warningFlags.push('Set room light level for tighter ranking.');
+    pushUnique(warningFlags, 'Set room light level for tighter ranking.');
   }
 
   if (profile.maintenancePreference) {
+    const maintenanceDelta =
+      MAINTENANCE_SCORE[plant.maintenanceLevel] - MAINTENANCE_SCORE[profile.maintenancePreference];
     const diff = Math.abs(
-      MAINTENANCE_SCORE[plant.maintenanceLevel] - MAINTENANCE_SCORE[profile.maintenancePreference]
+      maintenanceDelta
     );
     if (diff === 0) {
-      score += 12;
-      fitSignals.push('Maintenance preference matches this plant.');
+      score += 14;
+      preferenceFitReason = 'Matches your maintenance preference.';
+      pushUnique(fitSignals, preferenceFitReason);
     } else if (diff === 1) {
-      score += 2;
+      score += 5;
+      softBlockerCount += 1;
+      pushUnique(
+        warningFlags,
+        maintenanceDelta > 0
+          ? 'Maintenance is slightly above your preference; a lower-touch alternative may be easier long term.'
+          : 'Care routine is slightly lighter than requested; consider a more hands-on option if you want more interaction.',
+      );
+      if (!tradeoffReason) {
+        tradeoffReason =
+          maintenanceDelta > 0
+            ? 'care cadence is a bit higher than your preferred routine'
+            : 'care cadence is slightly lower than your preferred routine';
+      }
     } else {
-      score -= 10;
-      warningFlags.push('Maintenance demand may exceed your preference.');
+      score -= 14;
+      majorWarningCount += 1;
+      pushUnique(
+        warningFlags,
+        'Maintenance mismatch: this plant may require more ongoing care than requested.',
+      );
+      if (!tradeoffReason) {
+        tradeoffReason = 'maintenance demand is materially above your target';
+      }
     }
   }
 
   if (profile.hasPets) {
     if (plant.isPetSafe || plant.toxicityLevel === 'PET_SAFE') {
-      score += 16;
-      fitSignals.push('Pet-safety profile is favorable.');
+      score += 18;
+      pushUnique(fitSignals, 'Pet-safety profile is favorable.');
     } else if (plant.toxicityLevel === 'MILDLY_TOXIC') {
-      score -= 18;
-      warningFlags.push('Mild toxicity warning for pets.');
+      score -= 22;
+      majorWarningCount += 1;
+      pushUnique(
+        warningFlags,
+        'Pet toxicity warning: mild toxicity risk; keep out of reach of curious pets.',
+      );
+      if (!tradeoffReason) {
+        tradeoffReason = 'pet safety is a concern with this plant';
+      }
     } else if (plant.toxicityLevel === 'TOXIC') {
-      score -= 32;
-      warningFlags.push('Toxic to pets: handle placement carefully.');
+      score -= 40;
+      majorWarningCount += 1;
+      pushUnique(
+        warningFlags,
+        'Pet toxicity warning: not pet-safe; choose a safer option if pets have access to this room.',
+      );
+      if (!tradeoffReason) {
+        tradeoffReason = 'toxicity makes this a higher-risk choice around pets';
+      }
     } else {
-      score -= 8;
-      warningFlags.push('Pet-safety unknown; verify before bringing home.');
+      score -= 12;
+      softBlockerCount += 1;
+      pushUnique(warningFlags, 'Pet-safety data is limited; verify before bringing this plant home.');
     }
   }
 
   if (profile.goals.length === 0) {
-    warningFlags.push('No plant goals selected; goal-based boosts were skipped.');
+    pushUnique(warningFlags, 'No plant goals selected; goal-based boosts were skipped.');
   } else {
+    let matchedGoalCount = 0;
     for (const goal of profile.goals) {
       const matched = goalMatchesPlant(goal, plant);
       if (matched) {
-        score += 7;
-        fitSignals.push(goalSignal(goal));
+        matchedGoalCount += 1;
+        score += 8;
+        pushUnique(fitSignals, goalSignal(goal));
       } else {
-        score -= 2;
+        score -= 1;
       }
       score += roomGoalBoost(effectiveRoomType, goal, matched);
+    }
+
+    if (matchedGoalCount === 0) {
+      softBlockerCount += 1;
+      pushUnique(
+        warningFlags,
+        'Goal alignment is limited with current picks; try adjusting goals or selecting a lower-maintenance focus.',
+      );
+    } else if (!preferenceFitReason) {
+      preferenceFitReason =
+        matchedGoalCount === 1
+          ? 'Matches one of your selected goals.'
+          : `Matches ${matchedGoalCount} of your selected goals.`;
     }
   }
 
   if (effectiveRoomType === 'BATHROOM') {
     if (plant.humidityPreference === 'HIGH') {
       score += 8;
-      fitSignals.push('Humidity preference fits bathroom conditions.');
+      pushUnique(fitSignals, 'Humidity preference fits bathroom conditions.');
     } else if (plant.humidityPreference === 'LOW') {
-      score -= 4;
-      warningFlags.push('Lower-humidity plant for a typically humid room.');
+      score -= 6;
+      softBlockerCount += 1;
+      pushUnique(
+        warningFlags,
+        'Humidity mismatch: this plant prefers drier air than many bathrooms provide.',
+      );
     }
   }
 
   if (effectiveRoomType === 'OFFICE' && plant.humidityPreference === 'LOW') {
     score += 3;
-    fitSignals.push('Works well in drier office air.');
+    pushUnique(fitSignals, 'Works well in drier office air.');
   }
+
+  score += applyClimateWeighting({ plant, roomType: effectiveRoomType, futureSignals });
+  score += applyWindowDirectionWeighting({
+    plant,
+    profileLightLevel: profile.lightLevel ?? null,
+    futureSignals,
+  });
+  score += applyRoomScanWeighting({ plant, futureSignals });
+  score += applyMaintenanceReadinessWeighting({ plant, futureSignals });
 
   score = round(clamp(score, 0, 100), 1);
 
@@ -321,24 +513,58 @@ function scorePlantCandidate(args: {
     ((effectiveRoomType ? 1 : 0) +
       (profile.lightLevel ? 1 : 0) +
       (profile.maintenancePreference ? 1 : 0) +
-      (profile.goals.length > 0 ? 1 : 0) +
-      1) /
-    5;
+      (profile.goals.length > 0 ? 1 : 0)) /
+    4;
 
-  const confidence = round(
-    clamp(plant.baseConfidence * 0.45 + completeness * 0.25 + (score / 100) * 0.3, 0.05, 0.99),
-    2
-  );
+  let confidence =
+    0.18 +
+    clamp(plant.baseConfidence, 0, 1) * 0.15 +
+    completeness * 0.12 +
+    (score / 100) * 0.55;
+  confidence -= majorWarningCount * 0.12;
+  confidence -= softBlockerCount * 0.05;
+  if (score < 55) confidence -= 0.06;
+  confidence = round(clamp(confidence, 0.05, 0.98), 2);
+  const confidenceBandValue = confidenceBand(confidence);
 
-  const reasonSummary = fitSignals[0]
-    ? warningFlags[0]
-      ? `${fitSignals[0]} Caution: ${warningFlags[0]}`
-      : fitSignals[0]
-    : warningFlags[0]
-      ? `Potential fit with caveat: ${warningFlags[0]}`
-      : 'Balanced room fit based on available inputs.';
+  const fitCategory: ScoreResult['fitCategory'] =
+    score >= 78 && majorWarningCount === 0
+      ? 'STRONG'
+      : score >= 55
+        ? 'NEAR_FIT'
+        : 'WEAK';
 
-  return { score, confidence, fitSignals, warningFlags, reasonSummary };
+  if (fitCategory !== 'STRONG') {
+    pushUnique(warningFlags, 'Works, but not ideal under current room inputs.');
+  }
+
+  if (fitSignals.length === 0) {
+    pushUnique(fitSignals, 'Best available near-fit option given current room constraints.');
+  }
+
+  const summaryParts: string[] = [];
+  if (roomFitReason) summaryParts.push(roomFitReason);
+  if (preferenceFitReason) summaryParts.push(preferenceFitReason);
+  if (tradeoffReason) summaryParts.push(`Tradeoff: ${tradeoffReason}.`);
+  if (summaryParts.length === 0 && warningFlags[0]) {
+    summaryParts.push(`Near-fit recommendation: ${warningFlags[0]}`);
+  }
+  if (summaryParts.length === 0) {
+    summaryParts.push('Balanced recommendation based on available room inputs.');
+  }
+  const reasonSummary = summaryParts.join(' ');
+
+  return {
+    score,
+    confidence,
+    confidenceBand: confidenceBandValue,
+    fitSignals: fitSignals.slice(0, 6),
+    warningFlags: warningFlags.slice(0, 6),
+    reasonSummary,
+    majorWarningCount,
+    softBlockerCount,
+    fitCategory,
+  };
 }
 
 export class RoomPlantAdvisorService {
@@ -397,6 +623,7 @@ export class RoomPlantAdvisorService {
     const fitSignals = parseStringArray(row.fitSignals);
     const warningFlags = parseStringArray(row.warningFlags);
     const reasonSummary = row.reasonSummary || fitSignals[0] || 'Balanced recommendation.';
+    const normalizedConfidence = clamp(Number(row.confidence ?? 0), 0, 1);
 
     const reason: RecommendationReasonDTO = {
       summary: reasonSummary,
@@ -412,7 +639,8 @@ export class RoomPlantAdvisorService {
       plantCatalogId: row.plantCatalogId,
       rank: row.rank,
       score: row.score,
-      confidence: row.confidence,
+      confidence: normalizedConfidence,
+      confidenceBand: confidenceBand(normalizedConfidence),
       status: row.status,
       reasonSummary,
       reason,
@@ -616,13 +844,33 @@ export class RoomPlantAdvisorService {
             hasPets: profile.hasPets,
             goals: Array.isArray(profile.goals) ? profile.goals : [],
           },
+          futureSignals: {
+            // Future-ready extension points (kept deterministic in Phase 1).
+            climateZone: null,
+            windowDirection: null,
+            roomScanSignals: null,
+            maintenanceReminderReadiness: null,
+          },
         });
 
         return { plant, result };
       })
       .sort((a, b) => {
+        const categoryRank: Record<ScoreResult['fitCategory'], number> = {
+          STRONG: 3,
+          NEAR_FIT: 2,
+          WEAK: 1,
+        };
+        const byCategory = categoryRank[b.result.fitCategory] - categoryRank[a.result.fitCategory];
+        if (byCategory !== 0) return byCategory;
         if (b.result.score !== a.result.score) return b.result.score - a.result.score;
         if (b.result.confidence !== a.result.confidence) return b.result.confidence - a.result.confidence;
+        if (a.result.majorWarningCount !== b.result.majorWarningCount) {
+          return a.result.majorWarningCount - b.result.majorWarningCount;
+        }
+        if (a.result.softBlockerCount !== b.result.softBlockerCount) {
+          return a.result.softBlockerCount - b.result.softBlockerCount;
+        }
         return a.plant.commonName.localeCompare(b.plant.commonName);
       })
       .slice(0, limit);
@@ -772,4 +1020,3 @@ export class RoomPlantAdvisorService {
     };
   }
 }
-
