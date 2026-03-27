@@ -26,6 +26,7 @@ export const TOOL_IDS = [
   'home-digital-twin',
   'neighborhood-change-radar',
   'home-habit-coach',
+  'plant-advisor',
   'home-renovation-risk-advisor',
   'mortgage-refinance-radar',
   'home-gazette',

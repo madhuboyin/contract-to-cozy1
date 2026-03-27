@@ -43,7 +43,7 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'room-detail': ['status-board', 'home-risk-replay', 'service-price-radar'],
   'find-services': ['service-price-radar', 'negotiation-shield', 'cost-explainer'],
   warranties: ['status-board', 'home-risk-replay', 'insurance-trend'],
-  maintenance: ['home-habit-coach', 'service-price-radar', 'status-board'],
+  maintenance: ['home-habit-coach', 'plant-advisor', 'status-board'],
   claims: ['home-event-radar', 'home-risk-replay', 'negotiation-shield'],
   insurance: ['insurance-trend', 'home-risk-replay', 'status-board'],
   dashboard: ['home-event-radar', 'status-board', 'home-risk-replay'],
@@ -56,6 +56,8 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   'neighborhood-change-radar': ['home-event-radar', 'home-risk-replay', 'status-board'],
   // Habit coach relates to monitoring and planning tools.
   'home-habit-coach': ['home-event-radar', 'home-timeline', 'status-board'],
+  // Plant advisor connects to habit routines plus monitoring context.
+  'plant-advisor': ['home-habit-coach', 'status-board', 'home-event-radar'],
   // Renovation advisor surfaces tax, capital, and timeline planning tools.
   'home-renovation-risk-advisor': ['capital-timeline', 'property-tax', 'home-digital-twin'],
   // Refinance radar surfaces break-even math, full-cost context, and capital planning.

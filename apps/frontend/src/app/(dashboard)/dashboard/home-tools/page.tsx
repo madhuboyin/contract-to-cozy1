@@ -78,7 +78,7 @@ const HOME_TOOL_GROUPS = [
     key: 'habits',
     title: 'Home Habits',
     summary: 'Seasonal care routines, safety checks, and maintenance habits',
-    toolKeys: ['home-habit-coach'],
+    toolKeys: ['home-habit-coach', 'plant-advisor'],
   },
 ] as const;
 

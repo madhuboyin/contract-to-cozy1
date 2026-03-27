@@ -43,6 +43,7 @@ export const TOOL_ICON_MAP = {
     'status-board': { concept: 'status-board', icon: 'layout-grid', category: 'home' },
     'hidden-asset-finder': { concept: 'recommendations', icon: 'sparkles', category: 'home' },
     'home-digital-twin': { concept: 'property', icon: 'building-2', category: 'home' },
+    'plant-advisor': { concept: 'recommendations', icon: 'sparkles', category: 'home' },
     'home-gazette': { concept: 'documents', icon: 'file-text', category: 'home' },
   },
   insights: {
