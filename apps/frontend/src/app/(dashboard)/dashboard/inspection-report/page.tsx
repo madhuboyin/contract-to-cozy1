@@ -147,7 +147,7 @@ function InspectionReportContent() {
       )}
 
       <GuidanceStepCompletionCard
-        propertyId={selectedPropertyId}
+        propertyId={propertyIdFromUrl ?? selectedPropertyId}
         guidanceStepKey={guidanceStepKey}
         guidanceJourneyId={guidanceJourneyId}
         actionLabel="Mark inspection findings reviewed"
