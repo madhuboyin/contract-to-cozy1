@@ -27,6 +27,7 @@ export default function GuidanceOverviewClient() {
   const propertyId = params.id;
   const searchParams = useSearchParams();
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
+  const guidanceStepKey = searchParams.get('guidanceStepKey') ?? 'review_signal';
 
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<any>(null);
@@ -57,7 +58,7 @@ export default function GuidanceOverviewClient() {
     setCompleting(true);
     try {
       await recordGuidanceToolCompletion(propertyId, {
-        stepKey: 'review_signal',
+        stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
         producedData: { reviewedAt: new Date().toISOString() },
       });
