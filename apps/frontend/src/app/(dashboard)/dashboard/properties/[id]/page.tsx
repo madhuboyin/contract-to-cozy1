@@ -59,6 +59,7 @@ import {
 import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
 import { SmartContextToolsSection } from './components/SmartContextToolsSection';
+import PlantAdvisorDashboardCard from './components/PlantAdvisorDashboardCard';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -396,6 +397,8 @@ const PropertyOverview = ({ property }: { property: Property }) => {
 
   return (
     <div className="space-y-3">
+      <PlantAdvisorDashboardCard propertyId={property.id} />
+
       <div className="md:hidden space-y-3">
         <MobileCard variant="compact" className="space-y-3 border-slate-200/80 bg-white">
           <div className="flex items-start justify-between gap-3">

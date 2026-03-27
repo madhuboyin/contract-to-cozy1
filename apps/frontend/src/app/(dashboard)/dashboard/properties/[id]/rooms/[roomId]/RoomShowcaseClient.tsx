@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ChevronDown, History, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, History, Leaf, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { useCelebration } from '@/hooks/useCelebration';
@@ -37,6 +37,10 @@ import {
   listRoomScanSessions,
   updateInventoryItem,
 } from '../../../../inventory/inventoryApi';
+import {
+  getRoomPlantAdvisorState,
+} from '../../tools/plant-advisor/plantAdvisorApi';
+import type { RoomPlantRecommendationDTO } from '../../tools/plant-advisor/types';
 
 const MilestoneCelebration = dynamic(
   () => import('@/components/ui/MilestoneCelebration').then((m) => m.MilestoneCelebration),
@@ -104,6 +108,9 @@ export default function RoomShowcaseClient() {
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [insights, setInsights] = useState<any>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [plantAdvisorRecommendations, setPlantAdvisorRecommendations] = useState<
+    RoomPlantRecommendationDTO[]
+  >([]);
 
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -140,10 +147,11 @@ export default function RoomShowcaseClient() {
   async function refresh() {
     setLoading(true);
     try {
-      const [allRooms, insightData, roomItems] = await Promise.all([
+      const [allRooms, insightData, roomItems, roomPlantState] = await Promise.all([
         listInventoryRooms(propertyId),
         getRoomInsights(propertyId, roomId),
         listInventoryItems(propertyId, { roomId }),
+        getRoomPlantAdvisorState(propertyId, roomId).catch(() => null),
       ]);
 
       setRooms(allRooms);
@@ -154,6 +162,7 @@ export default function RoomShowcaseClient() {
       if (resolvedInsights) celebrate('scan');
 
       setItems(roomItems);
+      setPlantAdvisorRecommendations(roomPlantState?.recommendations ?? []);
     } finally {
       setLoading(false);
     }
@@ -228,6 +237,28 @@ export default function RoomShowcaseClient() {
   const itemsHref = withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory?roomId=${roomId}`);
   const editHref = withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory/rooms/${roomId}`);
   const checklistHref = withStatusBoardParam(`/dashboard/properties/${propertyId}/inventory/rooms/${roomId}?tab=CHECKLIST`);
+  const advisorRoomType = (insights?.room?.type || '').toString().trim();
+  const advisorQuery = new URLSearchParams({
+    roomId,
+    launchSurface: 'room_detail',
+  });
+  if (advisorRoomType) {
+    advisorQuery.set('roomType', advisorRoomType);
+  }
+  const plantAdvisorHref = withStatusBoardParam(
+    `/dashboard/properties/${propertyId}/tools/plant-advisor?${advisorQuery.toString()}`,
+  );
+
+  const savedPlantRecommendations = plantAdvisorRecommendations.filter(
+    (recommendation) => recommendation.status === 'SAVED',
+  );
+  const activePlantRecommendations = plantAdvisorRecommendations.filter(
+    (recommendation) => recommendation.status === 'RECOMMENDED',
+  );
+  const plantPreviewList =
+    savedPlantRecommendations.length > 0
+      ? savedPlantRecommendations.slice(0, 2)
+      : activePlantRecommendations.slice(0, 2);
 
   function scrollToItems() {
     itemsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -556,6 +587,56 @@ export default function RoomShowcaseClient() {
                 onEditProfile={() => router.push(editHref)}
                 onManageItems={() => router.push(itemsHref)}
               />
+
+              <div className="mt-3 rounded-2xl border border-gray-200 bg-white/80 p-3.5 shadow-xl shadow-slate-900/5 backdrop-blur-md">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-700">
+                      <Leaf className="h-3.5 w-3.5" />
+                    </span>
+                    <p className="mb-0 text-sm font-semibold text-gray-900">Plant Advisor</p>
+                  </div>
+                  <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                    {plantAdvisorRecommendations.length} cards
+                  </span>
+                </div>
+
+                <p className="mt-2 text-xs text-gray-600">
+                  {savedPlantRecommendations.length > 0
+                    ? `${savedPlantRecommendations.length} saved plant plan${savedPlantRecommendations.length === 1 ? '' : 's'} for this room.`
+                    : activePlantRecommendations.length > 0
+                    ? `${activePlantRecommendations.length} active recommendation${activePlantRecommendations.length === 1 ? '' : 's'} ready to review.`
+                    : 'No plant recommendations yet for this room.'}
+                </p>
+
+                {plantPreviewList.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {plantPreviewList.map((recommendation) => (
+                      <div
+                        key={recommendation.id}
+                        className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2.5 py-1.5"
+                      >
+                        <p className="mb-0 truncate text-xs font-medium text-gray-800">
+                          {recommendation.plantName}
+                        </p>
+                        <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                          {recommendation.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => router.push(plantAdvisorHref)}
+                  className="mt-3 inline-flex min-h-[38px] w-full items-center justify-center rounded-lg border border-teal-600 bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+                >
+                  {plantAdvisorRecommendations.length > 0
+                    ? 'Open Plant Advisor'
+                    : 'Get plants for this room'}
+                </button>
+              </div>
 
               {loading ? <p className="mt-2 text-xs text-gray-500">Updating room data...</p> : null}
             </div>

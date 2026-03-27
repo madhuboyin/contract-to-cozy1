@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -56,6 +56,7 @@ import {
   getRoomPlantAdvisorState,
   listEligiblePlantAdvisorRooms,
   saveRoomPlantRecommendation,
+  trackPlantAdvisorEvent,
   upsertRoomPlantProfile,
 } from './plantAdvisorApi';
 import type {
@@ -140,6 +141,12 @@ const ROOM_TYPE_LABELS: Record<RoomType, string> = {
 function getRoomTypeLabel(roomType: RoomType | null | undefined): string {
   if (!roomType) return 'Room';
   return ROOM_TYPE_LABELS[roomType] ?? roomType;
+}
+
+function parseRoomType(value: string | null): RoomType | null {
+  if (!value) return null;
+  const normalized = value.toUpperCase() as RoomType;
+  return Object.prototype.hasOwnProperty.call(ROOM_TYPE_LABELS, normalized) ? normalized : null;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -340,9 +347,18 @@ function RecommendationCard({
 
 export default function PlantAdvisorClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const launchSurface = searchParams.get('launchSurface') ?? 'direct';
+  const prefillRoomId = searchParams.get('roomId');
+  const prefillRoomType = parseRoomType(searchParams.get('roomType'));
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const roomSelectionSourceRef = React.useRef<'auto_default' | 'prefill' | 'picker' | 'auto_fallback'>(
+    'auto_default',
+  );
+  const lastTrackedRoomSelectionRef = React.useRef<string | null>(null);
+  const toolOpenTrackedRef = React.useRef(false);
 
   const [selectedRoomId, setSelectedRoomId] = React.useState<string | null>(null);
   const [roomPickerOpen, setRoomPickerOpen] = React.useState(false);
@@ -360,6 +376,18 @@ export default function PlantAdvisorClient() {
     action: 'save' | 'dismiss' | 'addToHome';
   } | null>(null);
 
+  const trackEvent = React.useCallback(
+    (event: string, section?: string, metadata?: Record<string, unknown>) => {
+      if (!propertyId) return;
+      void trackPlantAdvisorEvent(propertyId, {
+        event,
+        section,
+        metadata,
+      }).catch(() => undefined);
+    },
+    [propertyId],
+  );
+
   const roomsQuery = useQuery({
     queryKey: [ROOMS_QUERY_KEY, propertyId],
     queryFn: () => listEligiblePlantAdvisorRooms(propertyId),
@@ -375,16 +403,28 @@ export default function PlantAdvisorClient() {
       return;
     }
 
+    const preferredRoom =
+      prefillRoomId && rooms.find((room) => room.roomId === prefillRoomId)
+        ? prefillRoomId
+        : null;
+
     if (!selectedRoomId) {
-      setSelectedRoomId(rooms[0].roomId);
+      if (preferredRoom) {
+        roomSelectionSourceRef.current = 'prefill';
+        setSelectedRoomId(preferredRoom);
+      } else {
+        roomSelectionSourceRef.current = 'auto_default';
+        setSelectedRoomId(rooms[0].roomId);
+      }
       return;
     }
 
     const stillExists = rooms.some((room) => room.roomId === selectedRoomId);
     if (!stillExists) {
-      setSelectedRoomId(rooms[0].roomId);
+      roomSelectionSourceRef.current = 'auto_fallback';
+      setSelectedRoomId(preferredRoom ?? rooms[0].roomId);
     }
-  }, [rooms, selectedRoomId]);
+  }, [prefillRoomId, rooms, selectedRoomId]);
 
   const roomStateQuery = useQuery({
     queryKey: [PROFILE_QUERY_KEY, propertyId, selectedRoomId],
@@ -398,9 +438,39 @@ export default function PlantAdvisorClient() {
   );
 
   React.useEffect(() => {
+    if (!propertyId || toolOpenTrackedRef.current) return;
+    toolOpenTrackedRef.current = true;
+    trackEvent('PLANT_ADVISOR_OPENED', 'page', {
+      launch_surface: launchSurface,
+      prefill_room_id: prefillRoomId ?? null,
+      prefill_room_type: prefillRoomType ?? null,
+    });
+  }, [launchSurface, prefillRoomId, prefillRoomType, propertyId, trackEvent]);
+
+  React.useEffect(() => {
+    if (!selectedRoomSummary) return;
+    if (lastTrackedRoomSelectionRef.current === selectedRoomSummary.roomId) return;
+
+    trackEvent('PLANT_ADVISOR_ROOM_SELECTED', 'room_selection', {
+      room_id: selectedRoomSummary.roomId,
+      room_type: selectedRoomSummary.roomType ?? null,
+      source: roomSelectionSourceRef.current,
+    });
+
+    lastTrackedRoomSelectionRef.current = selectedRoomSummary.roomId;
+    roomSelectionSourceRef.current = 'auto_default';
+  }, [selectedRoomSummary, trackEvent]);
+
+  React.useEffect(() => {
     if (!selectedRoomId) return;
-    setDraft(createDraft(roomStateQuery.data, selectedRoomSummary));
-  }, [selectedRoomId, roomStateQuery.data, selectedRoomSummary]);
+    const nextDraft = createDraft(roomStateQuery.data, selectedRoomSummary);
+
+    if (!roomStateQuery.data?.profile && prefillRoomType) {
+      nextDraft.detectedRoomType = prefillRoomType;
+    }
+
+    setDraft(nextDraft);
+  }, [prefillRoomType, selectedRoomId, roomStateQuery.data, selectedRoomSummary]);
 
   const invalidateRoomData = React.useCallback(async () => {
     await Promise.all([
@@ -415,10 +485,22 @@ export default function PlantAdvisorClient() {
       return upsertRoomPlantProfile(propertyId, selectedRoomId, toProfileInput(draft));
     },
     onSuccess: async () => {
+      trackEvent('PLANT_ADVISOR_PROFILE_SAVED', 'profile', {
+        room_id: selectedRoomId,
+        room_type: draft.detectedRoomType ?? selectedRoomSummary?.roomType ?? null,
+        light_level: draft.lightLevel ?? null,
+        maintenance_preference: draft.maintenancePreference ?? null,
+        has_pets: draft.hasPets,
+        goal_count: draft.goals.length,
+        has_notes: Boolean(draft.notes.trim()),
+      });
       toast({ title: 'Plant profile updated' });
       await invalidateRoomData();
     },
     onError: (error) => {
+      trackEvent('PLANT_ADVISOR_PROFILE_SAVE_FAILED', 'profile', {
+        room_id: selectedRoomId,
+      });
       toast({
         title: getErrorMessage(error, 'Could not save your room preferences.'),
         variant: 'destructive',
@@ -434,12 +516,23 @@ export default function PlantAdvisorClient() {
         limit: 8,
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      trackEvent('PLANT_ADVISOR_RECOMMENDATIONS_GENERATED', 'recommendations', {
+        room_id: selectedRoomId,
+        recommendation_count: result.recommendations.length,
+        has_pets: draft.hasPets,
+        goal_count: draft.goals.length,
+        light_level: draft.lightLevel ?? null,
+        maintenance_preference: draft.maintenancePreference ?? null,
+      });
       toast({ title: 'Recommendations updated' });
       setRecommendationFilter('ALL');
       await invalidateRoomData();
     },
     onError: (error) => {
+      trackEvent('PLANT_ADVISOR_RECOMMENDATIONS_FAILED', 'recommendations', {
+        room_id: selectedRoomId,
+      });
       toast({
         title: getErrorMessage(error, 'Could not generate recommendations.'),
         variant: 'destructive',
@@ -452,11 +545,19 @@ export default function PlantAdvisorClient() {
       if (!selectedRoomId) throw new Error('Select a room first.');
       return saveRoomPlantRecommendation(propertyId, selectedRoomId, recommendationId);
     },
-    onSuccess: async () => {
+    onSuccess: async (recommendation) => {
+      trackEvent('PLANT_ADVISOR_RECOMMENDATION_SAVED', 'recommendations', {
+        room_id: selectedRoomId,
+        recommendation_id: recommendation.id,
+        plant_catalog_id: recommendation.plantCatalogId,
+      });
       toast({ title: 'Recommendation saved' });
       await invalidateRoomData();
     },
     onError: (error) => {
+      trackEvent('PLANT_ADVISOR_RECOMMENDATION_SAVE_FAILED', 'recommendations', {
+        room_id: selectedRoomId,
+      });
       toast({
         title: getErrorMessage(error, 'Could not save recommendation.'),
         variant: 'destructive',
@@ -469,11 +570,19 @@ export default function PlantAdvisorClient() {
       if (!selectedRoomId) throw new Error('Select a room first.');
       return dismissRoomPlantRecommendation(propertyId, selectedRoomId, recommendationId);
     },
-    onSuccess: async () => {
+    onSuccess: async (recommendation) => {
+      trackEvent('PLANT_ADVISOR_RECOMMENDATION_DISMISSED', 'recommendations', {
+        room_id: selectedRoomId,
+        recommendation_id: recommendation.id,
+        plant_catalog_id: recommendation.plantCatalogId,
+      });
       toast({ title: 'Recommendation dismissed' });
       await invalidateRoomData();
     },
     onError: (error) => {
+      trackEvent('PLANT_ADVISOR_RECOMMENDATION_DISMISS_FAILED', 'recommendations', {
+        room_id: selectedRoomId,
+      });
       toast({
         title: getErrorMessage(error, 'Could not dismiss recommendation.'),
         variant: 'destructive',
@@ -486,11 +595,20 @@ export default function PlantAdvisorClient() {
       if (!selectedRoomId) throw new Error('Select a room first.');
       return addRoomPlantRecommendationToHome(propertyId, selectedRoomId, recommendationId, {});
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      trackEvent('PLANT_ADVISOR_ADDED_TO_HOME', 'recommendations', {
+        room_id: selectedRoomId,
+        recommendation_id: result.recommendation.id,
+        plant_catalog_id: result.recommendation.plantCatalogId,
+        home_event_id: result.homeEventId ?? null,
+      });
       toast({ title: 'Added to home timeline' });
       await invalidateRoomData();
     },
     onError: (error) => {
+      trackEvent('PLANT_ADVISOR_ADD_TO_HOME_FAILED', 'recommendations', {
+        room_id: selectedRoomId,
+      });
       toast({
         title: getErrorMessage(error, 'Could not add this recommendation to home.'),
         variant: 'destructive',
@@ -517,6 +635,23 @@ export default function PlantAdvisorClient() {
   const roomState = roomStateQuery.data;
   const hasProfile = Boolean(roomState?.profile);
   const hasRecommendations = recommendations.length > 0;
+
+  function handleGenerateClick(source: 'primary' | 'refresh') {
+    trackEvent('PLANT_ADVISOR_GENERATE_CLICKED', 'recommendations', {
+      room_id: selectedRoomId,
+      source,
+      has_profile: hasProfile,
+    });
+    generateMutation.mutate();
+  }
+
+  function handleProfileEdited(field: string, value: unknown) {
+    trackEvent('PLANT_ADVISOR_PROFILE_EDITED', 'profile', {
+      room_id: selectedRoomId,
+      field,
+      value,
+    });
+  }
 
   async function handleRecommendationAction(
     recommendation: RoomPlantRecommendationDTO,
@@ -634,6 +769,7 @@ export default function PlantAdvisorClient() {
                             key={room.roomId}
                             type="button"
                             onClick={() => {
+                              roomSelectionSourceRef.current = 'picker';
                               setSelectedRoomId(room.roomId);
                               setRoomPickerOpen(false);
                             }}
@@ -678,12 +814,14 @@ export default function PlantAdvisorClient() {
                       </span>
                       <Select
                         value={draft.lightLevel ?? UNSET}
-                        onValueChange={(value) =>
+                        onValueChange={(value) => {
+                          const nextValue = value === UNSET ? null : (value as PlantLightLevel);
                           setDraft((current) => ({
                             ...current,
-                            lightLevel: value === UNSET ? null : (value as PlantLightLevel),
-                          }))
-                        }
+                            lightLevel: nextValue,
+                          }));
+                          handleProfileEdited('lightLevel', nextValue);
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select light level" />
@@ -709,13 +847,15 @@ export default function PlantAdvisorClient() {
                       </span>
                       <Select
                         value={draft.maintenancePreference ?? UNSET}
-                        onValueChange={(value) =>
+                        onValueChange={(value) => {
+                          const nextValue =
+                            value === UNSET ? null : (value as PlantMaintenanceLevel);
                           setDraft((current) => ({
                             ...current,
-                            maintenancePreference:
-                              value === UNSET ? null : (value as PlantMaintenanceLevel),
-                          }))
-                        }
+                            maintenancePreference: nextValue,
+                          }));
+                          handleProfileEdited('maintenancePreference', nextValue);
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select maintenance preference" />
@@ -748,7 +888,10 @@ export default function PlantAdvisorClient() {
                         size="sm"
                         variant={draft.hasPets ? 'default' : 'outline'}
                         className="min-h-[40px] flex-1"
-                        onClick={() => setDraft((current) => ({ ...current, hasPets: true }))}
+                        onClick={() => {
+                          setDraft((current) => ({ ...current, hasPets: true }));
+                          handleProfileEdited('hasPets', true);
+                        }}
                       >
                         Yes
                       </Button>
@@ -757,7 +900,10 @@ export default function PlantAdvisorClient() {
                         size="sm"
                         variant={!draft.hasPets ? 'default' : 'outline'}
                         className="min-h-[40px] flex-1"
-                        onClick={() => setDraft((current) => ({ ...current, hasPets: false }))}
+                        onClick={() => {
+                          setDraft((current) => ({ ...current, hasPets: false }));
+                          handleProfileEdited('hasPets', false);
+                        }}
                       >
                         No
                       </Button>
@@ -775,14 +921,19 @@ export default function PlantAdvisorClient() {
                           <button
                             key={goal.value}
                             type="button"
-                            onClick={() =>
+                            onClick={() => {
+                              const willInclude = !draft.goals.includes(goal.value);
                               setDraft((current) => ({
                                 ...current,
                                 goals: current.goals.includes(goal.value)
                                   ? current.goals.filter((item) => item !== goal.value)
                                   : [...current.goals, goal.value],
-                              }))
-                            }
+                              }));
+                              handleProfileEdited('goals', {
+                                goal: goal.value,
+                                selected: willInclude,
+                              });
+                            }}
                             className={cn(
                               'inline-flex min-h-[36px] items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                               active
@@ -810,6 +961,12 @@ export default function PlantAdvisorClient() {
                           notes: event.target.value,
                         }))
                       }
+                      onBlur={() =>
+                        handleProfileEdited('notes', {
+                          hasNotes: Boolean(draft.notes.trim()),
+                          length: draft.notes.trim().length,
+                        })
+                      }
                       placeholder="Example: Keep plants away from AC vent and leave floor space for pets."
                       className="min-h-[88px]"
                       maxLength={1000}
@@ -820,7 +977,7 @@ export default function PlantAdvisorClient() {
                     primaryAction={
                       <Button
                         className="min-h-[44px]"
-                        onClick={() => generateMutation.mutate()}
+                        onClick={() => handleGenerateClick('primary')}
                         disabled={generateMutation.isPending}
                       >
                         {generateMutation.isPending ? (
@@ -860,7 +1017,7 @@ export default function PlantAdvisorClient() {
                     variant="outline"
                     size="sm"
                     disabled={generateMutation.isPending}
-                    onClick={() => generateMutation.mutate()}
+                    onClick={() => handleGenerateClick('refresh')}
                   >
                     <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                     Refresh

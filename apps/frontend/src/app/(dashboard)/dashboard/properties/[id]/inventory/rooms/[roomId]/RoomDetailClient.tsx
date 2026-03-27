@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Package, Sparkles } from 'lucide-react';
+import { ArrowLeft, Leaf, Package, Sparkles } from 'lucide-react';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 
 import {
@@ -28,6 +28,8 @@ import ScanHistoryCollapsible from '@/components/rooms/ScanHistoryCollapsible';
 import RoomScanModal from '@/app/(dashboard)/dashboard/components/inventory/RoomScanModal';
 import { getHealthOverlay, getRoomConfig, getScoreColorHex, getStatusColor, getStatusLabel } from '@/components/rooms/roomVisuals';
 import { humanizeLabel } from '@/lib/utils/string';
+import { getRoomPlantAdvisorState } from '../../../tools/plant-advisor/plantAdvisorApi';
+import type { RoomPlantRecommendationDTO } from '../../../tools/plant-advisor/types';
 
 type Tab = 'profile' | 'checklist' | 'timeline';
 
@@ -263,6 +265,9 @@ export default function RoomDetailClient() {
   const [scanSessions, setScanSessions] = useState<any[]>([]);
   const [scanSessionsLoading, setScanSessionsLoading] = useState(false);
   const [historySessionId, setHistorySessionId] = useState<string | null>(null);
+  const [plantAdvisorRecommendations, setPlantAdvisorRecommendations] = useState<
+    RoomPlantRecommendationDTO[]
+  >([]);
 
   const roomBase = useMemo<RoomBase>(() => (room ? resolveRoomBase(room) : 'OTHER'), [room]);
   const bedroomKind = useMemo<BedroomKind>(() => normalizeBedroomKind(profile?.bedroomKind), [profile?.bedroomKind]);
@@ -294,6 +299,26 @@ export default function RoomDetailClient() {
   const statusLabelRaw = getStatusLabel(healthScore);
   const statusLabel = STATUS_LABELS[statusLabelRaw] ?? humanizeLabel(statusLabelRaw);
   const statusColor = getStatusColor(healthScore);
+  const advisorQuery = new URLSearchParams({
+    roomId,
+    launchSurface: 'inventory_room_detail',
+  });
+
+  if (typeof room?.type === 'string' && room.type.trim()) {
+    advisorQuery.set('roomType', room.type);
+  }
+
+  const plantAdvisorHref = `/dashboard/properties/${propertyId}/tools/plant-advisor?${advisorQuery.toString()}`;
+  const savedPlantRecommendations = plantAdvisorRecommendations.filter(
+    (recommendation) => recommendation.status === 'SAVED',
+  );
+  const activePlantRecommendations = plantAdvisorRecommendations.filter(
+    (recommendation) => recommendation.status === 'RECOMMENDED',
+  );
+  const plantPreviewList =
+    savedPlantRecommendations.length > 0
+      ? savedPlantRecommendations.slice(0, 2)
+      : activePlantRecommendations.slice(0, 2);
 
   async function loadRoom() {
     const rooms = await listInventoryRooms(propertyId);
@@ -344,6 +369,15 @@ export default function RoomDetailClient() {
     }
   }
 
+  async function loadPlantAdvisorPreview() {
+    try {
+      const state = await getRoomPlantAdvisorState(propertyId, roomId);
+      setPlantAdvisorRecommendations(state.recommendations ?? []);
+    } catch {
+      setPlantAdvisorRecommendations([]);
+    }
+  }
+
   useEffect(() => {
     if (!propertyId || !roomId) return;
 
@@ -353,6 +387,7 @@ export default function RoomDetailClient() {
       loadChecklistPreview(),
       loadTimelinePreview(),
       loadScanSessions(),
+      loadPlantAdvisorPreview(),
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, roomId]);
@@ -476,6 +511,15 @@ export default function RoomDetailClient() {
 
               <button
                 type="button"
+                onClick={() => router.push(plantAdvisorHref)}
+                className="inline-flex min-h-[42px] items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white/70 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-800"
+              >
+                <Leaf className="h-3.5 w-3.5" />
+                Plant advisor
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setScanOpen(true)}
                 className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg border border-teal-500 bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 transition-colors hover:bg-teal-700"
               >
@@ -558,8 +602,58 @@ export default function RoomDetailClient() {
                   />
                 </motion.div>
 
-                <motion.div variants={staggerItem} className="lg:sticky lg:top-4 lg:self-start">
+                <motion.div variants={staggerItem} className="space-y-3 lg:sticky lg:top-4 lg:self-start">
                   <QuickInsightsPanel roomType={roomBase} profileData={profile} onAddInsightTask={addInsightAsTask} />
+
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-700">
+                          <Leaf className="h-3.5 w-3.5" />
+                        </span>
+                        <p className="mb-0 text-sm font-semibold text-gray-900">Plant Advisor</p>
+                      </div>
+                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                        {plantAdvisorRecommendations.length} cards
+                      </span>
+                    </div>
+
+                    <p className="mt-2 text-xs text-gray-600">
+                      {savedPlantRecommendations.length > 0
+                        ? `${savedPlantRecommendations.length} saved plant plan${savedPlantRecommendations.length === 1 ? '' : 's'} for this room.`
+                        : activePlantRecommendations.length > 0
+                        ? `${activePlantRecommendations.length} active recommendation${activePlantRecommendations.length === 1 ? '' : 's'} ready to review.`
+                        : 'No plant recommendations for this room yet.'}
+                    </p>
+
+                    {plantPreviewList.length > 0 ? (
+                      <div className="mt-2 space-y-1">
+                        {plantPreviewList.map((recommendation) => (
+                          <div
+                            key={recommendation.id}
+                            className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-2.5 py-1.5"
+                          >
+                            <p className="mb-0 truncate text-xs font-medium text-gray-800">
+                              {recommendation.plantName}
+                            </p>
+                            <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                              {recommendation.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => router.push(plantAdvisorHref)}
+                      className="mt-3 inline-flex min-h-[38px] w-full items-center justify-center rounded-lg border border-teal-600 bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+                    >
+                      {plantAdvisorRecommendations.length > 0
+                        ? 'Open Plant Advisor'
+                        : 'Get plants for this room'}
+                    </button>
+                  </div>
                 </motion.div>
               </motion.div>
             ) : null}

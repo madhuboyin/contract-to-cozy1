@@ -96,3 +96,18 @@ export async function addRoomPlantRecommendationToHome(
 
   return res.data;
 }
+
+export async function trackPlantAdvisorEvent(
+  propertyId: string,
+  payload: {
+    event: string;
+    section?: string;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<void> {
+  await api.trackHomeEventRadarEvent(propertyId, {
+    event: payload.event,
+    section: payload.section ?? 'plant_advisor',
+    metadata: payload.metadata,
+  });
+}
