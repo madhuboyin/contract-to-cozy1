@@ -645,6 +645,7 @@ export default function PlantAdvisorClient() {
   const roomState = roomStateQuery.data;
   const hasProfile = Boolean(roomState?.profile);
   const hasRecommendations = recommendations.length > 0;
+  const hasGeneratedRecommendations = Boolean(roomState?.room.lastRecommendationGeneratedAt);
 
   function handleGenerateClick(source: 'primary' | 'refresh') {
     trackEvent('PLANT_ADVISOR_GENERATE_CLICKED', 'recommendations', {
@@ -1119,10 +1120,10 @@ export default function PlantAdvisorClient() {
                           })
                         )}
                       </>
-                    ) : hasProfile ? (
+                    ) : hasProfile && hasGeneratedRecommendations ? (
                       <EmptyStateCard
                         title="No-fit state"
-                        description="We could not find strong matches with the current room inputs. Try adjusting light, goals, or maintenance preference and regenerate."
+                        description="Current room inputs are limiting fit quality. Try moving to brighter placement, relaxing maintenance preference, or prioritizing low-maintenance goals, then regenerate."
                       />
                     ) : (
                       <EmptyStateCard

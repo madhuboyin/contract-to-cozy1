@@ -251,9 +251,10 @@ function applyMaintenanceReadinessWeighting(_args: {
 }
 
 function isNearRoomFit(plant: PlantCatalog, roomType: RoomType): boolean {
-  if (plant.suitableRoomTypes.length === 0) return false;
+  const roomTypes = Array.isArray(plant.suitableRoomTypes) ? plant.suitableRoomTypes : [];
+  if (roomTypes.length === 0) return false;
   const near = RELATED_ROOM_TYPES[roomType] ?? [];
-  return near.some((candidate) => plant.suitableRoomTypes.includes(candidate));
+  return near.some((candidate) => roomTypes.includes(candidate));
 }
 
 type ScoreResult = {
@@ -267,6 +268,98 @@ type ScoreResult = {
   softBlockerCount: number;
   fitCategory: 'STRONG' | 'NEAR_FIT' | 'WEAK';
 };
+
+type ScoredPlantCandidate = {
+  plant: PlantCatalog;
+  result: ScoreResult;
+};
+
+function normalizePlantNameKey(plant: PlantCatalog): string {
+  const scientific = (plant.scientificName ?? '').trim().toLowerCase();
+  const common = (plant.commonName ?? '').trim().toLowerCase();
+  if (scientific) return `scientific:${scientific}`;
+  return `common:${common}`;
+}
+
+function recommendationSort(a: ScoredPlantCandidate, b: ScoredPlantCandidate): number {
+  const categoryRank: Record<ScoreResult['fitCategory'], number> = {
+    STRONG: 3,
+    NEAR_FIT: 2,
+    WEAK: 1,
+  };
+
+  const byCategory = categoryRank[b.result.fitCategory] - categoryRank[a.result.fitCategory];
+  if (byCategory !== 0) return byCategory;
+  if (b.result.score !== a.result.score) return b.result.score - a.result.score;
+  if (b.result.confidence !== a.result.confidence) return b.result.confidence - a.result.confidence;
+  if (a.result.majorWarningCount !== b.result.majorWarningCount) {
+    return a.result.majorWarningCount - b.result.majorWarningCount;
+  }
+  if (a.result.softBlockerCount !== b.result.softBlockerCount) {
+    return a.result.softBlockerCount - b.result.softBlockerCount;
+  }
+  const byName = a.plant.commonName.localeCompare(b.plant.commonName);
+  if (byName !== 0) return byName;
+  return a.plant.id.localeCompare(b.plant.id);
+}
+
+function dedupeScoredCandidates(candidates: ScoredPlantCandidate[]): ScoredPlantCandidate[] {
+  const byPlantId = new Map<string, ScoredPlantCandidate>();
+  for (const candidate of candidates) {
+    const existing = byPlantId.get(candidate.plant.id);
+    if (!existing || recommendationSort(candidate, existing) < 0) {
+      byPlantId.set(candidate.plant.id, candidate);
+    }
+  }
+
+  const byName = new Map<string, ScoredPlantCandidate>();
+  for (const candidate of byPlantId.values()) {
+    const key = normalizePlantNameKey(candidate.plant);
+    const existing = byName.get(key);
+    if (!existing || recommendationSort(candidate, existing) < 0) {
+      byName.set(key, candidate);
+    }
+  }
+
+  return [...byName.values()];
+}
+
+export function rankPlantCandidates(candidates: ScoredPlantCandidate[], limit: number): ScoredPlantCandidate[] {
+  return dedupeScoredCandidates(candidates).sort(recommendationSort).slice(0, clamp(limit, 1, 24));
+}
+
+function normalizeGoalsForCompare(value: unknown): PlantGoalType[] {
+  const goals = Array.isArray(value) ? value.filter(Boolean) : [];
+  return [...new Set(goals as PlantGoalType[])].sort((a, b) => a.localeCompare(b));
+}
+
+function didScoringInputsChange(existing: any, patchData: Record<string, unknown>): boolean {
+  if ('detectedRoomType' in patchData && (existing.detectedRoomType ?? null) !== (patchData.detectedRoomType ?? null)) {
+    return true;
+  }
+  if ('lightLevel' in patchData && (existing.lightLevel ?? null) !== (patchData.lightLevel ?? null)) {
+    return true;
+  }
+  if (
+    'maintenancePreference' in patchData &&
+    (existing.maintenancePreference ?? null) !== (patchData.maintenancePreference ?? null)
+  ) {
+    return true;
+  }
+  if ('hasPets' in patchData && Boolean(existing.hasPets) !== Boolean(patchData.hasPets)) {
+    return true;
+  }
+  if ('goals' in patchData) {
+    const left = normalizeGoalsForCompare(existing.goals);
+    const right = normalizeGoalsForCompare(patchData.goals);
+    if (left.length !== right.length) return true;
+    for (let i = 0; i < left.length; i += 1) {
+      if (left[i] !== right[i]) return true;
+    }
+  }
+
+  return false;
+}
 
 function scorePlantCandidate(args: {
   plant: PlantCatalog;
@@ -292,9 +385,23 @@ function scorePlantCandidate(args: {
   let preferenceFitReason: string | null = null;
   let tradeoffReason: string | null = null;
   const futureSignals = args.futureSignals ?? {};
+  let petSafetySeverity: 'NONE' | 'MILD' | 'HIGH' = 'NONE';
+  const plantRoomTypes = Array.isArray(plant.suitableRoomTypes) ? plant.suitableRoomTypes : [];
+  const plantLightLevel = (plant.lightLevel ?? 'MEDIUM') as PlantLightLevel;
+  const plantMaintenanceLevel = (plant.maintenanceLevel ?? 'MEDIUM') as PlantMaintenanceLevel;
+
+  if (!Array.isArray(plant.suitableRoomTypes)) {
+    pushUnique(warningFlags, 'Plant room-fit metadata is incomplete; applying general fit assumptions.');
+  }
+  if (!plant.lightLevel) {
+    pushUnique(warningFlags, 'Plant light metadata is incomplete; using a moderate-light assumption.');
+  }
+  if (!plant.maintenanceLevel) {
+    pushUnique(warningFlags, 'Plant maintenance metadata is incomplete; using a moderate-care assumption.');
+  }
 
   if (effectiveRoomType) {
-    if (plant.suitableRoomTypes.includes(effectiveRoomType)) {
+    if (plantRoomTypes.includes(effectiveRoomType)) {
       score += 24;
       roomFitReason = `Fits ${formatRoomType(effectiveRoomType).toLowerCase()} conditions.`;
       pushUnique(fitSignals, roomFitReason);
@@ -310,7 +417,7 @@ function scorePlantCandidate(args: {
           `Comfortable in the micro-climate common to ${formatRoomType(effectiveRoomType).toLowerCase()} spaces.`,
         );
       }
-    } else if (plant.suitableRoomTypes.length === 0) {
+    } else if (plantRoomTypes.length === 0) {
       score += 4;
       pushUnique(fitSignals, 'Flexible room placement profile.');
     } else if (isNearRoomFit(plant, effectiveRoomType)) {
@@ -321,7 +428,7 @@ function scorePlantCandidate(args: {
         warningFlags,
         `Works, but not ideal for ${formatRoomType(effectiveRoomType).toLowerCase()} placement.`,
       );
-    } else if (plant.suitableRoomTypes.length > 0) {
+    } else if (plantRoomTypes.length > 0) {
       score -= 16;
       majorWarningCount += 1;
       tradeoffReason = `room-type fit is limited for ${formatRoomType(effectiveRoomType).toLowerCase()} use`;
@@ -335,7 +442,7 @@ function scorePlantCandidate(args: {
   }
 
   if (profile.lightLevel) {
-    const lightDelta = LIGHT_SCORE[profile.lightLevel] - LIGHT_SCORE[plant.lightLevel];
+    const lightDelta = LIGHT_SCORE[profile.lightLevel] - LIGHT_SCORE[plantLightLevel];
     const diff = Math.abs(lightDelta);
     if (diff === 0) {
       score += 22;
@@ -382,7 +489,7 @@ function scorePlantCandidate(args: {
 
   if (profile.maintenancePreference) {
     const maintenanceDelta =
-      MAINTENANCE_SCORE[plant.maintenanceLevel] - MAINTENANCE_SCORE[profile.maintenancePreference];
+      MAINTENANCE_SCORE[plantMaintenanceLevel] - MAINTENANCE_SCORE[profile.maintenancePreference];
     const diff = Math.abs(
       maintenanceDelta
     );
@@ -423,6 +530,7 @@ function scorePlantCandidate(args: {
       score += 18;
       pushUnique(fitSignals, 'Pet-safety profile is favorable.');
     } else if (plant.toxicityLevel === 'MILDLY_TOXIC') {
+      petSafetySeverity = 'MILD';
       score -= 22;
       majorWarningCount += 1;
       pushUnique(
@@ -433,6 +541,7 @@ function scorePlantCandidate(args: {
         tradeoffReason = 'pet safety is a concern with this plant';
       }
     } else if (plant.toxicityLevel === 'TOXIC') {
+      petSafetySeverity = 'HIGH';
       score -= 40;
       majorWarningCount += 1;
       pushUnique(
@@ -509,6 +618,12 @@ function scorePlantCandidate(args: {
 
   score = round(clamp(score, 0, 100), 1);
 
+  if (profile.hasPets && petSafetySeverity === 'HIGH') {
+    score = Math.min(score, 62);
+  } else if (profile.hasPets && petSafetySeverity === 'MILD') {
+    score = Math.min(score, 72);
+  }
+
   const completeness =
     ((effectiveRoomType ? 1 : 0) +
       (profile.lightLevel ? 1 : 0) +
@@ -524,15 +639,27 @@ function scorePlantCandidate(args: {
   confidence -= majorWarningCount * 0.12;
   confidence -= softBlockerCount * 0.05;
   if (score < 55) confidence -= 0.06;
+  if (profile.hasPets && petSafetySeverity === 'HIGH') {
+    confidence = Math.min(confidence, 0.56);
+  } else if (profile.hasPets && petSafetySeverity === 'MILD') {
+    confidence = Math.min(confidence, 0.64);
+  }
   confidence = round(clamp(confidence, 0.05, 0.98), 2);
   const confidenceBandValue = confidenceBand(confidence);
 
-  const fitCategory: ScoreResult['fitCategory'] =
+  let fitCategory: ScoreResult['fitCategory'] =
     score >= 78 && majorWarningCount === 0
       ? 'STRONG'
       : score >= 55
         ? 'NEAR_FIT'
         : 'WEAK';
+
+  if (profile.hasPets && petSafetySeverity === 'MILD' && fitCategory === 'STRONG') {
+    fitCategory = 'NEAR_FIT';
+  }
+  if (profile.hasPets && petSafetySeverity === 'HIGH') {
+    fitCategory = 'WEAK';
+  }
 
   if (fitCategory !== 'STRONG') {
     pushUnique(warningFlags, 'Works, but not ideal under current room inputs.');
@@ -701,9 +828,26 @@ export class RoomPlantAdvisorService {
 
     if (existing) {
       if (Object.keys(data).length === 0) return existing;
-      return prisma.roomPlantProfile.update({
-        where: { id: existing.id },
-        data,
+      const scoringInputsChanged = didScoringInputsChange(existing, data);
+
+      return prisma.$transaction(async (tx) => {
+        const updated = await tx.roomPlantProfile.update({
+          where: { id: existing.id },
+          data,
+        });
+
+        // Guardrail: recommendations become stale when scoring inputs change.
+        if (scoringInputsChanged) {
+          await tx.roomPlantRecommendation.deleteMany({
+            where: {
+              propertyId,
+              roomId,
+              roomPlantProfileId: existing.id,
+            },
+          });
+        }
+
+        return updated;
       });
     }
 
@@ -832,7 +976,9 @@ export class RoomPlantAdvisorService {
       take: 200,
     });
 
-    const scored = plants
+    const scored = rankPlantCandidates(
+      plants
+      .filter((plant) => Boolean(plant.id && plant.commonName))
       .map((plant) => {
         const result = scorePlantCandidate({
           plant,
@@ -854,26 +1000,9 @@ export class RoomPlantAdvisorService {
         });
 
         return { plant, result };
-      })
-      .sort((a, b) => {
-        const categoryRank: Record<ScoreResult['fitCategory'], number> = {
-          STRONG: 3,
-          NEAR_FIT: 2,
-          WEAK: 1,
-        };
-        const byCategory = categoryRank[b.result.fitCategory] - categoryRank[a.result.fitCategory];
-        if (byCategory !== 0) return byCategory;
-        if (b.result.score !== a.result.score) return b.result.score - a.result.score;
-        if (b.result.confidence !== a.result.confidence) return b.result.confidence - a.result.confidence;
-        if (a.result.majorWarningCount !== b.result.majorWarningCount) {
-          return a.result.majorWarningCount - b.result.majorWarningCount;
-        }
-        if (a.result.softBlockerCount !== b.result.softBlockerCount) {
-          return a.result.softBlockerCount - b.result.softBlockerCount;
-        }
-        return a.plant.commonName.localeCompare(b.plant.commonName);
-      })
-      .slice(0, limit);
+      }),
+      limit,
+    );
 
     await prisma.$transaction(async (tx) => {
       await tx.roomPlantRecommendation.deleteMany({
@@ -935,7 +1064,11 @@ export class RoomPlantAdvisorService {
 
   async saveRecommendation(propertyId: string, roomId: string, recommendationId: string) {
     await this.assertRoomBelongs(propertyId, roomId);
-    await this.getScopedRecommendation(propertyId, roomId, recommendationId);
+    const existing = await this.getScopedRecommendation(propertyId, roomId, recommendationId);
+
+    if (existing.status === 'SAVED') {
+      return { recommendation: this.mapRecommendationDTO(existing) };
+    }
 
     const updated = await prisma.roomPlantRecommendation.update({
       where: { id: recommendationId },
@@ -948,7 +1081,11 @@ export class RoomPlantAdvisorService {
 
   async dismissRecommendation(propertyId: string, roomId: string, recommendationId: string) {
     await this.assertRoomBelongs(propertyId, roomId);
-    await this.getScopedRecommendation(propertyId, roomId, recommendationId);
+    const existing = await this.getScopedRecommendation(propertyId, roomId, recommendationId);
+
+    if (existing.status === 'DISMISSED') {
+      return { recommendation: this.mapRecommendationDTO(existing) };
+    }
 
     const updated = await prisma.roomPlantRecommendation.update({
       where: { id: recommendationId },
@@ -1020,3 +1157,9 @@ export class RoomPlantAdvisorService {
     };
   }
 }
+
+export const __roomPlantAdvisorTestables = {
+  scorePlantCandidate,
+  rankPlantCandidates,
+  confidenceBand,
+};
