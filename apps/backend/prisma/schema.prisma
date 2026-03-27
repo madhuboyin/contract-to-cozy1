@@ -461,6 +461,8 @@ model InventoryRoom {
   scanSessions    InventoryRoomScanSession[]
   inventoryDrafts InventoryDraftItem[]
   homeItems       HomeItem[]
+  plantProfiles   RoomPlantProfile[]
+  plantRecommendations RoomPlantRecommendation[]
 
   @@unique([propertyId, name])
   @@index([propertyId])
@@ -1730,6 +1732,8 @@ model Property {
   inventoryOcrSessions InventoryOcrSession[]
   inventoryDraftItems  InventoryDraftItem[]
   roomChecklistItems   RoomChecklistItem[]
+  roomPlantProfiles    RoomPlantProfile[]
+  roomPlantRecommendations RoomPlantRecommendation[]
   homeEvents           HomeEvent[]
   financeSnapshots     PropertyFinanceSnapshot[]
   toolOverrides        ToolOverride[]
@@ -6629,6 +6633,148 @@ enum RoomChecklistFrequency {
   MONTHLY
   QUARTERLY
   SEASONAL
+}
+
+enum PlantLightLevel {
+  LOW
+  MEDIUM
+  BRIGHT_INDIRECT
+  BRIGHT_DIRECT
+}
+
+enum PlantMaintenanceLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum PlantHumidityPreference {
+  LOW
+  MODERATE
+  HIGH
+}
+
+enum PlantGoalType {
+  AIR_QUALITY
+  FRAGRANCE
+  DECOR
+  PET_SAFE
+  LOW_MAINTENANCE
+}
+
+enum PlantToxicityLevel {
+  PET_SAFE
+  MILDLY_TOXIC
+  TOXIC
+  UNKNOWN
+}
+
+enum PlantRecommendationStatus {
+  RECOMMENDED
+  SAVED
+  DISMISSED
+}
+
+model PlantCatalog {
+  id String @id @default(uuid())
+
+  commonName     String
+  scientificName String?
+
+  lightLevel         PlantLightLevel
+  maintenanceLevel   PlantMaintenanceLevel
+  humidityPreference PlantHumidityPreference
+
+  toxicityLevel PlantToxicityLevel @default(UNKNOWN)
+  isPetSafe     Boolean            @default(false)
+
+  suitableRoomTypes RoomType[] @default([])
+
+  supportsAirQuality Boolean  @default(false)
+  hasFragrance       Boolean  @default(false)
+  decorStyleTags     String[] @default([])
+
+  placementTips String?
+  careSummary   String?
+
+  wateringCadenceDays Int?
+  wateringNotes       String?
+
+  baseConfidence Float @default(0.5)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recommendations RoomPlantRecommendation[]
+
+  @@index([commonName])
+  @@index([scientificName])
+  @@index([lightLevel, maintenanceLevel, humidityPreference])
+  @@index([toxicityLevel])
+  @@map("plant_catalog")
+}
+
+model RoomPlantProfile {
+  id         String @id @default(uuid())
+  propertyId String
+  roomId     String
+
+  detectedRoomType      RoomType?
+  lightLevel            PlantLightLevel?
+  maintenancePreference PlantMaintenanceLevel?
+  hasPets               Boolean                @default(false)
+  goals                 PlantGoalType[]        @default([])
+  notes                 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room     InventoryRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  recommendations RoomPlantRecommendation[]
+
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([propertyId, roomId, createdAt(sort: Desc)])
+  @@map("room_plant_profiles")
+}
+
+model RoomPlantRecommendation {
+  id                 String @id @default(uuid())
+  propertyId         String
+  roomId             String
+  roomPlantProfileId String
+  plantCatalogId     String
+
+  score      Float @default(0.0)
+  confidence Float @default(0.0)
+
+  reasonSummary String?
+  fitSignals    Json?
+  warningFlags  Json?
+
+  status PlantRecommendationStatus @default(RECOMMENDED)
+  rank   Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room             InventoryRoom    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomPlantProfile RoomPlantProfile @relation(fields: [roomPlantProfileId], references: [id], onDelete: Cascade)
+  plantCatalog     PlantCatalog     @relation(fields: [plantCatalogId], references: [id], onDelete: Cascade)
+
+  @@unique([roomPlantProfileId, plantCatalogId])
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([plantCatalogId])
+  @@index([roomPlantProfileId])
+  @@index([status])
+  @@index([propertyId, status])
+  @@index([propertyId, roomId, status, rank])
+  @@index([roomPlantProfileId, status, rank])
+  @@map("room_plant_recommendations")
 }
 
 model RoomChecklistItem {
