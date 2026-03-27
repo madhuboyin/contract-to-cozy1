@@ -7,6 +7,159 @@ import { seedKnowledgeHub } from './knowledgeHub.seed';
 
 const prisma = new PrismaClient();
 
+async function seedPlantCatalog() {
+  const starterCatalog = [
+    {
+      commonName: 'Snake Plant',
+      scientificName: 'Dracaena trifasciata',
+      lightLevel: 'LOW',
+      maintenanceLevel: 'LOW',
+      humidityPreference: 'LOW',
+      toxicityLevel: 'MILDLY_TOXIC',
+      isPetSafe: false,
+      suitableRoomTypes: ['BEDROOM', 'OFFICE', 'LIVING_ROOM'],
+      supportsAirQuality: true,
+      hasFragrance: false,
+      decorStyleTags: ['modern', 'minimal', 'architectural'],
+      placementTips: 'Place near a bright window or in a low-light corner with indirect light.',
+      careSummary: 'Let soil dry almost completely between waterings; tolerates missed watering.',
+      wateringCadenceDays: 18,
+      wateringNotes: 'Water less in winter.',
+      baseConfidence: 0.82,
+    },
+    {
+      commonName: 'ZZ Plant',
+      scientificName: 'Zamioculcas zamiifolia',
+      lightLevel: 'LOW',
+      maintenanceLevel: 'LOW',
+      humidityPreference: 'LOW',
+      toxicityLevel: 'MILDLY_TOXIC',
+      isPetSafe: false,
+      suitableRoomTypes: ['OFFICE', 'BEDROOM', 'LIVING_ROOM'],
+      supportsAirQuality: true,
+      hasFragrance: false,
+      decorStyleTags: ['minimal', 'contemporary'],
+      placementTips: 'Great for desks and shelves away from direct afternoon sun.',
+      careSummary: 'Drought-tolerant foliage plant; avoid overwatering.',
+      wateringCadenceDays: 20,
+      wateringNotes: 'Check soil moisture before watering.',
+      baseConfidence: 0.8,
+    },
+    {
+      commonName: 'Pothos',
+      scientificName: 'Epipremnum aureum',
+      lightLevel: 'MEDIUM',
+      maintenanceLevel: 'LOW',
+      humidityPreference: 'MODERATE',
+      toxicityLevel: 'MILDLY_TOXIC',
+      isPetSafe: false,
+      suitableRoomTypes: ['KITCHEN', 'BATHROOM', 'OFFICE', 'LIVING_ROOM'],
+      supportsAirQuality: true,
+      hasFragrance: false,
+      decorStyleTags: ['trailing', 'boho', 'casual'],
+      placementTips: 'Use hanging planters or high shelves for trailing vines.',
+      careSummary: 'Fast grower in medium indirect light; prune to keep shape.',
+      wateringCadenceDays: 10,
+      wateringNotes: 'Water when top inch of soil is dry.',
+      baseConfidence: 0.84,
+    },
+    {
+      commonName: 'Peace Lily',
+      scientificName: 'Spathiphyllum wallisii',
+      lightLevel: 'MEDIUM',
+      maintenanceLevel: 'MEDIUM',
+      humidityPreference: 'HIGH',
+      toxicityLevel: 'TOXIC',
+      isPetSafe: false,
+      suitableRoomTypes: ['BATHROOM', 'BEDROOM', 'LIVING_ROOM'],
+      supportsAirQuality: true,
+      hasFragrance: true,
+      decorStyleTags: ['lush', 'classic'],
+      placementTips: 'Best in bathrooms or humid corners with filtered light.',
+      careSummary: 'Prefers consistently slightly moist soil and humidity.',
+      wateringCadenceDays: 7,
+      wateringNotes: 'Leaves droop when thirsty; avoid harsh direct light.',
+      baseConfidence: 0.78,
+    },
+    {
+      commonName: 'Spider Plant',
+      scientificName: 'Chlorophytum comosum',
+      lightLevel: 'MEDIUM',
+      maintenanceLevel: 'LOW',
+      humidityPreference: 'MODERATE',
+      toxicityLevel: 'PET_SAFE',
+      isPetSafe: true,
+      suitableRoomTypes: ['OFFICE', 'BEDROOM', 'KITCHEN', 'LIVING_ROOM'],
+      supportsAirQuality: true,
+      hasFragrance: false,
+      decorStyleTags: ['airy', 'hanging'],
+      placementTips: 'Ideal in hanging baskets near bright indirect windows.',
+      careSummary: 'Adaptable and forgiving; trim brown tips for appearance.',
+      wateringCadenceDays: 9,
+      wateringNotes: 'Allow top layer of soil to dry slightly between watering.',
+      baseConfidence: 0.86,
+    },
+    {
+      commonName: 'Boston Fern',
+      scientificName: 'Nephrolepis exaltata',
+      lightLevel: 'MEDIUM',
+      maintenanceLevel: 'MEDIUM',
+      humidityPreference: 'HIGH',
+      toxicityLevel: 'PET_SAFE',
+      isPetSafe: true,
+      suitableRoomTypes: ['BATHROOM', 'KITCHEN'],
+      supportsAirQuality: true,
+      hasFragrance: false,
+      decorStyleTags: ['lush', 'traditional'],
+      placementTips: 'Works best in humid bathrooms with bright filtered light.',
+      careSummary: 'Needs regular moisture and humidity to prevent frond browning.',
+      wateringCadenceDays: 5,
+      wateringNotes: 'Mist regularly in dry seasons.',
+      baseConfidence: 0.76,
+    },
+    {
+      commonName: 'Rubber Plant',
+      scientificName: 'Ficus elastica',
+      lightLevel: 'BRIGHT_INDIRECT',
+      maintenanceLevel: 'MEDIUM',
+      humidityPreference: 'MODERATE',
+      toxicityLevel: 'TOXIC',
+      isPetSafe: false,
+      suitableRoomTypes: ['LIVING_ROOM', 'OFFICE', 'BEDROOM'],
+      supportsAirQuality: true,
+      hasFragrance: false,
+      decorStyleTags: ['statement', 'modern'],
+      placementTips: 'Give it a bright corner with space to grow upright.',
+      careSummary: 'Wipe leaves for dust; water when top soil dries.',
+      wateringCadenceDays: 8,
+      wateringNotes: 'Rotate occasionally for even growth.',
+      baseConfidence: 0.79,
+    },
+    {
+      commonName: 'Areca Palm',
+      scientificName: 'Dypsis lutescens',
+      lightLevel: 'BRIGHT_INDIRECT',
+      maintenanceLevel: 'MEDIUM',
+      humidityPreference: 'HIGH',
+      toxicityLevel: 'PET_SAFE',
+      isPetSafe: true,
+      suitableRoomTypes: ['LIVING_ROOM', 'BEDROOM', 'OFFICE'],
+      supportsAirQuality: true,
+      hasFragrance: false,
+      decorStyleTags: ['tropical', 'statement'],
+      placementTips: 'Place where it receives bright filtered light and airflow.',
+      careSummary: 'Enjoys humidity and regular watering without soggy roots.',
+      wateringCadenceDays: 7,
+      wateringNotes: 'Increase humidity support during dry indoor months.',
+      baseConfidence: 0.81,
+    },
+  ];
+
+  await prisma.plantCatalog.createMany({
+    data: starterCatalog,
+  });
+}
+
 async function main() {
   console.log('🌱 Seeding comprehensive test data for all service categories...');
   console.log('');
@@ -33,7 +186,13 @@ async function main() {
   await prisma.homeownerProfile.deleteMany();
   await prisma.address.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.plantCatalog.deleteMany();
   console.log('✅ Cleared existing data');
+  console.log('');
+
+  console.log('🪴 Seeding starter plant catalog...');
+  await seedPlantCatalog();
+  console.log('✅ Seeded starter plant catalog');
   console.log('');
 
   const hashedPassword = await bcrypt.hash('password123', 10);
