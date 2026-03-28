@@ -34,6 +34,37 @@ enum HomeownerSegment {
   EXISTING_OWNER // Standard homeowner focused on maintenance
 }
 
+enum PreferenceRiskTolerance {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum DeductiblePreferenceStyle {
+  LOW_DEDUCTIBLE
+  BALANCED
+  HIGH_DEDUCTIBLE
+}
+
+enum CashBufferPosture {
+  TIGHT
+  MODERATE
+  STRONG
+}
+
+enum BundlingPreference {
+  NO_PREFERENCE
+  PREFER_BUNDLED
+  PREFER_UNBUNDLED
+}
+
+enum PreferenceProfileSource {
+  USER_INPUT
+  INFERRED
+  IMPORTED
+  SYSTEM_DEFAULT
+}
+
 enum ChecklistItemStatus {
   PENDING
   COMPLETED
@@ -457,6 +488,7 @@ model InventoryRoom {
   maintenanceTasks PropertyMaintenanceTask[]
   incidents        Incident[]
   homeEvents       HomeEvent[]
+  signals          Signal[]
 
   scanSessions    InventoryRoomScanSession[]
   inventoryDrafts InventoryDraftItem[]
@@ -891,6 +923,7 @@ model CoverageAnalysis {
   id                 String @id @default(uuid())
   homeownerProfileId String
   propertyId         String
+  assumptionSetId    String?
 
   status      CoverageAnalysisStatus @default(READY)
   confidence  CoverageConfidence
@@ -917,6 +950,7 @@ model CoverageAnalysis {
   // Relations
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assumptionSet    AssumptionSet?   @relation(fields: [assumptionSetId], references: [id], onDelete: SetNull)
 
   // Optional: what-if scenarios saved by the user
   scenarios CoverageScenario[]
@@ -925,6 +959,7 @@ model CoverageAnalysis {
   updatedAt DateTime @updatedAt
 
   @@index([homeownerProfileId])
+  @@index([assumptionSetId])
   @@index([propertyId, computedAt(sort: Desc)])
   @@index([propertyId, status])
   @@map("coverage_analyses")
@@ -949,6 +984,35 @@ model CoverageScenario {
   @@index([coverageAnalysisId])
   @@index([propertyId])
   @@map("coverage_scenarios")
+}
+
+model AssumptionSet {
+  id                  String  @id @default(uuid())
+  propertyId          String
+  toolKey             String
+  scenarioKey         String?
+  preferenceProfileId String?
+  assumptionsJson     Json
+  createdByUserId     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property          Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  preferenceProfile PreferenceProfile? @relation(fields: [preferenceProfileId], references: [id], onDelete: SetNull)
+  createdBy         User?              @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  coverageAnalyses                CoverageAnalysis[]
+  riskPremiumOptimizationAnalyses RiskPremiumOptimizationAnalysis[]
+  doNothingSimulationRuns         DoNothingSimulationRun[]
+
+  @@index([propertyId])
+  @@index([toolKey])
+  @@index([preferenceProfileId])
+  @@index([scenarioKey])
+  @@index([createdByUserId])
+  @@index([propertyId, toolKey, createdAt(sort: Desc)])
+  @@map("assumption_sets")
 }
 
 // ============================================================================
@@ -1249,6 +1313,7 @@ model User {
   negotiationShieldCasesCreated NegotiationShieldCase[]   @relation("NegotiationShieldCaseCreatedBy")
   radarStates                   PropertyRadarState[]
   createdHomeTwinScenarios      HomeTwinScenario[]
+  assumptionSetsCreated         AssumptionSet[]
 
   // Admin Analytics relations
   analyticsEvents ProductAnalyticsEvent[]
@@ -1417,11 +1482,40 @@ model HomeownerProfile {
   homeSavingsRuns                 HomeSavingsRun[]
   homeSavingsOpportunities        HomeSavingsOpportunity[]
   homeSavingsAccounts             HomeSavingsAccount[]
+  preferenceProfiles              PreferenceProfile[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("homeowner_profiles")
+}
+
+model PreferenceProfile {
+  id                 String  @id @default(uuid())
+  propertyId         String
+  homeownerProfileId String?
+
+  riskTolerance             PreferenceRiskTolerance?
+  deductiblePreferenceStyle DeductiblePreferenceStyle?
+  cashBufferPosture         CashBufferPosture?
+  bundlingPreference        BundlingPreference?
+  confidence                Float?
+  source                    PreferenceProfileSource @default(USER_INPUT)
+  notesJson                 Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property         Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  homeownerProfile HomeownerProfile? @relation(fields: [homeownerProfileId], references: [id], onDelete: SetNull)
+
+  assumptionSets   AssumptionSet[]
+  homeScoreReports HomeScoreReport[]
+
+  @@index([propertyId])
+  @@index([homeownerProfileId])
+  @@index([propertyId, updatedAt(sort: Desc)])
+  @@map("preference_profiles")
 }
 
 // ============================================================================
@@ -1810,6 +1904,9 @@ model Property {
   refinanceOpportunities RefinanceOpportunity[]
   refinanceRadarState    PropertyRefinanceRadarState?
   refinanceScenarios     RefinanceScenarioSnapshot[]
+  preferenceProfiles     PreferenceProfile[]
+  assumptionSets         AssumptionSet[]
+  signals                Signal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2999,6 +3096,43 @@ model SignalAttribution {
   weight Float? // e.g. contribution score
 
   @@index([provenanceId])
+}
+
+model Signal {
+  id         String  @id @default(uuid())
+  propertyId String
+  roomId     String?
+  homeItemId String?
+
+  signalKey   String
+  valueNumber Float?
+  valueText   String?
+  valueJson   Json?
+  unit        String?
+  confidence  Float?
+  sourceModel String
+  sourceId    String
+  capturedAt  DateTime @default(now())
+  validUntil  DateTime?
+  version     Int      @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room     InventoryRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  homeItem HomeItem?      @relation(fields: [homeItemId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, signalKey, sourceModel, sourceId, version, capturedAt])
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([homeItemId])
+  @@index([signalKey])
+  @@index([capturedAt(sort: Desc)])
+  @@index([validUntil])
+  @@index([sourceModel, sourceId])
+  @@index([propertyId, signalKey, capturedAt(sort: Desc)])
+  @@map("signals")
 }
 
 // =============================================================================
@@ -4781,6 +4915,7 @@ model RiskPremiumOptimizationAnalysis {
   id                 String @id @default(uuid())
   homeownerProfileId String
   propertyId         String
+  assumptionSetId    String?
 
   status     RiskPremiumOptimizationStatus     @default(READY)
   confidence RiskPremiumOptimizationConfidence
@@ -4804,10 +4939,12 @@ model RiskPremiumOptimizationAnalysis {
 
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assumptionSet    AssumptionSet?   @relation(fields: [assumptionSetId], references: [id], onDelete: SetNull)
 
   planItems RiskMitigationPlanItem[]
 
   @@index([homeownerProfileId])
+  @@index([assumptionSetId])
   @@index([propertyId, computedAt(sort: Desc)])
   @@index([propertyId, status])
   @@map("risk_premium_optimization_analyses")
@@ -5171,6 +5308,7 @@ model DoNothingSimulationRun {
   id                 String @id @default(uuid())
   homeownerProfileId String
   propertyId         String
+  assumptionSetId    String?
 
   scenarioId String?
 
@@ -5207,10 +5345,12 @@ model DoNothingSimulationRun {
 
   homeownerProfile HomeownerProfile @relation(fields: [homeownerProfileId], references: [id], onDelete: Cascade)
   property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assumptionSet    AssumptionSet?   @relation(fields: [assumptionSetId], references: [id], onDelete: SetNull)
 
   scenario DoNothingScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
 
   @@index([homeownerProfileId])
+  @@index([assumptionSetId])
   @@index([propertyId, computedAt(sort: Desc)])
   @@index([propertyId, horizonMonths])
   @@index([propertyId, status])
@@ -5367,8 +5507,9 @@ model PropertyScoreSnapshot {
 }
 
 model HomeScoreReport {
-  id                String                @id @default(uuid())
-  propertyId        String
+  id                  String                @id @default(uuid())
+  propertyId          String
+  preferenceProfileId String?
   generatedByUserId String?
   reportMode        HomeScoreReportMode   @default(HOMEOWNER)
   reportVersion     String                @default("2.0")
@@ -5379,6 +5520,7 @@ model HomeScoreReport {
   updatedAt         DateTime              @updatedAt
 
   property           Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  preferenceProfile  PreferenceProfile?            @relation(fields: [preferenceProfileId], references: [id], onDelete: SetNull)
   sections           HomeScoreReportSection[]
   certifications     HomeScoreCertification[]
   evidenceLinks      HomeScoreReportEvidenceLink[]
@@ -5388,6 +5530,7 @@ model HomeScoreReport {
   exportJobs         HomeScoreExportJob[]
 
   @@index([propertyId, generatedAt(sort: Desc)])
+  @@index([preferenceProfileId])
   @@index([status, generatedAt(sort: Desc)])
   @@index([reportMode, generatedAt(sort: Desc)])
   @@map("home_score_reports")
@@ -6104,6 +6247,7 @@ model HomeItem {
 
   status HomeItemStatus?
   events HomeItemStatusEvent[]
+  signals Signal[]
 
   // Property-scoped uniqueness (safer for future)
   @@unique([propertyId, inventoryItemId])
