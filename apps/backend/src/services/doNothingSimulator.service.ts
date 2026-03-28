@@ -16,6 +16,7 @@ import {
   hasAssumptionOverrides,
 } from './assumptionSet.service';
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
+import { SharedSignalKey, signalService } from './signal.service';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type DeductibleStrategy = 'KEEP_HIGH' | 'RAISE' | 'LOWER' | 'UNCHANGED';
@@ -68,6 +69,8 @@ export type DoNothingRunDTO = {
   propertyId: string;
   homeownerProfileId: string;
   assumptionSetId?: string | null;
+  preferenceProfileId?: string | null;
+  sharedSignalsUsed?: string[];
   scenarioId?: string | null;
 
   status: 'READY' | 'STALE' | 'ERROR';
@@ -303,12 +306,58 @@ function parseOutputsSnapshot(value: Prisma.JsonValue | null | undefined): DoNot
   };
 }
 
+function parseSharedMetaFromSnapshot(
+  value: Prisma.JsonValue | null | undefined
+): { preferenceProfileId: string | null; sharedSignalsUsed: string[] } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {
+      preferenceProfileId: null,
+      sharedSignalsUsed: [],
+    };
+  }
+
+  const root = value as Record<string, unknown>;
+  const sharedSignalsUsed = Array.isArray(root.sharedSignalsUsed)
+    ? root.sharedSignalsUsed.map((entry) => String(entry))
+    : [];
+
+  return {
+    preferenceProfileId:
+      typeof root.preferenceProfileId === 'string' ? root.preferenceProfileId : null,
+    sharedSignalsUsed,
+  };
+}
+
+function extractSignalNumber(
+  signal: { valueNumber: number | null; valueJson: Prisma.JsonValue | null },
+  jsonField?: string
+): number | null {
+  if (signal.valueNumber !== null && Number.isFinite(signal.valueNumber)) {
+    return signal.valueNumber;
+  }
+
+  if (jsonField && signal.valueJson && typeof signal.valueJson === 'object' && !Array.isArray(signal.valueJson)) {
+    const value = Number((signal.valueJson as Record<string, unknown>)[jsonField]);
+    if (Number.isFinite(value)) return value;
+  }
+
+  return null;
+}
+
+function toPercent(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value)) return null;
+  return value <= 1 ? Math.round(value * 100) : value;
+}
+
 function mapRunToDto(run: DoNothingSimulationRun): DoNothingRunDTO {
+  const sharedMeta = parseSharedMetaFromSnapshot(run.inputsSnapshot);
   return {
     id: run.id,
     propertyId: run.propertyId,
     homeownerProfileId: run.homeownerProfileId,
     assumptionSetId: run.assumptionSetId ?? null,
+    preferenceProfileId: sharedMeta.preferenceProfileId,
+    sharedSignalsUsed: sharedMeta.sharedSignalsUsed,
     scenarioId: run.scenarioId ?? null,
     status: run.status,
     confidence: run.confidence,
@@ -563,7 +612,7 @@ export class DoNothingSimulatorService {
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 36);
 
-    const [inventoryItems, maintenanceTasks, claims, homeEvents, policies] = await Promise.all([
+    const [inventoryItems, maintenanceTasks, claims, homeEvents, policies, sharedSignals] = await Promise.all([
       prisma.inventoryItem.findMany({
         where: { propertyId },
         select: {
@@ -626,6 +675,11 @@ export class DoNothingSimulatorService {
         },
         orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
       }),
+      signalService.getLatestSignalsByKey(
+        propertyId,
+        ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION'],
+        { freshOnly: true }
+      ),
     ]);
 
     const now = new Date();
@@ -635,6 +689,18 @@ export class DoNothingSimulatorService {
     const annualPremiumDollars = asNumber(activePolicy?.premiumAmount);
     const deductibleDollars = asNumber(activePolicy?.deductibleAmount);
     const deductibleCentsBase = deductibleDollars !== undefined ? Math.round(deductibleDollars * 100) : undefined;
+    const coverageGapCount = sharedSignals.COVERAGE_GAP
+      ? extractSignalNumber(sharedSignals.COVERAGE_GAP, 'coverageGapCount')
+      : null;
+    const maintenanceAdherencePercent = sharedSignals.MAINT_ADHERENCE
+      ? toPercent(extractSignalNumber(sharedSignals.MAINT_ADHERENCE, 'adherencePercent'))
+      : null;
+    const savingsRealizationAnnual = sharedSignals.SAVINGS_REALIZATION
+      ? extractSignalNumber(sharedSignals.SAVINGS_REALIZATION, 'estimatedAnnualSavings')
+      : null;
+    const sharedSignalsUsed = (Object.keys(sharedSignals) as SharedSignalKey[]).filter(
+      (signalKey) => Boolean(sharedSignals[signalKey])
+    );
 
     const openStatuses: MaintenanceTaskStatus[] = [
       MaintenanceTaskStatus.PENDING,
@@ -724,6 +790,17 @@ export class DoNothingSimulatorService {
     riskScoreDelta += Math.round((nearEolItems.length * 1.3 + criticalEolItems.length * 2.4) * Math.max(1, horizonFactor * 0.9));
     riskScoreDelta += Math.round(Math.min(10, claims.length * 1.8 + repairEventCount * 0.35));
 
+    if (coverageGapCount !== null && coverageGapCount > 0) {
+      riskScoreDelta += Math.round(Math.min(8, coverageGapCount * Math.max(1, horizonFactor * 0.9)));
+    }
+    if (maintenanceAdherencePercent !== null) {
+      if (maintenanceAdherencePercent < 55) {
+        riskScoreDelta += Math.round(Math.min(6, (55 - maintenanceAdherencePercent) / 8));
+      } else if (maintenanceAdherencePercent > 80) {
+        riskScoreDelta -= 1;
+      }
+    }
+
     if (horizonMonths >= 24) {
       riskScoreDelta += 2;
     }
@@ -768,6 +845,22 @@ export class DoNothingSimulatorService {
     const warrantyImpactMax = mergedOverrides.skipWarranty
       ? Math.round((nearEolItems.length * 20000 + criticalEolItems.length * 36000) * Math.max(1, horizonFactor))
       : 0;
+    const coverageGapImpactMin =
+      coverageGapCount !== null && coverageGapCount > 0
+        ? Math.round(coverageGapCount * 7000 * Math.max(0.8, horizonFactor))
+        : 0;
+    const coverageGapImpactMax =
+      coverageGapCount !== null && coverageGapCount > 0
+        ? Math.round(coverageGapCount * 19000 * Math.max(0.9, horizonFactor))
+        : 0;
+    const maintenanceAdherenceImpactMin =
+      maintenanceAdherencePercent !== null && maintenanceAdherencePercent < 65
+        ? Math.round((65 - maintenanceAdherencePercent) * 300 * Math.max(0.8, horizonFactor))
+        : 0;
+    const maintenanceAdherenceImpactMax =
+      maintenanceAdherencePercent !== null && maintenanceAdherencePercent < 65
+        ? Math.round((65 - maintenanceAdherencePercent) * 900 * Math.max(0.9, horizonFactor))
+        : 0;
 
     const cashBufferCents = mergedOverrides.cashBufferCents;
     let deductibleStressMin = 0;
@@ -794,9 +887,29 @@ export class DoNothingSimulatorService {
     const majorEventScale = horizonMonths === 6 ? 0.55 : horizonMonths === 12 ? 0.75 : horizonMonths === 24 ? 1 : 1.2;
 
     let expectedCostDeltaCentsMin =
-      maintenanceDebtMin + agingImpactMin + claimsImpactMin + warrantyImpactMin + deductibleStressMin;
+      maintenanceDebtMin +
+      agingImpactMin +
+      claimsImpactMin +
+      warrantyImpactMin +
+      deductibleStressMin +
+      coverageGapImpactMin +
+      maintenanceAdherenceImpactMin;
     let expectedCostDeltaCentsMax =
-      maintenanceDebtMax + agingImpactMax + claimsImpactMax + warrantyImpactMax + deductibleStressMax;
+      maintenanceDebtMax +
+      agingImpactMax +
+      claimsImpactMax +
+      warrantyImpactMax +
+      deductibleStressMax +
+      coverageGapImpactMax +
+      maintenanceAdherenceImpactMax;
+
+    if (savingsRealizationAnnual !== null && savingsRealizationAnnual > 0) {
+      const annualSavingsCents = Math.round(savingsRealizationAnnual * 100);
+      const savingsOffsetMin = Math.round(annualSavingsCents * 0.25 * Math.max(0.5, horizonFactor * 0.45));
+      const savingsOffsetMax = Math.round(annualSavingsCents * 0.45 * Math.max(0.55, horizonFactor * 0.55));
+      expectedCostDeltaCentsMin = Math.max(0, expectedCostDeltaCentsMin - savingsOffsetMin);
+      expectedCostDeltaCentsMax = Math.max(0, expectedCostDeltaCentsMax - savingsOffsetMax);
+    }
 
     expectedCostDeltaCentsMax += Math.round(majorEventCost.max * majorEventScale);
     expectedCostDeltaCentsMin += Math.round(majorEventCost.min * Math.max(0.4, majorEventScale - 0.2));
@@ -876,6 +989,26 @@ export class DoNothingSimulatorService {
       });
     }
 
+    if (coverageGapCount !== null && coverageGapCount > 0) {
+      topRiskDriversRaw.push({
+        code: 'COVERAGE_GAP_SIGNAL',
+        title: 'Coverage gap signal increases downside if no action is taken',
+        detail: `${Math.round(coverageGapCount)} active coverage gap signal(s) were reused from Coverage Intelligence.`,
+        severity: coverageGapCount >= 3 ? 'HIGH' : 'MEDIUM',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (maintenanceAdherencePercent !== null && maintenanceAdherencePercent < 70) {
+      topRiskDriversRaw.push({
+        code: 'MAINT_ADHERENCE_SIGNAL',
+        title: 'Low maintenance adherence increases avoidable failures',
+        detail: `Shared maintenance adherence is ${Math.round(maintenanceAdherencePercent)}%, which compounds deferred-risk projections.`,
+        severity: maintenanceAdherencePercent < 50 ? 'HIGH' : 'MEDIUM',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
     if (topRiskDriversRaw.length === 0) {
       topRiskDriversRaw.push({
         code: 'BASELINE_STABLE',
@@ -946,6 +1079,28 @@ export class DoNothingSimulatorService {
         )} USD.`,
         severity: 'HIGH',
         relatedPerils: ['WATER'],
+      });
+    }
+
+    if (coverageGapImpactMax > 0) {
+      topCostDriversRaw.push({
+        code: 'COVERAGE_GAP_COST',
+        title: 'Coverage gap spillover risk',
+        detail: `Known coverage gaps add an estimated ${Math.round(coverageGapImpactMin / 100)}-${Math.round(
+          coverageGapImpactMax / 100
+        )} USD of avoidable downside.`,
+        severity: coverageGapImpactMax > 120000 ? 'HIGH' : 'MEDIUM',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (savingsRealizationAnnual !== null && savingsRealizationAnnual > 0) {
+      topCostDriversRaw.push({
+        code: 'SAVINGS_REALIZATION_BUFFER',
+        title: 'Realized savings offsets some downside',
+        detail: `Shared savings realization (~${Math.round(savingsRealizationAnnual)} USD/year) lowers projected net downside exposure.`,
+        severity: 'LOW',
+        relatedPerils: ['OTHER'],
       });
     }
 
@@ -1065,6 +1220,41 @@ export class DoNothingSimulatorService {
         impact: claims.length > 0 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {
+        label: 'Shared coverage gap signal applied',
+        detail:
+          coverageGapCount !== null
+            ? `${Math.round(coverageGapCount)} coverage gap signal(s) reused from Coverage Intelligence.`
+            : 'No fresh coverage gap signal available; used local baseline only.',
+        impact:
+          coverageGapCount !== null
+            ? coverageGapCount > 0
+              ? 'NEGATIVE'
+              : 'NEUTRAL'
+            : 'NEUTRAL',
+      },
+      {
+        label: 'Shared maintenance adherence signal applied',
+        detail:
+          maintenanceAdherencePercent !== null
+            ? `Maintenance adherence signal: ${Math.round(maintenanceAdherencePercent)}%.`
+            : 'No fresh maintenance adherence signal available; used task-state baseline only.',
+        impact:
+          maintenanceAdherencePercent !== null && maintenanceAdherencePercent < 70
+            ? 'NEGATIVE'
+            : 'NEUTRAL',
+      },
+      {
+        label: 'Shared savings realization signal applied',
+        detail:
+          savingsRealizationAnnual !== null && savingsRealizationAnnual > 0
+            ? `Savings realization offset applied at ~${Math.round(savingsRealizationAnnual)} USD/year.`
+            : 'No active savings realization signal offset applied.',
+        impact:
+          savingsRealizationAnnual !== null && savingsRealizationAnnual > 0
+            ? 'POSITIVE'
+            : 'NEUTRAL',
+      },
+      {
         label: 'Home event maintenance history included',
         detail: `${repairEventCount} repair/maintenance-related home event(s) used to tune cost sensitivity.`,
         impact: repairEventCount > 0 ? 'NEGATIVE' : 'NEUTRAL',
@@ -1133,10 +1323,16 @@ export class DoNothingSimulatorService {
       scenarioId: scenario?.id ?? null,
       assumptionSetId,
       preferenceProfileId: posture.preferenceProfileId,
+      sharedSignalsUsed,
       policy: {
         policyId: activePolicy?.id ?? null,
         annualPremium: annualPremiumDollars ?? null,
         deductibleAmount: deductibleDollars ?? null,
+      },
+      sharedSignals: {
+        coverageGapCount,
+        maintenanceAdherencePercent,
+        savingsRealizationAnnual,
       },
       baseline: {
         riskScore: property.riskReport?.riskScore ?? null,

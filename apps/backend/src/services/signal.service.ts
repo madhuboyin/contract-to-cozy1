@@ -53,6 +53,8 @@ export type SignalListFilters = {
   limit?: number;
 };
 
+export type LatestSharedSignals = Partial<Record<SharedSignalKey, SignalDTO>>;
+
 function mapSignal(signal: Signal): SignalDTO {
   return {
     id: signal.id,
@@ -124,6 +126,32 @@ export class SignalService {
     });
 
     return signals.map(mapSignal);
+  }
+
+  async getLatestSignalsByKey(
+    propertyId: string,
+    keys: SharedSignalKey[],
+    options?: { freshOnly?: boolean }
+  ): Promise<LatestSharedSignals> {
+    if (keys.length === 0) return {};
+
+    const rows = await this.listSignals(propertyId, {
+      freshOnly: options?.freshOnly ?? true,
+      limit: 200,
+    });
+
+    const keySet = new Set(keys);
+    const latest: LatestSharedSignals = {};
+
+    for (const row of rows) {
+      if (!keySet.has(row.signalKey as SharedSignalKey)) continue;
+      const typedKey = row.signalKey as SharedSignalKey;
+      if (!latest[typedKey]) {
+        latest[typedKey] = row;
+      }
+    }
+
+    return latest;
   }
 
   async publishSignal(input: PublishSignalInput): Promise<SignalDTO> {

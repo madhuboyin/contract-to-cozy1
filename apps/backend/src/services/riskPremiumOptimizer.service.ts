@@ -17,6 +17,7 @@ import {
   hasAssumptionOverrides,
 } from './assumptionSet.service';
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
+import { SharedSignalKey, signalService } from './signal.service';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -49,6 +50,8 @@ export type RiskPremiumOptimizationDTO = {
   propertyId: string;
   homeownerProfileId: string;
   assumptionSetId?: string | null;
+  preferenceProfileId?: string | null;
+  sharedSignalsUsed?: string[];
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   summary?: string;
@@ -197,6 +200,53 @@ function inferInputSnapshot(
   };
 }
 
+function parseSharedMetaFromSnapshot(
+  value: Prisma.JsonValue | null | undefined
+): { preferenceProfileId: string | null; sharedSignalsUsed: string[] } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {
+      preferenceProfileId: null,
+      sharedSignalsUsed: [],
+    };
+  }
+
+  const root = value as Record<string, unknown>;
+  const inputs =
+    root.inputs && typeof root.inputs === 'object' && !Array.isArray(root.inputs)
+      ? (root.inputs as Record<string, unknown>)
+      : {};
+  const sharedSignals = Array.isArray(root.sharedSignalsUsed)
+    ? root.sharedSignalsUsed.map((entry) => String(entry))
+    : [];
+
+  return {
+    preferenceProfileId:
+      typeof inputs.preferenceProfileId === 'string' ? inputs.preferenceProfileId : null,
+    sharedSignalsUsed: sharedSignals,
+  };
+}
+
+function extractSignalNumber(signal: {
+  valueNumber: number | null;
+  valueJson: Prisma.JsonValue | null;
+}, jsonField?: string): number | null {
+  if (signal.valueNumber !== null && signal.valueNumber !== undefined && Number.isFinite(signal.valueNumber)) {
+    return signal.valueNumber;
+  }
+
+  if (jsonField && signal.valueJson && typeof signal.valueJson === 'object' && !Array.isArray(signal.valueJson)) {
+    const value = Number((signal.valueJson as Record<string, unknown>)[jsonField]);
+    if (Number.isFinite(value)) return value;
+  }
+
+  return null;
+}
+
+function toPercent(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value)) return null;
+  return value <= 1 ? Math.round(value * 100) : value;
+}
+
 function mapPlanItemToDto(item: RiskMitigationPlanItem): RiskPremiumOptimizationDTO['planItems'][number] {
   return {
     id: item.id,
@@ -221,12 +271,15 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     if (priorityDelta !== 0) return priorityDelta;
     return a.createdAt.getTime() - b.createdAt.getTime();
   });
+  const sharedMeta = parseSharedMetaFromSnapshot(record.inputsSnapshot);
 
   return {
     id: record.id,
     propertyId: record.propertyId,
     homeownerProfileId: record.homeownerProfileId,
     assumptionSetId: record.assumptionSetId ?? null,
+    preferenceProfileId: sharedMeta.preferenceProfileId,
+    sharedSignalsUsed: sharedMeta.sharedSignalsUsed,
     status: record.status,
     confidence: record.confidence,
     summary: record.summary ?? undefined,
@@ -438,7 +491,7 @@ export class RiskPremiumOptimizerService {
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 36);
 
-    const [policies, claims, inventoryItems, propertyDocuments] = await Promise.all([
+    const [policies, claims, inventoryItems, propertyDocuments, sharedSignals] = await Promise.all([
       prisma.insurancePolicy.findMany({
         where: { propertyId },
         orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
@@ -490,6 +543,11 @@ export class RiskPremiumOptimizerService {
           createdAt: true,
         },
       }),
+      signalService.getLatestSignalsByKey(
+        propertyId,
+        ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION'],
+        { freshOnly: true }
+      ),
     ]);
 
     const activePolicy =
@@ -517,6 +575,19 @@ export class RiskPremiumOptimizerService {
 
     const riskScore = property.riskReport?.riskScore ?? null;
     const state = String(property.state || '').toUpperCase();
+    const coverageGapCount = sharedSignals.COVERAGE_GAP
+      ? extractSignalNumber(sharedSignals.COVERAGE_GAP, 'coverageGapCount')
+      : null;
+    const maintenanceAdherenceScore = sharedSignals.MAINT_ADHERENCE
+      ? extractSignalNumber(sharedSignals.MAINT_ADHERENCE, 'adherencePercent')
+      : null;
+    const savingsRealizationAnnual = sharedSignals.SAVINGS_REALIZATION
+      ? extractSignalNumber(sharedSignals.SAVINGS_REALIZATION, 'estimatedAnnualSavings')
+      : null;
+    const maintenanceAdherencePercent = toPercent(maintenanceAdherenceScore);
+    const sharedSignalsUsed = (Object.keys(sharedSignals) as SharedSignalKey[]).filter(
+      (signalKey) => Boolean(sharedSignals[signalKey])
+    );
 
     const claimsByPeril = claims.reduce<Record<Peril, number>>(
       (acc, claim) => {
@@ -594,6 +665,26 @@ export class RiskPremiumOptimizerService {
         title: 'Property risk score is moderate',
         detail: `Current risk score is ${riskScore.toFixed(0)}. There may be room for mitigation-led premium improvements.`,
         severity: 'MEDIUM',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (coverageGapCount !== null && coverageGapCount > 0) {
+      pushDriver({
+        code: 'COVERAGE_GAP_SIGNAL',
+        title: 'Coverage gap signal indicates uncovered risk lanes',
+        detail: `${Math.round(coverageGapCount)} coverage gap signal(s) were detected in shared coverage intelligence.`,
+        severity: coverageGapCount >= 3 ? 'HIGH' : 'MEDIUM',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (maintenanceAdherencePercent !== null && maintenanceAdherencePercent < 70) {
+      pushDriver({
+        code: 'MAINTENANCE_ADHERENCE_LOW',
+        title: 'Maintenance adherence signal is below target',
+        detail: `Shared maintenance adherence is ${Math.round(maintenanceAdherencePercent)}%, which can increase preventable loss frequency.`,
+        severity: maintenanceAdherencePercent < 50 ? 'HIGH' : 'MEDIUM',
         relatedPerils: ['OTHER'],
       });
     }
@@ -923,6 +1014,56 @@ export class RiskPremiumOptimizerService {
       });
     }
 
+    const coverageGapDriver = getDriverSeverity('COVERAGE_GAP_SIGNAL');
+    if (coverageGapDriver) {
+      pushRecommendation({
+        code: 'COVERAGE_ALIGNMENT_REVIEW',
+        title: 'Align mitigation plan with known coverage gaps',
+        detail: 'Coverage Intelligence already flagged uncovered scenarios. Prioritize mitigation actions that close the highest-impact gaps first.',
+        type: 'POLICY_LEVER',
+        priority: coverageGapDriver,
+        targetPeril: 'OTHER',
+        estimatedCost: 0,
+        estimatedSavingsMin: 50,
+        estimatedSavingsMax: 240,
+        whyThisMatters: 'Resolving known gaps improves renewal negotiations and reduces unsupported exposure assumptions.',
+        actionType: MitigationActionType.REVIEW_DISCOUNTS,
+      });
+    }
+
+    const maintenanceAdherenceDriver = getDriverSeverity('MAINTENANCE_ADHERENCE_LOW');
+    if (maintenanceAdherenceDriver) {
+      pushRecommendation({
+        code: 'MAINTENANCE_ADHERENCE_RECOVERY',
+        title: 'Recover maintenance adherence before renewal',
+        detail: 'Complete overdue maintenance actions and capture evidence before policy shopping or renewal modeling.',
+        type: 'MITIGATE',
+        priority: maintenanceAdherenceDriver,
+        targetPeril: 'OTHER',
+        estimatedCost: 80,
+        estimatedSavingsMin: 45,
+        estimatedSavingsMax: 210,
+        whyThisMatters: 'Sustained maintenance completion can reduce repeat incidents and strengthen insurer confidence.',
+        actionType: MitigationActionType.REVIEW_DISCOUNTS,
+      });
+    }
+
+    if (savingsRealizationAnnual !== null && savingsRealizationAnnual > 0) {
+      pushRecommendation({
+        code: 'REINVEST_REALIZED_SAVINGS',
+        title: 'Reinvest realized savings into top mitigation levers',
+        detail: 'Use a portion of confirmed savings outcomes to fund high-priority protection actions.',
+        type: 'POLICY_LEVER',
+        priority: 'LOW',
+        targetPeril: 'OTHER',
+        estimatedCost: 0,
+        estimatedSavingsMin: 30,
+        estimatedSavingsMax: 160,
+        whyThisMatters: 'Cross-feature savings realization creates budget room for risk-reduction work without increasing net household spend.',
+        actionType: MitigationActionType.REVIEW_DISCOUNTS,
+      });
+    }
+
     if (getDriverSeverity('DOCUMENTATION_GAPS')) {
       pushRecommendation({
         code: 'DISCOUNT_DOCUMENTATION_REVIEW',
@@ -971,14 +1112,18 @@ export class RiskPremiumOptimizerService {
     });
 
     const discountBoost = assumeBundled ? 1.15 : 1;
+    const savingsSignalBoost =
+      savingsRealizationAnnual !== null && savingsRealizationAnnual > 0
+        ? Math.min(280, savingsRealizationAnnual * 0.18)
+        : 0;
     const totalSavingsMinRaw = sortedRecommendations.reduce(
       (sum, recommendation) => sum + (recommendation.estimatedSavingsMin ?? 0),
       0
-    ) * discountBoost;
+    ) * discountBoost + savingsSignalBoost * 0.5;
     const totalSavingsMaxRaw = sortedRecommendations.reduce(
       (sum, recommendation) => sum + (recommendation.estimatedSavingsMax ?? 0),
       0
-    ) * discountBoost;
+    ) * discountBoost + savingsSignalBoost;
 
     const estimatedSavingsMin = Number.isFinite(totalSavingsMinRaw)
       ? Math.round(totalSavingsMinRaw * 100) / 100
@@ -1052,7 +1197,11 @@ export class RiskPremiumOptimizerService {
               hasRoofInspectionDoc,
               hasMitigationReceipt,
               claimsByPeril,
+              coverageGapCount,
+              maintenanceAdherencePercent,
+              savingsRealizationAnnual,
             },
+            sharedSignalsUsed,
           },
           premiumDrivers: drivers.slice(0, 6),
           recommendations: persistedRecommendations.slice(0, 8),

@@ -64,6 +64,7 @@ export type CoverageAnalysisDTO = {
   propertyId: string;
   homeownerProfileId: string;
   assumptionSetId?: string | null;
+  preferenceProfileId?: string | null;
   status: 'READY' | 'STALE' | 'ERROR';
   computedAt: string;
 
@@ -448,6 +449,30 @@ function confidenceToScore(confidence: CoverageConfidence): number {
   return 0.45;
 }
 
+function attachSharedContextToSnapshot(
+  snapshot: ComputedSnapshot,
+  context: {
+    preferenceProfileId: string | null;
+    assumptionSetId: string | null;
+    signalKeysUsed: string[];
+  }
+): ComputedSnapshot {
+  const nextInputs = {
+    ...(snapshot.inputsSnapshot ?? {}),
+    sharedContext: {
+      preferenceProfileId: context.preferenceProfileId,
+      assumptionSetId: context.assumptionSetId,
+      signalKeysUsed: context.signalKeysUsed,
+      readPriorityOrder: ['CANONICAL', 'SHARED_MODELS', 'SNAPSHOT_FALLBACK'],
+    },
+  };
+
+  return {
+    ...snapshot,
+    inputsSnapshot: nextInputs,
+  };
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -605,12 +630,24 @@ function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
   const addOnRecommendations = safeArray<AddOnSuggestion>(analysis.addOnRecommendations);
   const decisionTrace = safeArray<DecisionTraceItem>(analysis.decisionTrace);
   const nextSteps = safeArray<NextStep>(analysis.nextSteps);
+  const snapshot = safeObject<Record<string, unknown>>(analysis.inputsSnapshot, {});
+  const sharedContext =
+    snapshot.sharedContext &&
+    typeof snapshot.sharedContext === 'object' &&
+    !Array.isArray(snapshot.sharedContext)
+      ? (snapshot.sharedContext as Record<string, unknown>)
+      : {};
+  const preferenceProfileId =
+    typeof sharedContext.preferenceProfileId === 'string'
+      ? sharedContext.preferenceProfileId
+      : null;
 
   return {
     id: analysis.id,
     propertyId: analysis.propertyId,
     homeownerProfileId: analysis.homeownerProfileId,
     assumptionSetId: analysis.assumptionSetId ?? null,
+    preferenceProfileId,
     status: analysis.status,
     computedAt: analysis.computedAt.toISOString(),
     overallVerdict: analysis.overallVerdict,
@@ -1206,9 +1243,12 @@ export class CoverageIntelligenceService {
       assumptionOverrides = parseCoverageOverrides(extractAssumptionOverrides(existing.assumptionsJson));
     }
 
-    const preferenceAdjusted = applyPreferenceDefaults(overrides, posture);
-    const effectiveOverrides = {
+    const mergedRawOverrides = {
       ...assumptionOverrides,
+      ...(overrides ?? {}),
+    };
+    const preferenceAdjusted = applyPreferenceDefaults(mergedRawOverrides, posture);
+    const effectiveOverrides = {
       ...preferenceAdjusted,
     };
 
@@ -1829,11 +1869,16 @@ export class CoverageIntelligenceService {
     options?: CoverageRunOptions
   ): Promise<CoverageAnalysisDTO> {
     const resolved = await this.resolveRunInputs(propertyId, userId, overrides, options);
-    const { snapshot, homeownerProfileId } = await this.computeSnapshot(
+    const { snapshot: computedSnapshot, homeownerProfileId } = await this.computeSnapshot(
       propertyId,
       userId,
       resolved.effectiveOverrides
     );
+    const snapshot = attachSharedContextToSnapshot(computedSnapshot, {
+      preferenceProfileId: resolved.preferenceProfileId,
+      assumptionSetId: resolved.assumptionSetId,
+      signalKeysUsed: ['COVERAGE_GAP'],
+    });
     const analysis = await this.createAnalysisRecord(
       propertyId,
       homeownerProfileId,
@@ -1879,7 +1924,16 @@ export class CoverageIntelligenceService {
     const resolved = await this.resolveRunInputs(propertyId, userId, input.overrides, {
       assumptionSetId: input.assumptionSetId,
     });
-    const { snapshot, homeownerProfileId } = await this.computeSnapshot(propertyId, userId, resolved.effectiveOverrides);
+    const { snapshot: computedSnapshot, homeownerProfileId } = await this.computeSnapshot(
+      propertyId,
+      userId,
+      resolved.effectiveOverrides
+    );
+    const snapshot = attachSharedContextToSnapshot(computedSnapshot, {
+      preferenceProfileId: resolved.preferenceProfileId,
+      assumptionSetId: resolved.assumptionSetId,
+      signalKeysUsed: ['COVERAGE_GAP'],
+    });
 
     if (!input.saveScenario) {
       return {
@@ -1887,6 +1941,7 @@ export class CoverageIntelligenceService {
         propertyId,
         homeownerProfileId,
         assumptionSetId: resolved.assumptionSetId,
+        preferenceProfileId: resolved.preferenceProfileId,
         status: snapshot.status,
         computedAt: new Date().toISOString(),
         overallVerdict: snapshot.overallVerdict,
