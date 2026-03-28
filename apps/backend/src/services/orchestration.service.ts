@@ -28,6 +28,13 @@ import { detectCoverageGaps } from './coverageGap.service';
 import { AssumptionSetService } from './assumptionSet.service';
 import { PreferenceProfileService } from './preferenceProfile.service';
 import { SharedSignalKey, SignalDTO, signalService } from './signal.service';
+import {
+  DecisionCandidate,
+  DecisionEngineResult,
+  DecisionRecommendation,
+  DecisionTargetTool,
+  runDecisionEngine,
+} from './decisionEngine.service';
 
 
 // PHASE 2.3 INTEGRATION
@@ -160,17 +167,7 @@ export type OrchestratedAction = {
   createdAt?: Date | null;
 };
 
-export type OrchestrationTargetTool =
-  | 'coverage-intelligence'
-  | 'risk-premium-optimizer'
-  | 'do-nothing'
-  | 'sell-hold-rent'
-  | 'break-even'
-  | 'capital-timeline'
-  | 'home-event-radar'
-  | 'home-risk-replay'
-  | 'home-timeline'
-  | 'status-board';
+export type OrchestrationTargetTool = DecisionTargetTool;
 
 export type OrchestrationNextBestMove = {
   title: string;
@@ -246,6 +243,61 @@ export type OrchestrationSummary = {
   nextBestMove?: OrchestrationNextBestMove | null;
   sharedContext?: OrchestrationSharedContext | null;
   handoffs?: OrchestrationHandoff[];
+  decisionEngine?: {
+    recommendations: Array<{
+      id: string;
+      title: string;
+      detail: string;
+      source: string;
+      targetTool: string;
+      targetPath: string;
+      score: number;
+      priorityBucket: 'HIGH' | 'MEDIUM' | 'LOW';
+      confidence: number;
+      freshness: number;
+      reasonCode:
+        | 'ACTION_CENTER'
+        | 'COVERAGE_PRESSURE'
+        | 'RISK_SPIKE'
+        | 'COST_PRESSURE'
+        | 'SCENARIO_CONTINUITY'
+        | 'DEFAULT';
+      sourceActionKey?: string | null;
+      signalKey?: SharedSignalKey | null;
+      trace: {
+        whyNow: string[];
+        contributedSignals: string[];
+        postureInputs: string[];
+        assumptionInputs: string[];
+        conflictsResolved: string[];
+        suppressionsConsidered: string[];
+      };
+    }>;
+    suppressed: Array<{
+      candidateId: string;
+      title: string;
+      source: string;
+      reason: string;
+      detail: string;
+    }>;
+    diagnostics: {
+      generatedAt: string;
+      evaluatedCount: number;
+      surfacedCount: number;
+      suppressedCount: number;
+      duplicateMergeCount: number;
+      conflictResolutionCount: number;
+      staleInputDecisions: number;
+      lowConfidenceRecommendationCount: number;
+      topDecisionCategories: Record<string, number>;
+      suppressedByReason: Record<string, number>;
+      priorityBuckets: {
+        high: number;
+        medium: number;
+        low: number;
+      };
+    };
+  } | null;
 };
 
 export interface CompletionCreateInput {
@@ -637,6 +689,438 @@ function buildScenarioHandoffs(params: {
   ];
 }
 
+function normalizeDecisionConfidence(confidence: unknown): number {
+  if (typeof confidence === 'number' && Number.isFinite(confidence)) {
+    return clamp01(confidence > 1 ? confidence / 100 : confidence);
+  }
+  if (typeof confidence === 'string') {
+    const normalized = confidence.trim().toUpperCase();
+    if (normalized === 'HIGH') return 0.82;
+    if (normalized === 'MEDIUM') return 0.64;
+    if (normalized === 'LOW') return 0.42;
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed)) return clamp01(parsed > 1 ? parsed / 100 : parsed);
+  }
+  return 0.62;
+}
+
+function freshnessFromDate(dateLike: unknown): number {
+  const date = safeParseDate(dateLike);
+  if (!date) return 0.55;
+  const ageDays = Math.max(0, (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (ageDays <= 7) return 1;
+  if (ageDays <= 30) return 0.85;
+  if (ageDays <= 60) return 0.65;
+  return 0.4;
+}
+
+function severityToUrgency(value: unknown): number {
+  const severity = normalizeUpper(value);
+  if (severity === 'CRITICAL') return 96;
+  if (severity === 'HIGH') return 82;
+  if (severity === 'MEDIUM' || severity === 'MODERATE') return 64;
+  if (severity === 'LOW') return 42;
+  return 56;
+}
+
+function priorityToUrgency(value: unknown): number {
+  const priority = normalizeUpper(value);
+  if (priority === 'HIGH' || priority === 'URGENT') return 84;
+  if (priority === 'MEDIUM') return 66;
+  if (priority === 'LOW') return 46;
+  return 58;
+}
+
+function parseJsonArray(value: Prisma.JsonValue | null | undefined): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  const parsed: Array<Record<string, unknown>> = [];
+  for (const entry of value) {
+    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      parsed.push(entry as Record<string, unknown>);
+    }
+  }
+  return parsed;
+}
+
+function recommendationReasonFromSignals(signalHighlights: OrchestrationSignalHighlight[]): string[] {
+  const reasons: string[] = [];
+  const coverage = signalHighlights.find((entry) => entry.signalKey === 'COVERAGE_GAP');
+  if (coverage?.valueNumber != null && coverage.valueNumber > 0) {
+    reasons.push(`Coverage gap signal currently reports ${Math.round(coverage.valueNumber)} open gap(s).`);
+  }
+  const risk = signalHighlights.find((entry) => entry.signalKey === 'RISK_SPIKE');
+  if (risk?.valueNumber != null && risk.valueNumber >= 0.55) {
+    reasons.push('Risk spike signal indicates elevated near-term pressure.');
+  }
+  const cost = signalHighlights.find((entry) => entry.signalKey === 'COST_ANOMALY');
+  if (cost?.valueNumber != null && cost.valueNumber >= 0.55) {
+    reasons.push('Cost anomaly signal is above baseline.');
+  }
+  return reasons;
+}
+
+function mapRecommendationToNextBestMove(params: {
+  recommendation: DecisionRecommendation;
+  assumptionSetId: string | null;
+}): OrchestrationNextBestMove {
+  return {
+    title: params.recommendation.title,
+    detail: params.recommendation.detail,
+    reasonCode: params.recommendation.reasonCode,
+    sourceActionKey: params.recommendation.sourceActionKey ?? null,
+    signalKey: params.recommendation.signalKey ?? null,
+    targetTool: params.recommendation.targetTool,
+    targetPath: params.recommendation.targetPath,
+    assumptionSetId: params.assumptionSetId,
+  };
+}
+
+function buildActionCenterDecisionCandidates(params: {
+  propertyId: string;
+  actions: OrchestratedAction[];
+  signalHighlights: OrchestrationSignalHighlight[];
+  activeScenarioAssumptionSetId: string | null;
+  activeScenarioToolKey: string | null;
+}): DecisionCandidate[] {
+  const reasonsFromSignals = recommendationReasonFromSignals(params.signalHighlights);
+
+  const candidates = params.actions.map((action): DecisionCandidate => {
+    const riskLevelUrgency = severityToUrgency(action.riskLevel);
+    const priorityUrgency = clampRange(action.priority, 0, 100);
+    const overdueBoost = action.overdue ? 10 : 0;
+    const urgency = clampRange(Math.max(riskLevelUrgency, priorityUrgency) + overdueBoost, 0, 100);
+    const exposure = toNumberSafe(action.exposure) ?? 0;
+    const normalizedExposure = clampRange((exposure / 12000) * 100, 0, 100);
+    const financialImpact = Math.max(
+      normalizedExposure,
+      action.actionKey.startsWith('COVERAGE_GAP::') ? 72 : 0
+    );
+    const riskReduction = Math.max(
+      severityToUrgency(action.riskLevel),
+      action.source === 'CHECKLIST' ? 62 : 58,
+      action.actionKey.startsWith('COVERAGE_GAP::') ? 88 : 0
+    );
+    const confidenceScore = normalizeDecisionConfidence(action.confidence?.score ?? 0.62);
+    const freshness = freshnessFromDate(action.createdAt ?? new Date());
+    const targetTool = mapActionToTargetTool(action);
+    const targetPath = buildToolPath({
+      propertyId: params.propertyId,
+      tool: targetTool,
+      assumptionSetId: params.activeScenarioAssumptionSetId,
+      fromTool: 'orchestration-summary',
+      launchSurface: 'orchestration-summary',
+    });
+
+    const intent = action.actionKey.startsWith('COVERAGE_GAP::')
+      ? 'REVIEW_COVERAGE'
+      : action.source === 'CHECKLIST'
+        ? 'EXECUTE_MAINTENANCE'
+        : 'REDUCE_EXPOSURE';
+
+    const signalDrivers = [
+      ...(action.primarySignalSource?.sourceSystem ? [action.primarySignalSource.sourceSystem] : []),
+      ...(action.actionKey.startsWith('COVERAGE_GAP::') ? ['COVERAGE_GAP'] : []),
+    ];
+
+    return {
+      id: `candidate:${action.id}`,
+      source: 'ACTION_CENTER',
+      title: action.title,
+      detail:
+        action.description ??
+        action.cta?.label ??
+        'Highest-priority actionable recommendation from Action Center.',
+      targetTool,
+      targetPath,
+      sourceActionKey: action.actionKey,
+      signalKey: action.actionKey.startsWith('COVERAGE_GAP::') ? 'COVERAGE_GAP' : null,
+      dedupeKey: `action:${action.actionKey}`,
+      conflictScope: action.actionKey.startsWith('COVERAGE_GAP::')
+        ? 'coverage'
+        : `asset:${action.systemType ?? action.category ?? action.title}`,
+      intent,
+      urgency,
+      financialImpact,
+      riskReduction,
+      userEffort: action.source === 'CHECKLIST' ? 48 : 42,
+      confidence: confidenceScore,
+      freshness,
+      reversibility: intent === 'REVIEW_COVERAGE' ? 74 : 60,
+      whyNow: [
+        ...reasonsFromSignals,
+        `${action.title} is currently unsuppressed and actionable in Action Center.`,
+      ],
+      signalDrivers,
+      postureInputs: [],
+      assumptionInputs: params.activeScenarioAssumptionSetId
+        ? [`assumptionSetId:${params.activeScenarioAssumptionSetId}`]
+        : [],
+      category: action.category ?? action.systemType ?? action.source,
+      suppressionHints: {
+        completedRecently: false,
+        dismissedOrSnoozed: false,
+        staleInput: freshness < 0.35,
+        criticalSafety: normalizeUpper(action.riskLevel) === 'CRITICAL',
+      },
+    };
+  });
+
+  if (params.activeScenarioAssumptionSetId && params.activeScenarioToolKey) {
+    const handoff = mapScenarioToolToHandoff(params.activeScenarioToolKey);
+    if (handoff) {
+      candidates.push({
+        id: `candidate:scenario:${params.activeScenarioAssumptionSetId}`,
+        source: 'SCENARIO_CONTINUITY',
+        title: `Continue scenario in ${handoff.to.replace(/-/g, ' ')}`,
+        detail: 'A shared assumption set is active. Continue the same scenario without re-entering assumptions.',
+        targetTool: handoff.to,
+        targetPath: buildToolPath({
+          propertyId: params.propertyId,
+          tool: handoff.to,
+          assumptionSetId: params.activeScenarioAssumptionSetId,
+          fromTool: handoff.from,
+          launchSurface: 'orchestration-summary',
+        }),
+        dedupeKey: `scenario:${params.activeScenarioAssumptionSetId}:${handoff.to}`,
+        conflictScope: 'scenario-continuity',
+        intent: 'NEUTRAL',
+        urgency: 52,
+        financialImpact: 38,
+        riskReduction: 44,
+        userEffort: 18,
+        confidence: 0.7,
+        freshness: 0.88,
+        reversibility: 92,
+        assumptionInputs: [`assumptionSetId:${params.activeScenarioAssumptionSetId}`],
+        whyNow: ['Scenario continuity was detected across aligned tools.'],
+        signalDrivers: [],
+        category: 'SCENARIO',
+        suppressionHints: {
+          completedRecently: false,
+          dismissedOrSnoozed: false,
+          staleInput: false,
+          criticalSafety: false,
+        },
+      });
+    }
+  }
+
+  return candidates;
+}
+
+type FeatureDecisionInputs = {
+  propertyId: string;
+  assumptionSetId: string | null;
+  postureLabels: string[];
+  signalHighlights: OrchestrationSignalHighlight[];
+};
+
+function buildFeatureDecisionCandidates(params: {
+  base: FeatureDecisionInputs;
+  coverageAnalysis: {
+    id: string;
+    summary: string | null;
+    confidence: string;
+    computedAt: Date;
+    nextSteps: Prisma.JsonValue | null;
+    decisionTrace: Prisma.JsonValue | null;
+    assumptionSetId: string | null;
+  } | null;
+  riskPremiumAnalysis: {
+    id: string;
+    summary: string | null;
+    confidence: string;
+    computedAt: Date;
+    recommendations: Prisma.JsonValue | null;
+    assumptionSetId: string | null;
+  } | null;
+  doNothingRun: {
+    id: string;
+    summary: string | null;
+    confidence: string;
+    computedAt: Date;
+    nextSteps: Prisma.JsonValue | null;
+    assumptionSetId: string | null;
+  } | null;
+}): DecisionCandidate[] {
+  const output: DecisionCandidate[] = [];
+  const signalReasons = recommendationReasonFromSignals(params.base.signalHighlights);
+
+  if (params.coverageAnalysis) {
+    const step = parseJsonArray(params.coverageAnalysis.nextSteps)[0] ?? null;
+    const detail = typeof step?.detail === 'string'
+      ? step.detail
+      : params.coverageAnalysis.summary ??
+        'Coverage analysis indicates an unresolved protection recommendation.';
+    const stepPriority = priorityToUrgency(step?.priority);
+    output.push({
+      id: `feature:coverage:${params.coverageAnalysis.id}`,
+      source: 'COVERAGE_ANALYSIS',
+      title:
+        typeof step?.title === 'string' && step.title.trim().length > 0
+          ? step.title
+          : 'Review unresolved coverage recommendation',
+      detail,
+      targetTool: 'coverage-intelligence',
+      targetPath: buildToolPath({
+        propertyId: params.base.propertyId,
+        tool: 'coverage-intelligence',
+        assumptionSetId: params.coverageAnalysis.assumptionSetId ?? params.base.assumptionSetId,
+        fromTool: 'orchestration-summary',
+        launchSurface: 'orchestration-summary',
+      }),
+      signalKey: 'COVERAGE_GAP',
+      dedupeKey: `coverage:${typeof step?.title === 'string' ? step.title.toLowerCase() : 'default'}`,
+      conflictScope: 'coverage',
+      intent: 'REVIEW_COVERAGE',
+      urgency: Math.max(stepPriority, 68),
+      financialImpact: 70,
+      riskReduction: 88,
+      userEffort: 32,
+      confidence: normalizeDecisionConfidence(params.coverageAnalysis.confidence),
+      freshness: freshnessFromDate(params.coverageAnalysis.computedAt),
+      reversibility: 78,
+      whyNow: [
+        ...signalReasons,
+        'Coverage Intelligence has a current recommendation that has not yet been actioned.',
+      ],
+      signalDrivers: ['COVERAGE_GAP'],
+      postureInputs: params.base.postureLabels,
+      assumptionInputs: params.coverageAnalysis.assumptionSetId
+        ? [`assumptionSetId:${params.coverageAnalysis.assumptionSetId}`]
+        : [],
+      category: 'COVERAGE',
+      suppressionHints: {
+        completedRecently: false,
+        dismissedOrSnoozed: false,
+        staleInput: freshnessFromDate(params.coverageAnalysis.computedAt) < 0.35,
+        criticalSafety: false,
+      },
+    });
+  }
+
+  if (params.riskPremiumAnalysis) {
+    const recommendation = parseJsonArray(params.riskPremiumAnalysis.recommendations)[0] ?? null;
+    const recommendationTitle =
+      typeof recommendation?.title === 'string' && recommendation.title.trim().length > 0
+        ? recommendation.title
+        : 'Apply highest-impact premium optimization action';
+    const recommendationPriority = priorityToUrgency(recommendation?.priority);
+    const recommendationCode = String(recommendation?.code ?? '').toUpperCase();
+    output.push({
+      id: `feature:risk-premium:${params.riskPremiumAnalysis.id}`,
+      source: 'RISK_PREMIUM_OPTIMIZER',
+      title: recommendationTitle,
+      detail:
+        typeof recommendation?.detail === 'string'
+          ? recommendation.detail
+          : params.riskPremiumAnalysis.summary ??
+            'Risk-to-Premium Optimizer identified a near-term premium action.',
+      targetTool: 'risk-premium-optimizer',
+      targetPath: buildToolPath({
+        propertyId: params.base.propertyId,
+        tool: 'risk-premium-optimizer',
+        assumptionSetId: params.riskPremiumAnalysis.assumptionSetId ?? params.base.assumptionSetId,
+        fromTool: 'orchestration-summary',
+        launchSurface: 'orchestration-summary',
+      }),
+      signalKey: recommendationCode.includes('COVERAGE') ? 'COVERAGE_GAP' : null,
+      dedupeKey: `risk-premium:${recommendationCode || recommendationTitle.toLowerCase()}`,
+      conflictScope:
+        typeof recommendation?.targetPeril === 'string'
+          ? `peril:${recommendation.targetPeril}`
+          : 'insurance-policy',
+      intent: recommendationCode.includes('RAISE_DEDUCTIBLE')
+        ? 'INCREASE_DEDUCTIBLE'
+        : 'REDUCE_EXPOSURE',
+      urgency: Math.max(recommendationPriority, 64),
+      financialImpact: 76,
+      riskReduction: 74,
+      userEffort: 44,
+      confidence: normalizeDecisionConfidence(params.riskPremiumAnalysis.confidence),
+      freshness: freshnessFromDate(params.riskPremiumAnalysis.computedAt),
+      reversibility: recommendationCode.includes('RAISE_DEDUCTIBLE') ? 86 : 58,
+      whyNow: [
+        ...signalReasons,
+        'Risk-to-Premium Optimizer found a ranked recommendation with current savings/risk relevance.',
+      ],
+      signalDrivers: recommendationCode.includes('COVERAGE') ? ['COVERAGE_GAP'] : [],
+      postureInputs: params.base.postureLabels,
+      assumptionInputs: params.riskPremiumAnalysis.assumptionSetId
+        ? [`assumptionSetId:${params.riskPremiumAnalysis.assumptionSetId}`]
+        : [],
+      category: 'RISK_PREMIUM',
+      suppressionHints: {
+        completedRecently: false,
+        dismissedOrSnoozed: false,
+        staleInput: freshnessFromDate(params.riskPremiumAnalysis.computedAt) < 0.35,
+        criticalSafety: false,
+      },
+    });
+  }
+
+  if (params.doNothingRun) {
+    const step = parseJsonArray(params.doNothingRun.nextSteps)[0] ?? null;
+    const title =
+      typeof step?.title === 'string' && step.title.trim().length > 0
+        ? step.title
+        : 'Validate inaction downside with current assumptions';
+    const priority = priorityToUrgency(step?.priority);
+    const lowerTitle = title.toLowerCase();
+    output.push({
+      id: `feature:do-nothing:${params.doNothingRun.id}`,
+      source: 'DO_NOTHING_SIMULATOR',
+      title,
+      detail:
+        typeof step?.detail === 'string'
+          ? step.detail
+          : params.doNothingRun.summary ??
+            'Do-Nothing simulation indicates a notable downside trend.',
+      targetTool: 'do-nothing',
+      targetPath: buildToolPath({
+        propertyId: params.base.propertyId,
+        tool: 'do-nothing',
+        assumptionSetId: params.doNothingRun.assumptionSetId ?? params.base.assumptionSetId,
+        fromTool: 'orchestration-summary',
+        launchSurface: 'orchestration-summary',
+      }),
+      signalKey: params.base.signalHighlights.some((entry) => entry.signalKey === 'COST_ANOMALY')
+        ? 'COST_ANOMALY'
+        : null,
+      dedupeKey: `do-nothing:${title.toLowerCase()}`,
+      conflictScope: 'inaction-vs-execution',
+      intent: lowerTitle.includes('delay') || lowerTitle.includes('monitor') ? 'DEFER_MONITOR' : 'EXECUTE_MAINTENANCE',
+      urgency: Math.max(priority, 58),
+      financialImpact: 72,
+      riskReduction: 68,
+      userEffort: 36,
+      confidence: normalizeDecisionConfidence(params.doNothingRun.confidence),
+      freshness: freshnessFromDate(params.doNothingRun.computedAt),
+      reversibility: 69,
+      whyNow: [
+        ...signalReasons,
+        'Do-Nothing scenario output suggests downside if delay continues.',
+      ],
+      signalDrivers: params.base.signalHighlights
+        .filter((entry) => entry.signalKey === 'COST_ANOMALY' || entry.signalKey === 'MAINT_ADHERENCE')
+        .map((entry) => entry.signalKey),
+      postureInputs: params.base.postureLabels,
+      assumptionInputs: params.doNothingRun.assumptionSetId
+        ? [`assumptionSetId:${params.doNothingRun.assumptionSetId}`]
+        : [],
+      category: 'DO_NOTHING',
+      suppressionHints: {
+        completedRecently: false,
+        dismissedOrSnoozed: false,
+        staleInput: freshnessFromDate(params.doNothingRun.computedAt) < 0.35,
+        criticalSafety: false,
+      },
+    });
+  }
+
+  return output;
+}
+
 function safeParseDate(dateLike: unknown): Date | null {
   if (!dateLike) return null;
   const d = new Date(String(dateLike));
@@ -645,6 +1129,11 @@ function safeParseDate(dateLike: unknown): Date | null {
 function clamp01(n: number) {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(1, n));
+}
+
+function clampRange(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, value));
 }
 
 function scoreTo01(score0to100?: number | null) {
@@ -1642,12 +2131,50 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   let sharedContext: OrchestrationSharedContext | null = null;
   let nextBestMove: OrchestrationNextBestMove | null = null;
   let handoffs: OrchestrationHandoff[] = [];
+  let decisionEngineResult: DecisionEngineResult | null = null;
 
   try {
-    const [profile, assumptionSets, latestSignals] = await Promise.all([
+    const [profile, assumptionSets, latestSignals, coverageAnalysis, riskPremiumAnalysis, doNothingRun] = await Promise.all([
       preferenceProfileService.getCurrentProfile(propertyId),
       assumptionSetService.listRecent(propertyId, { limit: 12 }),
       signalService.getLatestSignalsByKey(propertyId, ORCHESTRATION_SIGNAL_KEYS, { freshOnly: false }),
+      prisma.coverageAnalysis.findFirst({
+        where: { propertyId },
+        orderBy: { computedAt: 'desc' },
+        select: {
+          id: true,
+          summary: true,
+          confidence: true,
+          computedAt: true,
+          nextSteps: true,
+          decisionTrace: true,
+          assumptionSetId: true,
+        },
+      }),
+      prisma.riskPremiumOptimizationAnalysis.findFirst({
+        where: { propertyId },
+        orderBy: { computedAt: 'desc' },
+        select: {
+          id: true,
+          summary: true,
+          confidence: true,
+          computedAt: true,
+          recommendations: true,
+          assumptionSetId: true,
+        },
+      }),
+      prisma.doNothingSimulationRun.findFirst({
+        where: { propertyId },
+        orderBy: { computedAt: 'desc' },
+        select: {
+          id: true,
+          summary: true,
+          confidence: true,
+          computedAt: true,
+          nextSteps: true,
+          assumptionSetId: true,
+        },
+      }),
     ]);
 
     const activeScenario =
@@ -1666,6 +2193,14 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
 
     const strongestPressure = computeStrongestPressure(actions, signalHighlights);
     const strongestOpportunity = computeStrongestOpportunity(signalHighlights);
+    const postureLabels = profile
+      ? [
+          profile.riskTolerance ? `riskTolerance:${profile.riskTolerance}` : null,
+          profile.deductiblePreferenceStyle ? `deductible:${profile.deductiblePreferenceStyle}` : null,
+          profile.cashBufferPosture ? `cashBuffer:${profile.cashBufferPosture}` : null,
+          profile.bundlingPreference ? `bundling:${profile.bundlingPreference}` : null,
+        ].filter((entry): entry is string => Boolean(entry))
+      : [];
 
     sharedContext = {
       generatedAt: new Date().toISOString(),
@@ -1685,17 +2220,58 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       strongestOpportunity,
     };
 
-    nextBestMove = buildNextBestMove({
+    const actionCenterCandidates = buildActionCenterDecisionCandidates({
       propertyId,
       actions,
-      activeScenario: activeScenario
-        ? {
-            assumptionSetId: activeScenario.assumptionSetId,
-            toolKey: activeScenario.toolKey,
-          }
-        : null,
       signalHighlights,
+      activeScenarioAssumptionSetId: activeScenario?.assumptionSetId ?? null,
+      activeScenarioToolKey: activeScenario?.toolKey ?? null,
     });
+
+    const featureCandidates = buildFeatureDecisionCandidates({
+      base: {
+        propertyId,
+        assumptionSetId: activeScenario?.assumptionSetId ?? null,
+        postureLabels,
+        signalHighlights,
+      },
+      coverageAnalysis,
+      riskPremiumAnalysis,
+      doNothingRun,
+    });
+
+    const allDecisionCandidates: DecisionCandidate[] = [
+      ...actionCenterCandidates,
+      ...featureCandidates,
+    ];
+
+    if (allDecisionCandidates.length > 0) {
+      decisionEngineResult = runDecisionEngine({
+        candidates: allDecisionCandidates,
+        recommendationLimit: 5,
+      });
+      const top = decisionEngineResult.recommendations[0];
+      if (top) {
+        nextBestMove = mapRecommendationToNextBestMove({
+          recommendation: top,
+          assumptionSetId: activeScenario?.assumptionSetId ?? null,
+        });
+      }
+    }
+
+    if (!nextBestMove) {
+      nextBestMove = buildNextBestMove({
+        propertyId,
+        actions,
+        activeScenario: activeScenario
+          ? {
+              assumptionSetId: activeScenario.assumptionSetId,
+              toolKey: activeScenario.toolKey,
+            }
+          : null,
+        signalHighlights,
+      });
+    }
 
     handoffs = buildScenarioHandoffs({
       propertyId,
@@ -1726,7 +2302,56 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     nextBestMove,
     sharedContext,
     handoffs,
+    decisionEngine: decisionEngineResult
+      ? {
+          recommendations: decisionEngineResult.recommendations.map((entry) => ({
+            id: entry.id,
+            title: entry.title,
+            detail: entry.detail,
+            source: entry.source,
+            targetTool: entry.targetTool,
+            targetPath: entry.targetPath,
+            score: entry.score,
+            priorityBucket: entry.priorityBucket,
+            confidence: entry.confidence,
+            freshness: entry.freshness,
+            reasonCode: entry.reasonCode,
+            sourceActionKey: entry.sourceActionKey ?? null,
+            signalKey: entry.signalKey ?? null,
+            trace: entry.trace,
+          })),
+          suppressed: decisionEngineResult.suppressed.map((entry) => ({
+            candidateId: entry.candidateId,
+            title: entry.title,
+            source: entry.source,
+            reason: entry.reason,
+            detail: entry.detail,
+          })),
+          diagnostics: decisionEngineResult.diagnostics,
+        }
+      : null,
   };
+}
+
+export async function getOrchestrationDecisionDiagnostics(propertyId: string): Promise<{
+  generatedAt: string;
+  evaluatedCount: number;
+  surfacedCount: number;
+  suppressedCount: number;
+  duplicateMergeCount: number;
+  conflictResolutionCount: number;
+  staleInputDecisions: number;
+  lowConfidenceRecommendationCount: number;
+  topDecisionCategories: Record<string, number>;
+  suppressedByReason: Record<string, number>;
+  priorityBuckets: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+} | null> {
+  const summary = await getOrchestrationSummary(propertyId);
+  return summary.decisionEngine?.diagnostics ?? null;
 }
 
 async function persistDecisionTraces(params: {

@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import {
   getOrchestrationSummaryHandler,
+  getOrchestrationDecisionDiagnosticsHandler,
   markOrchestrationActionCompleted,
   snoozeOrchestrationAction,
   undoOrchestrationAction,
@@ -22,6 +23,13 @@ router.get(
   authenticate,
   propertyAuthMiddleware,
   getOrchestrationSummaryHandler
+);
+
+router.get(
+  '/summary/:propertyId/decision-diagnostics',
+  authenticate,
+  propertyAuthMiddleware,
+  getOrchestrationDecisionDiagnosticsHandler
 );
 
 // POST /api/orchestration/actions/mark-completed

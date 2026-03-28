@@ -13,7 +13,10 @@
  */
 
 import { Request, Response } from 'express';
-import { getOrchestrationSummary } from '../services/orchestration.service';
+import {
+  getOrchestrationDecisionDiagnostics,
+  getOrchestrationSummary,
+} from '../services/orchestration.service';
 import { AuthRequest } from '../types/auth.types';
 import { recordOrchestrationEvent } from '../services/orchestrationEvent.service';
 import { snoozeAction, unsnoozeAction } from '../services/orchestrationSnooze.service';
@@ -207,6 +210,38 @@ export async function getOrchestrationSummaryHandler(
     return res.status(500).json({
       success: false,
       message: 'Failed to build orchestration summary',
+    });
+  }
+}
+
+export async function getOrchestrationDecisionDiagnosticsHandler(
+  req: Request,
+  res: Response
+) {
+  try {
+    const { propertyId } = req.params;
+
+    if (!propertyId || typeof propertyId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'propertyId is required and must be a string',
+      });
+    }
+
+    const diagnostics = await getOrchestrationDecisionDiagnostics(propertyId);
+    return res.status(200).json({
+      success: true,
+      data: diagnostics,
+    });
+  } catch (error: any) {
+    console.error('[ORCHESTRATION_CONTROLLER] Failed to load decision diagnostics:', {
+      propertyId: req.params?.propertyId,
+      error: error?.message || error,
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load decision diagnostics',
     });
   }
 }

@@ -4,6 +4,7 @@ import { APIError } from '../middleware/error.middleware';
 import { HomeItemCondition, HomeItemRecommendation, Prisma } from '@prisma/client';
 import { ListBoardQuery, PatchItemStatusBody } from '../validators/homeStatusBoard.validators';
 import { SharedSignalKey, signalService } from './signal.service';
+import { DecisionCandidate, runDecisionEngine } from './decisionEngine.service';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -85,6 +86,122 @@ function toFiniteNumber(value: unknown): number | null {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+function buildStatusBoardDecisionCandidates(params: {
+  propertyId: string;
+  riskSignal: number | null;
+  costSignal: number | null;
+  maintenanceSignal: number | null;
+  summary: {
+    actionNeeded: number;
+    monitor: number;
+    total: number;
+  };
+}): DecisionCandidate[] {
+  const fallbackRisk = params.summary.actionNeeded > 0 ? 0.7 : params.summary.monitor > 0 ? 0.5 : 0.3;
+  const fallbackCost =
+    params.summary.total > 0
+      ? Math.min(0.85, params.summary.actionNeeded / Math.max(1, params.summary.total))
+      : 0.35;
+  const fallbackMaintenance =
+    params.summary.total > 0
+      ? Math.max(0.2, 1 - params.summary.actionNeeded / Math.max(1, params.summary.total))
+      : 0.65;
+
+  const risk = params.riskSignal ?? fallbackRisk;
+  const cost = params.costSignal ?? fallbackCost;
+  const maintenance = params.maintenanceSignal ?? fallbackMaintenance;
+
+  return [
+    {
+      id: `status-risk:${params.propertyId}`,
+      source: 'STATUS_FALLBACK',
+      title: 'Address current risk pressure',
+      detail: 'Status board indicates elevated risk pressure that should be triaged first.',
+      targetTool: 'status-board',
+      targetPath: `/dashboard/properties/${params.propertyId}/status-board?focus=risk`,
+      dedupeKey: `status-risk:${params.propertyId}`,
+      conflictScope: 'status-board',
+      intent: 'REDUCE_EXPOSURE',
+      urgency: Math.round(risk * 100),
+      financialImpact: Math.round(cost * 80),
+      riskReduction: Math.round(risk * 92),
+      userEffort: 34,
+      confidence: params.riskSignal === null ? 0.58 : 0.76,
+      freshness: 0.82,
+      reversibility: 60,
+      whyNow: ['Risk and item-condition pressure are above baseline in Status Board.'],
+      signalDrivers: ['RISK_SPIKE', 'RISK_ACCUMULATION'],
+      postureInputs: [],
+      assumptionInputs: [],
+      category: 'STATUS_RISK',
+      suppressionHints: {
+        completedRecently: false,
+        dismissedOrSnoozed: false,
+        staleInput: false,
+        criticalSafety: risk >= 0.85,
+      },
+    },
+    {
+      id: `status-cost:${params.propertyId}`,
+      source: 'STATUS_FALLBACK',
+      title: 'Review cost pressure drivers',
+      detail: 'Cost pressure is rising; review what is driving near-term expense acceleration.',
+      targetTool: 'status-board',
+      targetPath: `/dashboard/properties/${params.propertyId}/status-board?focus=cost`,
+      dedupeKey: `status-cost:${params.propertyId}`,
+      conflictScope: 'status-board',
+      intent: 'NEUTRAL',
+      urgency: Math.round(cost * 88),
+      financialImpact: Math.round(cost * 94),
+      riskReduction: Math.round(cost * 62),
+      userEffort: 24,
+      confidence: params.costSignal === null ? 0.55 : 0.72,
+      freshness: 0.8,
+      reversibility: 74,
+      whyNow: ['Cost pressure signals suggest near-term affordability drift.'],
+      signalDrivers: ['COST_ANOMALY', 'COST_PRESSURE_PATTERN'],
+      postureInputs: [],
+      assumptionInputs: [],
+      category: 'STATUS_COST',
+      suppressionHints: {
+        completedRecently: false,
+        dismissedOrSnoozed: false,
+        staleInput: false,
+        criticalSafety: false,
+      },
+    },
+    {
+      id: `status-maint:${params.propertyId}`,
+      source: 'STATUS_FALLBACK',
+      title: 'Stabilize maintenance adherence',
+      detail: 'Maintenance consistency is a leading indicator for future risk and avoidable costs.',
+      targetTool: 'status-board',
+      targetPath: `/dashboard/properties/${params.propertyId}/status-board?focus=maintenance`,
+      dedupeKey: `status-maint:${params.propertyId}`,
+      conflictScope: 'status-board',
+      intent: 'EXECUTE_MAINTENANCE',
+      urgency: Math.round((1 - maintenance) * 86),
+      financialImpact: Math.round((1 - maintenance) * 72),
+      riskReduction: Math.round((1 - maintenance) * 90),
+      userEffort: 42,
+      confidence: params.maintenanceSignal === null ? 0.54 : 0.71,
+      freshness: 0.82,
+      reversibility: 58,
+      whyNow: ['Maintenance adherence dropped below preferred operating band.'],
+      signalDrivers: ['MAINT_ADHERENCE'],
+      postureInputs: [],
+      assumptionInputs: [],
+      category: 'STATUS_MAINTENANCE',
+      suppressionHints: {
+        completedRecently: false,
+        dismissedOrSnoozed: false,
+        staleInput: false,
+        criticalSafety: false,
+      },
+    },
+  ];
 }
 
 async function ensureHomeAssetsFromRiskReport(propertyId: string): Promise<void> {
@@ -830,6 +947,33 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
     },
     interactions: interactionContext.interactions,
   };
+
+  const decisionCandidates = buildStatusBoardDecisionCandidates({
+    propertyId,
+    riskSignal: riskSpike !== null ? Math.max(riskSpike, riskAccumulation ?? 0) : null,
+    costSignal: costAnomaly !== null ? Math.max(costAnomaly, costPressurePattern ?? 0) : null,
+    maintenanceSignal: maintenanceAdherence,
+    summary,
+  });
+  const decisionResult = runDecisionEngine({
+    candidates: decisionCandidates,
+    recommendationLimit: 1,
+  });
+  const topRecommendation = decisionResult.recommendations[0] ?? null;
+  result.decisionSummary = topRecommendation
+    ? {
+        title: topRecommendation.title,
+        detail: topRecommendation.detail,
+        score: topRecommendation.score,
+        reasonCode: topRecommendation.reasonCode,
+        targetTool: topRecommendation.targetTool,
+        targetPath: topRecommendation.targetPath,
+        diagnostics: {
+          evaluated: decisionResult.diagnostics.evaluatedCount,
+          suppressed: decisionResult.diagnostics.suppressedCount,
+        },
+      }
+    : null;
 
   return result;
 }
