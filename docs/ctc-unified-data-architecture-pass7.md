@@ -90,6 +90,21 @@ Examples of invalid signals:
 - property address
 - raw inventory attributes
 
+### Signal Ownership Rule
+
+Each `Signal` MUST have a single owning service responsible for:
+- creation
+- updates
+- lifecycle management
+
+Examples:
+- `MAINT_ADHERENCE` -> Maintenance / Orchestration service
+- `NEGOTIATION_PRESSURE` -> Negotiation service
+- `COVERAGE_GAP` -> Coverage Analysis service
+
+Rule:
+No `Signal` should be written by multiple services without a defined ownership hierarchy.
+
 ## 4. Data Reuse Graph
 
 | Signal | Captured In | Reused In | Current Gap | Proposed Fix |
@@ -139,6 +154,16 @@ Principles used:
 3. `Signal`
 - Lightweight typed fact table described above.
 - Used for high-leverage cross-feature reuse only.
+
+### AssumptionSet Lifecycle
+
+- Each run MAY reference an existing `AssumptionSet` or create a new one.
+- `AssumptionSet` records are immutable once used in a run (versioned behavior).
+- Multiple tools can reference the same `AssumptionSet`.
+- New overrides create new `AssumptionSet` records (not overwrite).
+
+Goal:
+Ensure reproducibility of past runs and consistency across tools.
 
 ### 6.2 Extensions to existing models (no replacements)
 
@@ -221,6 +246,16 @@ Direct improvements from this design:
 8. Progressive capture only: collect inputs when immediate user value is visible.
 9. No onboarding expansion for advanced assumptions; collect lazily at first relevant decision point.
 10. Non-breaking evolution only: additive schema, dual-write, fallback reads, gradual legacy phase-down.
+
+### Data Read Priority Order
+
+When resolving any value:
+1. Canonical entity (`Property`, `InventoryItem`, etc.)
+2. Shared models (`PreferenceProfile`, `AssumptionSet`, `Signal`)
+3. Feature snapshot (`inputsSnapshot`, `outputSnapshot`)
+
+Rule:
+Snapshots are fallback only, never primary source.
 
 ## 10. Data Freshness & Recompute Strategy
 
