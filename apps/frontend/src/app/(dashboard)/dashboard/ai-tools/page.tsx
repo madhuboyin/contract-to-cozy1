@@ -18,16 +18,38 @@ import {
   MOBILE_AI_TOOL_GROUPS,
 } from '@/components/mobile/dashboard/mobileToolCatalog';
 
-function buildAiToolHref(propertyId: string | undefined, toolHref: string): string {
-  if (!propertyId) return toolHref;
-  const separator = toolHref.includes('?') ? '&' : '?';
-  return `${toolHref}${separator}propertyId=${encodeURIComponent(propertyId)}`;
+function buildAiToolHref(
+  propertyId: string | undefined,
+  toolHref: string,
+  guidanceContext?: {
+    guidanceJourneyId?: string;
+    guidanceStepKey?: string;
+    guidanceSignalIntentFamily?: string;
+    itemId?: string;
+    homeAssetId?: string;
+  }
+): string {
+  const queryParams = new URLSearchParams();
+  if (propertyId) queryParams.set('propertyId', propertyId);
+  if (guidanceContext?.guidanceJourneyId) queryParams.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+  if (guidanceContext?.guidanceStepKey) queryParams.set('guidanceStepKey', guidanceContext.guidanceStepKey);
+  if (guidanceContext?.guidanceSignalIntentFamily) queryParams.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+  if (guidanceContext?.itemId) queryParams.set('itemId', guidanceContext.itemId);
+  if (guidanceContext?.homeAssetId) queryParams.set('homeAssetId', guidanceContext.homeAssetId);
+  const suffix = queryParams.toString();
+  if (!suffix) return toolHref;
+  return toolHref.includes('?') ? `${toolHref}&${suffix}` : `${toolHref}?${suffix}`;
 }
 
 export default function AIToolsPage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
   const propertyIdFromQuery = searchParams.get('propertyId') || undefined;
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
+  const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
+  const itemId = searchParams.get('itemId') || undefined;
+  const homeAssetId = searchParams.get('homeAssetId') || undefined;
   const resolvedPropertyId = selectedPropertyId || propertyIdFromQuery;
 
   const tools = MOBILE_AI_TOOL_CATALOG.filter((tool) => tool.key !== 'view-all');
@@ -65,7 +87,13 @@ export default function AIToolsPage() {
                       icon={<ToolIcon className="h-5 w-5" />}
                       trailingIcon={<ToolIcon className="h-5 w-5" />}
                       artworkSrc={tool.artworkSrc}
-                      href={buildAiToolHref(resolvedPropertyId, tool.href)}
+                      href={buildAiToolHref(resolvedPropertyId, tool.href, {
+                        guidanceJourneyId,
+                        guidanceStepKey,
+                        guidanceSignalIntentFamily,
+                        itemId,
+                        homeAssetId,
+                      })}
                       badgeLabel=""
                       variant="compact"
                     />

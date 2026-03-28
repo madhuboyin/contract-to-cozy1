@@ -11,6 +11,17 @@ const ISSUE_DOMAIN_BY_FAMILY: Record<string, GuidanceIssueDomain> = {
   financial_exposure: 'FINANCIAL',
   cost_of_inaction_risk: 'FINANCIAL',
   freeze_risk: 'WEATHER',
+  flood_risk: 'WEATHER',
+  hurricane_risk: 'WEATHER',
+  wind_risk: 'WEATHER',
+  heat_risk: 'WEATHER',
+  wildfire_risk: 'WEATHER',
+  permit_required: 'COMPLIANCE',
+  hoa_violation_detected: 'COMPLIANCE',
+  safety_inspection_due: 'COMPLIANCE',
+  energy_inefficiency_detected: 'ENERGY',
+  high_utility_cost: 'ENERGY',
+  generic_actionable_signal: 'OTHER',
 };
 
 const STAGE_BY_FAMILY: Record<string, GuidanceDecisionStage> = {
@@ -23,6 +34,17 @@ const STAGE_BY_FAMILY: Record<string, GuidanceDecisionStage> = {
   financial_exposure: 'DIAGNOSIS',
   cost_of_inaction_risk: 'DIAGNOSIS',
   freeze_risk: 'AWARENESS',
+  flood_risk: 'AWARENESS',
+  hurricane_risk: 'AWARENESS',
+  wind_risk: 'AWARENESS',
+  heat_risk: 'AWARENESS',
+  wildfire_risk: 'AWARENESS',
+  permit_required: 'AWARENESS',
+  hoa_violation_detected: 'AWARENESS',
+  safety_inspection_due: 'AWARENESS',
+  energy_inefficiency_detected: 'AWARENESS',
+  high_utility_cost: 'AWARENESS',
+  generic_actionable_signal: 'AWARENESS',
 };
 
 const READINESS_BY_FAMILY: Record<string, GuidanceExecutionReadiness> = {
@@ -35,6 +57,17 @@ const READINESS_BY_FAMILY: Record<string, GuidanceExecutionReadiness> = {
   financial_exposure: 'NEEDS_CONTEXT',
   cost_of_inaction_risk: 'NEEDS_CONTEXT',
   freeze_risk: 'NEEDS_CONTEXT',
+  flood_risk: 'NEEDS_CONTEXT',
+  hurricane_risk: 'NEEDS_CONTEXT',
+  wind_risk: 'NEEDS_CONTEXT',
+  heat_risk: 'NEEDS_CONTEXT',
+  wildfire_risk: 'NEEDS_CONTEXT',
+  permit_required: 'NEEDS_CONTEXT',
+  hoa_violation_detected: 'NEEDS_CONTEXT',
+  safety_inspection_due: 'NEEDS_CONTEXT',
+  energy_inefficiency_detected: 'NEEDS_CONTEXT',
+  high_utility_cost: 'NEEDS_CONTEXT',
+  generic_actionable_signal: 'UNKNOWN',
 };
 
 const FIRST_STEP_BY_FAMILY: Record<string, string> = {
@@ -45,8 +78,19 @@ const FIRST_STEP_BY_FAMILY: Record<string, string> = {
   recall_detected: 'safety_alert',
   inspection_followup_needed: 'assess_urgency',
   financial_exposure: 'estimate_out_of_pocket_cost',
-  cost_of_inaction_risk: 'estimate_out_of_pocket_cost',
+  cost_of_inaction_risk: 'model_cost_of_delay',
   freeze_risk: 'weather_safety_check',
+  flood_risk: 'weather_safety_check',
+  hurricane_risk: 'weather_safety_check',
+  wind_risk: 'weather_safety_check',
+  heat_risk: 'weather_safety_check',
+  wildfire_risk: 'weather_safety_check',
+  permit_required: 'review_compliance_requirement',
+  hoa_violation_detected: 'review_compliance_requirement',
+  safety_inspection_due: 'review_compliance_requirement',
+  energy_inefficiency_detected: 'review_energy_signal',
+  high_utility_cost: 'review_energy_signal',
+  generic_actionable_signal: 'review_signal',
 };
 
 const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
@@ -59,6 +103,17 @@ const RECOMMENDED_TOOL_BY_FAMILY: Record<string, string> = {
   financial_exposure: 'true-cost',
   cost_of_inaction_risk: 'do-nothing-simulator',
   freeze_risk: 'home-event-radar',
+  flood_risk: 'home-event-radar',
+  hurricane_risk: 'home-event-radar',
+  wind_risk: 'home-event-radar',
+  heat_risk: 'home-event-radar',
+  wildfire_risk: 'home-event-radar',
+  permit_required: 'guidance-overview',
+  hoa_violation_detected: 'guidance-overview',
+  safety_inspection_due: 'guidance-overview',
+  energy_inefficiency_detected: 'home-event-radar',
+  high_utility_cost: 'home-event-radar',
+  generic_actionable_signal: 'guidance-overview',
 };
 
 const MERGE_CLUSTER_BY_FAMILY: Record<string, string> = {
@@ -167,7 +222,16 @@ function inferSeverity(input: GuidanceSignalSourceInput, family: string): Guidan
   }
 
   if (family === 'recall_detected') return 'HIGH';
-  if (family === 'freeze_risk') return 'HIGH';
+  if (
+    family === 'freeze_risk' ||
+    family === 'flood_risk' ||
+    family === 'hurricane_risk' ||
+    family === 'wind_risk' ||
+    family === 'heat_risk' ||
+    family === 'wildfire_risk'
+  ) {
+    return 'HIGH';
+  }
   if (family === 'coverage_gap') return 'MEDIUM';
   if (family === 'lifecycle_end_or_past_life') return 'MEDIUM';
   return null;

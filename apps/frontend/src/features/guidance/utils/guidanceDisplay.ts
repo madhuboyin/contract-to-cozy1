@@ -24,7 +24,7 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'service-price-radar': '/dashboard/properties/:propertyId/tools/service-price-radar',
   'negotiation-shield': '/dashboard/properties/:propertyId/tools/negotiation-shield',
   'inspection-report': '/dashboard/inspection-report?propertyId=:propertyId',
-  booking: '/dashboard/bookings?propertyId=:propertyId',
+  booking: '/dashboard/providers?propertyId=:propertyId',
   recalls: '/dashboard/properties/:propertyId/recalls',
   documents: '/dashboard/properties/:propertyId/inventory/coverage',
   'home-event-radar': '/dashboard/properties/:propertyId/tools/home-event-radar',

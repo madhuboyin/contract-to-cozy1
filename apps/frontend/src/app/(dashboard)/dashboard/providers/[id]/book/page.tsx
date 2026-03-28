@@ -43,6 +43,7 @@ export default function BookProviderPage() {
   const insightContext = searchParams.get('insightContext');
   const maintenancePredictionId = searchParams.get('predictionId');
   const inventoryItemId = searchParams.get('itemId');
+  const homeAssetId = searchParams.get('homeAssetId');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const providerId = params.id as string;
@@ -67,6 +68,9 @@ export default function BookProviderPage() {
 
   const bookingGuardQuery = useExecutionGuard(selectedPropertyId, 'BOOKING', {
     enabled: Boolean(selectedPropertyId),
+    journeyId: guidanceJourneyId ?? undefined,
+    inventoryItemId: inventoryItemId ?? undefined,
+    homeAssetId: homeAssetId ?? undefined,
   });
   const bookingGuidanceQuery = useGuidance(selectedPropertyId, {
     enabled: Boolean(selectedPropertyId),

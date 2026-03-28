@@ -94,18 +94,6 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       });
     }
 
-    // Verify user is HOME_BUYER segment
-    const homeownerProfile = await prisma.homeownerProfile.findUnique({
-      where: { userId }
-    });
-
-    if (homeownerProfile?.segment !== 'HOME_BUYER') {
-      return res.status(403).json({
-        success: false,
-        message: 'This feature is only available for home buyers'
-      });
-    }
-
     console.log(`[INSPECTION] Analyzing report for property ${propertyId}`);
 
     // Start analysis (this is async but we return immediately)

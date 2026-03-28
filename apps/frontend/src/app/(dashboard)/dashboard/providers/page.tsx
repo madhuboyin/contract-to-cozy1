@@ -191,6 +191,7 @@ const ProviderList = ({
   fromSource,
   predictionId,
   inventoryItemId,
+  homeAssetId,
   guidanceJourneyId,
   guidanceStepKey,
   guidanceSignalIntentFamily,
@@ -204,6 +205,7 @@ const ProviderList = ({
   fromSource?: string;
   predictionId?: string;
   inventoryItemId?: string;
+  homeAssetId?: string;
   guidanceJourneyId?: string;
   guidanceStepKey?: string;
   guidanceSignalIntentFamily?: string;
@@ -220,6 +222,7 @@ const ProviderList = ({
         if (fromSource) queryParams.append('from', fromSource);
         if (predictionId) queryParams.append('predictionId', predictionId);
         if (inventoryItemId) queryParams.append('itemId', inventoryItemId);
+        if (homeAssetId) queryParams.append('homeAssetId', homeAssetId);
         if (guidanceJourneyId) queryParams.append('guidanceJourneyId', guidanceJourneyId);
         if (guidanceStepKey) queryParams.append('guidanceStepKey', guidanceStepKey);
         if (guidanceSignalIntentFamily) {
@@ -327,12 +330,16 @@ export default function ProvidersPage() {
   const targetPropertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
   const predictionId = searchParams.get('predictionId') || undefined;
   const inventoryItemId = searchParams.get('itemId') || undefined;
+  const homeAssetId = searchParams.get('homeAssetId') || undefined;
   const fromSource = searchParams.get('from') || undefined;
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
   const providerGuardQuery = useExecutionGuard(targetPropertyId, 'BOOKING', {
     enabled: Boolean(targetPropertyId),
+    journeyId: guidanceJourneyId,
+    inventoryItemId,
+    homeAssetId,
   });
   const providerGuidanceQuery = useGuidance(targetPropertyId, {
     enabled: Boolean(targetPropertyId),
@@ -573,6 +580,7 @@ export default function ProvidersPage() {
           fromSource={fromSource}
           predictionId={predictionId}
           inventoryItemId={inventoryItemId}
+          homeAssetId={homeAssetId}
           guidanceJourneyId={guidanceJourneyId}
           guidanceStepKey={guidanceStepKey}
           guidanceSignalIntentFamily={guidanceSignalIntentFamily}

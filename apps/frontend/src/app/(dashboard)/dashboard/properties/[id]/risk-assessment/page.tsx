@@ -165,6 +165,67 @@ const ASSET_CATEGORY_GUIDANCE_DOMAIN_PRIORITY: Record<RiskCategory, GuidanceIssu
     FINANCIAL_GAP: ['FINANCIAL', 'INSURANCE'],
 };
 
+const ASSET_CATEGORY_SIGNAL_HINTS: Record<RiskCategory, string[]> = {
+    STRUCTURE: ['maintenance', 'inspection', 'wind', 'flood', 'hurricane', 'wildfire'],
+    SYSTEMS: ['lifecycle', 'maintenance', 'coverage', 'freeze', 'heat', 'energy'],
+    SAFETY: ['recall', 'safety', 'inspection'],
+    FINANCIAL_GAP: ['financial', 'coverage', 'cost', 'utility', 'energy'],
+};
+
+function tokenizeForMatch(value: string | null | undefined): Set<string> {
+    if (!value) return new Set();
+    return new Set(
+        value
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .split(' ')
+            .map((token) => token.trim())
+            .filter((token) => token.length >= 3)
+    );
+}
+
+function scoreGuidanceActionForAsset(item: AssetRiskDetail, action: GuidanceActionModel): number {
+    const family = action.journey.primarySignal?.signalIntentFamily?.toLowerCase() ?? '';
+    const hintMatches = (ASSET_CATEGORY_SIGNAL_HINTS[item.category] ?? []).filter((hint) =>
+        family.includes(hint)
+    ).length;
+
+    const domainPriority = ASSET_CATEGORY_GUIDANCE_DOMAIN_PRIORITY[item.category] ?? [];
+    const domainRank = domainPriority.indexOf(action.issueDomain);
+    const domainScore = domainRank >= 0 ? 12 - domainRank * 3 : 0;
+
+    const itemTokens = new Set<string>([
+        ...tokenizeForMatch(item.assetName),
+        ...tokenizeForMatch(item.systemType),
+        ...tokenizeForMatch(displayLabel(item.category)),
+    ]);
+
+    const actionText = [
+        action.title,
+        action.subtitle,
+        action.nextStep?.label ?? '',
+        action.currentStep?.label ?? '',
+        action.journey.journeyTypeKey ?? '',
+        action.journey.currentStepKey ?? '',
+        action.journey.primarySignal?.signalIntentFamily ?? '',
+        action.journey.primarySignal?.sourceFeatureKey ?? '',
+        action.journey.primarySignal?.sourceToolKey ?? '',
+        action.explanation?.what ?? '',
+        action.explanation?.nextStep ?? '',
+    ].join(' ');
+    const actionTokens = tokenizeForMatch(actionText);
+    let tokenOverlap = 0;
+    for (const token of itemTokens) {
+        if (actionTokens.has(token)) tokenOverlap += 1;
+    }
+
+    const hasScopedJourney = Boolean(action.journey.inventoryItemId || action.journey.homeAssetId);
+    const pastLifeBoost =
+        item.age > item.expectedLife && family.includes('lifecycle') ? 4 : 0;
+
+    return domainScore + hintMatches * 4 + tokenOverlap * 2 + (hasScopedJourney ? 1 : 0) + pastLifeBoost;
+}
+
 function buildGuidanceCtaText(action: GuidanceActionModel): string {
     const step = action.nextStep ?? action.currentStep;
     if (!step) return action.title;
@@ -176,11 +237,24 @@ function pickGuidanceActionForAsset(
     actions: GuidanceActionModel[]
 ): GuidanceActionModel | null {
     if (!actions.length) return null;
+
+    const ranked = actions
+        .map((action) => ({
+            action,
+            score: scoreGuidanceActionForAsset(item, action),
+        }))
+        .sort((a, b) => b.score - a.score);
+
+    if (ranked[0] && ranked[0].score > 0) {
+        return ranked[0].action;
+    }
+
     const domainPriority = ASSET_CATEGORY_GUIDANCE_DOMAIN_PRIORITY[item.category] ?? [];
     for (const domain of domainPriority) {
         const match = actions.find((action) => action.issueDomain === domain);
         if (match) return match;
     }
+
     return actions[0] ?? null;
 }
 

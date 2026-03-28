@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/inspection-report/page.tsx
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import InspectionReportAnalyzer from '@/components/InspectionReportAnalyzer';
 import { FileText, Loader2, Home as HomeIcon } from 'lucide-react';
@@ -24,27 +24,9 @@ function InspectionReportContent() {
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userSegment, setUserSegment] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      // Load user profile to check segment
-      const profileResponse = await api.getUserProfile();
-      console.log('🔍 Profile Response:', profileResponse); // ADD
-      if (profileResponse.success && profileResponse.data) {
-        setUserSegment(profileResponse.data.homeownerProfile?.segment || null);
-        
-        // Only HOME_BUYER can access this feature
-        if (profileResponse.data.homeownerProfile?.segment !== 'HOME_BUYER') {
-          setError('This feature is only available for home buyers.');
-          setLoading(false);
-          return;
-        }
-      }
-
       // Load properties
       const response = await api.getProperties();
       console.log('🔍 Properties Response:', response); // ADD
@@ -52,10 +34,9 @@ function InspectionReportContent() {
         const props = response.data.properties || response.data;
         console.log('🔍 Parsed Properties:', props); // ADD
         setProperties(props);
-        console.log('🔍 Properties set:', properties); // ADD
-        if (!selectedPropertyId && properties.length > 0) {
-          console.log('🔍 Setting propertyId to:', properties[0].id); // ADD
-          setSelectedPropertyId(properties[0].id);
+        if (!selectedPropertyId && props.length > 0) {
+          console.log('🔍 Setting propertyId to:', props[0].id); // ADD
+          setSelectedPropertyId(props[0].id);
         }
       } else {
         console.error('Failed to load properties:', response.message || 'Unknown error'); // ADD
@@ -66,26 +47,16 @@ function InspectionReportContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedPropertyId, setSelectedPropertyId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-      </div>
-    );
-  }
-
-  // Show error for non-HOME_BUYER users
-  if (userSegment !== 'HOME_BUYER') {
-    return (
-      <div className="mx-auto max-w-4xl p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-6 lg:pb-8">
-        <Alert variant="destructive">
-          <AlertDescription>
-            This feature is only available for home buyers actively closing on a property.
-            If you believe this is an error, please contact support.
-          </AlertDescription>
-        </Alert>
       </div>
     );
   }

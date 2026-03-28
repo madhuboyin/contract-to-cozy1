@@ -44,6 +44,11 @@ export default function RiskRadarPage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
   const propertyId = selectedPropertyId || searchParams.get('propertyId') || undefined;
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
+  const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
+  const itemId = searchParams.get('itemId') || undefined;
+  const homeAssetId = searchParams.get('homeAssetId') || undefined;
 
   const riskQuery = useQuery({
     queryKey: ['risk-radar-report', propertyId],
@@ -77,6 +82,19 @@ export default function RiskRadarPage() {
   }
 
   const report = riskQuery.data;
+  const guidanceParams = new URLSearchParams();
+  if (guidanceJourneyId) guidanceParams.set('guidanceJourneyId', guidanceJourneyId);
+  if (guidanceStepKey) guidanceParams.set('guidanceStepKey', guidanceStepKey);
+  if (guidanceSignalIntentFamily) guidanceParams.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
+  if (itemId) guidanceParams.set('itemId', itemId);
+  if (homeAssetId) guidanceParams.set('homeAssetId', homeAssetId);
+  const guidanceSuffix = guidanceParams.toString();
+  const actionCenterHref = `/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}${
+    guidanceSuffix ? `&${guidanceSuffix}` : ''
+  }`;
+  const riskAssessmentHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/risk-assessment${
+    guidanceSuffix ? `?${guidanceSuffix}` : ''
+  }`;
 
   return (
     <MobilePageContainer className="space-y-7 py-3 lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -157,13 +175,13 @@ export default function RiskRadarPage() {
           <MobileSection>
             <SummaryCard title="Suggested Next Steps" subtitle="Action pathways from risk radar">
               <Link
-                href={`/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`}
+                href={actionCenterHref}
                 className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
               >
                 Review Action Center
               </Link>
               <Link
-                href={`/dashboard/properties/${encodeURIComponent(propertyId)}/risk-assessment`}
+                href={riskAssessmentHref}
                 className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
               >
                 Open Full Risk Assessment

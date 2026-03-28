@@ -18,13 +18,30 @@ import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileTool
 function buildPropertyAwareHref(
   propertyId: string | undefined,
   hrefSuffix: string,
-  navTarget: string
+  navTarget: string,
+  guidanceContext?: {
+    guidanceJourneyId?: string;
+    guidanceStepKey?: string;
+    guidanceSignalIntentFamily?: string;
+    itemId?: string;
+    homeAssetId?: string;
+  }
 ): string {
+  const queryParams = new URLSearchParams();
+  if (guidanceContext?.guidanceJourneyId) queryParams.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+  if (guidanceContext?.guidanceStepKey) queryParams.set('guidanceStepKey', guidanceContext.guidanceStepKey);
+  if (guidanceContext?.guidanceSignalIntentFamily) queryParams.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+  if (guidanceContext?.itemId) queryParams.set('itemId', guidanceContext.itemId);
+  if (guidanceContext?.homeAssetId) queryParams.set('homeAssetId', guidanceContext.homeAssetId);
+  const suffix = queryParams.toString();
+
   if (propertyId) {
-    return `/dashboard/properties/${propertyId}/${hrefSuffix}`;
+    const base = `/dashboard/properties/${propertyId}/${hrefSuffix}`;
+    return suffix ? `${base}?${suffix}` : base;
   }
 
-  return `/dashboard/properties?navTarget=${encodeURIComponent(navTarget)}`;
+  const base = `/dashboard/properties?navTarget=${encodeURIComponent(navTarget)}`;
+  return suffix ? `${base}&${suffix}` : base;
 }
 
 const HOME_TOOL_GROUPS = [
@@ -86,6 +103,11 @@ export default function HomeToolsPage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
   const propertyIdFromQuery = searchParams.get('propertyId') || undefined;
+  const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
+  const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
+  const itemId = searchParams.get('itemId') || undefined;
+  const homeAssetId = searchParams.get('homeAssetId') || undefined;
   const resolvedPropertyId = selectedPropertyId || propertyIdFromQuery;
   const toolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));
 
@@ -120,7 +142,13 @@ export default function HomeToolsPage() {
                     subtitle={tool.description || 'Open tool'}
                     icon={<ToolIcon className="h-5 w-5" />}
                     trailingIcon={<ToolIcon className="h-5 w-5" />}
-                    href={buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget)}
+                    href={buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget, {
+                      guidanceJourneyId,
+                      guidanceStepKey,
+                      guidanceSignalIntentFamily,
+                      itemId,
+                      homeAssetId,
+                    })}
                     badgeLabel=""
                     variant="compact"
                   />

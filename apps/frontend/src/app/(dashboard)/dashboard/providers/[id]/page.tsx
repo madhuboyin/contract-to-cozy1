@@ -57,11 +57,15 @@ export default function ProviderDetailPage() {
   const category = searchParams.get('category');
   const predictionId = searchParams.get('predictionId');
   const itemId = searchParams.get('itemId');
+  const homeAssetId = searchParams.get('homeAssetId');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const bookingGuardQuery = useExecutionGuard(propertyId, 'BOOKING', {
     enabled: Boolean(propertyId),
+    journeyId: guidanceJourneyId ?? undefined,
+    inventoryItemId: itemId ?? undefined,
+    homeAssetId: homeAssetId ?? undefined,
   });
   const bookingGuidanceQuery = useGuidance(propertyId, {
     enabled: Boolean(propertyId),
@@ -216,6 +220,7 @@ export default function ProviderDetailPage() {
     if (category) queryParams.append('category', category);
     if (predictionId) queryParams.append('predictionId', predictionId);
     if (itemId) queryParams.append('itemId', itemId);
+    if (homeAssetId) queryParams.append('homeAssetId', homeAssetId);
     if (guidanceJourneyId) queryParams.append('guidanceJourneyId', guidanceJourneyId);
     if (guidanceStepKey) queryParams.append('guidanceStepKey', guidanceStepKey);
     if (guidanceSignalIntentFamily) {
