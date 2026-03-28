@@ -458,6 +458,10 @@ export class HomeRiskReplayService {
       'SAVINGS_REALIZATION',
       'RISK_SPIKE',
       'COST_ANOMALY',
+      'RISK_ACCUMULATION',
+      'SYSTEM_DEGRADATION',
+      'COST_PRESSURE_PATTERN',
+      'FINANCIAL_DISCIPLINE',
     ]);
 
     const sharedSignals = await signalService.listSignals(run.propertyId, {
@@ -504,6 +508,9 @@ export class HomeRiskReplayService {
       Array.from(relevantSignalKeys),
       { freshOnly: true },
     );
+    const signalInteractionContext = await signalService.getSignalInteractionContext(run.propertyId, {
+      freshOnly: true,
+    });
     const preferenceProfile = await this.preferenceProfileService.getCurrentProfile(run.propertyId);
 
     return {
@@ -511,6 +518,7 @@ export class HomeRiskReplayService {
       signalTimelineEvents,
       combinedTimelineEvents: combinedTimelineEntries,
       sharedSignals: latestSignalsByKey,
+      signalInteractions: signalInteractionContext.interactions,
       preferenceInfluence: preferenceProfile
         ? {
             preferenceProfileId: preferenceProfile.id,

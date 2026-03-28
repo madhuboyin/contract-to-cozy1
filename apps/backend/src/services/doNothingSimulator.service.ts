@@ -677,7 +677,7 @@ export class DoNothingSimulatorService {
       }),
       signalService.getLatestSignalsByKey(
         propertyId,
-        ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION'],
+        ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION', 'RISK_ACCUMULATION', 'FINANCIAL_DISCIPLINE'],
         { freshOnly: true }
       ),
     ]);
@@ -698,9 +698,21 @@ export class DoNothingSimulatorService {
     const savingsRealizationAnnual = sharedSignals.SAVINGS_REALIZATION
       ? extractSignalNumber(sharedSignals.SAVINGS_REALIZATION, 'estimatedAnnualSavings')
       : null;
+    const riskAccumulationScore = sharedSignals.RISK_ACCUMULATION
+      ? extractSignalNumber(sharedSignals.RISK_ACCUMULATION, 'accumulationScore')
+      : null;
+    const financialDisciplineScore = sharedSignals.FINANCIAL_DISCIPLINE
+      ? extractSignalNumber(sharedSignals.FINANCIAL_DISCIPLINE, 'disciplineScore')
+      : null;
     const sharedSignalsUsed = (Object.keys(sharedSignals) as SharedSignalKey[]).filter(
       (signalKey) => Boolean(sharedSignals[signalKey])
     );
+    const signalInteractionContext = await signalService.getSignalInteractionContext(propertyId, {
+      freshOnly: true,
+      cashBufferAmount: (mergedOverrides.cashBufferCents ?? null) !== null && mergedOverrides.cashBufferCents !== undefined
+        ? (mergedOverrides.cashBufferCents as number) / 100
+        : null,
+    });
 
     const openStatuses: MaintenanceTaskStatus[] = [
       MaintenanceTaskStatus.PENDING,
@@ -1009,6 +1021,29 @@ export class DoNothingSimulatorService {
       });
     }
 
+    if (riskAccumulationScore !== null && riskAccumulationScore >= 0.58) {
+      topRiskDriversRaw.push({
+        code: 'RISK_ACCUMULATION_PATTERN',
+        title: 'Deferred maintenance pattern compounds simulation downside',
+        detail: `Risk accumulation pattern score is ${Math.round(riskAccumulationScore * 100)}.`,
+        severity: riskAccumulationScore >= 0.78 ? 'HIGH' : 'MEDIUM',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (signalInteractionContext.interactions.length > 0) {
+      const interaction = signalInteractionContext.interactions[0];
+      topRiskDriversRaw.push({
+        code: `INTERACTION_${interaction.code}`,
+        title: interaction.title,
+        detail: interaction.reasons.join(' '),
+        severity:
+          interaction.strength >= 0.78 ? 'HIGH' :
+          interaction.strength >= 0.55 ? 'MEDIUM' : 'LOW',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
     if (topRiskDriversRaw.length === 0) {
       topRiskDriversRaw.push({
         code: 'BASELINE_STABLE',
@@ -1099,6 +1134,16 @@ export class DoNothingSimulatorService {
         code: 'SAVINGS_REALIZATION_BUFFER',
         title: 'Realized savings offsets some downside',
         detail: `Shared savings realization (~${Math.round(savingsRealizationAnnual)} USD/year) lowers projected net downside exposure.`,
+        severity: 'LOW',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (financialDisciplineScore !== null && financialDisciplineScore >= 0.6) {
+      topCostDriversRaw.push({
+        code: 'FINANCIAL_DISCIPLINE_PATTERN',
+        title: 'Financial discipline pattern improves projection resilience',
+        detail: 'Repeated savings execution suggests sustained ability to offset rising ownership costs.',
         severity: 'LOW',
         relatedPerils: ['OTHER'],
       });

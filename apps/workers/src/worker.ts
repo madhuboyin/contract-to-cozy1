@@ -42,6 +42,8 @@ import { runGazetteGenerationJob } from './jobs/gazetteGeneration.job';
 import { expireGuidanceSignalsJob } from './jobs/expireGuidanceSignals.job';
 import { runSharedDataBackfillJob } from './jobs/sharedDataBackfill.job';
 import { runSharedDataConsistencyAuditJob } from './jobs/sharedDataConsistencyAudit.job';
+import { runSharedSignalRefreshJob } from './jobs/sharedSignalRefresh.job';
+import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.job';
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
@@ -789,6 +791,8 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
   'shared-data-backfill':            async () => { await runSharedDataBackfillJob(); },
   'shared-data-consistency-audit':   async () => { await runSharedDataConsistencyAuditJob(); },
+  'shared-signal-refresh':           async () => { await runSharedSignalRefreshJob(); },
+  'shared-signal-health-audit':      async () => { await runSharedSignalHealthAuditJob(); },
   'expire-guidance-signals':         async () => { await expireGuidanceSignalsJob(); },
 };
 
@@ -798,6 +802,8 @@ const CRON_ENV_OVERRIDES: Record<string, string | undefined> = {
   'home-gazette-generation':    process.env.HOME_GAZETTE_GENERATION_CRON,
   'shared-data-backfill':       process.env.SHARED_DATA_BACKFILL_CRON,
   'shared-data-consistency-audit': process.env.SHARED_DATA_CONSISTENCY_AUDIT_CRON,
+  'shared-signal-refresh':      process.env.SHARED_SIGNAL_REFRESH_CRON,
+  'shared-signal-health-audit': process.env.SHARED_SIGNAL_HEALTH_AUDIT_CRON,
 };
 
 function scheduleCronJobs(): void {

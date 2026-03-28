@@ -219,6 +219,9 @@ export class HomeEventRadarService {
       riskSpike: unknown;
       costAnomaly: unknown;
       maintenanceAdherence: unknown;
+      riskAccumulation: unknown;
+      costPressurePattern: unknown;
+      interactions: unknown;
     };
   }> {
     const limit = Math.min(query.limit ?? 40, 100);
@@ -283,12 +286,19 @@ export class HomeEventRadarService {
       'MAINT_ADHERENCE',
       'COVERAGE_GAP',
       'SAVINGS_REALIZATION',
+      'RISK_ACCUMULATION',
+      'COST_PRESSURE_PATTERN',
     ];
     const latestSignals = await signalService.getLatestSignalsByKey(propertyId, signalKeys, { freshOnly: true });
+    const signalInteractions = await signalService.getSignalInteractionContext(propertyId, {
+      freshOnly: true,
+    });
 
     const riskSpike = toSignalNumber(latestSignals.RISK_SPIKE?.valueNumber);
     const costAnomaly = toSignalNumber(latestSignals.COST_ANOMALY?.valueNumber);
     const maintenanceAdherence = toSignalNumber(latestSignals.MAINT_ADHERENCE?.valueNumber);
+    const riskAccumulation = toSignalNumber(latestSignals.RISK_ACCUMULATION?.valueNumber);
+    const costPressurePattern = toSignalNumber(latestSignals.COST_PRESSURE_PATTERN?.valueNumber);
 
     const prioritizedItems = items
       .map((item: Record<string, unknown>) => {
@@ -303,6 +313,15 @@ export class HomeEventRadarService {
         }
         if (maintenanceAdherence !== null && maintenanceAdherence < 0.5) {
           boost += 0.4;
+        }
+        if (riskAccumulation !== null && riskAccumulation >= 0.6) {
+          boost += riskAccumulation * 0.6;
+        }
+        if (costPressurePattern !== null && costPressurePattern >= 0.6) {
+          boost += costPressurePattern * 0.5;
+        }
+        if (signalInteractions.interactions.length > 0) {
+          boost += signalInteractions.interactions[0].strength * 0.35;
         }
 
         return {
@@ -328,6 +347,9 @@ export class HomeEventRadarService {
         riskSpike: latestSignals.RISK_SPIKE ?? null,
         costAnomaly: latestSignals.COST_ANOMALY ?? null,
         maintenanceAdherence: latestSignals.MAINT_ADHERENCE ?? null,
+        riskAccumulation: latestSignals.RISK_ACCUMULATION ?? null,
+        costPressurePattern: latestSignals.COST_PRESSURE_PATTERN ?? null,
+        interactions: signalInteractions.interactions,
       },
     };
   }

@@ -20,6 +20,7 @@ test('admin shared-data routes expose expected endpoints', () => {
     { path: '/admin/shared-data/backfill', methods: ['post'] },
     { path: '/admin/shared-data/readiness', methods: ['get'] },
     { path: '/admin/shared-data/consistency', methods: ['get'] },
+    { path: '/admin/shared-data/signals/health', methods: ['get'] },
   ]);
 });
 

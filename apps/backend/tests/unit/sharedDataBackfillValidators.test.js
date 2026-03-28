@@ -5,6 +5,7 @@ require('ts-node/register');
 
 const {
   runSharedDataBackfillBodySchema,
+  sharedSignalHealthQuerySchema,
   sharedDataBackfillScopeQuerySchema,
 } = require('../../src/validators/sharedDataBackfill.validators.ts');
 
@@ -42,4 +43,16 @@ test('sharedDataBackfillScopeQuerySchema parses admin scope filters', async () =
   });
 
   assert.equal(parsed.query.limit, 25);
+});
+
+test('sharedSignalHealthQuerySchema parses signal health filters', async () => {
+  const parsed = await sharedSignalHealthQuerySchema.parseAsync({
+    query: {
+      limit: '50',
+      lookbackDays: '90',
+    },
+  });
+
+  assert.equal(parsed.query.limit, 50);
+  assert.equal(parsed.query.lookbackDays, 90);
 });

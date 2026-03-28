@@ -308,6 +308,10 @@ const SIGNAL_LABELS: Record<SharedSignalKey, string> = {
   SAVINGS_REALIZATION: 'Savings realization',
   RISK_SPIKE: 'Risk spike',
   COST_ANOMALY: 'Cost anomaly',
+  RISK_ACCUMULATION: 'Risk accumulation',
+  SYSTEM_DEGRADATION: 'System degradation',
+  COST_PRESSURE_PATTERN: 'Cost pressure pattern',
+  FINANCIAL_DISCIPLINE: 'Financial discipline',
 };
 
 const ORCHESTRATION_SIGNAL_KEYS: SharedSignalKey[] = [

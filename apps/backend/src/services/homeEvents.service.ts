@@ -207,6 +207,10 @@ export class HomeEventsService {
       'SAVINGS_REALIZATION',
       'RISK_SPIKE',
       'COST_ANOMALY',
+      'RISK_ACCUMULATION',
+      'SYSTEM_DEGRADATION',
+      'COST_PRESSURE_PATTERN',
+      'FINANCIAL_DISCIPLINE',
     ]);
 
     const sharedSignals = await signalService.listSignals(propertyId, {

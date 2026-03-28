@@ -782,11 +782,18 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
     'RISK_SPIKE',
     'COST_ANOMALY',
     'MAINT_ADHERENCE',
+    'RISK_ACCUMULATION',
+    'COST_PRESSURE_PATTERN',
+    'FINANCIAL_DISCIPLINE',
   ];
   const latestSignals = await signalService.getLatestSignalsByKey(propertyId, signalKeys, { freshOnly: true });
+  const interactionContext = await signalService.getSignalInteractionContext(propertyId, { freshOnly: true });
   const riskSpike = toFiniteNumber(latestSignals.RISK_SPIKE?.valueNumber);
   const costAnomaly = toFiniteNumber(latestSignals.COST_ANOMALY?.valueNumber);
   const maintenanceAdherence = toFiniteNumber(latestSignals.MAINT_ADHERENCE?.valueNumber);
+  const riskAccumulation = toFiniteNumber(latestSignals.RISK_ACCUMULATION?.valueNumber);
+  const costPressurePattern = toFiniteNumber(latestSignals.COST_PRESSURE_PATTERN?.valueNumber);
+  const financialDiscipline = toFiniteNumber(latestSignals.FINANCIAL_DISCIPLINE?.valueNumber);
 
   const fallbackRiskLevel = summary.actionNeeded > 0 ? 'ACTION_NEEDED' : summary.monitor > 0 ? 'MONITOR' : 'GOOD';
   const fallbackCostPressure = summary.actionNeeded >= Math.max(1, Math.round(summary.total * 0.25)) ? 'HIGH' : 'NORMAL';
@@ -795,24 +802,33 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
   result.signalSummary = {
     riskLevel: riskSpike === null
       ? fallbackRiskLevel
-      : riskSpike >= 0.8 ? 'HIGH'
-        : riskSpike >= 0.55 ? 'MODERATE'
+      : Math.max(riskSpike, riskAccumulation ?? 0) >= 0.8 ? 'HIGH'
+        : Math.max(riskSpike, riskAccumulation ?? 0) >= 0.55 ? 'MODERATE'
           : 'LOW',
     costPressure: costAnomaly === null
       ? fallbackCostPressure
-      : costAnomaly >= 0.8 ? 'HIGH'
-        : costAnomaly >= 0.55 ? 'ELEVATED'
+      : Math.max(costAnomaly, costPressurePattern ?? 0) >= 0.8 ? 'HIGH'
+        : Math.max(costAnomaly, costPressurePattern ?? 0) >= 0.55 ? 'ELEVATED'
           : 'LOW',
     maintenanceStatus: maintenanceAdherence === null
       ? fallbackMaintenance
       : maintenanceAdherence >= 0.8 ? 'ON_TRACK'
         : maintenanceAdherence >= 0.55 ? 'WATCH'
           : 'NEEDS_ATTENTION',
+    stabilityMomentum:
+      financialDiscipline === null
+        ? 'UNKNOWN'
+        : financialDiscipline >= 0.75
+          ? 'STRONG'
+          : financialDiscipline >= 0.55
+            ? 'EMERGING'
+            : 'LOW',
     signalBacked: {
       riskLevel: riskSpike !== null,
       costPressure: costAnomaly !== null,
       maintenanceStatus: maintenanceAdherence !== null,
     },
+    interactions: interactionContext.interactions,
   };
 
   return result;

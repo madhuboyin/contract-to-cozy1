@@ -294,10 +294,11 @@ export class FinancialAssumptionService {
 
     const sharedSignals = await signalService.getLatestSignalsByKey(
       input.propertyId,
-      ['SAVINGS_REALIZATION'],
+      ['SAVINGS_REALIZATION', 'FINANCIAL_DISCIPLINE'],
       { freshOnly: true }
     );
     const savingsSignal = sharedSignals.SAVINGS_REALIZATION ?? null;
+    const disciplineSignal = sharedSignals.FINANCIAL_DISCIPLINE ?? null;
     const savingsRealizationAnnual = savingsSignal
       ? extractSignalNumber(savingsSignal, 'estimatedAnnualSavings')
       : null;
@@ -307,7 +308,10 @@ export class FinancialAssumptionService {
       assumptionSetId: resolvedAssumptionSetId,
       preferenceProfileId: postureDefaults.preferenceProfileId,
       posture,
-      sharedSignalsUsed: savingsSignal ? ['SAVINGS_REALIZATION'] : [],
+      sharedSignalsUsed: [
+        ...(savingsSignal ? ['SAVINGS_REALIZATION'] : []),
+        ...(disciplineSignal ? ['FINANCIAL_DISCIPLINE'] : []),
+      ],
       savingsRealizationAnnual,
     };
   }

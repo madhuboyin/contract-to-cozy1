@@ -8,6 +8,14 @@ export const sharedDataBackfillScopeQuerySchema = z.object({
   }),
 });
 
+export const sharedSignalHealthQuerySchema = z.object({
+  query: z.object({
+    propertyId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(250).optional(),
+    lookbackDays: z.coerce.number().int().min(1).max(365).optional(),
+  }),
+});
+
 export const runSharedDataBackfillBodySchema = z.object({
   propertyId: z.string().uuid().optional(),
   dryRun: z.coerce.boolean().optional(),

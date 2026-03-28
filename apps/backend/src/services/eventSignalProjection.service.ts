@@ -62,6 +62,14 @@ function signalTitle(signalKey: string): string {
       return 'Risk spike detected';
     case 'COST_ANOMALY':
       return 'Cost anomaly detected';
+    case 'RISK_ACCUMULATION':
+      return 'Risk accumulation pattern detected';
+    case 'SYSTEM_DEGRADATION':
+      return 'System degradation pattern detected';
+    case 'COST_PRESSURE_PATTERN':
+      return 'Recurring cost pressure pattern detected';
+    case 'FINANCIAL_DISCIPLINE':
+      return 'Financial discipline pattern strengthened';
     default:
       return `${signalKey.replace(/_/g, ' ')} signal updated`;
   }
@@ -99,12 +107,26 @@ export function timelineEntryFromEvent(event: UnifiedEventEnvelope, title: strin
 
 export function timelineEntryFromSignal(signal: SignalDTO): TimelineProjectionEntry {
   const payload = toRecord(signal.valueJson);
+  const toOptionalString = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim().length > 0 ? value : null;
+  const explainability = signal.explainability;
+  const freshnessState = signal.freshnessState ?? (signal.validUntil ? (new Date(signal.validUntil) < new Date() ? 'STALE' : 'FRESH') : 'FRESH');
+  const reasonSummary =
+    toOptionalString(explainability?.why?.[0]) ??
+    toOptionalString(payload?.summary) ??
+    toOptionalString(payload?.message) ??
+    null;
+  const summary =
+    freshnessState === 'STALE'
+      ? [reasonSummary, 'Signal is stale and shown for historical context.'].filter(Boolean).join(' ')
+      : reasonSummary ?? signal.valueText ?? null;
+
   return {
     id: `signal:${signal.id}`,
     kind: 'SIGNAL',
     occurredAt: signal.capturedAt,
     title: signalTitle(signal.signalKey),
-    summary: signal.valueText ?? null,
+    summary,
     eventType: null,
     signalKey: signal.signalKey,
     sourceModel: signal.sourceModel,

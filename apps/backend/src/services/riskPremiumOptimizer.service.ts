@@ -545,7 +545,7 @@ export class RiskPremiumOptimizerService {
       }),
       signalService.getLatestSignalsByKey(
         propertyId,
-        ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION'],
+        ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION', 'RISK_ACCUMULATION', 'FINANCIAL_DISCIPLINE'],
         { freshOnly: true }
       ),
     ]);
@@ -585,9 +585,19 @@ export class RiskPremiumOptimizerService {
       ? extractSignalNumber(sharedSignals.SAVINGS_REALIZATION, 'estimatedAnnualSavings')
       : null;
     const maintenanceAdherencePercent = toPercent(maintenanceAdherenceScore);
+    const riskAccumulationScore = sharedSignals.RISK_ACCUMULATION
+      ? extractSignalNumber(sharedSignals.RISK_ACCUMULATION, 'accumulationScore')
+      : null;
+    const financialDisciplineScore = sharedSignals.FINANCIAL_DISCIPLINE
+      ? extractSignalNumber(sharedSignals.FINANCIAL_DISCIPLINE, 'disciplineScore')
+      : null;
     const sharedSignalsUsed = (Object.keys(sharedSignals) as SharedSignalKey[]).filter(
       (signalKey) => Boolean(sharedSignals[signalKey])
     );
+    const signalInteractionContext = await signalService.getSignalInteractionContext(propertyId, {
+      freshOnly: true,
+      cashBufferAmount: cashBuffer ?? null,
+    });
 
     const claimsByPeril = claims.reduce<Record<Peril, number>>(
       (acc, claim) => {
@@ -685,6 +695,39 @@ export class RiskPremiumOptimizerService {
         title: 'Maintenance adherence signal is below target',
         detail: `Shared maintenance adherence is ${Math.round(maintenanceAdherencePercent)}%, which can increase preventable loss frequency.`,
         severity: maintenanceAdherencePercent < 50 ? 'HIGH' : 'MEDIUM',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (riskAccumulationScore !== null && riskAccumulationScore >= 0.58) {
+      pushDriver({
+        code: 'RISK_ACCUMULATION_PATTERN',
+        title: 'Maintenance deferral pattern is accumulating risk',
+        detail: `Pattern signal indicates accumulated deferred-risk pressure (${Math.round(riskAccumulationScore * 100)}).`,
+        severity: riskAccumulationScore >= 0.78 ? 'HIGH' : 'MEDIUM',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (financialDisciplineScore !== null && financialDisciplineScore >= 0.6) {
+      pushDriver({
+        code: 'FINANCIAL_DISCIPLINE_SIGNAL',
+        title: 'Financial discipline pattern improves premium resilience',
+        detail: 'Repeated realized savings behavior improves confidence in sustained risk-control execution.',
+        severity: 'LOW',
+        relatedPerils: ['OTHER'],
+      });
+    }
+
+    if (signalInteractionContext.interactions.length > 0) {
+      const interaction = signalInteractionContext.interactions[0];
+      pushDriver({
+        code: `INTERACTION_${interaction.code}`,
+        title: interaction.title,
+        detail: interaction.reasons.join(' '),
+        severity:
+          interaction.strength >= 0.78 ? 'HIGH' :
+          interaction.strength >= 0.55 ? 'MEDIUM' : 'LOW',
         relatedPerils: ['OTHER'],
       });
     }

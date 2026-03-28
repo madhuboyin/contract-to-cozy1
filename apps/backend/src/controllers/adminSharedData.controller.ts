@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { sharedDataBackfillService } from '../services/sharedDataBackfill.service';
+import { signalService } from '../services/signal.service';
 
 function parseScope(req: Request): { propertyId?: string; limit?: number; startAfterPropertyId?: string } {
   const propertyId = typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined;
@@ -66,6 +67,32 @@ export async function getSharedDataConsistencyHandler(req: Request, res: Respons
       success: false,
       error: {
         message: error?.message || 'Failed to build shared data consistency report.',
+      },
+    });
+  }
+}
+
+export async function getSharedSignalHealthHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const propertyId = typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined;
+    const limit = Number.isFinite(Number(req.query.limit)) ? Number(req.query.limit) : undefined;
+    const lookbackDays = Number.isFinite(Number(req.query.lookbackDays))
+      ? Number(req.query.lookbackDays)
+      : undefined;
+
+    const health = await signalService.getSignalHealthOverview({
+      propertyId,
+      limit,
+      lookbackDays,
+    });
+
+    res.json({ success: true, data: health });
+  } catch (error: any) {
+    console.error('[ADMIN-SHARED-DATA] Failed to build signal health report:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error?.message || 'Failed to build signal health report.',
       },
     });
   }

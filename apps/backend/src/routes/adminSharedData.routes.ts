@@ -5,11 +5,13 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import {
   runSharedDataBackfillBodySchema,
+  sharedSignalHealthQuerySchema,
   sharedDataBackfillScopeQuerySchema,
 } from '../validators/sharedDataBackfill.validators';
 import {
   getSharedDataConsistencyHandler,
   getSharedDataReadinessHandler,
+  getSharedSignalHealthHandler,
   runSharedDataBackfillHandler,
 } from '../controllers/adminSharedData.controller';
 
@@ -34,6 +36,12 @@ router.get(
   '/admin/shared-data/consistency',
   validate(sharedDataBackfillScopeQuerySchema),
   getSharedDataConsistencyHandler
+);
+
+router.get(
+  '/admin/shared-data/signals/health',
+  validate(sharedSignalHealthQuerySchema),
+  getSharedSignalHealthHandler
 );
 
 export default router;

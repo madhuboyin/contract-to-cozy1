@@ -312,6 +312,32 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     jobName: 'shared-data-consistency-audit',
     triggerSupported: true,
   },
+  {
+    key: 'shared-signal-refresh',
+    name: 'Shared Signal Refresh',
+    description:
+      'Recomputes core shared signals for existing properties with confidence and decay updates. Idempotent and safe to rerun.',
+    category: 'HOME_INTELLIGENCE',
+    schedule: 'Daily at 2:55 AM EST',
+    cronExpression: '55 2 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'shared-signal-refresh',
+    triggerSupported: true,
+  },
+  {
+    key: 'shared-signal-health-audit',
+    name: 'Shared Signal Health Audit',
+    description:
+      'Builds operational signal-health diagnostics (stale, low-confidence, and interaction signal coverage).',
+    category: 'HOME_INTELLIGENCE',
+    schedule: 'Daily at 3:10 AM EST',
+    cronExpression: '10 3 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'shared-signal-health-audit',
+    triggerSupported: true,
+  },
 
   // ── Guidance Engine (cron) ────────────────────────────────────────────────
   {

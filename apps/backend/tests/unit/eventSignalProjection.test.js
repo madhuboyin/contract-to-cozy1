@@ -64,3 +64,38 @@ test('timeline projection merges event and signal entries in descending time ord
   assert.equal(merged[1].kind, 'EVENT');
 });
 
+test('timelineEntryFromSignal includes stale context summary when signal is expired', () => {
+  const entry = timelineEntryFromSignal({
+    id: 'sig-stale',
+    propertyId: 'property-1',
+    roomId: null,
+    homeItemId: null,
+    signalKey: 'COST_PRESSURE_PATTERN',
+    valueNumber: 0.7,
+    valueText: 'RECURRING_PRESSURE',
+    valueJson: {
+      _signalMeta: {
+        why: ['Recurring market pressure detected over 90 days.'],
+      },
+    },
+    unit: 'ratio',
+    confidence: 0.74,
+    sourceModel: 'HomeEventRadarService',
+    sourceId: 'radar-pattern-1',
+    capturedAt: '2026-02-01T10:00:00.000Z',
+    validUntil: '2026-02-10T10:00:00.000Z',
+    version: 1,
+    createdAt: '2026-02-01T10:00:00.000Z',
+    updatedAt: '2026-02-01T10:00:00.000Z',
+    freshnessState: 'STALE',
+    isStale: true,
+    explainability: {
+      generatedAt: '2026-02-01T10:00:00.000Z',
+      freshnessState: 'STALE',
+      why: ['Recurring market pressure detected over 90 days.'],
+    },
+  });
+
+  assert.equal(entry.signalKey, 'COST_PRESSURE_PATTERN');
+  assert.ok(String(entry.summary).toLowerCase().includes('stale'));
+});
