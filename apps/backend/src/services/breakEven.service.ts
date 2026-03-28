@@ -3,19 +3,39 @@ import { prisma } from '../lib/prisma';
 import { HomeCostGrowthService } from './homeCostGrowth.service';
 import { TrueCostOwnershipService } from './trueCostOwnership.service';
 import { AppreciationIndexService } from './appreciationIndex.service';
+import {
+  FinancialAssumptionService,
+  FinancialAssumptions,
+  deriveExpenseGrowthRate,
+  hasFinancialAssumptionInput,
+} from './financialAssumption.service';
+import { buildAnnualCostSeries, buildAnnualGainSeries } from './tools/financialProjectionMath';
 
 export type BreakEvenYears = 5 | 10 | 20 | 30;
 
 export type BreakEvenInput = {
   years?: BreakEvenYears; // default 20
+  assumptionSetId?: string;
   homeValueNow?: number; // optional override
   appreciationRate?: number; // decimal override
   expenseGrowthRate?: number; // optional override (decimal) for sensitivity / projection
+  inflationRate?: number;
+  rentGrowthRate?: number;
+  interestRate?: number;
+  propertyTaxGrowthRate?: number;
+  insuranceGrowthRate?: number;
+  maintenanceGrowthRate?: number;
+  sellingCostPercent?: number;
 };
 
 type Impact = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export type BreakEvenDTO = {
+  assumptionSetId?: string | null;
+  preferenceProfileId?: string | null;
+  sharedSignalsUsed?: string[];
+  financialAssumptions?: FinancialAssumptions;
+
   input: {
     propertyId: string;
     years: BreakEvenYears;
@@ -141,8 +161,13 @@ export class BreakEvenService {
   private costGrowth = new HomeCostGrowthService();
   private trueCost = new TrueCostOwnershipService();
   private appreciation = new AppreciationIndexService();
+  private financialAssumptionService = new FinancialAssumptionService();
 
-  async compute(propertyId: string, input: BreakEvenInput = {}): Promise<BreakEvenDTO> {
+  async compute(
+    propertyId: string,
+    input: BreakEvenInput = {},
+    userId?: string
+  ): Promise<BreakEvenDTO> {
     const years = clampYears(input.years);
 
     const property = await prisma.property.findUnique({
@@ -166,13 +191,13 @@ export class BreakEvenService {
     const dataSources: string[] = [
       'Internal property profile (address/state/zip)',
       'HomeCostGrowthService (Phase 1 heuristics)',
+      'AssumptionSet + PreferenceProfile (shared financial assumptions)',
     ];
 
     // Base: still call HomeCostGrowthService to anchor homeValueNow + annualExpensesNow
     const baseCg = await this.costGrowth.estimate(propertyId, {
       years: 10,
       homeValueNow: input.homeValueNow,
-      appreciationRate: input.appreciationRate,
     });
 
     const homeValueNow = baseCg.current.homeValueNow;
@@ -278,26 +303,74 @@ export class BreakEvenService {
         if (Number.isFinite(g) && g > -0.2 && g < 0.3) inferredExpenseGrowth = g;
       }
     }
-    const expenseGrowthRate = input.expenseGrowthRate ?? inferredExpenseGrowth;
-    if (input.expenseGrowthRate !== undefined) notes.push('Used client-provided expenseGrowthRate override for projection.');
+    const sharedFinancialOverrides = {
+      appreciationRate: input.appreciationRate,
+      inflationRate: input.inflationRate,
+      rentGrowthRate: input.rentGrowthRate,
+      interestRate: input.interestRate,
+      propertyTaxGrowthRate:
+        input.propertyTaxGrowthRate ?? input.expenseGrowthRate,
+      insuranceGrowthRate:
+        input.insuranceGrowthRate ?? input.expenseGrowthRate,
+      maintenanceGrowthRate:
+        input.maintenanceGrowthRate ?? input.expenseGrowthRate,
+      sellingCostPercent: input.sellingCostPercent,
+    };
+
+    const hasFinancialOverrideInput = hasFinancialAssumptionInput(sharedFinancialOverrides);
+    const financialContext = await this.financialAssumptionService.resolveForTool({
+      propertyId,
+      toolKey: 'BREAK_EVEN',
+      assumptionSetId: input.assumptionSetId,
+      requestOverrides: sharedFinancialOverrides,
+      canonicalDefaults: {
+        appreciationRate,
+        inflationRate: 0.035,
+        rentGrowthRate: 0.03,
+        interestRate: 0.065,
+        propertyTaxGrowthRate: inferredExpenseGrowth,
+        insuranceGrowthRate: inferredExpenseGrowth,
+        maintenanceGrowthRate: inferredExpenseGrowth,
+        sellingCostPercent: 0.06,
+      },
+      legacyFallbacks: {
+        appreciationRate,
+        propertyTaxGrowthRate: inferredExpenseGrowth,
+        insuranceGrowthRate: inferredExpenseGrowth,
+        maintenanceGrowthRate: inferredExpenseGrowth,
+      },
+      createdByUserId: userId ?? null,
+    });
+
+    appreciationRate = financialContext.assumptions.appreciationRate;
+    const expenseGrowthRate =
+      input.expenseGrowthRate !== undefined
+        ? input.expenseGrowthRate
+        : deriveExpenseGrowthRate(financialContext.assumptions);
+
+    if (input.expenseGrowthRate !== undefined) {
+      notes.push('Used client-provided expenseGrowthRate override for projection.');
+    }
+    if (hasFinancialOverrideInput) {
+      notes.push('Financial overrides were persisted into a reusable AssumptionSet.');
+      confidence = bumpConfidence(confidence, 'MEDIUM');
+    }
+    if (input.assumptionSetId) {
+      notes.push('Input assumptions were hydrated from the provided AssumptionSet before projection.');
+    }
+    if (financialContext.savingsRealizationAnnual !== null && financialContext.savingsRealizationAnnual > 0) {
+      notes.push(
+        `Savings realization context applied (~$${Math.round(financialContext.savingsRealizationAnnual).toLocaleString()}/yr).`
+      );
+      confidence = bumpConfidence(confidence, 'MEDIUM');
+    }
+    if (financialContext.sharedSignalsUsed.length > 0) {
+      dataSources.push('SignalService (shared financial signal context)');
+    }
 
     // Project series forward
-    const annualExpenses: number[] = [];
-    const annualAppGain: number[] = [];
-
-    let hv = homeValueNow;
-    let exp = annualExpensesNow;
-
-    for (let t = 1; t <= years; t++) {
-      const prevHv = hv;
-      hv = t === 1 ? hv : hv * (1 + appreciationRate);
-      const gain = t === 1 ? hv * appreciationRate : hv - prevHv;
-
-      exp = t === 1 ? exp : exp * (1 + expenseGrowthRate);
-
-      annualExpenses.push(toMoney(exp));
-      annualAppGain.push(toMoney(gain));
-    }
+    const annualExpenses = buildAnnualCostSeries(annualExpensesNow, expenseGrowthRate, years).map(toMoney);
+    const annualAppGain = buildAnnualGainSeries(homeValueNow, appreciationRate, years).map(toMoney);
 
     // Cumulative + net
     const historyOut: BreakEvenDTO['history'] = [];
@@ -335,8 +408,6 @@ export class BreakEvenService {
 
     // Sensitivity (unchanged)
     const sens = (adj: number) => {
-      let hv2 = homeValueNow;
-      let exp2 = annualExpensesNow;
       let cumE = 0;
       let cumG = 0;
       const net: number[] = [];
@@ -344,15 +415,11 @@ export class BreakEvenService {
       const ar = appreciationRate + adj;
       const er = expenseGrowthRate - adj * 0.5;
 
-      for (let t = 1; t <= years; t++) {
-        const prev = hv2;
-        hv2 = t === 1 ? hv2 : hv2 * (1 + ar);
-        const gain = t === 1 ? hv2 * ar : hv2 - prev;
-
-        exp2 = t === 1 ? exp2 : exp2 * (1 + er);
-
-        cumE += exp2;
-        cumG += gain;
+      const gains = buildAnnualGainSeries(homeValueNow, ar, years);
+      const costs = buildAnnualCostSeries(annualExpensesNow, er, years);
+      for (let t = 0; t < years; t++) {
+        cumE += costs[t];
+        cumG += gains[t];
         net.push(toMoney(cumG - cumE));
       }
 
@@ -390,6 +457,10 @@ export class BreakEvenService {
     });
 
     return {
+      assumptionSetId: financialContext.assumptionSetId,
+      preferenceProfileId: financialContext.preferenceProfileId,
+      sharedSignalsUsed: financialContext.sharedSignalsUsed,
+      financialAssumptions: financialContext.assumptions,
       input: {
         propertyId,
         years,
@@ -400,6 +471,13 @@ export class BreakEvenService {
           homeValueNow: input.homeValueNow,
           appreciationRate: input.appreciationRate,
           expenseGrowthRate: input.expenseGrowthRate,
+          inflationRate: input.inflationRate,
+          rentGrowthRate: input.rentGrowthRate,
+          interestRate: input.interestRate,
+          propertyTaxGrowthRate: input.propertyTaxGrowthRate,
+          insuranceGrowthRate: input.insuranceGrowthRate,
+          maintenanceGrowthRate: input.maintenanceGrowthRate,
+          sellingCostPercent: input.sellingCostPercent,
         },
       },
 

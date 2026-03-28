@@ -17,9 +17,17 @@ const BreakEvenQuerySchema = z.object({
   }),
   query: z.object({
     years: z.union([z.literal('5'), z.literal('10'), z.literal('20'), z.literal('30')]).optional(),
+    assumptionSetId: z.string().uuid().optional(),
     homeValueNow: z.string().optional(),
     appreciationRate: z.string().optional(),
     expenseGrowthRate: z.string().optional(),
+    inflationRate: z.string().optional(),
+    rentGrowthRate: z.string().optional(),
+    interestRate: z.string().optional(),
+    propertyTaxGrowthRate: z.string().optional(),
+    insuranceGrowthRate: z.string().optional(),
+    maintenanceGrowthRate: z.string().optional(),
+    sellingCostPercent: z.string().optional(),
   }),
   body: z.any().optional(),
 });

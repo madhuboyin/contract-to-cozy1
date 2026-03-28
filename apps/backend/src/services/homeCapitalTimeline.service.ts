@@ -11,6 +11,12 @@ import {
   InventoryItemCategory,
   InventoryItemCondition,
 } from '@prisma/client';
+import {
+  FinancialAssumptionInput,
+  FinancialAssumptionService,
+  deriveExpenseGrowthRate,
+} from './financialAssumption.service';
+import { projectValueAtYear } from './tools/financialProjectionMath';
 
 // ─── Category defaults ─────────────────────────────────────────────
 type CategoryDefault = {
@@ -100,6 +106,7 @@ function overallConfidence(confidences: HomeCapitalTimelineConfidence[]): HomeCa
 
 // ─── Service ────────────────────────────────────────────────────────
 export class HomeCapitalTimelineService {
+  private financialAssumptionService = new FinancialAssumptionService();
 
   // ── Get latest READY analysis ─────────────────────────────────────
   async getLatestTimeline(propertyId: string) {
@@ -119,7 +126,16 @@ export class HomeCapitalTimelineService {
   }
 
   // ── Run timeline computation ──────────────────────────────────────
-  async runTimeline(propertyId: string, homeownerProfileId: string, horizonYears: number) {
+  async runTimeline(
+    propertyId: string,
+    homeownerProfileId: string,
+    horizonYears: number,
+    options?: {
+      assumptionSetId?: string;
+      financialAssumptions?: FinancialAssumptionInput;
+      createdByUserId?: string | null;
+    }
+  ) {
     // 1. Fetch inputs
     const [inventoryItems, homeEvents, overrides] = await Promise.all([
       prisma.inventoryItem.findMany({
@@ -141,6 +157,25 @@ export class HomeCapitalTimelineService {
         where: { propertyId },
       }),
     ]);
+
+    const financialContext = await this.financialAssumptionService.resolveForTool({
+      propertyId,
+      toolKey: 'HOME_CAPITAL_TIMELINE',
+      assumptionSetId: options?.assumptionSetId,
+      requestOverrides: options?.financialAssumptions,
+      canonicalDefaults: {
+        inflationRate: 0.035,
+        maintenanceGrowthRate: 0.045,
+        insuranceGrowthRate: 0.05,
+        propertyTaxGrowthRate: 0.035,
+        appreciationRate: 0.04,
+        rentGrowthRate: 0.03,
+        interestRate: 0.065,
+        sellingCostPercent: 0.06,
+      },
+      createdByUserId: options?.createdByUserId ?? null,
+    });
+    const capitalCostGrowthRate = deriveExpenseGrowthRate(financialContext.assumptions);
 
     // Index overrides by inventoryItemId
     const overridesByItem = new Map<string | null, typeof overrides>();
@@ -250,6 +285,14 @@ export class HomeCapitalTimelineService {
         costMax = Math.round(item.replacementCostCents * 1.2);
       }
 
+      const windowMid = new Date((windowStart.getTime() + windowEnd.getTime()) / 2);
+      const yearsUntilEvent = Math.max(
+        0,
+        (windowMid.getTime() - now.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+      );
+      costMin = Math.round(projectValueAtYear(costMin, capitalCostGrowthRate, yearsUntilEvent));
+      costMax = Math.round(projectValueAtYear(costMax, capitalCostGrowthRate, yearsUntilEvent));
+
       // Confidence & priority
       const hasInstallDate = !!(item.installedOn || item.purchasedOn);
       const hasCondition = item.condition !== 'UNKNOWN';
@@ -273,6 +316,9 @@ export class HomeCapitalTimelineService {
       if (remainingLifeOverride) {
         whyParts.push(`Remaining life manually set to ${(remainingLifeOverride.payload as any)?.remainingYears} years.`);
       }
+      whyParts.push(
+        `Future cost projected with ${(capitalCostGrowthRate * 100).toFixed(1)}% annual capital-cost growth.`
+      );
       whyParts.push(`Estimated cost range: ${centsToUsd(costMin)} – ${centsToUsd(costMax)}.`);
 
       itemsToCreate.push({
@@ -300,8 +346,12 @@ export class HomeCapitalTimelineService {
 
     const totalMin = itemsToCreate.reduce((s, i) => s + (i.estimatedCostMinCents ?? 0), 0);
     const totalMax = itemsToCreate.reduce((s, i) => s + (i.estimatedCostMaxCents ?? 0), 0);
+    const savingsSignalNote =
+      financialContext.savingsRealizationAnnual !== null && financialContext.savingsRealizationAnnual > 0
+        ? ` Savings realization context (~$${Math.round(financialContext.savingsRealizationAnnual).toLocaleString()}/yr) was considered for planning posture.`
+        : '';
     const summary = itemsToCreate.length > 0
-      ? `${itemsToCreate.length} major expense(s) totaling ${centsToUsd(totalMin)} – ${centsToUsd(totalMax)} expected over the next ${horizonYears} years.`
+      ? `${itemsToCreate.length} major expense(s) totaling ${centsToUsd(totalMin)} – ${centsToUsd(totalMax)} expected over the next ${horizonYears} years.${savingsSignalNote}`
       : `No major capital expenses predicted within the next ${horizonYears} years.`;
 
     // 5. Persist (delete prior, create new)
@@ -327,6 +377,17 @@ export class HomeCapitalTimelineService {
           inventoryItemCount: inventoryItems.length,
           overrideCount: overrides.length,
           horizonYears,
+          assumptionSetId: financialContext.assumptionSetId,
+          preferenceProfileId: financialContext.preferenceProfileId,
+          financialAssumptions: financialContext.assumptions,
+          sharedSignalsUsed: financialContext.sharedSignalsUsed,
+          readPriorityOrder: [
+            'CANONICAL',
+            'ASSUMPTION_SET',
+            'PREFERENCE_PROFILE',
+            'SIGNALS',
+            'SNAPSHOT',
+          ],
         },
         timelineJson: itemsToCreate,
         items: {

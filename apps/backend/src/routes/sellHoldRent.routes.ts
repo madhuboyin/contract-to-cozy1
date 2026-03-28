@@ -16,10 +16,16 @@ const querySchema = z.object({
   }),
   query: z.object({
     years: z.union([z.literal('5'), z.literal('10')]).optional(),
+    assumptionSetId: z.string().uuid().optional(),
 
     homeValueNow: z.coerce.number().positive().optional(),
     appreciationRate: z.coerce.number().min(0).max(0.2).optional(),
     sellingCostRate: z.coerce.number().min(0).max(0.2).optional(),
+    inflationRate: z.coerce.number().min(0).max(0.2).optional(),
+    interestRate: z.coerce.number().min(0).max(0.25).optional(),
+    propertyTaxGrowthRate: z.coerce.number().min(0).max(0.2).optional(),
+    insuranceGrowthRate: z.coerce.number().min(0).max(0.25).optional(),
+    maintenanceGrowthRate: z.coerce.number().min(0).max(0.25).optional(),
 
     monthlyRentNow: z.coerce.number().min(0).optional(),
     rentGrowthRate: z.coerce.number().min(0).max(0.2).optional(),
