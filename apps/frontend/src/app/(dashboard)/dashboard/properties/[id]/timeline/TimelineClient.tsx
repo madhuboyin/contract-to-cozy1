@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
-import { listHomeEvents, HomeEvent } from './homeEventsApi';
+import { listHomeEvents, HomeEvent, TimelineProjectionEntry } from './homeEventsApi';
 import { EmptyStateCard } from '@/components/mobile/dashboard/MobilePrimitives';
 
 // Optional: if you have shared UI components already, feel free to swap these out.
@@ -36,6 +36,39 @@ function iconForType(type?: string) {
     case 'DOCUMENT': return '📄';
     default: return '•';
   }
+}
+
+function toHomeEventFromTimelineEntry(entry: TimelineProjectionEntry): HomeEvent {
+  const signalKey = entry.signalKey ?? undefined;
+  const summaryPrefix = entry.kind === 'SIGNAL' && signalKey ? `${signalKey.replace(/_/g, ' ')}: ` : '';
+  const derivedImportance: HomeEvent['importance'] =
+    entry.kind === 'SIGNAL' && (signalKey === 'RISK_SPIKE' || signalKey === 'COST_ANOMALY' || signalKey === 'COVERAGE_GAP')
+      ? 'HIGHLIGHT'
+      : 'NORMAL';
+
+  return {
+    id: entry.id,
+    propertyId: '',
+    type: (entry.eventType as HomeEvent['type']) ?? 'MILESTONE',
+    subtype: entry.kind === 'SIGNAL' ? signalKey ?? null : entry.eventType,
+    importance: derivedImportance,
+    occurredAt: entry.occurredAt,
+    endAt: null,
+    title: entry.title,
+    summary: entry.summary ? `${summaryPrefix}${entry.summary}` : entry.kind === 'SIGNAL' ? 'Derived from shared signals.' : null,
+    amount: null,
+    currency: null,
+    valueDelta: null,
+    meta: {
+      timelineProjectionKind: entry.kind,
+      sourceModel: entry.sourceModel,
+      signalKey: entry.signalKey,
+    },
+    groupKey: null,
+    createdAt: entry.occurredAt,
+    updatedAt: entry.occurredAt,
+    documents: [],
+  };
 }
 
 export type TimelineClientProps = {
@@ -73,6 +106,10 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
 
       const payload = res?.data ?? res;
       const inner = (payload as Record<string, unknown>)?.data ?? payload;
+      const timelineEntries = (inner as Record<string, unknown>)?.timelineEntries ?? [];
+      if (Array.isArray(timelineEntries) && timelineEntries.length > 0) {
+        return (timelineEntries as TimelineProjectionEntry[]).map(toHomeEventFromTimelineEntry);
+      }
       const events = (inner as Record<string, unknown>)?.events ?? [];
       return Array.isArray(events) ? (events as HomeEvent[]) : [];
     },

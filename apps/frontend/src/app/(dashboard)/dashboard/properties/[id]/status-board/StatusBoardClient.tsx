@@ -68,6 +68,7 @@ import InventoryItemDrawer from '../../../components/inventory/InventoryItemDraw
 import { getInventoryItem, listInventoryRooms } from '../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import HomeToolHeader from "@/components/tools/HomeToolHeader";
+import PropertyOrchestrationStrip from "@/components/orchestration/PropertyOrchestrationStrip";
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -388,6 +389,7 @@ export default function StatusBoardClient() {
   }
 
   const summary = data?.summary;
+  const signalSummary = data?.signalSummary;
   const items = data?.items ?? [];
   const pagination = data?.pagination;
   const groups = data?.groups;
@@ -1045,22 +1047,36 @@ export default function StatusBoardClient() {
           }
           summary={
             summary ? (
-              <ResultHeroCard
-                eyebrow="System Snapshot"
-                title="Condition Overview"
-                value={`${summary.total} items`}
-                status={
-                  <StatusChip tone={summary.actionNeeded > 0 ? "danger" : "good"}>
-                    {summary.actionNeeded > 0 ? `${summary.actionNeeded} action needed` : "All stable"}
-                  </StatusChip>
-                }
-                summary="Use filters to focus on items that need attention."
-                highlights={[
-                  `${summary.good} good`,
-                  `${summary.monitor} monitor`,
-                  `${summary.actionNeeded} action needed`,
-                ]}
-              />
+              <>
+                <ResultHeroCard
+                  eyebrow="System Snapshot"
+                  title="Condition Overview"
+                  value={`${summary.total} items`}
+                  status={
+                    <StatusChip tone={summary.actionNeeded > 0 ? "danger" : "good"}>
+                      {summary.actionNeeded > 0 ? `${summary.actionNeeded} action needed` : "All stable"}
+                    </StatusChip>
+                  }
+                  summary="Use filters to focus on items that need attention."
+                  highlights={[
+                    `${summary.good} good`,
+                    `${summary.monitor} monitor`,
+                    `${summary.actionNeeded} action needed`,
+                    ...(signalSummary
+                      ? [
+                          `Risk: ${signalSummary.riskLevel}${signalSummary.signalBacked.riskLevel ? ' (signal)' : ''}`,
+                          `Cost: ${signalSummary.costPressure}${signalSummary.signalBacked.costPressure ? ' (signal)' : ''}`,
+                          `Maintenance: ${signalSummary.maintenanceStatus}${signalSummary.signalBacked.maintenanceStatus ? ' (signal)' : ''}`,
+                        ]
+                      : []),
+                  ]}
+                />
+                <PropertyOrchestrationStrip
+                  propertyId={propertyId}
+                  contextTool="status-board"
+                  className="mt-3"
+                />
+              </>
             ) : undefined
           }
           filters={
@@ -1274,6 +1290,25 @@ export default function StatusBoardClient() {
       <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
         <div className="relative z-10 space-y-3">
         <HomeToolHeader toolId="status-board" propertyId={propertyId} />
+        <PropertyOrchestrationStrip
+          propertyId={propertyId}
+          contextTool="status-board"
+        />
+        {signalSummary ? (
+          <div className={`rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-xs text-slate-600 shadow-sm ${GLASS_CARD_CLASS}`}>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-slate-200/70 bg-white/80 px-2.5 py-1">
+                Risk: {signalSummary.riskLevel}{signalSummary.signalBacked.riskLevel ? ' (signal)' : ''}
+              </span>
+              <span className="rounded-full border border-slate-200/70 bg-white/80 px-2.5 py-1">
+                Cost: {signalSummary.costPressure}{signalSummary.signalBacked.costPressure ? ' (signal)' : ''}
+              </span>
+              <span className="rounded-full border border-slate-200/70 bg-white/80 px-2.5 py-1">
+                Maintenance: {signalSummary.maintenanceStatus}{signalSummary.signalBacked.maintenanceStatus ? ' (signal)' : ''}
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         <div className={`p-3 sm:p-4 ${GLASS_PANEL_CLASS}`}>
           <div className="flex justify-end">

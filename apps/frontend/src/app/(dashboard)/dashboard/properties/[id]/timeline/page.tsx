@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
 import TimelineClient from './TimelineClient';
-import { listHomeEvents } from './homeEventsApi';
+import { listHomeEvents, TimelineProjectionEntry } from './homeEventsApi';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
   ActionPriorityRow,
@@ -18,6 +18,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -52,6 +53,34 @@ function Badge({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
+}
+
+function toTimelineEvent(entry: TimelineProjectionEntry) {
+  const signalKey = entry.signalKey ?? undefined;
+  const derivedImportance =
+    entry.kind === 'SIGNAL' && (signalKey === 'RISK_SPIKE' || signalKey === 'COST_ANOMALY' || signalKey === 'COVERAGE_GAP')
+      ? 'HIGHLIGHT'
+      : 'NORMAL';
+
+  return {
+    id: entry.id,
+    type: entry.eventType ?? 'MILESTONE',
+    subtype: entry.kind === 'SIGNAL' ? signalKey ?? null : entry.eventType,
+    importance: derivedImportance,
+    occurredAt: entry.occurredAt,
+    title: entry.title,
+    summary:
+      entry.summary ??
+      (entry.kind === 'SIGNAL' ? 'Derived from shared signal context.' : null),
+    amount: null,
+    valueDelta: null,
+    documents: [],
+    meta: {
+      timelineProjectionKind: entry.kind,
+      sourceModel: entry.sourceModel,
+      signalKey: entry.signalKey,
+    },
+  };
 }
 function useOneShotGlow(active: boolean, durationMs = 600) {
   const [on, setOn] = useState(false);
@@ -330,6 +359,10 @@ export default function Page() {
       const res: any = await listHomeEvents(propertyId, { type: type || undefined, limit });
       const payload = res?.data ?? res;
       const inner = payload?.data ?? payload;
+      const timelineEntries = inner?.timelineEntries ?? [];
+      if (Array.isArray(timelineEntries) && timelineEntries.length > 0) {
+        return timelineEntries.map((entry: TimelineProjectionEntry) => toTimelineEvent(entry));
+      }
       const ev = inner?.events ?? [];
       return Array.isArray(ev) ? ev : [];
     },
@@ -353,6 +386,11 @@ export default function Page() {
       summary={
         <>
           <HomeToolHeader toolId="home-timeline" propertyId={propertyId} />
+          <PropertyOrchestrationStrip
+            propertyId={propertyId}
+            contextTool="home-timeline"
+            className="mt-3"
+          />
           <ResultHeroCard
             eyebrow="Property History"
             title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}

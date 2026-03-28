@@ -27,6 +27,11 @@ export type TimelineAnalysisDTO = {
   items: TimelineItemDTO[];
 };
 
+export type TimelineAnalysisResult = {
+  analysis: TimelineAnalysisDTO | null;
+  assumptionSetId: string | null;
+};
+
 export type OverrideDTO = {
   id: string;
   inventoryItemId: string | null;
@@ -35,16 +40,27 @@ export type OverrideDTO = {
   note: string | null;
 };
 
-export async function getLatestTimeline(propertyId: string) {
+export async function getLatestTimeline(propertyId: string): Promise<TimelineAnalysisResult> {
   const res = await api.get(`/api/properties/${propertyId}/capital-timeline`);
-  return res.data?.analysis as TimelineAnalysisDTO | null;
+  return {
+    analysis: (res.data?.analysis as TimelineAnalysisDTO | null) ?? null,
+    assumptionSetId: (res.data?.assumptionSetId as string | null) ?? null,
+  };
 }
 
-export async function runTimeline(propertyId: string, horizonYears: number = 10) {
+export async function runTimeline(
+  propertyId: string,
+  horizonYears: number = 10,
+  options?: { assumptionSetId?: string | null }
+): Promise<TimelineAnalysisResult> {
   const res = await api.post(`/api/properties/${propertyId}/capital-timeline/run`, {
     horizonYears,
+    ...(options?.assumptionSetId ? { assumptionSetId: options.assumptionSetId } : {}),
   });
-  return res.data?.analysis as TimelineAnalysisDTO;
+  return {
+    analysis: (res.data?.analysis as TimelineAnalysisDTO | null) ?? null,
+    assumptionSetId: (res.data?.assumptionSetId as string | null) ?? null,
+  };
 }
 
 export async function listOverrides(propertyId: string) {

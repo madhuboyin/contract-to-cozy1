@@ -25,6 +25,9 @@ import { OrchestrationSuppressionService, SuppressionSource } from './orchestrat
 import { computeActionKey } from './orchestrationActionKey';
 import { getPropertySnoozes, ActiveSnooze } from './orchestrationSnooze.service';
 import { detectCoverageGaps } from './coverageGap.service';
+import { AssumptionSetService } from './assumptionSet.service';
+import { PreferenceProfileService } from './preferenceProfile.service';
+import { SharedSignalKey, SignalDTO, signalService } from './signal.service';
 
 
 // PHASE 2.3 INTEGRATION
@@ -157,6 +160,74 @@ export type OrchestratedAction = {
   createdAt?: Date | null;
 };
 
+export type OrchestrationTargetTool =
+  | 'coverage-intelligence'
+  | 'risk-premium-optimizer'
+  | 'do-nothing'
+  | 'sell-hold-rent'
+  | 'break-even'
+  | 'capital-timeline'
+  | 'home-event-radar'
+  | 'home-risk-replay'
+  | 'home-timeline'
+  | 'status-board';
+
+export type OrchestrationNextBestMove = {
+  title: string;
+  detail: string;
+  reasonCode:
+    | 'ACTION_CENTER'
+    | 'COVERAGE_PRESSURE'
+    | 'RISK_SPIKE'
+    | 'COST_PRESSURE'
+    | 'SCENARIO_CONTINUITY'
+    | 'DEFAULT';
+  sourceActionKey?: string | null;
+  signalKey?: SharedSignalKey | null;
+  targetTool: OrchestrationTargetTool;
+  targetPath: string;
+  assumptionSetId?: string | null;
+};
+
+export type OrchestrationSignalHighlight = {
+  signalKey: SharedSignalKey;
+  label: string;
+  valueNumber: number | null;
+  valueText: string | null;
+  capturedAt: string;
+  validUntil: string | null;
+  isFresh: boolean;
+};
+
+export type OrchestrationSharedContext = {
+  generatedAt: string;
+  activeScenario: {
+    assumptionSetId: string;
+    toolKey: string;
+    scenarioKey: string | null;
+    createdAt: string;
+  } | null;
+  posture: {
+    preferenceProfileId: string;
+    riskTolerance: string | null;
+    deductiblePreferenceStyle: string | null;
+    cashBufferPosture: string | null;
+    bundlingPreference: string | null;
+    updatedAt: string;
+  } | null;
+  signalHighlights: OrchestrationSignalHighlight[];
+  strongestPressure: string | null;
+  strongestOpportunity: string | null;
+};
+
+export type OrchestrationHandoff = {
+  fromTool: OrchestrationTargetTool;
+  toTool: OrchestrationTargetTool;
+  label: string;
+  path: string;
+  assumptionSetId?: string | null;
+};
+
 export type OrchestrationSummary = {
   propertyId: string;
   pendingActionCount: number;
@@ -172,6 +243,9 @@ export type OrchestrationSummary = {
     suppressedActions: number;
     snoozedActions: number;
   };
+  nextBestMove?: OrchestrationNextBestMove | null;
+  sharedContext?: OrchestrationSharedContext | null;
+  handoffs?: OrchestrationHandoff[];
 };
 
 export interface CompletionCreateInput {
@@ -224,6 +298,340 @@ const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   'IN_PROGRESS',
   'DISPUTED',
 ];
+
+const preferenceProfileService = new PreferenceProfileService();
+const assumptionSetService = new AssumptionSetService();
+
+const SIGNAL_LABELS: Record<SharedSignalKey, string> = {
+  MAINT_ADHERENCE: 'Maintenance adherence',
+  COVERAGE_GAP: 'Coverage gap',
+  SAVINGS_REALIZATION: 'Savings realization',
+  RISK_SPIKE: 'Risk spike',
+  COST_ANOMALY: 'Cost anomaly',
+};
+
+const ORCHESTRATION_SIGNAL_KEYS: SharedSignalKey[] = [
+  'COVERAGE_GAP',
+  'MAINT_ADHERENCE',
+  'SAVINGS_REALIZATION',
+  'RISK_SPIKE',
+  'COST_ANOMALY',
+];
+
+function appendQueryParams(path: string, params: Record<string, string | null | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) query.set(key, value);
+  }
+  const qs = query.toString();
+  if (!qs) return path;
+  return path.includes('?') ? `${path}&${qs}` : `${path}?${qs}`;
+}
+
+function buildToolPath(params: {
+  propertyId: string;
+  tool: OrchestrationTargetTool;
+  assumptionSetId?: string | null;
+  fromTool?: string;
+  launchSurface?: string;
+}): string {
+  const queryParams = {
+    assumptionSetId: params.assumptionSetId ?? undefined,
+    fromTool: params.fromTool ?? undefined,
+    launchSurface: params.launchSurface ?? undefined,
+  };
+
+  switch (params.tool) {
+    case 'coverage-intelligence':
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/tools/coverage-intelligence`,
+        queryParams
+      );
+    case 'risk-premium-optimizer':
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/tools/risk-premium-optimizer`,
+        queryParams
+      );
+    case 'do-nothing':
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/tools/do-nothing`,
+        queryParams
+      );
+    case 'sell-hold-rent':
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/tools/sell-hold-rent`,
+        queryParams
+      );
+    case 'break-even':
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/tools/break-even`,
+        queryParams
+      );
+    case 'capital-timeline':
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/tools/capital-timeline`,
+        queryParams
+      );
+    case 'home-event-radar':
+      return appendQueryParams('/dashboard/home-event-radar', {
+        propertyId: params.propertyId,
+        ...queryParams,
+      });
+    case 'home-risk-replay':
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/tools/home-risk-replay`,
+        queryParams
+      );
+    case 'home-timeline':
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/timeline`,
+        queryParams
+      );
+    case 'status-board':
+    default:
+      return appendQueryParams(
+        `/dashboard/properties/${params.propertyId}/status-board`,
+        queryParams
+      );
+  }
+}
+
+function mapScenarioToolToHandoff(toolKey: string): {
+  from: OrchestrationTargetTool;
+  to: OrchestrationTargetTool;
+} | null {
+  switch (toolKey) {
+    case 'COVERAGE_ANALYSIS':
+      return { from: 'coverage-intelligence', to: 'risk-premium-optimizer' };
+    case 'RISK_PREMIUM_OPTIMIZER':
+      return { from: 'risk-premium-optimizer', to: 'do-nothing' };
+    case 'DO_NOTHING_SIMULATOR':
+      return { from: 'do-nothing', to: 'coverage-intelligence' };
+    case 'SELL_HOLD_RENT':
+      return { from: 'sell-hold-rent', to: 'break-even' };
+    case 'BREAK_EVEN':
+      return { from: 'break-even', to: 'capital-timeline' };
+    case 'HOME_CAPITAL_TIMELINE':
+      return { from: 'capital-timeline', to: 'sell-hold-rent' };
+    default:
+      return null;
+  }
+}
+
+function mapActionToTargetTool(action: OrchestratedAction): OrchestrationTargetTool {
+  if (action.actionKey.startsWith('COVERAGE_GAP::')) return 'coverage-intelligence';
+  if (action.source === 'CHECKLIST') return 'status-board';
+  if (action.category?.toUpperCase().includes('INSURANCE')) return 'coverage-intelligence';
+  if (action.riskLevel === 'HIGH' || action.riskLevel === 'CRITICAL') return 'risk-premium-optimizer';
+  return 'do-nothing';
+}
+
+function signalToHighlight(signalKey: SharedSignalKey, signal: SignalDTO | undefined): OrchestrationSignalHighlight | null {
+  if (!signal) return null;
+  const validUntil = signal.validUntil ? new Date(signal.validUntil) : null;
+  const isFresh = validUntil ? validUntil.getTime() > Date.now() : true;
+  return {
+    signalKey,
+    label: SIGNAL_LABELS[signalKey],
+    valueNumber: typeof signal.valueNumber === 'number' ? signal.valueNumber : null,
+    valueText: typeof signal.valueText === 'string' ? signal.valueText : null,
+    capturedAt: signal.capturedAt,
+    validUntil: signal.validUntil ?? null,
+    isFresh,
+  };
+}
+
+function computeStrongestPressure(
+  actions: OrchestratedAction[],
+  signalHighlights: OrchestrationSignalHighlight[]
+): string | null {
+  const topAction = actions[0];
+  if (topAction) {
+    if (topAction.actionKey.startsWith('COVERAGE_GAP::')) {
+      return `Coverage pressure: ${topAction.title}`;
+    }
+    if (topAction.riskLevel === 'HIGH' || topAction.riskLevel === 'CRITICAL') {
+      return `Risk pressure: ${topAction.title}`;
+    }
+    return topAction.title;
+  }
+
+  const riskSpike = signalHighlights.find((signal) => signal.signalKey === 'RISK_SPIKE');
+  if (riskSpike?.valueNumber != null && riskSpike.valueNumber >= 0.55) {
+    return 'Recent risk conditions are elevated for this property';
+  }
+
+  const costAnomaly = signalHighlights.find((signal) => signal.signalKey === 'COST_ANOMALY');
+  if (costAnomaly?.valueNumber != null && costAnomaly.valueNumber >= 0.55) {
+    return 'Cost pressure is trending above baseline';
+  }
+
+  return null;
+}
+
+function computeStrongestOpportunity(signalHighlights: OrchestrationSignalHighlight[]): string | null {
+  const savings = signalHighlights.find((signal) => signal.signalKey === 'SAVINGS_REALIZATION');
+  if (savings?.valueNumber != null && savings.valueNumber > 0) {
+    return `Savings realization signal indicates about $${Math.round(savings.valueNumber).toLocaleString()}/year impact`;
+  }
+
+  const maintenance = signalHighlights.find((signal) => signal.signalKey === 'MAINT_ADHERENCE');
+  if (maintenance?.valueNumber != null && maintenance.valueNumber >= 0.8) {
+    return 'Maintenance adherence is strong, which lowers avoidable risk';
+  }
+
+  return null;
+}
+
+function buildNextBestMove(params: {
+  propertyId: string;
+  actions: OrchestratedAction[];
+  activeScenario: {
+    assumptionSetId: string;
+    toolKey: string;
+  } | null;
+  signalHighlights: OrchestrationSignalHighlight[];
+}): OrchestrationNextBestMove {
+  const topAction = params.actions[0];
+  if (topAction) {
+    const targetTool = mapActionToTargetTool(topAction);
+    return {
+      title: topAction.title,
+      detail:
+        topAction.description ||
+        topAction.cta?.label ||
+        'This is currently the highest-priority action across aligned tools.',
+      reasonCode: 'ACTION_CENTER',
+      sourceActionKey: topAction.actionKey,
+      signalKey: topAction.actionKey.startsWith('COVERAGE_GAP::') ? 'COVERAGE_GAP' : null,
+      targetTool,
+      targetPath: buildToolPath({
+        propertyId: params.propertyId,
+        tool: targetTool,
+        assumptionSetId: params.activeScenario?.assumptionSetId ?? null,
+        fromTool: 'orchestration-summary',
+        launchSurface: 'orchestration-summary',
+      }),
+      assumptionSetId: params.activeScenario?.assumptionSetId ?? null,
+    };
+  }
+
+  const coverageGap = params.signalHighlights.find((signal) => signal.signalKey === 'COVERAGE_GAP');
+  if (coverageGap?.valueNumber != null && coverageGap.valueNumber > 0) {
+    return {
+      title: 'Review current coverage gaps',
+      detail: 'Coverage Intelligence found open gaps. Review and tighten protection before rerunning downstream tools.',
+      reasonCode: 'COVERAGE_PRESSURE',
+      signalKey: 'COVERAGE_GAP',
+      targetTool: 'coverage-intelligence',
+      targetPath: buildToolPath({
+        propertyId: params.propertyId,
+        tool: 'coverage-intelligence',
+        assumptionSetId: params.activeScenario?.assumptionSetId ?? null,
+        fromTool: 'orchestration-summary',
+        launchSurface: 'orchestration-summary',
+      }),
+      assumptionSetId: params.activeScenario?.assumptionSetId ?? null,
+    };
+  }
+
+  const riskSpike = params.signalHighlights.find((signal) => signal.signalKey === 'RISK_SPIKE');
+  if (riskSpike?.valueNumber != null && riskSpike.valueNumber >= 0.55) {
+    return {
+      title: 'Replay recent risk conditions',
+      detail: 'Home Risk Replay can explain what changed and how current risk pressure developed.',
+      reasonCode: 'RISK_SPIKE',
+      signalKey: 'RISK_SPIKE',
+      targetTool: 'home-risk-replay',
+      targetPath: buildToolPath({
+        propertyId: params.propertyId,
+        tool: 'home-risk-replay',
+        fromTool: 'orchestration-summary',
+        launchSurface: 'orchestration-summary',
+      }),
+    };
+  }
+
+  const costAnomaly = params.signalHighlights.find((signal) => signal.signalKey === 'COST_ANOMALY');
+  if (costAnomaly?.valueNumber != null && costAnomaly.valueNumber >= 0.55) {
+    return {
+      title: 'Re-check break-even assumptions',
+      detail: 'Cost pressure shifted. Validate break-even timing with current financial assumptions.',
+      reasonCode: 'COST_PRESSURE',
+      signalKey: 'COST_ANOMALY',
+      targetTool: 'break-even',
+      targetPath: buildToolPath({
+        propertyId: params.propertyId,
+        tool: 'break-even',
+        assumptionSetId: params.activeScenario?.assumptionSetId ?? null,
+        fromTool: 'orchestration-summary',
+        launchSurface: 'orchestration-summary',
+      }),
+      assumptionSetId: params.activeScenario?.assumptionSetId ?? null,
+    };
+  }
+
+  if (params.activeScenario) {
+    const handoff = mapScenarioToolToHandoff(params.activeScenario.toolKey);
+    if (handoff) {
+      return {
+        title: `Continue shared scenario in ${handoff.to.replace(/-/g, ' ')}`,
+        detail: 'A reusable assumption set is active. Continue the same scenario in the next aligned tool.',
+        reasonCode: 'SCENARIO_CONTINUITY',
+        targetTool: handoff.to,
+        targetPath: buildToolPath({
+          propertyId: params.propertyId,
+          tool: handoff.to,
+          assumptionSetId: params.activeScenario.assumptionSetId,
+          fromTool: handoff.from,
+          launchSurface: 'orchestration-summary',
+        }),
+        assumptionSetId: params.activeScenario.assumptionSetId,
+      };
+    }
+  }
+
+  return {
+    title: 'Review current home status',
+    detail: 'No urgent orchestration pressure was detected. Review signal-backed status for current priorities.',
+    reasonCode: 'DEFAULT',
+    targetTool: 'status-board',
+    targetPath: buildToolPath({
+      propertyId: params.propertyId,
+      tool: 'status-board',
+      fromTool: 'orchestration-summary',
+      launchSurface: 'orchestration-summary',
+    }),
+  };
+}
+
+function buildScenarioHandoffs(params: {
+  propertyId: string;
+  activeScenario: {
+    assumptionSetId: string;
+    toolKey: string;
+  } | null;
+}): OrchestrationHandoff[] {
+  if (!params.activeScenario) return [];
+  const handoff = mapScenarioToolToHandoff(params.activeScenario.toolKey);
+  if (!handoff) return [];
+
+  return [
+    {
+      fromTool: handoff.from,
+      toTool: handoff.to,
+      label: `Continue scenario in ${handoff.to.replace(/-/g, ' ')}`,
+      path: buildToolPath({
+        propertyId: params.propertyId,
+        tool: handoff.to,
+        assumptionSetId: params.activeScenario.assumptionSetId,
+        fromTool: handoff.from,
+        launchSurface: 'orchestration-summary',
+      }),
+      assumptionSetId: params.activeScenario.assumptionSetId,
+    },
+  ];
+}
 
 function safeParseDate(dateLike: unknown): Date | null {
   if (!dateLike) return null;
@@ -1220,13 +1628,84 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   };
 
     // Persist decision traces (Option B) — best effort, non-breaking
-    try {
+  try {
       const all = [...actions, ...suppressedActions, ...snoozedActions];
       await persistDecisionTraces({ propertyId, actions: all, algoVersion: 'v1' });
     } catch (e) {
       console.warn('[ORCHESTRATION] decision trace persistence failed:', e);
     }
-      
+
+  let sharedContext: OrchestrationSharedContext | null = null;
+  let nextBestMove: OrchestrationNextBestMove | null = null;
+  let handoffs: OrchestrationHandoff[] = [];
+
+  try {
+    const [profile, assumptionSets, latestSignals] = await Promise.all([
+      preferenceProfileService.getCurrentProfile(propertyId),
+      assumptionSetService.listRecent(propertyId, { limit: 12 }),
+      signalService.getLatestSignalsByKey(propertyId, ORCHESTRATION_SIGNAL_KEYS, { freshOnly: false }),
+    ]);
+
+    const activeScenario =
+      assumptionSets.length > 0
+        ? {
+            assumptionSetId: assumptionSets[0].id,
+            toolKey: assumptionSets[0].toolKey,
+            scenarioKey: assumptionSets[0].scenarioKey,
+            createdAt: assumptionSets[0].createdAt,
+          }
+        : null;
+
+    const signalHighlights = ORCHESTRATION_SIGNAL_KEYS
+      .map((key) => signalToHighlight(key, latestSignals[key]))
+      .filter((entry): entry is OrchestrationSignalHighlight => Boolean(entry));
+
+    const strongestPressure = computeStrongestPressure(actions, signalHighlights);
+    const strongestOpportunity = computeStrongestOpportunity(signalHighlights);
+
+    sharedContext = {
+      generatedAt: new Date().toISOString(),
+      activeScenario,
+      posture: profile
+        ? {
+            preferenceProfileId: profile.id,
+            riskTolerance: profile.riskTolerance,
+            deductiblePreferenceStyle: profile.deductiblePreferenceStyle,
+            cashBufferPosture: profile.cashBufferPosture,
+            bundlingPreference: profile.bundlingPreference,
+            updatedAt: profile.updatedAt,
+          }
+        : null,
+      signalHighlights,
+      strongestPressure,
+      strongestOpportunity,
+    };
+
+    nextBestMove = buildNextBestMove({
+      propertyId,
+      actions,
+      activeScenario: activeScenario
+        ? {
+            assumptionSetId: activeScenario.assumptionSetId,
+            toolKey: activeScenario.toolKey,
+          }
+        : null,
+      signalHighlights,
+    });
+
+    handoffs = buildScenarioHandoffs({
+      propertyId,
+      activeScenario: activeScenario
+        ? {
+            assumptionSetId: activeScenario.assumptionSetId,
+            toolKey: activeScenario.toolKey,
+          }
+        : null,
+    });
+  } catch (error) {
+    console.warn('[ORCHESTRATION] shared context enrichment failed:', error);
+  }
+
   return {
     propertyId,
     pendingActionCount: actions.length,
@@ -1240,6 +1719,9 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       suppressedActions: suppressedActions.length,
       snoozedActions: snoozedActions.length,
     },
+    nextBestMove,
+    sharedContext,
+    handoffs,
   };
 }
 

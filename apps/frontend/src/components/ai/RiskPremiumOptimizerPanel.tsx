@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 import {
   getRiskPremiumOptimizer,
@@ -72,6 +73,8 @@ function priorityTone(priority: 'LOW' | 'MEDIUM' | 'HIGH') {
 }
 
 export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOptimizerPanelProps) {
+  const searchParams = useSearchParams();
+  const requestedAssumptionSetId = searchParams.get('assumptionSetId');
   const [analysis, setAnalysis] = useState<RiskPremiumOptimizationDTO | null>(null);
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -126,7 +129,9 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
     setRunning(true);
     setError(null);
     try {
-      const next = await runRiskPremiumOptimizer(propertyId, normalizedOverrides);
+      const next = await runRiskPremiumOptimizer(propertyId, normalizedOverrides, {
+        assumptionSetId: requestedAssumptionSetId,
+      });
       setHasAnalysis(true);
       setAnalysis(next);
       setRerunRecommended(false);

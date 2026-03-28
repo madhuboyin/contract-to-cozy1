@@ -147,6 +147,7 @@ function buildOverrides(form: FormState): DoNothingInputOverrides {
 
 export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulatorPanelProps) {
   const searchParams = useSearchParams();
+  const requestedAssumptionSetId = searchParams.get('assumptionSetId');
   const [scenarios, setScenarios] = useState<DoNothingScenarioDTO[]>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>(CUSTOM_SCENARIO_KEY);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM_STATE);
@@ -321,6 +322,7 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
             : undefined,
         horizonMonths: form.horizonMonths,
         inputOverrides: buildOverrides(form),
+        ...(requestedAssumptionSetId ? { assumptionSetId: requestedAssumptionSetId } : {}),
       }, {
         guidanceJourneyId: searchParams.get('guidanceJourneyId'),
         guidanceStepKey: searchParams.get('guidanceStepKey'),

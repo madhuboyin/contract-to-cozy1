@@ -14,6 +14,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 export default function CoverageIntelligenceToolClient() {
   const params = useParams<{ id: string }>();
@@ -54,6 +55,8 @@ export default function CoverageIntelligenceToolClient() {
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
+
+      <PropertyOrchestrationStrip propertyId={propertyId} contextTool="coverage-intelligence" />
 
       <GuidanceInlinePanel
         propertyId={propertyId}

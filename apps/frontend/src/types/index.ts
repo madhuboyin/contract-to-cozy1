@@ -1801,6 +1801,62 @@ export interface OrchestratedActionDTO {
   createdAt?: string | null;
 }
 
+export interface OrchestrationSignalHighlightDTO {
+  signalKey: string;
+  label: string;
+  valueNumber: number | null;
+  valueText: string | null;
+  capturedAt: string;
+  validUntil: string | null;
+  isFresh: boolean;
+}
+
+export interface OrchestrationSharedContextDTO {
+  generatedAt: string;
+  activeScenario: {
+    assumptionSetId: string;
+    toolKey: string;
+    scenarioKey: string | null;
+    createdAt: string;
+  } | null;
+  posture: {
+    preferenceProfileId: string;
+    riskTolerance: string | null;
+    deductiblePreferenceStyle: string | null;
+    cashBufferPosture: string | null;
+    bundlingPreference: string | null;
+    updatedAt: string;
+  } | null;
+  signalHighlights: OrchestrationSignalHighlightDTO[];
+  strongestPressure: string | null;
+  strongestOpportunity: string | null;
+}
+
+export interface OrchestrationNextBestMoveDTO {
+  title: string;
+  detail: string;
+  reasonCode:
+    | 'ACTION_CENTER'
+    | 'COVERAGE_PRESSURE'
+    | 'RISK_SPIKE'
+    | 'COST_PRESSURE'
+    | 'SCENARIO_CONTINUITY'
+    | 'DEFAULT';
+  sourceActionKey?: string | null;
+  signalKey?: string | null;
+  targetTool: string;
+  targetPath: string;
+  assumptionSetId?: string | null;
+}
+
+export interface OrchestrationHandoffDTO {
+  fromTool: string;
+  toTool: string;
+  label: string;
+  path: string;
+  assumptionSetId?: string | null;
+}
+
 /**
  * Orchestration Summary DTO
  */
@@ -1826,6 +1882,10 @@ export interface OrchestrationSummaryDTO {
     suppressedActions: number;
     snoozedActions: number;
   };
+
+  nextBestMove?: OrchestrationNextBestMoveDTO | null;
+  sharedContext?: OrchestrationSharedContextDTO | null;
+  handoffs?: OrchestrationHandoffDTO[];
 }
 
 export type SuppressionSourceDTO =

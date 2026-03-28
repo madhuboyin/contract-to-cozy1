@@ -3,7 +3,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import MultiLineChart from '../cost-growth/MultiLineChart';
@@ -13,6 +13,7 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 import ComparisonBars from './ComparisonBars';
 import {
@@ -46,6 +47,8 @@ function toNum(v: string): number | undefined {
 export default function SellHoldRentClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const requestedAssumptionSetId = searchParams.get('assumptionSetId');
 
   const [years, setYears] = useState<5 | 10>(5);
 
@@ -75,14 +78,17 @@ export default function SellHoldRentClient() {
     setError(null);
 
     try {
-      const dto = await getSellHoldRent(propertyId, { years: y });
+      const dto = await getSellHoldRent(propertyId, {
+        years: y,
+        assumptionSetId: requestedAssumptionSetId ?? undefined,
+      });
       setData(dto);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load simulator');
     } finally {
       setLoading(false);
     }
-  }, [propertyId]);
+  }, [propertyId, requestedAssumptionSetId]);
 
   const loadOverrides = useCallback(async () => {
     if (!propertyId) return;
@@ -175,6 +181,8 @@ export default function SellHoldRentClient() {
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="sell-hold-rent" currentToolId="sell-hold-rent" />
       </MobileFilterSurface>
+
+      <PropertyOrchestrationStrip propertyId={propertyId} contextTool="sell-hold-rent" />
 
       <div className="rounded-2xl border border-white/70 bg-white/65 p-3 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
         <div className="flex flex-wrap items-center justify-between gap-3">

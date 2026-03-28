@@ -20,6 +20,7 @@ export type GuidanceToolContext = {
   guidanceStepKey?: string | null;
   guidanceSignalIntentFamily?: string | null;
   inventoryItemId?: string | null;
+  assumptionSetId?: string | null;
 };
 
 export type ItemCoverageType = 'WARRANTY' | 'SERVICE_PLAN';
@@ -47,6 +48,8 @@ export type CoverageAnalysisDTO = {
 
   confidence: CoverageConfidence;
   impactLevel?: CoverageImpactLevel;
+  assumptionSetId?: string | null;
+  preferenceProfileId?: string | null;
 
   summary?: string;
   nextSteps?: Array<{
@@ -169,6 +172,9 @@ export async function runCoverageAnalysis(
         : {}),
       ...(guidanceContext?.inventoryItemId
         ? { inventoryItemId: guidanceContext.inventoryItemId }
+        : {}),
+      ...(guidanceContext?.assumptionSetId
+        ? { assumptionSetId: guidanceContext.assumptionSetId }
         : {}),
     }
   );

@@ -3,6 +3,7 @@ import { api } from '@/lib/api/client';
 
 export type SellHoldRentInput = {
   years?: 5 | 10;
+  assumptionSetId?: string;
 
   // Scenario overrides
   homeValueNow?: number;
@@ -211,6 +212,7 @@ export async function getSellHoldRent(propertyId: string, input: SellHoldRentInp
   add('rentGrowthRate', input.rentGrowthRate);
   add('vacancyRate', input.vacancyRate);
   add('managementRate', input.managementRate);
+  add('assumptionSetId', input.assumptionSetId);
 
   // IMPORTANT:
   // This controller returns a keyed payload: { sellHoldRent: dto }

@@ -95,6 +95,9 @@ export function adaptOrchestrationSummary(
 
   counts: OrchestrationSummaryDTO['counts'];
   derivedFrom: OrchestrationSummaryDTO['derivedFrom'];
+  nextBestMove?: OrchestrationSummaryDTO['nextBestMove'];
+  sharedContext?: OrchestrationSummaryDTO['sharedContext'];
+  handoffs?: OrchestrationSummaryDTO['handoffs'];
 } {
   return {
     propertyId: dto.propertyId,
@@ -106,5 +109,8 @@ export function adaptOrchestrationSummary(
 
     counts: dto.counts,
     derivedFrom: dto.derivedFrom,
+    nextBestMove: dto.nextBestMove ?? null,
+    sharedContext: dto.sharedContext ?? null,
+    handoffs: dto.handoffs ?? [],
   };
 }

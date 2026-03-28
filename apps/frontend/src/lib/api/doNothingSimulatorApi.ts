@@ -29,6 +29,9 @@ export type DoNothingRunDTO = {
   propertyId: string;
   homeownerProfileId: string;
   scenarioId?: string | null;
+  assumptionSetId?: string | null;
+  preferenceProfileId?: string | null;
+  sharedSignalsUsed?: string[];
 
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -78,6 +81,7 @@ export type RunDoNothingSimulationPayload = {
   scenarioId?: string;
   horizonMonths: 6 | 12 | 24 | 36;
   inputOverrides?: DoNothingInputOverrides;
+  assumptionSetId?: string;
 };
 
 export type GuidanceToolContext = {

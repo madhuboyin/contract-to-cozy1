@@ -12,6 +12,7 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 export default function RiskPremiumOptimizerToolClient() {
   const params = useParams<{ id: string }>();
@@ -49,6 +50,8 @@ export default function RiskPremiumOptimizerToolClient() {
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
+
+      <PropertyOrchestrationStrip propertyId={propertyId} contextTool="risk-premium-optimizer" />
 
       <ToolExplainerSection toolKey="riskToPremiumOptimizer" id="how-it-works" />
 

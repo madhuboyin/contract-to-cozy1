@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 import HomeToolsRail from '../../components/HomeToolsRail';
@@ -13,6 +13,7 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 import MultiLineChart from '../insurance-trend/MultiLineChart';
 import { getBreakEven, BreakEvenDTO } from './breakEvenApi';
@@ -40,6 +41,8 @@ function breakEvenHeadline(dto: BreakEvenDTO | null) {
 export default function BreakEvenClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const requestedAssumptionSetId = searchParams.get('assumptionSetId');
 
   const [years, setYears] = useState<5 | 10 | 20 | 30>(20);
   const [loading, setLoading] = useState(false);
@@ -55,7 +58,10 @@ export default function BreakEvenClient() {
 
     const reqId = ++reqRef.current;
     try {
-      const r = await getBreakEven(propertyId, { years: nextYears });
+      const r = await getBreakEven(propertyId, {
+        years: nextYears,
+        assumptionSetId: requestedAssumptionSetId ?? undefined,
+      });
       if (reqId !== reqRef.current) return;
       setData(r);
     } catch (e: unknown) {
@@ -70,7 +76,7 @@ export default function BreakEvenClient() {
     if (!propertyId) return;
     load(years);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId]);
+  }, [propertyId, requestedAssumptionSetId]);
 
   const chartModel = useMemo(() => {
     const hist = data?.history ?? [];
@@ -128,6 +134,8 @@ export default function BreakEvenClient() {
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="break-even" currentToolId="break-even" />
       </MobileFilterSurface>
+
+      <PropertyOrchestrationStrip propertyId={propertyId} contextTool="break-even" />
 
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
         <div className="flex flex-wrap items-start justify-between gap-4">

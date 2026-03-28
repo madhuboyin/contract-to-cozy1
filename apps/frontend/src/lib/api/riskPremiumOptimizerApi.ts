@@ -18,6 +18,9 @@ export type RiskPremiumOptimizationDTO = {
   id: string;
   propertyId: string;
   homeownerProfileId: string;
+  assumptionSetId?: string | null;
+  preferenceProfileId?: string | null;
+  sharedSignalsUsed?: string[];
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   summary?: string;
@@ -95,11 +98,17 @@ export async function getRiskPremiumOptimizer(
 
 export async function runRiskPremiumOptimizer(
   propertyId: string,
-  overrides?: RiskPremiumOptimizerOverrides
+  overrides?: RiskPremiumOptimizerOverrides,
+  options?: {
+    assumptionSetId?: string | null;
+  }
 ): Promise<RiskPremiumOptimizationDTO> {
   const res = await api.post<{ analysis: RiskPremiumOptimizationDTO }>(
     `/api/properties/${propertyId}/risk-premium-optimizer/run`,
-    { overrides: overrides ?? {} }
+    {
+      overrides: overrides ?? {},
+      ...(options?.assumptionSetId ? { assumptionSetId: options.assumptionSetId } : {}),
+    }
   );
   return res.data.analysis;
 }

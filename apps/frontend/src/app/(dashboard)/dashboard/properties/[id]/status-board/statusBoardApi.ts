@@ -52,11 +52,23 @@ export interface StatusBoardPagination {
   totalPages: number;
 }
 
+export interface StatusBoardSignalSummary {
+  riskLevel: string;
+  costPressure: string;
+  maintenanceStatus: string;
+  signalBacked: {
+    riskLevel: boolean;
+    costPressure: boolean;
+    maintenanceStatus: boolean;
+  };
+}
+
 export interface StatusBoardResponse {
   items: StatusBoardItemDTO[];
   summary: StatusBoardSummary;
   pagination: StatusBoardPagination;
   groups?: Record<string, StatusBoardItemDTO[]>;
+  signalSummary?: StatusBoardSignalSummary;
 }
 
 export interface ListBoardParams {

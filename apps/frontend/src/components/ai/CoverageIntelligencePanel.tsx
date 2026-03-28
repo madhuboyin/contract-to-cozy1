@@ -358,6 +358,7 @@ export default function CoverageIntelligencePanel({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const requestedAssumptionSetId = searchParams.get('assumptionSetId');
   const [analysis, setAnalysis] = useState<CoverageAnalysisDTO | null>(null);
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -433,6 +434,7 @@ export default function CoverageIntelligencePanel({
         guidanceStepKey: searchParams.get('guidanceStepKey'),
         guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
         inventoryItemId: searchParams.get('itemId'),
+        assumptionSetId: requestedAssumptionSetId,
       });
       setHasAnalysis(true);
       setAnalysis(latest);

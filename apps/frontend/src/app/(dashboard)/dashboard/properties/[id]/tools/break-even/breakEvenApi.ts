@@ -79,6 +79,7 @@ export async function getBreakEven(
     homeValueNow?: number;
     appreciationRate?: number;
     expenseGrowthRate?: number;
+    assumptionSetId?: string;
   }
 ): Promise<BreakEvenDTO> {
   const params = new URLSearchParams();
@@ -86,6 +87,7 @@ export async function getBreakEven(
   if (opts?.homeValueNow !== undefined) params.set('homeValueNow', String(opts.homeValueNow));
   if (opts?.appreciationRate !== undefined) params.set('appreciationRate', String(opts.appreciationRate));
   if (opts?.expenseGrowthRate !== undefined) params.set('expenseGrowthRate', String(opts.expenseGrowthRate));
+  if (opts?.assumptionSetId) params.set('assumptionSetId', opts.assumptionSetId);
 
   const q = params.toString();
   const url = `/api/properties/${propertyId}/tools/break-even${q ? `?${q}` : ''}`;

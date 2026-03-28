@@ -33,6 +33,7 @@ import {
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -120,11 +121,13 @@ export default function CapitalTimelineClient() {
   const searchParams = useSearchParams();
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const requestedAssumptionSetId = searchParams.get('assumptionSetId');
 
   const [horizonYears, setHorizonYears] = useState<5 | 10>(10);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [data, setData] = useState<TimelineAnalysisDTO | null>(null);
+  const [activeAssumptionSetId, setActiveAssumptionSetId] = useState<string | null>(requestedAssumptionSetId);
   const [error, setError] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
@@ -137,13 +140,16 @@ export default function CapitalTimelineClient() {
 
     try {
       const reqId = ++reqRef.current;
-      const analysis = await getLatestTimeline(propertyId);
+      const latest = await getLatestTimeline(propertyId);
       if (reqId !== reqRef.current) return;
+      if (latest.assumptionSetId) {
+        setActiveAssumptionSetId(latest.assumptionSetId);
+      }
 
-      if (!analysis || analysis.status === 'STALE') {
-        await doRun(horizonYears);
+      if (!latest.analysis || latest.analysis.status === 'STALE') {
+        await doRun(horizonYears, latest.assumptionSetId ?? activeAssumptionSetId);
       } else {
-        setData(analysis);
+        setData(latest.analysis);
         setLoading(false);
       }
     } catch (e: unknown) {
@@ -152,16 +158,21 @@ export default function CapitalTimelineClient() {
     }
   }
 
-  async function doRun(horizon: 5 | 10) {
+  async function doRun(horizon: 5 | 10, assumptionSetId: string | null = activeAssumptionSetId) {
     if (!propertyId) return;
     setRunning(true);
     setError(null);
 
     try {
       const reqId = ++reqRef.current;
-      const analysis = await runTimeline(propertyId, horizon);
+      const next = await runTimeline(propertyId, horizon, {
+        assumptionSetId,
+      });
       if (reqId !== reqRef.current) return;
-      setData(analysis);
+      setData(next.analysis);
+      if (next.assumptionSetId) {
+        setActiveAssumptionSetId(next.assumptionSetId);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to compute timeline');
     } finally {
@@ -175,9 +186,15 @@ export default function CapitalTimelineClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
+  useEffect(() => {
+    if (requestedAssumptionSetId) {
+      setActiveAssumptionSetId(requestedAssumptionSetId);
+    }
+  }, [requestedAssumptionSetId]);
+
   function handleHorizonChange(h: 5 | 10) {
     setHorizonYears(h);
-    doRun(h);
+    doRun(h, activeAssumptionSetId);
   }
 
   function toggleExpand(itemId: string) {
@@ -239,6 +256,8 @@ export default function CapitalTimelineClient() {
           </button>
         </MobileActionRow>
       </MobileFilterSurface>
+
+      <PropertyOrchestrationStrip propertyId={propertyId} contextTool="capital-timeline" />
 
       {/* Loading */}
       {(loading || running) && !data && (

@@ -41,6 +41,21 @@ export interface HomeEvent {
   documents: HomeEventDocument[];
 }
 
+export interface TimelineProjectionEntry {
+  id: string;
+  kind: 'EVENT' | 'SIGNAL';
+  occurredAt: string;
+  title: string;
+  summary: string | null;
+  eventType: string | null;
+  signalKey: string | null;
+  sourceModel: string;
+  sourceId: string;
+  roomId: string | null;
+  homeItemId: string | null;
+  payloadJson: Record<string, unknown> | null;
+}
+
 export type HomeEventListParams = {
   type?: string;
   importance?: string;
@@ -54,6 +69,8 @@ export type HomeEventListParams = {
 
 type HomeEventsResponse = {
   events: HomeEvent[];
+  signalEvents?: TimelineProjectionEntry[];
+  timelineEntries?: TimelineProjectionEntry[];
 };
 export async function listHomeEvents(propertyId: string, params: HomeEventListParams = {}) {
   const qs = new URLSearchParams();
