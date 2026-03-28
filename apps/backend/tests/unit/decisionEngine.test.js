@@ -1,10 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+require('ts-node/register');
+
 const {
   computeDecisionScore,
   runDecisionEngine,
-} = require('../../dist/services/decisionEngine.service.js');
+} = require('../../src/services/decisionEngine.service.ts');
 
 function baseCandidate(overrides = {}) {
   return {
@@ -156,4 +158,14 @@ test('runDecisionEngine includes trace context for surfaced recommendation', () 
   assert.ok(Array.isArray(recommendation.trace.postureInputs));
   assert.ok(Array.isArray(recommendation.trace.assumptionInputs));
   assert.ok(Array.isArray(recommendation.trace.suppressionsConsidered));
+});
+
+test('runDecisionEngine diagnostics include explicit decision model version', () => {
+  const result = runDecisionEngine({
+    candidates: [baseCandidate()],
+    recommendationLimit: 1,
+  });
+
+  assert.ok(typeof result.diagnostics.decisionModelVersion === 'string');
+  assert.ok(result.diagnostics.decisionModelVersion.length > 0);
 });

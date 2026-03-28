@@ -97,3 +97,18 @@ export async function getSharedSignalHealthHandler(req: Request, res: Response):
     });
   }
 }
+
+export async function getSharedDataDiagnosticsHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const diagnostics = await sharedDataBackfillService.getOperationalDiagnostics(parseScope(req));
+    res.json({ success: true, data: diagnostics });
+  } catch (error: any) {
+    console.error('[ADMIN-SHARED-DATA] Failed to build operational diagnostics report:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error?.message || 'Failed to build operational diagnostics report.',
+      },
+    });
+  }
+}

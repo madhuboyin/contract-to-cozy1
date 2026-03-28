@@ -18,6 +18,7 @@ import {
 } from './assumptionSet.service';
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 import { SharedSignalKey, signalService } from './signal.service';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -491,7 +492,7 @@ export class RiskPremiumOptimizerService {
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 36);
 
-    const [policies, claims, inventoryItems, propertyDocuments, sharedSignals] = await Promise.all([
+    const [policies, claims, inventoryItems, propertyDocuments, sharedSignalLookup] = await Promise.all([
       prisma.insurancePolicy.findMany({
         where: { propertyId },
         orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
@@ -543,12 +544,30 @@ export class RiskPremiumOptimizerService {
           createdAt: true,
         },
       }),
-      signalService.getLatestSignalsByKey(
+      signalService.getLatestSignalsByKeyWithFreshFallback(
         propertyId,
         ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION', 'RISK_ACCUMULATION', 'FINANCIAL_DISCIPLINE'],
-        { freshOnly: true }
+        {
+          freshOnly: true,
+          refreshIfStale: true,
+          refreshReason: 'risk-premium-optimizer',
+        }
       ),
     ]);
+    const sharedSignals = sharedSignalLookup.signals;
+    if (sharedSignalLookup.fallbackUsed) {
+      logSharedDataEvent({
+        event: 'risk_premium.signal_fallback_used',
+        level: 'INFO',
+        propertyId,
+        toolKey: 'RISK_PREMIUM_OPTIMIZER',
+        fallbackPath: 'signal-refresh',
+        metadata: {
+          refreshedSignals: sharedSignalLookup.refreshSummary?.refreshedSignals ?? [],
+          skippedSignals: sharedSignalLookup.refreshSummary?.skippedSignals ?? [],
+        },
+      });
+    }
 
     const activePolicy =
       policies.find((policy) => policy.startDate <= now && policy.expiryDate >= now) ?? policies[0] ?? null;
@@ -594,10 +613,26 @@ export class RiskPremiumOptimizerService {
     const sharedSignalsUsed = (Object.keys(sharedSignals) as SharedSignalKey[]).filter(
       (signalKey) => Boolean(sharedSignals[signalKey])
     );
-    const signalInteractionContext = await signalService.getSignalInteractionContext(propertyId, {
-      freshOnly: true,
-      cashBufferAmount: cashBuffer ?? null,
-    });
+    const signalInteractionContext = await signalService
+      .getSignalInteractionContext(propertyId, {
+        freshOnly: true,
+        cashBufferAmount: cashBuffer ?? null,
+      })
+      .catch((error) => {
+        logSharedDataEvent({
+          event: 'risk_premium.signal_interaction_context_fallback',
+          level: 'WARN',
+          propertyId,
+          toolKey: 'RISK_PREMIUM_OPTIMIZER',
+          fallbackPath: 'empty-signal-interaction-context',
+          error,
+        });
+        return {
+          signals: {},
+          interactions: [],
+          staleSignals: [],
+        };
+      });
 
     const claimsByPeril = claims.reduce<Record<Peril, number>>(
       (acc, claim) => {

@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { runMatchingForEvent } from './homeEventRadarMatcher.service';
 import { SharedSignalKey, signalService } from './signal.service';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -289,10 +290,44 @@ export class HomeEventRadarService {
       'RISK_ACCUMULATION',
       'COST_PRESSURE_PATTERN',
     ];
-    const latestSignals = await signalService.getLatestSignalsByKey(propertyId, signalKeys, { freshOnly: true });
-    const signalInteractions = await signalService.getSignalInteractionContext(propertyId, {
+    const signalLookup = await signalService.getLatestSignalsByKeyWithFreshFallback(propertyId, signalKeys, {
       freshOnly: true,
+      refreshIfStale: true,
+      refreshReason: 'home-event-radar',
     });
+    const latestSignals = signalLookup.signals;
+    if (signalLookup.fallbackUsed) {
+      logSharedDataEvent({
+        event: 'event_radar.signal_fallback_used',
+        level: 'INFO',
+        propertyId,
+        toolKey: 'HOME_EVENT_RADAR',
+        fallbackPath: 'signal-refresh',
+        metadata: {
+          refreshedSignals: signalLookup.refreshSummary?.refreshedSignals ?? [],
+          skippedSignals: signalLookup.refreshSummary?.skippedSignals ?? [],
+        },
+      });
+    }
+    const signalInteractions = await signalService
+      .getSignalInteractionContext(propertyId, {
+        freshOnly: true,
+      })
+      .catch((error) => {
+        logSharedDataEvent({
+          event: 'event_radar.signal_interaction_context_fallback',
+          level: 'WARN',
+          propertyId,
+          toolKey: 'HOME_EVENT_RADAR',
+          fallbackPath: 'empty-signal-interaction-context',
+          error,
+        });
+        return {
+          signals: {},
+          interactions: [],
+          staleSignals: [],
+        };
+      });
 
     const riskSpike = toSignalNumber(latestSignals.RISK_SPIKE?.valueNumber);
     const costAnomaly = toSignalNumber(latestSignals.COST_ANOMALY?.valueNumber);

@@ -22,6 +22,7 @@ import {
 } from './eventSignalProjection.service';
 import { SharedSignalKey, signalService } from './signal.service';
 import { PreferenceProfileService } from './preferenceProfile.service';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -464,12 +465,24 @@ export class HomeRiskReplayService {
       'FINANCIAL_DISCIPLINE',
     ]);
 
-    const sharedSignals = await signalService.listSignals(run.propertyId, {
-      freshOnly: false,
-      capturedFrom: run.windowStart ?? undefined,
-      capturedTo: run.windowEnd ?? undefined,
-      limit: 200,
-    });
+    const sharedSignals = await signalService
+      .listSignals(run.propertyId, {
+        freshOnly: false,
+        capturedFrom: run.windowStart ?? undefined,
+        capturedTo: run.windowEnd ?? undefined,
+        limit: 200,
+      })
+      .catch((error) => {
+        logSharedDataEvent({
+          event: 'risk_replay.signal_timeline_fallback',
+          level: 'WARN',
+          propertyId: run.propertyId,
+          toolKey: 'HOME_RISK_REPLAY',
+          fallbackPath: 'empty-signal-timeline',
+          error,
+        });
+        return [];
+      });
 
     const signalTimelineEvents = sharedSignals
       .filter((signal) => relevantSignalKeys.has(signal.signalKey as SharedSignalKey))
@@ -503,14 +516,48 @@ export class HomeRiskReplayService {
       ...signalTimelineEvents,
     ], 300);
 
-    const latestSignalsByKey = await signalService.getLatestSignalsByKey(
+    const latestSignalsLookup = await signalService.getLatestSignalsByKeyWithFreshFallback(
       run.propertyId,
       Array.from(relevantSignalKeys),
-      { freshOnly: true },
+      {
+        freshOnly: true,
+        refreshIfStale: true,
+        refreshReason: 'home-risk-replay',
+      },
     );
-    const signalInteractionContext = await signalService.getSignalInteractionContext(run.propertyId, {
-      freshOnly: true,
-    });
+    const latestSignalsByKey = latestSignalsLookup.signals;
+    if (latestSignalsLookup.fallbackUsed) {
+      logSharedDataEvent({
+        event: 'risk_replay.signal_fallback_used',
+        level: 'INFO',
+        propertyId: run.propertyId,
+        toolKey: 'HOME_RISK_REPLAY',
+        fallbackPath: 'signal-refresh',
+        metadata: {
+          refreshedSignals: latestSignalsLookup.refreshSummary?.refreshedSignals ?? [],
+          skippedSignals: latestSignalsLookup.refreshSummary?.skippedSignals ?? [],
+        },
+      });
+    }
+    const signalInteractionContext = await signalService
+      .getSignalInteractionContext(run.propertyId, {
+        freshOnly: true,
+      })
+      .catch((error) => {
+        logSharedDataEvent({
+          event: 'risk_replay.signal_interaction_context_fallback',
+          level: 'WARN',
+          propertyId: run.propertyId,
+          toolKey: 'HOME_RISK_REPLAY',
+          fallbackPath: 'empty-signal-interaction-context',
+          error,
+        });
+        return {
+          signals: {},
+          interactions: [],
+          staleSignals: [],
+        };
+      });
     const preferenceProfile = await this.preferenceProfileService.getCurrentProfile(run.propertyId);
 
     return {

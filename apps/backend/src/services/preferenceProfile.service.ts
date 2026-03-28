@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 export type PreferenceProfileInput = {
   riskTolerance?: PreferenceRiskTolerance | null;
@@ -141,65 +142,93 @@ export class PreferenceProfileService {
       },
     });
 
-    if (!property?.homeownerProfileId) {
+    if (!property) {
       throw new Error('Property not found for preference profile upsert.');
     }
 
-    const latest = await prisma.preferenceProfile.findFirst({
-      where: { propertyId },
-      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-      select: {
-        id: true,
-        source: true,
-      },
-    });
+    if (!property.homeownerProfileId) {
+      logSharedDataEvent({
+        event: 'preference_profile.upsert.property_missing_homeowner_profile',
+        level: 'WARN',
+        propertyId,
+      });
+    }
 
-    const source = input.source ?? latest?.source ?? PreferenceProfileSource.USER_INPUT;
-
-    const notesJsonInput =
-      input.notesJson === undefined
-        ? undefined
-        : input.notesJson === null
-          ? Prisma.JsonNull
-          : (input.notesJson as Prisma.InputJsonValue);
-
-    if (latest) {
-      const updated = await prisma.preferenceProfile.update({
-        where: { id: latest.id },
-        data: {
-          homeownerProfileId: property.homeownerProfileId,
-          ...(input.riskTolerance !== undefined ? { riskTolerance: input.riskTolerance } : {}),
-          ...(input.deductiblePreferenceStyle !== undefined
-            ? { deductiblePreferenceStyle: input.deductiblePreferenceStyle }
-            : {}),
-          ...(input.cashBufferPosture !== undefined ? { cashBufferPosture: input.cashBufferPosture } : {}),
-          ...(input.bundlingPreference !== undefined ? { bundlingPreference: input.bundlingPreference } : {}),
-          ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
-          source,
-          ...(notesJsonInput !== undefined ? { notesJson: notesJsonInput } : {}),
+    return prisma.$transaction(async (tx) => {
+      const latest = await tx.preferenceProfile.findFirst({
+        where: { propertyId },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          source: true,
         },
       });
 
-      return mapPreferenceProfile(updated);
-    }
+      const source = input.source ?? latest?.source ?? PreferenceProfileSource.USER_INPUT;
 
-    const created = await prisma.preferenceProfile.create({
-      data: {
-        propertyId,
-        homeownerProfileId: property.homeownerProfileId,
-        riskTolerance: input.riskTolerance ?? null,
-        deductiblePreferenceStyle: input.deductiblePreferenceStyle ?? null,
-        cashBufferPosture: input.cashBufferPosture ?? null,
-        bundlingPreference: input.bundlingPreference ?? null,
-        confidence: input.confidence ?? null,
-        source,
-        notesJson:
-          notesJsonInput === undefined
+      const notesJsonInput =
+        input.notesJson === undefined
+          ? undefined
+          : input.notesJson === null
             ? Prisma.JsonNull
-            : notesJsonInput,
-      },
-    });
+            : (input.notesJson as Prisma.InputJsonValue);
 
-    return mapPreferenceProfile(created);
+      if (latest) {
+        const updated = await tx.preferenceProfile.update({
+          where: { id: latest.id },
+          data: {
+            homeownerProfileId: property.homeownerProfileId ?? null,
+            ...(input.riskTolerance !== undefined ? { riskTolerance: input.riskTolerance } : {}),
+            ...(input.deductiblePreferenceStyle !== undefined
+              ? { deductiblePreferenceStyle: input.deductiblePreferenceStyle }
+              : {}),
+            ...(input.cashBufferPosture !== undefined ? { cashBufferPosture: input.cashBufferPosture } : {}),
+            ...(input.bundlingPreference !== undefined ? { bundlingPreference: input.bundlingPreference } : {}),
+            ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
+            source,
+            ...(notesJsonInput !== undefined ? { notesJson: notesJsonInput } : {}),
+          },
+        });
+
+        logSharedDataEvent({
+          event: 'preference_profile.upsert.updated',
+          level: 'INFO',
+          propertyId,
+          metadata: {
+            profileId: updated.id,
+            source,
+          },
+        });
+        return mapPreferenceProfile(updated);
+      }
+
+      const created = await tx.preferenceProfile.create({
+        data: {
+          propertyId,
+          homeownerProfileId: property.homeownerProfileId ?? null,
+          riskTolerance: input.riskTolerance ?? null,
+          deductiblePreferenceStyle: input.deductiblePreferenceStyle ?? null,
+          cashBufferPosture: input.cashBufferPosture ?? null,
+          bundlingPreference: input.bundlingPreference ?? null,
+          confidence: input.confidence ?? null,
+          source,
+          notesJson:
+            notesJsonInput === undefined
+              ? Prisma.JsonNull
+              : notesJsonInput,
+        },
+      });
+
+      logSharedDataEvent({
+        event: 'preference_profile.upsert.created',
+        level: 'INFO',
+        propertyId,
+        metadata: {
+          profileId: created.id,
+          source,
+        },
+      });
+      return mapPreferenceProfile(created);
+    });
   }
 }

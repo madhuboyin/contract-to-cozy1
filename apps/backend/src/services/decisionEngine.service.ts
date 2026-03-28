@@ -131,6 +131,7 @@ export type SuppressedDecisionCandidate = {
 };
 
 export type DecisionDiagnostics = {
+  decisionModelVersion: string;
   generatedAt: string;
   evaluatedCount: number;
   surfacedCount: number;
@@ -153,6 +154,8 @@ export type DecisionEngineResult = {
   suppressed: SuppressedDecisionCandidate[];
   diagnostics: DecisionDiagnostics;
 };
+
+const DECISION_ENGINE_VERSION = '7d.1';
 
 const CONFLICT_PAIRS = new Set([
   'INCREASE_DEDUCTIBLE|REDUCE_EXPOSURE',
@@ -445,6 +448,7 @@ export function runDecisionEngine(input: {
   }
 
   const diagnostics: DecisionDiagnostics = {
+    decisionModelVersion: DECISION_ENGINE_VERSION,
     generatedAt: new Date().toISOString(),
     evaluatedCount,
     surfacedCount: recommendations.length,

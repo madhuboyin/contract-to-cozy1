@@ -12,6 +12,7 @@ import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from './coverageGap.service';
 import { normalizeFinancialAssumptionInput } from './financialAssumption.service';
 import { SharedSignalKey, signalService } from './signal.service';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 const BACKFILL_VERSION = 1;
 const REQUIRED_SIGNAL_KEYS: SharedSignalKey[] = ['MAINT_ADHERENCE', 'COVERAGE_GAP', 'SAVINGS_REALIZATION'];
@@ -151,6 +152,31 @@ export type SharedDataReadinessReport = {
     avgSignalCoverageRatio: number;
   };
   properties: PropertySharedDataReadiness[];
+};
+
+export type SharedDataOperationalDiagnostics = {
+  generatedAt: string;
+  propertiesEvaluated: number;
+  fallbackRisk: {
+    coverageAnalysesWithoutAssumptionSet: number;
+    riskAnalysesWithoutAssumptionSet: number;
+    doNothingRunsWithoutAssumptionSet: number;
+    homeScoreReportsWithoutPreferenceProfile: number;
+    totalAnalyzedRows: number;
+    missingSharedLinkRatio: number;
+  };
+  readinessSummary: SharedDataReadinessReport['summary'];
+  consistencySummary: {
+    issueCount: number;
+    byCode: Record<string, number>;
+    bySeverity: Record<BackfillIssueSeverity, number>;
+  };
+  signalSummary: {
+    staleSignals: number;
+    lowConfidenceSignals: number;
+    interactionSignals: number;
+    totalSignals: number;
+  };
 };
 
 type PreferenceEvidence = {
@@ -1575,56 +1601,98 @@ export class SharedDataBackfillService {
     const gaps = await detectCoverageGaps(propertyId);
 
     if (!dryRun) {
-      const previous = existingLatest.MAINT_ADHERENCE;
-      const signal = await signalService.publishMaintenanceAdherenceSignal({
-        propertyId,
-        sourceId: `backfill:${propertyId}:maint_adherence`,
-      });
-      touch('MAINT_ADHERENCE');
-      if (previous?.id === signal.id) result.refreshed += 1;
-      else result.published += 1;
+      try {
+        const previous = existingLatest.MAINT_ADHERENCE;
+        const signal = await signalService.publishMaintenanceAdherenceSignal({
+          propertyId,
+          sourceId: `backfill:${propertyId}:maint_adherence`,
+        });
+        touch('MAINT_ADHERENCE');
+        if (previous?.id === signal.id) result.refreshed += 1;
+        else result.published += 1;
+      } catch (error) {
+        result.skipped += 1;
+        logSharedDataEvent({
+          event: 'shared_backfill.signal_publish_failed',
+          level: 'WARN',
+          propertyId,
+          signalKey: 'MAINT_ADHERENCE',
+          error,
+        });
+      }
 
-      const coverageSignal = await signalService.publishCoverageGapSignal({
-        propertyId,
-        coverageAnalysisId: latestCoverageAnalysis?.id ?? `backfill:${propertyId}:coverage_gap`,
-        gapCount: gaps.length,
-        confidence:
-          latestCoverageAnalysis?.confidence === 'HIGH'
-            ? 0.9
-            : latestCoverageAnalysis?.confidence === 'MEDIUM'
-              ? 0.7
-              : 0.5,
-        verdict: latestCoverageAnalysis?.overallVerdict ?? (gaps.length > 0 ? 'SITUATIONAL' : 'NOT_WORTH_IT'),
-      });
-      touch('COVERAGE_GAP');
-      if (existingLatest.COVERAGE_GAP?.id === coverageSignal.id) result.refreshed += 1;
-      else result.published += 1;
+      try {
+        const coverageSignal = await signalService.publishCoverageGapSignal({
+          propertyId,
+          coverageAnalysisId: latestCoverageAnalysis?.id ?? `backfill:${propertyId}:coverage_gap`,
+          gapCount: gaps.length,
+          confidence:
+            latestCoverageAnalysis?.confidence === 'HIGH'
+              ? 0.9
+              : latestCoverageAnalysis?.confidence === 'MEDIUM'
+                ? 0.7
+                : 0.5,
+          verdict: latestCoverageAnalysis?.overallVerdict ?? (gaps.length > 0 ? 'SITUATIONAL' : 'NOT_WORTH_IT'),
+        });
+        touch('COVERAGE_GAP');
+        if (existingLatest.COVERAGE_GAP?.id === coverageSignal.id) result.refreshed += 1;
+        else result.published += 1;
+      } catch (error) {
+        result.skipped += 1;
+        logSharedDataEvent({
+          event: 'shared_backfill.signal_publish_failed',
+          level: 'WARN',
+          propertyId,
+          signalKey: 'COVERAGE_GAP',
+          error,
+        });
+      }
 
       if (latestAppliedSavings) {
-        const savingsSignal = await signalService.publishSavingsRealizationSignal({
-          propertyId,
-          opportunityId: latestAppliedSavings.id,
-          status: latestAppliedSavings.status,
-          estimatedMonthlySavings: asFinite(latestAppliedSavings.estimatedMonthlySavings) ?? null,
-          estimatedAnnualSavings: asFinite(latestAppliedSavings.estimatedAnnualSavings) ?? null,
-          currency: latestAppliedSavings.currency,
-        });
-        touch('SAVINGS_REALIZATION');
-        if (existingLatest.SAVINGS_REALIZATION?.id === savingsSignal.id) result.refreshed += 1;
-        else result.published += 1;
+        try {
+          const savingsSignal = await signalService.publishSavingsRealizationSignal({
+            propertyId,
+            opportunityId: latestAppliedSavings.id,
+            status: latestAppliedSavings.status,
+            estimatedMonthlySavings: asFinite(latestAppliedSavings.estimatedMonthlySavings) ?? null,
+            estimatedAnnualSavings: asFinite(latestAppliedSavings.estimatedAnnualSavings) ?? null,
+            currency: latestAppliedSavings.currency,
+          });
+          touch('SAVINGS_REALIZATION');
+          if (existingLatest.SAVINGS_REALIZATION?.id === savingsSignal.id) result.refreshed += 1;
+          else result.published += 1;
+        } catch (error) {
+          result.skipped += 1;
+          logSharedDataEvent({
+            event: 'shared_backfill.signal_publish_failed',
+            level: 'WARN',
+            propertyId,
+            signalKey: 'SAVINGS_REALIZATION',
+            error,
+          });
+        }
       } else {
         result.skipped += 1;
       }
 
       if (latestRadarMatch?.radarEvent) {
-        await signalService.publishRadarEventSignals({
-          propertyId,
-          radarEventId: latestRadarMatch.radarEvent.id,
-          eventType: latestRadarMatch.radarEvent.eventType,
-          severity: latestRadarMatch.radarEvent.severity,
-          impactLevel: latestRadarMatch.impactLevel,
-          capturedAt: latestRadarMatch.updatedAt,
-        });
+        try {
+          await signalService.publishRadarEventSignals({
+            propertyId,
+            radarEventId: latestRadarMatch.radarEvent.id,
+            eventType: latestRadarMatch.radarEvent.eventType,
+            severity: latestRadarMatch.radarEvent.severity,
+            impactLevel: latestRadarMatch.impactLevel,
+            capturedAt: latestRadarMatch.updatedAt,
+          });
+        } catch (error) {
+          logSharedDataEvent({
+            event: 'shared_backfill.radar_signal_publish_failed',
+            level: 'WARN',
+            propertyId,
+            error,
+          });
+        }
       }
     } else {
       result.published += 2;
@@ -2094,6 +2162,145 @@ export class SharedDataBackfillService {
     };
   }
 
+  async getOperationalDiagnostics(options: {
+    propertyId?: string;
+    limit?: number;
+    startAfterPropertyId?: string;
+  }): Promise<SharedDataOperationalDiagnostics> {
+    const targets = await listTargetProperties(options);
+    const propertyIds = targets.map((row) => row.id);
+
+    const [readiness, consistency, signalHealth] = await Promise.all([
+      this.getReadinessReport(options),
+      this.getConsistencyReport(options),
+      signalService.getSignalHealthOverview({
+        propertyId: options.propertyId,
+        limit: options.limit,
+      }),
+    ]);
+
+    if (propertyIds.length === 0) {
+      return {
+        generatedAt: new Date().toISOString(),
+        propertiesEvaluated: 0,
+        fallbackRisk: {
+          coverageAnalysesWithoutAssumptionSet: 0,
+          riskAnalysesWithoutAssumptionSet: 0,
+          doNothingRunsWithoutAssumptionSet: 0,
+          homeScoreReportsWithoutPreferenceProfile: 0,
+          totalAnalyzedRows: 0,
+          missingSharedLinkRatio: 0,
+        },
+        readinessSummary: readiness.summary,
+        consistencySummary: {
+          issueCount: consistency.issueCount,
+          byCode: {},
+          bySeverity: {
+            INFO: 0,
+            WARN: 0,
+            ERROR: 0,
+          },
+        },
+        signalSummary: {
+          staleSignals: signalHealth.totals.staleSignals,
+          lowConfidenceSignals: signalHealth.totals.lowConfidenceSignals,
+          interactionSignals: signalHealth.totals.interactionSignals,
+          totalSignals: signalHealth.totals.totalSignals,
+        },
+      };
+    }
+
+    const [
+      coverageTotal,
+      coverageWithoutAssumptionSet,
+      riskTotal,
+      riskWithoutAssumptionSet,
+      doNothingTotal,
+      doNothingWithoutAssumptionSet,
+      homeScoreTotal,
+      homeScoreWithoutPreferenceProfile,
+    ] = await Promise.all([
+      prisma.coverageAnalysis.count({ where: { propertyId: { in: propertyIds } } }),
+      prisma.coverageAnalysis.count({
+        where: {
+          propertyId: { in: propertyIds },
+          assumptionSetId: null,
+        },
+      }),
+      prisma.riskPremiumOptimizationAnalysis.count({
+        where: { propertyId: { in: propertyIds } },
+      }),
+      prisma.riskPremiumOptimizationAnalysis.count({
+        where: {
+          propertyId: { in: propertyIds },
+          assumptionSetId: null,
+        },
+      }),
+      prisma.doNothingSimulationRun.count({
+        where: { propertyId: { in: propertyIds } },
+      }),
+      prisma.doNothingSimulationRun.count({
+        where: {
+          propertyId: { in: propertyIds },
+          assumptionSetId: null,
+        },
+      }),
+      prisma.homeScoreReport.count({
+        where: { propertyId: { in: propertyIds } },
+      }),
+      prisma.homeScoreReport.count({
+        where: {
+          propertyId: { in: propertyIds },
+          preferenceProfileId: null,
+        },
+      }),
+    ]);
+
+    const totalAnalyzedRows = coverageTotal + riskTotal + doNothingTotal + homeScoreTotal;
+    const missingSharedLinkRows =
+      coverageWithoutAssumptionSet +
+      riskWithoutAssumptionSet +
+      doNothingWithoutAssumptionSet +
+      homeScoreWithoutPreferenceProfile;
+
+    const byCode: Record<string, number> = {};
+    const bySeverity: Record<BackfillIssueSeverity, number> = {
+      INFO: 0,
+      WARN: 0,
+      ERROR: 0,
+    };
+    for (const issue of consistency.issues) {
+      byCode[issue.code] = (byCode[issue.code] ?? 0) + 1;
+      bySeverity[issue.severity] += 1;
+    }
+
+    return {
+      generatedAt: new Date().toISOString(),
+      propertiesEvaluated: targets.length,
+      fallbackRisk: {
+        coverageAnalysesWithoutAssumptionSet: coverageWithoutAssumptionSet,
+        riskAnalysesWithoutAssumptionSet: riskWithoutAssumptionSet,
+        doNothingRunsWithoutAssumptionSet: doNothingWithoutAssumptionSet,
+        homeScoreReportsWithoutPreferenceProfile: homeScoreWithoutPreferenceProfile,
+        totalAnalyzedRows,
+        missingSharedLinkRatio:
+          totalAnalyzedRows > 0 ? Number((missingSharedLinkRows / totalAnalyzedRows).toFixed(4)) : 0,
+      },
+      readinessSummary: readiness.summary,
+      consistencySummary: {
+        issueCount: consistency.issueCount,
+        byCode,
+        bySeverity,
+      },
+      signalSummary: {
+        staleSignals: signalHealth.totals.staleSignals,
+        lowConfidenceSignals: signalHealth.totals.lowConfidenceSignals,
+        interactionSignals: signalHealth.totals.interactionSignals,
+        totalSignals: signalHealth.totals.totalSignals,
+      },
+    };
+  }
+
   async runBackfill(options: SharedDataBackfillRunOptions = {}): Promise<SharedDataBackfillSummary> {
     const startedAt = new Date();
     const dryRun = options.dryRun ?? false;
@@ -2126,6 +2333,18 @@ export class SharedDataBackfillService {
       },
       properties: [],
     };
+
+    logSharedDataEvent({
+      event: 'shared_backfill.run.started',
+      level: 'INFO',
+      metadata: {
+        dryRun,
+        totalPropertiesConsidered: targets.length,
+        includePreference: options.includePreference !== false,
+        includeAssumptions: options.includeAssumptions !== false,
+        includeSignals: options.includeSignals !== false,
+      },
+    });
 
     for (const property of targets) {
       const propertySummary: PropertyBackfillSummary = {
@@ -2214,6 +2433,12 @@ export class SharedDataBackfillService {
       } catch (error: any) {
         summary.erroredProperties += 1;
         summary.aggregates.errors += 1;
+        logSharedDataEvent({
+          event: 'shared_backfill.property.failed',
+          level: 'ERROR',
+          propertyId: property.id,
+          error,
+        });
         pushIssue(
           propertySummary,
           {
@@ -2228,6 +2453,18 @@ export class SharedDataBackfillService {
     }
 
     summary.finishedAt = new Date().toISOString();
+    logSharedDataEvent({
+      event: 'shared_backfill.run.completed',
+      level: 'INFO',
+      durationMs: new Date(summary.finishedAt).getTime() - new Date(summary.startedAt).getTime(),
+      metadata: {
+        dryRun: summary.dryRun,
+        processedProperties: summary.processedProperties,
+        skippedProperties: summary.skippedProperties,
+        erroredProperties: summary.erroredProperties,
+        totals: summary.aggregates,
+      },
+    });
     return summary;
   }
 }

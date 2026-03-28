@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 export type AssumptionSetDTO = {
   id: string;
@@ -66,6 +68,51 @@ export function hasAssumptionOverrides(overrides: Record<string, unknown> | unde
   return Boolean(overrides && Object.keys(overrides).length > 0);
 }
 
+export function normalizeAssumptionIdentityPayload(
+  value: Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  const cleanValue = (input: unknown): unknown => {
+    if (input === undefined || input === null) return undefined;
+
+    if (Array.isArray(input)) {
+      const next = input
+        .map((entry) => cleanValue(entry))
+        .filter((entry) => entry !== undefined);
+      return next.length > 0 ? next : undefined;
+    }
+
+    if (typeof input === 'object') {
+      const objectInput = input as Record<string, unknown>;
+      const keys = Object.keys(objectInput).sort();
+      const next: Record<string, unknown> = {};
+      for (const key of keys) {
+        const cleaned = cleanValue(objectInput[key]);
+        if (cleaned !== undefined) {
+          next[key] = cleaned;
+        }
+      }
+      return Object.keys(next).length > 0 ? next : undefined;
+    }
+
+    if (typeof input === 'number' && Number.isFinite(input)) {
+      return Number(input.toFixed(6));
+    }
+
+    return input;
+  };
+
+  const normalized = cleanValue(value);
+  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return {};
+  return normalized as Record<string, unknown>;
+}
+
+export function hashAssumptionIdentityPayload(value: Record<string, unknown> | null | undefined): string {
+  const normalized = normalizeAssumptionIdentityPayload(value);
+  return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+}
+
 export function extractAssumptionOverrides(
   assumptionsJson: Prisma.JsonValue | null | undefined
 ): Record<string, unknown> {
@@ -98,6 +145,54 @@ export class AssumptionSetService {
       }
     }
 
+    const normalizedInput = normalizeAssumptionIdentityPayload(
+      extractAssumptionOverrides(input.assumptionsJson as Prisma.JsonValue)
+    );
+    const inputHash = hashAssumptionIdentityPayload(normalizedInput);
+
+    const existingCandidates = await prisma.assumptionSet.findMany({
+      where: {
+        propertyId: input.propertyId,
+        toolKey: input.toolKey,
+        scenarioKey: input.scenarioKey ?? null,
+        preferenceProfileId: input.preferenceProfileId ?? null,
+      },
+      select: {
+        id: true,
+        propertyId: true,
+        toolKey: true,
+        scenarioKey: true,
+        preferenceProfileId: true,
+        assumptionsJson: true,
+        createdByUserId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 50,
+    });
+
+    for (const candidate of existingCandidates) {
+      const candidateOverrides = normalizeAssumptionIdentityPayload(
+        extractAssumptionOverrides(candidate.assumptionsJson)
+      );
+      if (hashAssumptionIdentityPayload(candidateOverrides) === inputHash) {
+        logSharedDataEvent({
+          event: 'assumption_set.create.reused_existing',
+          level: 'INFO',
+          propertyId: input.propertyId,
+          toolKey: input.toolKey,
+          assumptionSetId: candidate.id,
+          metadata: {
+            scenarioKey: input.scenarioKey ?? null,
+            preferenceProfileId: input.preferenceProfileId ?? null,
+            hash: inputHash,
+          },
+        });
+        return mapAssumptionSet(candidate);
+      }
+    }
+
     const created = await prisma.assumptionSet.create({
       data: {
         propertyId: input.propertyId,
@@ -106,6 +201,19 @@ export class AssumptionSetService {
         preferenceProfileId: input.preferenceProfileId ?? null,
         assumptionsJson: input.assumptionsJson as Prisma.InputJsonValue,
         createdByUserId: input.createdByUserId ?? null,
+      },
+    });
+
+    logSharedDataEvent({
+      event: 'assumption_set.create.created',
+      level: 'INFO',
+      propertyId: input.propertyId,
+      toolKey: input.toolKey,
+      assumptionSetId: created.id,
+      metadata: {
+        scenarioKey: input.scenarioKey ?? null,
+        preferenceProfileId: input.preferenceProfileId ?? null,
+        hash: inputHash,
       },
     });
 

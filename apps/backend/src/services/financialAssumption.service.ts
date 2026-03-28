@@ -6,6 +6,7 @@ import {
 } from './assumptionSet.service';
 import { PreferenceProfileService } from './preferenceProfile.service';
 import { signalService } from './signal.service';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 export type FinancialAssumptions = {
   appreciationRate: number;
@@ -292,11 +293,29 @@ export class FinancialAssumptionService {
       resolvedAssumptionSetId = created.id;
     }
 
-    const sharedSignals = await signalService.getLatestSignalsByKey(
+    const signalLookup = await signalService.getLatestSignalsByKeyWithFreshFallback(
       input.propertyId,
       ['SAVINGS_REALIZATION', 'FINANCIAL_DISCIPLINE'],
-      { freshOnly: true }
+      {
+        freshOnly: true,
+        refreshIfStale: true,
+        refreshReason: `financial-assumptions:${input.toolKey}`,
+      }
     );
+    const sharedSignals = signalLookup.signals;
+    if (signalLookup.fallbackUsed) {
+      logSharedDataEvent({
+        event: 'financial_assumptions.signal_fallback_used',
+        level: 'INFO',
+        propertyId: input.propertyId,
+        toolKey: input.toolKey,
+        fallbackPath: 'signal-refresh',
+        metadata: {
+          refreshedSignals: signalLookup.refreshSummary?.refreshedSignals ?? [],
+          skippedSignals: signalLookup.refreshSummary?.skippedSignals ?? [],
+        },
+      });
+    }
     const savingsSignal = sharedSignals.SAVINGS_REALIZATION ?? null;
     const disciplineSignal = sharedSignals.FINANCIAL_DISCIPLINE ?? null;
     const savingsRealizationAnnual = savingsSignal

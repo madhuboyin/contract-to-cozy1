@@ -5,6 +5,7 @@ import { HomeItemCondition, HomeItemRecommendation, Prisma } from '@prisma/clien
 import { ListBoardQuery, PatchItemStatusBody } from '../validators/homeStatusBoard.validators';
 import { SharedSignalKey, signalService } from './signal.service';
 import { DecisionCandidate, runDecisionEngine } from './decisionEngine.service';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -903,8 +904,42 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
     'COST_PRESSURE_PATTERN',
     'FINANCIAL_DISCIPLINE',
   ];
-  const latestSignals = await signalService.getLatestSignalsByKey(propertyId, signalKeys, { freshOnly: true });
-  const interactionContext = await signalService.getSignalInteractionContext(propertyId, { freshOnly: true });
+  const signalLookup = await signalService.getLatestSignalsByKeyWithFreshFallback(propertyId, signalKeys, {
+    freshOnly: true,
+    refreshIfStale: true,
+    refreshReason: 'home-status-board',
+  });
+  const latestSignals = signalLookup.signals;
+  if (signalLookup.fallbackUsed) {
+    logSharedDataEvent({
+      event: 'status_board.signal_fallback_used',
+      level: 'INFO',
+      propertyId,
+      toolKey: 'STATUS_BOARD',
+      fallbackPath: 'signal-refresh',
+      metadata: {
+        refreshedSignals: signalLookup.refreshSummary?.refreshedSignals ?? [],
+        skippedSignals: signalLookup.refreshSummary?.skippedSignals ?? [],
+      },
+    });
+  }
+  const interactionContext = await signalService
+    .getSignalInteractionContext(propertyId, { freshOnly: true })
+    .catch((error) => {
+      logSharedDataEvent({
+        event: 'status_board.signal_interaction_context_fallback',
+        level: 'WARN',
+        propertyId,
+        toolKey: 'STATUS_BOARD',
+        fallbackPath: 'empty-signal-interaction-context',
+        error,
+      });
+      return {
+        signals: {},
+        interactions: [],
+        staleSignals: [],
+      };
+    });
   const riskSpike = toFiniteNumber(latestSignals.RISK_SPIKE?.valueNumber);
   const costAnomaly = toFiniteNumber(latestSignals.COST_ANOMALY?.valueNumber);
   const maintenanceAdherence = toFiniteNumber(latestSignals.MAINT_ADHERENCE?.valueNumber);

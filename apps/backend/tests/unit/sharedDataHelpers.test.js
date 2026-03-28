@@ -6,6 +6,8 @@ require('ts-node/register');
 const {
   hasAssumptionOverrides,
   extractAssumptionOverrides,
+  normalizeAssumptionIdentityPayload,
+  hashAssumptionIdentityPayload,
 } = require('../../src/services/assumptionSet.service.ts');
 const {
   hasPreferenceInput,
@@ -36,6 +38,51 @@ test('extractAssumptionOverrides supports nested overrides payload shape', () =>
     annualPremium: 2400,
     riskTolerance: 'MEDIUM',
   });
+});
+
+test('normalizeAssumptionIdentityPayload canonicalizes shape for idempotent comparison', () => {
+  const normalized = normalizeAssumptionIdentityPayload({
+    z: undefined,
+    nested: {
+      b: 2,
+      a: 1.123456789,
+      c: null,
+    },
+    arr: [null, 3.987654321, { y: undefined, x: 'ok' }],
+  });
+
+  assert.deepEqual(normalized, {
+    arr: [3.987654, { x: 'ok' }],
+    nested: {
+      a: 1.123457,
+      b: 2,
+    },
+  });
+});
+
+test('hashAssumptionIdentityPayload is stable for semantically equivalent payloads', () => {
+  const hashA = hashAssumptionIdentityPayload({
+    overrides: {
+      riskTolerance: 'LOW',
+      deductible: null,
+      rates: {
+        b: 2,
+        a: 1,
+      },
+    },
+  });
+  const hashB = hashAssumptionIdentityPayload({
+    overrides: {
+      rates: {
+        a: 1,
+        b: 2,
+      },
+      riskTolerance: 'LOW',
+      deductible: undefined,
+    },
+  });
+
+  assert.equal(hashA, hashB);
 });
 
 test('hasPreferenceInput detects profile updates correctly', () => {

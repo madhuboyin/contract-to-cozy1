@@ -1,6 +1,7 @@
 import { HomeSavingsOpportunityStatus, MaintenanceTaskStatus, Prisma, Signal } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from './coverageGap.service';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 export type SharedSignalKey =
   | 'MAINT_ADHERENCE'
@@ -49,6 +50,7 @@ const FINANCIAL_PATTERN_SIGNAL_KEYS: SharedSignalKey[] = ['FINANCIAL_DISCIPLINE'
 const RADAR_PATTERN_SIGNAL_KEYS: SharedSignalKey[] = ['COST_PRESSURE_PATTERN'];
 
 const LOW_CONFIDENCE_THRESHOLD = 0.55;
+const SIGNAL_PUBLISH_MAX_RETRIES = 3;
 
 type CashBufferPosture = 'TIGHT' | 'MODERATE' | 'STRONG';
 
@@ -126,6 +128,12 @@ export type SignalListFilters = {
 };
 
 export type LatestSharedSignals = Partial<Record<SharedSignalKey, SignalDTO>>;
+
+export type SignalLookupWithFallbackResult = {
+  signals: LatestSharedSignals;
+  fallbackUsed: boolean;
+  refreshSummary: SignalRefreshSummary | null;
+};
 
 export type SignalInteractionInsight = {
   code: string;
@@ -223,6 +231,10 @@ function mapRadarImpactToSignalScore(impactLevel: string | null | undefined): nu
 
 function isCostPressureEvent(eventType: string): boolean {
   return COST_PRESSURE_EVENT_TYPES.includes(String(eventType || '').toLowerCase() as any);
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
 export function evaluateSignalFreshness(
@@ -586,24 +598,113 @@ export class SignalService {
     options?: { freshOnly?: boolean }
   ): Promise<LatestSharedSignals> {
     if (keys.length === 0) return {};
+    const freshOnly = options?.freshOnly ?? true;
+    const now = new Date();
+    const uniqueKeys = Array.from(new Set(keys));
 
-    const rows = await this.listSignals(propertyId, {
-      freshOnly: options?.freshOnly ?? true,
-      limit: 250,
+    const rows = await Promise.all(
+      uniqueKeys.map((key) =>
+        prisma.signal.findFirst({
+          where: {
+            propertyId,
+            signalKey: key,
+            ...(freshOnly
+              ? {
+                  OR: [
+                    { validUntil: null },
+                    { validUntil: { gt: now } },
+                  ],
+                }
+              : {}),
+          },
+          orderBy: [{ capturedAt: 'desc' }, { version: 'desc' }, { createdAt: 'desc' }],
+        })
+      )
+    );
+
+    const latest: LatestSharedSignals = {};
+    rows.forEach((row, index) => {
+      if (!row) return;
+      const key = uniqueKeys[index];
+      latest[key] = mapSignal(row);
     });
 
-    const keySet = new Set(keys);
-    const latest: LatestSharedSignals = {};
+    return latest;
+  }
 
-    for (const row of rows) {
-      if (!keySet.has(row.signalKey as SharedSignalKey)) continue;
-      const typedKey = row.signalKey as SharedSignalKey;
-      if (!latest[typedKey]) {
-        latest[typedKey] = row;
-      }
+  async getLatestSignalsByKeyWithFreshFallback(
+    propertyId: string,
+    keys: SharedSignalKey[],
+    options?: {
+      freshOnly?: boolean;
+      refreshIfStale?: boolean;
+      requiredKeys?: SharedSignalKey[];
+      refreshReason?: string;
+    }
+  ): Promise<SignalLookupWithFallbackResult> {
+    const freshOnly = options?.freshOnly ?? true;
+    const refreshIfStale = options?.refreshIfStale ?? false;
+    const requiredKeys = options?.requiredKeys?.length ? options.requiredKeys : keys;
+
+    let refreshSummary: SignalRefreshSummary | null = null;
+    let fallbackUsed = false;
+    let signals = await this.getLatestSignalsByKey(propertyId, keys, { freshOnly });
+
+    const missingOrStale = requiredKeys.filter((key) => {
+      const signal = signals[key];
+      if (!signal) return true;
+      if (!freshOnly && signal.isStale) return true;
+      return false;
+    });
+
+    if (!refreshIfStale || missingOrStale.length === 0) {
+      return {
+        signals,
+        fallbackUsed,
+        refreshSummary,
+      };
     }
 
-    return latest;
+    fallbackUsed = true;
+    const refreshStart = Date.now();
+    try {
+      refreshSummary = await this.refreshSignalsForProperty(propertyId);
+      signals = await this.getLatestSignalsByKey(propertyId, keys, { freshOnly });
+      logSharedDataEvent({
+        event: 'signals.lookup.fallback_refresh.success',
+        level: 'INFO',
+        propertyId,
+        fallbackPath: 'refresh-signals-for-property',
+        durationMs: Date.now() - refreshStart,
+        metadata: {
+          reason: options?.refreshReason ?? null,
+          requiredKeys,
+          missingOrStaleBeforeRefresh: missingOrStale,
+          refreshedSignals: refreshSummary.refreshedSignals,
+          skippedSignals: refreshSummary.skippedSignals,
+        },
+      });
+    } catch (error) {
+      logSharedDataEvent({
+        event: 'signals.lookup.fallback_refresh.failed',
+        level: 'WARN',
+        propertyId,
+        fallbackPath: 'refresh-signals-for-property',
+        durationMs: Date.now() - refreshStart,
+        metadata: {
+          reason: options?.refreshReason ?? null,
+          requiredKeys,
+          missingOrStaleBeforeRefresh: missingOrStale,
+        },
+        error,
+      });
+    }
+
+    return {
+      signals,
+      fallbackUsed,
+      refreshSummary,
+    };
   }
 
   async getSignalInteractionContext(
@@ -659,16 +760,6 @@ export class SignalService {
     const confidenceBreakdown = normalizeConfidenceBreakdown(input.confidenceBreakdown, asFinite(input.confidence));
     const confidence = confidenceBreakdown ? confidenceBreakdown.score : clamp01(input.confidence);
 
-    const latest = await prisma.signal.findFirst({
-      where: {
-        propertyId: input.propertyId,
-        signalKey: input.signalKey,
-        roomId: input.roomId ?? null,
-        homeItemId: input.homeItemId ?? null,
-      },
-      orderBy: [{ version: 'desc' }, { capturedAt: 'desc' }],
-    });
-
     const valueJson = buildValueJsonWithMeta({
       base: input.valueJson,
       freshnessState: freshness.state,
@@ -677,43 +768,122 @@ export class SignalService {
       evidenceCount: input.evidenceCount,
       patternKey: input.patternKey,
     });
+    const roomId = input.roomId ?? null;
+    const homeItemId = input.homeItemId ?? null;
 
-    const data: Prisma.SignalUncheckedCreateInput = {
-      propertyId: input.propertyId,
-      roomId: input.roomId ?? null,
-      homeItemId: input.homeItemId ?? null,
-      signalKey: input.signalKey,
-      valueNumber: input.valueNumber ?? null,
-      valueText: input.valueText ?? null,
-      valueJson,
-      unit: input.unit ?? null,
-      confidence,
-      sourceModel: input.sourceModel,
-      sourceId: input.sourceId,
-      capturedAt,
-      validUntil,
-      version: latest ? latest.version + 1 : 1,
-    };
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= SIGNAL_PUBLISH_MAX_RETRIES; attempt += 1) {
+      const startedAt = Date.now();
+      try {
+        const persisted = await prisma.$transaction(async (tx) => {
+          const existingSameSource = await tx.signal.findFirst({
+            where: {
+              propertyId: input.propertyId,
+              roomId,
+              homeItemId,
+              signalKey: input.signalKey,
+              sourceModel: input.sourceModel,
+              sourceId: input.sourceId,
+            },
+            orderBy: [{ capturedAt: 'desc' }, { version: 'desc' }, { createdAt: 'desc' }],
+          });
 
-    if (latest && latest.sourceModel === input.sourceModel && latest.sourceId === input.sourceId) {
-      const updated = await prisma.signal.update({
-        where: { id: latest.id },
-        data: {
-          valueNumber: data.valueNumber,
-          valueText: data.valueText,
-          valueJson: data.valueJson,
-          unit: data.unit,
-          confidence: data.confidence,
-          capturedAt: data.capturedAt,
-          validUntil: data.validUntil,
-        },
-      });
+          if (existingSameSource) {
+            const updated = await tx.signal.update({
+              where: { id: existingSameSource.id },
+              data: {
+                valueNumber: input.valueNumber ?? null,
+                valueText: input.valueText ?? null,
+                valueJson,
+                unit: input.unit ?? null,
+                confidence,
+                capturedAt,
+                validUntil,
+              },
+            });
+            return { mode: 'updated' as const, record: updated };
+          }
 
-      return mapSignal(updated);
+          const latestForScope = await tx.signal.findFirst({
+            where: {
+              propertyId: input.propertyId,
+              roomId,
+              homeItemId,
+              signalKey: input.signalKey,
+            },
+            orderBy: [{ version: 'desc' }, { capturedAt: 'desc' }],
+          });
+
+          const created = await tx.signal.create({
+            data: {
+              propertyId: input.propertyId,
+              roomId,
+              homeItemId,
+              signalKey: input.signalKey,
+              valueNumber: input.valueNumber ?? null,
+              valueText: input.valueText ?? null,
+              valueJson,
+              unit: input.unit ?? null,
+              confidence,
+              sourceModel: input.sourceModel,
+              sourceId: input.sourceId,
+              capturedAt,
+              validUntil,
+              version: (latestForScope?.version ?? 0) + 1,
+            },
+          });
+          return { mode: 'created' as const, record: created };
+        });
+
+        logSharedDataEvent({
+          event: 'signal.publish.success',
+          level: 'INFO',
+          propertyId: input.propertyId,
+          signalKey: input.signalKey,
+          durationMs: Date.now() - startedAt,
+          metadata: {
+            mode: persisted.mode,
+            signalId: persisted.record.id,
+            sourceModel: input.sourceModel,
+            sourceId: input.sourceId,
+            version: persisted.record.version,
+            attempt,
+          },
+        });
+        return mapSignal(persisted.record);
+      } catch (error) {
+        lastError = error;
+        if (isUniqueConstraintError(error) && attempt < SIGNAL_PUBLISH_MAX_RETRIES) {
+          logSharedDataEvent({
+            event: 'signal.publish.retry_on_unique_conflict',
+            level: 'WARN',
+            propertyId: input.propertyId,
+            signalKey: input.signalKey,
+            metadata: {
+              sourceModel: input.sourceModel,
+              sourceId: input.sourceId,
+              attempt,
+            },
+            error,
+          });
+          continue;
+        }
+        break;
+      }
     }
 
-    const created = await prisma.signal.create({ data });
-    return mapSignal(created);
+    logSharedDataEvent({
+      event: 'signal.publish.failed',
+      level: 'ERROR',
+      propertyId: input.propertyId,
+      signalKey: input.signalKey,
+      metadata: {
+        sourceModel: input.sourceModel,
+        sourceId: input.sourceId,
+      },
+      error: lastError,
+    });
+    throw (lastError ?? new Error('Signal publish failed without surfaced error.'));
   }
 
   async publishCoverageGapSignal(params: {
@@ -1437,6 +1607,7 @@ export class SignalService {
   }
 
   async refreshSignalsForProperty(propertyId: string): Promise<SignalRefreshSummary> {
+    const startedAt = Date.now();
     const refreshedSignals: SharedSignalKey[] = [];
     const skippedSignals: SharedSignalKey[] = [];
 
@@ -1504,12 +1675,24 @@ export class SignalService {
     const latest = await this.getLatestSignalsByKey(propertyId, SHARED_SIGNAL_KEYS, { freshOnly: true });
     const interactions = computeSignalInteractionInsights({ signals: latest });
 
-    return {
+    const summary = {
       propertyId,
       refreshedSignals,
       skippedSignals,
       interactionCount: interactions.length,
     };
+    logSharedDataEvent({
+      event: 'signal.refresh.completed',
+      level: 'INFO',
+      propertyId,
+      durationMs: Date.now() - startedAt,
+      metadata: {
+        refreshedSignals,
+        skippedSignals,
+        interactionCount: interactions.length,
+      },
+    });
+    return summary;
   }
 
   async getPropertySignalHealth(propertyId: string, lookbackDays = 120): Promise<PropertySignalHealthSummary> {

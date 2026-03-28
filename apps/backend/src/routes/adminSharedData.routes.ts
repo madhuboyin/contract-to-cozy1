@@ -10,6 +10,7 @@ import {
 } from '../validators/sharedDataBackfill.validators';
 import {
   getSharedDataConsistencyHandler,
+  getSharedDataDiagnosticsHandler,
   getSharedDataReadinessHandler,
   getSharedSignalHealthHandler,
   runSharedDataBackfillHandler,
@@ -42,6 +43,12 @@ router.get(
   '/admin/shared-data/signals/health',
   validate(sharedSignalHealthQuerySchema),
   getSharedSignalHealthHandler
+);
+
+router.get(
+  '/admin/shared-data/diagnostics',
+  validate(sharedDataBackfillScopeQuerySchema),
+  getSharedDataDiagnosticsHandler
 );
 
 export default router;

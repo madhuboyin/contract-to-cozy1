@@ -17,6 +17,7 @@ import {
 } from './assumptionSet.service';
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 import { SharedSignalKey, signalService } from './signal.service';
+import { logSharedDataEvent } from './sharedDataObservability.service';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type DeductibleStrategy = 'KEEP_HIGH' | 'RAISE' | 'LOWER' | 'UNCHANGED';
@@ -612,7 +613,7 @@ export class DoNothingSimulatorService {
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 36);
 
-    const [inventoryItems, maintenanceTasks, claims, homeEvents, policies, sharedSignals] = await Promise.all([
+    const [inventoryItems, maintenanceTasks, claims, homeEvents, policies, sharedSignalLookup] = await Promise.all([
       prisma.inventoryItem.findMany({
         where: { propertyId },
         select: {
@@ -675,12 +676,30 @@ export class DoNothingSimulatorService {
         },
         orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
       }),
-      signalService.getLatestSignalsByKey(
+      signalService.getLatestSignalsByKeyWithFreshFallback(
         propertyId,
         ['COVERAGE_GAP', 'MAINT_ADHERENCE', 'SAVINGS_REALIZATION', 'RISK_ACCUMULATION', 'FINANCIAL_DISCIPLINE'],
-        { freshOnly: true }
+        {
+          freshOnly: true,
+          refreshIfStale: true,
+          refreshReason: 'do-nothing-simulator',
+        }
       ),
     ]);
+    const sharedSignals = sharedSignalLookup.signals;
+    if (sharedSignalLookup.fallbackUsed) {
+      logSharedDataEvent({
+        event: 'do_nothing.signal_fallback_used',
+        level: 'INFO',
+        propertyId,
+        toolKey: 'DO_NOTHING_SIMULATOR',
+        fallbackPath: 'signal-refresh',
+        metadata: {
+          refreshedSignals: sharedSignalLookup.refreshSummary?.refreshedSignals ?? [],
+          skippedSignals: sharedSignalLookup.refreshSummary?.skippedSignals ?? [],
+        },
+      });
+    }
 
     const now = new Date();
     const activePolicy =
@@ -707,12 +726,28 @@ export class DoNothingSimulatorService {
     const sharedSignalsUsed = (Object.keys(sharedSignals) as SharedSignalKey[]).filter(
       (signalKey) => Boolean(sharedSignals[signalKey])
     );
-    const signalInteractionContext = await signalService.getSignalInteractionContext(propertyId, {
-      freshOnly: true,
-      cashBufferAmount: (mergedOverrides.cashBufferCents ?? null) !== null && mergedOverrides.cashBufferCents !== undefined
-        ? (mergedOverrides.cashBufferCents as number) / 100
-        : null,
-    });
+    const signalInteractionContext = await signalService
+      .getSignalInteractionContext(propertyId, {
+        freshOnly: true,
+        cashBufferAmount: (mergedOverrides.cashBufferCents ?? null) !== null && mergedOverrides.cashBufferCents !== undefined
+          ? (mergedOverrides.cashBufferCents as number) / 100
+          : null,
+      })
+      .catch((error) => {
+        logSharedDataEvent({
+          event: 'do_nothing.signal_interaction_context_fallback',
+          level: 'WARN',
+          propertyId,
+          toolKey: 'DO_NOTHING_SIMULATOR',
+          fallbackPath: 'empty-signal-interaction-context',
+          error,
+        });
+        return {
+          signals: {},
+          interactions: [],
+          staleSignals: [],
+        };
+      });
 
     const openStatuses: MaintenanceTaskStatus[] = [
       MaintenanceTaskStatus.PENDING,
