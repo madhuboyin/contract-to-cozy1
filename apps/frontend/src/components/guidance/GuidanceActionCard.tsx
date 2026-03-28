@@ -28,8 +28,8 @@ const COVERAGE_LABEL: Record<string, string> = {
 };
 
 const WARNING_TITLE: Record<string, string> = {
-  NOT_READY: 'This step is blocked',
-  NEEDS_CONTEXT: 'More information needed',
+  NOT_READY: 'This step is blocked — complete prerequisites first',
+  NEEDS_CONTEXT: 'Answer a few questions to unlock the next step',
 };
 
 export function GuidanceActionCard({ action, onOpenJourney, compact = false }: GuidanceActionCardProps) {
@@ -69,6 +69,9 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
             {showSeverityBadge ? <GuidanceStatusBadge kind="severity" value={action.severity ?? null} /> : null}
           </div>
         </div>
+        {action.explanation?.what ? (
+          <p className="mb-0 text-sm font-medium text-foreground">{action.explanation.what}</p>
+        ) : null}
         <p className="mb-0 text-sm text-muted-foreground">{advisorySubtitle}</p>
       </CardHeader>
 
@@ -103,7 +106,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
 
         {action.nextStep ? (
           <div className="space-y-1.5">
-            <p className="mb-0 text-xs font-medium text-muted-foreground">Recommended next action</p>
+            <p className="mb-0 text-xs font-medium text-muted-foreground">Your next step</p>
             <GuidancePrimaryCta
               label={nextStepLabel}
               stepNumber={action.nextStep.stepOrder}

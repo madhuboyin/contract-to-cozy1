@@ -10,6 +10,9 @@ type GuidanceActionCopyContext = {
   costOfDelay?: number;
   coverageImpact?: 'COVERED' | 'PARTIAL' | 'NOT_COVERED' | 'UNKNOWN';
   confidenceLabel?: 'HIGH' | 'MEDIUM' | 'LOW';
+  // Item/asset context for specific copy
+  itemName?: string | null;
+  assetType?: string | null;
 };
 
 const STEP_LABEL_MAP: Record<string, string> = {
@@ -100,27 +103,79 @@ export class GuidanceCopyService {
       label: context.stepLabel ?? null,
     });
 
-    let what = `${humanizeEnum(context.signalIntentFamily)} detected`;
-    if (!context.signalIntentFamily) {
+    const familyKey = (context.signalIntentFamily ?? '').toLowerCase();
+    const subject = context.itemName
+      ? `your ${context.itemName}`
+      : context.assetType
+        ? `your ${humanizeEnum(context.assetType).toLowerCase()}`
+        : null;
+
+    // Build a specific "what" using item/asset context when available
+    let what: string;
+    if (subject) {
+      const FAMILY_WHAT: Record<string, string> = {
+        coverage_gap: `${subject} may have a coverage gap`,
+        coverage_lapse_detected: `Coverage on ${subject} is lapsing soon`,
+        lifecycle_end_or_past_life: `${subject} is nearing or past expected life`,
+        maintenance_failure_risk: `${subject} has a maintenance issue that needs attention`,
+        recall_detected: `A safety recall was found on ${subject}`,
+        cost_of_inaction_risk: `Delaying action on ${subject} is increasing your cost`,
+        financial_exposure: `Out-of-pocket exposure detected for ${subject}`,
+        inspection_followup_needed: `Follow-up action is needed from ${subject}'s inspection`,
+        freeze_risk: `${subject} is at risk from freezing temperatures`,
+        heat_risk: `${subject} is at risk from heat stress`,
+        flood_risk: `${subject} is at risk from flooding`,
+        hurricane_risk: `${subject} is at risk from storm damage`,
+        wind_risk: `${subject} is at risk from high winds`,
+        wildfire_risk: `${subject} is at risk from wildfire conditions`,
+        energy_inefficiency_detected: `${subject} is running inefficiently`,
+        high_utility_cost: `${subject} may be driving higher utility costs`,
+        permit_required: `${subject} may require a permit before work proceeds`,
+        hoa_violation_detected: `${subject} may have an HOA violation`,
+        safety_inspection_due: `${subject} is due for a safety inspection`,
+      };
+      what = FAMILY_WHAT[familyKey] ?? `An issue was detected on ${subject}`;
+    } else if (context.signalIntentFamily) {
+      what = `${humanizeEnum(context.signalIntentFamily)} detected`;
+    } else {
       what = `${humanizeEnum(context.issueDomain)} risk needs attention`;
     }
+    // Capitalize first letter
+    what = what.charAt(0).toUpperCase() + what.slice(1);
 
-    let why = 'This can affect your home risk and cost profile.';
+    // Build contextual "why" — reference the specific item when available
+    let why: string;
     if (context.issueDomain === 'SAFETY' || context.issueDomain === 'WEATHER') {
-      why = 'This has direct safety impact, so it should be handled first.';
+      why = subject
+        ? `${subject.charAt(0).toUpperCase() + subject.slice(1)} poses a direct safety risk — act before the window closes.`
+        : 'This has direct safety impact, so it should be handled first.';
     } else if (context.coverageImpact === 'NOT_COVERED') {
-      why = 'Coverage appears limited, so out-of-pocket exposure may be high.';
+      why = subject
+        ? `${subject.charAt(0).toUpperCase() + subject.slice(1)} appears uncovered — full repair costs may come out of pocket.`
+        : 'Coverage appears limited, so out-of-pocket exposure may be high.';
     } else if (context.coverageImpact === 'COVERED') {
-      why = 'Coverage may reduce your cash spend if you validate eligibility first.';
+      why = subject
+        ? `${subject.charAt(0).toUpperCase() + subject.slice(1)} may be covered — validate eligibility before spending.`
+        : 'Coverage may reduce your cash spend if you validate eligibility first.';
     } else if (context.fundingGapFlag) {
-      why = 'Expected cost may exceed available savings without planning.';
+      why = subject
+        ? `Repair or replacement cost for ${subject} may exceed available savings.`
+        : 'Expected cost may exceed available savings without planning.';
+    } else {
+      why = subject
+        ? `Unresolved issues with ${subject} can affect your home value and budget.`
+        : 'This can affect your home risk and cost profile.';
     }
 
     let risk = 'Delaying this can increase avoidable cost and stress.';
     if ((context.costOfDelay ?? 0) > 0) {
-      risk = `Delaying may increase cost by about $${Math.round(context.costOfDelay ?? 0).toLocaleString()}.`;
+      risk = subject
+        ? `Delaying action on ${subject} may increase cost by about $${Math.round(context.costOfDelay ?? 0).toLocaleString()}.`
+        : `Delaying may increase cost by about $${Math.round(context.costOfDelay ?? 0).toLocaleString()}.`;
     } else if (context.priorityBucket === 'HIGH') {
-      risk = 'Delaying can increase risk quickly.';
+      risk = subject
+        ? `Delaying action on ${subject} can escalate risk quickly.`
+        : 'Delaying can increase risk quickly.';
     }
 
     if (context.confidenceLabel === 'LOW') {

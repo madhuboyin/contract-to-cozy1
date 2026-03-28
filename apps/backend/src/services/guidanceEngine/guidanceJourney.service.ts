@@ -252,6 +252,8 @@ export class GuidanceJourneyService {
       costOfDelay: validation.sanitized.costOfDelay,
       coverageImpact: financial.coverageImpact,
       confidenceLabel: adjustedConfidenceLabel,
+      itemName: (journey as any).inventoryItem?.name ?? null,
+      assetType: (journey as any).homeAsset?.assetType ?? null,
     });
 
     const baseWarnings = guidanceCopyService.polishWarnings(next?.warnings ?? [], {
@@ -645,6 +647,12 @@ export class GuidanceJourneyService {
           orderBy: [{ createdAt: 'desc' }],
           take: 50,
         },
+        inventoryItem: {
+          select: { name: true, category: true },
+        },
+        homeAsset: {
+          select: { assetType: true },
+        },
       },
     });
 
@@ -681,6 +689,12 @@ export class GuidanceJourneyService {
         primarySignal: true,
         steps: {
           orderBy: [{ stepOrder: 'asc' }],
+        },
+        inventoryItem: {
+          select: { name: true, category: true },
+        },
+        homeAsset: {
+          select: { assetType: true },
         },
       },
       orderBy: [{ updatedAt: 'desc' }],
