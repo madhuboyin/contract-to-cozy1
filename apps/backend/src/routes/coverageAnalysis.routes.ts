@@ -23,6 +23,7 @@ const overrideSchema = z.object({
 
 const runBodySchema = z.object({
   overrides: overrideSchema.optional(),
+  assumptionSetId: z.string().uuid().optional(),
   guidanceJourneyId: z.string().uuid().optional(),
   guidanceStepKey: z.string().trim().min(1).max(80).optional(),
   guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),
@@ -30,6 +31,7 @@ const runBodySchema = z.object({
 
 const simulateBodySchema = z.object({
   overrides: overrideSchema.optional(),
+  assumptionSetId: z.string().uuid().optional(),
   saveScenario: z.boolean().optional(),
   name: z.string().trim().max(120).optional(),
 });

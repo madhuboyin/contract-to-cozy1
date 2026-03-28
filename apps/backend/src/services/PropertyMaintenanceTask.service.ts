@@ -11,6 +11,7 @@ import {
   } from '@prisma/client';
   import { prisma } from '../lib/prisma';
   import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
+  import { signalService } from './signal.service';
 
   /**
    * Service for managing property maintenance tasks.
@@ -533,6 +534,17 @@ import {
             });
             console.log(`🔄 Synced seasonal uncomplete: checklist ${seasonalItem.seasonalChecklistId} tasks_completed--`);
           }
+        }
+      }
+
+      if (wasCompleted !== isNowCompleted) {
+        try {
+          await signalService.publishMaintenanceAdherenceSignal({
+            propertyId: task.propertyId,
+            sourceId: updatedTask.id,
+          });
+        } catch (signalError) {
+          console.warn('Maintenance adherence signal publish failed (task status update):', signalError);
         }
       }
     

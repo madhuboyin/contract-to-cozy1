@@ -10,6 +10,7 @@ import {
   majorApplianceTypeFromSourceHash,
   PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
 } from './majorAppliance.util';
+import { PreferenceProfileService } from './preferenceProfile.service';
 import {
   getPropertyScoreSnapshotSummary,
   PropertyScoreSnapshotSummaryDTO,
@@ -619,6 +620,7 @@ function buildHomeScoreTrend(summary: PropertyScoreSnapshotSummaryDTO): HomeScor
 
 export class HomeScoreReportService {
   private readonly financialService = new FinancialReportService();
+  private readonly preferenceProfileService = new PreferenceProfileService();
 
   private withHomeScoreReturnContext(propertyId: string, targetHref?: string): string | undefined {
     if (!targetHref) {
@@ -1108,7 +1110,13 @@ export class HomeScoreReportService {
     }
   }
 
-  private async persistReportSnapshot(propertyId: string, userId: string, weeks: number, report: HomeScoreReportDTO) {
+  private async persistReportSnapshot(
+    propertyId: string,
+    userId: string,
+    weeks: number,
+    report: HomeScoreReportDTO,
+    preferenceProfileId?: string | null
+  ) {
     await prisma.$transaction(async (tx) => {
       const scoreModelVersion = this.scoreModelVersion(weeks);
 
@@ -1127,6 +1135,7 @@ export class HomeScoreReportService {
       const createdReport = await tx.homeScoreReport.create({
         data: {
           propertyId,
+          preferenceProfileId: preferenceProfileId ?? null,
           generatedByUserId: userId,
           reportMode: 'HOMEOWNER',
           reportVersion: report.reportMeta.reportVersion || '2.0',
@@ -3050,6 +3059,7 @@ export class HomeScoreReportService {
 
   async getReport(propertyId: string, userId: string, weeks = 26): Promise<HomeScoreReportDTO> {
     await this.assertPropertyAccess(propertyId, userId);
+    const preferenceProfile = await this.preferenceProfileService.getCurrentProfile(propertyId);
 
     const persisted = await this.getPersistedReport(propertyId, weeks);
     const persistedIsFresh = persisted ? !this.isPersistedReportStale(persisted.generatedAt) : false;
@@ -3060,7 +3070,13 @@ export class HomeScoreReportService {
     try {
       const result = await this.build(propertyId, userId, weeks);
       try {
-        await this.persistReportSnapshot(propertyId, userId, weeks, result.report);
+        await this.persistReportSnapshot(
+          propertyId,
+          userId,
+          weeks,
+          result.report,
+          preferenceProfile?.id ?? null
+        );
       } catch (error) {
         console.error('Failed to persist HomeScore snapshot after build:', error);
       }
@@ -3175,6 +3191,7 @@ export class HomeScoreReportService {
 
   async refresh(propertyId: string, userId: string, weeks = 26) {
     await this.assertPropertyAccess(propertyId, userId);
+    const preferenceProfile = await this.preferenceProfileService.getCurrentProfile(propertyId);
 
     await Promise.all([
       RiskAssessmentService.calculateAndSaveReport(propertyId),
@@ -3182,7 +3199,13 @@ export class HomeScoreReportService {
     ]);
     const result = await this.build(propertyId, userId, weeks);
     try {
-      await this.persistReportSnapshot(propertyId, userId, weeks, result.report);
+      await this.persistReportSnapshot(
+        propertyId,
+        userId,
+        weeks,
+        result.report,
+        preferenceProfile?.id ?? null
+      );
     } catch (error) {
       console.error('Failed to persist HomeScore snapshot after refresh:', error);
     }

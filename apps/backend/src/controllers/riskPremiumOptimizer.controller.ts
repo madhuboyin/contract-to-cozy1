@@ -38,7 +38,9 @@ export async function runRiskPremiumOptimizer(req: CustomRequest, res: Response)
     }
 
     const overrides = (req.body?.overrides ?? {}) as RiskPremiumOptimizerOverrides;
-    const analysis = await service.run(propertyId, userId, overrides);
+    const assumptionSetId =
+      typeof req.body?.assumptionSetId === 'string' ? req.body.assumptionSetId : undefined;
+    const analysis = await service.run(propertyId, userId, overrides, { assumptionSetId });
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
     console.error('Error running risk-premium optimization:', error);

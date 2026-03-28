@@ -13,6 +13,7 @@ import {
 const router = Router();
 
 const runBodySchema = z.object({
+  assumptionSetId: z.string().uuid().optional(),
   overrides: z
     .object({
       annualPremium: z.number().nonnegative().optional(),

@@ -99,6 +99,7 @@ import homeRenovationAdvisorRoutes from './homeRenovationAdvisor/homeRenovationA
 import refinanceRadarRoutes from './refinanceRadar/refinanceRadar.routes';
 import gazetteRoutes from './modules/gazette/gazette.routes';
 import gazetteInternalRoutes from './modules/gazette/gazetteInternal.routes';
+import sharedDataRoutes from './routes/sharedData.routes';
 dotenv.config();
 
 const app = express();
@@ -367,6 +368,7 @@ app.use('/api', costExplainerRoutes);
 app.use('/api', sellHoldRentRoutes);
 app.use('/api', propertyFinanceSnapshotRoutes);
 app.use('/api', toolOverrideRoutes);
+app.use('/api', sharedDataRoutes);
 app.use('/api', costVolatilityRoutes);
 app.use('/api', breakEvenRoutes);
 app.use('/api', propertyOnboardingRoutes);

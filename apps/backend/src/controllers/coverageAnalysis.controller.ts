@@ -47,9 +47,11 @@ export async function runCoverageAnalysis(req: CustomRequest, res: Response) {
       typeof req.body?.guidanceSignalIntentFamily === 'string'
         ? req.body.guidanceSignalIntentFamily.trim().toLowerCase()
         : null;
+    const assumptionSetId =
+      typeof req.body?.assumptionSetId === 'string' ? req.body.assumptionSetId : undefined;
 
     const overrides = (req.body?.overrides ?? {}) as CoverageAnalysisOverrides;
-    const analysis = await service.run(propertyId, userId, overrides);
+    const analysis = await service.run(propertyId, userId, overrides, { assumptionSetId });
 
     const shouldEmitGuidanceSignal =
       analysis.overallVerdict !== 'NOT_WORTH_IT' ||

@@ -11,6 +11,12 @@ import {
   RiskPremiumOptimizationStatus,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import {
+  AssumptionSetService,
+  extractAssumptionOverrides,
+  hasAssumptionOverrides,
+} from './assumptionSet.service';
+import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -27,6 +33,10 @@ export type RiskPremiumOptimizerOverrides = {
   assumeNewMitigations?: string[];
 };
 
+export type RiskPremiumRunOptions = {
+  assumptionSetId?: string;
+};
+
 export type UpdateRiskMitigationPlanItemInput = {
   status?: 'RECOMMENDED' | 'PLANNED' | 'DONE' | 'SKIPPED';
   completedAt?: string | null;
@@ -38,6 +48,7 @@ export type RiskPremiumOptimizationDTO = {
   id: string;
   propertyId: string;
   homeownerProfileId: string;
+  assumptionSetId?: string | null;
   status: 'READY' | 'STALE' | 'ERROR';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   summary?: string;
@@ -215,6 +226,7 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     id: record.id,
     propertyId: record.propertyId,
     homeownerProfileId: record.homeownerProfileId,
+    assumptionSetId: record.assumptionSetId ?? null,
     status: record.status,
     confidence: record.confidence,
     summary: record.summary ?? undefined,
@@ -227,6 +239,76 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     ),
     planItems: planItems.map(mapPlanItemToDto),
     computedAt: record.computedAt.toISOString(),
+  };
+}
+
+function deductibleFromPreferenceStyle(
+  style: PreferencePostureDefaults['deductiblePreferenceStyle']
+): number | undefined {
+  if (style === 'LOW_DEDUCTIBLE') return 1000;
+  if (style === 'BALANCED') return 1500;
+  if (style === 'HIGH_DEDUCTIBLE') return 2500;
+  return undefined;
+}
+
+function cashBufferFromPosture(posture: PreferencePostureDefaults['cashBufferPosture']): number | undefined {
+  if (posture === 'TIGHT') return 1500;
+  if (posture === 'MODERATE') return 6000;
+  if (posture === 'STRONG') return 18000;
+  return undefined;
+}
+
+function bundlingFromPreference(
+  preference: PreferencePostureDefaults['bundlingPreference']
+): boolean | undefined {
+  if (preference === 'PREFER_BUNDLED') return true;
+  if (preference === 'PREFER_UNBUNDLED') return false;
+  return undefined;
+}
+
+function parseRiskPremiumOverrides(value: Record<string, unknown>): RiskPremiumOptimizerOverrides {
+  const asFinite = (input: unknown): number | undefined => {
+    const numeric = Number(input);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  };
+
+  const tolerance = String(value.riskTolerance ?? '').toUpperCase();
+  const riskTolerance: RiskTolerance | undefined =
+    tolerance === 'LOW' || tolerance === 'MEDIUM' || tolerance === 'HIGH'
+      ? (tolerance as RiskTolerance)
+      : undefined;
+
+  const assumeNewMitigations = Array.isArray(value.assumeNewMitigations)
+    ? value.assumeNewMitigations.map((entry) => String(entry)).filter(Boolean)
+    : undefined;
+
+  return {
+    annualPremium: asFinite(value.annualPremium),
+    deductibleAmount: asFinite(value.deductibleAmount),
+    cashBuffer: asFinite(value.cashBuffer),
+    riskTolerance,
+    assumeBundled: typeof value.assumeBundled === 'boolean' ? value.assumeBundled : undefined,
+    assumeNewMitigations,
+  };
+}
+
+function applyPreferenceDefaults(
+  overrides: RiskPremiumOptimizerOverrides | undefined,
+  posture: PreferencePostureDefaults
+): RiskPremiumOptimizerOverrides {
+  const base = overrides ?? {};
+  const riskTolerance =
+    base.riskTolerance ??
+    (posture.riskTolerance === 'LOW' || posture.riskTolerance === 'MEDIUM' || posture.riskTolerance === 'HIGH'
+      ? posture.riskTolerance
+      : undefined);
+
+  return {
+    ...base,
+    riskTolerance,
+    deductibleAmount: base.deductibleAmount ?? deductibleFromPreferenceStyle(posture.deductiblePreferenceStyle),
+    cashBuffer: base.cashBuffer ?? cashBufferFromPosture(posture.cashBufferPosture),
+    assumeBundled: base.assumeBundled ?? bundlingFromPreference(posture.bundlingPreference),
   };
 }
 
@@ -286,6 +368,9 @@ function mapPerilToActionType(peril: Peril, strategy: 'PRIMARY' | 'SECONDARY'): 
 }
 
 export class RiskPremiumOptimizerService {
+  private preferenceProfileService = new PreferenceProfileService();
+  private assumptionSetService = new AssumptionSetService();
+
   async getLatest(propertyId: string, userId: string) {
     await assertPropertyForUser(propertyId, userId);
 
@@ -307,7 +392,47 @@ export class RiskPremiumOptimizerService {
     };
   }
 
-  async run(propertyId: string, userId: string, overrides?: RiskPremiumOptimizerOverrides) {
+  async run(
+    propertyId: string,
+    userId: string,
+    overrides?: RiskPremiumOptimizerOverrides,
+    options?: RiskPremiumRunOptions
+  ) {
+    const posture = await this.preferenceProfileService.resolvePostureDefaults(propertyId);
+    let assumptionSetId: string | null = null;
+    let assumptionOverrides: RiskPremiumOptimizerOverrides = {};
+
+    if (options?.assumptionSetId) {
+      const existingSet = await this.assumptionSetService.getById(propertyId, options.assumptionSetId);
+      if (!existingSet) {
+        throw new Error('Assumption set not found for this property.');
+      }
+      assumptionSetId = existingSet.id;
+      assumptionOverrides = parseRiskPremiumOverrides(extractAssumptionOverrides(existingSet.assumptionsJson));
+    }
+
+    const mergedOverrides = {
+      ...assumptionOverrides,
+      ...(overrides ?? {}),
+    };
+    const effectiveOverrides = applyPreferenceDefaults(mergedOverrides, posture);
+
+    if (hasAssumptionOverrides(overrides)) {
+      const createdSet = await this.assumptionSetService.create({
+        propertyId,
+        toolKey: 'RISK_PREMIUM_OPTIMIZER',
+        scenarioKey: null,
+        preferenceProfileId: posture.preferenceProfileId,
+        assumptionsJson: {
+          version: 1,
+          overrides: effectiveOverrides,
+          parentAssumptionSetId: assumptionSetId,
+        },
+        createdByUserId: userId,
+      });
+      assumptionSetId = createdSet.id;
+    }
+
     const property = await assertPropertyForUser(propertyId, userId);
     const now = new Date();
     const lookback = new Date();
@@ -371,9 +496,9 @@ export class RiskPremiumOptimizerService {
       policies.find((policy) => policy.startDate <= now && policy.expiryDate >= now) ?? policies[0] ?? null;
 
     const annualPremium =
-      overrides?.annualPremium ?? (activePolicy ? asNumber(activePolicy.premiumAmount) : undefined);
+      effectiveOverrides.annualPremium ?? (activePolicy ? asNumber(activePolicy.premiumAmount) : undefined);
     const deductibleAmount =
-      overrides?.deductibleAmount ?? (activePolicy ? asNumber(activePolicy.deductibleAmount) : undefined);
+      effectiveOverrides.deductibleAmount ?? (activePolicy ? asNumber(activePolicy.deductibleAmount) : undefined);
 
     const inferredCashBuffer = (() => {
       const totalBudget = asNumber(property.homeownerProfile.totalBudget);
@@ -383,11 +508,11 @@ export class RiskPremiumOptimizerService {
       return Number.isFinite(available) ? available : undefined;
     })();
 
-    const cashBuffer = overrides?.cashBuffer ?? inferredCashBuffer;
-    const riskTolerance: RiskTolerance = overrides?.riskTolerance ?? 'MEDIUM';
-    const assumeBundled = Boolean(overrides?.assumeBundled);
+    const cashBuffer = effectiveOverrides.cashBuffer ?? inferredCashBuffer;
+    const riskTolerance: RiskTolerance = effectiveOverrides.riskTolerance ?? 'MEDIUM';
+    const assumeBundled = Boolean(effectiveOverrides.assumeBundled);
     const assumedMitigations = new Set(
-      (overrides?.assumeNewMitigations ?? []).map((value) => String(value).toUpperCase())
+      (effectiveOverrides.assumeNewMitigations ?? []).map((value) => String(value).toUpperCase())
     );
 
     const riskScore = property.riskReport?.riskScore ?? null;
@@ -901,6 +1026,7 @@ export class RiskPremiumOptimizerService {
         data: {
           homeownerProfileId: property.homeownerProfileId,
           propertyId,
+          assumptionSetId: assumptionSetId ?? null,
           status: RiskPremiumOptimizationStatus.READY,
           confidence,
           summary,
@@ -916,6 +1042,8 @@ export class RiskPremiumOptimizerService {
               policyId: activePolicy?.id ?? null,
               assumeBundled,
               assumeNewMitigations: Array.from(assumedMitigations.values()),
+              preferenceProfileId: posture.preferenceProfileId,
+              assumptionSetId,
             },
             signals: {
               riskScore,

@@ -10,6 +10,12 @@ import {
   Prisma,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import {
+  AssumptionSetService,
+  extractAssumptionOverrides,
+  hasAssumptionOverrides,
+} from './assumptionSet.service';
+import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type DeductibleStrategy = 'KEEP_HIGH' | 'RAISE' | 'LOWER' | 'UNCHANGED';
@@ -41,6 +47,7 @@ export type UpdateDoNothingScenarioInput = {
 
 export type RunDoNothingSimulationInput = {
   scenarioId?: string;
+  assumptionSetId?: string;
   horizonMonths: number;
   inputOverrides?: DoNothingInputOverrides;
 };
@@ -60,6 +67,7 @@ export type DoNothingRunDTO = {
   id: string;
   propertyId: string;
   homeownerProfileId: string;
+  assumptionSetId?: string | null;
   scenarioId?: string | null;
 
   status: 'READY' | 'STALE' | 'ERROR';
@@ -216,6 +224,45 @@ function mergeOverrides(
   };
 }
 
+function deductibleStrategyFromPreference(
+  style: PreferencePostureDefaults['deductiblePreferenceStyle']
+): DeductibleStrategy | undefined {
+  if (style === 'LOW_DEDUCTIBLE') return 'LOWER';
+  if (style === 'HIGH_DEDUCTIBLE') return 'RAISE';
+  if (style === 'BALANCED') return 'UNCHANGED';
+  return undefined;
+}
+
+function cashBufferCentsFromPosture(posture: PreferencePostureDefaults['cashBufferPosture']): number | undefined {
+  if (posture === 'TIGHT') return 150000;
+  if (posture === 'MODERATE') return 600000;
+  if (posture === 'STRONG') return 1800000;
+  return undefined;
+}
+
+function riskToleranceFromPosture(
+  posture: PreferencePostureDefaults['riskTolerance']
+): RiskTolerance | undefined {
+  if (posture === 'LOW' || posture === 'MEDIUM' || posture === 'HIGH') {
+    return posture;
+  }
+  return undefined;
+}
+
+function applyPreferenceDefaults(
+  overrides: DoNothingInputOverrides | undefined,
+  posture: PreferencePostureDefaults
+): DoNothingInputOverrides {
+  const base = overrides ?? {};
+  return {
+    ...base,
+    deductibleStrategy:
+      base.deductibleStrategy ?? deductibleStrategyFromPreference(posture.deductiblePreferenceStyle),
+    cashBufferCents: base.cashBufferCents ?? cashBufferCentsFromPosture(posture.cashBufferPosture),
+    riskTolerance: base.riskTolerance ?? riskToleranceFromPosture(posture.riskTolerance),
+  };
+}
+
 function mapClaimTypeToPeril(type: ClaimType): Peril {
   if (type === ClaimType.WATER_DAMAGE || type === ClaimType.PLUMBING) return 'WATER';
   if (type === ClaimType.FIRE_SMOKE) return 'FIRE';
@@ -261,6 +308,7 @@ function mapRunToDto(run: DoNothingSimulationRun): DoNothingRunDTO {
     id: run.id,
     propertyId: run.propertyId,
     homeownerProfileId: run.homeownerProfileId,
+    assumptionSetId: run.assumptionSetId ?? null,
     scenarioId: run.scenarioId ?? null,
     status: run.status,
     confidence: run.confidence,
@@ -350,6 +398,9 @@ function dedupeSteps(steps: NextStep[]): NextStep[] {
 }
 
 export class DoNothingSimulatorService {
+  private preferenceProfileService = new PreferenceProfileService();
+  private assumptionSetService = new AssumptionSetService();
+
   async listScenarios(propertyId: string, userId: string) {
     const property = await assertPropertyForUser(propertyId, userId);
 
@@ -464,16 +515,50 @@ export class DoNothingSimulatorService {
   async run(propertyId: string, userId: string, input: RunDoNothingSimulationInput) {
     const property = await assertPropertyForUser(propertyId, userId);
     const horizonMonths = normalizeHorizon(input.horizonMonths);
+    const posture = await this.preferenceProfileService.resolvePostureDefaults(propertyId);
+    let assumptionSetId: string | null = null;
+    let assumptionOverrides: DoNothingInputOverrides = {};
+
+    if (input.assumptionSetId) {
+      const existingSet = await this.assumptionSetService.getById(propertyId, input.assumptionSetId);
+      if (!existingSet) {
+        throw new Error('Assumption set not found for this property.');
+      }
+      assumptionSetId = existingSet.id;
+      assumptionOverrides = normalizeOverrides(extractAssumptionOverrides(existingSet.assumptionsJson));
+    }
 
     let scenario: DoNothingScenario | null = null;
     if (input.scenarioId) {
       scenario = await assertScenarioForProperty(propertyId, property.homeownerProfileId, input.scenarioId);
     }
 
-    const mergedOverrides = mergeOverrides(
-      scenario ? normalizeOverrides(scenario.inputOverrides) : undefined,
-      normalizeOverrides(input.inputOverrides)
-    );
+    const scenarioOverrides = scenario ? normalizeOverrides(scenario.inputOverrides) : {};
+    const requestOverrides = normalizeOverrides(input.inputOverrides);
+    const mergedRawOverrides = {
+      ...scenarioOverrides,
+      ...assumptionOverrides,
+      ...requestOverrides,
+    };
+    const preferenceAdjusted = applyPreferenceDefaults(mergedRawOverrides, posture);
+    const mergedOverrides = mergeOverrides(undefined, preferenceAdjusted);
+
+    if (hasAssumptionOverrides(requestOverrides as Record<string, unknown>)) {
+      const createdSet = await this.assumptionSetService.create({
+        propertyId,
+        toolKey: 'DO_NOTHING_SIMULATOR',
+        scenarioKey: scenario?.id ?? null,
+        preferenceProfileId: posture.preferenceProfileId,
+        assumptionsJson: {
+          version: 1,
+          horizonMonths,
+          overrides: mergedOverrides,
+          parentAssumptionSetId: assumptionSetId,
+        },
+        createdByUserId: userId,
+      });
+      assumptionSetId = createdSet.id;
+    }
 
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 36);
@@ -1046,6 +1131,8 @@ export class DoNothingSimulatorService {
       baselineAt: now.toISOString(),
       horizonMonths,
       scenarioId: scenario?.id ?? null,
+      assumptionSetId,
+      preferenceProfileId: posture.preferenceProfileId,
       policy: {
         policyId: activePolicy?.id ?? null,
         annualPremium: annualPremiumDollars ?? null,
@@ -1080,6 +1167,7 @@ export class DoNothingSimulatorService {
       data: {
         homeownerProfileId: property.homeownerProfileId,
         propertyId,
+        assumptionSetId: assumptionSetId ?? null,
         scenarioId: scenario?.id ?? null,
         status: DoNothingSimulationStatus.READY,
         confidence,

@@ -20,6 +20,7 @@ import {
   RunComparisonInput,
 } from './homeSavings/types';
 import { amountToAnnual, amountToMonthly, asNumber, round2, toRecord } from './homeSavings/helpers';
+import { signalService } from './signal.service';
 
 export type HomeSavingsCategoryStatus = 'NOT_SET_UP' | 'CONNECTED' | 'FOUND_SAVINGS';
 
@@ -619,6 +620,25 @@ export class HomeSavingsService {
         status,
       },
     });
+
+    if (
+      opportunity.propertyId &&
+      (status === HomeSavingsOpportunityStatus.APPLIED ||
+        status === HomeSavingsOpportunityStatus.SWITCHED)
+    ) {
+      try {
+        await signalService.publishSavingsRealizationSignal({
+          propertyId: opportunity.propertyId,
+          opportunityId: opportunity.id,
+          status: opportunity.status,
+          estimatedMonthlySavings: asNumber(opportunity.estimatedMonthlySavings) ?? null,
+          estimatedAnnualSavings: asNumber(opportunity.estimatedAnnualSavings) ?? null,
+          currency: opportunity.currency,
+        });
+      } catch (signalError) {
+        console.warn('Savings realization signal publish failed:', signalError);
+      }
+    }
 
     return {
       opportunity: serializeOpportunity(opportunity),

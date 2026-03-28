@@ -10,6 +10,13 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from './coverageGap.service';
+import {
+  AssumptionSetService,
+  extractAssumptionOverrides,
+  hasAssumptionOverrides,
+} from './assumptionSet.service';
+import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
+import { signalService } from './signal.service';
 
 type Impact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -39,8 +46,13 @@ export type ItemCoverageAnalysisOverrides = {
 
 export type CoverageSimulationInput = {
   overrides?: CoverageAnalysisOverrides;
+  assumptionSetId?: string;
   saveScenario?: boolean;
   name?: string;
+};
+
+export type CoverageRunOptions = {
+  assumptionSetId?: string;
 };
 
 export type ItemCoverageAnalysisInput = {
@@ -51,6 +63,7 @@ export type CoverageAnalysisDTO = {
   id: string;
   propertyId: string;
   homeownerProfileId: string;
+  assumptionSetId?: string | null;
   status: 'READY' | 'STALE' | 'ERROR';
   computedAt: string;
 
@@ -362,6 +375,79 @@ function riskToleranceMultiplier(riskTolerance: RiskTolerance): number {
   return 1;
 }
 
+function deductibleFromPreferenceStyle(
+  style: PreferencePostureDefaults['deductiblePreferenceStyle']
+): number | undefined {
+  if (style === 'LOW_DEDUCTIBLE') return 1000;
+  if (style === 'HIGH_DEDUCTIBLE') return 2500;
+  if (style === 'BALANCED') return 1500;
+  return undefined;
+}
+
+function cashBufferFromPosture(posture: PreferencePostureDefaults['cashBufferPosture']): number | undefined {
+  if (posture === 'TIGHT') return 1500;
+  if (posture === 'MODERATE') return 6000;
+  if (posture === 'STRONG') return 18000;
+  return undefined;
+}
+
+function applyPreferenceDefaults(
+  overrides: CoverageAnalysisOverrides | undefined,
+  posture: PreferencePostureDefaults
+): CoverageAnalysisOverrides {
+  const base = overrides ?? {};
+  const riskTolerance =
+    base.riskTolerance ??
+    (posture.riskTolerance === 'LOW' || posture.riskTolerance === 'MEDIUM' || posture.riskTolerance === 'HIGH'
+      ? posture.riskTolerance
+      : undefined);
+
+  return {
+    ...base,
+    riskTolerance,
+    deductibleUsd: base.deductibleUsd ?? deductibleFromPreferenceStyle(posture.deductiblePreferenceStyle),
+    cashBufferUsd: base.cashBufferUsd ?? cashBufferFromPosture(posture.cashBufferPosture),
+  };
+}
+
+function parseCoverageOverrides(value: Record<string, unknown>): CoverageAnalysisOverrides {
+  const asFinite = (input: unknown): number | undefined => {
+    const numeric = Number(input);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  };
+
+  const tolerance = String(value.riskTolerance ?? '').toUpperCase();
+  const riskTolerance: RiskTolerance | undefined =
+    tolerance === 'LOW' || tolerance === 'MEDIUM' || tolerance === 'HIGH'
+      ? (tolerance as RiskTolerance)
+      : undefined;
+
+  return {
+    annualPremiumUsd: asFinite(value.annualPremiumUsd),
+    deductibleUsd: asFinite(value.deductibleUsd),
+    warrantyAnnualCostUsd: asFinite(value.warrantyAnnualCostUsd),
+    warrantyServiceFeeUsd: asFinite(value.warrantyServiceFeeUsd),
+    cashBufferUsd: asFinite(value.cashBufferUsd),
+    riskTolerance,
+  };
+}
+
+function countCoverageGapsFromInputsSnapshot(snapshot: Prisma.JsonValue | null | undefined): number {
+  const root = safeObject<Record<string, unknown>>(snapshot, {});
+  const counts =
+    root.counts && typeof root.counts === 'object' && !Array.isArray(root.counts)
+      ? (root.counts as Record<string, unknown>)
+      : {};
+  const count = Number(counts.coverageGaps ?? 0);
+  return Number.isFinite(count) ? Math.max(0, Math.round(count)) : 0;
+}
+
+function confidenceToScore(confidence: CoverageConfidence): number {
+  if (confidence === CoverageConfidence.HIGH) return 0.9;
+  if (confidence === CoverageConfidence.MEDIUM) return 0.7;
+  return 0.45;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -524,6 +610,7 @@ function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
     id: analysis.id,
     propertyId: analysis.propertyId,
     homeownerProfileId: analysis.homeownerProfileId,
+    assumptionSetId: analysis.assumptionSetId ?? null,
     status: analysis.status,
     computedAt: analysis.computedAt.toISOString(),
     overallVerdict: analysis.overallVerdict,
@@ -633,6 +720,9 @@ function mapAnalysisToItemDto(
 }
 
 export class CoverageIntelligenceService {
+  private preferenceProfileService = new PreferenceProfileService();
+  private assumptionSetService = new AssumptionSetService();
+
   private async computeSnapshot(
     propertyId: string,
     userId: string,
@@ -1092,15 +1182,81 @@ export class CoverageIntelligenceService {
     return { snapshot, homeownerProfileId };
   }
 
+  private async resolveRunInputs(
+    propertyId: string,
+    userId: string,
+    overrides: CoverageAnalysisOverrides | undefined,
+    options?: CoverageRunOptions
+  ): Promise<{
+    effectiveOverrides: CoverageAnalysisOverrides | undefined;
+    assumptionSetId: string | null;
+    preferenceProfileId: string | null;
+  }> {
+    const posture = await this.preferenceProfileService.resolvePostureDefaults(propertyId);
+
+    let assumptionSetId: string | null = null;
+    let assumptionOverrides: CoverageAnalysisOverrides = {};
+
+    if (options?.assumptionSetId) {
+      const existing = await this.assumptionSetService.getById(propertyId, options.assumptionSetId);
+      if (!existing) {
+        throw new Error('Assumption set not found for this property.');
+      }
+      assumptionSetId = existing.id;
+      assumptionOverrides = parseCoverageOverrides(extractAssumptionOverrides(existing.assumptionsJson));
+    }
+
+    const preferenceAdjusted = applyPreferenceDefaults(overrides, posture);
+    const effectiveOverrides = {
+      ...assumptionOverrides,
+      ...preferenceAdjusted,
+    };
+
+    if (hasAssumptionOverrides(overrides)) {
+      const created = await this.assumptionSetService.create({
+        propertyId,
+        toolKey: 'COVERAGE_ANALYSIS',
+        scenarioKey: null,
+        preferenceProfileId: posture.preferenceProfileId,
+        assumptionsJson: {
+          version: 1,
+          overrides: effectiveOverrides,
+          parentAssumptionSetId: assumptionSetId,
+        },
+        createdByUserId: userId,
+      });
+      assumptionSetId = created.id;
+    }
+
+    return {
+      effectiveOverrides,
+      assumptionSetId,
+      preferenceProfileId: posture.preferenceProfileId,
+    };
+  }
+
+  private async publishCoverageGapSignal(analysis: LatestAnalysisRecord): Promise<void> {
+    const gapCount = countCoverageGapsFromInputsSnapshot(analysis.inputsSnapshot);
+    await signalService.publishCoverageGapSignal({
+      propertyId: analysis.propertyId,
+      coverageAnalysisId: analysis.id,
+      gapCount,
+      confidence: confidenceToScore(analysis.confidence),
+      verdict: analysis.overallVerdict,
+    });
+  }
+
   private async createAnalysisRecord(
     propertyId: string,
     homeownerProfileId: string,
-    snapshot: ComputedSnapshot
+    snapshot: ComputedSnapshot,
+    assumptionSetId?: string | null
   ): Promise<LatestAnalysisRecord> {
     const analysis = await prisma.coverageAnalysis.create({
       data: {
         propertyId,
         homeownerProfileId,
+        assumptionSetId: assumptionSetId ?? null,
         status: snapshot.status,
         confidence: snapshot.confidence,
         impactLevel: snapshot.impactLevel,
@@ -1669,10 +1825,28 @@ export class CoverageIntelligenceService {
   async run(
     propertyId: string,
     userId: string,
-    overrides?: CoverageAnalysisOverrides
+    overrides?: CoverageAnalysisOverrides,
+    options?: CoverageRunOptions
   ): Promise<CoverageAnalysisDTO> {
-    const { snapshot, homeownerProfileId } = await this.computeSnapshot(propertyId, userId, overrides);
-    const analysis = await this.createAnalysisRecord(propertyId, homeownerProfileId, snapshot);
+    const resolved = await this.resolveRunInputs(propertyId, userId, overrides, options);
+    const { snapshot, homeownerProfileId } = await this.computeSnapshot(
+      propertyId,
+      userId,
+      resolved.effectiveOverrides
+    );
+    const analysis = await this.createAnalysisRecord(
+      propertyId,
+      homeownerProfileId,
+      snapshot,
+      resolved.assumptionSetId
+    );
+
+    try {
+      await this.publishCoverageGapSignal(analysis);
+    } catch (error) {
+      console.warn('Coverage gap signal publish failed:', error);
+    }
+
     return mapAnalysisToDto(analysis);
   }
 
@@ -1702,17 +1876,17 @@ export class CoverageIntelligenceService {
     userId: string,
     input: CoverageSimulationInput
   ): Promise<CoverageAnalysisDTO> {
-    const { snapshot, homeownerProfileId } = await this.computeSnapshot(
-      propertyId,
-      userId,
-      input.overrides
-    );
+    const resolved = await this.resolveRunInputs(propertyId, userId, input.overrides, {
+      assumptionSetId: input.assumptionSetId,
+    });
+    const { snapshot, homeownerProfileId } = await this.computeSnapshot(propertyId, userId, resolved.effectiveOverrides);
 
     if (!input.saveScenario) {
       return {
         id: `sim-${Date.now()}`,
         propertyId,
         homeownerProfileId,
+        assumptionSetId: resolved.assumptionSetId,
         status: snapshot.status,
         computedAt: new Date().toISOString(),
         overallVerdict: snapshot.overallVerdict,
@@ -1754,7 +1928,12 @@ export class CoverageIntelligenceService {
     });
 
     if (!latest) {
-      latest = await this.createAnalysisRecord(propertyId, homeownerProfileId, snapshot);
+      latest = await this.createAnalysisRecord(
+        propertyId,
+        homeownerProfileId,
+        snapshot,
+        resolved.assumptionSetId
+      );
     }
 
     await prisma.coverageScenario.create({

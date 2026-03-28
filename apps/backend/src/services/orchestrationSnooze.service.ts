@@ -1,6 +1,7 @@
 // apps/backend/src/services/orchestrationSnooze.service.ts
 
 import { prisma } from '../lib/prisma';
+import { signalService } from './signal.service';
 
 export type ActiveSnooze = {
   id: string;
@@ -76,6 +77,15 @@ export async function snoozeAction(params: {
     },
   });
 
+  try {
+    await signalService.publishMaintenanceAdherenceSignal({
+      propertyId,
+      sourceId: actionKey,
+    });
+  } catch (signalError) {
+    console.warn('Maintenance adherence signal publish failed (snooze):', signalError);
+  }
+
   return { success: true };
 }
 
@@ -96,6 +106,15 @@ export async function unsnoozeAction(
       endedAt: new Date(),
     },
   });
+
+  try {
+    await signalService.publishMaintenanceAdherenceSignal({
+      propertyId,
+      sourceId: actionKey,
+    });
+  } catch (signalError) {
+    console.warn('Maintenance adherence signal publish failed (unsnooze):', signalError);
+  }
 
   return { success: true };
 }

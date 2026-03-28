@@ -1,6 +1,7 @@
 // apps/backend/src/services/orchestrationCompletion.service.ts
 import { prisma } from '../lib/prisma';
 import { CompletionCreateInput, CompletionResponse } from './orchestration.service';
+import { signalService } from './signal.service';
 
 export async function createCompletion(params: {
   propertyId: string;
@@ -43,6 +44,15 @@ export async function createCompletion(params: {
         completionId: completion.id,
       },
     });
+  }
+
+  try {
+    await signalService.publishMaintenanceAdherenceSignal({
+      propertyId,
+      sourceId: completion.id,
+    });
+  } catch (signalError) {
+    console.warn('Maintenance adherence signal publish failed (completion create):', signalError);
   }
 
   return mapCompletionToResponse(completion);
@@ -120,6 +130,15 @@ export async function updateCompletion(
       },
     },
   });
+
+  try {
+    await signalService.publishMaintenanceAdherenceSignal({
+      propertyId,
+      sourceId: updated.id,
+    });
+  } catch (signalError) {
+    console.warn('Maintenance adherence signal publish failed (completion update):', signalError);
+  }
 
   return mapCompletionToResponse(updated);
 }
