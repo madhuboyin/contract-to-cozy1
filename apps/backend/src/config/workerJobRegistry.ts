@@ -286,6 +286,32 @@ export const JOB_REGISTRY: JobRegistryEntry[] = [
     jobName: 'home-gazette-generation',
     triggerSupported: true,
   },
+  {
+    key: 'shared-data-backfill',
+    name: 'Shared Data Backfill',
+    description:
+      'Backfills shared CtC data primitives (PreferenceProfile, AssumptionSet, and Signal) for existing properties. Idempotent and safe to rerun.',
+    category: 'HOME_INTELLIGENCE',
+    schedule: 'Daily at 2:20 AM EST',
+    cronExpression: '20 2 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'shared-data-backfill',
+    triggerSupported: true,
+  },
+  {
+    key: 'shared-data-consistency-audit',
+    name: 'Shared Data Consistency Audit',
+    description:
+      'Builds shared-data consistency and readiness diagnostics across properties for operational visibility.',
+    category: 'HOME_INTELLIGENCE',
+    schedule: 'Daily at 2:40 AM EST',
+    cronExpression: '40 2 * * *',
+    type: 'cron',
+    queueName: 'cron-trigger-queue',
+    jobName: 'shared-data-consistency-audit',
+    triggerSupported: true,
+  },
 
   // ── Guidance Engine (cron) ────────────────────────────────────────────────
   {

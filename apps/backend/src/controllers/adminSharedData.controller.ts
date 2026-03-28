@@ -1,0 +1,72 @@
+import { Request, Response } from 'express';
+import { sharedDataBackfillService } from '../services/sharedDataBackfill.service';
+
+function parseScope(req: Request): { propertyId?: string; limit?: number; startAfterPropertyId?: string } {
+  const propertyId = typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined;
+  const startAfterPropertyId =
+    typeof req.query.startAfterPropertyId === 'string' ? req.query.startAfterPropertyId : undefined;
+  const parsedLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+
+  return {
+    propertyId,
+    startAfterPropertyId,
+    limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+  };
+}
+
+export async function runSharedDataBackfillHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const summary = await sharedDataBackfillService.runBackfill({
+      propertyId: typeof req.body?.propertyId === 'string' ? req.body.propertyId : undefined,
+      dryRun: typeof req.body?.dryRun === 'boolean' ? req.body.dryRun : true,
+      limit: Number.isFinite(Number(req.body?.limit)) ? Number(req.body.limit) : undefined,
+      startAfterPropertyId:
+        typeof req.body?.startAfterPropertyId === 'string' ? req.body.startAfterPropertyId : undefined,
+      includePreference:
+        typeof req.body?.includePreference === 'boolean' ? req.body.includePreference : undefined,
+      includeAssumptions:
+        typeof req.body?.includeAssumptions === 'boolean' ? req.body.includeAssumptions : undefined,
+      includeSignals: typeof req.body?.includeSignals === 'boolean' ? req.body.includeSignals : undefined,
+    });
+
+    res.json({ success: true, data: summary });
+  } catch (error: any) {
+    console.error('[ADMIN-SHARED-DATA] Failed to run backfill:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error?.message || 'Failed to run shared data backfill.',
+      },
+    });
+  }
+}
+
+export async function getSharedDataReadinessHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const report = await sharedDataBackfillService.getReadinessReport(parseScope(req));
+    res.json({ success: true, data: report });
+  } catch (error: any) {
+    console.error('[ADMIN-SHARED-DATA] Failed to build readiness report:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error?.message || 'Failed to build shared data readiness report.',
+      },
+    });
+  }
+}
+
+export async function getSharedDataConsistencyHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const report = await sharedDataBackfillService.getConsistencyReport(parseScope(req));
+    res.json({ success: true, data: report });
+  } catch (error: any) {
+    console.error('[ADMIN-SHARED-DATA] Failed to build consistency report:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        message: error?.message || 'Failed to build shared data consistency report.',
+      },
+    });
+  }
+}
