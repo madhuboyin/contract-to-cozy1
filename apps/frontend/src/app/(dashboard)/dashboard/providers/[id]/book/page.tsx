@@ -46,6 +46,7 @@ export default function BookProviderPage() {
   const homeAssetId = searchParams.get('homeAssetId');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
+  const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const providerId = params.id as string;
 
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -211,6 +212,7 @@ export default function BookProviderPage() {
       ...(inventoryItemId && { inventoryItemId }),
       ...(guidanceJourneyId && { guidanceJourneyId }),
       ...(guidanceJourneyId && guidanceStepKey && { guidanceStepKey }),
+      ...(guidanceSignalIntentFamily && { guidanceSignalIntentFamily }),
       ...(guidanceJourneyId && { guidanceEnforceGuard: true }),
     };
 

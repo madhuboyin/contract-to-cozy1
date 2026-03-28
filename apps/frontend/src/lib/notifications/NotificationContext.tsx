@@ -12,6 +12,14 @@ type SignalSourceBadge = {
   confidence?: number | null;
 };
 
+type GuidanceContextBadge = {
+  guidanceJourneyId?: string | null;
+  guidanceStepKey?: string | null;
+  guidanceSignalIntentFamily?: string | null;
+  itemId?: string | null;
+  homeAssetId?: string | null;
+};
+
 
 export type Notification = {
   id: string;
@@ -25,6 +33,8 @@ export type Notification = {
   readAt?: string | null;
   createdAt: string;
   signalSource?: SignalSourceBadge;
+  guidanceContext?: GuidanceContextBadge | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 type NotificationContextType = {

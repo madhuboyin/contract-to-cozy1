@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/actions/ActionsClient.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api/client';
 import { OrchestratedActionDTO, Property, CompletionDataDTO } from '@/types';
 import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
@@ -19,7 +19,7 @@ import { DecisionTraceModal } from '@/components/orchestration/DecisionTraceModa
 import { useCallback } from 'react';
 import { SnoozeModal } from '@/components/orchestration/SnoozeModal';
 import { CompletionModal } from '@/components/orchestration/CompletionModal';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
 import {
   BottomSafeAreaGuard,
@@ -31,9 +31,15 @@ import {
   MobileSection,
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { useGuidance } from '@/features/guidance/hooks/useGuidance';
+import {
+  buildGuidanceCtaLabel,
+  resolveGuidanceForOrchestrationAction,
+} from '@/components/orchestration/guidanceActionLinking';
 
 export function ActionsClient() {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   // 1. Prioritize URL parameter, fallback to context
@@ -63,6 +69,22 @@ export function ActionsClient() {
 
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
   const [completionAction, setCompletionAction] = useState<OrchestratedActionDTO | null>(null);
+  const guidanceQuery = useGuidance(propertyId, {
+    enabled: Boolean(propertyId),
+    limit: 12,
+  });
+  const guidanceByActionKey = useMemo(() => {
+    const out = new Map<string, ReturnType<typeof resolveGuidanceForOrchestrationAction>>();
+    const allActions = [...actions, ...suppressedActions, ...snoozedActions];
+    for (const action of allActions) {
+      const match = resolveGuidanceForOrchestrationAction({
+        action,
+        guidanceActions: guidanceQuery.actions,
+      });
+      if (match?.href) out.set(action.actionKey, match);
+    }
+    return out;
+  }, [actions, suppressedActions, snoozedActions, guidanceQuery.actions]);
 
   const loadActions = useCallback(async () => {
     if (!propertyId) {
@@ -137,6 +159,12 @@ export function ActionsClient() {
         description: 'This task is already in your maintenance schedule.',
         variant: 'default',
       });
+      return;
+    }
+
+    const guidanceAction = guidanceByActionKey.get(action.actionKey);
+    if (guidanceAction?.href) {
+      router.push(guidanceAction.href);
       return;
     }
 
@@ -426,6 +454,8 @@ export function ActionsClient() {
               {actions.map((action) => {
                 const isChecklistAction = action.source === 'CHECKLIST';
                 const isSuppressed = action.suppression?.suppressed;
+                const guidanceAction = guidanceByActionKey.get(action.actionKey);
+                const guidanceCtaLabel = guidanceAction ? buildGuidanceCtaLabel(guidanceAction) : undefined;
 
                 // Task created server-side (preferred truth)
                 const hasTaskCreated = action.hasRelatedChecklistItem === true;
@@ -450,7 +480,7 @@ export function ActionsClient() {
                             ? 'Already scheduled'
                             : isChecklistAction
                               ? 'View in Maintenance'
-                              : undefined
+                              : guidanceCtaLabel
                     }
                   />
                 );

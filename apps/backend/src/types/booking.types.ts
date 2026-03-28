@@ -32,6 +32,7 @@ export const createBookingSchema = z.object({
   inventoryItemId: z.string().uuid('Invalid inventory item ID').optional(),
   guidanceJourneyId: z.string().uuid('Invalid guidance journey ID').optional(),
   guidanceStepKey: z.string().optional(),
+  guidanceSignalIntentFamily: z.string().optional(),
   guidanceEnforceGuard: z.boolean().optional(),
 });
 

@@ -47,10 +47,12 @@ export class BookingController {
       const {
         guidanceJourneyId,
         guidanceStepKey,
+        guidanceSignalIntentFamily,
         ...bookingInput
       } = input as CreateBookingInput & {
         guidanceJourneyId?: string;
         guidanceStepKey?: string;
+        guidanceSignalIntentFamily?: string;
       };
 
       await guidanceBookingGuardService.assertCanExecute({
@@ -60,7 +62,11 @@ export class BookingController {
         targetAction: 'BOOKING',
       });
 
-      const booking = await BookingService.createBooking(userId, bookingInput);
+      const booking = await BookingService.createBooking(userId, bookingInput, {
+        guidanceJourneyId: guidanceJourneyId ?? null,
+        guidanceStepKey: guidanceStepKey ?? null,
+        guidanceSignalIntentFamily: guidanceSignalIntentFamily ?? null,
+      });
 
       if (guidanceJourneyId) {
         try {

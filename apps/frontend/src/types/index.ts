@@ -1399,6 +1399,7 @@ export interface CreateBookingInput {
   maintenancePredictionId?: string;
   inventoryItemId?: string;
   guidanceJourneyId?: string;
+  guidanceSignalIntentFamily?: string;
   guidanceEnforceGuard?: boolean;
 }
 

@@ -62,7 +62,12 @@ export class BookingService {
    */
   static async createBooking(
     homeownerId: string,
-    input: CreateBookingInput
+    input: CreateBookingInput,
+    options?: {
+      guidanceJourneyId?: string | null;
+      guidanceStepKey?: string | null;
+      guidanceSignalIntentFamily?: string | null;
+    }
   ): Promise<BookingResponse> {
     // Validate service exists and get details
     const service = await prisma.service.findUnique({
@@ -254,14 +259,34 @@ export class BookingService {
       },
     });
     
+    const actionUrlParams = new URLSearchParams();
+    if (options?.guidanceJourneyId) actionUrlParams.set('guidanceJourneyId', options.guidanceJourneyId);
+    if (options?.guidanceStepKey) actionUrlParams.set('guidanceStepKey', options.guidanceStepKey);
+    if (options?.guidanceSignalIntentFamily) {
+      actionUrlParams.set('guidanceSignalIntentFamily', options.guidanceSignalIntentFamily);
+    }
+    if (input.inventoryItemId) actionUrlParams.set('itemId', input.inventoryItemId);
+    const actionUrlQuery = actionUrlParams.toString();
+    const notificationActionUrl = actionUrlQuery
+      ? `/bookings/${booking.id}?${actionUrlQuery}`
+      : `/bookings/${booking.id}`;
+
     await NotificationService.create({
       userId: booking.homeownerId,
       type: 'BOOKING_CREATED',
       title: 'Booking request submitted',
       message: `Your booking request for ${booking.service.name} has been submitted.`,
-      actionUrl: `/bookings/${booking.id}`,
+      actionUrl: notificationActionUrl,
       metadata: {
         priority: 'HIGH', // 🔴 REQUIRED for immediate email
+        guidanceContext: options?.guidanceJourneyId
+          ? {
+              guidanceJourneyId: options.guidanceJourneyId,
+              guidanceStepKey: options.guidanceStepKey ?? null,
+              guidanceSignalIntentFamily: options.guidanceSignalIntentFamily ?? null,
+              itemId: input.inventoryItemId ?? null,
+            }
+          : null,
       },
       entityType: 'BOOKING',
       entityId: booking.id,

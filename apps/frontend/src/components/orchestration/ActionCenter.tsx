@@ -27,6 +27,11 @@ import { CheckCircle2, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import humanizeActionType from '@/lib/utils/humanize';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useGuidance } from '@/features/guidance/hooks/useGuidance';
+import {
+  buildGuidanceCtaLabel,
+  resolveGuidanceForOrchestrationAction,
+} from './guidanceActionLinking';
 
 type Props = {
   propertyId: string;
@@ -74,6 +79,22 @@ export const ActionCenter: React.FC<Props> = ({
   const [itemDrawerRooms, setItemDrawerRooms] = useState<InventoryRoom[]>([]);
 
   const router = useRouter();
+  const guidanceQuery = useGuidance(propertyId, {
+    enabled: Boolean(propertyId),
+    limit: 12,
+  });
+  const guidanceByActionKey = useMemo(() => {
+    const out = new Map<string, ReturnType<typeof resolveGuidanceForOrchestrationAction>>();
+    const allActions = [...actions, ...suppressedActions, ...snoozedActions];
+    for (const action of allActions) {
+      const match = resolveGuidanceForOrchestrationAction({
+        action,
+        guidanceActions: guidanceQuery.actions,
+      });
+      if (match?.href) out.set(action.actionKey, match);
+    }
+    return out;
+  }, [actions, suppressedActions, snoozedActions, guidanceQuery.actions]);
 
   /* ------------------------------------------------------------------
      Load Actions
@@ -121,6 +142,12 @@ export const ActionCenter: React.FC<Props> = ({
     if (isModalOpen) return;
     if (activeActionKey === action.actionKey) return;
 
+    const guidanceAction = guidanceByActionKey.get(action.actionKey);
+    if (guidanceAction?.href && action.source === 'RISK') {
+      router.push(guidanceAction.href);
+      return;
+    }
+
     setActiveActionKey(action.actionKey);
 
     // 🔑 FIX: Map riskLevel to priority (same as backend does)
@@ -153,7 +180,7 @@ export const ActionCenter: React.FC<Props> = ({
     } as any);
 
     setIsModalOpen(true);
-  }, [isModalOpen, activeActionKey]);
+  }, [isModalOpen, activeActionKey, guidanceByActionKey, router]);
 
   /* ------------------------------------------------------------------
      Maintenance Modal Success
@@ -412,7 +439,9 @@ export const ActionCenter: React.FC<Props> = ({
             const hasTaskCreated = action.hasRelatedChecklistItem === true;
             const isCurrentlyBeingScheduled = activeActionKey === action.actionKey;
             const isChecklistAction = action.source === 'CHECKLIST';
-  
+            const guidanceAction = guidanceByActionKey.get(action.actionKey);
+            const guidanceCtaLabel = guidanceAction ? buildGuidanceCtaLabel(guidanceAction) : undefined;
+
             return (
               <OrchestrationActionCard
                 key={action.actionKey}
@@ -432,7 +461,7 @@ export const ActionCenter: React.FC<Props> = ({
                       ? 'Already scheduled'
                       : isChecklistAction
                         ? 'View in Maintenance'
-                        : undefined
+                        : guidanceCtaLabel
                 }
                 forceShowCta
                 onOpenTrace={handleOpenDecisionTrace}

@@ -14,6 +14,47 @@ type SignalSourceBadge = {
   confidence?: number | null; // 0..1
 };
 
+type GuidanceContextBadge = {
+  guidanceJourneyId?: string | null;
+  guidanceStepKey?: string | null;
+  guidanceSignalIntentFamily?: string | null;
+  itemId?: string | null;
+  homeAssetId?: string | null;
+};
+
+function inferGuidanceContextFromNotification(n: any): GuidanceContextBadge | null {
+  const metadataContext = n?.metadata?.guidanceContext ?? null;
+  const context: GuidanceContextBadge = {};
+
+  if (metadataContext && typeof metadataContext === 'object') {
+    if (typeof metadataContext.guidanceJourneyId === 'string') context.guidanceJourneyId = metadataContext.guidanceJourneyId;
+    if (typeof metadataContext.guidanceStepKey === 'string') context.guidanceStepKey = metadataContext.guidanceStepKey;
+    if (typeof metadataContext.guidanceSignalIntentFamily === 'string') {
+      context.guidanceSignalIntentFamily = metadataContext.guidanceSignalIntentFamily;
+    }
+    if (typeof metadataContext.itemId === 'string') context.itemId = metadataContext.itemId;
+    if (typeof metadataContext.homeAssetId === 'string') context.homeAssetId = metadataContext.homeAssetId;
+  }
+
+  if (typeof n?.actionUrl === 'string' && n.actionUrl.length > 0) {
+    try {
+      const url = new URL(n.actionUrl, 'https://contracttocozy.local');
+      const qp = url.searchParams;
+      if (!context.guidanceJourneyId && qp.get('guidanceJourneyId')) context.guidanceJourneyId = qp.get('guidanceJourneyId');
+      if (!context.guidanceStepKey && qp.get('guidanceStepKey')) context.guidanceStepKey = qp.get('guidanceStepKey');
+      if (!context.guidanceSignalIntentFamily && qp.get('guidanceSignalIntentFamily')) {
+        context.guidanceSignalIntentFamily = qp.get('guidanceSignalIntentFamily');
+      }
+      if (!context.itemId && qp.get('itemId')) context.itemId = qp.get('itemId');
+      if (!context.homeAssetId && qp.get('homeAssetId')) context.homeAssetId = qp.get('homeAssetId');
+    } catch {
+      // Ignore malformed URLs for resilience.
+    }
+  }
+
+  return Object.keys(context).length > 0 ? context : null;
+}
+
 function inferSignalSourceFromNotification(n: any): SignalSourceBadge {
   // 1) Prefer explicit metadata.signalSource (if present)
   const ss = n?.metadata?.signalSource;
@@ -115,6 +156,7 @@ export class NotificationController {
     const dto = notifications.map((n: any) => ({
       ...n,
       signalSource: inferSignalSourceFromNotification(n),
+      guidanceContext: inferGuidanceContextFromNotification(n),
     }));
 
     return res.json({

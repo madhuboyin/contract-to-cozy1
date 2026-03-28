@@ -29,6 +29,50 @@ const SOURCE_BADGE_META: Record<string, { label: string }> = {
   EXTERNAL: { label: 'External' },
 };
 
+function appendGuidanceContext(
+  actionUrl: string,
+  guidanceContext?: {
+    guidanceJourneyId?: string | null;
+    guidanceStepKey?: string | null;
+    guidanceSignalIntentFamily?: string | null;
+    itemId?: string | null;
+    homeAssetId?: string | null;
+  } | null
+): string {
+  if (!guidanceContext) return actionUrl;
+
+  const hasAnyGuidance =
+    Boolean(guidanceContext.guidanceJourneyId) ||
+    Boolean(guidanceContext.guidanceStepKey) ||
+    Boolean(guidanceContext.guidanceSignalIntentFamily) ||
+    Boolean(guidanceContext.itemId) ||
+    Boolean(guidanceContext.homeAssetId);
+  if (!hasAnyGuidance) return actionUrl;
+
+  try {
+    const url = new URL(actionUrl, 'https://contracttocozy.local');
+    if (guidanceContext.guidanceJourneyId && !url.searchParams.get('guidanceJourneyId')) {
+      url.searchParams.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+    }
+    if (guidanceContext.guidanceStepKey && !url.searchParams.get('guidanceStepKey')) {
+      url.searchParams.set('guidanceStepKey', guidanceContext.guidanceStepKey);
+    }
+    if (guidanceContext.guidanceSignalIntentFamily && !url.searchParams.get('guidanceSignalIntentFamily')) {
+      url.searchParams.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+    }
+    if (guidanceContext.itemId && !url.searchParams.get('itemId')) {
+      url.searchParams.set('itemId', guidanceContext.itemId);
+    }
+    if (guidanceContext.homeAssetId && !url.searchParams.get('homeAssetId')) {
+      url.searchParams.set('homeAssetId', guidanceContext.homeAssetId);
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return actionUrl;
+  }
+}
+
 function renderSignalBadge(n: Notification) {
   const sourceType = n?.signalSource?.sourceType;
   if (!sourceType) return null;
@@ -152,10 +196,14 @@ export default function NotificationsPage() {
             );
 
             if (notification.actionUrl) {
+              const contextAwareActionUrl = appendGuidanceContext(
+                notification.actionUrl,
+                notification.guidanceContext
+              );
               const href =
-                notification.actionUrl.startsWith('/') && !notification.actionUrl.startsWith('/dashboard')
-                  ? `/dashboard${notification.actionUrl}`
-                  : notification.actionUrl;
+                contextAwareActionUrl.startsWith('/') && !contextAwareActionUrl.startsWith('/dashboard')
+                  ? `/dashboard${contextAwareActionUrl}`
+                  : contextAwareActionUrl;
 
               return (
                 <Link
