@@ -4,6 +4,8 @@
 // No external provider integrations in this step.
 
 import { prisma } from '../lib/prisma';
+import { buildUnifiedEventEnvelope } from './eventSignalProjection.service';
+import { signalService } from './signal.service';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -620,6 +622,31 @@ export async function runMatchingForEvent(
           visibleFrom: event.startAt,
           visibleUntil: event.endAt ?? null,
         },
+      });
+
+      const envelope = buildUnifiedEventEnvelope({
+        eventType: event.eventType,
+        propertyId: property.id,
+        sourceModel: 'RadarEvent',
+        sourceId: eventId,
+        occurredAt: event.startAt,
+        payloadJson: {
+          eventType: event.eventType,
+          eventSubType: event.eventSubType ?? null,
+          severity: event.severity,
+          impactLevel: impact.impactLevel,
+          impactSummary: impact.impactSummary,
+        },
+      });
+
+      await signalService.publishRadarEventSignals({
+        propertyId: property.id,
+        radarEventId: eventId,
+        eventType: envelope.eventType.toLowerCase(),
+        severity: String(event.severity),
+        impactLevel: String(impact.impactLevel),
+        capturedAt: envelope.occurredAt,
+        validUntil: event.endAt ?? null,
       });
 
       matched++;

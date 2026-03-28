@@ -1,12 +1,19 @@
 import { HomeSavingsOpportunityStatus, MaintenanceTaskStatus, Prisma, Signal } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
-export type SharedSignalKey = 'MAINT_ADHERENCE' | 'COVERAGE_GAP' | 'SAVINGS_REALIZATION';
+export type SharedSignalKey =
+  | 'MAINT_ADHERENCE'
+  | 'COVERAGE_GAP'
+  | 'SAVINGS_REALIZATION'
+  | 'RISK_SPIKE'
+  | 'COST_ANOMALY';
 
 const SIGNAL_OWNER_BY_KEY: Record<SharedSignalKey, string> = {
   MAINT_ADHERENCE: 'MaintenanceOrchestrationService',
   COVERAGE_GAP: 'CoverageAnalysisService',
   SAVINGS_REALIZATION: 'HomeSavingsService',
+  RISK_SPIKE: 'HomeEventRadarService',
+  COST_ANOMALY: 'HomeEventRadarService',
 };
 
 export type SignalDTO = {
@@ -51,6 +58,8 @@ export type SignalListFilters = {
   homeItemId?: string;
   freshOnly?: boolean;
   limit?: number;
+  capturedFrom?: Date;
+  capturedTo?: Date;
 };
 
 export type LatestSharedSignals = Partial<Record<SharedSignalKey, SignalDTO>>;
@@ -80,6 +89,32 @@ function mapSignal(signal: Signal): SignalDTO {
 function clamp01(value: number | null | undefined): number | null {
   if (value === null || value === undefined || !Number.isFinite(value)) return null;
   return Math.max(0, Math.min(1, value));
+}
+
+function mapRadarSeverityToSignalScore(severity: string): number {
+  const normalized = String(severity || '').toLowerCase();
+  if (normalized === 'critical') return 0.95;
+  if (normalized === 'high') return 0.82;
+  if (normalized === 'medium') return 0.62;
+  if (normalized === 'low') return 0.4;
+  return 0.25;
+}
+
+function mapRadarImpactToSignalScore(impactLevel: string | null | undefined): number {
+  const normalized = String(impactLevel || '').toLowerCase();
+  if (normalized === 'high') return 0.9;
+  if (normalized === 'moderate') return 0.7;
+  if (normalized === 'watch') return 0.5;
+  return 0.25;
+}
+
+function isCostPressureEvent(eventType: string): boolean {
+  return [
+    'insurance_market',
+    'utility_rate_change',
+    'tax_reassessment',
+    'tax_rate_change',
+  ].includes(String(eventType || '').toLowerCase());
 }
 
 export function computeMaintenanceAdherenceScore(input: {
@@ -118,6 +153,14 @@ export class SignalService {
                 { validUntil: null },
                 { validUntil: { gt: now } },
               ],
+            }
+          : {}),
+        ...(filters?.capturedFrom || filters?.capturedTo
+          ? {
+              capturedAt: {
+                ...(filters?.capturedFrom ? { gte: filters.capturedFrom } : {}),
+                ...(filters?.capturedTo ? { lte: filters.capturedTo } : {}),
+              },
             }
           : {}),
       },
@@ -357,6 +400,77 @@ export class SignalService {
       },
       validUntil,
     });
+  }
+
+  async publishRadarEventSignals(params: {
+    propertyId: string;
+    radarEventId: string;
+    eventType: string;
+    severity: string;
+    impactLevel?: string | null;
+    capturedAt?: Date;
+    validUntil?: Date | null;
+  }): Promise<{ riskSpike: SignalDTO | null; costAnomaly: SignalDTO | null }> {
+    const capturedAt = params.capturedAt ?? new Date();
+    const baseRiskScore = mapRadarSeverityToSignalScore(params.severity);
+    const impactScore = mapRadarImpactToSignalScore(params.impactLevel);
+    const riskScore = Math.max(baseRiskScore, impactScore);
+    const effectiveValidUntil = params.validUntil === undefined
+      ? (() => {
+          const next = new Date(capturedAt);
+          next.setDate(next.getDate() + 14);
+          return next;
+        })()
+      : params.validUntil;
+
+    let riskSpike: SignalDTO | null = null;
+    let costAnomaly: SignalDTO | null = null;
+
+    if (riskScore >= 0.5) {
+      riskSpike = await this.publishSignal({
+        propertyId: params.propertyId,
+        signalKey: 'RISK_SPIKE',
+        sourceModel: SIGNAL_OWNER_BY_KEY.RISK_SPIKE,
+        sourceId: params.radarEventId,
+        valueNumber: riskScore,
+        valueText: riskScore >= 0.8 ? 'HIGH_SPIKE' : 'ELEVATED_SPIKE',
+        unit: 'ratio',
+        confidence: 0.78,
+        valueJson: {
+          eventType: params.eventType,
+          severity: params.severity,
+          impactLevel: params.impactLevel ?? null,
+        },
+        capturedAt,
+        validUntil: effectiveValidUntil,
+      });
+    }
+
+    if (isCostPressureEvent(params.eventType)) {
+      const costPressureScore = Math.max(0.55, Math.min(0.95, riskScore));
+      const costValidUntil = new Date(capturedAt);
+      costValidUntil.setDate(costValidUntil.getDate() + 30);
+
+      costAnomaly = await this.publishSignal({
+        propertyId: params.propertyId,
+        signalKey: 'COST_ANOMALY',
+        sourceModel: SIGNAL_OWNER_BY_KEY.COST_ANOMALY,
+        sourceId: params.radarEventId,
+        valueNumber: costPressureScore,
+        valueText: 'UPWARD_PRESSURE',
+        unit: 'ratio',
+        confidence: 0.74,
+        valueJson: {
+          eventType: params.eventType,
+          severity: params.severity,
+          impactLevel: params.impactLevel ?? null,
+        },
+        capturedAt,
+        validUntil: costValidUntil,
+      });
+    }
+
+    return { riskSpike, costAnomaly };
   }
 }
 

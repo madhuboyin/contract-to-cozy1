@@ -56,6 +56,7 @@ export const listHomeEventsQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
+  includeSignals: z.coerce.boolean().optional(),
 }).superRefine((query, ctx) => {
   if (!query.from || !query.to) return;
 

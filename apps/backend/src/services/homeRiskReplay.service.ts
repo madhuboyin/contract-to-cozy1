@@ -15,6 +15,13 @@ import {
   ReplayPropertySystemContext,
   resolveReplayWindow,
 } from './homeRiskReplay.engine';
+import {
+  mergeTimelineProjectionEntries,
+  timelineEntryFromEvent,
+  timelineEntryFromSignal,
+} from './eventSignalProjection.service';
+import { SharedSignalKey, signalService } from './signal.service';
+import { PreferenceProfileService } from './preferenceProfile.service';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -441,6 +448,80 @@ function serializeReplayDetail(run: ReplayRunWithMatches): JsonRecord {
 }
 
 export class HomeRiskReplayService {
+  private readonly preferenceProfileService = new PreferenceProfileService();
+
+  private async enrichReplayWithSignals(run: ReplayRunWithMatches): Promise<JsonRecord> {
+    const base = serializeReplayDetail(run);
+    const relevantSignalKeys = new Set<SharedSignalKey>([
+      'MAINT_ADHERENCE',
+      'COVERAGE_GAP',
+      'SAVINGS_REALIZATION',
+      'RISK_SPIKE',
+      'COST_ANOMALY',
+    ]);
+
+    const sharedSignals = await signalService.listSignals(run.propertyId, {
+      freshOnly: false,
+      capturedFrom: run.windowStart ?? undefined,
+      capturedTo: run.windowEnd ?? undefined,
+      limit: 200,
+    });
+
+    const signalTimelineEvents = sharedSignals
+      .filter((signal) => relevantSignalKeys.has(signal.signalKey as SharedSignalKey))
+      .map((signal) => timelineEntryFromSignal(signal));
+
+    const eventTimelineEntries = run.eventMatches.map((match) => {
+      const event = match.homeRiskEvent;
+      return timelineEntryFromEvent(
+        {
+          eventType: event.eventType,
+          propertyId: run.propertyId,
+          roomId: null,
+          homeItemId: null,
+          sourceModel: 'HomeRiskEvent',
+          sourceId: event.id,
+          occurredAt: event.startAt,
+          payloadJson: {
+            eventSubType: event.eventSubType ?? null,
+            severity: event.severity,
+            impactLevel: match.impactLevel,
+            impactSummary: match.impactSummary,
+          },
+        },
+        event.title,
+        event.summary ?? null,
+      );
+    });
+
+    const combinedTimelineEntries = mergeTimelineProjectionEntries([
+      ...eventTimelineEntries,
+      ...signalTimelineEvents,
+    ], 300);
+
+    const latestSignalsByKey = await signalService.getLatestSignalsByKey(
+      run.propertyId,
+      Array.from(relevantSignalKeys),
+      { freshOnly: true },
+    );
+    const preferenceProfile = await this.preferenceProfileService.getCurrentProfile(run.propertyId);
+
+    return {
+      ...base,
+      signalTimelineEvents,
+      combinedTimelineEvents: combinedTimelineEntries,
+      sharedSignals: latestSignalsByKey,
+      preferenceInfluence: preferenceProfile
+        ? {
+            preferenceProfileId: preferenceProfile.id,
+            riskTolerance: preferenceProfile.riskTolerance,
+            cashBufferPosture: preferenceProfile.cashBufferPosture,
+          }
+        : null,
+      readPriorityOrderApplied: ['CANONICAL_EVENTS', 'SHARED_SIGNALS', 'SNAPSHOTS_FALLBACK'],
+    };
+  }
+
   async generateRun(propertyId: string, input: GenerateReplayInput): Promise<{ replay: JsonRecord; reused: boolean }> {
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -480,7 +561,7 @@ export class HomeRiskReplayService {
       });
 
       if (existing) {
-        return { replay: serializeReplayDetail(existing), reused: true };
+        return { replay: await this.enrichReplayWithSignals(existing), reused: true };
       }
     }
 
@@ -594,7 +675,7 @@ export class HomeRiskReplayService {
       });
 
       return {
-        replay: serializeReplayDetail(finalizedRun),
+        replay: await this.enrichReplayWithSignals(finalizedRun),
         reused: false,
       };
     } catch (error) {
@@ -659,7 +740,7 @@ export class HomeRiskReplayService {
       throw new APIError('Replay run not found', 404, 'HOME_RISK_REPLAY_NOT_FOUND');
     }
 
-    return serializeReplayDetail(run);
+    return this.enrichReplayWithSignals(run);
   }
 
   async trackEvent(

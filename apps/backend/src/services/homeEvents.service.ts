@@ -4,6 +4,14 @@ import { APIError } from '../middleware/error.middleware';
 import { markReplaceRepairStale } from './replaceRepairAnalysis.service';
 import { markDoNothingRunsStale } from './doNothingSimulator.service';
 import { formatMajorApplianceType, inferMajorApplianceType, majorApplianceTypeFromSourceHash } from './majorAppliance.util';
+import {
+  buildUnifiedEventEnvelope,
+  mergeTimelineProjectionEntries,
+  timelineEntryFromEvent,
+  timelineEntryFromSignal,
+  TimelineProjectionEntry,
+} from './eventSignalProjection.service';
+import { SharedSignalKey, signalService } from './signal.service';
 
 type ListQuery = {
   type?: any;
@@ -14,6 +22,7 @@ type ListQuery = {
   from?: string;
   to?: string;
   limit?: number;
+  includeSignals?: boolean;
 };
 
 function moneyToDecimalString(n?: number | null) {
@@ -99,7 +108,11 @@ export class HomeEventsService {
 
   // ---- queries ----
 
-  async listHomeEvents(propertyId: string, query: ListQuery) {
+  async listHomeEvents(propertyId: string, query: ListQuery): Promise<{
+    events: any[];
+    signalEvents: TimelineProjectionEntry[];
+    timelineEntries: TimelineProjectionEntry[];
+  }> {
     const take = Math.min(Math.max(query.limit ?? 60, 1), 200);
     const shouldNormalizePurchases = !query.type || String(query.type).toUpperCase() === 'PURCHASE';
     const shouldInjectCanonicalAppliances =
@@ -152,7 +165,58 @@ export class HomeEventsService {
       return String(b.id || '').localeCompare(String(a.id || ''));
     });
 
-    return sorted.slice(0, take).map(({ inventoryItem, ...event }) => event);
+    const projectedEvents = sorted.slice(0, take).map(({ inventoryItem, ...event }) => event);
+    const includeSignals = query.includeSignals !== false;
+
+    const signalEvents = includeSignals
+      ? await this.buildSignalTimelineEntries(propertyId, take)
+      : [];
+    const eventTimelineEntries = projectedEvents.map((event) => this.mapHomeEventToTimelineEntry(event));
+    const timelineEntries = mergeTimelineProjectionEntries([...eventTimelineEntries, ...signalEvents], take * 2);
+
+    return {
+      events: projectedEvents,
+      signalEvents,
+      timelineEntries,
+    };
+  }
+
+  private mapHomeEventToTimelineEntry(event: any): TimelineProjectionEntry {
+    const envelope = buildUnifiedEventEnvelope({
+      eventType: String(event.type || 'OTHER'),
+      propertyId: event.propertyId,
+      sourceModel: 'HomeEventsService',
+      sourceId: String(event.id),
+      occurredAt: event.occurredAt,
+      roomId: event.roomId ?? null,
+      payloadJson: {
+        subtype: event.subtype ?? null,
+        importance: event.importance ?? null,
+        amount: event.amount ?? null,
+        currency: event.currency ?? null,
+      },
+    });
+
+    return timelineEntryFromEvent(envelope, String(event.title || 'Home event'), event.summary ?? null);
+  }
+
+  private async buildSignalTimelineEntries(propertyId: string, take: number): Promise<TimelineProjectionEntry[]> {
+    const relevantSignalKeys = new Set<SharedSignalKey>([
+      'MAINT_ADHERENCE',
+      'COVERAGE_GAP',
+      'SAVINGS_REALIZATION',
+      'RISK_SPIKE',
+      'COST_ANOMALY',
+    ]);
+
+    const sharedSignals = await signalService.listSignals(propertyId, {
+      freshOnly: false,
+      limit: Math.min(200, Math.max(40, take * 2)),
+    });
+
+    return sharedSignals
+      .filter((signal) => relevantSignalKeys.has(signal.signalKey as SharedSignalKey))
+      .map((signal) => timelineEntryFromSignal(signal));
   }
 
   private canonicalPurchaseKey(event: any): string | null {

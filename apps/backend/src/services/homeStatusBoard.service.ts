@@ -3,6 +3,7 @@ import { RISK_ASSET_CONFIG } from '../config/risk-constants';
 import { APIError } from '../middleware/error.middleware';
 import { HomeItemCondition, HomeItemRecommendation, Prisma } from '@prisma/client';
 import { ListBoardQuery, PatchItemStatusBody } from '../validators/homeStatusBoard.validators';
+import { SharedSignalKey, signalService } from './signal.service';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,6 +74,15 @@ function parseNumericAge(value: unknown): number | null {
   if (typeof value === 'string') {
     const parsed = Number.parseFloat(value);
     if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return null;
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
   }
   return null;
 }
@@ -767,6 +777,43 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
     }
     result.groups = groups;
   }
+
+  const signalKeys: SharedSignalKey[] = [
+    'RISK_SPIKE',
+    'COST_ANOMALY',
+    'MAINT_ADHERENCE',
+  ];
+  const latestSignals = await signalService.getLatestSignalsByKey(propertyId, signalKeys, { freshOnly: true });
+  const riskSpike = toFiniteNumber(latestSignals.RISK_SPIKE?.valueNumber);
+  const costAnomaly = toFiniteNumber(latestSignals.COST_ANOMALY?.valueNumber);
+  const maintenanceAdherence = toFiniteNumber(latestSignals.MAINT_ADHERENCE?.valueNumber);
+
+  const fallbackRiskLevel = summary.actionNeeded > 0 ? 'ACTION_NEEDED' : summary.monitor > 0 ? 'MONITOR' : 'GOOD';
+  const fallbackCostPressure = summary.actionNeeded >= Math.max(1, Math.round(summary.total * 0.25)) ? 'HIGH' : 'NORMAL';
+  const fallbackMaintenance = summary.actionNeeded > summary.good ? 'NEEDS_ATTENTION' : 'ON_TRACK';
+
+  result.signalSummary = {
+    riskLevel: riskSpike === null
+      ? fallbackRiskLevel
+      : riskSpike >= 0.8 ? 'HIGH'
+        : riskSpike >= 0.55 ? 'MODERATE'
+          : 'LOW',
+    costPressure: costAnomaly === null
+      ? fallbackCostPressure
+      : costAnomaly >= 0.8 ? 'HIGH'
+        : costAnomaly >= 0.55 ? 'ELEVATED'
+          : 'LOW',
+    maintenanceStatus: maintenanceAdherence === null
+      ? fallbackMaintenance
+      : maintenanceAdherence >= 0.8 ? 'ON_TRACK'
+        : maintenanceAdherence >= 0.55 ? 'WATCH'
+          : 'NEEDS_ATTENTION',
+    signalBacked: {
+      riskLevel: riskSpike !== null,
+      costPressure: costAnomaly !== null,
+      maintenanceStatus: maintenanceAdherence !== null,
+    },
+  };
 
   return result;
 }

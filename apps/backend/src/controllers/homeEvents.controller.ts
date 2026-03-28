@@ -8,8 +8,11 @@ const service = new HomeEventsService();
 export async function listHomeEvents(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const propertyId = req.params.propertyId;
+    const includeSignals = req.query.includeSignals === undefined
+      ? undefined
+      : String(req.query.includeSignals).toLowerCase() === 'true';
 
-    const events = await service.listHomeEvents(propertyId, {
+    const data = await service.listHomeEvents(propertyId, {
       type: req.query.type ? String(req.query.type) : undefined,
       importance: req.query.importance ? String(req.query.importance) : undefined,
       roomId: req.query.roomId ? String(req.query.roomId) : undefined,
@@ -18,9 +21,10 @@ export async function listHomeEvents(req: CustomRequest, res: Response, next: Ne
       from: req.query.from ? String(req.query.from) : undefined,
       to: req.query.to ? String(req.query.to) : undefined,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
+      includeSignals,
     });
 
-    res.json({ success: true, data: { events } });
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }

@@ -3,6 +3,7 @@
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { runMatchingForEvent } from './homeEventRadarMatcher.service';
+import { SharedSignalKey, signalService } from './signal.service';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -84,6 +85,32 @@ function serializeState(state: any): Record<string, unknown> {
     createdAt: state.createdAt instanceof Date ? state.createdAt.toISOString() : state.createdAt,
     updatedAt: state.updatedAt instanceof Date ? state.updatedAt.toISOString() : state.updatedAt,
   };
+}
+
+function toSignalNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function radarSeverityWeight(severity: unknown): number {
+  const normalized = String(severity || '').toLowerCase();
+  if (normalized === 'critical') return 4;
+  if (normalized === 'high') return 3;
+  if (normalized === 'medium') return 2;
+  if (normalized === 'low') return 1;
+  return 0;
+}
+
+function radarImpactWeight(impactLevel: unknown): number {
+  const normalized = String(impactLevel || '').toLowerCase();
+  if (normalized === 'high') return 3;
+  if (normalized === 'moderate') return 2;
+  if (normalized === 'watch') return 1;
+  return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +211,16 @@ export class HomeEventRadarService {
       limit?: number;
       cursor?: string;
     },
-  ): Promise<{ items: Record<string, unknown>[]; hasMore: boolean; nextCursor: string | null }> {
+  ): Promise<{
+    items: Record<string, unknown>[];
+    hasMore: boolean;
+    nextCursor: string | null;
+    signalContext: {
+      riskSpike: unknown;
+      costAnomaly: unknown;
+      maintenanceAdherence: unknown;
+    };
+  }> {
     const limit = Math.min(query.limit ?? 40, 100);
 
     const where: Record<string, unknown> = {
@@ -241,9 +277,59 @@ export class HomeEventRadarService {
     }
 
     const items = page.map((match: any) => serializeMatchFeedItem(match, stateMap.get(match.id) ?? null));
+    const signalKeys: SharedSignalKey[] = [
+      'RISK_SPIKE',
+      'COST_ANOMALY',
+      'MAINT_ADHERENCE',
+      'COVERAGE_GAP',
+      'SAVINGS_REALIZATION',
+    ];
+    const latestSignals = await signalService.getLatestSignalsByKey(propertyId, signalKeys, { freshOnly: true });
+
+    const riskSpike = toSignalNumber(latestSignals.RISK_SPIKE?.valueNumber);
+    const costAnomaly = toSignalNumber(latestSignals.COST_ANOMALY?.valueNumber);
+    const maintenanceAdherence = toSignalNumber(latestSignals.MAINT_ADHERENCE?.valueNumber);
+
+    const prioritizedItems = items
+      .map((item: Record<string, unknown>) => {
+        const base = radarSeverityWeight((item as any).severity) + radarImpactWeight((item as any).impactLevel);
+        let boost = 0;
+
+        if (riskSpike !== null) boost += riskSpike * 2;
+        if (costAnomaly !== null && ['insurance_market', 'utility_rate_change', 'tax_reassessment', 'tax_rate_change'].includes(
+          String((item as any).eventType || '').toLowerCase()
+        )) {
+          boost += costAnomaly;
+        }
+        if (maintenanceAdherence !== null && maintenanceAdherence < 0.5) {
+          boost += 0.4;
+        }
+
+        return {
+          ...item,
+          priorityScore: Number((base + boost).toFixed(3)),
+        };
+      })
+      .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+        const scoreDiff = Number((b as any).priorityScore ?? 0) - Number((a as any).priorityScore ?? 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        const byDate = new Date(String((b as any).createdAt ?? 0)).getTime() - new Date(String((a as any).createdAt ?? 0)).getTime();
+        if (byDate !== 0) return byDate;
+        return String((b as any).propertyRadarMatchId ?? '').localeCompare(String((a as any).propertyRadarMatchId ?? ''));
+      });
+
     const nextCursor = hasMore ? String(page[page.length - 1].id) : null;
 
-    return { items, hasMore, nextCursor };
+    return {
+      items: prioritizedItems,
+      hasMore,
+      nextCursor,
+      signalContext: {
+        riskSpike: latestSignals.RISK_SPIKE ?? null,
+        costAnomaly: latestSignals.COST_ANOMALY ?? null,
+        maintenanceAdherence: latestSignals.MAINT_ADHERENCE ?? null,
+      },
+    };
   }
 
   // --------------------------------------------------------------------------
