@@ -30,6 +30,7 @@ export const createBookingSchema = z.object({
   insightContext: z.string().max(500).optional(),    // e.g., "Property age: 35 years"
   maintenancePredictionId: z.string().uuid('Invalid maintenance prediction ID').optional(),
   inventoryItemId: z.string().uuid('Invalid inventory item ID').optional(),
+  priceFinalizationId: z.string().uuid('Invalid price finalization ID').optional(),
   guidanceJourneyId: z.string().uuid('Invalid guidance journey ID').optional(),
   guidanceStepKey: z.string().optional(),
   guidanceSignalIntentFamily: z.string().optional(),
@@ -160,6 +161,7 @@ export interface BookingResponse {
   insightContext: string | null;
   maintenancePredictionId: string | null;
   inventoryItemId: string | null;
+  priceFinalizationId: string | null;
   
   // Cancellation
   cancelledAt: Date | null;

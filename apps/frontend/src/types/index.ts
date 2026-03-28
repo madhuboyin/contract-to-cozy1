@@ -1274,6 +1274,7 @@ export interface Booking {
   insightContext: string | null;
   maintenancePredictionId: string | null;
   inventoryItemId: string | null;
+  priceFinalizationId: string | null;
   cancelledAt: string | null;
   cancelledBy: string | null;
   cancellationReason: string | null;
@@ -1398,7 +1399,9 @@ export interface CreateBookingInput {
   insightContext?: string;    // e.g., "Property age: 35 years"
   maintenancePredictionId?: string;
   inventoryItemId?: string;
+  priceFinalizationId?: string;
   guidanceJourneyId?: string;
+  guidanceStepKey?: string;
   guidanceSignalIntentFamily?: string;
   guidanceEnforceGuard?: boolean;
 }

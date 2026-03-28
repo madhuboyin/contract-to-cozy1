@@ -67,6 +67,16 @@ function normalizeToolOutput(toolKey: string, producedData: Record<string, unkno
     };
   }
 
+  if (key === 'quote-comparison') {
+    return {
+      quoteWorkspaceId: pickString(producedData.workspaceId),
+      quoteCount: pickNumber(producedData.quoteCount),
+      selectedVendorName: pickString(producedData.selectedVendorName),
+      selectedQuoteAmount: pickNumber(producedData.selectedQuoteAmount),
+      quoteCurrency: pickString(producedData.currency),
+    };
+  }
+
   if (key === 'negotiation-shield') {
     return {
       negotiationLeverage: producedData.negotiationLeverage ?? null,
@@ -130,6 +140,17 @@ function normalizeToolOutput(toolKey: string, producedData: Record<string, unkno
       maintenance5y: pickNumber(producedData.maintenance5y),
       utilities5y: pickNumber(producedData.utilities5y),
       trueCostConfidence: pickString(producedData.confidence),
+    };
+  }
+
+  if (key === 'price-finalization') {
+    return {
+      finalizationId: pickString(producedData.finalizationId),
+      acceptedPrice: pickNumber(producedData.acceptedPrice),
+      quotePrice: pickNumber(producedData.quotePrice),
+      finalizationCurrency: pickString(producedData.currency),
+      finalizationVendorName: pickString(producedData.vendorName),
+      termsAcceptedCount: pickNumber(producedData.termsAcceptedCount),
     };
   }
 

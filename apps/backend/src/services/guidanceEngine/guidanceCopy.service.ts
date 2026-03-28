@@ -17,6 +17,8 @@ const STEP_LABEL_MAP: Record<string, string> = {
   check_coverage: 'Check Coverage First',
   validate_price: 'Validate Price Before Hiring',
   prepare_negotiation: 'Prepare Negotiation Strategy',
+  compare_quotes: 'Compare Quotes Side By Side',
+  finalize_price: 'Finalize Price and Terms',
   book_service: 'Book Service When Ready',
   assess_urgency: 'Assess Urgency First',
   estimate_repair_cost: 'Estimate Repair Cost',
@@ -81,7 +83,9 @@ export class GuidanceCopyService {
     if (toolKey === 'replace-repair') return 'Compare Repair vs Replace';
     if (toolKey === 'coverage-intelligence') return 'Check Coverage First';
     if (toolKey === 'service-price-radar') return 'Validate Price Before Hiring';
+    if (toolKey === 'quote-comparison') return 'Compare Quotes Side By Side';
     if (toolKey === 'negotiation-shield') return 'Prepare Negotiation Strategy';
+    if (toolKey === 'price-finalization') return 'Finalize Price and Terms';
     if (toolKey === 'booking') return 'Book Service When Ready';
     if (toolKey === 'do-nothing-simulator') return 'Compare Act Now vs Delay';
     if (toolKey === 'home-savings') return 'Review Savings and Funding Options';

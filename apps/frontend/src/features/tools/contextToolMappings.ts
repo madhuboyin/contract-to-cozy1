@@ -19,6 +19,8 @@ export const CONTEXT_TOOL_MAPPINGS: ContextToolMapping = {
   // Pricing and quote review tools ladder into explanation and downstream math.
   'service-price-radar': ['negotiation-shield', 'cost-explainer', 'true-cost'],
   'negotiation-shield': ['service-price-radar', 'cost-explainer', 'true-cost'],
+  'quote-comparison': ['service-price-radar', 'negotiation-shield', 'price-finalization'],
+  'price-finalization': ['quote-comparison', 'negotiation-shield', 'service-price-radar'],
   'cost-explainer': ['true-cost', 'break-even', 'cost-growth'],
   'true-cost': ['cost-explainer', 'break-even', 'sell-hold-rent'],
   'sell-hold-rent': ['break-even', 'cost-volatility', 'capital-timeline'],

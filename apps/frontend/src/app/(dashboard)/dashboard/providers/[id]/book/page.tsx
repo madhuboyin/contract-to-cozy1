@@ -12,6 +12,7 @@ import { AlertCircle, Calendar, Clock3, Loader2 } from 'lucide-react';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import DateField from '@/components/shared/DateField';
 import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
+import { getPriceFinalization } from '@/lib/api/priceFinalizationApi';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -47,6 +48,9 @@ export default function BookProviderPage() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
+  const priceFinalizationId = searchParams.get('priceFinalizationId');
+  const finalPrice = searchParams.get('finalPrice');
+  const vendorName = searchParams.get('vendorName');
   const providerId = params.id as string;
 
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -86,6 +90,14 @@ export default function BookProviderPage() {
   const blockedActionHref =
     blockedAction?.href ??
     (selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/risk-assessment` : '/dashboard/maintenance');
+
+  useEffect(() => {
+    if (!finalPrice) return;
+    const parsed = Number(finalPrice);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setEstimatedPrice(parsed);
+    }
+  }, [finalPrice]);
 
   useEffect(() => {
     loadData();
@@ -153,6 +165,53 @@ export default function BookProviderPage() {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedPropertyId || !priceFinalizationId) return;
+
+    (async () => {
+      try {
+        const detail = await getPriceFinalization(selectedPropertyId, priceFinalizationId);
+        if (cancelled) return;
+
+        if (typeof detail.acceptedPrice === 'number' && Number.isFinite(detail.acceptedPrice) && detail.acceptedPrice > 0) {
+          setEstimatedPrice(detail.acceptedPrice);
+        }
+
+        if (detail.notes) {
+          setSpecialRequests((prev) => {
+            if (prev.trim().length > 0) return prev;
+            return detail.notes ?? '';
+          });
+        } else if (vendorName) {
+          setSpecialRequests((prev) => {
+            if (prev.trim().length > 0) return prev;
+            return `Finalized with vendor: ${vendorName}`;
+          });
+        }
+
+        setDescription((prev) => {
+          if (prev.trim().length > 0) return prev;
+          const categoryLabel = detail.serviceCategory ? formatEnumLabel(detail.serviceCategory) : 'service';
+          const vendorLabel = detail.vendorName ? ` with ${detail.vendorName}` : '';
+          const priceLabel =
+            typeof detail.acceptedPrice === 'number' && Number.isFinite(detail.acceptedPrice)
+              ? `$${detail.acceptedPrice.toFixed(2)}`
+              : finalPrice && Number.isFinite(Number(finalPrice))
+                ? `$${Number(finalPrice).toFixed(2)}`
+                : 'agreed price';
+          return `Please complete ${categoryLabel} work${vendorLabel} at ${priceLabel}.`;
+        });
+      } catch (error) {
+        console.warn('[BOOKING] unable to prefill from price finalization', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPropertyId, priceFinalizationId, finalPrice, vendorName]);
+
   const toISODateTime = (date: string, time: string): string => {
     return `${date}T${time}:00Z`;
   };
@@ -210,6 +269,7 @@ export default function BookProviderPage() {
       ...(insightContext && { insightContext }),
       ...(maintenancePredictionId && { maintenancePredictionId }),
       ...(inventoryItemId && { inventoryItemId }),
+      ...(priceFinalizationId && { priceFinalizationId }),
       ...(guidanceJourneyId && { guidanceJourneyId }),
       ...(guidanceJourneyId && guidanceStepKey && { guidanceStepKey }),
       ...(guidanceSignalIntentFamily && { guidanceSignalIntentFamily }),

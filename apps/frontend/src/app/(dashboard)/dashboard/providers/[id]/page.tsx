@@ -61,6 +61,9 @@ export default function ProviderDetailPage() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
+  const priceFinalizationId = searchParams.get('priceFinalizationId');
+  const finalPrice = searchParams.get('finalPrice');
+  const vendorName = searchParams.get('vendorName');
   const bookingGuardQuery = useExecutionGuard(propertyId, 'BOOKING', {
     enabled: Boolean(propertyId),
     journeyId: guidanceJourneyId ?? undefined,
@@ -226,6 +229,9 @@ export default function ProviderDetailPage() {
     if (guidanceSignalIntentFamily) {
       queryParams.append('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
     }
+    if (priceFinalizationId) queryParams.append('priceFinalizationId', priceFinalizationId);
+    if (finalPrice) queryParams.append('finalPrice', finalPrice);
+    if (vendorName) queryParams.append('vendorName', vendorName);
 
     const fromParam = searchParams.get('from');
     if (fromParam) queryParams.append('from', fromParam);

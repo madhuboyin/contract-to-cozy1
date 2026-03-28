@@ -586,6 +586,8 @@ model InventoryItem {
   replaceRepairAnalyses  ReplaceRepairAnalysis[]
   guidanceSignals        GuidanceSignal[]
   guidanceJourneys       GuidanceJourney[]
+  quoteComparisonWorkspaces QuoteComparisonWorkspace[]
+  priceFinalizations        PriceFinalization[]
 
   homeCapitalTimelineItems     HomeCapitalTimelineItem[]
   homeCapitalTimelineOverrides HomeCapitalTimelineOverride[]
@@ -1159,6 +1161,43 @@ enum ServiceBenchmarkRegionType {
   COUNTY
 }
 
+enum QuoteComparisonWorkspaceStatus {
+  DRAFT
+  SHORTLISTED
+  DECIDED
+  ARCHIVED
+}
+
+enum QuoteComparisonQuoteDecision {
+  UNDECIDED
+  SHORTLISTED
+  ACCEPTED
+  REJECTED
+}
+
+enum PriceFinalizationStatus {
+  DRAFT
+  FINALIZED
+  ARCHIVED
+}
+
+enum PriceFinalizationSourceType {
+  MANUAL
+  NEGOTIATION_SHIELD
+  QUOTE_COMPARISON
+  SERVICE_PRICE_RADAR
+}
+
+enum PriceFinalizationTermType {
+  SCOPE
+  PAYMENT
+  WARRANTY
+  TIMELINE
+  CANCELLATION
+  MATERIALS
+  OTHER
+}
+
 enum InspectionType {
   HOME_INSPECTION
   PEST_INSPECTION
@@ -1311,6 +1350,8 @@ model User {
   propertyNarrativeRuns         PropertyNarrativeRun[]
   knowledgeArticleEvents        KnowledgeArticleEvent[]
   negotiationShieldCasesCreated NegotiationShieldCase[]   @relation("NegotiationShieldCaseCreatedBy")
+  priceFinalizationsCreated     PriceFinalization[]        @relation("PriceFinalizationCreatedBy")
+  quoteComparisonWorkspacesCreated QuoteComparisonWorkspace[] @relation("QuoteComparisonWorkspaceCreatedBy")
   radarStates                   PropertyRadarState[]
   createdHomeTwinScenarios      HomeTwinScenario[]
   assumptionSetsCreated         AssumptionSet[]
@@ -1860,6 +1901,8 @@ model Property {
   homeSavingsOpportunities HomeSavingsOpportunity[]
   homeSavingsAccounts      HomeSavingsAccount[]
   serviceRadarChecks       ServiceRadarCheck[]
+  quoteComparisonWorkspaces QuoteComparisonWorkspace[]
+  priceFinalizations        PriceFinalization[]
   homeItems                HomeItem[]
   maintenancePredictions   MaintenancePrediction[]
 
@@ -2182,6 +2225,7 @@ model Booking {
 
   inventoryItemId String?
   inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  priceFinalization PriceFinalization?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2535,6 +2579,8 @@ model HomeAsset {
   homeItems        HomeItem[]
   guidanceSignals  GuidanceSignal[]
   guidanceJourneys GuidanceJourney[]
+  quoteComparisonWorkspaces QuoteComparisonWorkspace[]
+  priceFinalizations        PriceFinalization[]
 
   @@unique([propertyId, assetType]) // Usually only one furnace per house
   @@index([manufacturerNorm, modelNumberNorm])
@@ -4979,6 +5025,7 @@ model NegotiationShieldCase {
   documents NegotiationShieldDocument[]
   analyses  NegotiationShieldAnalysis[]
   drafts    NegotiationShieldDraft[]
+  priceFinalizations PriceFinalization[]
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([propertyId, status])
@@ -6106,6 +6153,7 @@ model ServiceRadarCheck {
   property    Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   systemLinks ServiceRadarCheckSystemLink[]
   userActions ServiceRadarUserAction[]
+  priceFinalizations PriceFinalization[]
 
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([serviceCategory, createdAt(sort: Desc)])
@@ -6170,6 +6218,159 @@ model ServiceRadarUserAction {
   @@index([actionType])
   @@index([createdAt(sort: Desc)])
   @@map("service_radar_user_actions")
+}
+
+model QuoteComparisonWorkspace {
+  id              String @id @default(uuid())
+  propertyId      String
+  createdByUserId String?
+
+  inventoryItemId String?
+  homeAssetId     String?
+
+  guidanceJourneyId          String?
+  guidanceStepKey            String?
+  guidanceSignalIntentFamily String?
+
+  status          QuoteComparisonWorkspaceStatus @default(DRAFT)
+  serviceCategory ServiceCategory?
+  scopeSummary    String?
+  notes           String?
+  decisionSummary String?
+
+  selectedVendorName  String?
+  selectedQuoteAmount Decimal? @db.Decimal(12, 2)
+  currency            String   @default("USD")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy     User?          @relation("QuoteComparisonWorkspaceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  homeAsset     HomeAsset?     @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+
+  quotes             QuoteComparisonQuote[]
+  priceFinalizations PriceFinalization[]
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@index([createdByUserId])
+  @@index([inventoryItemId])
+  @@index([homeAssetId])
+  @@map("quote_comparison_workspaces")
+}
+
+model QuoteComparisonQuote {
+  id          String @id @default(uuid())
+  workspaceId String
+
+  vendorName      String
+  quoteAmount     Decimal @db.Decimal(12, 2)
+  currency        String  @default("USD")
+  quoteDate       DateTime?
+  serviceLabelRaw String?
+  notes           String?
+
+  sourceType        ServiceRadarQuoteSource @default(MANUAL)
+  sourceReferenceId String?
+
+  normalizedLow     Decimal? @db.Decimal(12, 2)
+  normalizedHigh    Decimal? @db.Decimal(12, 2)
+  adjustmentSummary String?
+
+  decision   QuoteComparisonQuoteDecision @default(UNDECIDED)
+  isSelected Boolean                      @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace QuoteComparisonWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([workspaceId, decision])
+  @@map("quote_comparison_quotes")
+}
+
+model PriceFinalization {
+  id              String @id @default(uuid())
+  propertyId      String
+  createdByUserId String?
+
+  inventoryItemId String?
+  homeAssetId     String?
+
+  guidanceJourneyId          String?
+  guidanceStepKey            String?
+  guidanceSignalIntentFamily String?
+
+  sourceType PriceFinalizationSourceType @default(MANUAL)
+  status     PriceFinalizationStatus     @default(DRAFT)
+
+  serviceCategory ServiceCategory?
+  vendorName      String?
+  acceptedPrice   Decimal? @db.Decimal(12, 2)
+  quotePrice      Decimal? @db.Decimal(12, 2)
+  currency        String   @default("USD")
+
+  scopeSummary      String?
+  paymentTerms      String?
+  warrantyTerms     String?
+  timelineTerms     String?
+  notes             String?
+  acceptedTermsJson Json?
+  metadataJson      Json?
+
+  negotiationShieldCaseId    String?
+  serviceRadarCheckId        String?
+  quoteComparisonWorkspaceId String?
+
+  finalizedAt DateTime?
+  bookingId   String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy     User?          @relation("PriceFinalizationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  homeAsset     HomeAsset?     @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  booking       Booking?       @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  negotiationShieldCase    NegotiationShieldCase?    @relation(fields: [negotiationShieldCaseId], references: [id], onDelete: SetNull)
+  serviceRadarCheck        ServiceRadarCheck?        @relation(fields: [serviceRadarCheckId], references: [id], onDelete: SetNull)
+  quoteComparisonWorkspace QuoteComparisonWorkspace? @relation(fields: [quoteComparisonWorkspaceId], references: [id], onDelete: SetNull)
+
+  terms PriceFinalizationTerm[]
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([propertyId, status])
+  @@index([createdByUserId])
+  @@index([inventoryItemId])
+  @@index([homeAssetId])
+  @@index([negotiationShieldCaseId])
+  @@index([serviceRadarCheckId])
+  @@index([quoteComparisonWorkspaceId])
+  @@map("price_finalizations")
+}
+
+model PriceFinalizationTerm {
+  id                 String @id @default(uuid())
+  priceFinalizationId String
+
+  termType   PriceFinalizationTermType
+  label      String
+  value      String
+  sortOrder  Int     @default(0)
+  isAccepted Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  priceFinalization PriceFinalization @relation(fields: [priceFinalizationId], references: [id], onDelete: Cascade)
+
+  @@index([priceFinalizationId, sortOrder])
+  @@map("price_finalization_terms")
 }
 
 // ============================================================================

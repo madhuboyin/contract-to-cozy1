@@ -27,6 +27,7 @@ import { prisma } from '../lib/prisma';
 import { NotificationService } from './notification.service';
 import { incrementStreak } from './gamification.service';
 import { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory.util';
+import { priceFinalizationService } from './priceFinalization.service';
 
 export class BookingService {
   /**
@@ -199,6 +200,24 @@ export class BookingService {
       throw new Error('maintenancePredictionId and inventoryItemId point to different assets');
     }
 
+    let linkedPriceFinalizationId: string | null = null;
+    if (input.priceFinalizationId) {
+      const finalization = await priceFinalizationService.getDetail(
+        input.propertyId,
+        homeownerId,
+        input.priceFinalizationId
+      );
+
+      if (finalization.status !== 'FINALIZED') {
+        throw new Error('Price finalization must be finalized before booking.');
+      }
+      if (finalization.bookingId) {
+        throw new Error('Price finalization is already linked to an existing booking.');
+      }
+
+      linkedPriceFinalizationId = finalization.id;
+    }
+
     // Generate booking number
     const bookingNumber = await this.generateBookingNumber();
 
@@ -258,6 +277,24 @@ export class BookingService {
         },
       },
     });
+
+    let linkedPriceFinalizationForBooking = false;
+    if (linkedPriceFinalizationId) {
+      try {
+        await priceFinalizationService.attachBooking({
+          propertyId: input.propertyId,
+          finalizationId: linkedPriceFinalizationId,
+          bookingId: booking.id,
+        });
+        linkedPriceFinalizationForBooking = true;
+      } catch (error) {
+        console.warn('[BOOKING] failed to link price finalization to booking', {
+          bookingId: booking.id,
+          priceFinalizationId: linkedPriceFinalizationId,
+          error,
+        });
+      }
+    }
     
     const actionUrlParams = new URLSearchParams();
     if (options?.guidanceJourneyId) actionUrlParams.set('guidanceJourneyId', options.guidanceJourneyId);
@@ -266,6 +303,9 @@ export class BookingService {
       actionUrlParams.set('guidanceSignalIntentFamily', options.guidanceSignalIntentFamily);
     }
     if (input.inventoryItemId) actionUrlParams.set('itemId', input.inventoryItemId);
+    if (linkedPriceFinalizationForBooking && linkedPriceFinalizationId) {
+      actionUrlParams.set('priceFinalizationId', linkedPriceFinalizationId);
+    }
     const actionUrlQuery = actionUrlParams.toString();
     const notificationActionUrl = actionUrlQuery
       ? `/bookings/${booking.id}?${actionUrlQuery}`
@@ -285,6 +325,10 @@ export class BookingService {
               guidanceStepKey: options.guidanceStepKey ?? null,
               guidanceSignalIntentFamily: options.guidanceSignalIntentFamily ?? null,
               itemId: input.inventoryItemId ?? null,
+              priceFinalizationId:
+                linkedPriceFinalizationForBooking && linkedPriceFinalizationId
+                  ? linkedPriceFinalizationId
+                  : null,
             }
           : null,
       },
@@ -1025,6 +1069,7 @@ export class BookingService {
       insightContext: booking.insightContext || null,
       maintenancePredictionId: booking.maintenancePredictionId || null,
       inventoryItemId: booking.inventoryItemId || null,
+      priceFinalizationId: booking.priceFinalization?.id || null,
       cancelledAt: booking.cancelledAt,
       cancelledBy: booking.cancelledBy,
       cancellationReason: booking.cancellationReason,

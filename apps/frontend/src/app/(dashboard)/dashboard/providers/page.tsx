@@ -195,6 +195,9 @@ const ProviderList = ({
   guidanceJourneyId,
   guidanceStepKey,
   guidanceSignalIntentFamily,
+  priceFinalizationId,
+  finalPrice,
+  vendorName,
   executionBlocked,
   blockedActionHref,
 }: {
@@ -209,6 +212,9 @@ const ProviderList = ({
   guidanceJourneyId?: string;
   guidanceStepKey?: string;
   guidanceSignalIntentFamily?: string;
+  priceFinalizationId?: string;
+  finalPrice?: string;
+  vendorName?: string;
   executionBlocked?: boolean;
   blockedActionHref?: string;
 }) => {
@@ -228,6 +234,9 @@ const ProviderList = ({
         if (guidanceSignalIntentFamily) {
           queryParams.append('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
         }
+        if (priceFinalizationId) queryParams.append('priceFinalizationId', priceFinalizationId);
+        if (finalPrice) queryParams.append('finalPrice', finalPrice);
+        if (vendorName) queryParams.append('vendorName', vendorName);
 
         const profileLink = queryParams.toString()
           ? `/dashboard/providers/${provider.id}?${queryParams.toString()}`
@@ -335,6 +344,9 @@ export default function ProvidersPage() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
+  const priceFinalizationId = searchParams.get('priceFinalizationId') || undefined;
+  const finalPrice = searchParams.get('finalPrice') || undefined;
+  const vendorName = searchParams.get('vendorName') || undefined;
   const providerGuardQuery = useExecutionGuard(targetPropertyId, 'BOOKING', {
     enabled: Boolean(targetPropertyId),
     journeyId: guidanceJourneyId,
@@ -584,6 +596,9 @@ export default function ProvidersPage() {
           guidanceJourneyId={guidanceJourneyId}
           guidanceStepKey={guidanceStepKey}
           guidanceSignalIntentFamily={guidanceSignalIntentFamily}
+          priceFinalizationId={priceFinalizationId}
+          finalPrice={finalPrice}
+          vendorName={vendorName}
           executionBlocked={isExecutionBlocked}
           blockedActionHref={blockedActionHref}
         />

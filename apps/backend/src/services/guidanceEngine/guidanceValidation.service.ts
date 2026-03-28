@@ -15,6 +15,8 @@ export type GuidanceFreshnessAssessment = {
 
 const TOOL_FRESHNESS_DAYS: Record<string, number> = {
   'service-price-radar': 30,
+  'quote-comparison': 30,
+  'price-finalization': 30,
   'coverage-intelligence': 180,
   'replace-repair': 180,
   'inspection-report': 365,

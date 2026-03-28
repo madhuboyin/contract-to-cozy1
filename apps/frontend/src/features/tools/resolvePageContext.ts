@@ -7,7 +7,9 @@ export type ResolvePageContextInput = {
 
 const ROUTE_CONTEXT_PATTERNS: Array<{ context: PageContextId; pattern: RegExp }> = [
   { context: 'service-price-radar', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/service-price-radar(?:\/|$)/ },
+  { context: 'quote-comparison', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/quote-comparison(?:\/|$)/ },
   { context: 'negotiation-shield', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/negotiation-shield(?:\/|$)/ },
+  { context: 'price-finalization', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/price-finalization(?:\/|$)/ },
   { context: 'property-tax', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/property-tax(?:\/|$)/ },
   { context: 'cost-growth', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/cost-growth(?:\/|$)/ },
   { context: 'cost-explainer', pattern: /^\/dashboard\/properties\/[^/]+\/tools\/cost-explainer(?:\/|$)/ },

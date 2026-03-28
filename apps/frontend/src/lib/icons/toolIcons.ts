@@ -32,6 +32,8 @@ export const TOOL_ICON_MAP = {
     'insurance-trend': { concept: 'insurance', icon: 'shield', category: 'home' },
     'service-price-radar': { concept: 'expenses', icon: 'dollar-sign', category: 'home' },
     'negotiation-shield': { concept: 'coverage', icon: 'shield-check', category: 'home' },
+    'quote-comparison': { concept: 'review', icon: 'layout-grid', category: 'home' },
+    'price-finalization': { concept: 'expenses', icon: 'badge-check', category: 'home' },
     'cost-explainer': { concept: 'recommendations', icon: 'lightbulb', category: 'home' },
     'true-cost': { concept: 'expenses', icon: 'dollar-sign', category: 'home' },
     'sell-hold-rent': { concept: 'recommendations', icon: 'lightbulb', category: 'home' },

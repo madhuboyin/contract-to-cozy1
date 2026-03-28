@@ -330,13 +330,12 @@ function buildNegotiationShieldHref(
   // P3-23: engine-resolved next step key replaces hardcoded 'prepare_negotiation'
   resolvedNextStepKey?: string | null
 ): string {
-  const params = new URLSearchParams({
-    create: '1',
-    scenario: 'contractor-quote-review',
-  });
+  const params = new URLSearchParams();
+  const targetStepKey = resolvedNextStepKey ?? 'prepare_negotiation';
 
   if (check.quoteVendorName) {
     params.set('contractorName', check.quoteVendorName);
+    params.set('vendorName', check.quoteVendorName);
   }
   params.set('quoteAmount', String(check.quoteAmount));
   params.set('serviceCategory', check.serviceCategory);
@@ -347,7 +346,18 @@ function buildNegotiationShieldHref(
   if (guidanceContext?.guidanceSignalIntentFamily) {
     params.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
   }
-  params.set('guidanceStepKey', resolvedNextStepKey ?? 'prepare_negotiation');
+  params.set('guidanceStepKey', targetStepKey);
+
+  if (targetStepKey === 'compare_quotes') {
+    return `/dashboard/properties/${propertyId}/tools/quote-comparison?${params.toString()}`;
+  }
+
+  if (targetStepKey === 'finalize_price') {
+    return `/dashboard/properties/${propertyId}/tools/price-finalization?${params.toString()}`;
+  }
+
+  params.set('create', '1');
+  params.set('scenario', 'contractor-quote-review');
 
   return `/dashboard/properties/${propertyId}/tools/negotiation-shield?${params.toString()}`;
 }
@@ -1495,7 +1505,11 @@ export default function ServicePriceRadarClient() {
                           })
                         }
                       >
-                        Need help responding?
+                        {nextStepKey === 'compare_quotes'
+                          ? 'Compare quotes'
+                          : nextStepKey === 'finalize_price'
+                            ? 'Finalize accepted price'
+                            : 'Need help responding?'}
                       </Link>
                     </Button>
                   </div>
