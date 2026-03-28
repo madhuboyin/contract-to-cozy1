@@ -53,6 +53,14 @@ COPY apps/backend/src/utils/FinancialCalculator.util.ts src/shared/backend/utils
 COPY apps/backend/src/config/risk-constants.ts src/shared/backend/config/
 COPY apps/backend/src/config/workerJobRegistry.ts src/shared/backend/config/
 COPY apps/backend/src/services/homeEventRadarMatcher.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/eventSignalProjection.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/sharedDataObservability.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/coverageGap.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/signal.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/assumptionSet.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/preferenceProfile.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/financialAssumption.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/sharedDataBackfill.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/storage/reportStorage.ts src/shared/backend/services/storage/
 COPY apps/backend/src/services/storage/s3Client.ts src/shared/backend/services/storage/
 COPY apps/backend/src/services/pdf/renderHomeReportPackPdf.ts src/shared/backend/services/pdf/
@@ -147,6 +155,10 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/storage\/reportStorage/\.\.\/shared\/backend\/services\/storage\/reportStorage/g' src/jobs/generateHomeReportExport.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/pdf\/renderHomeReportPackPdf/\.\.\/shared\/backend\/services\/pdf\/renderHomeReportPackPdf/g' src/jobs/generateHomeReportExport.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/homeEventRadarMatcher\.service/\.\.\/shared\/backend\/services\/homeEventRadarMatcher\.service/g' src/jobs/ingestRadarSignals.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/sharedDataBackfill\.service/\.\.\/shared\/backend\/services\/sharedDataBackfill\.service/g' src/jobs/sharedDataBackfill.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/sharedDataBackfill\.service/\.\.\/shared\/backend\/services\/sharedDataBackfill\.service/g' src/jobs/sharedDataConsistencyAudit.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/signal\.service/\.\.\/shared\/backend\/services\/signal\.service/g' src/jobs/sharedSignalHealthAudit.job.ts && \
+    sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/signal\.service/\.\.\/shared\/backend\/services\/signal\.service/g' src/jobs/sharedSignalRefresh.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/domainEvents\/domainEvents\.service/\.\/shared\/backend\/services\/domainEvents\/domainEvents\.service/g' src/runners/claimFollowUpDue.poller.ts && \
     # This ensures the domainEvents service can find the prisma lib in its new shared relative path
     sed -i 's/\.\.\/\.\.\/lib\/prisma/\.\.\/\.\.\/lib\/prisma/g' src/shared/backend/services/domainEvents/domainEvents.service.ts && \
