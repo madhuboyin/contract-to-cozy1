@@ -114,6 +114,7 @@ export async function evaluateIncident(incidentId: string) {
           title: incident.title,
           summary: incident.summary ?? null,
           severity,
+          details: (incident.details as Record<string, unknown> | null) ?? null,
         },
         userId: incident.userId ?? '', // best effort; if null, you can route to property owner later
       });

@@ -64,14 +64,21 @@ export default function ProviderDetailPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId');
   const finalPrice = searchParams.get('finalPrice');
   const vendorName = searchParams.get('vendorName');
+  const hasGuardScopeContext = Boolean(
+    guidanceJourneyId ||
+      guidanceStepKey ||
+      guidanceSignalIntentFamily ||
+      itemId ||
+      homeAssetId
+  );
   const bookingGuardQuery = useExecutionGuard(propertyId, 'BOOKING', {
-    enabled: Boolean(propertyId),
+    enabled: Boolean(propertyId) && hasGuardScopeContext,
     journeyId: guidanceJourneyId ?? undefined,
     inventoryItemId: itemId ?? undefined,
     homeAssetId: homeAssetId ?? undefined,
   });
   const bookingGuidanceQuery = useGuidance(propertyId, {
-    enabled: Boolean(propertyId),
+    enabled: Boolean(propertyId) && hasGuardScopeContext,
     limit: 3,
   });
 
@@ -79,7 +86,7 @@ export default function ProviderDetailPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const isExecutionBlocked = Boolean(bookingGuardQuery.data?.blocked);
+  const isExecutionBlocked = hasGuardScopeContext && Boolean(bookingGuardQuery.data?.blocked);
   const blockedReason =
     bookingGuardQuery.data?.blockedReason ?? bookingGuardQuery.data?.reasons?.[0] ?? null;
   const blockedJourneyIds = new Set(

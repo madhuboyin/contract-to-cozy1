@@ -23,6 +23,8 @@ export interface AssetRiskDetail {
   assetName: string;
   systemType: string;
   category: RiskCategory;
+  homeAssetId?: string | null;
+  inventoryItemId?: string | null;
   age: number;
   expectedLife: number;
   replacementCost: number;
@@ -192,6 +194,10 @@ export const calculateAssetRisk = (
   assetConfig: SystemRiskConfig,
   property: PropertyWithDetails,
   currentYear: number,
+  scope?: {
+    homeAssetId?: string | null;
+    inventoryItemId?: string | null;
+  }
 ): AssetRiskDetail | null => {
   
   // 1. Identify Installation Year based on asset type (Simplified for Phase 1)
@@ -268,6 +274,8 @@ export const calculateAssetRisk = (
     assetName,
     systemType: assetConfig.systemType,
     category: assetConfig.category,
+    homeAssetId: scope?.homeAssetId ?? null,
+    inventoryItemId: scope?.inventoryItemId ?? null,
     age,
     expectedLife,
     replacementCost,

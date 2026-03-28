@@ -3,6 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 // FIX: Added Calendar for Book button
 import { Star, Phone, Loader2, Calendar, Search } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -13,6 +14,8 @@ import { cn } from '@/lib/utils';
 // PHASE 2 FIX: Import for data fetching
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
+import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { extractGuidanceContinuityContext } from '@/features/guidance/utils/guidanceContinuity';
 
 // Define a structural type for the data returned by listFavorites API 
 interface FavoriteProviderData {
@@ -44,6 +47,9 @@ const getInitials = (name: string | null | undefined): string => {
 };
 
 export const FavoriteProvidersCard = ({ className }: { className?: string }) => {
+  const searchParams = useSearchParams();
+  const { selectedPropertyId } = usePropertyContext();
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
   
   // PHASE 2 FIX: Implement data fetching using useQuery
   const { data, isLoading, error } = useQuery({
@@ -61,6 +67,24 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
 
   // Replace placeholder data with fetched data
   const favorites = data || []; 
+
+  const buildQuickBookHref = (providerId: string): string => {
+    const params = new URLSearchParams();
+    if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
+    if (guidanceContext.guidanceJourneyId) params.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+    if (guidanceContext.guidanceStepKey) params.set('guidanceStepKey', guidanceContext.guidanceStepKey);
+    if (guidanceContext.guidanceSignalIntentFamily) {
+      params.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+    }
+    if (guidanceContext.itemId) params.set('itemId', guidanceContext.itemId);
+    if (guidanceContext.homeAssetId) params.set('homeAssetId', guidanceContext.homeAssetId);
+
+    const from = searchParams.get('from');
+    if (from) params.set('from', from);
+
+    const basePath = `/dashboard/providers/${providerId}/book`;
+    return params.toString() ? `${basePath}?${params.toString()}` : basePath;
+  };
 
   if (isLoading) {
     return (
@@ -168,7 +192,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                             </Button>
                         )}
                         <Button variant="outline" size="sm" className="min-h-[44px]" asChild>
-                            <Link href={`/dashboard/providers/${provider.id}/book`}>
+                            <Link href={buildQuickBookHref(provider.id)}>
                                 <Calendar className="h-4 w-4 sm:mr-1" />
                                 <span className="hidden sm:inline">Book</span>
                             </Link>

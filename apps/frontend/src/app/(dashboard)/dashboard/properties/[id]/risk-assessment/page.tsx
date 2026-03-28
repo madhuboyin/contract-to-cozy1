@@ -184,7 +184,45 @@ function tokenizeForMatch(value: string | null | undefined): Set<string> {
     );
 }
 
+function normalizeMatchId(value: string | null | undefined): string | null {
+    if (!value) return null;
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+}
+
+function scoreStableScopeMatch(item: AssetRiskDetail, action: GuidanceActionModel): number {
+    const itemInventoryId = normalizeMatchId(item.inventoryItemId);
+    const itemHomeAssetId = normalizeMatchId(item.homeAssetId);
+    const actionInventoryId = normalizeMatchId(action.journey.inventoryItemId);
+    const actionHomeAssetId = normalizeMatchId(action.journey.homeAssetId);
+
+    let score = 0;
+
+    if (itemInventoryId) {
+        if (actionInventoryId === itemInventoryId) {
+            score += 120;
+        } else if (actionInventoryId) {
+            score -= 80;
+        }
+    }
+
+    if (itemHomeAssetId) {
+        if (actionHomeAssetId === itemHomeAssetId) {
+            score += 80;
+        } else if (actionHomeAssetId) {
+            score -= 60;
+        }
+    }
+
+    return score;
+}
+
 function scoreGuidanceActionForAsset(item: AssetRiskDetail, action: GuidanceActionModel): number {
+    const stableScopeScore = scoreStableScopeMatch(item, action);
+    if (stableScopeScore <= -80) {
+        return stableScopeScore;
+    }
+
     const family = action.journey.primarySignal?.signalIntentFamily?.toLowerCase() ?? '';
     const hintMatches = (ASSET_CATEGORY_SIGNAL_HINTS[item.category] ?? []).filter((hint) =>
         family.includes(hint)
@@ -223,7 +261,14 @@ function scoreGuidanceActionForAsset(item: AssetRiskDetail, action: GuidanceActi
     const pastLifeBoost =
         item.age > item.expectedLife && family.includes('lifecycle') ? 4 : 0;
 
-    return domainScore + hintMatches * 4 + tokenOverlap * 2 + (hasScopedJourney ? 1 : 0) + pastLifeBoost;
+    return (
+        stableScopeScore +
+        domainScore +
+        hintMatches * 4 +
+        tokenOverlap * 2 +
+        (hasScopedJourney ? 1 : 0) +
+        pastLifeBoost
+    );
 }
 
 function buildGuidanceCtaText(action: GuidanceActionModel): string {
@@ -237,6 +282,21 @@ function pickGuidanceActionForAsset(
     actions: GuidanceActionModel[]
 ): GuidanceActionModel | null {
     if (!actions.length) return null;
+
+    const scopedMatches = actions
+        .map((action) => ({
+            action,
+            score: scoreStableScopeMatch(item, action),
+        }))
+        .filter((entry) => entry.score >= 80)
+        .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return (b.action.priorityScore ?? 0) - (a.action.priorityScore ?? 0);
+        });
+
+    if (scopedMatches[0]) {
+        return scopedMatches[0].action;
+    }
 
     const ranked = actions
         .map((action) => ({
@@ -424,8 +484,11 @@ const RiskCategorySummaryCard = ({
 // --- Component for Phase 3.2: Detailed Asset Matrix Table ---
 const AssetMatrixTable = ({ 
     details, 
+    tasksByHomeAssetId,
     tasksBySystemType,
+    bookingsByInventoryItemId,
     bookingsByInsightFactor,
+    warrantiesByHomeAssetId,
     warrantiesBySystemType,
     propertyId,
     onScheduleInspection, 
@@ -433,8 +496,11 @@ const AssetMatrixTable = ({
     onViewBooking,
 }: { 
     details: AssetRiskDetail[];
+    tasksByHomeAssetId: Map<string, PropertyMaintenanceTask>;
     tasksBySystemType: Map<string, PropertyMaintenanceTask>;
+    bookingsByInventoryItemId: Map<string, any>;
     bookingsByInsightFactor: Map<string, any>;
+    warrantiesByHomeAssetId: Map<string, any>;
     warrantiesBySystemType: Map<string, any>;
     propertyId: string;
     onScheduleInspection: (asset: AssetRiskDetail) => void;
@@ -457,11 +523,20 @@ const AssetMatrixTable = ({
     // Shared logic to derive CTA text/variant and status flags per asset
     const getAssetRowData = (item: AssetRiskDetail) => {
         const insightFactor = item.assetName.replace(/_/g, ' ');
-        const existingBooking = bookingsByInsightFactor.get(insightFactor);
+        const existingBooking =
+            (item.inventoryItemId
+                ? bookingsByInventoryItemId.get(item.inventoryItemId)
+                : undefined) ?? bookingsByInsightFactor.get(insightFactor);
         const hasBooking = !!existingBooking;
-        const existingTask = tasksBySystemType.get(item.systemType);
+        const existingTask =
+            (item.homeAssetId
+                ? tasksByHomeAssetId.get(item.homeAssetId)
+                : undefined) ?? tasksBySystemType.get(item.systemType);
         const hasTask = !!existingTask;
-        const existingWarranty = warrantiesBySystemType.get(item.systemType);
+        const existingWarranty =
+            (item.homeAssetId
+                ? warrantiesByHomeAssetId.get(item.homeAssetId)
+                : undefined) ?? warrantiesBySystemType.get(item.systemType);
         const hasWarranty = !!existingWarranty;
         const isPastLife = item.age > item.expectedLife;
         const guidanceAction = pickGuidanceActionForAsset(item, guidance.actions);
@@ -558,7 +633,9 @@ const AssetMatrixTable = ({
                         query: {
                             category: getProviderCategoryForSystemType(item.systemType),
                             insightFactor: item.assetName.replace(/_/g, ' '),
-                            propertyId: propertyId
+                            propertyId: propertyId,
+                            ...(item.inventoryItemId ? { itemId: item.inventoryItemId } : {}),
+                            ...(item.homeAssetId ? { homeAssetId: item.homeAssetId } : {}),
                         }
                     }}>
                         {ctaText}
@@ -627,9 +704,13 @@ const AssetMatrixTable = ({
                 <div className="md:hidden space-y-4">
                     {details.map((item, index) => {
                         const data = getAssetRowData(item);
+                        const rowKey =
+                            item.inventoryItemId ??
+                            item.homeAssetId ??
+                            `${item.systemType}-${item.assetName}-${index}`;
                         return (
                             <div
-                                key={index}
+                                key={rowKey}
                                 className={`rounded-lg border p-4 space-y-3 ${
                                     item.riskLevel === 'HIGH'
                                         ? 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-900/10'
@@ -701,9 +782,13 @@ const AssetMatrixTable = ({
                         <TableBody>
                             {details.map((item, index) => {
                                 const data = getAssetRowData(item);
+                                const rowKey =
+                                    item.inventoryItemId ??
+                                    item.homeAssetId ??
+                                    `${item.systemType}-${item.assetName}-${index}`;
 
                                 return (
-                                    <TableRow key={index} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
+                                    <TableRow key={rowKey} className={item.riskLevel === 'HIGH' ? 'bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : ''}>
                                         <TableCell className="font-medium whitespace-normal break-words">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <div>
@@ -825,24 +910,33 @@ export default function RiskAssessmentPage() {
 
     // 🔑 Create lookup map: systemType -> task
     const tasksBySystemType = new Map<string, PropertyMaintenanceTask>();
+    const tasksByHomeAssetId = new Map<string, PropertyMaintenanceTask>();
     if (Array.isArray(maintenanceTasks)) {
         maintenanceTasks.forEach(task => {
             if (task.assetType) {
                 tasksBySystemType.set(task.assetType, task);
             }
+            if (task.homeAssetId) {
+                tasksByHomeAssetId.set(task.homeAssetId, task);
+            }
         });
     }
 
+    const bookingsByInventoryItemId = new Map<string, any>();
     // 🔑 Create lookup map: insightFactor -> booking
     const bookingsByInsightFactor = new Map<string, any>();
     if (Array.isArray(activeBookings)) {
         activeBookings.forEach((booking: any) => {
+            if (booking.inventoryItemId) {
+                bookingsByInventoryItemId.set(booking.inventoryItemId, booking);
+            }
             if (booking.insightFactor) {
                 bookingsByInsightFactor.set(booking.insightFactor, booking);
             }
         });
     }
 
+    const warrantiesByHomeAssetId = new Map<string, any>();
     // 🔑 NEW: Create lookup map: systemType -> warranty (for badge display)
     const warrantiesBySystemType = new Map<string, any>();
     if (Array.isArray(activeWarranties)) {
@@ -854,6 +948,7 @@ export default function RiskAssessmentPage() {
             // If warranty is linked to specific asset, add that too
             if (warranty.linkedAssetId && warranty.linkedAsset?.assetType) {
                 warrantiesBySystemType.set(warranty.linkedAsset.assetType, warranty);
+                warrantiesByHomeAssetId.set(warranty.linkedAssetId, warranty);
             }
         });
     }
@@ -1029,7 +1124,10 @@ export default function RiskAssessmentPage() {
     const handleScheduleInspection = (asset: AssetRiskDetail) => {
         // Check if booking already exists for this asset
         const insightFactor = asset.assetName.replace(/_/g, ' ');
-        const existingBooking = bookingsByInsightFactor.get(insightFactor);
+        const existingBooking =
+            (asset.inventoryItemId
+                ? bookingsByInventoryItemId.get(asset.inventoryItemId)
+                : undefined) ?? bookingsByInsightFactor.get(insightFactor);
         
         if (existingBooking) {
             // Navigate to booking detail page
@@ -1061,6 +1159,12 @@ export default function RiskAssessmentPage() {
                 propertyId: propertyId,
                 from: 'risk-assessment', // 🔑 NEW: Track navigation source
             });
+            if (asset.inventoryItemId) {
+                params.set('itemId', asset.inventoryItemId);
+            }
+            if (asset.homeAssetId) {
+                params.set('homeAssetId', asset.homeAssetId);
+            }
             router.push(`/dashboard/providers?${params.toString()}`);
             return;
         }
@@ -1116,8 +1220,11 @@ export default function RiskAssessmentPage() {
                 <React.Fragment>
                     <AssetMatrixTable 
                         details={report.details} 
+                        tasksByHomeAssetId={tasksByHomeAssetId}
                         tasksBySystemType={tasksBySystemType}
+                        bookingsByInventoryItemId={bookingsByInventoryItemId}
                         bookingsByInsightFactor={bookingsByInsightFactor}
+                        warrantiesByHomeAssetId={warrantiesByHomeAssetId}
                         warrantiesBySystemType={warrantiesBySystemType}
                         propertyId={propertyId}
                         onScheduleInspection={handleScheduleInspection}

@@ -238,6 +238,8 @@ export interface AssetRiskDetail {
     assetName: string;
     systemType: string;
     category: RiskCategory;
+    homeAssetId?: string | null;
+    inventoryItemId?: string | null;
     age: number;
     expectedLife: number;
     replacementCost: number;
@@ -1399,6 +1401,7 @@ export interface CreateBookingInput {
   insightContext?: string;    // e.g., "Property age: 35 years"
   maintenancePredictionId?: string;
   inventoryItemId?: string;
+  homeAssetId?: string;
   priceFinalizationId?: string;
   guidanceJourneyId?: string;
   guidanceStepKey?: string;

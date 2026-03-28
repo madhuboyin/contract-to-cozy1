@@ -51,6 +51,13 @@ export default function BookProviderPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId');
   const finalPrice = searchParams.get('finalPrice');
   const vendorName = searchParams.get('vendorName');
+  const hasGuardScopeContext = Boolean(
+    guidanceJourneyId ||
+      guidanceStepKey ||
+      guidanceSignalIntentFamily ||
+      inventoryItemId ||
+      homeAssetId
+  );
   const providerId = params.id as string;
 
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -72,17 +79,17 @@ export default function BookProviderPage() {
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   const bookingGuardQuery = useExecutionGuard(selectedPropertyId, 'BOOKING', {
-    enabled: Boolean(selectedPropertyId),
+    enabled: Boolean(selectedPropertyId) && hasGuardScopeContext,
     journeyId: guidanceJourneyId ?? undefined,
     inventoryItemId: inventoryItemId ?? undefined,
     homeAssetId: homeAssetId ?? undefined,
   });
   const bookingGuidanceQuery = useGuidance(selectedPropertyId, {
-    enabled: Boolean(selectedPropertyId),
+    enabled: Boolean(selectedPropertyId) && hasGuardScopeContext,
     limit: 3,
   });
 
-  const isExecutionBlocked = Boolean(bookingGuardQuery.data?.blocked);
+  const isExecutionBlocked = hasGuardScopeContext && Boolean(bookingGuardQuery.data?.blocked);
   const blockedReason =
     bookingGuardQuery.data?.blockedReason ?? bookingGuardQuery.data?.reasons?.[0] ?? null;
   const blockedJourneyIds = new Set(bookingGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []);
@@ -269,11 +276,12 @@ export default function BookProviderPage() {
       ...(insightContext && { insightContext }),
       ...(maintenancePredictionId && { maintenancePredictionId }),
       ...(inventoryItemId && { inventoryItemId }),
+      ...(homeAssetId && { homeAssetId }),
       ...(priceFinalizationId && { priceFinalizationId }),
       ...(guidanceJourneyId && { guidanceJourneyId }),
       ...(guidanceJourneyId && guidanceStepKey && { guidanceStepKey }),
       ...(guidanceSignalIntentFamily && { guidanceSignalIntentFamily }),
-      ...(guidanceJourneyId && { guidanceEnforceGuard: true }),
+      ...(hasGuardScopeContext && { guidanceEnforceGuard: true }),
     };
 
     setIsSubmitting(true);

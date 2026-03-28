@@ -23,6 +23,10 @@ interface PropertyWithRelations extends Property {
   warranties: Warranty[];
   insurancePolicies: InsurancePolicy[];
   riskReport: RiskAssessmentReport | null;
+  homeAssets: Array<{
+    id: string;
+    assetType: string;
+  }>;
 
   // ✅ New: Inventory source of truth
   inventoryItems: Array<
@@ -220,11 +224,15 @@ class RiskAssessmentService {
           console.log(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
         
           for (const config of relevantConfigs) {
+            const homeAssetId = this.resolveHomeAssetIdForSystemType(property as PropertyWithRelations, config.systemType);
             const assetRisk = calculateAssetRisk(
               config.systemType,
               config,
               property as PropertyWithRelations,
-              currentYear
+              currentYear,
+              {
+                homeAssetId,
+              }
             );
             if (assetRisk) assetRisks.push(assetRisk);
           }
@@ -428,6 +436,39 @@ class RiskAssessmentService {
   
     return Math.max(0, currentYear - year);
   }
+
+  private resolveHomeAssetIdForSystemType(
+    property: PropertyWithRelations,
+    systemType: string
+  ): string | null {
+    const homeAssets = Array.isArray(property.homeAssets) ? property.homeAssets : [];
+    if (homeAssets.length === 0) return null;
+
+    const normalizedSystemType = String(systemType || '').trim().toUpperCase();
+    if (!normalizedSystemType) return null;
+
+    const exact = homeAssets.find((asset) => String(asset.assetType || '').toUpperCase() === normalizedSystemType);
+    if (exact?.id) return exact.id;
+
+    const prefixMappings: Array<{ from: string; to: string }> = [
+      { from: 'HVAC_', to: 'HVAC_' },
+      { from: 'WATER_HEATER_', to: 'WATER_HEATER_' },
+      { from: 'ROOF_', to: 'ROOF_' },
+      { from: 'ELECTRICAL_PANEL_', to: 'ELECTRICAL_PANEL_' },
+      { from: 'SAFETY_', to: 'SAFETY_' },
+      { from: 'FOUNDATION_', to: 'FOUNDATION_' },
+    ];
+
+    for (const mapping of prefixMappings) {
+      if (!normalizedSystemType.startsWith(mapping.from)) continue;
+      const prefixMatch = homeAssets.find((asset) =>
+        String(asset.assetType || '').toUpperCase().startsWith(mapping.to)
+      );
+      if (prefixMatch?.id) return prefixMatch.id;
+    }
+
+    return null;
+  }
   
   private buildMajorApplianceRisksFromInventory(
     property: PropertyWithRelations,
@@ -470,6 +511,8 @@ class RiskAssessmentService {
         assetName,
         systemType,
         category: 'SYSTEMS' as any,
+        homeAssetId: item.homeAssetId ?? null,
+        inventoryItemId: item.id,
   
         age: ageYears,
         expectedLife,
@@ -542,6 +585,12 @@ class RiskAssessmentService {
         warranties: true,
         insurancePolicies: true,
         riskReport: true,
+        homeAssets: {
+          select: {
+            id: true,
+            assetType: true,
+          },
+        },
   
         // ✅ New: inventory items drive MAJOR_APPLIANCE risks
         inventoryItems: {

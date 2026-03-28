@@ -48,25 +48,47 @@ export class BookingController {
         guidanceJourneyId,
         guidanceStepKey,
         guidanceSignalIntentFamily,
+        guidanceEnforceGuard,
+        homeAssetId,
         ...bookingInput
       } = input as CreateBookingInput & {
         guidanceJourneyId?: string;
         guidanceStepKey?: string;
         guidanceSignalIntentFamily?: string;
+        guidanceEnforceGuard?: boolean;
+        homeAssetId?: string;
       };
 
-      await guidanceBookingGuardService.assertCanExecute({
-        propertyId: bookingInput.propertyId,
-        journeyId: guidanceJourneyId ?? null,
-        inventoryItemId: bookingInput.inventoryItemId ?? null,
-        targetAction: 'BOOKING',
-      });
+      const shouldEnforceGuard = Boolean(
+        guidanceEnforceGuard ||
+          guidanceJourneyId ||
+          bookingInput.inventoryItemId ||
+          homeAssetId
+      );
 
-      const booking = await BookingService.createBooking(userId, bookingInput, {
-        guidanceJourneyId: guidanceJourneyId ?? null,
-        guidanceStepKey: guidanceStepKey ?? null,
-        guidanceSignalIntentFamily: guidanceSignalIntentFamily ?? null,
-      });
+      if (shouldEnforceGuard) {
+        await guidanceBookingGuardService.assertCanExecute({
+          propertyId: bookingInput.propertyId,
+          journeyId: guidanceJourneyId ?? null,
+          inventoryItemId: bookingInput.inventoryItemId ?? null,
+          homeAssetId: homeAssetId ?? null,
+          targetAction: 'BOOKING',
+        });
+      }
+
+      const booking = await BookingService.createBooking(
+        userId,
+        {
+          ...bookingInput,
+          ...(homeAssetId ? { homeAssetId } : {}),
+        },
+        {
+          guidanceJourneyId: guidanceJourneyId ?? null,
+          guidanceStepKey: guidanceStepKey ?? null,
+          guidanceSignalIntentFamily: guidanceSignalIntentFamily ?? null,
+          homeAssetId: homeAssetId ?? null,
+        }
+      );
 
       if (guidanceJourneyId) {
         try {
@@ -78,6 +100,7 @@ export class BookingController {
             stepKey: guidanceStepKey ?? undefined,
             status: 'COMPLETED',
             inventoryItemId: bookingInput.inventoryItemId ?? null,
+            homeAssetId: homeAssetId ?? null,
             producedData: {
               bookingId: booking.id,
               status: booking.status,

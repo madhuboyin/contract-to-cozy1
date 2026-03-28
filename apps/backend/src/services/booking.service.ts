@@ -68,6 +68,7 @@ export class BookingService {
       guidanceJourneyId?: string | null;
       guidanceStepKey?: string | null;
       guidanceSignalIntentFamily?: string | null;
+      homeAssetId?: string | null;
     }
   ): Promise<BookingResponse> {
     // Validate service exists and get details
@@ -158,6 +159,7 @@ export class BookingService {
           propertyId: string;
           name: string;
           category: InventoryItemCategory;
+          homeAssetId: string | null;
           manufacturer: string | null;
           modelNumber: string | null;
           serialNumber: string | null;
@@ -178,6 +180,7 @@ export class BookingService {
           propertyId: true,
           name: true,
           category: true,
+          homeAssetId: true,
           manufacturer: true,
           modelNumber: true,
           serialNumber: true,
@@ -296,13 +299,17 @@ export class BookingService {
       }
     }
     
+    const resolvedHomeAssetId =
+      options?.homeAssetId ?? input.homeAssetId ?? linkedInventoryItem?.homeAssetId ?? null;
+
     const actionUrlParams = new URLSearchParams();
     if (options?.guidanceJourneyId) actionUrlParams.set('guidanceJourneyId', options.guidanceJourneyId);
     if (options?.guidanceStepKey) actionUrlParams.set('guidanceStepKey', options.guidanceStepKey);
     if (options?.guidanceSignalIntentFamily) {
       actionUrlParams.set('guidanceSignalIntentFamily', options.guidanceSignalIntentFamily);
     }
-    if (input.inventoryItemId) actionUrlParams.set('itemId', input.inventoryItemId);
+    if (resolvedInventoryItemId) actionUrlParams.set('itemId', resolvedInventoryItemId);
+    if (resolvedHomeAssetId) actionUrlParams.set('homeAssetId', resolvedHomeAssetId);
     if (linkedPriceFinalizationForBooking && linkedPriceFinalizationId) {
       actionUrlParams.set('priceFinalizationId', linkedPriceFinalizationId);
     }
@@ -319,18 +326,24 @@ export class BookingService {
       actionUrl: notificationActionUrl,
       metadata: {
         priority: 'HIGH', // 🔴 REQUIRED for immediate email
-        guidanceContext: options?.guidanceJourneyId
-          ? {
-              guidanceJourneyId: options.guidanceJourneyId,
-              guidanceStepKey: options.guidanceStepKey ?? null,
-              guidanceSignalIntentFamily: options.guidanceSignalIntentFamily ?? null,
-              itemId: input.inventoryItemId ?? null,
-              priceFinalizationId:
-                linkedPriceFinalizationForBooking && linkedPriceFinalizationId
-                  ? linkedPriceFinalizationId
-                  : null,
-            }
-          : null,
+        guidanceContext:
+          options?.guidanceJourneyId ||
+          options?.guidanceStepKey ||
+          options?.guidanceSignalIntentFamily ||
+          resolvedInventoryItemId ||
+          resolvedHomeAssetId
+            ? {
+                guidanceJourneyId: options?.guidanceJourneyId ?? null,
+                guidanceStepKey: options?.guidanceStepKey ?? null,
+                guidanceSignalIntentFamily: options?.guidanceSignalIntentFamily ?? null,
+                itemId: resolvedInventoryItemId ?? null,
+                homeAssetId: resolvedHomeAssetId ?? null,
+                priceFinalizationId:
+                  linkedPriceFinalizationForBooking && linkedPriceFinalizationId
+                    ? linkedPriceFinalizationId
+                    : null,
+              }
+            : null,
       },
       entityType: 'BOOKING',
       entityId: booking.id,
@@ -840,20 +853,40 @@ export class BookingService {
         providerProfile: true,
         service: true,
         property: true,
+        inventoryItem: {
+          select: {
+            homeAssetId: true,
+          },
+        },
         timeline: {
           orderBy: { createdAt: 'asc' },
         },
       },
     });
- 
+
+    const cancelActionUrlParams = new URLSearchParams();
+    if (updated.inventoryItemId) cancelActionUrlParams.set('itemId', updated.inventoryItemId);
+    if (updated.inventoryItem?.homeAssetId) cancelActionUrlParams.set('homeAssetId', updated.inventoryItem.homeAssetId);
+    const cancelActionUrlQuery = cancelActionUrlParams.toString();
+    const cancelNotificationActionUrl = cancelActionUrlQuery
+      ? `/bookings/${updated.id}?${cancelActionUrlQuery}`
+      : `/bookings/${updated.id}`;
+
     await NotificationService.create({
       userId: updated.homeownerId,
       type: 'BOOKING_CANCELLED',
       title: 'Booking cancelled',
       message: `Your booking has been cancelled.`,
-      actionUrl: `/bookings/${updated.id}`,
+      actionUrl: cancelNotificationActionUrl,
       metadata: {
         priority: 'HIGH', // 🔴 REQUIRED for immediate email
+        guidanceContext:
+          updated.inventoryItemId || updated.inventoryItem?.homeAssetId
+            ? {
+                itemId: updated.inventoryItemId ?? null,
+                homeAssetId: updated.inventoryItem?.homeAssetId ?? null,
+              }
+            : null,
       },
       entityType: 'BOOKING',
       entityId: updated.id,
