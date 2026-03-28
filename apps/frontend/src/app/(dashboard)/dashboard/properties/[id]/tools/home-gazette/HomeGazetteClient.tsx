@@ -3,7 +3,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -43,6 +43,13 @@ import {
   type GazetteShareResult,
   type GazetteStoryDto,
 } from './homeGazetteApi';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import {
+  appendGuidanceContinuityToHref,
+  extractGuidanceContinuityContext,
+  hasGuidanceContinuityContext,
+  type GuidanceContinuityContext,
+} from '@/features/guidance/utils/guidanceContinuity';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,6 +95,15 @@ const CATEGORY_META: Record<string, { label: string; color: string }> = {
 
 function getCategoryMeta(cat: string) {
   return CATEGORY_META[cat] ?? CATEGORY_META.GENERAL;
+}
+
+function buildGazetteStoryHref(
+  propertyId: string,
+  story: GazetteStoryDto,
+  guidanceContext: GuidanceContinuityContext
+): string {
+  const baseHref = `/dashboard/properties/${propertyId}/${story.primaryDeepLink.replace(/^\//, '')}`;
+  return appendGuidanceContinuityToHref(baseHref, guidanceContext);
 }
 
 // ─── Primitive Card Shells ────────────────────────────────────────────────────
@@ -154,10 +170,12 @@ function TickerStrip({ items }: { items: string[] }) {
 
 function HeroCard({
   story,
-  propertyId,
+  storyHref,
+  onOpenStory,
 }: {
   story: GazetteStoryDto;
-  propertyId: string;
+  storyHref: string;
+  onOpenStory?: (story: GazetteStoryDto) => void;
 }) {
   const meta = getCategoryMeta(story.storyCategory);
 
@@ -209,7 +227,8 @@ function HeroCard({
 
         {/* CTA */}
         <Link
-          href={`/dashboard/properties/${propertyId}/${story.primaryDeepLink.replace(/^\//, '')}`}
+          href={storyHref}
+          onClick={() => onOpenStory?.(story)}
           className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-900 bg-slate-900 px-5 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:border-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
         >
           View Details
@@ -224,10 +243,12 @@ function HeroCard({
 
 function StoryCard({
   story,
-  propertyId,
+  storyHref,
+  onOpenStory,
 }: {
   story: GazetteStoryDto;
-  propertyId: string;
+  storyHref: string;
+  onOpenStory?: (story: GazetteStoryDto) => void;
 }) {
   return (
     <div className="flex items-start gap-4 rounded-xl border border-white/70 bg-white/72 p-4 backdrop-blur transition-colors hover:bg-white/85 dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900/70">
@@ -256,7 +277,8 @@ function StoryCard({
           {story.summary}
         </p>
         <Link
-          href={`/dashboard/properties/${propertyId}/${story.primaryDeepLink.replace(/^\//, '')}`}
+          href={storyHref}
+          onClick={() => onOpenStory?.(story)}
           className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
         >
           View
@@ -617,10 +639,14 @@ function EditionStatusPill({ status }: { status: string }) {
 function EditionDetailPanel({
   editionId,
   propertyId,
+  guidanceContext,
+  onStoryOpen,
   onClose,
 }: {
   editionId: string;
   propertyId: string;
+  guidanceContext: GuidanceContinuityContext;
+  onStoryOpen: (story: GazetteStoryDto) => void;
   onClose: () => void;
 }) {
   const [edition, setEdition] = useState<GazetteEditionDto | null>(null);
@@ -713,7 +739,11 @@ function EditionDetailPanel({
               )}
 
               {heroStory && (
-                <HeroCard story={heroStory} propertyId={propertyId} />
+                <HeroCard
+                  story={heroStory}
+                  storyHref={buildGazetteStoryHref(propertyId, heroStory, guidanceContext)}
+                  onOpenStory={onStoryOpen}
+                />
               )}
 
               {otherStories.length > 0 && (
@@ -722,7 +752,12 @@ function EditionDetailPanel({
                     More This Week
                   </h3>
                   {otherStories.map((story) => (
-                    <StoryCard key={story.id} story={story} propertyId={propertyId} />
+                    <StoryCard
+                      key={story.id}
+                      story={story}
+                      storyHref={buildGazetteStoryHref(propertyId, story, guidanceContext)}
+                      onOpenStory={onStoryOpen}
+                    />
                   ))}
                 </div>
               )}
@@ -788,7 +823,10 @@ type Tab = 'current' | 'history';
 
 export default function HomeGazetteClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
 
   const [tab, setTab] = useState<Tab>('current');
   const [loading, setLoading] = useState(false);
@@ -828,6 +866,33 @@ export default function HomeGazetteClient() {
   const otherStories = currentEdition?.stories.filter((s) => !s.isHero) ?? [];
   const visibleStories = storyExpanded ? otherStories : otherStories.slice(0, 3);
   const tickerItems = (currentEdition?.tickerJson ?? []) as string[];
+
+  const handleStoryOpen = useCallback(
+    (story: GazetteStoryDto) => {
+      if (!hasGuidanceContext || !guidanceContext.guidanceJourneyId || !guidanceContext.guidanceStepKey) return;
+
+      void recordGuidanceToolStatus(propertyId, {
+        journeyId: guidanceContext.guidanceJourneyId,
+        stepKey: guidanceContext.guidanceStepKey,
+        signalIntentFamily: guidanceContext.guidanceSignalIntentFamily ?? undefined,
+        sourceToolKey: 'home-gazette',
+        sourceEntityType: 'GAZETTE_STORY',
+        sourceEntityId: story.id,
+        status: 'IN_PROGRESS',
+        producedData: {
+          proofType: 'cta_engagement',
+          proofId: story.id,
+          ctaKey: 'gazette_story_open',
+          storyCategory: story.storyCategory,
+          sourceEventId: story.sourceEventId ?? null,
+          openedAt: new Date().toISOString(),
+        },
+      }).catch((error) => {
+        console.warn('[home-gazette] guidance progress hook failed:', error);
+      });
+    },
+    [guidanceContext, hasGuidanceContext, propertyId]
+  );
 
   return (
     <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -965,7 +1030,13 @@ export default function HomeGazetteClient() {
               {tickerItems.length > 0 && <TickerStrip items={tickerItems} />}
 
               {/* Hero story */}
-              {heroStory && <HeroCard story={heroStory} propertyId={propertyId} />}
+              {heroStory && (
+                <HeroCard
+                  story={heroStory}
+                  storyHref={buildGazetteStoryHref(propertyId, heroStory, guidanceContext)}
+                  onOpenStory={handleStoryOpen}
+                />
+              )}
 
               {/* Other stories */}
               {otherStories.length > 0 && (
@@ -977,7 +1048,11 @@ export default function HomeGazetteClient() {
                     <div className="divide-y divide-slate-100/70 dark:divide-slate-800/70">
                       {visibleStories.map((story) => (
                         <div key={story.id} className="p-4">
-                          <StoryCard story={story} propertyId={propertyId} />
+                          <StoryCard
+                            story={story}
+                            storyHref={buildGazetteStoryHref(propertyId, story, guidanceContext)}
+                            onOpenStory={handleStoryOpen}
+                          />
                         </div>
                       ))}
                     </div>
@@ -1029,6 +1104,8 @@ export default function HomeGazetteClient() {
         <EditionDetailPanel
           editionId={selectedEditionId}
           propertyId={propertyId}
+          guidanceContext={guidanceContext}
+          onStoryOpen={handleStoryOpen}
           onClose={() => setSelectedEditionId(null)}
         />
       )}

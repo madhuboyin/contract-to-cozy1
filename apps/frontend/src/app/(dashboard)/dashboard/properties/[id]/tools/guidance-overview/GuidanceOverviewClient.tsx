@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
-import { getPropertyGuidance, recordGuidanceToolCompletion } from '@/lib/api/guidanceApi';
+import { getPropertyGuidance, recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { Button } from '@/components/ui/button';
 import {
   MobileFilterSurface,
@@ -32,8 +32,8 @@ export default function GuidanceOverviewClient() {
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
-  const [completing, setCompleting] = React.useState(false);
-  const [completed, setCompleted] = React.useState(false);
+  const [progressing, setProgressing] = React.useState(false);
+  const [progressRecorded, setProgressRecorded] = React.useState(false);
 
   React.useEffect(() => {
     if (!propertyId) return;
@@ -55,18 +55,25 @@ export default function GuidanceOverviewClient() {
 
   async function handleMarkReviewed() {
     if (!propertyId) return;
-    setCompleting(true);
+    setProgressing(true);
     try {
-      await recordGuidanceToolCompletion(propertyId, {
+      await recordGuidanceToolStatus(propertyId, {
         stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
-        producedData: { reviewedAt: new Date().toISOString() },
+        sourceToolKey: 'guidance-overview',
+        status: 'IN_PROGRESS',
+        producedData: {
+          proofType: 'progress_checkpoint',
+          proofId: 'guidance-overview:in-progress',
+          reviewedAt: new Date().toISOString(),
+          visibleJourneys: Number(data?.journeys?.length ?? 0),
+        },
       });
-      setCompleted(true);
+      setProgressRecorded(true);
     } catch (e) {
-      console.error('[GuidanceOverview] failed to record completion', e);
+      console.error('[GuidanceOverview] failed to record progress', e);
     } finally {
-      setCompleting(false);
+      setProgressing(false);
     }
   }
 
@@ -171,21 +178,21 @@ export default function GuidanceOverviewClient() {
       )}
 
       <ScenarioInputCard
-        title="Step Complete?"
-        subtitle="Once you've reviewed all active guidance signals, mark this step as done."
+        title="Guidance Progress"
+        subtitle="Completion is proof-based and happens from downstream tool evidence."
       >
-        {completed ? (
-          <div className="flex items-center gap-2 text-sm text-green-700">
+        {progressRecorded ? (
+          <div className="flex items-center gap-2 text-sm text-slate-700">
             <CheckCircle className="h-4 w-4" />
-            Step marked complete. Return to your guidance journey to continue.
+            Progress recorded. Continue into a journey step to produce completion evidence.
           </div>
         ) : (
           <Button
             className="min-h-[44px] w-full"
             onClick={handleMarkReviewed}
-            disabled={completing}
+            disabled={progressing}
           >
-            {completing ? 'Saving...' : 'Mark guidance reviewed'}
+            {progressing ? 'Saving...' : 'Record progress'}
           </Button>
         )}
       </ScenarioInputCard>

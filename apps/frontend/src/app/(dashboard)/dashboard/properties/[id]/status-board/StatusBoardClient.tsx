@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useMemo, type ElementType } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getStatusBoard,
@@ -69,6 +69,12 @@ import { getInventoryItem, listInventoryRooms } from '../../../inventory/invento
 import { InventoryItem, InventoryRoom } from '@/types';
 import HomeToolHeader from "@/components/tools/HomeToolHeader";
 import PropertyOrchestrationStrip from "@/components/orchestration/PropertyOrchestrationStrip";
+import { recordGuidanceToolStatus } from "@/lib/api/guidanceApi";
+import {
+  appendGuidanceContinuityToHref,
+  extractGuidanceContinuityContext,
+  hasGuidanceContinuityContext,
+} from "@/features/guidance/utils/guidanceContinuity";
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -241,8 +247,14 @@ function getWarrantyTone(status: WarrantyBadge): "good" | "elevated" | "danger" 
 
 export default function StatusBoardClient() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const propertyId = params.id as string;
+  const guidanceContext = useMemo(
+    () => extractGuidanceContinuityContext(searchParams),
+    [searchParams]
+  );
+  const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -260,8 +272,48 @@ export default function StatusBoardClient() {
   const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
   const [drawerLoading, setDrawerLoading] = useState<string | null>(null);
 
+  const appendGuidanceHref = useCallback(
+    (href: string) => appendGuidanceContinuityToHref(href, guidanceContext),
+    [guidanceContext]
+  );
+
+  const recordOperationalGuidanceProgress = useCallback(
+    (item: StatusBoardItemDTO, ctaKey: string) => {
+      if (!hasGuidanceContext || !guidanceContext.guidanceJourneyId || !guidanceContext.guidanceStepKey) return;
+
+      const sourceEntityId = item.inventoryItemId ?? item.homeAssetId ?? item.id;
+      const sourceEntityType = item.inventoryItemId ? 'INVENTORY_ITEM' : item.homeAssetId ? 'HOME_ASSET' : 'HOME_ITEM';
+
+      void recordGuidanceToolStatus(propertyId, {
+        journeyId: guidanceContext.guidanceJourneyId,
+        stepKey: guidanceContext.guidanceStepKey,
+        signalIntentFamily: guidanceContext.guidanceSignalIntentFamily ?? undefined,
+        sourceToolKey: 'status-board',
+        sourceEntityType,
+        sourceEntityId,
+        inventoryItemId: item.inventoryItemId ?? undefined,
+        homeAssetId: item.homeAssetId ?? undefined,
+        status: 'IN_PROGRESS',
+        producedData: {
+          proofType: 'cta_engagement',
+          proofId: `${sourceEntityId}:${ctaKey}`,
+          ctaKey,
+          itemId: item.id,
+          itemName: item.displayName,
+          recommendation: item.recommendation,
+          condition: item.condition,
+          recordedAt: new Date().toISOString(),
+        },
+      }).catch((error) => {
+        console.warn('[status-board] guidance progress hook failed:', error);
+      });
+    },
+    [guidanceContext, hasGuidanceContext, propertyId]
+  );
+
   const handleViewItem = useCallback(async (item: StatusBoardItemDTO) => {
     if (!item.inventoryItemId) return;
+    recordOperationalGuidanceProgress(item, 'view_item');
     setDrawerLoading(item.id);
     try {
       const [invItem, rooms] = await Promise.all([
@@ -276,7 +328,7 @@ export default function StatusBoardClient() {
     } finally {
       setDrawerLoading(null);
     }
-  }, [propertyId]);
+  }, [propertyId, recordOperationalGuidanceProgress]);
 
   const handleDrawerSaved = useCallback(() => {
     setDrawerOpen(false);
@@ -332,10 +384,12 @@ export default function StatusBoardClient() {
   }, [data?.items]);
 
   function handleTogglePin(item: StatusBoardItemDTO) {
+    recordOperationalGuidanceProgress(item, item.isPinned ? 'unpin_item' : 'pin_item');
     patchMutation.mutate({ homeItemId: item.id, payload: { isPinned: !item.isPinned } });
   }
 
   function handleToggleHide(item: StatusBoardItemDTO) {
+    recordOperationalGuidanceProgress(item, item.isHidden ? 'show_item' : 'hide_item');
     patchMutation.mutate({ homeItemId: item.id, payload: { isHidden: !item.isHidden } });
   }
 
@@ -698,21 +752,30 @@ export default function StatusBoardClient() {
                     </Button>
                   )}
                   {item.deepLinks.viewRoom && (
-                    <Link href={item.deepLinks.viewRoom}>
+                    <Link
+                      href={appendGuidanceHref(item.deepLinks.viewRoom)}
+                      onClick={() => recordOperationalGuidanceProgress(item, 'view_room')}
+                    >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <ExternalLink className="h-3.5 w-3.5 mr-1" /> View Room
                       </Button>
                     </Link>
                   )}
                   {item.deepLinks.warranty && (
-                    <Link href={item.deepLinks.warranty}>
+                    <Link
+                      href={appendGuidanceHref(item.deepLinks.warranty)}
+                      onClick={() => recordOperationalGuidanceProgress(item, 'view_warranty')}
+                    >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <Shield className="h-3.5 w-3.5 mr-1" /> Warranty
                       </Button>
                     </Link>
                   )}
                   {item.recommendation === "REPLACE_SOON" && item.deepLinks.replaceRepair ? (
-                    <Link href={item.deepLinks.replaceRepair}>
+                    <Link
+                      href={appendGuidanceHref(item.deepLinks.replaceRepair)}
+                      onClick={() => recordOperationalGuidanceProgress(item, 'replace_or_repair')}
+                    >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <Wrench className="h-3.5 w-3.5 mr-1" /> Replace or Repair
                       </Button>
@@ -737,7 +800,10 @@ export default function StatusBoardClient() {
                     </Tooltip>
                   ) : null}
                   {item.deepLinks.maintenance && item.pendingMaintenance > 0 ? (
-                    <Link href={item.deepLinks.maintenance}>
+                    <Link
+                      href={appendGuidanceHref(item.deepLinks.maintenance)}
+                      onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
+                    >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <Wrench className="h-3.5 w-3.5 mr-1" /> Maintenance
                       </Button>
@@ -762,7 +828,10 @@ export default function StatusBoardClient() {
                     </Tooltip>
                   )}
                   {item.deepLinks.riskAssessment && (
-                    <Link href={item.deepLinks.riskAssessment}>
+                    <Link
+                      href={appendGuidanceHref(item.deepLinks.riskAssessment)}
+                      onClick={() => recordOperationalGuidanceProgress(item, 'risk_assessment')}
+                    >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
                         <Shield className="h-3.5 w-3.5 mr-1" /> Risk
                       </Button>
@@ -844,6 +913,7 @@ export default function StatusBoardClient() {
                     className="bg-teal-600 text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.8)] dark:bg-teal-600 dark:hover:bg-teal-500"
                     onClick={(e) => {
                       e.stopPropagation();
+                      recordOperationalGuidanceProgress(item, 'save_status_override');
                       handleSaveOverride(item.id);
                     }}
                     disabled={patchMutation.isPending}
@@ -918,7 +988,10 @@ export default function StatusBoardClient() {
           <ActionPriorityRow
             primaryAction={
               canShowReplaceRepair ? (
-                <Link href={item.deepLinks.replaceRepair!}>
+                <Link
+                  href={appendGuidanceHref(item.deepLinks.replaceRepair!)}
+                  onClick={() => recordOperationalGuidanceProgress(item, 'replace_or_repair')}
+                >
                   <Button className="w-full bg-teal-600 hover:bg-teal-700">Replace or Repair</Button>
                 </Link>
               ) : canViewInventoryItem ? (
@@ -930,7 +1003,10 @@ export default function StatusBoardClient() {
                   {drawerLoading === item.id ? "Loading..." : "View Item"}
                 </Button>
               ) : canShowMaintenance ? (
-                <Link href={item.deepLinks.maintenance!}>
+                <Link
+                  href={appendGuidanceHref(item.deepLinks.maintenance!)}
+                  onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
+                >
                   <Button className="w-full bg-teal-600 hover:bg-teal-700">Open Maintenance</Button>
                 </Link>
               ) : undefined
@@ -938,22 +1014,34 @@ export default function StatusBoardClient() {
             secondaryActions={
               <>
                 {item.deepLinks.viewRoom ? (
-                  <Link href={item.deepLinks.viewRoom}>
+                  <Link
+                    href={appendGuidanceHref(item.deepLinks.viewRoom)}
+                    onClick={() => recordOperationalGuidanceProgress(item, 'view_room')}
+                  >
                     <Button size="sm" variant="outline">Room</Button>
                   </Link>
                 ) : null}
                 {item.deepLinks.warranty ? (
-                  <Link href={item.deepLinks.warranty}>
+                  <Link
+                    href={appendGuidanceHref(item.deepLinks.warranty)}
+                    onClick={() => recordOperationalGuidanceProgress(item, 'view_warranty')}
+                  >
                     <Button size="sm" variant="outline">Warranty</Button>
                   </Link>
                 ) : null}
                 {canShowMaintenance ? (
-                  <Link href={item.deepLinks.maintenance!}>
+                  <Link
+                    href={appendGuidanceHref(item.deepLinks.maintenance!)}
+                    onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
+                  >
                     <Button size="sm" variant="outline">Maintenance</Button>
                   </Link>
                 ) : null}
                 {item.deepLinks.riskAssessment ? (
-                  <Link href={item.deepLinks.riskAssessment}>
+                  <Link
+                    href={appendGuidanceHref(item.deepLinks.riskAssessment)}
+                    onClick={() => recordOperationalGuidanceProgress(item, 'risk_assessment')}
+                  >
                     <Button size="sm" variant="outline">Risk</Button>
                   </Link>
                 ) : null}
@@ -1013,7 +1101,10 @@ export default function StatusBoardClient() {
               </div>
               <Button
                 className="w-full bg-teal-600 hover:bg-teal-700"
-                onClick={() => handleSaveOverride(item.id)}
+                onClick={() => {
+                  recordOperationalGuidanceProgress(item, 'save_status_override');
+                  handleSaveOverride(item.id);
+                }}
                 disabled={patchMutation.isPending}
               >
                 {patchMutation.isPending ? "Saving..." : "Save Override"}

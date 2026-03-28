@@ -194,12 +194,14 @@ export function PreviewListRow({
   subtitle,
   icon,
   href,
+  onClick,
   className,
 }: {
   title: string;
   subtitle?: string;
   icon?: React.ReactNode;
   href?: string;
+  onClick?: () => void;
   className?: string;
 }) {
   const content = (
@@ -224,7 +226,7 @@ export function PreviewListRow({
 
   if (!href) return content;
   return (
-    <Link href={href} className="no-brand-style block">
+    <Link href={href} className="no-brand-style block" onClick={onClick}>
       {content}
     </Link>
   );

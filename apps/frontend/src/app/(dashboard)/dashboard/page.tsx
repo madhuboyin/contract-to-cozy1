@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
 import { Loader2 } from 'lucide-react';
@@ -41,6 +41,12 @@ import { useToast } from '@/components/ui/use-toast';
 import MobileDashboardHome from './components/MobileDashboardHome';
 import MobileHomeBuyerDashboard from './components/MobileHomeBuyerDashboard';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import {
+  appendGuidanceContinuityToHref,
+  extractGuidanceContinuityContext,
+  hasGuidanceContinuityContext,
+} from '@/features/guidance/utils/guidanceContinuity';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -216,12 +222,15 @@ const formatAddress = (property: Property) => {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: userLoading } = useAuth();
   const { toast } = useToast();
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
   
   const [data, setData] = useState<DashboardData>({
     bookings: [],
@@ -242,6 +251,49 @@ export default function DashboardPage() {
     selectedPropertyId && properties.some((property) => property.id === selectedPropertyId)
       ? selectedPropertyId
       : properties[0]?.id;
+
+  const resolveLocalUpdateHref = useCallback(
+    (href: string | null | undefined) => {
+      const fallbackHref = href || '/dashboard';
+      return appendGuidanceContinuityToHref(fallbackHref, guidanceContext);
+    },
+    [guidanceContext]
+  );
+
+  const trackLocalUpdateGuidanceProgress = useCallback(
+    (update: LocalUpdate | null | undefined, resolvedHref: string) => {
+      if (
+        !update ||
+        !effectiveSelectedPropertyId ||
+        !hasGuidanceContext ||
+        !guidanceContext.guidanceJourneyId ||
+        !guidanceContext.guidanceStepKey
+      ) {
+        return;
+      }
+
+      void recordGuidanceToolStatus(effectiveSelectedPropertyId, {
+        journeyId: guidanceContext.guidanceJourneyId,
+        stepKey: guidanceContext.guidanceStepKey,
+        signalIntentFamily: guidanceContext.guidanceSignalIntentFamily ?? undefined,
+        sourceToolKey: 'dashboard-local-updates',
+        sourceEntityType: 'LOCAL_UPDATE',
+        sourceEntityId: update.id,
+        status: 'IN_PROGRESS',
+        producedData: {
+          proofType: 'cta_engagement',
+          proofId: update.id,
+          ctaKey: 'local_update_open',
+          updateTitle: update.title,
+          ctaUrl: resolvedHref,
+          openedAt: new Date().toISOString(),
+        },
+      }).catch((error) => {
+        console.warn('[dashboard] local update guidance progress hook failed:', error);
+      });
+    },
+    [effectiveSelectedPropertyId, guidanceContext, hasGuidanceContext]
+  );
   
   // --- DATA FETCHING LOGIC (unchanged) ---
   const fetchDashboardData = useCallback(async () => {
@@ -526,7 +578,14 @@ export default function DashboardPage() {
               onCtaClick={(id) => {
                 const update = localUpdates.find((u) => u.id === id);
                 if (update?.ctaUrl) {
-                  window.open(update.ctaUrl, '_blank', 'noopener,noreferrer');
+                  const resolvedHref = resolveLocalUpdateHref(update.ctaUrl);
+                  trackLocalUpdateGuidanceProgress(update, resolvedHref);
+                  const isExternal = /^https?:\/\//i.test(resolvedHref);
+                  if (isExternal) {
+                    window.open(resolvedHref, '_blank', 'noopener,noreferrer');
+                  } else {
+                    router.push(resolvedHref);
+                  }
                 }
               }}
             />

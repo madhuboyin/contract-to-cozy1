@@ -4,7 +4,7 @@ import React from 'react';
 import { CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScenarioInputCard } from '@/components/mobile/dashboard/MobilePrimitives';
-import { recordGuidanceToolCompletion } from '@/lib/api/guidanceApi';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 
 type Props = {
   propertyId: string | null | undefined;
@@ -17,12 +17,9 @@ type Props = {
 };
 
 /**
- * Renders a "Step complete?" card when a guidance journey has routed the user
- * to this tool page. The card is only shown when `guidanceStepKey` is present
- * in the URL — i.e. when the page was reached via a guidance step link.
- *
- * Clicking the button calls `recordGuidanceToolCompletion` which marks the
- * step done in the backend without requiring the caller to know the step ID.
+ * Renders a proof-aware guidance card when a journey routes to this page.
+ * Completion is no longer a manual "mark done" action; we only allow
+ * progress pings here, while completion should come from real tool evidence.
  */
 export function GuidanceStepCompletionCard({
   propertyId,
@@ -36,21 +33,26 @@ export function GuidanceStepCompletionCard({
 
   if (!propertyId || !guidanceStepKey) return null;
 
-  async function handleComplete() {
+  async function handleMarkInProgress() {
     if (!propertyId || !guidanceStepKey) return;
     setCompleting(true);
     try {
-      await recordGuidanceToolCompletion(propertyId, {
+      await recordGuidanceToolStatus(propertyId, {
         stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId ?? undefined,
+        sourceToolKey: 'frontend',
+        status: 'IN_PROGRESS',
         producedData: {
-          completedAt: new Date().toISOString(),
+          progressNotedAt: new Date().toISOString(),
+          proofType: 'progress_checkpoint',
+          proofId: `${guidanceStepKey}:in_progress`,
+          actionLabel,
           ...producedData,
         },
       });
       setCompleted(true);
     } catch (e) {
-      console.error('[GuidanceStepCompletionCard] completion failed', e);
+      console.error('[GuidanceStepCompletionCard] progress update failed', e);
     } finally {
       setCompleting(false);
     }
@@ -61,22 +63,22 @@ export function GuidanceStepCompletionCard({
       title="Guidance Step"
       subtitle={
         completed
-          ? 'Step recorded. Return to your guidance journey to continue.'
-          : 'Once you have reviewed the information above, mark this guidance step complete.'
+          ? 'Progress recorded. This step will auto-complete when proof-backed business evidence is captured.'
+          : 'Guidance progress is tracked here. Step completion is proof-based and will update automatically from real tool actions.'
       }
     >
       {completed ? (
-        <div className="flex items-center gap-2 text-sm text-green-700">
+        <div className="flex items-center gap-2 text-sm text-slate-700">
           <CheckCircle className="h-4 w-4" />
-          Step marked complete.
+          Progress recorded for this guidance step.
         </div>
       ) : (
         <Button
           className="min-h-[44px] w-full"
-          onClick={handleComplete}
+          onClick={handleMarkInProgress}
           disabled={completing}
         >
-          {completing ? 'Saving…' : actionLabel}
+          {completing ? 'Saving…' : 'Record progress'}
         </Button>
       )}
     </ScenarioInputCard>

@@ -25,7 +25,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
-import { recordGuidanceToolCompletion } from '@/lib/api/guidanceApi';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 
 // Step-specific copy for guidance-driven visits
 const RECALL_STEP_CONTENT: Record<
@@ -66,8 +66,7 @@ export default function RecallAlertsClient() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<RecallMatchDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [guidanceCompleting, setGuidanceCompleting] = useState(false);
-  const [guidanceCompleted, setGuidanceCompleted] = useState(false);
+  const [guidanceProofRecorded, setGuidanceProofRecorded] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -105,33 +104,55 @@ export default function RecallAlertsClient() {
 
   async function onConfirm(matchId: string) {
     await confirmRecallMatch(propertyId, matchId);
+    await recordRecallGuidanceProof({
+      action: 'confirm',
+      matchId,
+    });
     await refresh();
   }
 
   async function onDismiss(matchId: string) {
     await dismissRecallMatch(propertyId, matchId);
+    await recordRecallGuidanceProof({
+      action: 'dismiss',
+      matchId,
+    });
     await refresh();
   }
 
   async function onResolve(matchId: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
     await resolveRecallMatch({ propertyId, matchId, ...payload });
+    await recordRecallGuidanceProof({
+      action: 'resolve',
+      matchId,
+      resolutionType: payload.resolutionType,
+    });
     await refresh();
   }
 
-  async function handleGuidanceComplete() {
+  async function recordRecallGuidanceProof(params: {
+    action: 'confirm' | 'dismiss' | 'resolve';
+    matchId: string;
+    resolutionType?: RecallResolutionType;
+  }) {
     if (!propertyId || !guidanceStepKey) return;
-    setGuidanceCompleting(true);
     try {
-      await recordGuidanceToolCompletion(propertyId, {
+      await recordGuidanceToolStatus(propertyId, {
         stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
-        producedData: { completedAt: new Date().toISOString() },
+        sourceToolKey: 'recalls',
+        status: 'COMPLETED',
+        producedData: {
+          proofType: 'recall_action',
+          proofId: params.matchId,
+          action: params.action,
+          resolutionType: params.resolutionType ?? null,
+          completedAt: new Date().toISOString(),
+        },
       });
-      setGuidanceCompleted(true);
+      setGuidanceProofRecorded(true);
     } catch (e) {
-      console.error('[RecallAlertsClient] failed to record guidance completion', e);
-    } finally {
-      setGuidanceCompleting(false);
+      console.error('[RecallAlertsClient] failed to record proof-backed completion', e);
     }
   }
 
@@ -168,24 +189,20 @@ export default function RecallAlertsClient() {
         <ScenarioInputCard
           title={stepContent?.title ?? 'Guidance Step'}
           subtitle={
-            guidanceCompleted
-              ? 'Step recorded. Return to your guidance journey to continue.'
-              : (stepContent?.instruction ?? 'Complete the actions below, then mark this step done.')
+            guidanceProofRecorded
+              ? 'Proof-backed recall action captured. Return to your guidance journey to continue.'
+              : (stepContent?.instruction ?? 'Complete the actions below. Step completion is recorded from real recall actions.')
           }
         >
-          {guidanceCompleted ? (
+          {guidanceProofRecorded ? (
             <div className="flex items-center gap-2 text-sm text-green-700">
               <CheckCircle className="h-4 w-4" />
-              Step marked complete.
+              Step completed from recall evidence.
             </div>
           ) : (
-            <Button
-              className="min-h-[44px] w-full"
-              onClick={handleGuidanceComplete}
-              disabled={guidanceCompleting}
-            >
-              {guidanceCompleting ? 'Saving...' : (stepContent?.cta ?? 'Mark step complete')}
-            </Button>
+            <p className="text-sm text-muted-foreground">
+              Use Confirm, Dismiss, or Resolve on recall matches below to generate completion proof.
+            </p>
           )}
         </ScenarioInputCard>
       )}

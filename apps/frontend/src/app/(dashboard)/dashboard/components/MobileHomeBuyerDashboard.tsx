@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, CircleUserRound, Home, Sparkles, Truck, FileText, Shield, Wallet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,6 +29,12 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { AI_TOOL_ARTWORK } from '@/components/mobile/dashboard/aiToolArtwork';
 import { resolveIconByConcept, resolveToolIcon } from '@/lib/icons';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import {
+  appendGuidanceContinuityToHref,
+  extractGuidanceContinuityContext,
+  hasGuidanceContinuityContext,
+} from '@/features/guidance/utils/guidanceContinuity';
 
 function buildAiToolHref(propertyId: string | undefined, toolHref: string): string {
   if (!propertyId) return toolHref;
@@ -63,10 +70,56 @@ export default function MobileHomeBuyerDashboard({
   checklistItems,
   localUpdates,
 }: MobileHomeBuyerDashboardProps) {
+  const searchParams = useSearchParams();
+  const guidanceContext = React.useMemo(
+    () => extractGuidanceContinuityContext(searchParams),
+    [searchParams]
+  );
+  const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
   const heroProperty = selectedProperty || properties[0];
   const propertyId = selectedProperty?.id || properties[0]?.id;
   const selectedPropertyName = selectedProperty?.name || selectedProperty?.address || 'Primary Property';
+
+  const resolveLocalUpdateHref = React.useCallback(
+    (href: string | null | undefined) => appendGuidanceContinuityToHref(href || '/dashboard', guidanceContext),
+    [guidanceContext]
+  );
+
+  const trackLocalUpdateProgress = React.useCallback(
+    (update: LocalUpdate) => {
+      if (
+        !propertyId ||
+        !hasGuidanceContext ||
+        !guidanceContext.guidanceJourneyId ||
+        !guidanceContext.guidanceStepKey
+      ) {
+        return;
+      }
+
+      const resolvedHref = resolveLocalUpdateHref(update.ctaUrl ?? '/dashboard');
+      void recordGuidanceToolStatus(propertyId, {
+        journeyId: guidanceContext.guidanceJourneyId,
+        stepKey: guidanceContext.guidanceStepKey,
+        signalIntentFamily: guidanceContext.guidanceSignalIntentFamily ?? undefined,
+        sourceToolKey: 'dashboard-local-updates',
+        sourceEntityType: 'LOCAL_UPDATE',
+        sourceEntityId: update.id,
+        status: 'IN_PROGRESS',
+        producedData: {
+          proofType: 'cta_engagement',
+          proofId: update.id,
+          ctaKey: 'local_update_open',
+          ctaUrl: resolvedHref,
+          updateTitle: update.title,
+          openedAt: new Date().toISOString(),
+        },
+      }).catch((error) => {
+        console.warn('[mobile-home-buyer] local update guidance hook failed:', error);
+      });
+    },
+    [guidanceContext, hasGuidanceContext, propertyId, resolveLocalUpdateHref]
+  );
 
   const buyerStatsQuery = useQuery({
     queryKey: ['mobile-home-buyer-task-stats'],
@@ -300,7 +353,8 @@ export default function MobileHomeBuyerDashboard({
                         key={update.id}
                         title={update.title}
                         subtitle={update.shortDescription}
-                        href={update.ctaUrl || '/dashboard'}
+                        href={resolveLocalUpdateHref(update.ctaUrl)}
+                        onClick={() => trackLocalUpdateProgress(update)}
                         icon={<Sparkles className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
                       />
                     ))}

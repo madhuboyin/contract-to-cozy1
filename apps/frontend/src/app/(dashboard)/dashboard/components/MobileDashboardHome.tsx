@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -49,6 +50,12 @@ import { MoneyImpactTrackerCard } from '@/components/mobile/dashboard/MoneyImpac
 import { resolveToolIcon } from '@/lib/icons';
 import type { LocalUpdate } from '@/types';
 import type { ScoredProperty } from '../types';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import {
+  appendGuidanceContinuityToHref,
+  extractGuidanceContinuityContext,
+  hasGuidanceContinuityContext,
+} from '@/features/guidance/utils/guidanceContinuity';
 
 type MobileDashboardHomeProps = {
   userFirstName: string;
@@ -115,8 +122,54 @@ export default function MobileDashboardHome({
   onPropertyChange,
   localUpdates = [],
 }: MobileDashboardHomeProps) {
+  const searchParams = useSearchParams();
+  const guidanceContext = React.useMemo(
+    () => extractGuidanceContinuityContext(searchParams),
+    [searchParams]
+  );
+  const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
   const propertyId = selectedProperty?.id;
+
+  const resolveLocalUpdateHref = React.useCallback(
+    (href: string | null | undefined) => appendGuidanceContinuityToHref(href || '/dashboard', guidanceContext),
+    [guidanceContext]
+  );
+
+  const trackLocalUpdateProgress = React.useCallback(
+    (update: LocalUpdate) => {
+      if (
+        !propertyId ||
+        !hasGuidanceContext ||
+        !guidanceContext.guidanceJourneyId ||
+        !guidanceContext.guidanceStepKey
+      ) {
+        return;
+      }
+
+      const resolvedHref = resolveLocalUpdateHref(update.ctaUrl ?? '/dashboard');
+      void recordGuidanceToolStatus(propertyId, {
+        journeyId: guidanceContext.guidanceJourneyId,
+        stepKey: guidanceContext.guidanceStepKey,
+        signalIntentFamily: guidanceContext.guidanceSignalIntentFamily ?? undefined,
+        sourceToolKey: 'dashboard-local-updates',
+        sourceEntityType: 'LOCAL_UPDATE',
+        sourceEntityId: update.id,
+        status: 'IN_PROGRESS',
+        producedData: {
+          proofType: 'cta_engagement',
+          proofId: update.id,
+          ctaKey: 'local_update_open',
+          ctaUrl: resolvedHref,
+          updateTitle: update.title,
+          openedAt: new Date().toISOString(),
+        },
+      }).catch((error) => {
+        console.warn('[mobile-dashboard] local update guidance hook failed:', error);
+      });
+    },
+    [guidanceContext, hasGuidanceContext, propertyId, resolveLocalUpdateHref]
+  );
 
   const homeScoreQuery = useQuery({
     queryKey: ['mobile-home-score-report', propertyId],
@@ -533,7 +586,8 @@ export default function MobileDashboardHome({
                         key={update.id}
                         title={update.title}
                         subtitle={update.shortDescription}
-                        href={update.ctaUrl || '/dashboard'}
+                        href={resolveLocalUpdateHref(update.ctaUrl)}
+                        onClick={() => trackLocalUpdateProgress(update)}
                         icon={<Sparkles className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
                       />
                     ))}

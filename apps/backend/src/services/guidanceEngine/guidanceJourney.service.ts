@@ -32,6 +32,31 @@ function mergeRecord(
   return Object.keys(merged).length > 0 ? merged : null;
 }
 
+function hasProofBackedCompletionPayload(payload: Record<string, unknown> | null | undefined): boolean {
+  if (!payload) return false;
+  const normalized = asRecord(payload);
+  const proofType = normalized.proofType;
+  if (typeof proofType !== 'string' || proofType.trim().length === 0) return false;
+
+  const proofIdKeys = [
+    'proofId',
+    'evidenceId',
+    'recordId',
+    'bookingId',
+    'policyId',
+    'quoteId',
+    'matchId',
+    'taskId',
+    'analysisId',
+    'sourceEntityId',
+  ];
+
+  return proofIdKeys.some((key) => {
+    const value = normalized[key];
+    return typeof value === 'string' && value.trim().length > 0;
+  });
+}
+
 type EnrichedGuidanceAction = {
   journey: any;
   signal: any | null;
@@ -514,6 +539,19 @@ export class GuidanceJourneyService {
 
   async recordToolCompletion(input: GuidanceToolCompletionInput) {
     const { guidanceJourney } = getGuidanceModels();
+    const normalizedSourceToolKey = String(input.sourceToolKey ?? '').trim().toLowerCase();
+
+    if (
+      input.status === 'COMPLETED' &&
+      normalizedSourceToolKey === 'frontend' &&
+      !hasProofBackedCompletionPayload(input.producedData ?? null)
+    ) {
+      throw new APIError(
+        'Proof-backed completion data is required before marking this step complete.',
+        400,
+        'GUIDANCE_PROOF_REQUIRED'
+      );
+    }
 
     let signal: any | null = null;
     let journey: any | null = null;

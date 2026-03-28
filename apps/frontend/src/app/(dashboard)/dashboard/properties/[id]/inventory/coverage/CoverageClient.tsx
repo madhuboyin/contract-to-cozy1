@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 import { api } from '@/lib/api/client';
-import { recordGuidanceToolCompletion } from '@/lib/api/guidanceApi';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import InsuranceQuoteModal from '@/app/(dashboard)/dashboard/components/coverage/InsuranceQuoteModal';
@@ -44,8 +44,9 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
 
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') ?? undefined;
-  const [guidanceCompleting, setGuidanceCompleting] = React.useState(false);
-  const [guidanceCompleted, setGuidanceCompleted] = React.useState(false);
+  const [guidanceProgressing, setGuidanceProgressing] = React.useState(false);
+  const [guidanceProgressRecorded, setGuidanceProgressRecorded] = React.useState(false);
+  const [guidanceProofCompleted, setGuidanceProofCompleted] = React.useState(false);
 
   const [quoteOpen, setQuoteOpen] = React.useState(false);
   const [coveredOpen, setCoveredOpen] = React.useState(false);
@@ -112,22 +113,59 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
     }
   }
 
-  async function handleGuidanceComplete() {
+  async function handleGuidanceProgress() {
     if (!propertyId || !guidanceStepKey) return;
-    setGuidanceCompleting(true);
+    setGuidanceProgressing(true);
     try {
-      await recordGuidanceToolCompletion(propertyId, {
+      await recordGuidanceToolStatus(propertyId, {
         stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
-        producedData: { completedAt: new Date().toISOString() },
+        sourceToolKey: 'coverage-options',
+        status: 'IN_PROGRESS',
+        producedData: {
+          proofType: 'progress_checkpoint',
+          proofId: `${guidanceStepKey}:coverage-progress`,
+          progressNotedAt: new Date().toISOString(),
+        },
       });
-      setGuidanceCompleted(true);
+      setGuidanceProgressRecorded(true);
     } catch (e) {
-      console.error('[CoverageClient] failed to record guidance completion', e);
+      console.error('[CoverageClient] failed to record guidance progress', e);
     } finally {
-      setGuidanceCompleting(false);
+      setGuidanceProgressing(false);
     }
   }
+
+  React.useEffect(() => {
+    if (!propertyId || !guidanceStepKey || !guidanceJourneyId) return;
+    const total = Number(data?.counts?.total ?? 0);
+    if (guidanceProofCompleted || Number.isNaN(total) || total > 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await recordGuidanceToolStatus(propertyId, {
+          stepKey: guidanceStepKey,
+          journeyId: guidanceJourneyId,
+          sourceToolKey: 'coverage-options',
+          status: 'COMPLETED',
+          producedData: {
+            proofType: 'coverage_gap_snapshot',
+            proofId: `coverage-gaps:${propertyId}`,
+            totalCoverageGaps: total,
+            capturedAt: new Date().toISOString(),
+          },
+        });
+        if (!cancelled) setGuidanceProofCompleted(true);
+      } catch (error) {
+        console.error('[CoverageClient] failed to auto-complete proof-backed step', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.counts?.total, guidanceJourneyId, guidanceProofCompleted, guidanceStepKey, propertyId]);
 
   return (
     <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
@@ -191,17 +229,21 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         <div className="rounded-2xl border border-black/10 bg-white p-4 space-y-2">
           <p className="text-sm font-medium">Guidance Step</p>
           <p className="text-sm text-muted-foreground">
-            {guidanceCompleted
-              ? 'Policy or document update recorded. Return to your guidance journey.'
-              : 'Once you have updated your policy or uploaded coverage documents, mark this step complete.'}
+            {guidanceProofCompleted
+              ? 'Proof-backed completion recorded from current coverage state. Return to your guidance journey.'
+              : 'Completion is proof-based. Update policy/documents in the linked tools to complete this step automatically.'}
           </p>
-          {!guidanceCompleted && (
+          {!guidanceProofCompleted && (
             <Button
               className="min-h-[44px] w-full mt-1"
-              onClick={handleGuidanceComplete}
-              disabled={guidanceCompleting}
+              onClick={handleGuidanceProgress}
+              disabled={guidanceProgressing}
             >
-              {guidanceCompleting ? 'Saving...' : 'Mark policy/documents updated'}
+              {guidanceProgressing
+                ? 'Saving...'
+                : guidanceProgressRecorded
+                  ? 'Progress recorded'
+                  : 'Record progress'}
             </Button>
           )}
         </div>

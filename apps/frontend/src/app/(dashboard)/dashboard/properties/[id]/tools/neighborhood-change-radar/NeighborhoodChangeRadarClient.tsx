@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -53,6 +53,11 @@ import {
   getNeighborhoodRadarSummary,
   getNeighborhoodRadarTrends,
 } from './neighborhoodRadarApi';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import {
+  extractGuidanceContinuityContext,
+  hasGuidanceContinuityContext,
+} from '@/features/guidance/utils/guidanceContinuity';
 
 // ============================================================================
 // DISPLAY CONSTANTS
@@ -350,11 +355,13 @@ function EventDetailSheet({
   eventId,
   open,
   onOpenChange,
+  onSourceOpen,
 }: {
   propertyId: string;
   eventId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSourceOpen: (detail: NeighborhoodEventDetailDTO) => void;
 }) {
   const { data: detail, isLoading } = useQuery({
     queryKey: ['neighborhood-radar-event', propertyId, eventId],
@@ -385,7 +392,7 @@ function EventDetailSheet({
               </div>
             </div>
           ) : (
-            <EventDetailContent detail={detail} />
+            <EventDetailContent detail={detail} onSourceOpen={onSourceOpen} />
           )}
         </div>
       </SheetContent>
@@ -393,7 +400,13 @@ function EventDetailSheet({
   );
 }
 
-function EventDetailContent({ detail }: { detail: NeighborhoodEventDetailDTO }) {
+function EventDetailContent({
+  detail,
+  onSourceOpen,
+}: {
+  detail: NeighborhoodEventDetailDTO;
+  onSourceOpen: (detail: NeighborhoodEventDetailDTO) => void;
+}) {
   const positives = detail.allImpacts.filter((i) => i.direction === 'POSITIVE');
   const negatives = detail.allImpacts.filter((i) => i.direction === 'NEGATIVE');
 
@@ -550,6 +563,7 @@ function EventDetailContent({ detail }: { detail: NeighborhoodEventDetailDTO }) 
               href={detail.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => onSourceOpen(detail)}
               className="inline-flex items-center gap-1 text-[13px] font-medium text-[hsl(var(--mobile-brand-strong))]"
             >
               View source
@@ -692,7 +706,10 @@ function TrendStrip({ propertyId }: { propertyId: string }) {
 
 export default function NeighborhoodChangeRadarClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const guidanceContext = extractGuidanceContinuityContext(searchParams);
+  const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
 
   const [filterEffect, setFilterEffect] = useState<FilterEffect>('ALL');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -712,7 +729,41 @@ export default function NeighborhoodChangeRadarClient() {
   const events = eventsQuery.data?.events ?? [];
   const total = eventsQuery.data?.total ?? 0;
 
+  function recordNeighborhoodGuidanceProgress(args: {
+    ctaKey: string;
+    eventId?: string | null;
+    sourceUrl?: string | null;
+  }) {
+    if (!hasGuidanceContext || !guidanceContext.guidanceJourneyId || !guidanceContext.guidanceStepKey) return;
+
+    const proofId = args.eventId ?? args.sourceUrl ?? `${propertyId}:${args.ctaKey}`;
+
+    void recordGuidanceToolStatus(propertyId, {
+      journeyId: guidanceContext.guidanceJourneyId,
+      stepKey: guidanceContext.guidanceStepKey,
+      signalIntentFamily: guidanceContext.guidanceSignalIntentFamily ?? undefined,
+      sourceToolKey: 'neighborhood-change-radar',
+      sourceEntityType: args.eventId ? 'NEIGHBORHOOD_EVENT' : 'EXTERNAL_SOURCE',
+      sourceEntityId: args.eventId ?? args.sourceUrl ?? undefined,
+      status: 'IN_PROGRESS',
+      producedData: {
+        proofType: 'cta_engagement',
+        proofId: String(proofId),
+        ctaKey: args.ctaKey,
+        eventId: args.eventId ?? null,
+        sourceUrl: args.sourceUrl ?? null,
+        openedAt: new Date().toISOString(),
+      },
+    }).catch((error) => {
+      console.warn('[neighborhood-radar] guidance progress hook failed:', error);
+    });
+  }
+
   function openDetail(eventId: string) {
+    recordNeighborhoodGuidanceProgress({
+      ctaKey: 'open_event_detail',
+      eventId,
+    });
     setSelectedEventId(eventId);
     setSheetOpen(true);
   }
@@ -800,6 +851,13 @@ export default function NeighborhoodChangeRadarClient() {
         eventId={selectedEventId}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+        onSourceOpen={(detail) => {
+          recordNeighborhoodGuidanceProgress({
+            ctaKey: 'open_external_source',
+            eventId: detail.eventId,
+            sourceUrl: detail.sourceUrl ?? null,
+          });
+        }}
       />
     </MobilePageContainer>
   );

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import { recordGuidanceToolCompletion } from '@/lib/api/guidanceApi';
+import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { Button } from '@/components/ui/button';
 import {
   MobileFilterSurface,
@@ -27,12 +27,14 @@ export default function CoverageOptionsClient() {
   const propertyId = params.id;
   const searchParams = useSearchParams();
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
+  const guidanceStepKey = searchParams.get('guidanceStepKey') ?? 'compare_coverage_options';
 
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
-  const [completing, setCompleting] = React.useState(false);
-  const [completed, setCompleted] = React.useState(false);
+  const [progressing, setProgressing] = React.useState(false);
+  const [progressRecorded, setProgressRecorded] = React.useState(false);
+  const [proofCompleted, setProofCompleted] = React.useState(false);
 
   React.useEffect(() => {
     if (!propertyId) return;
@@ -54,24 +56,60 @@ export default function CoverageOptionsClient() {
 
   async function handleMarkReviewed() {
     if (!propertyId) return;
-    setCompleting(true);
+    setProgressing(true);
     try {
-      await recordGuidanceToolCompletion(propertyId, {
-        stepKey: 'compare_coverage_options',
+      await recordGuidanceToolStatus(propertyId, {
+        stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
-        producedData: { reviewedAt: new Date().toISOString() },
+        sourceToolKey: 'coverage-options',
+        status: 'IN_PROGRESS',
+        producedData: {
+          proofType: 'progress_checkpoint',
+          proofId: 'coverage-options:in-progress',
+          reviewedAt: new Date().toISOString(),
+        },
       });
-      setCompleted(true);
+      setProgressRecorded(true);
     } catch (e) {
-      console.error('[CoverageOptions] failed to record completion', e);
+      console.error('[CoverageOptions] failed to record progress', e);
     } finally {
-      setCompleting(false);
+      setProgressing(false);
     }
   }
 
   const gaps = data?.gaps ?? [];
   const counts = data?.counts ?? {};
   const totalGaps = counts.total ?? 0;
+
+  React.useEffect(() => {
+    if (!propertyId || !guidanceJourneyId || proofCompleted) return;
+    if (Number(totalGaps) > 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await recordGuidanceToolStatus(propertyId, {
+          stepKey: guidanceStepKey,
+          journeyId: guidanceJourneyId,
+          sourceToolKey: 'coverage-options',
+          status: 'COMPLETED',
+          producedData: {
+            proofType: 'coverage_gap_snapshot',
+            proofId: `coverage-options:${propertyId}`,
+            totalCoverageGaps: Number(totalGaps),
+            capturedAt: new Date().toISOString(),
+          },
+        });
+        if (!cancelled) setProofCompleted(true);
+      } catch (error) {
+        console.error('[CoverageOptions] failed to auto-complete proof-backed step', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [guidanceJourneyId, guidanceStepKey, proofCompleted, propertyId, totalGaps]);
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -162,21 +200,21 @@ export default function CoverageOptionsClient() {
       )}
 
       <ScenarioInputCard
-        title="Step Complete?"
-        subtitle="Once you've reviewed coverage options and taken action, mark this step as done."
+        title="Guidance Progress"
+        subtitle="This step auto-completes when proof-backed coverage state is available."
       >
-        {completed ? (
+        {proofCompleted ? (
           <div className="flex items-center gap-2 text-sm text-green-700">
             <CheckCircle className="h-4 w-4" />
-            Step marked complete. Return to your guidance journey to continue.
+            Proof-backed completion recorded. Return to your guidance journey to continue.
           </div>
         ) : (
           <Button
             className="min-h-[44px] w-full"
             onClick={handleMarkReviewed}
-            disabled={completing}
+            disabled={progressing}
           >
-            {completing ? 'Saving...' : 'Mark coverage options reviewed'}
+            {progressing ? 'Saving...' : progressRecorded ? 'Progress recorded' : 'Record progress'}
           </Button>
         )}
       </ScenarioInputCard>

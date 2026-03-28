@@ -347,12 +347,46 @@ export async function recordGuidanceToolCompletion(
   payload: {
     stepKey: string;
     journeyId?: string;
+    signalIntentFamily?: string;
+    issueDomain?: GuidanceIssueDomain;
+    homeAssetId?: string;
+    inventoryItemId?: string;
+    sourceEntityType?: string;
+    sourceEntityId?: string;
+    sourceToolKey?: string;
     producedData?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }> {
+  return recordGuidanceToolStatus(propertyId, {
+    ...payload,
+    sourceToolKey: payload.sourceToolKey ?? 'frontend',
+    status: 'COMPLETED',
+  });
+}
+
+export async function recordGuidanceToolStatus(
+  propertyId: string,
+  payload: {
+    stepKey?: string;
+    journeyId?: string;
+    signalIntentFamily?: string;
+    issueDomain?: GuidanceIssueDomain;
+    homeAssetId?: string;
+    inventoryItemId?: string;
+    sourceEntityType?: string;
+    sourceEntityId?: string;
+    sourceToolKey?: string;
+    status: 'COMPLETED' | 'SKIPPED' | 'BLOCKED' | 'IN_PROGRESS';
+    producedData?: Record<string, unknown>;
+    reasonCode?: string;
+    reasonMessage?: string;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }> {
   const res = await api.post<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }>(
     `/api/properties/${propertyId}/guidance/tool-completions`,
-    { sourceToolKey: 'frontend', status: 'COMPLETED', ...payload }
+    { sourceToolKey: payload.sourceToolKey ?? 'frontend', ...payload }
   );
   return res.data;
 }
