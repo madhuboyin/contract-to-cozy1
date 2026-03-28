@@ -146,15 +146,25 @@ export function resolveGuidanceStepHref(args: {
 export function buildJourneyTitle(journey: GuidanceJourneyDTO): string {
   const familyKey = String(journey.primarySignal?.signalIntentFamily ?? '').toLowerCase();
   const familyTitle: Record<string, string> = {
-    cost_of_inaction_risk: 'Cost Of Waiting Risk',
-    financial_exposure: 'Out-of-Pocket Cost Risk',
-    coverage_gap: 'Coverage Gap Detected',
-    coverage_lapse_detected: 'Coverage Lapse Detected',
-    lifecycle_end_or_past_life: 'Aging System Risk',
-    maintenance_failure_risk: 'Maintenance Failure Risk',
-    inspection_followup_needed: 'Inspection Follow-up Needed',
-    recall_detected: 'Safety Recall Alert',
-    freeze_risk: 'Freeze Risk Alert',
+    cost_of_inaction_risk: 'Cost of Waiting',
+    financial_exposure: 'Out-of-Pocket Exposure',
+    coverage_gap: 'Coverage Gap',
+    coverage_lapse_detected: 'Coverage Lapsing Soon',
+    lifecycle_end_or_past_life: 'Aging System',
+    maintenance_failure_risk: 'Maintenance Issue',
+    inspection_followup_needed: 'Inspection Follow-up',
+    recall_detected: 'Safety Recall',
+    freeze_risk: 'Freeze Risk',
+    flood_risk: 'Flood Risk',
+    heat_risk: 'Heat Risk',
+    hurricane_risk: 'Storm Risk',
+    wind_risk: 'Wind Risk',
+    wildfire_risk: 'Wildfire Risk',
+    energy_inefficiency_detected: 'Energy Inefficiency',
+    high_utility_cost: 'High Utility Cost',
+    permit_required: 'Permit Required',
+    hoa_violation_detected: 'HOA Violation',
+    safety_inspection_due: 'Safety Inspection Due',
   };
 
   if (familyTitle[familyKey]) return familyTitle[familyKey];
@@ -171,7 +181,18 @@ export function buildJourneySubtitle(
   journey: GuidanceJourneyDTO,
   nextStepLabel?: string | null
 ): string {
-  if (nextStepLabel) return `Start with: ${nextStepLabel}`;
+  const domainHints: Record<string, string> = {
+    FINANCIAL: 'Review your options to avoid unnecessary out-of-pocket costs.',
+    INSURANCE: 'Check your coverage before the gap becomes an expense.',
+    MAINTENANCE: 'Address this before a minor issue becomes a major repair.',
+    SAFETY: 'Safety issues need prompt attention — review the details below.',
+    ASSET_LIFECYCLE: 'Your system is aging — decide on repair or replacement.',
+    WEATHER: 'Take protective action before the weather window closes.',
+    COMPLIANCE: 'Resolve this to avoid fines or permit complications.',
+    ENERGY: 'Reduce ongoing costs with targeted improvements.',
+  };
+
+  if (nextStepLabel) return `Next: ${nextStepLabel}`;
   if (journey.currentStepKey) return `In progress: ${formatEnumLabel(journey.currentStepKey)}`;
-  return 'Follow these steps to resolve this issue.';
+  return domainHints[journey.issueDomain] ?? 'Follow these steps to resolve this issue.';
 }

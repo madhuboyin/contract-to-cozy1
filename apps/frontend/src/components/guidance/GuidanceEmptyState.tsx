@@ -8,8 +8,8 @@ type GuidanceEmptyStateProps = {
 };
 
 export function GuidanceEmptyState({
-  title = 'No active guidance right now',
-  description = 'We will surface deterministic next steps as soon as actionable signals are available.',
+  title = "You're all caught up",
+  description = "No action items right now. We'll flag your next home task as soon as something needs attention.",
 }: GuidanceEmptyStateProps) {
   return (
     <Card>

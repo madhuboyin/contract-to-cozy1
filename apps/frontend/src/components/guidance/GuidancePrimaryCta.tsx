@@ -11,6 +11,7 @@ type GuidancePrimaryCtaProps = {
   href?: string | null;
   executionReadiness: GuidanceExecutionReadiness;
   blockedReason?: string | null;
+  missingStepLabel?: string | null;
   className?: string;
 };
 
@@ -20,6 +21,7 @@ export function GuidancePrimaryCta({
   href,
   executionReadiness,
   blockedReason,
+  missingStepLabel,
   className,
 }: GuidancePrimaryCtaProps) {
   const safeLabel = label?.trim() ? label.trim() : 'Review Next Step';
@@ -28,16 +30,22 @@ export function GuidancePrimaryCta({
   const isBlocked = executionReadiness === 'NOT_READY';
 
   if (!href || isBlocked) {
+    const hintText = blockedReason
+      ? blockedReason
+      : missingStepLabel
+        ? `First complete: ${missingStepLabel}`
+        : executionReadiness === 'NEEDS_CONTEXT'
+          ? 'Answer a few questions to unlock this step.'
+          : null;
+
     return (
       <div className="space-y-1.5">
         <Button type="button" variant="secondary" className={className} disabled>
           <Lock className="mr-2 h-4 w-4" />
           {ctaLabel}
         </Button>
-        {blockedReason ? (
-          <p className="mb-0 text-xs text-muted-foreground">{blockedReason}</p>
-        ) : executionReadiness === 'NEEDS_CONTEXT' ? (
-          <p className="mb-0 text-xs text-muted-foreground">Complete missing context before execution.</p>
+        {hintText ? (
+          <p className="mb-0 text-xs text-muted-foreground">{hintText}</p>
         ) : null}
       </div>
     );
