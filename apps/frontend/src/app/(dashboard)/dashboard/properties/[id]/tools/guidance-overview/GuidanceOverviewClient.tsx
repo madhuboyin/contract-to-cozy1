@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import {
   ActionPriorityRow,
   CompactEntityRow,
-  EmptyStateCard,
   MobilePageContainer,
   MobilePageIntro,
   ResultHeroCard,
@@ -21,6 +20,7 @@ import type { GuidanceActionModel } from '@/features/guidance/utils/guidanceMapp
 import { formatIssueDomain } from '@/features/guidance/utils/guidanceDisplay';
 import type { AssetRiskDetail, RiskAssessmentReport } from '@/types';
 import { api } from '@/lib/api/client';
+import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 
@@ -50,6 +50,9 @@ const SIGNAL_SUBTITLE_LABELS: Record<string, string> = {
 type AssetScopeOption = {
   key: string;
   assetName: string;
+  systemType: string;
+  category: AssetRiskDetail['category'];
+  actionCta: string | null;
   riskLevel: AssetRiskDetail['riskLevel'];
   outOfPocketCost: number;
   inventoryItemId: string | null;
@@ -91,6 +94,34 @@ function buildScopedOverviewHref(args: {
   const base = `/dashboard/properties/${args.propertyId}/tools/guidance-overview`;
   const query = params.toString();
   return query ? `${base}?${query}` : base;
+}
+
+function appendScopeParams(
+  baseHref: string,
+  option: Pick<AssetScopeOption, 'inventoryItemId' | 'homeAssetId' | 'assetName'>
+): string {
+  const params = new URLSearchParams();
+  if (option.inventoryItemId) {
+    params.set('itemId', option.inventoryItemId);
+    params.set('inventoryItemId', option.inventoryItemId);
+  }
+  if (option.homeAssetId) {
+    params.set('homeAssetId', option.homeAssetId);
+  }
+  params.set('assetName', option.assetName);
+  const query = params.toString();
+  return query ? `${baseHref}${baseHref.includes('?') ? '&' : '?'}${query}` : baseHref;
+}
+
+function buildProvidersHref(propertyId: string, option: AssetScopeOption): string {
+  const params = new URLSearchParams();
+  params.set('propertyId', propertyId);
+  params.set('category', getProviderCategoryForSystemType(option.systemType));
+  params.set('insightFactor', option.systemType || option.assetName);
+  if (option.inventoryItemId) params.set('itemId', option.inventoryItemId);
+  if (option.homeAssetId) params.set('homeAssetId', option.homeAssetId);
+  params.set('assetName', option.assetName);
+  return `/dashboard/providers?${params.toString()}`;
 }
 
 function resolveAssetLabel(action: GuidanceActionModel): string {
@@ -220,6 +251,9 @@ export default function GuidanceOverviewClient() {
       .map((item) => ({
         key: `${item.inventoryItemId ?? 'none'}:${item.homeAssetId ?? 'none'}:${item.assetName}`,
         assetName: item.assetName,
+        systemType: item.systemType,
+        category: item.category,
+        actionCta: item.actionCta ?? null,
         riskLevel: item.riskLevel,
         outOfPocketCost: item.outOfPocketCost,
         inventoryItemId: item.inventoryItemId ?? null,
@@ -257,20 +291,10 @@ export default function GuidanceOverviewClient() {
   }, [assetScopeOptions, hasScopeFilter, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId]);
 
   const hasScopedMatch = filteredActions.length > 0;
-  const isScopeFallback = hasScopeFilter && !hasScopedMatch && allActions.length > 0;
   const actions = React.useMemo(() => {
-    if (hasScopeFilter) {
-      if (filteredActions.length > 0) return filteredActions;
-      return allActions;
-    }
-    const scoped = allActions.filter(
-      (action) => Boolean(action.journey.inventoryItemId) || Boolean(action.journey.homeAssetId)
-    );
-    const propertyWide = allActions.filter(
-      (action) => !action.journey.inventoryItemId && !action.journey.homeAssetId
-    );
-    return [...scoped, ...propertyWide];
-  }, [allActions, filteredActions, hasScopeFilter]);
+    if (!hasScopeFilter) return [];
+    return filteredActions;
+  }, [filteredActions, hasScopeFilter]);
 
   const primaryAction = actions[0] ?? null;
   const remainingActions = primaryAction ? actions.slice(1) : [];
@@ -278,6 +302,40 @@ export default function GuidanceOverviewClient() {
   const blockedCount = actions.filter((action) => action.executionReadiness === 'NOT_READY').length;
   const baseOverviewHref = `/dashboard/properties/${propertyId}/tools/guidance-overview`;
   const focusLabel = selectedAssetOption?.assetName ?? (primaryAction ? resolveAssetLabel(primaryAction) : null);
+  const fallbackJourneySteps = React.useMemo(() => {
+    if (!selectedAssetOption) return [];
+    const coverageHref = appendScopeParams(
+      `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,
+      selectedAssetOption
+    );
+    const replaceRepairHref = selectedAssetOption.inventoryItemId
+      ? appendScopeParams(
+          `/dashboard/properties/${propertyId}/inventory/items/${selectedAssetOption.inventoryItemId}/replace-repair`,
+          selectedAssetOption
+        )
+      : appendScopeParams(`/dashboard/replace-repair?propertyId=${propertyId}`, selectedAssetOption);
+    const priceRadarHref = appendScopeParams(
+      `/dashboard/properties/${propertyId}/tools/service-price-radar`,
+      selectedAssetOption
+    );
+    const providersHref = buildProvidersHref(propertyId, selectedAssetOption);
+    const negotiationHref = appendScopeParams(
+      `/dashboard/properties/${propertyId}/tools/negotiation-shield`,
+      selectedAssetOption
+    );
+    const finalizationHref = appendScopeParams(
+      `/dashboard/properties/${propertyId}/tools/price-finalization`,
+      selectedAssetOption
+    );
+    return [
+      { title: 'Step 1: Check Coverage', description: 'Confirm warranty/insurance applicability.', href: coverageHref, cta: 'Open Coverage Check' },
+      { title: 'Step 2: Decide Repair vs Replace', description: 'Choose the right execution path for this asset.', href: replaceRepairHref, cta: 'Open Repair vs Replace' },
+      { title: 'Step 3: Estimate Service Pricing', description: 'Use price radar to establish fair expected cost.', href: priceRadarHref, cta: 'Open Service Price Radar' },
+      { title: 'Step 4: Get Providers and Quotes', description: 'Find vendors and gather comparable quotes.', href: providersHref, cta: 'Find Providers' },
+      { title: 'Step 5: Negotiate Price', description: 'Use negotiation shield to prepare and execute bargaining.', href: negotiationHref, cta: 'Open Negotiation Shield' },
+      { title: 'Step 6: Finalize Terms', description: 'Capture accepted terms and final price before booking.', href: finalizationHref, cta: 'Open Price Finalization' },
+    ];
+  }, [propertyId, selectedAssetOption]);
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
@@ -368,14 +426,20 @@ export default function GuidanceOverviewClient() {
       ) : null}
 
       <ResultHeroCard
-        title={hasScopeFilter ? 'Selected asset journeys' : 'Active issue journeys'}
+        title={hasScopeFilter ? 'Selected asset guidance' : 'Select an asset to begin'}
         value={actions.length}
         status={
           <StatusChip tone={immediateCount > 0 ? 'danger' : actions.length > 0 ? 'elevated' : 'good'}>
-            {immediateCount > 0 ? `${immediateCount} urgent` : actions.length > 0 ? 'Action needed' : 'All clear'}
+            {immediateCount > 0 ? `${immediateCount} urgent` : actions.length > 0 ? 'Action needed' : hasScopeFilter ? 'Journey pending' : 'Selection required'}
           </StatusChip>
         }
-        summary={`${guidance.counts?.activeSignals ?? 0} signals detected · ${blockedCount} blocked by missing context`}
+        summary={
+          !hasScopeFilter
+            ? 'Guidance is asset-first. Choose any asset above to launch the end-to-end journey.'
+            : hasScopeFilter && !hasScopedMatch
+            ? 'No active asset-scoped journeys yet for this selected issue.'
+            : `${guidance.counts?.activeSignals ?? 0} signals detected · ${blockedCount} blocked by missing context`
+        }
         highlights={
           primaryAction
             ? [
@@ -385,7 +449,9 @@ export default function GuidanceOverviewClient() {
                   ? `Delay risk: ~${formatCurrency(primaryAction.costOfDelay)}`
                   : primaryAction.explanation?.risk ?? 'Follow the guided path to reduce risk.',
               ]
-            : ['No active journeys right now.']
+            : hasScopeFilter
+              ? ['No active backend journey yet for this asset.', 'Use the guided steps below to continue.']
+              : ['Choose an asset from the list above.', 'Guidance is always created per asset.']
         }
       />
 
@@ -397,60 +463,42 @@ export default function GuidanceOverviewClient() {
         <ScenarioInputCard title="Guidance unavailable" subtitle="We could not load active journeys right now.">
           <p className="text-sm text-rose-700">You can still use Risk Assessment and Home Tools while this refreshes.</p>
         </ScenarioInputCard>
+      ) : !hasScopeFilter ? (
+        <ScenarioInputCard
+          title="Select an asset to launch guidance"
+          subtitle="Guidance Engine does not run as property-wide flow."
+        >
+          <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+            Pick any asset in the section above and we will guide coverage, repair vs replace, pricing, provider selection, negotiation, and finalization for that asset.
+          </p>
+        </ScenarioInputCard>
       ) : actions.length === 0 ? (
-        <EmptyStateCard
-          title={hasScopeFilter ? 'No guidance found for selected asset' : 'No active guidance journeys'}
-          description={
-            hasScopeFilter
-              ? 'We could not find an active journey for this asset yet. Recalculate risk or choose another asset.'
-              : 'Run Risk Assessment to identify issues, then Guidance Engine will walk you through resolution.'
-          }
-          action={
-            <Button asChild className="min-h-[44px] w-full">
-              <Link href={`/dashboard/properties/${propertyId}/risk-assessment`}>Open Risk Assessment</Link>
-            </Button>
-          }
-        />
-      ) : isScopeFallback ? (
-        <>
-          <ScenarioInputCard
-            title="Asset-specific path is still being prepared"
-            subtitle="Showing the closest active guidance journey while we gather asset-level evidence."
-            badge={<StatusChip tone="elevated">Fallback</StatusChip>}
-          >
-            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-              We found your selected asset, but there is no dedicated active journey for it yet.
-            </p>
-          </ScenarioInputCard>
-          {primaryAction ? (
-            <ScenarioInputCard
-              title={`Start Here: ${focusLabel ?? resolveAssetLabel(primaryAction)}`}
-              subtitle={resolvePrimarySubtitle(primaryAction)}
-              badge={<StatusChip tone={resolvePriorityTone(primaryAction)}>{primaryAction.priorityGroup.toLowerCase()}</StatusChip>}
-            >
-              <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
-                <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                  Why now
-                </p>
-                <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                  {primaryAction.explanation?.why ??
-                    primaryAction.subtitle ??
-                    'Following this journey now reduces cost and execution risk.'}
-                </p>
-                {primaryAction.costOfDelay ? (
-                  <p className="mb-0 text-sm font-semibold text-amber-700">
-                    Potential delay cost: ~{formatCurrency(primaryAction.costOfDelay)}
-                  </p>
-                ) : null}
-                <p className="mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">
-                  Progress: {resolveProgressLabel(primaryAction)}
-                </p>
+        <ScenarioInputCard
+          title={`Guidance journey for ${focusLabel ?? 'selected asset'}`}
+          subtitle="No backend-generated journey exists yet, so use the standard asset resolution path."
+          badge={<StatusChip tone="elevated">Journey pending</StatusChip>}
+        >
+          <div className="space-y-3">
+            {fallbackJourneySteps.map((step) => (
+              <div key={step.title} className="space-y-2">
+                <CompactEntityRow
+                  title={step.title}
+                  subtitle={step.description}
+                />
+                <ActionPriorityRow
+                  primaryAction={
+                    <Link
+                      href={step.href}
+                      className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                    >
+                      {step.cta}
+                    </Link>
+                  }
+                />
               </div>
-
-              <ActionPriorityRow primaryAction={renderPrimaryActionButton(primaryAction)} />
-            </ScenarioInputCard>
-          ) : null}
-        </>
+            ))}
+          </div>
+        </ScenarioInputCard>
       ) : (
         <>
           {primaryAction ? (
@@ -483,13 +531,13 @@ export default function GuidanceOverviewClient() {
           ) : null}
 
           <ScenarioInputCard
-            title="Issue Queue"
-            subtitle="After the primary issue, continue with these journeys."
+            title="Journey Steps"
+            subtitle="Continue with the remaining steps for this asset."
           >
             <div className="space-y-3">
               {remainingActions.length === 0 ? (
                 <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                  You only have one active journey right now.
+                  No additional backend steps are active yet for this asset.
                 </p>
               ) : (
                 remainingActions.map((action) => {
