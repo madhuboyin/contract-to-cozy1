@@ -253,14 +253,52 @@ function mapSummary(row: any): ServiceRadarSummaryDTO {
   };
 }
 
+function buildRadarNextAction(
+  propertyId: string,
+  verdict: ServiceRadarVerdictValue | null,
+): import('./servicePriceRadar.types').ServiceRadarNextAction | null {
+  if (!verdict) return null;
+  if (verdict === 'VERY_HIGH') {
+    return {
+      href: `/dashboard/properties/${propertyId}/tools/negotiation-shield`,
+      label: 'Negotiate this quote',
+      reason: 'Quote is well above the expected range — use negotiation guidance before accepting',
+    };
+  }
+  if (verdict === 'HIGH') {
+    return {
+      href: `/dashboard/properties/${propertyId}/tools/negotiation-shield`,
+      label: 'Review negotiation options',
+      reason: 'Quote is above the expected range — consider negotiating before accepting',
+    };
+  }
+  if (verdict === 'UNDERPRICED') {
+    return {
+      href: `/dashboard/providers?propertyId=${propertyId}`,
+      label: 'Book this service',
+      reason: 'Quote looks favorable — book while the price is right',
+    };
+  }
+  if (verdict === 'INSUFFICIENT_DATA') {
+    return {
+      href: `/dashboard/properties/${propertyId}`,
+      label: 'Complete your property profile',
+      reason: 'More property details improve price estimate accuracy',
+    };
+  }
+  return null;
+}
+
 function mapDetail(row: any, linkedEntities: LinkedEntityContext[]): ServiceRadarDetailDTO {
+  const summary = mapSummary(row);
   return {
-    ...mapSummary(row),
+    ...summary,
     explanationJson: (row.explanationJson ?? null) as Prisma.JsonValue | null,
     propertySnapshotJson: (row.propertySnapshotJson ?? null) as Prisma.JsonValue | null,
     pricingFactorsJson: (row.pricingFactorsJson ?? null) as Prisma.JsonValue | null,
     engineVersion: textOrNull(row.engineVersion),
     linkedEntities: linkedEntities.map(serializeLinkedEntitySummary),
+    nextAction: buildRadarNextAction(summary.propertyId, summary.verdict),
   };
 }
 

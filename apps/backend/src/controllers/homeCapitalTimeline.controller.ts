@@ -3,6 +3,41 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeCapitalTimelineService } from '../services/homeCapitalTimeline.service';
 
+type TimelineNextAction = { href: string; label: string; reason: string };
+
+function buildTimelineNextAction(propertyId: string, analysis: any): TimelineNextAction | null {
+  if (!analysis) return null;
+  const items: any[] = Array.isArray(analysis.items) ? analysis.items : [];
+  const highItem = items.find((i) => i.priority === 'HIGH');
+  if (highItem) {
+    const cat = String(highItem.category ?? 'capital item').toLowerCase().replace(/_/g, ' ');
+    return {
+      href: `/dashboard/properties/${propertyId}/tools/budget-planner`,
+      label: `Plan budget for upcoming ${cat}`,
+      reason: 'You have a high-priority capital expense within the next 2 years',
+    };
+  }
+  if (items.length === 0) {
+    return {
+      href: `/dashboard/properties/${propertyId}/inventory`,
+      label: 'Add appliances and systems to get started',
+      reason: 'No inventory items found — add items to generate a capital timeline',
+    };
+  }
+  if (analysis.confidence === 'LOW') {
+    return {
+      href: `/dashboard/properties/${propertyId}/inventory`,
+      label: 'Improve timeline accuracy',
+      reason: 'Add install dates and conditions to inventory items to raise confidence',
+    };
+  }
+  return {
+    href: `/dashboard/properties/${propertyId}/tools/true-cost`,
+    label: 'See full cost of ownership',
+    reason: 'Pair capital planning with your projected operating costs',
+  };
+}
+
 const service = new HomeCapitalTimelineService();
 
 export async function getLatestTimeline(req: CustomRequest, res: Response, next: NextFunction) {
@@ -17,7 +52,8 @@ export async function getLatestTimeline(req: CustomRequest, res: Response, next:
         : {};
     const assumptionSetId =
       typeof snapshot.assumptionSetId === 'string' ? snapshot.assumptionSetId : null;
-    res.json({ success: true, data: { analysis, assumptionSetId } });
+    const nextAction = buildTimelineNextAction(propertyId, analysis);
+    res.json({ success: true, data: { analysis, assumptionSetId, nextAction } });
   } catch (err) {
     next(err);
   }
@@ -49,7 +85,8 @@ export async function runTimeline(req: CustomRequest, res: Response, next: NextF
         : {};
     const assumptionSetId =
       typeof snapshot.assumptionSetId === 'string' ? snapshot.assumptionSetId : null;
-    res.status(201).json({ success: true, data: { analysis, assumptionSetId } });
+    const nextAction = buildTimelineNextAction(propertyId, analysis);
+    res.status(201).json({ success: true, data: { analysis, assumptionSetId, nextAction } });
   } catch (err) {
     next(err);
   }

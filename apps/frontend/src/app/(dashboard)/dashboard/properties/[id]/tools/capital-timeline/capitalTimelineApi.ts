@@ -27,9 +27,16 @@ export type TimelineAnalysisDTO = {
   items: TimelineItemDTO[];
 };
 
+export type TimelineNextAction = {
+  href: string;
+  label: string;
+  reason: string;
+};
+
 export type TimelineAnalysisResult = {
   analysis: TimelineAnalysisDTO | null;
   assumptionSetId: string | null;
+  nextAction: TimelineNextAction | null;
 };
 
 export type OverrideDTO = {
@@ -45,6 +52,7 @@ export async function getLatestTimeline(propertyId: string): Promise<TimelineAna
   return {
     analysis: (res.data?.analysis as TimelineAnalysisDTO | null) ?? null,
     assumptionSetId: (res.data?.assumptionSetId as string | null) ?? null,
+    nextAction: (res.data?.nextAction as TimelineNextAction | null) ?? null,
   };
 }
 
@@ -60,6 +68,7 @@ export async function runTimeline(
   return {
     analysis: (res.data?.analysis as TimelineAnalysisDTO | null) ?? null,
     assumptionSetId: (res.data?.assumptionSetId as string | null) ?? null,
+    nextAction: (res.data?.nextAction as TimelineNextAction | null) ?? null,
   };
 }
 

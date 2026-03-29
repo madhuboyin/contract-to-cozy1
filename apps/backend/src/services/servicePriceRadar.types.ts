@@ -125,12 +125,19 @@ export type ServiceRadarSummaryDTO = {
   explanationShort: string | null;
 };
 
+export type ServiceRadarNextAction = {
+  href: string;
+  label: string;
+  reason: string;
+};
+
 export type ServiceRadarDetailDTO = ServiceRadarSummaryDTO & {
   explanationJson: Prisma.JsonValue | null;
   propertySnapshotJson: Prisma.JsonValue | null;
   pricingFactorsJson: Prisma.JsonValue | null;
   engineVersion: string | null;
   linkedEntities: ServiceRadarLinkedEntitySummaryDTO[];
+  nextAction: ServiceRadarNextAction | null;
 };
 
 export type ServiceRadarCreateResponseDTO = {

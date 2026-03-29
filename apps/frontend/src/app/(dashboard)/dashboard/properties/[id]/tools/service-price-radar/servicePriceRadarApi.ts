@@ -106,12 +106,19 @@ export type ServicePriceRadarLinkedEntitySummary = {
   summary: string | null;
 };
 
+export type ServicePriceRadarNextAction = {
+  href: string;
+  label: string;
+  reason: string;
+};
+
 export type ServicePriceRadarCheckDetail = ServicePriceRadarCheckSummary & {
   explanationJson: JsonValue;
   propertySnapshotJson: JsonValue;
   pricingFactorsJson: JsonValue;
   engineVersion: string | null;
   linkedEntities: ServicePriceRadarLinkedEntitySummary[];
+  nextAction: ServicePriceRadarNextAction | null;
 };
 
 export type CreateServicePriceRadarCheckPayload = {

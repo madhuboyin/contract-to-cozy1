@@ -214,6 +214,7 @@ async function buildAnnualHistory(args: {
   const { propertyId, years, insuranceSvc, taxSvc, trueCostSvc } = args;
 
   const ins = await insuranceSvc.estimate(propertyId, { years });
+  const insuranceIsEducational = (ins as any)?.meta?.classification === 'EDUCATIONAL_ESTIMATE';
   const insHist = (ins?.history || []).slice(-years);
 
   const tax = await taxSvc.estimate(propertyId, { historyYears: years } as any);
@@ -247,7 +248,7 @@ async function buildAnnualHistory(args: {
 
   const yearsSorted = Array.from(yearSet).sort((a, b) => a - b).slice(-years);
 
-  return yearsSorted.map((year, idx) => {
+  const history = yearsSorted.map((year, idx) => {
     const annualInsurance = byYearIns.get(year) ?? 0;
     const annualTax = byYearTax.get(year) ?? 0;
 
@@ -275,6 +276,8 @@ async function buildAnnualHistory(args: {
       yoyTaxPct: yoyTax === null ? null : round1(yoyTax * 100),
     };
   });
+
+  return { history, insuranceIsEducational };
 }
 
 export class CostVolatilityService {
@@ -313,7 +316,7 @@ export class CostVolatilityService {
 
     // 1) Build full history once (10y) for stable event detection
     const MAX_EVENT_YEARS: 10 = 10;
-    const fullHistory = await buildAnnualHistory({
+    const { history: fullHistory, insuranceIsEducational } = await buildAnnualHistory({
       propertyId,
       years: MAX_EVENT_YEARS,
       insuranceSvc: this.insuranceTrend,
@@ -442,6 +445,10 @@ export class CostVolatilityService {
     if (!zp) {
       confidence = 'LOW';
       notes.push('ZIP missing/invalid; localized messaging reduced.');
+    }
+    if (insuranceIsEducational) {
+      if (confidence !== 'LOW') confidence = 'LOW';
+      notes.push('Insurance data is a modeled estimate (EDUCATIONAL_ESTIMATE); volatility confidence reduced to LOW.');
     }
 
     // Totals note (preserve Phase-1 behavior)
