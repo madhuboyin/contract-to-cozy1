@@ -54,6 +54,7 @@ type AssetScopeOption = {
   outOfPocketCost: number;
   inventoryItemId: string | null;
   homeAssetId: string | null;
+  supportsPreciseScope: boolean;
 };
 
 const RISK_LEVEL_RANK: Record<AssetRiskDetail['riskLevel'], number> = {
@@ -73,6 +74,7 @@ function buildScopedOverviewHref(args: {
   propertyId: string;
   inventoryItemId: string | null;
   homeAssetId: string | null;
+  assetName?: string | null;
 }): string {
   const params = new URLSearchParams();
   if (args.inventoryItemId) {
@@ -81,6 +83,9 @@ function buildScopedOverviewHref(args: {
   }
   if (args.homeAssetId) {
     params.set('homeAssetId', args.homeAssetId);
+  }
+  if (args.assetName) {
+    params.set('assetName', args.assetName);
   }
 
   const base = `/dashboard/properties/${args.propertyId}/tools/guidance-overview`;
@@ -159,7 +164,8 @@ export default function GuidanceOverviewClient() {
   const selectedInventoryItemId =
     searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
   const selectedHomeAssetId = searchParams.get('homeAssetId');
-  const hasScopeFilter = Boolean(selectedInventoryItemId || selectedHomeAssetId);
+  const selectedAssetName = searchParams.get('assetName')?.trim() ?? '';
+  const hasScopeFilter = Boolean(selectedInventoryItemId || selectedHomeAssetId || selectedAssetName);
 
   const guidance = useGuidance(propertyId, {
     enabled: Boolean(propertyId),
@@ -179,6 +185,7 @@ export default function GuidanceOverviewClient() {
   const allActions = React.useMemo(() => guidance.actions ?? [], [guidance.actions]);
   const filteredActions = React.useMemo(() => {
     if (!hasScopeFilter) return allActions;
+    const assetNameNeedle = selectedAssetName.toLowerCase();
     return allActions.filter((action) => {
       if (selectedInventoryItemId && action.journey.inventoryItemId === selectedInventoryItemId) {
         return true;
@@ -186,16 +193,30 @@ export default function GuidanceOverviewClient() {
       if (selectedHomeAssetId && action.journey.homeAssetId === selectedHomeAssetId) {
         return true;
       }
+      if (assetNameNeedle) {
+        const haystack = [
+          resolveAssetLabel(action),
+          action.title,
+          action.subtitle,
+          action.nextStep?.label ?? '',
+          action.journey.primarySignal?.signalIntentFamily ?? '',
+          action.explanation?.what ?? '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (haystack.includes(assetNameNeedle)) {
+          return true;
+        }
+      }
       return false;
     });
-  }, [allActions, hasScopeFilter, selectedHomeAssetId, selectedInventoryItemId]);
+  }, [allActions, hasScopeFilter, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId]);
 
   const assetScopeOptions = React.useMemo<AssetScopeOption[]>(() => {
     const details = riskReportQuery.data?.details ?? [];
     if (!details.length) return [];
 
     const options = details
-      .filter((item) => Boolean(item.inventoryItemId || item.homeAssetId))
       .map((item) => ({
         key: `${item.inventoryItemId ?? 'none'}:${item.homeAssetId ?? 'none'}:${item.assetName}`,
         assetName: item.assetName,
@@ -203,6 +224,7 @@ export default function GuidanceOverviewClient() {
         outOfPocketCost: item.outOfPocketCost,
         inventoryItemId: item.inventoryItemId ?? null,
         homeAssetId: item.homeAssetId ?? null,
+        supportsPreciseScope: Boolean(item.inventoryItemId || item.homeAssetId),
       }))
       .sort((a, b) => {
         const rankDiff = RISK_LEVEL_RANK[b.riskLevel] - RISK_LEVEL_RANK[a.riskLevel];
@@ -213,7 +235,7 @@ export default function GuidanceOverviewClient() {
     const deduped: AssetScopeOption[] = [];
     const seen = new Set<string>();
     for (const option of options) {
-      const idKey = `${option.inventoryItemId ?? ''}:${option.homeAssetId ?? ''}`;
+      const idKey = `${option.inventoryItemId ?? ''}:${option.homeAssetId ?? ''}:${option.assetName.toLowerCase()}`;
       if (seen.has(idKey)) continue;
       seen.add(idKey);
       deduped.push(option);
@@ -228,10 +250,11 @@ export default function GuidanceOverviewClient() {
         const inventoryMatch =
           selectedInventoryItemId && option.inventoryItemId === selectedInventoryItemId;
         const homeAssetMatch = selectedHomeAssetId && option.homeAssetId === selectedHomeAssetId;
-        return Boolean(inventoryMatch || homeAssetMatch);
+        const nameMatch = selectedAssetName && option.assetName.toLowerCase() === selectedAssetName.toLowerCase();
+        return Boolean(inventoryMatch || homeAssetMatch || nameMatch);
       }) ?? null
     );
-  }, [assetScopeOptions, hasScopeFilter, selectedHomeAssetId, selectedInventoryItemId]);
+  }, [assetScopeOptions, hasScopeFilter, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId]);
 
   const hasScopedMatch = filteredActions.length > 0;
   const isScopeFallback = hasScopeFilter && !hasScopedMatch && allActions.length > 0;
@@ -297,16 +320,18 @@ export default function GuidanceOverviewClient() {
                 propertyId,
                 inventoryItemId: option.inventoryItemId,
                 homeAssetId: option.homeAssetId,
+                assetName: option.assetName,
               });
               const isSelected =
                 (selectedInventoryItemId && option.inventoryItemId === selectedInventoryItemId) ||
-                (selectedHomeAssetId && option.homeAssetId === selectedHomeAssetId);
+                (selectedHomeAssetId && option.homeAssetId === selectedHomeAssetId) ||
+                (selectedAssetName && option.assetName.toLowerCase() === selectedAssetName.toLowerCase());
               return (
                 <div key={option.key} className="space-y-2">
                   <CompactEntityRow
                     title={option.assetName}
                     subtitle={`Estimated out-of-pocket: ${formatCurrency(option.outOfPocketCost)}`}
-                    meta={`Risk: ${formatEnumLabel(option.riskLevel)}`}
+                    meta={`Risk: ${formatEnumLabel(option.riskLevel)}${option.supportsPreciseScope ? '' : ' · ID linking pending'}`}
                     status={<StatusChip tone={riskLevelTone(option.riskLevel)}>{formatEnumLabel(option.riskLevel)}</StatusChip>}
                   />
                   <ActionPriorityRow
@@ -337,7 +362,7 @@ export default function GuidanceOverviewClient() {
           }
         >
           <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-            If this does not match what you expected, open Risk Assessment and select the asset again.
+            If this does not match what you expected, pick a different asset above or open Risk Assessment.
           </p>
         </ScenarioInputCard>
       ) : null}
