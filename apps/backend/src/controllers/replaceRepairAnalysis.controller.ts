@@ -62,6 +62,8 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
         stepKey: guidanceStepKey || 'repair_replace_decision',
         status: 'COMPLETED',
         producedData: {
+          proofType: 'repair_replace_analysis',
+          proofId: analysis.id,
           verdict: analysis.verdict,
           confidence: analysis.confidence,
           impactLevel: analysis.impactLevel,

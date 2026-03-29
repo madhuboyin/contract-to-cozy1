@@ -45,6 +45,8 @@ export async function confirmMatch(req: Request, res: Response) {
         stepKey: 'safety_alert',
         status: 'COMPLETED',
         producedData: {
+          proofType: 'recall_confirmation',
+          proofId: row.id,
           status: row.status,
           confidencePct: row.confidencePct,
           method: row.method,
@@ -84,6 +86,8 @@ export async function dismissMatch(req: Request, res: Response) {
         reasonCode: 'USER_DISMISSED',
         reasonMessage: 'User dismissed recall match.',
         producedData: {
+          proofType: 'recall_dismissal',
+          proofId: row.id,
           status: row.status,
           recallId: row.recallId,
         },
@@ -133,6 +137,8 @@ export async function resolveMatch(req: Request, res: Response) {
         stepKey: 'recall_resolution',
         status: 'COMPLETED',
         producedData: {
+          proofType: 'recall_resolution',
+          proofId: row.id,
           status: row.status,
           resolutionType: row.resolutionType,
           resolutionNotes: row.resolutionNotes,

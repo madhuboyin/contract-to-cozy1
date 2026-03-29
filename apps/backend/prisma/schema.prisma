@@ -586,6 +586,7 @@ model InventoryItem {
   replaceRepairAnalyses  ReplaceRepairAnalysis[]
   guidanceSignals        GuidanceSignal[]
   guidanceJourneys       GuidanceJourney[]
+  guidanceStepEvidences  GuidanceStepEvidence[]
   quoteComparisonWorkspaces QuoteComparisonWorkspace[]
   priceFinalizations        PriceFinalization[]
 
@@ -1862,6 +1863,7 @@ model Property {
   guidanceSignals        GuidanceSignal[]
   guidanceJourneys       GuidanceJourney[]
   guidanceJourneyEvents  GuidanceJourneyEvent[]
+  guidanceStepEvidences  GuidanceStepEvidence[]
   inventoryImportBatches InventoryImportBatch[]
 
   inventoryOcrSessions InventoryOcrSession[]
@@ -2579,6 +2581,7 @@ model HomeAsset {
   homeItems        HomeItem[]
   guidanceSignals  GuidanceSignal[]
   guidanceJourneys GuidanceJourney[]
+  guidanceStepEvidences GuidanceStepEvidence[]
   quoteComparisonWorkspaces QuoteComparisonWorkspace[]
   priceFinalizations        PriceFinalization[]
 
@@ -3338,6 +3341,34 @@ enum GuidanceJourneyEventType {
   DERIVED_DATA_UPDATED
 }
 
+enum GuidanceEvidenceType {
+  TOOL_RESULT
+  BOOKING_RECORD
+  POLICY_UPDATE
+  QUOTE_CAPTURE
+  NEGOTIATION_ARTIFACT
+  DOCUMENT_PROOF
+  COMMUNICATION_LOG
+  USER_CONFIRMATION
+  SYSTEM_DERIVATION
+  OTHER
+}
+
+enum GuidanceEvidenceSourceType {
+  INTERNAL_TOOL
+  INTEGRATION
+  EVENT_PIPELINE
+  USER_INPUT
+  SYSTEM_WORKER
+}
+
+enum GuidanceEvidenceStatus {
+  CAPTURED
+  VERIFIED
+  REJECTED
+  SUPERSEDED
+}
+
 // Normalized actionable signal; can be produced by any CtC tool, worker, or resolver.
 model GuidanceSignal {
   id String @id @default(uuid())
@@ -3408,15 +3439,19 @@ model GuidanceSignal {
   sourceProvenance SignalProvenance?      @relation(fields: [sourceProvenanceId], references: [id], onDelete: SetNull)
   journeys         GuidanceJourney[]
   events           GuidanceJourneyEvent[]
+  evidences        GuidanceStepEvidence[]
 
   @@unique([propertyId, dedupeKey]) // P4-2: replaces former @@index([propertyId, dedupeKey])
   @@index([propertyId, status, lastObservedAt(sort: Desc)])
   @@index([propertyId, executionReadiness])
   @@index([propertyId, issueDomain])
   @@index([propertyId, signalIntentFamily])
+  @@index([propertyId, signalIntentFamily, status, lastObservedAt(sort: Desc)])
   @@index([duplicateGroupKey])
   @@index([homeAssetId])
   @@index([inventoryItemId])
+  @@index([propertyId, inventoryItemId, status, lastObservedAt(sort: Desc)])
+  @@index([propertyId, homeAssetId, status, lastObservedAt(sort: Desc)])
   @@index([sourceEntityType, sourceEntityId])
   @@index([sourceToolKey, sourceFeatureKey])
   @@index([sourceProvenanceId])
@@ -3482,12 +3517,15 @@ model GuidanceJourney {
 
   steps  GuidanceJourneyStep[]
   events GuidanceJourneyEvent[]
+  evidences GuidanceStepEvidence[]
 
   @@index([propertyId, status, updatedAt(sort: Desc)])
   @@index([propertyId, executionReadiness, status])
   @@index([propertyId, issueDomain, status])
   @@index([propertyId, journeyTypeKey, status]) // P4-13: supports ensureJourneyForSignal() lookup
   @@index([propertyId, currentStepOrder])
+  @@index([propertyId, inventoryItemId, status, updatedAt(sort: Desc)])
+  @@index([propertyId, homeAssetId, status, updatedAt(sort: Desc)])
   @@index([primarySignalId])
   @@index([mergedSignalGroupKey])
   @@index([homeAssetId])
@@ -3543,13 +3581,16 @@ model GuidanceJourneyStep {
 
   journey GuidanceJourney        @relation(fields: [journeyId], references: [id], onDelete: Cascade)
   events  GuidanceJourneyEvent[]
+  evidences GuidanceStepEvidence[]
 
   @@unique([journeyId, stepOrder])
   @@unique([journeyId, stepKey])
   @@index([journeyId, status, stepOrder])
+  @@index([journeyId, isRequired, status, stepOrder])
   @@index([journeyId, decisionStage, status])
   @@index([journeyId, executionReadiness])
   @@index([journeyId, toolKey]) // P4-14: supports GuidanceBookingGuardService step filtering by toolKey
+  @@index([toolKey, status])
   @@index([toolKey])
   @@map("guidance_journey_steps")
 }
@@ -3603,12 +3644,71 @@ model GuidanceJourneyEvent {
   signal   GuidanceSignal?      @relation(fields: [signalId], references: [id], onDelete: SetNull)
 
   @@index([propertyId, createdAt(sort: Desc)])
+  @@index([propertyId, journeyId, createdAt(sort: Desc)])
   @@index([journeyId, createdAt(sort: Desc)])
   @@index([journeyId, eventType, createdAt(sort: Desc)]) // P4-15: supports per-journey event type queries
   @@index([stepId, createdAt(sort: Desc)])
   @@index([signalId, createdAt(sort: Desc)])
   @@index([eventType, createdAt(sort: Desc)])
   @@map("guidance_journey_events")
+}
+
+model GuidanceStepEvidence {
+  id String @id @default(uuid())
+
+  propertyId String
+  journeyId  String
+  stepId     String
+  signalId   String?
+
+  homeAssetId     String?
+  inventoryItemId String?
+
+  evidenceType GuidanceEvidenceType
+  sourceType   GuidanceEvidenceSourceType @default(INTERNAL_TOOL)
+  status       GuidanceEvidenceStatus     @default(CAPTURED)
+
+  sourceToolKey    String?
+  sourceFeatureKey String?
+  evidenceRefType  String?
+  evidenceRefId    String?
+  proofType        String?
+  proofId          String?
+  confidenceScore  Decimal? @db.Decimal(5, 4)
+
+  observedAt   DateTime @default(now())
+  verifiedAt   DateTime?
+  invalidatedAt DateTime?
+
+  supersededById String?
+  createdByUserId String?
+
+  payloadJson  Json?
+  metadataJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property      Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  journey       GuidanceJourney      @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  step          GuidanceJourneyStep  @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  signal        GuidanceSignal?      @relation(fields: [signalId], references: [id], onDelete: SetNull)
+  homeAsset     HomeAsset?           @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem?       @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  supersededBy  GuidanceStepEvidence? @relation("GuidanceStepEvidenceSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes    GuidanceStepEvidence[] @relation("GuidanceStepEvidenceSupersession")
+
+  @@index([propertyId, observedAt(sort: Desc)])
+  @@index([journeyId, stepId, observedAt(sort: Desc)])
+  @@index([journeyId, stepId, status, observedAt(sort: Desc)])
+  @@index([signalId, observedAt(sort: Desc)])
+  @@index([inventoryItemId, observedAt(sort: Desc)])
+  @@index([homeAssetId, observedAt(sort: Desc)])
+  @@index([evidenceRefType, evidenceRefId])
+  @@index([sourceToolKey, sourceFeatureKey, observedAt(sort: Desc)])
+  @@index([evidenceType, status, observedAt(sort: Desc)])
+  @@index([proofId])
+  @@map("guidance_step_evidences")
 }
 
 // =============================================================================

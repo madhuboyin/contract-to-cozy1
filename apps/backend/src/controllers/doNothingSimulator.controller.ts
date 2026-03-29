@@ -166,6 +166,8 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
         stepKey: guidanceStepKey ?? 'compare_action_options',
         status: 'COMPLETED',
         producedData: {
+          proofType: 'simulation_run',
+          proofId: result.run.id,
           runId: result.run.id,
           horizonMonths: result.run.horizonMonths,
           confidence: result.run.confidence,

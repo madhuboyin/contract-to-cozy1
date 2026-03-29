@@ -124,6 +124,8 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
           stepKey: 'assess_urgency',
           status: 'COMPLETED',
           producedData: {
+            proofType: 'inspection_report',
+            proofId: reportId,
             reportId,
             overallScore: report.overallScore,
             overallCondition: report.overallCondition,

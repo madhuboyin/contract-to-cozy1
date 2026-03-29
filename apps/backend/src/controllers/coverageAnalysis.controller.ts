@@ -72,6 +72,8 @@ export async function runCoverageAnalysis(req: CustomRequest, res: Response) {
           stepKey: guidanceStepKey || 'check_coverage',
           status: 'COMPLETED',
           producedData: {
+            proofType: 'coverage_assessment',
+            proofId: analysis.id,
             overallVerdict: analysis.overallVerdict,
             insuranceVerdict: analysis.insuranceVerdict,
             warrantyVerdict: analysis.warrantyVerdict,
@@ -180,6 +182,8 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
           stepKey: guidanceStepKey || 'check_coverage',
           status: 'COMPLETED',
           producedData: {
+            proofType: 'coverage_assessment',
+            proofId: analysis.id,
             overallVerdict: analysis.overallVerdict,
             insuranceVerdict: analysis.insuranceVerdict,
             warrantyVerdict: analysis.warrantyVerdict,

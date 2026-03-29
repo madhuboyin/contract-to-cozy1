@@ -133,3 +133,33 @@ export function mapGuidanceEvent(event: any) {
     createdAt: asIso(event.createdAt),
   };
 }
+
+export function mapGuidanceEvidence(evidence: any) {
+  return {
+    id: evidence.id,
+    propertyId: evidence.propertyId,
+    journeyId: evidence.journeyId,
+    stepId: evidence.stepId,
+    signalId: evidence.signalId ?? null,
+    homeAssetId: evidence.homeAssetId ?? null,
+    inventoryItemId: evidence.inventoryItemId ?? null,
+    evidenceType: evidence.evidenceType,
+    sourceType: evidence.sourceType,
+    status: evidence.status,
+    sourceToolKey: evidence.sourceToolKey ?? null,
+    sourceFeatureKey: evidence.sourceFeatureKey ?? null,
+    evidenceRefType: evidence.evidenceRefType ?? null,
+    evidenceRefId: evidence.evidenceRefId ?? null,
+    proofType: evidence.proofType ?? null,
+    proofId: evidence.proofId ?? null,
+    confidenceScore: decimalToNumber(evidence.confidenceScore),
+    observedAt: asIso(evidence.observedAt),
+    verifiedAt: asIso(evidence.verifiedAt),
+    invalidatedAt: asIso(evidence.invalidatedAt),
+    createdByUserId: evidence.createdByUserId ?? null,
+    payload: evidence.payloadJson ?? null,
+    metadata: evidence.metadataJson ?? null,
+    createdAt: asIso(evidence.createdAt),
+    updatedAt: asIso(evidence.updatedAt),
+  };
+}

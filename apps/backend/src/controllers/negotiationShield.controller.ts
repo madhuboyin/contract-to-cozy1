@@ -192,6 +192,8 @@ export async function analyzeNegotiationShieldCase(
         stepKey: guidanceStepKey ?? 'prepare_negotiation',
         status: 'COMPLETED',
         producedData: {
+          proofType: 'negotiation_analysis',
+          proofId: detail.case.id,
           scenarioType: detail.case.scenarioType,
           caseStatus: detail.case.status,
           summary: detail.latestAnalysis?.summary ?? null,

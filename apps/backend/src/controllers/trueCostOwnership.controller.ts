@@ -55,6 +55,8 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
       stepKey: guidanceStepKey ?? 'estimate_out_of_pocket_cost',
       status: 'COMPLETED',
       producedData: {
+        proofType: 'cost_estimate',
+        proofId: `${propertyId}:${dto.meta.generatedAt}`,
         annualTotalNow: dto.current.annualTotalNow,
         total5y: dto.rollup.total5y,
         taxes5y: dto.rollup.breakdown5y.taxes,

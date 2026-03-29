@@ -173,6 +173,27 @@ export type GuidanceToolCompletionInput = {
   metadata?: Record<string, unknown> | null;
 };
 
+export type GuidanceEvidenceType =
+  | 'TOOL_RESULT'
+  | 'BOOKING_RECORD'
+  | 'POLICY_UPDATE'
+  | 'QUOTE_CAPTURE'
+  | 'NEGOTIATION_ARTIFACT'
+  | 'DOCUMENT_PROOF'
+  | 'COMMUNICATION_LOG'
+  | 'USER_CONFIRMATION'
+  | 'SYSTEM_DERIVATION'
+  | 'OTHER';
+
+export type GuidanceEvidenceSourceType =
+  | 'INTERNAL_TOOL'
+  | 'INTEGRATION'
+  | 'EVENT_PIPELINE'
+  | 'USER_INPUT'
+  | 'SYSTEM_WORKER';
+
+export type GuidanceEvidenceStatus = 'CAPTURED' | 'VERIFIED' | 'REJECTED' | 'SUPERSEDED';
+
 export type GuidanceNextStepResult = {
   journeyId: string;
   currentStep: any | null;
@@ -220,6 +241,7 @@ export function getGuidanceModels() {
   const guidanceJourney = db.guidanceJourney;
   const guidanceJourneyStep = db.guidanceJourneyStep;
   const guidanceJourneyEvent = db.guidanceJourneyEvent;
+  const guidanceStepEvidence = db.guidanceStepEvidence ?? null;
 
   if (!guidanceSignal || !guidanceJourney || !guidanceJourneyStep || !guidanceJourneyEvent) {
     throw new APIError(
@@ -234,6 +256,7 @@ export function getGuidanceModels() {
     guidanceJourney,
     guidanceJourneyStep,
     guidanceJourneyEvent,
+    guidanceStepEvidence,
   };
 }
 

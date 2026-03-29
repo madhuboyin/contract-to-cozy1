@@ -1,4 +1,5 @@
 import { APIError } from '../../middleware/error.middleware';
+import { prisma } from '../../lib/prisma';
 import { getGuidanceTemplateBySignalFamily, getDefaultStepKey } from './guidanceTemplateRegistry';
 import { guidanceSignalResolverService } from './guidanceSignalResolver.service';
 import { guidanceStepResolverService } from './guidanceStepResolver.service';
@@ -9,6 +10,10 @@ import { guidanceSuppressionService } from './guidanceSuppression.service';
 import { guidanceCopyService } from './guidanceCopy.service';
 import { guidanceValidationService } from './guidanceValidation.service';
 import {
+  clampConfidenceToDecimal,
+  GuidanceEvidenceSourceType,
+  GuidanceEvidenceStatus,
+  GuidanceEvidenceType,
   GuidanceSignalSourceInput,
   GuidanceToolCompletionInput,
   getGuidanceModels,
@@ -57,6 +62,119 @@ function hasProofBackedCompletionPayload(payload: Record<string, unknown> | null
   });
 }
 
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function readFirstNonEmptyString(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = toNonEmptyString(record[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function inferEvidenceType(args: {
+  sourceToolKey: string | null;
+  sourceEntityType: string | null;
+  proofType: string | null;
+}): GuidanceEvidenceType {
+  const sourceToolKey = String(args.sourceToolKey ?? '').toLowerCase();
+  const sourceEntityType = String(args.sourceEntityType ?? '').toUpperCase();
+  const proofType = String(args.proofType ?? '').toLowerCase();
+
+  if (
+    sourceToolKey.includes('book') ||
+    sourceEntityType.includes('BOOKING') ||
+    proofType.includes('booking')
+  ) {
+    return 'BOOKING_RECORD';
+  }
+  if (
+    sourceToolKey.includes('coverage') ||
+    sourceToolKey.includes('warranty') ||
+    sourceEntityType.includes('POLICY') ||
+    proofType.includes('coverage')
+  ) {
+    return 'POLICY_UPDATE';
+  }
+  if (
+    sourceToolKey.includes('quote') ||
+    sourceToolKey.includes('price-radar') ||
+    sourceEntityType.includes('QUOTE') ||
+    proofType.includes('quote')
+  ) {
+    return 'QUOTE_CAPTURE';
+  }
+  if (
+    sourceToolKey.includes('negotiation') ||
+    sourceEntityType.includes('NEGOTIATION') ||
+    proofType.includes('negotiation')
+  ) {
+    return 'NEGOTIATION_ARTIFACT';
+  }
+  if (
+    sourceToolKey.includes('document') ||
+    sourceToolKey.includes('vault') ||
+    sourceEntityType.includes('DOCUMENT') ||
+    proofType.includes('document')
+  ) {
+    return 'DOCUMENT_PROOF';
+  }
+  if (sourceToolKey === 'frontend' || proofType.includes('checkpoint') || proofType.includes('confirmation')) {
+    return 'USER_CONFIRMATION';
+  }
+  return 'TOOL_RESULT';
+}
+
+function inferEvidenceSourceType(args: {
+  sourceToolKey: string | null;
+  sourceEntityType: string | null;
+  actorUserId: string | null | undefined;
+}): GuidanceEvidenceSourceType {
+  const sourceToolKey = String(args.sourceToolKey ?? '').toLowerCase();
+  const sourceEntityType = String(args.sourceEntityType ?? '').toUpperCase();
+  if (sourceToolKey === 'frontend') return 'USER_INPUT';
+  if (sourceToolKey.includes('worker') || sourceEntityType.includes('WORKER')) return 'SYSTEM_WORKER';
+  if (
+    sourceToolKey.includes('integration') ||
+    sourceEntityType.includes('INTEGRATION') ||
+    sourceEntityType.includes('WEBHOOK')
+  ) {
+    return 'INTEGRATION';
+  }
+  if (!args.actorUserId) return 'EVENT_PIPELINE';
+  return 'INTERNAL_TOOL';
+}
+
+function inferEvidenceStatus(args: {
+  stepStatus: GuidanceToolCompletionInput['status'];
+  proofType: string | null;
+  sourceToolKey: string | null;
+}): GuidanceEvidenceStatus {
+  if (args.stepStatus !== 'COMPLETED') return 'CAPTURED';
+  const sourceToolKey = String(args.sourceToolKey ?? '').toLowerCase();
+  const proofType = String(args.proofType ?? '').toLowerCase();
+  if (sourceToolKey === 'frontend' && proofType.includes('checkpoint')) {
+    return 'CAPTURED';
+  }
+  return 'VERIFIED';
+}
+
+function shouldCaptureEvidence(args: {
+  sourceEntityId: string | null;
+  proofType: string | null;
+  proofId: string | null;
+  producedData: Record<string, unknown> | null | undefined;
+  status: GuidanceToolCompletionInput['status'];
+}): boolean {
+  if (args.status === 'COMPLETED' || args.status === 'IN_PROGRESS') return true;
+  if (args.sourceEntityId || args.proofType || args.proofId) return true;
+  return guidanceValidationService.hasMeaningfulProducedData(args.producedData ?? null);
+}
+
 type EnrichedGuidanceAction = {
   journey: any;
   signal: any | null;
@@ -81,6 +199,229 @@ type EnrichedGuidanceAction = {
 };
 
 export class GuidanceJourneyService {
+  private async resolveScopeFromSourceEntity(input: {
+    propertyId: string;
+    sourceEntityType?: string | null;
+    sourceEntityId?: string | null;
+    inventoryItemId?: string | null;
+    homeAssetId?: string | null;
+  }): Promise<{ inventoryItemId: string | null; homeAssetId: string | null }> {
+    let inventoryItemId = input.inventoryItemId ?? null;
+    let homeAssetId = input.homeAssetId ?? null;
+
+    if (inventoryItemId || homeAssetId) {
+      return { inventoryItemId, homeAssetId };
+    }
+
+    const sourceEntityType = String(input.sourceEntityType ?? '').trim().toUpperCase();
+    const sourceEntityId = toNonEmptyString(input.sourceEntityId);
+    if (!sourceEntityType || !sourceEntityId) {
+      return { inventoryItemId, homeAssetId };
+    }
+
+    const db = prisma as any;
+
+    try {
+      if (sourceEntityType === 'REPLACE_REPAIR_ANALYSIS' && db.replaceRepairAnalysis) {
+        const row = await db.replaceRepairAnalysis.findFirst({
+          where: { id: sourceEntityId, propertyId: input.propertyId },
+          select: { inventoryItemId: true },
+        });
+        if (row?.inventoryItemId) inventoryItemId = row.inventoryItemId;
+      } else if (sourceEntityType === 'RECALL_MATCH' && db.recallMatch) {
+        const row = await db.recallMatch.findFirst({
+          where: { id: sourceEntityId, propertyId: input.propertyId },
+          select: { inventoryItemId: true, homeAssetId: true },
+        });
+        if (row?.inventoryItemId) inventoryItemId = row.inventoryItemId;
+        if (row?.homeAssetId) homeAssetId = row.homeAssetId;
+      } else if (sourceEntityType === 'PRICE_FINALIZATION' && db.priceFinalization) {
+        const row = await db.priceFinalization.findFirst({
+          where: { id: sourceEntityId, propertyId: input.propertyId },
+          select: { inventoryItemId: true, homeAssetId: true },
+        });
+        if (row?.inventoryItemId) inventoryItemId = row.inventoryItemId;
+        if (row?.homeAssetId) homeAssetId = row.homeAssetId;
+      } else if (sourceEntityType === 'BOOKING' && db.booking) {
+        const row = await db.booking.findFirst({
+          where: { id: sourceEntityId, propertyId: input.propertyId },
+          select: { inventoryItemId: true, homeAssetId: true },
+        });
+        if (row?.inventoryItemId) inventoryItemId = row.inventoryItemId;
+        if (row?.homeAssetId) homeAssetId = row.homeAssetId;
+      } else if (sourceEntityType === 'SERVICE_PRICE_RADAR_CHECK' && db.serviceRadarCheckSystemLink) {
+        const applianceLink = await db.serviceRadarCheckSystemLink.findFirst({
+          where: {
+            serviceRadarCheckId: sourceEntityId,
+            linkedEntityType: 'APPLIANCE',
+          },
+          select: { linkedEntityId: true },
+        });
+        if (applianceLink?.linkedEntityId) inventoryItemId = applianceLink.linkedEntityId;
+
+        const systemLink = await db.serviceRadarCheckSystemLink.findFirst({
+          where: {
+            serviceRadarCheckId: sourceEntityId,
+            linkedEntityType: 'SYSTEM',
+          },
+          select: { linkedEntityId: true },
+        });
+        if (systemLink?.linkedEntityId) homeAssetId = systemLink.linkedEntityId;
+      }
+    } catch (error) {
+      console.warn('[GUIDANCE] failed to infer scope from source entity', {
+        propertyId: input.propertyId,
+        sourceEntityType,
+        sourceEntityId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return { inventoryItemId, homeAssetId };
+  }
+
+  private async captureStepEvidence(args: {
+    input: GuidanceToolCompletionInput;
+    signal: any | null;
+    journey: any;
+    step: any;
+    resolvedStepKey: string;
+  }) {
+    const { guidanceStepEvidence } = getGuidanceModels();
+    if (!guidanceStepEvidence) return null;
+
+    const producedData = args.input.producedData ?? null;
+    const producedRecord = asRecord(producedData);
+    const metadataRecord = asRecord(args.input.metadata);
+
+    const proofType =
+      toNonEmptyString(producedRecord.proofType) ?? toNonEmptyString(metadataRecord.proofType);
+    const proofId =
+      readFirstNonEmptyString(producedRecord, [
+        'proofId',
+        'evidenceId',
+        'recordId',
+        'bookingId',
+        'policyId',
+        'quoteId',
+        'matchId',
+        'taskId',
+        'analysisId',
+        'sourceEntityId',
+      ]) ??
+      readFirstNonEmptyString(metadataRecord, [
+        'proofId',
+        'evidenceId',
+        'recordId',
+        'bookingId',
+        'policyId',
+        'quoteId',
+        'matchId',
+        'taskId',
+        'analysisId',
+      ]);
+
+    const evidenceRefType =
+      toNonEmptyString(args.input.sourceEntityType) ??
+      toNonEmptyString(producedRecord.sourceEntityType) ??
+      toNonEmptyString(metadataRecord.sourceEntityType);
+    const evidenceRefId =
+      toNonEmptyString(args.input.sourceEntityId) ??
+      toNonEmptyString(producedRecord.sourceEntityId) ??
+      toNonEmptyString(metadataRecord.sourceEntityId) ??
+      proofId;
+
+    if (
+      !shouldCaptureEvidence({
+        sourceEntityId: evidenceRefId,
+        proofType,
+        proofId,
+        producedData,
+        status: args.input.status,
+      })
+    ) {
+      return null;
+    }
+
+    const confidenceCandidate =
+      typeof producedRecord.confidenceScore === 'number'
+        ? producedRecord.confidenceScore
+        : typeof metadataRecord.confidenceScore === 'number'
+          ? metadataRecord.confidenceScore
+          : null;
+    const confidenceScore = clampConfidenceToDecimal(confidenceCandidate);
+
+    const evidenceType = inferEvidenceType({
+      sourceToolKey: args.input.sourceToolKey ?? null,
+      sourceEntityType: evidenceRefType,
+      proofType,
+    });
+    const sourceType = inferEvidenceSourceType({
+      sourceToolKey: args.input.sourceToolKey ?? null,
+      sourceEntityType: evidenceRefType,
+      actorUserId: args.input.actorUserId ?? null,
+    });
+    const status = inferEvidenceStatus({
+      stepStatus: args.input.status,
+      proofType,
+      sourceToolKey: args.input.sourceToolKey ?? null,
+    });
+
+    try {
+      return await guidanceStepEvidence.create({
+        data: {
+          propertyId: args.input.propertyId,
+          journeyId: args.journey.id,
+          stepId: args.step.id,
+          signalId: args.signal?.id ?? args.journey.primarySignalId ?? null,
+          homeAssetId:
+            args.journey.homeAssetId ??
+            args.signal?.homeAssetId ??
+            args.input.homeAssetId ??
+            null,
+          inventoryItemId:
+            args.journey.inventoryItemId ??
+            args.signal?.inventoryItemId ??
+            args.input.inventoryItemId ??
+            null,
+          evidenceType,
+          sourceType,
+          status,
+          sourceToolKey: args.input.sourceToolKey ?? null,
+          sourceFeatureKey:
+            toNonEmptyString(metadataRecord.sourceFeatureKey) ?? args.input.sourceToolKey ?? null,
+          evidenceRefType,
+          evidenceRefId,
+          proofType,
+          proofId,
+          confidenceScore,
+          observedAt: new Date(),
+          createdByUserId: args.input.actorUserId ?? null,
+          payloadJson: producedData,
+          metadataJson: {
+            ...metadataRecord,
+            stepStatus: args.input.status,
+            stepKey: args.resolvedStepKey,
+            reasonCode: args.input.reasonCode ?? null,
+            reasonMessage: args.input.reasonMessage ?? null,
+          },
+        },
+      });
+    } catch (error: any) {
+      const code = typeof error?.code === 'string' ? error.code : '';
+      if (code === 'P2021' || code === 'P2022') {
+        console.warn('[GUIDANCE] GuidanceStepEvidence table/column missing; skipping evidence write', {
+          propertyId: args.input.propertyId,
+          journeyId: args.journey.id,
+          stepId: args.step.id,
+          prismaCode: code,
+        });
+        return null;
+      }
+      throw error;
+    }
+  }
+
   private confidenceLabel(score: number): 'HIGH' | 'MEDIUM' | 'LOW' {
     if (score >= 0.72) return 'HIGH';
     if (score < 0.45) return 'LOW';
@@ -557,6 +898,15 @@ export class GuidanceJourneyService {
 
     let signal: any | null = null;
     let journey: any | null = null;
+    const inferredScope = await this.resolveScopeFromSourceEntity({
+      propertyId: input.propertyId,
+      sourceEntityType: input.sourceEntityType ?? null,
+      sourceEntityId: input.sourceEntityId ?? null,
+      inventoryItemId: input.inventoryItemId ?? null,
+      homeAssetId: input.homeAssetId ?? null,
+    });
+    const resolvedInventoryItemId = input.inventoryItemId ?? inferredScope.inventoryItemId ?? null;
+    const resolvedHomeAssetId = input.homeAssetId ?? inferredScope.homeAssetId ?? null;
 
     if (input.journeyId) {
       journey = await guidanceJourney.findFirst({
@@ -580,8 +930,8 @@ export class GuidanceJourneyService {
     } else {
       const ingest = await this.ingestSignal({
         propertyId: input.propertyId,
-        homeAssetId: input.homeAssetId ?? null,
-        inventoryItemId: input.inventoryItemId ?? null,
+        homeAssetId: resolvedHomeAssetId,
+        inventoryItemId: resolvedInventoryItemId,
         signalIntentFamily: input.signalIntentFamily ?? null,
         issueDomain: input.issueDomain ?? null,
         sourceEntityType: input.sourceEntityType ?? null,
@@ -617,6 +967,14 @@ export class GuidanceJourneyService {
       signalId: signal?.id ?? null,
     });
 
+    await this.captureStepEvidence({
+      input,
+      signal,
+      journey: transitioned.journey,
+      step: transitioned.step,
+      resolvedStepKey,
+    });
+
     const next = await guidanceStepResolverService.resolveNextStep({
       propertyId: input.propertyId,
       journeyId: journey.id,
@@ -646,6 +1004,10 @@ export class GuidanceJourneyService {
         events: {
           orderBy: [{ createdAt: 'desc' }],
           take: 50,
+        },
+        evidences: {
+          orderBy: [{ observedAt: 'desc' }],
+          take: 75,
         },
         inventoryItem: {
           select: { name: true, category: true },

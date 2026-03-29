@@ -172,6 +172,8 @@ export async function finalizePriceFinalization(
         inventoryItemId: detail.inventoryItemId,
         homeAssetId: detail.homeAssetId,
         producedData: {
+          proofType: 'price_finalization',
+          proofId: detail.id,
           finalizationId: detail.id,
           acceptedPrice: detail.acceptedPrice,
           currency: detail.currency,

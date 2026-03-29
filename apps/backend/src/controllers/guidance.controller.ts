@@ -3,7 +3,13 @@ import { CustomRequest } from '../types';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { guidanceStepResolverService } from '../services/guidanceEngine/guidanceStepResolver.service';
 import { guidanceBookingGuardService } from '../services/guidanceEngine/guidanceBookingGuard.service';
-import { mapGuidanceJourney, mapGuidanceSignal, mapGuidanceStep, mapGuidanceEvent } from '../services/guidanceEngine/guidanceMapper';
+import {
+  mapGuidanceJourney,
+  mapGuidanceSignal,
+  mapGuidanceStep,
+  mapGuidanceEvent,
+  mapGuidanceEvidence,
+} from '../services/guidanceEngine/guidanceMapper';
 import { APIError } from '../middleware/error.middleware';
 
 const GUIDANCE_TARGET_ACTIONS = new Set([
@@ -81,6 +87,7 @@ export async function getGuidanceJourneyDetail(req: CustomRequest, res: Response
         journey: mapGuidanceJourney(journey),
         next: next ?? null,
         events: (journey.events ?? []).map(mapGuidanceEvent),
+        evidences: (journey.evidences ?? []).map(mapGuidanceEvidence),
       },
     });
   } catch (error) {

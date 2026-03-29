@@ -120,6 +120,8 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
         stepKey: guidanceStepKey ?? 'evaluate_savings_funding',
         status: 'COMPLETED',
         producedData: {
+          proofType: 'savings_analysis',
+          proofId: result.runId,
           runId: result.runId,
           potentialMonthlySavings: result.summary.potentialMonthlySavings,
           potentialAnnualSavings: result.summary.potentialAnnualSavings,

@@ -19,6 +19,25 @@ function requireUserId(req: CustomRequest): string {
   return userId;
 }
 
+function resolveScopeFromLinkedEntities(
+  entities: Array<{ linkedEntityType: string; linkedEntityId: string }> | undefined
+) {
+  let inventoryItemId: string | null = null;
+  let homeAssetId: string | null = null;
+
+  for (const entity of entities ?? []) {
+    if (!inventoryItemId && entity.linkedEntityType === 'APPLIANCE') {
+      inventoryItemId = entity.linkedEntityId;
+    }
+    if (!homeAssetId && entity.linkedEntityType === 'SYSTEM') {
+      homeAssetId = entity.linkedEntityId;
+    }
+    if (inventoryItemId && homeAssetId) break;
+  }
+
+  return { inventoryItemId, homeAssetId };
+}
+
 export async function createServicePriceRadarCheck(
   req: CustomRequest,
   res: Response,
@@ -36,12 +55,15 @@ export async function createServicePriceRadarCheck(
       guidanceSignalIntentFamily === 'inspection_followup_needed'
         ? 'MAINTENANCE'
         : 'ASSET_LIFECYCLE';
+    const guidanceScope = resolveScopeFromLinkedEntities(result.check.linkedEntities);
 
     try {
       await guidanceJourneyService.recordToolCompletion({
         propertyId: req.params.propertyId,
         actorUserId: userId,
         journeyId: payload.guidanceJourneyId ?? null,
+        inventoryItemId: guidanceScope.inventoryItemId,
+        homeAssetId: guidanceScope.homeAssetId,
         signalIntentFamily: guidanceSignalIntentFamily ?? 'lifecycle_end_or_past_life',
         issueDomain,
         sourceToolKey: 'service-price-radar',
@@ -60,6 +82,8 @@ export async function createServicePriceRadarCheck(
           currency: result.check.quoteCurrency,
           quoteAmount: result.check.quoteAmount,
           explanationShort: result.check.explanationShort,
+          proofType: 'price_validation',
+          proofId: result.check.id,
         },
         metadata: {
           linkedEntityCount: result.check.linkedEntities?.length ?? 0,
