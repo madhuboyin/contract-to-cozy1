@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, CircleAlert, ShieldCheck, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +19,8 @@ import {
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import type { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
 import { formatIssueDomain } from '@/features/guidance/utils/guidanceDisplay';
+import type { AssetRiskDetail, RiskAssessmentReport } from '@/types';
+import { api } from '@/lib/api/client';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 
@@ -43,6 +46,47 @@ const SIGNAL_SUBTITLE_LABELS: Record<string, string> = {
   recall_detected: 'A safety recall may require immediate action.',
   high_utility_cost: 'This issue may be increasing your ongoing utility costs.',
 };
+
+type AssetScopeOption = {
+  key: string;
+  assetName: string;
+  riskLevel: AssetRiskDetail['riskLevel'];
+  outOfPocketCost: number;
+  inventoryItemId: string | null;
+  homeAssetId: string | null;
+};
+
+const RISK_LEVEL_RANK: Record<AssetRiskDetail['riskLevel'], number> = {
+  HIGH: 4,
+  ELEVATED: 3,
+  MODERATE: 2,
+  LOW: 1,
+};
+
+function riskLevelTone(level: AssetRiskDetail['riskLevel']): 'danger' | 'elevated' | 'good' {
+  if (level === 'HIGH' || level === 'ELEVATED') return 'danger';
+  if (level === 'MODERATE') return 'elevated';
+  return 'good';
+}
+
+function buildScopedOverviewHref(args: {
+  propertyId: string;
+  inventoryItemId: string | null;
+  homeAssetId: string | null;
+}): string {
+  const params = new URLSearchParams();
+  if (args.inventoryItemId) {
+    params.set('itemId', args.inventoryItemId);
+    params.set('inventoryItemId', args.inventoryItemId);
+  }
+  if (args.homeAssetId) {
+    params.set('homeAssetId', args.homeAssetId);
+  }
+
+  const base = `/dashboard/properties/${args.propertyId}/tools/guidance-overview`;
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
+}
 
 function resolveAssetLabel(action: GuidanceActionModel): string {
   const itemName = action.journey.inventoryItem?.name?.trim();
@@ -121,6 +165,16 @@ export default function GuidanceOverviewClient() {
     enabled: Boolean(propertyId),
     limit: 10,
   });
+  const riskReportQuery = useQuery({
+    queryKey: ['risk-report-summary', propertyId],
+    queryFn: async () => {
+      if (!propertyId) return null;
+      const reportOrStatus = await api.getRiskReportSummary(propertyId);
+      return reportOrStatus === 'QUEUED' ? null : (reportOrStatus as RiskAssessmentReport);
+    },
+    enabled: Boolean(propertyId),
+    staleTime: 60_000,
+  });
 
   const allActions = React.useMemo(() => guidance.actions ?? [], [guidance.actions]);
   const filteredActions = React.useMemo(() => {
@@ -136,8 +190,56 @@ export default function GuidanceOverviewClient() {
     });
   }, [allActions, hasScopeFilter, selectedHomeAssetId, selectedInventoryItemId]);
 
+  const assetScopeOptions = React.useMemo<AssetScopeOption[]>(() => {
+    const details = riskReportQuery.data?.details ?? [];
+    if (!details.length) return [];
+
+    const options = details
+      .filter((item) => Boolean(item.inventoryItemId || item.homeAssetId))
+      .map((item) => ({
+        key: `${item.inventoryItemId ?? 'none'}:${item.homeAssetId ?? 'none'}:${item.assetName}`,
+        assetName: item.assetName,
+        riskLevel: item.riskLevel,
+        outOfPocketCost: item.outOfPocketCost,
+        inventoryItemId: item.inventoryItemId ?? null,
+        homeAssetId: item.homeAssetId ?? null,
+      }))
+      .sort((a, b) => {
+        const rankDiff = RISK_LEVEL_RANK[b.riskLevel] - RISK_LEVEL_RANK[a.riskLevel];
+        if (rankDiff !== 0) return rankDiff;
+        return b.outOfPocketCost - a.outOfPocketCost;
+      });
+
+    const deduped: AssetScopeOption[] = [];
+    const seen = new Set<string>();
+    for (const option of options) {
+      const idKey = `${option.inventoryItemId ?? ''}:${option.homeAssetId ?? ''}`;
+      if (seen.has(idKey)) continue;
+      seen.add(idKey);
+      deduped.push(option);
+    }
+    return deduped.slice(0, 6);
+  }, [riskReportQuery.data?.details]);
+
+  const selectedAssetOption = React.useMemo(() => {
+    if (!hasScopeFilter) return null;
+    return (
+      assetScopeOptions.find((option) => {
+        const inventoryMatch =
+          selectedInventoryItemId && option.inventoryItemId === selectedInventoryItemId;
+        const homeAssetMatch = selectedHomeAssetId && option.homeAssetId === selectedHomeAssetId;
+        return Boolean(inventoryMatch || homeAssetMatch);
+      }) ?? null
+    );
+  }, [assetScopeOptions, hasScopeFilter, selectedHomeAssetId, selectedInventoryItemId]);
+
+  const hasScopedMatch = filteredActions.length > 0;
+  const isScopeFallback = hasScopeFilter && !hasScopedMatch && allActions.length > 0;
   const actions = React.useMemo(() => {
-    if (hasScopeFilter) return filteredActions;
+    if (hasScopeFilter) {
+      if (filteredActions.length > 0) return filteredActions;
+      return allActions;
+    }
     const scoped = allActions.filter(
       (action) => Boolean(action.journey.inventoryItemId) || Boolean(action.journey.homeAssetId)
     );
@@ -152,6 +254,7 @@ export default function GuidanceOverviewClient() {
   const immediateCount = actions.filter((action) => action.priorityGroup === 'IMMEDIATE').length;
   const blockedCount = actions.filter((action) => action.executionReadiness === 'NOT_READY').length;
   const baseOverviewHref = `/dashboard/properties/${propertyId}/tools/guidance-overview`;
+  const focusLabel = selectedAssetOption?.assetName ?? (primaryAction ? resolveAssetLabel(primaryAction) : null);
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
@@ -167,6 +270,61 @@ export default function GuidanceOverviewClient() {
         title="Resolve Home Issues Step by Step"
         subtitle="We guide you through coverage checks, repair vs replace decisions, pricing, negotiation, and booking so each issue gets resolved end to end."
       />
+
+      <ScenarioInputCard
+        title="Get guidance for any asset"
+        subtitle="Pick a risk item to launch an asset-scoped guidance path."
+      >
+        {riskReportQuery.isLoading ? (
+          <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">Loading assets from Risk Assessment...</p>
+        ) : assetScopeOptions.length === 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+              No asset-level risk entries are ready yet. Run Risk Assessment to generate asset options.
+            </p>
+            <ActionPriorityRow
+              primaryAction={
+                <Button asChild className="min-h-[42px] w-full">
+                  <Link href={`/dashboard/properties/${propertyId}/risk-assessment`}>Open Risk Assessment</Link>
+                </Button>
+              }
+            />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {assetScopeOptions.map((option) => {
+              const href = buildScopedOverviewHref({
+                propertyId,
+                inventoryItemId: option.inventoryItemId,
+                homeAssetId: option.homeAssetId,
+              });
+              const isSelected =
+                (selectedInventoryItemId && option.inventoryItemId === selectedInventoryItemId) ||
+                (selectedHomeAssetId && option.homeAssetId === selectedHomeAssetId);
+              return (
+                <div key={option.key} className="space-y-2">
+                  <CompactEntityRow
+                    title={option.assetName}
+                    subtitle={`Estimated out-of-pocket: ${formatCurrency(option.outOfPocketCost)}`}
+                    meta={`Risk: ${formatEnumLabel(option.riskLevel)}`}
+                    status={<StatusChip tone={riskLevelTone(option.riskLevel)}>{formatEnumLabel(option.riskLevel)}</StatusChip>}
+                  />
+                  <ActionPriorityRow
+                    primaryAction={
+                      <Link
+                        href={href}
+                        className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                      >
+                        {isSelected ? 'Selected asset' : `Guide this asset: ${option.assetName}`}
+                      </Link>
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </ScenarioInputCard>
 
       {hasScopeFilter ? (
         <ScenarioInputCard
@@ -196,7 +354,7 @@ export default function GuidanceOverviewClient() {
         highlights={
           primaryAction
             ? [
-                `Focus now: ${resolveAssetLabel(primaryAction)}`,
+                `Focus now: ${focusLabel ?? resolveAssetLabel(primaryAction)}`,
                 `Next step: ${resolveNextStepLabel(primaryAction)}`,
                 primaryAction.costOfDelay
                   ? `Delay risk: ~${formatCurrency(primaryAction.costOfDelay)}`
@@ -228,11 +386,51 @@ export default function GuidanceOverviewClient() {
             </Button>
           }
         />
+      ) : isScopeFallback ? (
+        <>
+          <ScenarioInputCard
+            title="Asset-specific path is still being prepared"
+            subtitle="Showing the closest active guidance journey while we gather asset-level evidence."
+            badge={<StatusChip tone="elevated">Fallback</StatusChip>}
+          >
+            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+              We found your selected asset, but there is no dedicated active journey for it yet.
+            </p>
+          </ScenarioInputCard>
+          {primaryAction ? (
+            <ScenarioInputCard
+              title={`Start Here: ${focusLabel ?? resolveAssetLabel(primaryAction)}`}
+              subtitle={resolvePrimarySubtitle(primaryAction)}
+              badge={<StatusChip tone={resolvePriorityTone(primaryAction)}>{primaryAction.priorityGroup.toLowerCase()}</StatusChip>}
+            >
+              <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
+                <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+                  Why now
+                </p>
+                <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                  {primaryAction.explanation?.why ??
+                    primaryAction.subtitle ??
+                    'Following this journey now reduces cost and execution risk.'}
+                </p>
+                {primaryAction.costOfDelay ? (
+                  <p className="mb-0 text-sm font-semibold text-amber-700">
+                    Potential delay cost: ~{formatCurrency(primaryAction.costOfDelay)}
+                  </p>
+                ) : null}
+                <p className="mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">
+                  Progress: {resolveProgressLabel(primaryAction)}
+                </p>
+              </div>
+
+              <ActionPriorityRow primaryAction={renderPrimaryActionButton(primaryAction)} />
+            </ScenarioInputCard>
+          ) : null}
+        </>
       ) : (
         <>
           {primaryAction ? (
             <ScenarioInputCard
-              title={`Start Here: ${resolveAssetLabel(primaryAction)}`}
+              title={`Start Here: ${focusLabel ?? resolveAssetLabel(primaryAction)}`}
               subtitle={resolvePrimarySubtitle(primaryAction)}
               badge={<StatusChip tone={resolvePriorityTone(primaryAction)}>{primaryAction.priorityGroup.toLowerCase()}</StatusChip>}
             >
