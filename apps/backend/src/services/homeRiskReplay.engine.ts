@@ -1,4 +1,5 @@
 import { HomeRiskEventSeverity, HomeRiskEventType, HomeRiskReplayWindowType } from '@prisma/client';
+import { applyBoundedSignalPriorityBoost } from './signalPriorityBoost.service';
 
 export const HOME_RISK_REPLAY_ENGINE_VERSION = 'home-risk-replay-mvp-v1';
 
@@ -864,6 +865,13 @@ export function evaluateReplayEvent(event: ReplayCandidateEvent, context: Replay
     systems = systems.concat(result.systems);
   }
 
+  const eventBaseScore = SEVERITY_BASE_SCORE[event.severity];
+  const bounded = applyBoundedSignalPriorityBoost({
+    baseScore: eventBaseScore,
+    additiveBoost: score - eventBaseScore,
+    maxMultiplier: 1.5,
+  });
+  score = bounded.score;
   score = clamp(score);
   const impactLevel = scoreToImpactLevel(score);
   const dedupedActions = dedupeActions(actions);

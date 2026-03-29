@@ -1,6 +1,7 @@
 import { GuidanceExecutionReadiness, GuidanceIssueDomain, GuidanceSeverity } from './guidanceTypes';
 import { GuidanceConfidence } from './guidanceConfidence.service';
 import { GuidanceFinancialContext } from './guidanceFinancialContext.service';
+import { applyBoundedSignalPriorityBoost } from '../signalPriorityBoost.service';
 
 export type GuidancePriorityResult = {
   priorityScore: number;
@@ -76,8 +77,13 @@ export class GuidancePriorityService {
       : severityBase(input.severity);
 
     const severityWeight = severity * 0.35;
-    const urgencyWeight =
+    const rawUrgencyBoost =
       signalUrgencyBoost(input.signalIntentFamily) + deadlineUrgencyBoost(input.signalPayload);
+    const urgencyWeight = applyBoundedSignalPriorityBoost({
+      baseScore: severityWeight,
+      additiveBoost: rawUrgencyBoost,
+      maxMultiplier: 1.5,
+    }).appliedBoost;
     const financialWeight = input.financial.financialImpactScore * 0.28;
     const safetyBoost =
       input.issueDomain === 'SAFETY' || input.issueDomain === 'WEATHER' ? 18 : 0;
