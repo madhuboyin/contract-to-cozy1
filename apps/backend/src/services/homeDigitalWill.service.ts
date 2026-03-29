@@ -3,6 +3,7 @@ import {
   HomeDigitalWillSection,
   HomeDigitalWillEntry,
   HomeDigitalWillTrustedContact,
+  HomeDigitalWillAccessLevel,
   HomeDigitalWillSectionType,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
@@ -153,6 +154,35 @@ function buildCounts(
     trustedContactCount: contacts.length,
     hasEmergencyEntries,
   };
+}
+
+export function scopeTrustedContactSections(
+  sections: SectionDTO[],
+  accessLevel: HomeDigitalWillAccessLevel,
+  sectionType?: HomeDigitalWillSectionType,
+): SectionDTO[] {
+  let scoped = sections;
+
+  if (accessLevel === 'EMERGENCY_ONLY') {
+    if (sectionType && sectionType !== 'EMERGENCY') {
+      throw new APIError('Trusted contact access restricted to emergency section', 403, 'FORBIDDEN');
+    }
+    scoped = scoped
+      .filter((section) => section.type === 'EMERGENCY')
+      .map((section) => ({
+        ...section,
+        entries: section.entries.filter((entry) => entry.isEmergency),
+      }));
+  }
+
+  if (sectionType) {
+    scoped = scoped.filter((section) => section.type === sectionType);
+    if (scoped.length === 0) {
+      throw new APIError('Section not available for this trusted contact', 404, 'NOT_FOUND');
+    }
+  }
+
+  return scoped;
 }
 
 // ─── Entry ordering helper ────────────────────────────────────────────────────
@@ -307,6 +337,41 @@ export class HomeDigitalWillService {
     const will = await prisma.homeDigitalWill.findUnique({ where: { propertyId } });
     if (!will) return null;
     return this.loadFullWill(will.id);
+  }
+
+  async getTrustedContactScopedView(
+    willId: string,
+    userId: string,
+    contactId: string,
+    sectionType?: HomeDigitalWillSectionType,
+  ): Promise<DigitalWillDTO> {
+    await this.assertWillOwnership(willId, userId);
+
+    const contact = await prisma.homeDigitalWillTrustedContact.findFirst({
+      where: {
+        id: contactId,
+        digitalWillId: willId,
+      },
+    });
+
+    if (!contact) {
+      throw new APIError('Trusted contact not found', 404, 'NOT_FOUND');
+    }
+
+    const full = await this.loadFullWill(willId);
+
+    const sections = scopeTrustedContactSections(full.sections, contact.accessLevel, sectionType);
+
+    return {
+      ...full,
+      sections,
+      counts: {
+        ...full.counts,
+        sectionCount: sections.length,
+        entryCount: sections.reduce((sum, section) => sum + section.entries.length, 0),
+        hasEmergencyEntries: sections.some((section) => section.entries.some((entry) => entry.isEmergency)),
+      },
+    };
   }
 
   async getOrCreateByProperty(propertyId: string, body: CreateDigitalWillBody): Promise<DigitalWillDTO> {

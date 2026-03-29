@@ -1663,9 +1663,11 @@ class APIClient {
     propertyId?: string
   ): Promise<APIResponse<{
     severity: string;
+    classification?: string;
     message: string;
     resolution?: string;
     steps?: string[];
+    confidence?: number;
   }>> {
     return this.request('/api/emergency/chat', {
       method: 'POST',

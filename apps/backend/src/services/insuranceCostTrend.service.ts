@@ -55,6 +55,9 @@ export type InsuranceCostTrendDTO = {
     dataSources: string[];
     notes: string[];
     confidence: Confidence;
+    classification: 'EDUCATIONAL_ESTIMATE';
+    financialPlanningSafe: false;
+    usageRestrictions: string[];
   };
 };
 
@@ -295,6 +298,12 @@ export class InsuranceCostTrendService {
           'Phase 1 does not fetch live DOI/FEMA/NOAA datasets. It is a storytelling estimator with clear upgrade hooks.',
         ],
         confidence,
+        classification: 'EDUCATIONAL_ESTIMATE',
+        financialPlanningSafe: false,
+        usageRestrictions: [
+          'Do not use as sole input for refinance, sell/hold/rent, or long-horizon financial decisions.',
+          'Treat as directional education only until grounded external rate datasets are integrated.',
+        ],
       },
     };
 

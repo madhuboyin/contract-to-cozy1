@@ -19,6 +19,15 @@ interface Message {
   content: string;
 }
 
+interface EmergencyResponsePayload {
+  severity: string;
+  classification?: string;
+  message: string;
+  resolution?: string;
+  steps?: string[];
+  confidence?: number;
+}
+
 interface EmergencyTroubleshooterProps {
   propertyId?: string;
 }
@@ -28,6 +37,9 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
   const [input, setInput] = useState('');
   const [severity, setSeverity] = useState<string | null>(null);
   const [resolution, setResolution] = useState<string | null>(null);
+  const [classification, setClassification] = useState<string | null>(null);
+  const [steps, setSteps] = useState<string[]>([]);
+  const [confidence, setConfidence] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -47,8 +59,12 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
       
       if (response.success && response.data) {
         // Update severity/resolution from response
-        setSeverity(response.data.severity);
-        setResolution(response.data.resolution || null);
+        const payload = response.data as EmergencyResponsePayload;
+        setSeverity(payload.severity);
+        setResolution(payload.resolution || null);
+        setClassification(payload.classification || null);
+        setSteps(Array.isArray(payload.steps) ? payload.steps : []);
+        setConfidence(typeof payload.confidence === 'number' ? payload.confidence : null);
         
         // Add assistant response to conversation
         setMessages([...newMessages, {
@@ -127,6 +143,12 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
           ) : null}
         </div>
         {getResolutionBadge()}
+        {classification ? (
+          <p className="text-xs text-gray-600">Classification: {classification}</p>
+        ) : null}
+        {confidence != null ? (
+          <p className="text-xs text-gray-600">Model confidence: {Math.round(confidence * 100)}%</p>
+        ) : null}
       </MobileSection>
 
       {error && (
@@ -174,6 +196,21 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
           )}
         </MobileCard>
       </MobileSection>
+
+      {steps.length > 0 ? (
+        <MobileSection>
+          <MobileCard className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">Immediate Steps</p>
+            <ul className="space-y-1">
+              {steps.map((step, idx) => (
+                <li key={`${step}-${idx}`} className="text-sm text-gray-700">
+                  {idx + 1}. {step}
+                </li>
+              ))}
+            </ul>
+          </MobileCard>
+        </MobileSection>
+      ) : null}
 
       <MobileFilterSurface>
         <div className="flex gap-2">

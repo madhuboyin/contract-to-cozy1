@@ -31,6 +31,10 @@ interface ClimateRisk {
   description: string;
   trends: string;
   mitigationSteps: string[];
+  source: 'AI_ESTIMATE' | 'STATE_HEURISTIC';
+  confidenceBand: 'LOW' | 'MEDIUM';
+  confidenceScore: number;
+  confidenceReason: string;
 }
 
 interface ClimateReport {
@@ -47,6 +51,15 @@ interface ClimateReport {
   recommendations: string[];
   insuranceImpact: string;
   propertyValueImpact: string;
+  meta?: {
+    classification: 'EDUCATIONAL_ESTIMATE';
+    groundedDataSources: string[];
+    groundingLevel: 'NONE' | 'PARTIAL';
+    confidenceBand: 'LOW' | 'MEDIUM';
+    confidenceScore: number;
+    financialPlanningSafe: false;
+    disclaimer: string;
+  };
   generatedAt: string;
 }
 
@@ -160,6 +173,7 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
           { label: 'State', value: report.location.state },
           { label: 'ZIP', value: report.location.zipCode || 'Unknown' },
           { label: 'Generated', value: new Date(report.generatedAt).toLocaleDateString() },
+          { label: 'Confidence', value: report.meta?.confidenceBand ?? 'LOW' },
         ]}
       />
 
@@ -205,6 +219,12 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
                         <div className={`text-xs font-semibold px-2 py-1 rounded ${getRiskColor(risk.riskLevel)}`}>
                           {risk.riskLevel}
                         </div>
+                        <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-500">
+                          {risk.source === 'AI_ESTIMATE' ? 'AI estimate' : 'State heuristic'}
+                        </div>
+                        <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-500">
+                          Confidence {Math.round((risk.confidenceScore || 0) * 100)}%
+                        </div>
                       </div>
                     </div>
                     <Button
@@ -235,6 +255,11 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
                           <p className="text-xs font-semibold text-gray-600">Trends:</p>
                           <p className="text-sm text-gray-700">{risk.trends}</p>
                         </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold text-gray-600">Confidence context:</p>
+                        <p className="text-sm text-gray-700">{risk.confidenceReason}</p>
                       </div>
 
                       {/* Mitigation Steps */}
@@ -316,6 +341,16 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
             Climate risk analysis based on location, historical data, and projected trends. 
             Generated on {new Date(report.generatedAt).toLocaleString()}
           </p>
+          {report.meta?.disclaimer && (
+            <p className="mt-2 text-xs text-amber-800 text-center">
+              {report.meta.disclaimer}
+            </p>
+          )}
+          {report.meta?.groundedDataSources?.length ? (
+            <p className="mt-1 text-[11px] text-slate-600 text-center">
+              Sources: {report.meta.groundedDataSources.join(' | ')}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </div>

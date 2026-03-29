@@ -1,5 +1,7 @@
 // apps/backend/src/services/emergencyTroubleshooter.service.ts
 import { GoogleGenAI } from "@google/genai";
+import { IncidentSeverity, IncidentSourceType, IncidentStatus } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -8,9 +10,11 @@ interface Message {
 
 interface EmergencyResponse {
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  classification: string;
   message: string;
-  resolution?: 'DIY' | 'CALL_PRO' | 'IMMEDIATE_DANGER';
-  steps?: string[];
+  resolution: 'DIY' | 'CALL_PRO' | 'IMMEDIATE_DANGER';
+  steps: string[];
+  confidence: number;
 }
 
 const EMERGENCY_SYSTEM_PROMPT = `You are an emergency home troubleshooting assistant. 
@@ -22,12 +26,28 @@ CRITICAL SAFETY RULES:
 - Sewage backup = "Do not use plumbing and call professional"
 - Never suggest DIY for: gas lines, electrical panels, structural issues
 
-Your response format:
-1. Assess severity: LOW, MEDIUM, HIGH, or CRITICAL
-2. Provide clear guidance (2-3 sentences max)
-3. Give resolution: DIY (with steps) OR CALL_PRO OR IMMEDIATE_DANGER
+Return ONLY valid JSON with this exact schema:
+{
+  "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+  "classification": "short category name",
+  "message": "2-3 sentence guidance prioritizing safety",
+  "resolution": "DIY|CALL_PRO|IMMEDIATE_DANGER",
+  "steps": ["step 1", "step 2"],
+  "confidence": 0.0
+}
+
+Rules:
+- Use IMMEDIATE_DANGER for gas leak, electrical fire risk, structural collapse risk, or life-safety risk.
+- If resolution is CALL_PRO or IMMEDIATE_DANGER, steps must still include safe immediate actions.
+- confidence is 0.0-1.0.
+- No markdown, no prose outside JSON.
 
 Be concise, clear, and prioritize safety above all else.`;
+
+type ChatContext = {
+  userId?: string;
+  propertyId?: string;
+};
 
 export class EmergencyTroubleshooterService {
   private ai: GoogleGenAI;
@@ -45,7 +65,8 @@ export class EmergencyTroubleshooterService {
    */
   async chat(
     messages: Message[],
-    propertyContext?: string
+    propertyContext?: string,
+    context?: ChatContext,
   ): Promise<EmergencyResponse> {
     console.log(`[EMERGENCY-CHAT] Processing ${messages.length} messages | Property Context: ${!!propertyContext}`);
     
@@ -85,18 +106,20 @@ export class EmergencyTroubleshooterService {
         console.error(`[EMERGENCY-ERROR] Gemini returned empty response`);
         throw new Error('AI service returned an empty response');
       }
-      
-      const severity = this.extractSeverity(text);
-      const resolution = this.extractResolution(text);
-      const steps = resolution === 'DIY' ? this.extractSteps(text) : undefined;
 
-      console.log(`[EMERGENCY-RESPONSE] Severity: ${severity} | Resolution: ${resolution || 'N/A'}`);
+      const parsed = this.parseStructuredResponse(text);
+
+      console.log(`[EMERGENCY-RESPONSE] Severity: ${parsed.severity} | Resolution: ${parsed.resolution}`);
+
+      await this.logIncidentIfPossible(messages, parsed, context);
 
       return {
-        severity,
-        message: text,
-        resolution,
-        steps
+        severity: parsed.severity,
+        classification: parsed.classification,
+        message: parsed.message,
+        resolution: parsed.resolution,
+        steps: parsed.steps,
+        confidence: parsed.confidence,
       };
     } catch (error) {
       console.error(`[EMERGENCY-FATAL] Failed to call Gemini API`, error);
@@ -104,51 +127,109 @@ export class EmergencyTroubleshooterService {
     }
   }
 
-  private extractSeverity(text: string): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
-    const lower = text.toLowerCase();
-    if (lower.includes('critical') || lower.includes('evacuate') || lower.includes('danger')) {
-      return 'CRITICAL';
+  private parseStructuredResponse(text: string): EmergencyResponse {
+    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const raw = this.extractFirstJsonObject(cleaned);
+
+    if (!raw) {
+      throw new Error('Emergency response schema parse failed');
     }
-    if (lower.includes('high') || lower.includes('immediate') || lower.includes('urgent')) {
-      return 'HIGH';
+
+    const severity = String(raw.severity || '').toUpperCase();
+    const resolution = String(raw.resolution || '').toUpperCase();
+    const classification = String(raw.classification || '').trim();
+    const message = String(raw.message || '').trim();
+    const steps = Array.isArray(raw.steps)
+      ? raw.steps.map((step: unknown) => String(step).trim()).filter(Boolean)
+      : [];
+    const confidence = Number(raw.confidence);
+
+    if (!['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(severity)) {
+      throw new Error('Emergency response missing valid severity');
     }
-    if (lower.includes('medium') || lower.includes('moderate')) {
-      return 'MEDIUM';
+    if (!['DIY', 'CALL_PRO', 'IMMEDIATE_DANGER'].includes(resolution)) {
+      throw new Error('Emergency response missing valid resolution');
     }
-    return 'LOW';
+    if (!message) {
+      throw new Error('Emergency response missing message');
+    }
+    if (!classification) {
+      throw new Error('Emergency response missing classification');
+    }
+
+    return {
+      severity: severity as EmergencyResponse['severity'],
+      classification,
+      message,
+      resolution: resolution as EmergencyResponse['resolution'],
+      steps,
+      confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.5,
+    };
   }
 
-  private extractResolution(text: string): 'DIY' | 'CALL_PRO' | 'IMMEDIATE_DANGER' | undefined {
-    const lower = text.toLowerCase();
-    if (lower.includes('evacuate') || lower.includes('call 911') || lower.includes('emergency services')) {
-      return 'IMMEDIATE_DANGER';
+  private extractFirstJsonObject(text: string): Record<string, unknown> | null {
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start === -1 || end <= start) return null;
+      const slice = text.slice(start, end + 1);
+      try {
+        return JSON.parse(slice) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
     }
-    if (lower.includes('call professional') || lower.includes('call plumber') || 
-        lower.includes('call electrician') || lower.includes('call hvac') ||
-        lower.includes('hire a pro')) {
-      return 'CALL_PRO';
-    }
-    if (lower.includes('you can fix') || lower.includes('diy') || 
-        lower.includes('step 1') || lower.includes('here\'s how')) {
-      return 'DIY';
-    }
-    return undefined;
   }
 
-  private extractSteps(text: string): string[] {
-    const steps: string[] = [];
-    
-    // Match numbered steps like "1.", "Step 1:", etc.
-    const stepMatches = text.match(/(?:Step )?\d+[.:]\s*(.+?)(?=(?:Step )?\d+[.:]|$)/gs);
-    
-    if (stepMatches) {
-      stepMatches.forEach(match => {
-        const cleanStep = match.replace(/(?:Step )?\d+[.:]\s*/, '').trim();
-        if (cleanStep) steps.push(cleanStep);
+  private mapIncidentSeverity(severity: EmergencyResponse['severity']): IncidentSeverity {
+    if (severity === 'CRITICAL') return IncidentSeverity.CRITICAL;
+    if (severity === 'HIGH' || severity === 'MEDIUM') return IncidentSeverity.WARNING;
+    return IncidentSeverity.INFO;
+  }
+
+  private async logIncidentIfPossible(
+    messages: Message[],
+    response: EmergencyResponse,
+    context?: ChatContext,
+  ): Promise<void> {
+    if (!context?.propertyId || !context?.userId) {
+      return;
+    }
+
+    try {
+      const latestUserMessage = [...messages].reverse().find((msg) => msg.role === 'user')?.content ?? 'Emergency request';
+      const title = latestUserMessage.slice(0, 140);
+      const fingerprint = `emergency:${context.propertyId}:${Buffer.from(title).toString('base64').slice(0, 24)}`;
+
+      await prisma.incident.create({
+        data: {
+          propertyId: context.propertyId,
+          userId: context.userId,
+          sourceType: IncidentSourceType.MANUAL,
+          typeKey: 'EMERGENCY_CHAT',
+          category: 'EMERGENCY',
+          title,
+          summary: response.message.slice(0, 280),
+          details: {
+            classification: response.classification,
+            resolution: response.resolution,
+            steps: response.steps,
+            confidence: response.confidence,
+          } as any,
+          status:
+            response.severity === 'CRITICAL' || response.resolution === 'IMMEDIATE_DANGER'
+              ? IncidentStatus.ACTIVE
+              : IncidentStatus.EVALUATED,
+          severity: this.mapIncidentSeverity(response.severity),
+          confidence: Math.round(response.confidence * 100),
+          fingerprint,
+        },
       });
+    } catch (error) {
+      console.error('[EMERGENCY-INCIDENT-LOG] Failed to persist incident log', error);
     }
-    
-    return steps.length > 0 ? steps : [];
   }
 }
 

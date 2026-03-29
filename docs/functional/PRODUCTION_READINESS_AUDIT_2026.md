@@ -1200,3 +1200,5 @@ Phase 1 prioritization intentionally excludes Guidance Overview orchestration ch
 **Central finding:**
 
 The product has strong analytical depth but uneven production hardening. The fastest path to dependable user outcomes is to close high-risk gaps in Home and AI tools independently, then reintroduce orchestration once tool-level reliability is proven.
+
+**Execution plan:** `/docs/functional/PRODUCTION_GAP_IMPLEMENTATION_PLAN_2026.md`

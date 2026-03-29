@@ -1,6 +1,8 @@
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeDigitalWillService } from '../services/homeDigitalWill.service';
+import { HomeDigitalWillSectionType } from '@prisma/client';
+import { APIError } from '../middleware/error.middleware';
 
 const svc = new HomeDigitalWillService();
 
@@ -21,6 +23,29 @@ export async function createDigitalWillForProperty(req: CustomRequest, res: Resp
     const { propertyId } = req.params;
     const data = await svc.getOrCreateByProperty(propertyId, req.body);
     res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getTrustedContactScopedWill(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const { id, contactId } = req.params;
+    const userId = req.user!.userId;
+    const sectionTypeRaw = req.query.sectionType
+      ? String(req.query.sectionType).toUpperCase()
+      : undefined;
+    if (sectionTypeRaw && !Object.values(HomeDigitalWillSectionType).includes(sectionTypeRaw as HomeDigitalWillSectionType)) {
+      throw new APIError('Invalid sectionType query value', 400, 'VALIDATION_ERROR');
+    }
+
+    const data = await svc.getTrustedContactScopedView(
+      id,
+      userId,
+      contactId,
+      sectionTypeRaw as HomeDigitalWillSectionType | undefined,
+    );
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }

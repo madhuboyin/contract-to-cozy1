@@ -181,6 +181,7 @@ export class TrueCostOwnershipService {
       insuranceAnnualNow: input.insuranceAnnualNow,
       inflationRate: input.inflationRate,
     });
+    const insuranceIsEducational = (ins as any)?.meta?.classification === 'EDUCATIONAL_ESTIMATE';
 
     const annualInsuranceNow = ins?.current?.insuranceAnnualNow ?? 0;
     const insHist = (ins?.history || []).slice(-years);
@@ -189,7 +190,9 @@ export class TrueCostOwnershipService {
       notes.push('Insurance override applied.');
       confidence = 'HIGH';
     } else {
-      confidence = confidence === 'HIGH' ? 'HIGH' : 'MEDIUM';
+      confidence = insuranceIsEducational
+        ? (confidence === 'HIGH' ? 'HIGH' : 'LOW')
+        : (confidence === 'HIGH' ? 'HIGH' : 'MEDIUM');
     }
 
     // Maintenance (override or heuristic)
@@ -222,6 +225,9 @@ export class TrueCostOwnershipService {
       confidence = 'HIGH';
     } else {
       notes.push(`Projected utilities/maintenance drift ${(inflationRate * 100).toFixed(1)}%/yr (Phase 1).`);
+    }
+    if (insuranceIsEducational) {
+      notes.push('Insurance component is an educational estimate and should not be used as a sole financial planning input.');
     }
 
     const nowYear = new Date().getFullYear();

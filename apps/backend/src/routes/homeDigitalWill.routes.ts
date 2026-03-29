@@ -6,6 +6,7 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 import {
   getDigitalWillByProperty,
+  getTrustedContactScopedWill,
   createDigitalWillForProperty,
   updateDigitalWill,
   listSections,
@@ -69,6 +70,9 @@ router.patch(
 
 // GET  /api/home-digital-wills/:id/sections
 router.get('/home-digital-wills/:id/sections', listSections);
+
+// GET /api/home-digital-wills/:id/trusted-contacts/:contactId/view?sectionType=EMERGENCY
+router.get('/home-digital-wills/:id/trusted-contacts/:contactId/view', getTrustedContactScopedWill);
 
 // POST /api/home-digital-wills/:id/sections
 router.post(

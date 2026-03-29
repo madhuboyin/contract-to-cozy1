@@ -36,6 +36,16 @@ interface ModificationRecommendation {
   benefits: string[];
   contractorType: string;
   permitRequired: boolean;
+  source?: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
+  confidence?: 'LOW' | 'MEDIUM';
+  validation?: {
+    costModel: 'STATE_MULTIPLIER_BASELINE_V1';
+    roiModel: 'CATEGORY_ROI_BOUNDS_V1';
+    stateCostMultiplier: number;
+    costWasClamped: boolean;
+    roiWasClamped: boolean;
+    notes: string[];
+  };
 }
 
 interface ModificationReport {
@@ -48,6 +58,13 @@ interface ModificationReport {
   averageROI: number;
   quickWins: ModificationRecommendation[];
   longTermProjects: ModificationRecommendation[];
+  meta?: {
+    classification: 'EDUCATIONAL_ESTIMATE';
+    regionalCostModel: 'STATE_MULTIPLIER_BASELINE_V1';
+    roiModel: 'CATEGORY_ROI_BOUNDS_V1';
+    financialPlanningSafe: false;
+    disclaimer: string;
+  };
   generatedAt: string;
 }
 
@@ -207,6 +224,18 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
         ]}
       />
 
+      {report.meta?.disclaimer ? (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="p-4">
+            <p className="text-sm font-semibold text-amber-900">Educational Estimate</p>
+            <p className="mt-1 text-sm text-amber-800">{report.meta.disclaimer}</p>
+            <p className="mt-2 text-xs text-amber-700">
+              Models: {report.meta.regionalCostModel} + {report.meta.roiModel}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="border-blue-200 bg-blue-50">
@@ -297,6 +326,16 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
                       <div>
                         <h4 className="font-bold text-lg text-gray-900">{rec.title}</h4>
                         <p className="text-sm text-gray-600">{rec.description}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                            {rec.source === 'AI_ESTIMATE' ? 'AI estimate' : 'Baseline heuristic'}
+                          </span>
+                          {rec.confidence ? (
+                            <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                              Confidence: {rec.confidence}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -344,6 +383,19 @@ export default function HomeModificationAdvisor({ propertyId }: HomeModification
                     <span>Building permit required</span>
                   </div>
                 )}
+
+                {rec.validation?.notes?.length ? (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                    <p className="text-xs font-semibold text-slate-700">Validation notes</p>
+                    <ul className="mt-1 space-y-0.5">
+                      {rec.validation.notes.map((note, noteIndex) => (
+                        <li key={noteIndex} className="text-xs text-slate-600">
+                          {note}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           ))}

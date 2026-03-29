@@ -127,6 +127,7 @@ export class BudgetForecasterService {
     ];
 
     const forecasts: MonthlyForecast[] = [];
+    const propertySeed = String(property.id || property.address || property.zipCode || 'default-seed');
 
     for (let i = 0; i < 12; i++) {
       const month = months[i];
@@ -141,7 +142,10 @@ export class BudgetForecasterService {
 
       const routine = Math.round(baseCost * 0.5 * seasonalMultiplier * ageMultiplier);
       const preventive = Math.round(baseCost * 0.3 * seasonalMultiplier * ageMultiplier);
-      const unexpected = Math.round(baseCost * 0.2 * (0.8 + Math.random() * 0.4) * ageMultiplier);
+      // Deterministic 0.8..1.2 multiplier so identical inputs always produce identical forecasts.
+      const unexpected = Math.round(
+        baseCost * 0.2 * this.deterministicUnexpectedMultiplier(propertySeed, i) * ageMultiplier
+      );
 
       forecasts.push({
         month,
@@ -154,6 +158,18 @@ export class BudgetForecasterService {
     }
 
     return forecasts;
+  }
+
+  private deterministicUnexpectedMultiplier(seed: string, monthIndex: number): number {
+    let hash = 2166136261; // FNV-1a style rolling hash
+    const input = `${seed}:${monthIndex}`;
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i);
+      hash +=
+        (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    }
+    const normalized = Math.abs(hash >>> 0) / 4294967295; // 0..1
+    return 0.8 + normalized * 0.4; // 0.8..1.2
   }
 
   private generateCategoryBreakdowns(property: any, totalAnnual: number): CategoryBreakdown[] {

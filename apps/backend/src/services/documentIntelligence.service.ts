@@ -58,6 +58,7 @@ Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
 
 export class DocumentIntelligenceService {
   private ai: GoogleGenAI;
+  private static readonly AUTO_WARRANTY_MIN_CONFIDENCE = 0.7;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -140,6 +141,14 @@ export class DocumentIntelligenceService {
   ): Promise<any | null> {
     try {
       const { extractedData } = insights;
+
+      if ((insights.confidence ?? 0) < DocumentIntelligenceService.AUTO_WARRANTY_MIN_CONFIDENCE) {
+        console.log(
+          `[DOC-INTELLIGENCE] Confidence ${(insights.confidence ?? 0).toFixed(2)} below threshold ` +
+            `${DocumentIntelligenceService.AUTO_WARRANTY_MIN_CONFIDENCE.toFixed(2)}, skipping auto-create`
+        );
+        return null;
+      }
 
       // Only create if we have minimum required data
       if (!extractedData.warrantyExpiration) {

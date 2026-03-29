@@ -10,6 +10,10 @@ interface ClimateRisk {
   description: string;
   trends: string;
   mitigationSteps: string[];
+  source: 'AI_ESTIMATE' | 'STATE_HEURISTIC';
+  confidenceBand: 'LOW' | 'MEDIUM';
+  confidenceScore: number;
+  confidenceReason: string;
 }
 
 interface ClimateReport {
@@ -26,6 +30,15 @@ interface ClimateReport {
   recommendations: string[];
   insuranceImpact: string;
   propertyValueImpact: string;
+  meta: {
+    classification: 'EDUCATIONAL_ESTIMATE';
+    groundedDataSources: string[];
+    groundingLevel: 'NONE' | 'PARTIAL';
+    confidenceBand: 'LOW' | 'MEDIUM';
+    confidenceScore: number;
+    financialPlanningSafe: false;
+    disclaimer: string;
+  };
   generatedAt: Date;
 }
 
@@ -90,6 +103,18 @@ export class ClimateRiskPredictorService {
     const insuranceImpact = this.getInsuranceImpact(overallRiskLevel, risks);
     const propertyValueImpact = this.getPropertyValueImpact(overallRiskLevel);
 
+    const confidenceScore = this.deriveOverallConfidenceScore(risks);
+    const confidenceBand: 'LOW' | 'MEDIUM' = confidenceScore >= 0.5 ? 'MEDIUM' : 'LOW';
+    const hasStateHeuristic = risks.some((risk) => risk.source === 'STATE_HEURISTIC');
+    const hasAIEstimate = risks.some((risk) => risk.source === 'AI_ESTIMATE');
+    const groundedDataSources = hasStateHeuristic
+      ? ['State-level historical hazard heuristics']
+      : [];
+
+    if (hasAIEstimate) {
+      groundedDataSources.push('AI-generated directional estimate (no authoritative feed binding)');
+    }
+
     return {
       propertyId,
       propertyAddress: property.address,
@@ -100,6 +125,16 @@ export class ClimateRiskPredictorService {
       recommendations,
       insuranceImpact,
       propertyValueImpact,
+      meta: {
+        classification: 'EDUCATIONAL_ESTIMATE',
+        groundedDataSources,
+        groundingLevel: hasStateHeuristic ? 'PARTIAL' : 'NONE',
+        confidenceBand,
+        confidenceScore,
+        financialPlanningSafe: false,
+        disclaimer:
+          'Climate risk percentages are educational estimates and are not grounded to FEMA/NOAA property-level datasets in this version.',
+      },
       generatedAt: new Date(),
     };
   }
@@ -162,6 +197,10 @@ Only include categories with risk level MODERATE or higher.`;
         description: r.description,
         trends: r.trends,
         mitigationSteps: r.mitigationSteps || [],
+        source: 'AI_ESTIMATE',
+        confidenceBand: 'LOW',
+        confidenceScore: 0.35,
+        confidenceReason: 'AI-generated estimate without authoritative property-level climate feed grounding.',
       }));
 
     } catch (error) {
@@ -180,7 +219,11 @@ Only include categories with risk level MODERATE or higher.`;
           score: 80,
           description: 'Florida is in active hurricane zone',
           trends: 'Hurricane intensity increasing',
-          mitigationSteps: ['Hurricane shutters', 'Roof reinforcement', 'Emergency kit']
+          mitigationSteps: ['Hurricane shutters', 'Roof reinforcement', 'Emergency kit'],
+          source: 'STATE_HEURISTIC',
+          confidenceBand: 'MEDIUM',
+          confidenceScore: 0.55,
+          confidenceReason: 'Based on state-level hazard heuristics; not parcel-level FEMA/NOAA data.',
         },
         {
           category: 'Flooding',
@@ -188,7 +231,11 @@ Only include categories with risk level MODERATE or higher.`;
           score: 60,
           description: 'Coastal flooding risk',
           trends: 'Sea level rising',
-          mitigationSteps: ['Flood insurance', 'Elevation certificates', 'Drainage improvements']
+          mitigationSteps: ['Flood insurance', 'Elevation certificates', 'Drainage improvements'],
+          source: 'STATE_HEURISTIC',
+          confidenceBand: 'MEDIUM',
+          confidenceScore: 0.55,
+          confidenceReason: 'Based on state-level hazard heuristics; not parcel-level FEMA/NOAA data.',
         }
       ],
       'CA': [
@@ -198,7 +245,11 @@ Only include categories with risk level MODERATE or higher.`;
           score: 75,
           description: 'Wildfire-prone region',
           trends: 'Fire season lengthening',
-          mitigationSteps: ['Defensible space', 'Fire-resistant materials', 'Evacuation plan']
+          mitigationSteps: ['Defensible space', 'Fire-resistant materials', 'Evacuation plan'],
+          source: 'STATE_HEURISTIC',
+          confidenceBand: 'MEDIUM',
+          confidenceScore: 0.55,
+          confidenceReason: 'Based on state-level hazard heuristics; not parcel-level FEMA/NOAA data.',
         },
         {
           category: 'Earthquakes',
@@ -206,7 +257,11 @@ Only include categories with risk level MODERATE or higher.`;
           score: 65,
           description: 'Seismic activity zone',
           trends: 'Stable seismic patterns',
-          mitigationSteps: ['Seismic retrofit', 'Emergency supplies', 'Secure heavy items']
+          mitigationSteps: ['Seismic retrofit', 'Emergency supplies', 'Secure heavy items'],
+          source: 'STATE_HEURISTIC',
+          confidenceBand: 'MEDIUM',
+          confidenceScore: 0.55,
+          confidenceReason: 'Based on state-level hazard heuristics; not parcel-level FEMA/NOAA data.',
         }
       ],
       'TX': [
@@ -216,7 +271,11 @@ Only include categories with risk level MODERATE or higher.`;
           score: 70,
           description: 'High summer temperatures',
           trends: 'Heat waves increasing',
-          mitigationSteps: ['AC maintenance', 'Insulation upgrade', 'Shade trees']
+          mitigationSteps: ['AC maintenance', 'Insulation upgrade', 'Shade trees'],
+          source: 'STATE_HEURISTIC',
+          confidenceBand: 'MEDIUM',
+          confidenceScore: 0.55,
+          confidenceReason: 'Based on state-level hazard heuristics; not parcel-level FEMA/NOAA data.',
         }
       ],
     };
@@ -228,9 +287,19 @@ Only include categories with risk level MODERATE or higher.`;
         score: 30,
         description: 'Moderate climate risks for this area',
         trends: 'Climate patterns stable',
-        mitigationSteps: ['Regular maintenance', 'Monitor weather', 'Insurance review']
+        mitigationSteps: ['Regular maintenance', 'Monitor weather', 'Insurance review'],
+        source: 'STATE_HEURISTIC',
+        confidenceBand: 'LOW',
+        confidenceScore: 0.45,
+        confidenceReason: 'Fallback state heuristic due limited local climate calibration.',
       }
     ];
+  }
+
+  private deriveOverallConfidenceScore(risks: ClimateRisk[]): number {
+    if (!risks.length) return 0.3;
+    const avg = risks.reduce((sum, risk) => sum + risk.confidenceScore, 0) / risks.length;
+    return Math.max(0, Math.min(1, Number(avg.toFixed(2))));
   }
 
   private async getAIRecommendations(

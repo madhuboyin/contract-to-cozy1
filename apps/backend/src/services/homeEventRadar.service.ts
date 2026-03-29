@@ -5,6 +5,7 @@ import { APIError } from '../middleware/error.middleware';
 import { runMatchingForEvent } from './homeEventRadarMatcher.service';
 import { SharedSignalKey, signalService } from './signal.service';
 import { logSharedDataEvent } from './sharedDataObservability.service';
+import { applyBoundedSignalPriorityBoost } from './signalPriorityBoost.service';
 
 // ---------------------------------------------------------------------------
 // DTO serializers
@@ -338,30 +339,41 @@ export class HomeEventRadarService {
     const prioritizedItems = items
       .map((item: Record<string, unknown>) => {
         const base = radarSeverityWeight((item as any).severity) + radarImpactWeight((item as any).impactLevel);
-        let boost = 0;
+        let additiveBoost = 0;
 
-        if (riskSpike !== null) boost += riskSpike * 2;
+        if (riskSpike !== null) additiveBoost += riskSpike * 2;
         if (costAnomaly !== null && ['insurance_market', 'utility_rate_change', 'tax_reassessment', 'tax_rate_change'].includes(
           String((item as any).eventType || '').toLowerCase()
         )) {
-          boost += costAnomaly;
+          additiveBoost += costAnomaly;
         }
         if (maintenanceAdherence !== null && maintenanceAdherence < 0.5) {
-          boost += 0.4;
+          additiveBoost += 0.4;
         }
         if (riskAccumulation !== null && riskAccumulation >= 0.6) {
-          boost += riskAccumulation * 0.6;
+          additiveBoost += riskAccumulation * 0.6;
         }
         if (costPressurePattern !== null && costPressurePattern >= 0.6) {
-          boost += costPressurePattern * 0.5;
+          additiveBoost += costPressurePattern * 0.5;
         }
         if (signalInteractions.interactions.length > 0) {
-          boost += signalInteractions.interactions[0].strength * 0.35;
+          additiveBoost += signalInteractions.interactions[0].strength * 0.35;
         }
+        const bounded = applyBoundedSignalPriorityBoost({
+          baseScore: base,
+          additiveBoost,
+          maxMultiplier: 1.5,
+        });
 
         return {
           ...item,
-          priorityScore: Number((base + boost).toFixed(3)),
+          priorityScore: Number(bounded.score.toFixed(3)),
+          priorityBoostMeta: {
+            baseScore: Number(base.toFixed(3)),
+            appliedBoost: Number(bounded.appliedBoost.toFixed(3)),
+            maxAllowedScore: Number(bounded.maxAllowedScore.toFixed(3)),
+            wasClamped: bounded.wasClamped,
+          },
         };
       })
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {

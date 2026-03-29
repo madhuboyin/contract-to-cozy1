@@ -110,6 +110,7 @@ export class CostExplainerService {
     const insNow = ins?.current?.insuranceAnnualNow ?? insHist.at(-1)?.annualPremium ?? 0;
     const insPrev = insHist.length >= 2 ? insHist.at(-2)!.annualPremium : insNow;
     const insDelta = insNow - insPrev;
+    const insuranceIsEducational = (ins as any)?.meta?.classification === 'EDUCATIONAL_ESTIMATE';
 
     // 3) Home value proxy (prefer tax service if it provides it; else heuristic)
     const homeValueNow =
@@ -174,8 +175,9 @@ export class CostExplainerService {
     const taxConfidence: 'HIGH' | 'MEDIUM' | 'LOW' =
       ((tax as any)?.meta?.confidence as any) ?? 'MEDIUM';
 
-    const insConfidence: 'HIGH' | 'MEDIUM' | 'LOW' =
-      ((ins as any)?.meta?.confidence as any) ?? 'LOW';
+    const insConfidence: 'HIGH' | 'MEDIUM' | 'LOW' = insuranceIsEducational
+      ? 'LOW'
+      : (((ins as any)?.meta?.confidence as any) ?? 'LOW');
 
     const explanations: CostExplainerDTO['explanations'] = [
       {
@@ -246,6 +248,9 @@ export class CostExplainerService {
         notes: [
           'Phase 1 uses modeled estimates (no external datasets) and does not store snapshots.',
           'Maintenance is a heuristic (~1% of value/year) adjusted lightly by state and inflation.',
+          ...(insuranceIsEducational
+            ? ['Insurance component is an educational estimate and should not be treated as decision-grade financial input.']
+            : []),
         ],
       },
     };

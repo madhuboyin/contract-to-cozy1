@@ -180,6 +180,22 @@ export default function InsuranceTrendClient() {
           </div>
         )}
 
+        {data?.meta?.classification === 'EDUCATIONAL_ESTIMATE' && (
+          <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/85 p-3 text-xs text-amber-900 backdrop-blur">
+            <div className="font-semibold">Educational Estimate</div>
+            <div className="mt-1">
+              This tool is directional and not decision-grade for major financial planning.
+            </div>
+            {Array.isArray(data?.meta?.usageRestrictions) && data.meta.usageRestrictions.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {data.meta.usageRestrictions.map((restriction, idx) => (
+                  <li key={idx}>{restriction}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-12 lg:grid-cols-12">
           <div className="space-y-3 lg:col-span-4">
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">

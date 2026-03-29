@@ -3,10 +3,13 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
 
+type RecommendationCategory = 'ACCESSIBILITY' | 'AGING_IN_PLACE' | 'FAMILY' | 'RESALE' | 'ENERGY' | 'SAFETY';
+type RecommendationPriority = 'IMMEDIATE' | 'HIGH' | 'MEDIUM' | 'LOW';
+
 interface ModificationRecommendation {
   title: string;
-  category: 'ACCESSIBILITY' | 'AGING_IN_PLACE' | 'FAMILY' | 'RESALE' | 'ENERGY' | 'SAFETY';
-  priority: 'IMMEDIATE' | 'HIGH' | 'MEDIUM' | 'LOW';
+  category: RecommendationCategory;
+  priority: RecommendationPriority;
   estimatedCost: number;
   roi: number; // Percentage return on investment
   timeline: string;
@@ -14,6 +17,16 @@ interface ModificationRecommendation {
   benefits: string[];
   contractorType: string;
   permitRequired: boolean;
+  source?: 'AI_ESTIMATE' | 'BASELINE_HEURISTIC';
+  confidence?: 'LOW' | 'MEDIUM';
+  validation?: {
+    costModel: 'STATE_MULTIPLIER_BASELINE_V1';
+    roiModel: 'CATEGORY_ROI_BOUNDS_V1';
+    stateCostMultiplier: number;
+    costWasClamped: boolean;
+    roiWasClamped: boolean;
+    notes: string[];
+  };
 }
 
 interface ModificationReport {
@@ -26,10 +39,17 @@ interface ModificationReport {
   averageROI: number;
   quickWins: ModificationRecommendation[];
   longTermProjects: ModificationRecommendation[];
+  meta: {
+    classification: 'EDUCATIONAL_ESTIMATE';
+    regionalCostModel: 'STATE_MULTIPLIER_BASELINE_V1';
+    roiModel: 'CATEGORY_ROI_BOUNDS_V1';
+    financialPlanningSafe: false;
+    disclaimer: string;
+  };
   generatedAt: Date;
 }
 
-const COMMON_MODIFICATIONS = {
+const COMMON_MODIFICATIONS: Record<RecommendationCategory, Array<{ title: string; cost: number; roi: number }>> = {
   ACCESSIBILITY: [
     { title: 'Wheelchair Ramp Installation', cost: 3500, roi: 50 },
     { title: 'Walk-in Shower Conversion', cost: 6000, roi: 65 },
@@ -68,6 +88,45 @@ const COMMON_MODIFICATIONS = {
   ],
 };
 
+const STATE_COST_MULTIPLIER: Record<string, number> = {
+  CA: 1.34,
+  NY: 1.28,
+  NJ: 1.24,
+  WA: 1.21,
+  MA: 1.2,
+  CO: 1.15,
+  FL: 1.12,
+  TX: 1.05,
+  NC: 1.02,
+  AZ: 1.03,
+  IL: 1.03,
+  OH: 0.96,
+  GA: 0.97,
+  MI: 0.95,
+  PA: 0.99,
+  IN: 0.93,
+  MO: 0.92,
+  TN: 0.94,
+  AL: 0.9,
+  OK: 0.89,
+  DEFAULT: 1.0,
+};
+
+const ROI_BOUNDS: Record<RecommendationCategory, { min: number; max: number }> = {
+  ACCESSIBILITY: { min: 20, max: 75 },
+  AGING_IN_PLACE: { min: 25, max: 80 },
+  FAMILY: { min: 35, max: 90 },
+  RESALE: { min: 40, max: 100 },
+  ENERGY: { min: 45, max: 115 },
+  SAFETY: { min: 30, max: 90 },
+};
+
+function clamp(value: number, min: number, max: number): number {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
 export class HomeModificationAdvisorService {
   private ai: GoogleGenAI;
 
@@ -99,18 +158,21 @@ export class HomeModificationAdvisorService {
       ? new Date().getFullYear() - property.yearBuilt 
       : 10;
 
-    // Get AI recommendations
-    const recommendations = await this.getAIRecommendations(
+    const rawRecommendations = await this.getAIRecommendations(
       property,
       userNeeds,
       propertyAge
     );
+    const recommendations = this.applyRegionalGuardrails(
+      rawRecommendations,
+      property.state,
+    );
 
     // Calculate totals
     const totalEstimatedCost = recommendations.reduce((sum, r) => sum + r.estimatedCost, 0);
-    const averageROI = Math.round(
-      recommendations.reduce((sum, r) => sum + r.roi, 0) / recommendations.length
-    );
+    const averageROI = recommendations.length
+      ? Math.round(recommendations.reduce((sum, r) => sum + r.roi, 0) / recommendations.length)
+      : 0;
 
     // Categorize
     const quickWins = recommendations.filter(r => 
@@ -134,6 +196,14 @@ export class HomeModificationAdvisorService {
       averageROI,
       quickWins,
       longTermProjects,
+      meta: {
+        classification: 'EDUCATIONAL_ESTIMATE',
+        regionalCostModel: 'STATE_MULTIPLIER_BASELINE_V1',
+        roiModel: 'CATEGORY_ROI_BOUNDS_V1',
+        financialPlanningSafe: false,
+        disclaimer:
+          'Costs and ROI are educational estimates calibrated with state-level baselines, not contractor bids or jurisdiction permit records.',
+      },
       generatedAt: new Date(),
     };
   }
@@ -191,12 +261,135 @@ Include diverse recommendations across categories.`;
       const text = response.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const recommendations = JSON.parse(text);
 
-      return recommendations.slice(0, 8);
+      return this.normalizeRecommendationsFromAI(recommendations).slice(0, 8);
 
     } catch (error) {
       console.error('[HOME-MODIFICATION] AI error:', error);
       return this.getBasicRecommendations(userNeeds, propertyAge);
     }
+  }
+
+  private normalizeRecommendationsFromAI(input: unknown): ModificationRecommendation[] {
+    if (!Array.isArray(input)) return [];
+    const allowedCategories: RecommendationCategory[] = [
+      'ACCESSIBILITY',
+      'AGING_IN_PLACE',
+      'FAMILY',
+      'RESALE',
+      'ENERGY',
+      'SAFETY',
+    ];
+    const allowedPriorities: RecommendationPriority[] = ['IMMEDIATE', 'HIGH', 'MEDIUM', 'LOW'];
+
+    return input
+      .map((raw): ModificationRecommendation | null => {
+        if (!raw || typeof raw !== 'object') return null;
+        const rec = raw as Record<string, unknown>;
+        const category = String(rec.category || '').toUpperCase() as RecommendationCategory;
+        const priority = String(rec.priority || '').toUpperCase() as RecommendationPriority;
+        const title = String(rec.title || '').trim();
+        const description = String(rec.description || '').trim();
+        const contractorType = String(rec.contractorType || 'General Contractor').trim() || 'General Contractor';
+        const timeline = String(rec.timeline || '2-4 weeks').trim() || '2-4 weeks';
+        const cost = Number(rec.estimatedCost);
+        const roi = Number(rec.roi);
+        const benefits = Array.isArray(rec.benefits)
+          ? rec.benefits.map((b) => String(b).trim()).filter(Boolean).slice(0, 6)
+          : [];
+        const permitRequired = Boolean(rec.permitRequired);
+
+        if (!title || !description) return null;
+
+        return {
+          title: title.slice(0, 140),
+          category: allowedCategories.includes(category) ? category : 'RESALE',
+          priority: allowedPriorities.includes(priority) ? priority : 'MEDIUM',
+          estimatedCost: Number.isFinite(cost) && cost > 0 ? Math.round(cost) : 5000,
+          roi: Number.isFinite(roi) ? Math.round(roi) : 60,
+          timeline,
+          description: description.slice(0, 500),
+          benefits,
+          contractorType: contractorType.slice(0, 80),
+          permitRequired,
+          source: 'AI_ESTIMATE',
+        };
+      })
+      .filter((rec): rec is ModificationRecommendation => rec !== null);
+  }
+
+  private applyRegionalGuardrails(
+    recommendations: ModificationRecommendation[],
+    state?: string | null,
+  ): ModificationRecommendation[] {
+    const stateKey = String(state || '').toUpperCase();
+    const stateMultiplier = STATE_COST_MULTIPLIER[stateKey] ?? STATE_COST_MULTIPLIER.DEFAULT;
+
+    return recommendations.map((rec) => {
+      const baseline = this.findBaselineForCategory(rec.category, rec.title);
+      const notes: string[] = [];
+
+      const fallbackCost = baseline ? baseline.cost * stateMultiplier : rec.estimatedCost || 5000;
+      const expectedCost = Math.round(fallbackCost);
+      const minCost = Math.round(expectedCost * 0.7);
+      const maxCost = Math.round(expectedCost * 1.4);
+      const rawCost = Number(rec.estimatedCost);
+      const boundedCost = clamp(
+        Number.isFinite(rawCost) && rawCost > 0 ? Math.round(rawCost) : expectedCost,
+        Math.max(300, minCost),
+        Math.max(500, maxCost),
+      );
+      const costWasClamped = boundedCost !== rawCost;
+      if (costWasClamped) {
+        notes.push(`Cost adjusted to state baseline range for ${stateKey || 'DEFAULT'}.`);
+      }
+
+      const roiBounds = ROI_BOUNDS[rec.category] ?? { min: 20, max: 100 };
+      const fallbackRoi = baseline?.roi ?? Math.round((roiBounds.min + roiBounds.max) / 2);
+      const rawRoi = Number(rec.roi);
+      const boundedRoi = clamp(
+        Number.isFinite(rawRoi) ? Math.round(rawRoi) : fallbackRoi,
+        roiBounds.min,
+        roiBounds.max,
+      );
+      const roiWasClamped = boundedRoi !== rawRoi;
+      if (roiWasClamped) {
+        notes.push('ROI adjusted to category guardrail range.');
+      }
+
+      if (rec.permitRequired) {
+        notes.push('Permit requirement is informational and should be verified with local jurisdiction.');
+      }
+
+      return {
+        ...rec,
+        estimatedCost: boundedCost,
+        roi: boundedRoi,
+        confidence: costWasClamped || roiWasClamped ? 'LOW' : 'MEDIUM',
+        source: rec.source ?? 'BASELINE_HEURISTIC',
+        validation: {
+          costModel: 'STATE_MULTIPLIER_BASELINE_V1',
+          roiModel: 'CATEGORY_ROI_BOUNDS_V1',
+          stateCostMultiplier: stateMultiplier,
+          costWasClamped,
+          roiWasClamped,
+          notes,
+        },
+      };
+    });
+  }
+
+  private findBaselineForCategory(
+    category: RecommendationCategory,
+    title: string,
+  ): { title: string; cost: number; roi: number } | null {
+    const catalog = COMMON_MODIFICATIONS[category] ?? [];
+    if (catalog.length === 0) return null;
+    const normalizedTitle = title.toLowerCase();
+    const match = catalog.find((entry) => {
+      const firstWord = entry.title.toLowerCase().split(' ')[0];
+      return normalizedTitle.includes(firstWord);
+    });
+    return match ?? catalog[0];
   }
 
   private getBasicRecommendations(userNeeds: string[], propertyAge: number): ModificationRecommendation[] {
@@ -217,6 +410,7 @@ Include diverse recommendations across categories.`;
         benefits: ['Wheelchair access', 'Improved safety', 'Universal design'],
         contractorType: 'Accessibility Specialist',
         permitRequired: true,
+        source: 'BASELINE_HEURISTIC',
       });
     }
 
@@ -232,6 +426,7 @@ Include diverse recommendations across categories.`;
         benefits: ['Safer bathing', 'Reduced fall risk', 'Modern look'],
         contractorType: 'Bathroom Remodeler',
         permitRequired: false,
+        source: 'BASELINE_HEURISTIC',
       });
     }
 
@@ -247,6 +442,7 @@ Include diverse recommendations across categories.`;
         benefits: ['Work from home capability', 'Quiet workspace', 'Increased productivity'],
         contractorType: 'General Contractor',
         permitRequired: false,
+        source: 'BASELINE_HEURISTIC',
       });
     }
 
@@ -262,6 +458,7 @@ Include diverse recommendations across categories.`;
         benefits: ['Increased home value', 'Better buyer appeal', 'Modern aesthetics'],
         contractorType: 'Kitchen Specialist',
         permitRequired: true,
+        source: 'BASELINE_HEURISTIC',
       });
     }
 
@@ -277,6 +474,7 @@ Include diverse recommendations across categories.`;
         benefits: ['Lower energy bills', 'Remote control', 'Reduced carbon footprint'],
         contractorType: 'HVAC Technician',
         permitRequired: false,
+        source: 'BASELINE_HEURISTIC',
       });
     }
 
@@ -293,6 +491,7 @@ Include diverse recommendations across categories.`;
         benefits: ['Lower heating costs', 'Noise reduction', 'Increased comfort'],
         contractorType: 'Window Installer',
         permitRequired: false,
+        source: 'BASELINE_HEURISTIC',
       });
     }
 
@@ -307,6 +506,7 @@ Include diverse recommendations across categories.`;
       benefits: ['Enhanced security', 'Remote monitoring', 'Insurance discounts'],
       contractorType: 'Security Installer',
       permitRequired: false,
+      source: 'BASELINE_HEURISTIC',
     });
 
     return recommendations.slice(0, 6);

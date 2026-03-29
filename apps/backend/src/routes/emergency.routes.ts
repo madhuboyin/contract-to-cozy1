@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { emergencyService } from '../services/emergencyTroubleshooter.service';
 import { getPropertyContextForAI } from '../services/property.service';
+import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
 const router = Router();
 
@@ -48,7 +49,7 @@ const router = Router();
  *       200:
  *         description: Emergency response
  */
-router.post('/chat', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/chat', authenticate, apiRateLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { messages, propertyId } = req.body;
     const userId = req.user!.userId;
@@ -91,7 +92,10 @@ router.post('/chat', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
     
-    const result = await emergencyService.chat(messages, propertyContext);
+    const result = await emergencyService.chat(messages, propertyContext, {
+      userId,
+      propertyId: propertyId ? String(propertyId) : undefined,
+    });
     
     console.log(`[RESPONSE] /api/emergency/chat successful | Severity: ${result.severity} | Resolution: ${result.resolution || 'N/A'}`);
     
