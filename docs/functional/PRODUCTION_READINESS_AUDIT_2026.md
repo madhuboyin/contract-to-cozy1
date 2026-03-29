@@ -1,20 +1,50 @@
 # Contract to Cozy — Production Readiness Audit
 
 **Date:** 2026-03-29
-**Scope:** All Home Tools and AI Tools in the CtC inventory (42 tools)
-**Method:** Deep codebase audit — routes, services, controllers, validators, frontend pages
+**Scope:** Home Tools and AI Tools hardening review (42 entries total)
+**Phase 1 Prioritization Scope:** Home Tools + AI Tools independently; Guidance Overview is documented for reference and excluded from Phase 1 prioritization
+**Method:** Deep codebase audit with evidence anchors — routes, services, controllers, validators, frontend pages
 **Standard:** "Can a real homeowner use this safely and confidently, under imperfect conditions, and get meaningful end-to-end value without confusion or dead ends?"
 
 ---
 
 ## Table of Contents
 
+0. [Scoring and Evidence Rubric](#0-scoring-and-evidence-rubric)
 1. [Tool Inventory Map](#1-tool-inventory-map)
 2. [Per-Tool Audit](#2-per-tool-audit)
 3. [Cross-Tool Consistency Audit](#3-cross-tool-consistency-audit)
 4. [Production-Grade Classification](#4-production-grade-classification)
-5. [Prioritized Gap List](#5-prioritized-gap-list)
-6. [Top 15 Highest-Impact Fixes](#6-top-15-highest-impact-fixes)
+5. [Prioritized Gap List by Independent Track](#5-prioritized-gap-list-by-independent-track)
+6. [Implementation Board (Top 15)](#6-implementation-board-top-15)
+7. [Evidence Index](#7-evidence-index)
+8. [Summary](#8-summary)
+
+---
+
+## 0. Scoring and Evidence Rubric
+
+### 0.1 Readiness Scoring Rubric (Weighted)
+
+| Dimension | Weight | What "Good" Looks Like |
+|---|---|---|
+| Safety and Compliance | 30% | No safety/privacy/legal failure mode; required safeguards enforced |
+| Data Integrity and Determinism | 25% | Deterministic outputs for same inputs; source quality and freshness visible |
+| Functional Completeness | 20% | Core promise fully delivered without critical TODO/stub gaps |
+| Actionability and UX Trust | 15% | Clear "what next" path and transparent reasoning/confidence |
+| Operability and Resilience | 10% | Error handling, fallback behavior, logging, and stale-data signaling present |
+
+Score bands used in this audit:
+- **1 — Production-grade:** >= 85 and no open P0/P1
+- **2 — Usable with targeted hardening:** 70-84 and no open P0
+- **3 — Valuable but incomplete:** 55-69
+- **4 — Conceptually good but not production-ready:** 40-54 or unresolved trust/safety risk
+- **5 — Rework/reposition:** < 40 or placeholder architecture
+- **0 — Not independently scorable:** Embedded module or missing backend implementation
+
+### 0.2 Evidence Standard
+
+Each prioritized gap in Section 5 includes one or more evidence IDs (`EV-*`) mapped in Section 7 to concrete code anchors (route/service/file).
 
 ---
 
@@ -36,7 +66,7 @@
 | Cost Explainer | `properties/[id]/tools/cost-explainer/` | `costExplainer.routes.ts` | `costExplainer.service.ts` | Property | Yes |
 | True Cost | `properties/[id]/tools/true-cost/` | `trueCostOwnership.routes.ts` | `trueCostOwnership.service.ts` | Property | Yes |
 | Sell / Hold / Rent | `properties/[id]/tools/sell-hold-rent/` | `sellHoldRent.routes.ts` | `sellHoldRent.service.ts` | Property, FinanceSnapshot | Yes |
-| Volatility | `properties/[id]/tools/cost-volatility/` | `costVolatility.routes.ts` | `costVolatility.service.ts` | Property | Yes |
+| Cost Volatility | `properties/[id]/tools/cost-volatility/` | `costVolatility.routes.ts` | `costVolatility.service.ts` | Property | Yes |
 | Break-Even | `properties/[id]/tools/break-even/` | `breakEven.routes.ts` | `breakEven.service.ts` | Property, FinanceSnapshot | Yes |
 | Home Capital Timeline | `properties/[id]/tools/capital-timeline/` | `homeCapitalTimeline.routes.ts` | `homeCapitalTimeline.service.ts` | InventoryItem, HomeAsset | Yes |
 | Seller Prep | (own module) | `sellerPrep/sellerPrep.routes.ts` | `sellerPrep/` (multiple) | SellerPrepItem, AgentInterview | Yes — loosely coupled |
@@ -293,7 +323,7 @@ Journey classification key:
 
 ---
 
-### True Cost (True Cost of Ownership)
+### True Cost
 
 **What it does:** Aggregates property tax + insurance + maintenance + utilities into a 5-year cost-of-ownership view.
 
@@ -1018,6 +1048,7 @@ With all signals at maximum, priority can be boosted by more than 2× with no ca
 
 | Tool | What's Missing |
 |---|---|
+| Home Event Radar | County/polygon matching completion; signal explanation transparency; stale-signal warnings |
 | Property Tax | County assessor data; exemption eligibility; tax appeal guidance |
 | Cost Volatility | Climate event detection (disabled); actionable volatility reduction guidance |
 | Seller Prep | Execution integration (contractors, Price Finalization, actual spend capture) |
@@ -1039,200 +1070,133 @@ With all signals at maximum, priority can be boosted by more than 2× with no ca
 | Climate Risk | Gemini hallucination risk on risk percentages; no FEMA/NOAA grounding |
 | Home Upgrades | Gemini-invented ROI and cost estimates presented as facts; no regional validation |
 | Neighborhood Change Radar | Incomplete implementation visibility; uncertain production scope |
-| Coverage Options | No backend found; cannot assess |
 
 ### 5 — Should Be Reworked or Repositioned
 
 | Tool | Recommended Action |
 |---|---|
 | Quote Comparison | Remove as a named peer tool; expose only as a step in the Negotiation workflow |
-| Insurance Trend | Rework with DOI rate filings or clearly label as "Educational Estimate Only" |
+
+### 0 — Not Independently Scorable
+
+| Tool | Why It Is Unscored in This Classification |
+|---|---|
+| Coverage Options | Frontend wrapper exists but no backend route/service implementation found |
+| Home Timeline | Embedded inside Home Capital Timeline; no standalone route/service/UI surface to score independently |
 
 ---
 
-## 5. Prioritized Gap List
+## 5. Prioritized Gap List by Independent Track
 
-### P0 — Dangerous / Trust-Breaking / Major Production Blockers
+Phase 1 prioritization intentionally excludes Guidance Overview orchestration changes so Home Tools and AI Tools can be hardened independently first.
 
-| ID | Gap | Tool(s) | Reason |
+### 5.1 Home Tools Track
+
+#### Home P0
+
+| ID | Gap | Tool(s) | Reason | Evidence |
+|---|---|---|---|---|
+| HT-P0-1 | Signal multiplier compounding is unbounded and can over-inflate urgency | Home Event Radar, Home Risk Replay, Home Digital Twin | Distorts homeowner priority and decision quality | EV-H1 |
+| HT-P0-2 | Per-contact read permissions are not enforced | Home Digital Will | Privacy/security exposure | EV-H2 |
+| HT-P0-3 | Insurance Trend presents heuristic outputs as trend-grade analysis | Insurance Trend | Financial trust risk | EV-H3 |
+
+#### Home P1
+
+| ID | Gap | Tool(s) | Evidence |
 |---|---|---|---|
-| P0-1 | Emergency Help severity classification via regex — gas/electrical/structural emergencies can be silently misclassified as LOW | Emergency Help | Direct safety liability |
-| P0-2 | Budget Planner non-determinism bug (`Math.random()`) — same property generates different forecasts | Budget Planner | Breaks every comparison and planning use case |
-| P0-3 | Document Vault auto-creates warranty records at any confidence level including 20% — errors propagate to Capital Timeline, Status Board, Coverage Intelligence | Document Vault | Cascading data corruption across multiple tools |
-| P0-4 | Signal multiplier compounding is unbounded in 4+ tools — priority/urgency distorted for all signal-rich properties | Home Event Radar, Home Risk Replay, Guidance Overview, Home Digital Twin | Distorts all urgency signals across the platform |
-| P0-5 | Climate Risk and Home Upgrades present Gemini-hallucinated numbers as facts without uncertainty disclosure | Climate Risk, Home Upgrades | Trust-breaking at scale; financial harm from incorrect guidance |
-| P0-6 | Insurance Trend presented as a "trend" analysis with state-hardcoded baselines and arbitrary ZIP volatility — no real data backing | Insurance Trend | Financial planning decisions made on fictional data |
-| P0-7 | Home Digital Will per-contact read permissions not enforced — any trusted contact reads all sections | Home Digital Will | Privacy breach |
+| HT-P1-1 | FX conversion and state normalization gaps degrade quote fairness verdicts | Service Price Radar | EV-H4 |
+| HT-P1-2 | Mortgage context not fetched by default in core financial decision tools | Break-Even, Sell/Hold/Rent | EV-H5 |
+| HT-P1-3 | County/polygon geo matching incomplete in risk/event tools | Home Event Radar, Home Risk Replay | EV-H1 |
+| HT-P1-4 | Quote Comparison is a placeholder but presented as a peer tool | Quote Comparison | EV-H6 |
+| HT-P1-5 | Missing next-action CTAs in high-traffic decision tools | Service Price Radar, Break-Even, Home Capital Timeline | EV-H4, EV-H5 |
 
-### P1 — High-Value, Strongly Needed Before Scale
+### 5.2 AI Tools Track
 
-| ID | Gap | Tool(s) |
-|---|---|---|
-| P1-1 | County and polygon geo-matching not implemented — events at county granularity may never match properties | Home Event Radar, Home Risk Replay |
-| P1-2 | Silent signal fallbacks — empty signal context used without user notification when signal service fails or data is stale | All signal-integrated tools |
-| P1-3 | Confidence scoring is inconsistent across 42 tools — 5+ different systems, several misleading | All tools |
-| P1-4 | No execution pathway in any tool except Home Savings — every other tool stops at analysis | All tools |
-| P1-5 | Heuristic data stack compounding — Property Tax → Cost Growth → Insurance Trend → True Cost → Break-Even — each tool inherits upstream imprecision | Financial stack |
-| P1-6 | Guidance Overview has hardcoded templates — no new journey without code redeployment | Guidance Overview |
-| P1-7 | Mortgage modeling not fetched by default in Break-Even and Sell/Hold/Rent — core financial decisions miss debt context | Break-Even, Sell/Hold/Rent |
-| P1-8 | No "what to do next" CTA in most tools — homeowners receive analysis with no clear next action | Most tools |
-| P1-9 | Tax implications absent from Sell/Hold/Rent — capital gains, rental income tax, 1031 exchange not modeled | Sell/Hold/Rent |
-| P1-10 | Emergency Help has no incident logging — liability exposure with no audit trail | Emergency Help |
+#### AI P0
 
-### P2 — Important Polish / Consistency Issues
+| ID | Gap | Tool(s) | Reason | Evidence |
+|---|---|---|---|---|
+| AI-P0-1 | Emergency severity is inferred by regex on free-text AI output | Emergency Help | Direct safety liability | EV-A1 |
+| AI-P0-2 | Non-deterministic forecasting (`Math.random`) in planning output | Budget Planner | Breaks repeatability and trust | EV-A2 |
+| AI-P0-3 | Auto-warranty creation lacks confidence threshold gate | Document Vault | Cascading downstream data corruption | EV-A3 |
+| AI-P0-4 | Hallucination-prone numeric outputs presented as facts | Climate Risk, Home Upgrades | Financial and trust harm | EV-A4, EV-A5 |
 
-| ID | Gap | Tool(s) |
-|---|---|---|
-| P2-1 | "Radar" naming used for 4 tools with different mechanics | Platform-wide naming |
-| P2-2 | AI Tools category includes fully deterministic tools (Replace or Repair, Value Tracker, Home Savings) | Platform-wide categorization |
-| P2-3 | Quote Comparison exists as a named tool but is a placeholder redirect | Quote Comparison |
-| P2-4 | Coverage Options has no identified backend — UI exists but tool is non-functional | Coverage Options |
-| P2-5 | Service Price Radar: non-USD quotes not FX-adjusted; state name normalization fails for full state names | Service Price Radar |
-| P2-6 | Home Habit Coach has no notification/reminder system — passive tool requiring proactive app opens | Home Habit Coach |
-| P2-7 | Renovation Risk Advisor compliance rules have no DB versioning/deprecation | Renovation Risk Advisor |
-| P2-8 | Hidden Asset Finder confidence bands not validated against real approval rates | Hidden Asset Finder |
-| P2-9 | Seller Prep operates as a completely isolated module — not connected to Negotiation Shield, Price Finalization, or Digital Twin | Seller Prep |
-| P2-10 | Home Gazette editorial copy is generic — stories don't explain scope, urgency, or financial impact clearly | Home Gazette |
+#### AI P1
 
-### P3 — Nice-to-Have Improvements
-
-| ID | Gap | Tool(s) |
-|---|---|---|
-| P3-1 | Plant Advisor climate zone/window direction signals built but never activated (0 weight) | Plant Advisor |
-| P3-2 | Home Upgrades `COMMON_MODIFICATIONS` templates are dead code when Gemini succeeds | Home Upgrades |
-| P3-3 | Appliance Oracle: no bundling optimization across co-failing appliances | Appliance Oracle |
-| P3-4 | Home Capital Timeline: no seasonal/climate adjustment for system wear | Home Capital Timeline |
-| P3-5 | Energy Audit carbon offset calculations not validated | Energy Audit |
-| P3-6 | Break-Even sensitivity range not attached to any prescriptive guidance | Break-Even |
-| P3-7 | Home Gazette: no A/B testing or editorial override capability | Home Gazette |
-| P3-8 | Home Digital Twin: no cross-scenario comparison across archived scenarios | Home Digital Twin |
-| P3-9 | Risk-to-Premium Optimizer: no urgency timeline beyond priority level | Risk-to-Premium Optimizer |
-| P3-10 | Value Tracker: no comparison to neighborhood market comps | Value Tracker |
+| ID | Gap | Tool(s) | Evidence |
+|---|---|---|---|
+| AI-P1-1 | No execution bridge from coverage recommendations to marketplace/carrier flow | Coverage Intelligence | EV-A6 |
+| AI-P1-2 | Mitigation plan savings are not verified post-action | Risk-to-Premium Optimizer | EV-A7 |
+| AI-P1-3 | Bill extraction path is incomplete in energy analysis workflow | Energy Audit | EV-A8 |
+| AI-P1-4 | Low-data simulation quality not transparently surfaced to users | Do-Nothing Simulator | EV-A9 |
+| AI-P1-5 | Oracle recommendations are not validated against property-specific constraints | Appliance Oracle | EV-A10 |
 
 ---
 
-## 6. Top 15 Highest-Impact Fixes
+## 6. Implementation Board (Top 15)
 
-### Fix 1 — Cap signal multiplier compounding at 1.5× total across all signal-integrated tools
-
-Affects Home Event Radar, Home Risk Replay, Guidance Overview, Home Digital Twin quality scoring. Fix in one shared signal enrichment utility. Prevents all priority/urgency distortion across the platform.
-
----
-
-### Fix 2 — Replace Emergency Help's regex severity extraction with structured Gemini output
-
-Mandate that Gemini returns structured JSON with explicit `severity`, `classification`, and `steps` fields. Gate IMMEDIATE_DANGER classification on a structured field, not keyword match. Add incident logging. **This is a safety issue.**
-
----
-
-### Fix 3 — Add confidence threshold gate to Document Vault auto-warranty creation (≥0.70 required)
-
-One gate in Document Vault prevents cascading data quality errors downstream in Capital Timeline, Status Board, and Coverage Intelligence.
-
----
-
-### Fix 4 — Fix Budget Planner non-determinism (remove Math.random() from forecast)
-
-Replace with a deterministic percentile-based unexpected cost estimate. Any tool that produces different outputs on identical inputs cannot be trusted or used for comparison.
+| ID | Track | Work Item | Owner | ETA | Dependencies | Acceptance Criteria | Evidence |
+|---|---|---|---|---|---|---|---|
+| IMP-01 | Home | Cap shared signal multiplier at 1.5x with explicit clamp | Home Platform Eng | Sprint 1 | Shared signal utility | With maxed signals, priority never exceeds 1.5x baseline; regression tests added | EV-H1 |
+| IMP-02 | Home | Enforce Home Digital Will per-contact read ACLs | Privacy/Security Eng | Sprint 1 | Contact role mapping | Unauthorized sections return 403; ACL integration tests pass | EV-H2 |
+| IMP-03 | Home | Re-label Insurance Trend as Educational Estimate and gate financial usage | Home Tools PM + Eng | Sprint 1 | UX copy + API flag | UI/API both show disclosure; planning flows cannot consume as trusted trend input | EV-H3 |
+| IMP-04 | Home | Add FX normalization and robust state mapping in Service Price Radar | Home Pricing Eng | Sprint 2 | FX source + state map util | EUR/CAD quotes normalize correctly; full state-name inputs resolve correctly | EV-H4 |
+| IMP-05 | Home | Auto-fetch finance snapshot for Break-Even and Sell/Hold/Rent | Home Finance Eng | Sprint 2 | Finance snapshot availability | Both tools include debt context by default or prompt for missing data | EV-H5 |
+| IMP-06 | Home | Reposition Quote Comparison as workflow step, not peer tool | Home UX Eng | Sprint 2 | Navigation IA update | Quote Comparison removed from peer nav and reachable only in negotiation workflow | EV-H6 |
+| IMP-07 | Home | Add next-action CTAs for top decision tools | Home UX Eng | Sprint 2 | Destination deep links | Tools show deterministic next-action button with validated deep links | EV-H4, EV-H5 |
+| IMP-08 | AI | Replace Emergency Help regex severity with structured response contract | AI Safety Eng | Sprint 1 | Schema validation + incident logging | Severity derives only from structured field; misclassification tests pass | EV-A1 |
+| IMP-09 | AI | Remove non-determinism from Budget Planner forecasts | AI Core Eng | Sprint 1 | Deterministic unexpected-cost model | Same inputs always produce same forecast outputs | EV-A2 |
+| IMP-10 | AI | Add >= 0.70 confidence gate before auto-warranty creation | AI Intake Eng | Sprint 1 | Extraction confidence scoring | Warranty records created only when confidence threshold is met | EV-A3 |
+| IMP-11 | AI | Add uncertainty disclosure and source grounding in Climate Risk outputs | AI Risk Eng | Sprint 2 | Source attribution format | Risk percentages include source/confidence and disclaimer when heuristic | EV-A4 |
+| IMP-12 | AI | Validate Home Upgrades ROI/costs against regional baseline tables | AI Planning Eng | Sprint 2 | Regional pricing dataset | ROI values outside allowed bounds are rejected or downgraded with disclosure | EV-A5 |
+| IMP-13 | AI | Complete Energy Audit bill extraction and fallback path | AI Energy Eng | Sprint 3 | OCR/parser completion | Uploaded bill contributes to model or explicit fallback message is returned | EV-A8 |
+| IMP-14 | AI | Add mitigation verification loop to Risk-to-Premium Optimizer | AI Insurance Eng | Sprint 3 | Policy premium history data | Completed mitigations trigger post-check with observed premium delta | EV-A7 |
+| IMP-15 | AI | Add execution CTA to Coverage Intelligence recommendations | AI Insurance Eng | Sprint 3 | Marketplace link strategy | Coverage recs include actionable next step and destination | EV-A6 |
 
 ---
 
-### Fix 5 — Standardize confidence reporting across all tools
+## 7. Evidence Index
 
-Define a shared `ConfidenceReport` type:
-```typescript
-{
-  level: 'HIGH' | 'MEDIUM' | 'LOW' | 'ESTIMATED',
-  source: 'external_data' | 'user_override' | 'heuristic',
-  lastVerifiedAt: Date
-}
-```
-Apply to every tool. This is the single most important trust investment in the platform.
-
----
-
-### Fix 6 — Add "what to do next" CTA to the 15 highest-traffic tools
-
-These require no new tools — just navigation links with meaningful framing:
-- Break-Even → "Review your refinancing options" → Mortgage Refinance Radar
-- Sell/Hold/Rent → "See your break-even projection" → Break-Even
-- Service Price Radar → "Prepare your negotiation" → Negotiation Shield
-- Home Capital Timeline → "Plan your budget" → Budget Planner
-
----
-
-### Fix 7 — Wire mortgage modeling by default in Break-Even and Sell/Hold/Rent
-
-Fetch `PropertyFinanceSnapshot` automatically when available. Show an "Add mortgage details to improve accuracy" prompt when not. Excluding debt from these calculations produces fundamentally misleading recommendations for the majority of homeowners.
+| Evidence ID | Code Anchor(s) |
+|---|---|
+| EV-H1 | `apps/backend/src/services/homeEventRadar.service.ts`, `apps/backend/src/services/homeRiskReplay.engine.ts`, `apps/backend/src/services/homeDigitalTwinQuality.service.ts` |
+| EV-H2 | `apps/backend/src/services/homeDigitalWill.service.ts`, `apps/backend/src/controllers/homeDigitalWill.controller.ts` |
+| EV-H3 | `apps/backend/src/services/insuranceCostTrend.service.ts`, `apps/backend/src/routes/insuranceCostTrend.routes.ts` |
+| EV-H4 | `apps/backend/src/services/servicePriceRadar.service.ts`, `apps/backend/src/services/servicePriceRadar.engine.ts`, `apps/backend/src/routes/servicePriceRadar.routes.ts` |
+| EV-H5 | `apps/backend/src/services/breakEven.service.ts`, `apps/backend/src/services/sellHoldRent.service.ts`, `apps/backend/src/routes/breakEven.routes.ts`, `apps/backend/src/routes/sellHoldRent.routes.ts` |
+| EV-H6 | `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/quote-comparison/QuoteComparisonPlaceholderClient.tsx`, `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/quote-comparison/page.tsx` |
+| EV-A1 | `apps/backend/src/services/emergencyTroubleshooter.service.ts`, `apps/backend/src/routes/emergency.routes.ts` |
+| EV-A2 | `apps/backend/src/services/budgetForecaster.service.ts`, `apps/backend/src/routes/budgetForecaster.routes.ts` |
+| EV-A3 | `apps/backend/src/services/documentIntelligence.service.ts`, `apps/backend/src/routes/document.routes.ts` |
+| EV-A4 | `apps/backend/src/services/climateRiskPredictor.service.ts`, `apps/backend/src/routes/climateRisk.routes.ts` |
+| EV-A5 | `apps/backend/src/services/homeModificationAdvisor.service.ts`, `apps/backend/src/routes/homeModification.routes.ts` |
+| EV-A6 | `apps/backend/src/services/coverageAnalysis.service.ts`, `apps/backend/src/routes/coverageAnalysis.routes.ts` |
+| EV-A7 | `apps/backend/src/services/riskPremiumOptimizer.service.ts`, `apps/backend/src/routes/riskPremiumOptimizer.routes.ts` |
+| EV-A8 | `apps/backend/src/services/energyAuditor.service.ts`, `apps/backend/src/routes/energyAuditor.routes.ts` |
+| EV-A9 | `apps/backend/src/services/doNothingSimulator.service.ts`, `apps/backend/src/routes/doNothingSimulator.routes.ts` |
+| EV-A10 | `apps/backend/src/services/applianceOracle.service.ts`, `apps/backend/src/routes/applianceOracle.routes.ts` |
 
 ---
 
-### Fix 8 — Label Insurance Trend as "Educational Estimate" and gate it from financial planning use cases
+## 8. Summary
 
-Either replace with DOI rate filing data or add a prominent disclosure that estimates use state-level averages and heuristic ZIP patterns, not actual policy data. This is the only tool in the platform that cannot be safely used in any financial decision context in its current form.
-
----
-
-### Fix 9 — Surface stale signal warnings in all signal-integrated tools
-
-Add `signalAge` metadata to all tool responses. If signals are older than 7 days, surface: "Some insights are based on data from [N] days ago. Refresh for the latest analysis." Silent staleness is the most common form of trust erosion in data-driven products.
-
----
-
-### Fix 10 — Add after-tax modeling disclosure to Sell/Hold/Rent
-
-Add a clear disclaimer: "This analysis does not account for capital gains tax, rental income tax, or 1031 exchange benefits. Consult a tax advisor before acting on this recommendation." The absence of this disclosure is a liability for any homeowner who acts on the current output.
-
----
-
-### Fix 11 — Enforce per-contact read permissions in Home Digital Will
-
-The trusted contact system stores roles and access levels but does not enforce them at read. This is a privacy requirement, not a polish item.
-
----
-
-### Fix 12 — Reposition Quote Comparison from "tool" to "workflow step"
-
-Remove it from the tool navigation as a peer entry point. Expose it only within the Negotiation Shield → Price Finalization workflow. Prevents user confusion with no new development required.
-
----
-
-### Fix 13 — Implement real-time rate feed for Mortgage Refinance Radar
-
-Admin-only rate snapshot ingestion means the tool is only as accurate as the last manual update. Without a real-time rate feed, the core value proposition (detecting market windows) does not work reliably.
-
----
-
-### Fix 14 — Add minimum data completeness gate to Home Digital Twin
-
-Before displaying a twin, validate that the property has: `yearBuilt`, `propertyType`, and at least 3 inventory items with install dates. Show an "Improve Your Twin" prompt for sparse properties rather than a low-confidence twin that erodes trust in the tool.
-
----
-
-### Fix 15 — Design and implement one end-to-end journey as a proof of concept
-
-The platform has 42 tools, none of which complete the resolution loop. The single highest-leverage architectural investment is completing one full journey, for example:
-
-> Service Price Radar verdict → Negotiation Shield leverage → Price Finalization record → Booking trigger
-
-This becomes the template all other journeys follow and demonstrates to homeowners that the platform is a problem-solving system, not a dashboard.
-
----
-
-## Summary
-
-**Out of 42 tools audited:**
+**Classification integrity check (42 entries total):**
 
 | Classification | Count | Tools |
 |---|---|---|
-| Production-grade | 3 | Replace or Repair, Home Savings Check, Value Tracker |
-| Usable but needs targeted hardening | 19 | Home Risk Replay, Service Price Radar, Cost Growth, True Cost, Cost Explainer, Break-Even, Home Capital Timeline, Sell/Hold/Rent, Status Board, Home Digital Will, Hidden Asset Finder, Home Habit Coach, Negotiation Shield, Mortgage Refinance Radar, Coverage Intelligence, Risk-to-Premium Optimizer, Do-Nothing Simulator, Appliance Oracle, Energy Audit |
-| Valuable but incomplete | 11 | Property Tax, Cost Volatility, Seller Prep, Home Digital Twin, Plant Advisor, Renovation Risk Advisor, Home Gazette, Document Vault, Budget Planner, Price Finalization, Guidance Overview |
-| Conceptually good but not production-ready | 6 | Insurance Trend, Emergency Help, Climate Risk, Home Upgrades, Neighborhood Change Radar, Coverage Options |
-| Should be reworked or repositioned | 2 | Quote Comparison, Insurance Trend (rework path) |
+| 1 — Production-grade | 3 | Replace or Repair, Home Savings Check, Value Tracker |
+| 2 — Usable but needs targeted hardening | 19 | Home Risk Replay, Service Price Radar, Cost Growth, True Cost, Cost Explainer, Break-Even, Home Capital Timeline, Sell/Hold/Rent, Status Board, Home Digital Will, Hidden Asset Finder, Home Habit Coach, Negotiation Shield, Mortgage Refinance Radar, Coverage Intelligence, Risk-to-Premium Optimizer, Do-Nothing Simulator, Appliance Oracle, Energy Audit |
+| 3 — Valuable but incomplete | 12 | Home Event Radar, Property Tax, Cost Volatility, Seller Prep, Home Digital Twin, Plant Advisor, Renovation Risk Advisor, Home Gazette, Document Vault, Budget Planner, Price Finalization, Guidance Overview |
+| 4 — Conceptually good but not production-ready | 5 | Insurance Trend, Emergency Help, Climate Risk, Home Upgrades, Neighborhood Change Radar |
+| 5 — Rework/reposition | 1 | Quote Comparison |
+| 0 — Not independently scorable | 2 | Coverage Options, Home Timeline |
 
-**The central finding is structural:**
+**Phase 1 execution scope for hardening:**
 
-The platform has built an extremely rich analysis layer. Every tool produces insight. But the gap between *insight* and *resolution* is almost universally unaddressed. Until at least one end-to-end journey is completed — from signal detection to analysis to decision to execution to outcome tracking — the platform remains a sophisticated reporting system rather than a home problem-solving product.
+- 39 tools (all scored tools except Guidance Overview and the 2 unscored entries)
+- Two independent tracks: Home Tools and AI Tools
+- Top-15 implementation board is executable without Guidance Overview dependencies
 
-The P0 issues (Emergency Help safety, Budget Planner non-determinism, Document Vault confidence gate, signal compounding, hallucinated data presented as fact) are immediate blockers. The execution gap is the strategic one.
+**Central finding:**
+
+The product has strong analytical depth but uneven production hardening. The fastest path to dependable user outcomes is to close high-risk gaps in Home and AI tools independently, then reintroduce orchestration once tool-level reliability is proven.
