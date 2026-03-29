@@ -111,6 +111,17 @@ export function mapGuidanceJourney(journey: any) {
     explanation: journey.explanation ?? null,
     nextStepLabel: journey.nextStepLabel ?? null,
     primarySignal: journey.primarySignal ? mapGuidanceSignal(journey.primarySignal) : null,
+    inventoryItem: journey.inventoryItem
+      ? {
+          name: journey.inventoryItem.name ?? null,
+          category: journey.inventoryItem.category ?? null,
+        }
+      : null,
+    homeAsset: journey.homeAsset
+      ? {
+          assetType: journey.homeAsset.assetType ?? null,
+        }
+      : null,
     steps,
   };
 }

@@ -137,6 +137,13 @@ export type GuidanceJourneyDTO = {
     nextStep: string;
   } | null;
   nextStepLabel?: string | null;
+  inventoryItem?: {
+    name: string | null;
+    category: string | null;
+  } | null;
+  homeAsset?: {
+    assetType: string | null;
+  } | null;
   primarySignal: GuidanceSignalDTO | null;
   steps: GuidanceStepDTO[];
 };
@@ -211,6 +218,33 @@ export type GuidanceJourneyDetailResponse = {
     reasonMessage: string | null;
     payload: Record<string, unknown> | null;
     createdAt: string;
+  }>;
+  evidences?: Array<{
+    id: string;
+    propertyId: string;
+    journeyId: string;
+    stepId: string;
+    signalId: string | null;
+    homeAssetId: string | null;
+    inventoryItemId: string | null;
+    evidenceType: string;
+    sourceType: string;
+    status: string;
+    sourceToolKey: string | null;
+    sourceFeatureKey: string | null;
+    evidenceRefType: string | null;
+    evidenceRefId: string | null;
+    proofType: string | null;
+    proofId: string | null;
+    confidenceScore: number | null;
+    observedAt: string | null;
+    verifiedAt: string | null;
+    invalidatedAt: string | null;
+    createdByUserId: string | null;
+    payload: Record<string, unknown> | null;
+    metadata: Record<string, unknown> | null;
+    createdAt: string | null;
+    updatedAt: string | null;
   }>;
 };
 
