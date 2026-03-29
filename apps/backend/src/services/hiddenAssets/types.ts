@@ -153,6 +153,15 @@ export interface UpdateMatchStatusInput {
 // RESPONSE DTO TYPES
 // ============================================================================
 
+export interface HiddenAssetConfidenceCalibrationSummary {
+  matchedRuleCount: number | null;
+  totalRuleCount: number | null;
+  /** Human-readable explanation of how confidence was scored for this match. */
+  calibrationNote: string;
+  /** Non-null when the homeowner has already claimed this program. */
+  outcomeNote: string | null;
+}
+
 export interface HiddenAssetMatchDTO {
   id: string;
   propertyId: string;
@@ -184,6 +193,8 @@ export interface HiddenAssetMatchDTO {
   firstDetectedAt: string;
   dismissedAt: string | null;
   claimedAt: string | null;
+  // Phase-3: confidence calibration transparency
+  confidenceCalibrationSummary: HiddenAssetConfidenceCalibrationSummary;
 }
 
 export interface HiddenAssetMatchSummaryDTO {

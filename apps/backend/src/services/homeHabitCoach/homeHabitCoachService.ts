@@ -61,6 +61,38 @@ const HABIT_SUMMARY_SELECT = {
   habitTemplate: { select: TEMPLATE_SUMMARY_SELECT },
 } as const;
 
+// ─── Phase-3: reminder schedule + completion evidence helpers ──────────────
+
+const CADENCE_LABEL: Record<string, string> = {
+  DAILY: 'Daily',
+  WEEKLY: 'Weekly',
+  MONTHLY: 'Monthly',
+  SEASONAL: 'Seasonal',
+  ANNUAL: 'Annual',
+};
+
+function buildHabitExtras(h: any) {
+  const cadence: string | null = h.habitTemplate?.cadence ?? null;
+  return {
+    reminderSchedule: {
+      channel: 'IN_APP' as const,
+      nextReminderAt: (h.snoozedUntil as Date | null)?.toISOString()
+        ?? (h.dueAt as Date | null)?.toISOString()
+        ?? null,
+      cadenceLabel: cadence ? (CADENCE_LABEL[cadence] ?? cadence) : 'One-time',
+    },
+    completionEvidence: {
+      evidenceType: (h.lastCompletedAt as Date | null) ? 'COMPLETION_TIMESTAMP' : 'NONE',
+      capturedAt: (h.lastCompletedAt as Date | null)?.toISOString() ?? null,
+      notes: null as string | null,
+    },
+  };
+}
+
+function mapHabit(h: any) {
+  return { ...h, ...buildHabitExtras(h) };
+}
+
 // ─── Internal guard ────────────────────────────────────────────────────────
 
 async function assertHabitAccess(
@@ -134,7 +166,7 @@ export class HomeHabitCoachService {
     const items = hasMore ? page.slice(0, limit) : page;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
 
-    return { habits: items, hasMore, nextCursor };
+    return { habits: items.map(mapHabit), hasMore, nextCursor };
   }
 
   async getSpotlightHabit(propertyId: string) {
@@ -146,7 +178,7 @@ export class HomeHabitCoachService {
     });
 
     const habit = await selectSpotlight(candidates, propertyId);
-    return { habit: habit ?? null };
+    return { habit: habit ? mapHabit(habit) : null };
   }
 
   async getHabitHistory(
@@ -175,7 +207,7 @@ export class HomeHabitCoachService {
     const items = hasMore ? habits.slice(0, limit) : habits;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
 
-    return { habits: items, hasMore, nextCursor };
+    return { habits: items.map(mapHabit), hasMore, nextCursor };
   }
 
   async getHabitDetail(propertyId: string, habitId: string) {
@@ -224,7 +256,7 @@ export class HomeHabitCoachService {
     });
 
     if (!habit) throw new APIError('Habit not found', 404, 'HABIT_NOT_FOUND');
-    return { habit };
+    return { habit: mapHabit(habit) };
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -268,7 +300,7 @@ export class HomeHabitCoachService {
       }),
     ]);
 
-    return { habit: updated };
+    return { habit: mapHabit(updated) };
   }
 
   async snoozeHabit(
@@ -321,7 +353,7 @@ export class HomeHabitCoachService {
       }),
     ]);
 
-    return { habit: updated };
+    return { habit: mapHabit(updated) };
   }
 
   async skipHabit(
@@ -358,7 +390,7 @@ export class HomeHabitCoachService {
       }),
     ]);
 
-    return { habit: updated };
+    return { habit: mapHabit(updated) };
   }
 
   async dismissHabit(
@@ -395,7 +427,7 @@ export class HomeHabitCoachService {
       }),
     ]);
 
-    return { habit: updated };
+    return { habit: mapHabit(updated) };
   }
 
   async reopenHabit(
@@ -430,7 +462,7 @@ export class HomeHabitCoachService {
       }),
     ]);
 
-    return { habit: updated };
+    return { habit: mapHabit(updated) };
   }
 
   async recordViewed(

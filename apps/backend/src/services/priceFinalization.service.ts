@@ -92,6 +92,11 @@ function mapDetail(row: any): PriceFinalizationDetailDTO {
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt),
     terms: Array.isArray(row.terms) ? row.terms.map(mapTerm) : [],
+    actualSpendCents: (() => {
+      const meta = toJsonRecord(row.metadataJson);
+      const v = meta?._actualSpendCents;
+      return typeof v === 'number' && Number.isFinite(v) ? v : null;
+    })(),
   };
 }
 
@@ -207,7 +212,15 @@ function buildUpdateData(input: PriceFinalizationUpdateInput) {
   if (input.notes !== undefined) data.notes = input.notes;
 
   if (input.acceptedTermsJson !== undefined) data.acceptedTermsJson = input.acceptedTermsJson;
-  if (input.metadataJson !== undefined) data.metadataJson = input.metadataJson;
+  if (input.metadataJson !== undefined || input.actualSpendCents !== undefined) {
+    // Preserve existing metadataJson and layer in actualSpendCents when provided
+    const base = input.metadataJson !== undefined ? (input.metadataJson ?? {}) : undefined;
+    if (input.actualSpendCents !== undefined) {
+      data.metadataJson = { ...(base ?? {}), _actualSpendCents: input.actualSpendCents };
+    } else if (base !== undefined) {
+      data.metadataJson = base;
+    }
+  }
 
   if (input.negotiationShieldCaseId !== undefined) {
     data.negotiationShieldCaseId = input.negotiationShieldCaseId;
@@ -313,7 +326,9 @@ export class PriceFinalizationService {
         notes: input.notes ?? null,
 
         acceptedTermsJson: input.acceptedTermsJson ?? null,
-        metadataJson: input.metadataJson ?? null,
+        metadataJson: input.actualSpendCents !== undefined
+          ? { ...(input.metadataJson ?? {}), _actualSpendCents: input.actualSpendCents }
+          : (input.metadataJson ?? null),
 
         negotiationShieldCaseId: input.negotiationShieldCaseId ?? null,
         serviceRadarCheckId: input.serviceRadarCheckId ?? null,

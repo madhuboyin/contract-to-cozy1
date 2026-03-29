@@ -55,6 +55,10 @@ export class GazetteMapper {
       aiStatus: story.aiStatus as string,
       createdAt: story.createdAt,
       updatedAt: story.updatedAt,
+      // Phase-3: confidence disclosure derived from confidenceScore
+      confidenceDisclosure: story.confidenceScore != null
+        ? `Story confidence: ${Math.round(story.confidenceScore * 100)}%. Insights are AI-generated and may not reflect real-time data.`
+        : null,
     };
   }
 

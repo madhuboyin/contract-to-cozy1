@@ -31,6 +31,8 @@ export interface GazetteStoryDto {
   aiStatus: string;
   createdAt: Date;
   updatedAt: Date;
+  // Phase-3: confidence disclosure for story-level accuracy transparency
+  confidenceDisclosure?: string | null;
 }
 
 export interface GazetteEditionDto {

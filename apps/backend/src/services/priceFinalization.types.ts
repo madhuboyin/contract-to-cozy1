@@ -62,6 +62,9 @@ export type PriceFinalizationCreateInput = {
   quoteComparisonWorkspaceId?: string | null;
 
   terms?: PriceFinalizationTermInput[];
+
+  // Phase-3: actual spend capture (stored in metadataJson._actualSpendCents)
+  actualSpendCents?: number | null;
 };
 
 export type PriceFinalizationUpdateInput = Partial<PriceFinalizationCreateInput> & {
@@ -112,6 +115,8 @@ export type PriceFinalizationDetailDTO = {
   createdAt: string;
   updatedAt: string;
   terms: PriceFinalizationTermDTO[];
+  // Phase-3: actual spend feedback surface (sourced from metadataJson._actualSpendCents)
+  actualSpendCents: number | null;
 };
 
 export type PriceFinalizationListResponse = {

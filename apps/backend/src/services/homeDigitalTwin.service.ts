@@ -26,6 +26,15 @@ function decimalToNumber(d: Prisma.Decimal | null | undefined): number | null {
   return Number(d.toString());
 }
 
+function buildComponentConfidenceDisclosure(c: ComponentRow): string | null {
+  if (c.confidenceScore == null) return null;
+  const pct = Math.round(c.confidenceScore * 100);
+  const sourceNote = c.isUserConfirmed || c.sourceType === 'MANUAL'
+    ? 'confirmed by homeowner'
+    : 'modeled from property data';
+  return `Component data confidence: ${pct}% (${sourceNote}). Cost and lifespan estimates may vary.`;
+}
+
 function serializeComponent(c: ComponentRow) {
   return {
     id: c.id,
@@ -50,6 +59,8 @@ function serializeComponent(c: ComponentRow) {
     lastModeledAt: c.lastModeledAt,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
+    // Phase-3: confidence disclosure
+    confidenceDisclosure: buildComponentConfidenceDisclosure(c),
   };
 }
 
@@ -78,6 +89,16 @@ type TwinWithRelations = Prisma.HomeDigitalTwinGetPayload<{ include: typeof TWIN
 
 type ComponentRow = TwinWithRelations['components'][number];
 
+function buildTwinConfidenceDisclosure(twin: TwinWithRelations): string | null {
+  if (twin.confidenceScore == null && twin.completenessScore == null) return null;
+  const confPct = twin.confidenceScore != null ? Math.round(twin.confidenceScore * 100) : null;
+  const compPct = twin.completenessScore != null ? Math.round(twin.completenessScore * 100) : null;
+  const parts: string[] = [];
+  if (confPct != null) parts.push(`overall confidence ${confPct}%`);
+  if (compPct != null) parts.push(`data completeness ${compPct}%`);
+  return `Digital twin accuracy — ${parts.join(', ')}. Components without homeowner confirmation use heuristic estimates.`;
+}
+
 function serializeTwin(twin: TwinWithRelations) {
   return {
     id: twin.id,
@@ -94,6 +115,8 @@ function serializeTwin(twin: TwinWithRelations) {
     components: twin.components.map(serializeComponent),
     dataQuality: twin.dataQuality,
     recentScenarios: twin.scenarios,
+    // Phase-3: confidence disclosure
+    confidenceDisclosure: buildTwinConfidenceDisclosure(twin),
   };
 }
 

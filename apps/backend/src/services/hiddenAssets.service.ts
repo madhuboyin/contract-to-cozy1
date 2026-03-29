@@ -21,6 +21,7 @@ import {
   HiddenAssetMatchListDTO,
   HiddenAssetMatchSummaryDTO,
   HiddenAssetProgramDetailDTO,
+  HiddenAssetConfidenceCalibrationSummary,
   ProgramEvalResult,
   RefreshResultDTO,
   RegionPair,
@@ -44,6 +45,25 @@ function safeJsonToStringArray(json: Prisma.JsonValue | null | undefined): strin
   if (json == null) return null;
   if (Array.isArray(json)) return json.map(String);
   return null;
+}
+
+function buildConfidenceCalibrationSummary(row: MatchWithProgram): HiddenAssetConfidenceCalibrationSummary {
+  const matched = row.matchedRuleCount ?? null;
+  const total = row.totalRuleCount ?? null;
+  const level = String(row.confidenceLevel).toLowerCase();
+
+  let calibrationNote: string;
+  if (matched !== null && total !== null && total > 0) {
+    calibrationNote = `${matched} of ${total} eligibility criteria matched (${level} confidence).`;
+  } else {
+    calibrationNote = `Confidence level: ${level}. Detailed rule match data unavailable.`;
+  }
+
+  const outcomeNote = row.claimedAt
+    ? `Claimed on ${new Date(row.claimedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`
+    : null;
+
+  return { matchedRuleCount: matched, totalRuleCount: total, calibrationNote, outcomeNote };
 }
 
 function serializeMatch(row: MatchWithProgram): HiddenAssetMatchDTO {
@@ -77,6 +97,7 @@ function serializeMatch(row: MatchWithProgram): HiddenAssetMatchDTO {
     firstDetectedAt: row.firstDetectedAt.toISOString(),
     dismissedAt: row.dismissedAt ? row.dismissedAt.toISOString() : null,
     claimedAt: row.claimedAt ? row.claimedAt.toISOString() : null,
+    confidenceCalibrationSummary: buildConfidenceCalibrationSummary(row),
   };
 }
 
