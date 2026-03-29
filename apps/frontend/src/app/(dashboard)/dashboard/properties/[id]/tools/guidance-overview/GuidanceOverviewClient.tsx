@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CircleAlert, ShieldCheck, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +21,29 @@ import { formatIssueDomain } from '@/features/guidance/utils/guidanceDisplay';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 
+const DOMAIN_FOCUS_LABELS: Record<string, string> = {
+  ASSET_LIFECYCLE: 'Aging home system',
+  MAINTENANCE: 'Home maintenance issue',
+  SAFETY: 'Home safety issue',
+  INSURANCE: 'Coverage decision',
+  FINANCIAL: 'Home expense planning',
+  COMPLIANCE: 'Compliance issue',
+  WEATHER: 'Weather readiness issue',
+  ENERGY: 'Energy cost issue',
+  OTHER: 'Home issue',
+};
+
+const SIGNAL_SUBTITLE_LABELS: Record<string, string> = {
+  cost_of_inaction_risk: 'Delaying this issue could increase your total cost.',
+  coverage_gap: 'Coverage may not protect this issue right now.',
+  coverage_lapse_detected: 'Coverage may expire soon for this issue.',
+  lifecycle_end_or_past_life: 'This asset is near or past expected life.',
+  maintenance_failure_risk: 'This issue can worsen if maintenance is delayed.',
+  inspection_followup_needed: 'Inspection follow-up is needed before execution.',
+  recall_detected: 'A safety recall may require immediate action.',
+  high_utility_cost: 'This issue may be increasing your ongoing utility costs.',
+};
+
 function resolveAssetLabel(action: GuidanceActionModel): string {
   const itemName = action.journey.inventoryItem?.name?.trim();
   if (itemName) return itemName;
@@ -28,10 +51,16 @@ function resolveAssetLabel(action: GuidanceActionModel): string {
   const assetType = action.journey.homeAsset?.assetType;
   if (assetType) return `${formatEnumLabel(assetType)} system`;
 
-  const signalFamily = action.journey.primarySignal?.signalIntentFamily;
-  if (signalFamily) return formatEnumLabel(signalFamily);
+  return DOMAIN_FOCUS_LABELS[action.issueDomain] ?? formatIssueDomain(action.issueDomain);
+}
 
-  return formatIssueDomain(action.issueDomain);
+function resolvePrimarySubtitle(action: GuidanceActionModel): string {
+  const family = action.journey.primarySignal?.signalIntentFamily ?? '';
+  const familySubtitle = SIGNAL_SUBTITLE_LABELS[family];
+  if (familySubtitle) return familySubtitle;
+  if (action.explanation?.why) return action.explanation.why;
+  if (action.subtitle) return action.subtitle;
+  return 'This is the highest-priority issue to resolve now.';
 }
 
 function resolveNextStepLabel(action: GuidanceActionModel): string {
@@ -82,17 +111,47 @@ function renderPrimaryActionButton(action: GuidanceActionModel) {
 export default function GuidanceOverviewClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const selectedInventoryItemId =
+    searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
+  const selectedHomeAssetId = searchParams.get('homeAssetId');
+  const hasScopeFilter = Boolean(selectedInventoryItemId || selectedHomeAssetId);
 
   const guidance = useGuidance(propertyId, {
     enabled: Boolean(propertyId),
     limit: 10,
   });
 
-  const actions = guidance.actions ?? [];
+  const allActions = React.useMemo(() => guidance.actions ?? [], [guidance.actions]);
+  const filteredActions = React.useMemo(() => {
+    if (!hasScopeFilter) return allActions;
+    return allActions.filter((action) => {
+      if (selectedInventoryItemId && action.journey.inventoryItemId === selectedInventoryItemId) {
+        return true;
+      }
+      if (selectedHomeAssetId && action.journey.homeAssetId === selectedHomeAssetId) {
+        return true;
+      }
+      return false;
+    });
+  }, [allActions, hasScopeFilter, selectedHomeAssetId, selectedInventoryItemId]);
+
+  const actions = React.useMemo(() => {
+    if (hasScopeFilter) return filteredActions;
+    const scoped = allActions.filter(
+      (action) => Boolean(action.journey.inventoryItemId) || Boolean(action.journey.homeAssetId)
+    );
+    const propertyWide = allActions.filter(
+      (action) => !action.journey.inventoryItemId && !action.journey.homeAssetId
+    );
+    return [...scoped, ...propertyWide];
+  }, [allActions, filteredActions, hasScopeFilter]);
+
   const primaryAction = actions[0] ?? null;
   const remainingActions = primaryAction ? actions.slice(1) : [];
   const immediateCount = actions.filter((action) => action.priorityGroup === 'IMMEDIATE').length;
   const blockedCount = actions.filter((action) => action.executionReadiness === 'NOT_READY').length;
+  const baseOverviewHref = `/dashboard/properties/${propertyId}/tools/guidance-overview`;
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
@@ -109,9 +168,25 @@ export default function GuidanceOverviewClient() {
         subtitle="We guide you through coverage checks, repair vs replace decisions, pricing, negotiation, and booking so each issue gets resolved end to end."
       />
 
+      {hasScopeFilter ? (
+        <ScenarioInputCard
+          title="Asset focus enabled"
+          subtitle="Showing guidance only for the selected asset context."
+          actions={
+            <Button asChild variant="ghost" className="min-h-[40px] w-full">
+              <Link href={baseOverviewHref}>Clear asset focus</Link>
+            </Button>
+          }
+        >
+          <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+            If this does not match what you expected, open Risk Assessment and select the asset again.
+          </p>
+        </ScenarioInputCard>
+      ) : null}
+
       <ResultHeroCard
-        title="Active issue journeys"
-        value={guidance.counts?.activeJourneys ?? actions.length}
+        title={hasScopeFilter ? 'Selected asset journeys' : 'Active issue journeys'}
+        value={actions.length}
         status={
           <StatusChip tone={immediateCount > 0 ? 'danger' : actions.length > 0 ? 'elevated' : 'good'}>
             {immediateCount > 0 ? `${immediateCount} urgent` : actions.length > 0 ? 'Action needed' : 'All clear'}
@@ -141,8 +216,12 @@ export default function GuidanceOverviewClient() {
         </ScenarioInputCard>
       ) : actions.length === 0 ? (
         <EmptyStateCard
-          title="No active guidance journeys"
-          description="Run Risk Assessment to identify issues, then Guidance Engine will walk you through resolution."
+          title={hasScopeFilter ? 'No guidance found for selected asset' : 'No active guidance journeys'}
+          description={
+            hasScopeFilter
+              ? 'We could not find an active journey for this asset yet. Recalculate risk or choose another asset.'
+              : 'Run Risk Assessment to identify issues, then Guidance Engine will walk you through resolution.'
+          }
           action={
             <Button asChild className="min-h-[44px] w-full">
               <Link href={`/dashboard/properties/${propertyId}/risk-assessment`}>Open Risk Assessment</Link>
@@ -154,10 +233,7 @@ export default function GuidanceOverviewClient() {
           {primaryAction ? (
             <ScenarioInputCard
               title={`Start Here: ${resolveAssetLabel(primaryAction)}`}
-              subtitle={
-                primaryAction.explanation?.what ??
-                'This is the highest-priority issue to resolve now.'
-              }
+              subtitle={resolvePrimarySubtitle(primaryAction)}
               badge={<StatusChip tone={resolvePriorityTone(primaryAction)}>{primaryAction.priorityGroup.toLowerCase()}</StatusChip>}
             >
               <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">

@@ -61,9 +61,13 @@ function appendGuidanceContext(
   if (journey.primarySignal?.signalIntentFamily) {
     params.set('guidanceSignalIntentFamily', journey.primarySignal.signalIntentFamily);
   }
-  // Items 20 + 22: Pass itemId so destination tools can pre-load item context
+  // Pass asset scope so destination tools can stay in the same issue context.
   if (journey.inventoryItemId) {
     params.set('itemId', journey.inventoryItemId);
+    params.set('inventoryItemId', journey.inventoryItemId);
+  }
+  if (journey.homeAssetId) {
+    params.set('homeAssetId', journey.homeAssetId);
   }
 
   const query = params.toString();
