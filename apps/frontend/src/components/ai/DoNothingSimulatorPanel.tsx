@@ -549,6 +549,7 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
             status={<StatusChip tone={runStatusChipTone(run.status)}>{run.status}</StatusChip>}
             summary={run.summary || 'Simulation completed.'}
             highlights={[
+              `Confidence: ${run.confidence}`,
               `Incident likelihood: ${run.incidentLikelihood ?? 'N/A'}`,
               `Cost impact: ${moneyFromCents(run.expectedCostDeltaCentsMin)} - ${moneyFromCents(run.expectedCostDeltaCentsMax)}`,
               `Computed: ${formatDate(run.computedAt)}`,
@@ -556,9 +557,14 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
             actions={
               <ActionPriorityRow
                 secondaryActions={
-                  <StatusChip tone={likelihoodChipTone(run.incidentLikelihood)}>
-                    Incident {run.incidentLikelihood ?? 'N/A'}
-                  </StatusChip>
+                  <>
+                    <StatusChip tone={run.confidence === 'LOW' ? 'elevated' : run.confidence === 'HIGH' ? 'good' : 'info'}>
+                      Confidence {run.confidence}
+                    </StatusChip>
+                    <StatusChip tone={likelihoodChipTone(run.incidentLikelihood)}>
+                      Incident {run.incidentLikelihood ?? 'N/A'}
+                    </StatusChip>
+                  </>
                 }
               />
             }
@@ -576,6 +582,12 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
               { label: 'Cost impact (max)', value: moneyFromCents(run.expectedCostDeltaCentsMax) },
             ]}
           />
+
+          {run.confidence === 'LOW' ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              Low-data run: this simulation is directional because key historical signals were limited. Add policy, claims, and maintenance history for stronger confidence.
+            </div>
+          ) : null}
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
             <h4 className="text-base font-semibold text-gray-900">Top risk drivers</h4>

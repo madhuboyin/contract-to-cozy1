@@ -82,6 +82,16 @@ interface EnergyAuditReport {
     annualCostSavings: number;
     percentageReduction: number;
   };
+
+  billExtraction: {
+    uploadedCount: number;
+    processedCount: number;
+    extractedCount: number;
+    failedCount: number;
+    status: 'NOT_PROVIDED' | 'COMPLETE' | 'PARTIAL' | 'FALLBACK';
+    usedInModel: boolean;
+    message: string;
+  };
   
   generatedAt: Date;
 }
@@ -163,8 +173,19 @@ export class EnergyAuditorService {
 
     // Extract bill data if provided (smart extraction)
     let billData: BillData[] = [];
+    let billExtraction: EnergyAuditReport['billExtraction'] = {
+      uploadedCount: 0,
+      processedCount: 0,
+      extractedCount: 0,
+      failedCount: 0,
+      status: 'NOT_PROVIDED',
+      usedInModel: false,
+      message: 'No utility bills uploaded; used manual usage inputs only.',
+    };
     if (billFiles && billFiles.length > 0) {
-      billData = await this.extractBillData(billFiles);
+      const extraction = await this.extractBillData(billFiles);
+      billData = extraction.billData;
+      billExtraction = extraction.summary;
     }
 
     // Calculate actual electricity rate
@@ -239,21 +260,39 @@ export class EnergyAuditorService {
       recommendations,
       carbonFootprint,
       potentialSavings,
+      billExtraction,
       generatedAt: new Date(),
     };
   }
 
-  private async extractBillData(billFiles: Express.Multer.File[]): Promise<BillData[]> {
+  private async extractBillData(
+    billFiles: Express.Multer.File[]
+  ): Promise<{ billData: BillData[]; summary: EnergyAuditReport['billExtraction'] }> {
     if (!this.ai) {
-      return [];
+      return {
+        billData: [],
+        summary: {
+          uploadedCount: billFiles.length,
+          processedCount: 0,
+          extractedCount: 0,
+          failedCount: billFiles.length,
+          status: 'FALLBACK',
+          usedInModel: false,
+          message: 'Bill extraction unavailable because AI service is not configured. Used manual usage inputs only.',
+        },
+      };
     }
 
     const billData: BillData[] = [];
+    let processedCount = 0;
+    let extractedCount = 0;
+    let failedCount = 0;
 
     // Only process first 3 bills to save tokens
     const filesToProcess = billFiles.slice(0, 3);
 
     for (const file of filesToProcess) {
+      processedCount += 1;
       try {
         const prompt = `Extract energy usage data from this utility bill.
 
@@ -293,14 +332,55 @@ If you cannot extract the data, return null.`;
         
         if (text !== 'null') {
           const data = JSON.parse(text);
-          billData.push(data);
+          if (
+            data &&
+            typeof data.month === 'string' &&
+            Number.isFinite(Number(data.kwh)) &&
+            Number.isFinite(Number(data.cost))
+          ) {
+            billData.push({
+              month: String(data.month),
+              kwh: Number(data.kwh),
+              cost: Number(data.cost),
+            });
+            extractedCount += 1;
+          } else {
+            failedCount += 1;
+          }
+        } else {
+          failedCount += 1;
         }
       } catch (error) {
         console.error('[ENERGY-AUDITOR] Bill extraction error:', error);
+        failedCount += 1;
       }
     }
 
-    return billData;
+    const status: EnergyAuditReport['billExtraction']['status'] =
+      extractedCount === 0
+        ? 'FALLBACK'
+        : extractedCount === filesToProcess.length
+          ? 'COMPLETE'
+          : 'PARTIAL';
+    const message =
+      status === 'COMPLETE'
+        ? `Extracted ${extractedCount}/${filesToProcess.length} bill(s) and applied them to seasonal analysis.`
+        : status === 'PARTIAL'
+          ? `Extracted ${extractedCount}/${filesToProcess.length} bill(s); remaining files fell back to manual input assumptions.`
+          : 'Could not extract structured bill data; analysis used manual usage inputs and seasonal heuristics.';
+
+    return {
+      billData,
+      summary: {
+        uploadedCount: billFiles.length,
+        processedCount,
+        extractedCount,
+        failedCount: Math.max(failedCount, filesToProcess.length - extractedCount),
+        status,
+        usedInModel: extractedCount > 0,
+        message,
+      },
+    };
   }
 
   private calculateEfficiencyScore(

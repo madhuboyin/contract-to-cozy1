@@ -96,7 +96,9 @@ interface AIToolLink {
 
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
 
-const HOME_TOOL_LINKS: PropertyToolLink[] = MOBILE_HOME_TOOL_LINKS;
+const HOME_TOOL_LINKS: PropertyToolLink[] = MOBILE_HOME_TOOL_LINKS.filter(
+  (tool) => !tool.workflowOnly
+);
 
 const AI_TOOL_LINKS: AIToolLink[] = [
   {

@@ -76,6 +76,15 @@ interface EnergyAuditReport {
     annualCostSavings: number;
     percentageReduction: number;
   };
+  billExtraction: {
+    uploadedCount: number;
+    processedCount: number;
+    extractedCount: number;
+    failedCount: number;
+    status: 'NOT_PROVIDED' | 'COMPLETE' | 'PARTIAL' | 'FALLBACK';
+    usedInModel: boolean;
+    message: string;
+  };
   generatedAt: string;
 }
 
@@ -207,6 +216,25 @@ export default function EnergyAuditor({ propertyId, squareFootage: propSquareFoo
             { label: 'CO2 footprint', value: `${(report.carbonFootprint.annualCO2Pounds / 1000).toFixed(1)}k lbs/year` },
           ]}
         />
+
+        <div
+          className={`rounded-2xl border p-3 text-sm ${
+            report.billExtraction.status === 'COMPLETE'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : report.billExtraction.status === 'PARTIAL'
+                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                : report.billExtraction.status === 'FALLBACK'
+                  ? 'border-rose-200 bg-rose-50 text-rose-700'
+                  : 'border-slate-200 bg-slate-50 text-slate-700'
+          }`}
+        >
+          <div className="font-medium">
+            Bill extraction: {report.billExtraction.status.replace('_', ' ')}
+          </div>
+          <div className="mt-1 text-xs">
+            {report.billExtraction.message}
+          </div>
+        </div>
 
         {/* Header Score Card */}
         <Card className={`border-2 ${getGradeColor(report.grade)}`}>

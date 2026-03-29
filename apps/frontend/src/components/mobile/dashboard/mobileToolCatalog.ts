@@ -259,6 +259,7 @@ export type MobilePropertyToolLink = {
   name: string;
   description: string;
   desktopDescription?: string;
+  workflowOnly?: boolean;
   hrefSuffix: string;
   navTarget: string;
   icon: ElementType;
@@ -341,6 +342,7 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
     name: 'Quote Comparison',
     description: "Compare vendor quotes side by side",
     desktopDescription: "Review multiple vendor quotes together so you can shortlist the best option with context.",
+    workflowOnly: true,
     hrefSuffix: 'tools/quote-comparison',
     navTarget: 'tool:quote-comparison',
     icon: resolveToolIcon('home', 'quote-comparison'),

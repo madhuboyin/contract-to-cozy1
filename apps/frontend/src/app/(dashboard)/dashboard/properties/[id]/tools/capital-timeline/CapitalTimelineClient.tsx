@@ -114,6 +114,28 @@ function confidenceBadge(c: string) {
   return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>Low confidence</span>;
 }
 
+function mapTimelineCategoryToRadarCategory(category: string): string {
+  switch (category) {
+    case 'HVAC':
+      return 'HVAC';
+    case 'WATER_HEATER':
+      return 'WATER_HEATER';
+    case 'PLUMBING':
+      return 'PLUMBING';
+    case 'ELECTRICAL':
+      return 'ELECTRICAL';
+    case 'ROOF':
+    case 'EXTERIOR':
+      return 'ROOFING';
+    case 'FOUNDATION':
+      return 'FOUNDATION';
+    case 'APPLIANCE':
+      return 'APPLIANCE_REPLACEMENT';
+    default:
+      return 'GENERAL_HANDYMAN';
+  }
+}
+
 // ─── Component ──────────────────────────────────────────────────────
 export default function CapitalTimelineClient() {
   const params = useParams<{ id: string }>();
@@ -211,6 +233,38 @@ export default function CapitalTimelineClient() {
   const totalMin = items.reduce((s, i) => s + (i.estimatedCostMinCents ?? 0), 0);
   const totalMax = items.reduce((s, i) => s + (i.estimatedCostMaxCents ?? 0), 0);
   const highPriorityCount = items.filter((i) => i.priority === 'HIGH').length;
+  const nextAction = (() => {
+    if (!propertyId || !data) return null;
+
+    const firstHighPriority = items.find((item) => item.priority === 'HIGH');
+    if (firstHighPriority) {
+      const mappedCategory = mapTimelineCategoryToRadarCategory(firstHighPriority.category);
+      const itemLabel =
+        firstHighPriority.inventoryItem?.name || categoryLabel(firstHighPriority.category);
+      const params = new URLSearchParams({
+        launchSurface: 'home_tools',
+        category: mappedCategory,
+        label: itemLabel,
+      });
+      if (guidanceJourneyId) params.set('guidanceJourneyId', guidanceJourneyId);
+      if (guidanceStepKey) params.set('guidanceStepKey', guidanceStepKey);
+
+      return {
+        label: `Price-check: ${itemLabel}`,
+        reason: 'Start with your highest-priority capital item before booking work.',
+        href: `/dashboard/properties/${propertyId}/tools/service-price-radar?${params.toString()}`,
+      };
+    }
+
+    const assumptionSetQuery = activeAssumptionSetId
+      ? `?assumptionSetId=${encodeURIComponent(activeAssumptionSetId)}`
+      : '';
+    return {
+      label: 'Compare sell / hold / rent outcomes',
+      reason: 'No urgent item is due now, so validate your broader ownership strategy next.',
+      href: `/dashboard/properties/${propertyId}/tools/sell-hold-rent${assumptionSetQuery}`,
+    };
+  })();
 
   return (
     <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
@@ -317,6 +371,15 @@ export default function CapitalTimelineClient() {
               <p className="mt-4 border-t border-slate-200/70 pt-3 text-sm text-slate-600 dark:border-slate-700/70 dark:text-slate-300">
                 {data.summary}
               </p>
+            )}
+            {nextAction && (
+              <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
+                <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Next action</p>
+                <p className="mt-1 mb-0 text-sm font-medium text-slate-900 dark:text-slate-100">{nextAction.reason}</p>
+                <Button asChild className="mt-3 h-9 rounded-xl text-sm">
+                  <Link href={nextAction.href}>{nextAction.label}</Link>
+                </Button>
+              </div>
             )}
           </div>
 

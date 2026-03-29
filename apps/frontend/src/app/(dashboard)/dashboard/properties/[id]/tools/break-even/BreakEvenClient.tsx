@@ -178,6 +178,12 @@ export default function BreakEvenClient() {
               <div className="mt-2 text-xs opacity-70">
                 Net at horizon: <span className="font-medium">{money(data?.rollup?.netAtHorizon)}</span>
               </div>
+              <div className="mt-2 text-xs opacity-70">
+                Debt model:{' '}
+                <span className="font-medium">
+                  {data?.current?.debtMode === 'ON' ? 'On (snapshot-backed)' : 'Off (snapshot missing)'}
+                </span>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
@@ -211,6 +217,12 @@ export default function BreakEvenClient() {
                 </span>
               </div>
             </div>
+
+            {data?.current?.debtMode === 'OFF' ? (
+              <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900">
+                Mortgage context is missing, so this is a directional break-even read. Add finance snapshot details for debt-aware math.
+              </div>
+            ) : null}
           </div>
 
           {/* Right */}
@@ -274,6 +286,18 @@ export default function BreakEvenClient() {
               <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>
             ))}
           </div>
+
+          {data?.nextAction ? (
+            <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Next action</div>
+              <div className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                {data.nextAction.reason}
+              </div>
+              <Button asChild className="mt-3 h-9 rounded-xl text-sm">
+                <Link href={data.nextAction.href}>{data.nextAction.label}</Link>
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
     </MobilePageContainer>

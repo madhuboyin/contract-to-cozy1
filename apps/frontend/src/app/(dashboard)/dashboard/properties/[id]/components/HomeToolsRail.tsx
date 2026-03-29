@@ -38,13 +38,15 @@ type ToolDef = {
   tooltip: string;
 };
 
-const HOME_TOOLS: ToolDef[] = MOBILE_HOME_TOOL_LINKS.map((tool) => ({
-  key: tool.key,
-  label: tool.name,
-  href: (propertyId) => `/dashboard/properties/${propertyId}/${tool.hrefSuffix}`,
-  Icon: tool.icon,
-  tooltip: tool.description,
-}));
+const HOME_TOOLS: ToolDef[] = MOBILE_HOME_TOOL_LINKS
+  .filter((tool) => !tool.workflowOnly)
+  .map((tool) => ({
+    key: tool.key,
+    label: tool.name,
+    href: (propertyId) => `/dashboard/properties/${propertyId}/${tool.hrefSuffix}`,
+    Icon: tool.icon,
+    tooltip: tool.description,
+  }));
 
 function isActivePath(pathname: string, href: string) {
   // Active if you’re on the tool route or any nested sub-route

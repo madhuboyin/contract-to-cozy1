@@ -14,6 +14,11 @@ export type BreakEvenDTO = {
     homeValueNow: number;
     appreciationRate: number;
     annualExpensesNow: number;
+    debtMode: 'ON' | 'OFF';
+    mortgageBalanceNow?: number | null;
+    mortgageAnnualRate?: number | null;
+    remainingTermMonths?: number | null;
+    monthlyPayment?: number | null;
   };
 
   history: Array<{
@@ -64,6 +69,13 @@ export type BreakEvenDTO = {
     explanation: string;
   }>;
 
+  nextAction?: {
+    toolKey: 'sell-hold-rent' | 'capital-timeline';
+    label: string;
+    href: string;
+    reason: string;
+  };
+
   meta: {
     generatedAt: string;
     dataSources: string[];
@@ -79,6 +91,10 @@ export async function getBreakEven(
     homeValueNow?: number;
     appreciationRate?: number;
     expenseGrowthRate?: number;
+    mortgageBalance?: number;
+    mortgageAnnualRate?: number;
+    remainingTermMonths?: number;
+    monthlyPayment?: number;
     assumptionSetId?: string;
   }
 ): Promise<BreakEvenDTO> {
@@ -87,6 +103,10 @@ export async function getBreakEven(
   if (opts?.homeValueNow !== undefined) params.set('homeValueNow', String(opts.homeValueNow));
   if (opts?.appreciationRate !== undefined) params.set('appreciationRate', String(opts.appreciationRate));
   if (opts?.expenseGrowthRate !== undefined) params.set('expenseGrowthRate', String(opts.expenseGrowthRate));
+  if (opts?.mortgageBalance !== undefined) params.set('mortgageBalance', String(opts.mortgageBalance));
+  if (opts?.mortgageAnnualRate !== undefined) params.set('mortgageAnnualRate', String(opts.mortgageAnnualRate));
+  if (opts?.remainingTermMonths !== undefined) params.set('remainingTermMonths', String(opts.remainingTermMonths));
+  if (opts?.monthlyPayment !== undefined) params.set('monthlyPayment', String(opts.monthlyPayment));
   if (opts?.assumptionSetId) params.set('assumptionSetId', opts.assumptionSetId);
 
   const q = params.toString();

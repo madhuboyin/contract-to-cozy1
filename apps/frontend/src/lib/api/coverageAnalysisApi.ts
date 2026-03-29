@@ -56,6 +56,11 @@ export type CoverageAnalysisDTO = {
     title: string;
     detail?: string;
     priority?: CoverageImpactLevel;
+    action?: {
+      label: string;
+      href: string;
+      targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+    };
   }>;
 
   insurance: {
@@ -105,6 +110,11 @@ export type ItemCoverageAnalysisDTO = {
     title: string;
     detail?: string;
     priority?: CoverageImpactLevel;
+    action?: {
+      label: string;
+      href: string;
+      targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+    };
   }>;
 
   item: {

@@ -28,6 +28,18 @@ export async function getBreakEven(req: CustomRequest, res: Response) {
   const sellingCostPercent = req.query.sellingCostPercent
     ? Number(req.query.sellingCostPercent)
     : undefined;
+  const mortgageBalance = req.query.mortgageBalance
+    ? Number(req.query.mortgageBalance)
+    : undefined;
+  const mortgageAnnualRate = req.query.mortgageAnnualRate
+    ? Number(req.query.mortgageAnnualRate)
+    : undefined;
+  const remainingTermMonths = req.query.remainingTermMonths
+    ? Number(req.query.remainingTermMonths)
+    : undefined;
+  const monthlyPayment = req.query.monthlyPayment
+    ? Number(req.query.monthlyPayment)
+    : undefined;
   const assumptionSetId =
     typeof req.query.assumptionSetId === 'string' ? req.query.assumptionSetId : undefined;
 
@@ -44,6 +56,10 @@ export async function getBreakEven(req: CustomRequest, res: Response) {
     insuranceGrowthRate,
     maintenanceGrowthRate,
     sellingCostPercent,
+    mortgageBalance,
+    mortgageAnnualRate,
+    remainingTermMonths,
+    monthlyPayment,
   }, userId);
 
   return res.json({

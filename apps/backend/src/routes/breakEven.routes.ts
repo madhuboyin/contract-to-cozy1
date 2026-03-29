@@ -28,6 +28,10 @@ const BreakEvenQuerySchema = z.object({
     insuranceGrowthRate: z.string().optional(),
     maintenanceGrowthRate: z.string().optional(),
     sellingCostPercent: z.string().optional(),
+    mortgageBalance: z.string().optional(),
+    mortgageAnnualRate: z.string().optional(),
+    remainingTermMonths: z.string().optional(),
+    monthlyPayment: z.string().optional(),
   }),
   body: z.any().optional(),
 });

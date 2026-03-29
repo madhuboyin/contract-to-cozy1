@@ -10,6 +10,8 @@ import {
   hasFinancialAssumptionInput,
 } from './financialAssumption.service';
 import { buildAnnualCostSeries, buildAnnualGainSeries } from './tools/financialProjectionMath';
+import { computeMonthlyPayment } from './tools/mortgageMath';
+import { getFinanceSnapshot } from './propertyFinanceSnapshot.service';
 
 export type BreakEvenYears = 5 | 10 | 20 | 30;
 
@@ -26,6 +28,10 @@ export type BreakEvenInput = {
   insuranceGrowthRate?: number;
   maintenanceGrowthRate?: number;
   sellingCostPercent?: number;
+  mortgageBalance?: number;
+  mortgageAnnualRate?: number;
+  remainingTermMonths?: number;
+  monthlyPayment?: number;
 };
 
 type Impact = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -49,6 +55,11 @@ export type BreakEvenDTO = {
     homeValueNow: number;
     appreciationRate: number; // decimal
     annualExpensesNow: number;
+    debtMode: 'ON' | 'OFF';
+    mortgageBalanceNow?: number | null;
+    mortgageAnnualRate?: number | null;
+    remainingTermMonths?: number | null;
+    monthlyPayment?: number | null;
   };
 
   history: Array<{
@@ -99,6 +110,13 @@ export type BreakEvenDTO = {
     explanation: string;
   }>;
 
+  nextAction?: {
+    toolKey: 'sell-hold-rent' | 'capital-timeline';
+    label: string;
+    href: string;
+    reason: string;
+  };
+
   meta: {
     generatedAt: string;
     dataSources: string[];
@@ -118,6 +136,12 @@ export type BreakEvenDTO = {
       notes: string[];
     };
   };
+};
+
+type DebtProjectionYear = {
+  annualInterest: number;
+  annualPrincipal: number;
+  endingBalance: number;
 };
 
 function clampYears(y?: number): BreakEvenYears {
@@ -157,6 +181,61 @@ function bumpConfidence(
   return rank[next] > rank[cur] ? next : cur;
 }
 
+function projectDebtByYear(args: {
+  balanceNow: number;
+  annualRate: number;
+  remainingTermMonths: number;
+  monthlyPayment?: number | null;
+  years: number;
+}): { yearly: DebtProjectionYear[]; monthlyPayment: number } {
+  const monthlyRate = Math.max(0, args.annualRate) / 12;
+  const monthsToSimulate = Math.min(Math.max(0, args.remainingTermMonths), args.years * 12);
+  const payment = args.monthlyPayment ?? computeMonthlyPayment({
+    balanceNow: args.balanceNow,
+    annualRate: args.annualRate,
+    remainingTermMonths: args.remainingTermMonths,
+    monthlyPayment: null,
+  });
+
+  const yearly: DebtProjectionYear[] = [];
+  let balance = Math.max(0, args.balanceNow);
+  let annualInterest = 0;
+  let annualPrincipal = 0;
+
+  for (let month = 0; month < monthsToSimulate; month += 1) {
+    const interest = balance * monthlyRate;
+    const principal = Math.max(0, payment - interest);
+    const actualPrincipal = Math.min(principal, balance);
+    balance = Math.max(0, balance - actualPrincipal);
+
+    annualInterest += interest;
+    annualPrincipal += actualPrincipal;
+
+    const endOfYear = (month + 1) % 12 === 0 || month === monthsToSimulate - 1;
+    if (endOfYear) {
+      yearly.push({
+        annualInterest: annualInterest,
+        annualPrincipal: annualPrincipal,
+        endingBalance: balance,
+      });
+      annualInterest = 0;
+      annualPrincipal = 0;
+    }
+
+    if (balance <= 0) break;
+  }
+
+  while (yearly.length < args.years) {
+    yearly.push({
+      annualInterest: 0,
+      annualPrincipal: 0,
+      endingBalance: 0,
+    });
+  }
+
+  return { yearly, monthlyPayment: payment };
+}
+
 export class BreakEvenService {
   private costGrowth = new HomeCostGrowthService();
   private trueCost = new TrueCostOwnershipService();
@@ -186,6 +265,7 @@ export class BreakEvenService {
     const zipCode = String(property.zipCode || '');
     const addressLabel = `${property.address}, ${property.city} ${property.state} ${property.zipCode}`;
     const nowYear = new Date().getFullYear();
+    const financeSnapshot = await getFinanceSnapshot(propertyId);
 
     const notes: string[] = [];
     const dataSources: string[] = [
@@ -204,10 +284,35 @@ export class BreakEvenService {
     let appreciationRate = baseCg.current.appreciationRate; // replaced below if FHFA comps used
     const annualExpensesNow = baseCg.current.annualExpensesNow;
 
+    const mortgageBalanceNow =
+      input.mortgageBalance ?? financeSnapshot?.mortgageBalance ?? null;
+    const mortgageAnnualRate =
+      input.mortgageAnnualRate ?? financeSnapshot?.interestRate ?? null;
+    const remainingTermMonths =
+      input.remainingTermMonths ?? financeSnapshot?.remainingTermMonths ?? null;
+    const monthlyPaymentInput =
+      input.monthlyPayment ?? financeSnapshot?.monthlyPayment ?? null;
+    const debtMode: 'ON' | 'OFF' =
+      mortgageBalanceNow !== null &&
+      mortgageAnnualRate !== null &&
+      remainingTermMonths !== null &&
+      remainingTermMonths > 0
+        ? 'ON'
+        : 'OFF';
+
     // Overall confidence starts low; we bump based on data
     let confidence: BreakEvenDTO['meta']['confidence'] = 'LOW';
     if (input.homeValueNow !== undefined || input.appreciationRate !== undefined || input.expenseGrowthRate !== undefined) {
       confidence = bumpConfidence(confidence, 'MEDIUM');
+    }
+    if (debtMode === 'ON') {
+      dataSources.push('PropertyFinanceSnapshot + mortgage amortization context');
+      notes.push('Debt-aware modeling is ON using mortgage snapshot/override inputs.');
+      confidence = bumpConfidence(confidence, 'MEDIUM');
+    } else if (financeSnapshot) {
+      notes.push('Finance snapshot is partial; add missing mortgage fields to enable debt-aware break-even.');
+    } else {
+      notes.push('No finance snapshot found; break-even runs without debt context until mortgage details are added.');
     }
 
     // ✅ Phase-3: swap appreciationRate to real comps when user did NOT override appreciationRate
@@ -368,9 +473,36 @@ export class BreakEvenService {
       dataSources.push('SignalService (shared financial signal context)');
     }
 
-    // Project series forward
-    const annualExpenses = buildAnnualCostSeries(annualExpensesNow, expenseGrowthRate, years).map(toMoney);
-    const annualAppGain = buildAnnualGainSeries(homeValueNow, appreciationRate, years).map(toMoney);
+    // Project base ownership + appreciation series
+    const baseAnnualExpenses = buildAnnualCostSeries(annualExpensesNow, expenseGrowthRate, years);
+    const baseAnnualAppGain = buildAnnualGainSeries(homeValueNow, appreciationRate, years);
+
+    // Debt-aware add-ons (interest as cost, principal as equity gain)
+    let debtMonthlyPayment: number | null = monthlyPaymentInput;
+    const annualDebtInterest = Array.from({ length: years }, () => 0);
+    const annualPrincipalPaydown = Array.from({ length: years }, () => 0);
+
+    if (debtMode === 'ON') {
+      const debtProjection = projectDebtByYear({
+        balanceNow: mortgageBalanceNow as number,
+        annualRate: mortgageAnnualRate as number,
+        remainingTermMonths: remainingTermMonths as number,
+        monthlyPayment: monthlyPaymentInput,
+        years,
+      });
+      debtMonthlyPayment = debtProjection.monthlyPayment;
+      for (let i = 0; i < years; i += 1) {
+        annualDebtInterest[i] = debtProjection.yearly[i]?.annualInterest ?? 0;
+        annualPrincipalPaydown[i] = debtProjection.yearly[i]?.annualPrincipal ?? 0;
+      }
+    }
+
+    const annualExpenses = baseAnnualExpenses.map((value, idx) =>
+      toMoney(value + annualDebtInterest[idx])
+    );
+    const annualAppGain = baseAnnualAppGain.map((value, idx) =>
+      toMoney(value + annualPrincipalPaydown[idx])
+    );
 
     // Cumulative + net
     const historyOut: BreakEvenDTO['history'] = [];
@@ -418,8 +550,8 @@ export class BreakEvenService {
       const gains = buildAnnualGainSeries(homeValueNow, ar, years);
       const costs = buildAnnualCostSeries(annualExpensesNow, er, years);
       for (let t = 0; t < years; t++) {
-        cumE += costs[t];
-        cumG += gains[t];
+        cumE += costs[t] + annualDebtInterest[t];
+        cumG += gains[t] + annualPrincipalPaydown[t];
         net.push(toMoney(cumG - cumE));
       }
 
@@ -455,6 +587,39 @@ export class BreakEvenService {
             ? `Based on FHFA repeat-sale index (${appreciationMeta.regionLevel}): ${appreciationMeta.regionLabel}.`
             : 'Modeled using localized historical heuristics (Phase 1–2).',
     });
+    drivers.push({
+      factor: debtMode === 'ON' ? 'Debt-aware ownership math' : 'Debt context missing',
+      impact: debtMode === 'ON' ? 'MEDIUM' : 'HIGH',
+      explanation:
+        debtMode === 'ON'
+          ? 'Interest is treated as ownership cost and principal paydown as equity gain in each projected year.'
+          : 'Mortgage context is unavailable, so debt carrying costs are not included in this break-even projection.',
+    });
+
+    const assumptionSetSuffix = financialContext.assumptionSetId
+      ? `?assumptionSetId=${encodeURIComponent(financialContext.assumptionSetId)}`
+      : '';
+    const nextAction: BreakEvenDTO['nextAction'] =
+      debtMode === 'OFF'
+        ? {
+            toolKey: 'sell-hold-rent',
+            label: 'Add mortgage details for debt-aware modeling',
+            href: `/dashboard/properties/${propertyId}/tools/sell-hold-rent${assumptionSetSuffix}#finance-snapshot`,
+            reason: 'Debt context is missing, so break-even is currently directional.',
+          }
+        : reached
+          ? {
+              toolKey: 'capital-timeline',
+              label: 'Plan capital events after break-even',
+              href: `/dashboard/properties/${propertyId}/tools/capital-timeline${assumptionSetSuffix}`,
+              reason: 'Break-even is projected; capital sequencing is the next decision.',
+            }
+          : {
+              toolKey: 'sell-hold-rent',
+              label: 'Compare Sell / Hold / Rent outcomes',
+              href: `/dashboard/properties/${propertyId}/tools/sell-hold-rent${assumptionSetSuffix}`,
+              reason: 'Break-even is not reached in this horizon, so disposition options should be compared.',
+            };
 
     return {
       assumptionSetId: financialContext.assumptionSetId,
@@ -478,10 +643,23 @@ export class BreakEvenService {
           insuranceGrowthRate: input.insuranceGrowthRate,
           maintenanceGrowthRate: input.maintenanceGrowthRate,
           sellingCostPercent: input.sellingCostPercent,
+          mortgageBalance: input.mortgageBalance,
+          mortgageAnnualRate: input.mortgageAnnualRate,
+          remainingTermMonths: input.remainingTermMonths,
+          monthlyPayment: input.monthlyPayment,
         },
       },
 
-      current: { homeValueNow, appreciationRate, annualExpensesNow },
+      current: {
+        homeValueNow,
+        appreciationRate,
+        annualExpensesNow,
+        debtMode,
+        mortgageBalanceNow,
+        mortgageAnnualRate,
+        remainingTermMonths,
+        monthlyPayment: debtMode === 'ON' ? debtMonthlyPayment : monthlyPaymentInput,
+      },
 
       history: historyOut,
 
@@ -504,6 +682,7 @@ export class BreakEvenService {
       },
 
       drivers,
+      nextAction,
 
       meta: {
         generatedAt: new Date().toISOString(),

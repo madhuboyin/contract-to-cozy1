@@ -72,6 +72,13 @@ function priorityTone(priority: 'LOW' | 'MEDIUM' | 'HIGH') {
   return 'bg-emerald-100 text-emerald-700';
 }
 
+function verificationTone(direction: 'DECREASED' | 'INCREASED' | 'UNCHANGED' | 'UNKNOWN') {
+  if (direction === 'DECREASED') return 'bg-emerald-100 text-emerald-700';
+  if (direction === 'INCREASED') return 'bg-rose-100 text-rose-700';
+  if (direction === 'UNCHANGED') return 'bg-amber-100 text-amber-700';
+  return 'bg-slate-100 text-slate-700';
+}
+
 export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOptimizerPanelProps) {
   const searchParams = useSearchParams();
   const requestedAssumptionSetId = searchParams.get('assumptionSetId');
@@ -365,6 +372,35 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
               { label: 'Computed', value: compactDate(analysis.computedAt) },
             ]}
           />
+
+          {analysis.mitigationVerification?.hasCompletedMitigations ? (
+            <section className="rounded-2xl border border-black/10 bg-white p-5">
+              <h4 className="text-base font-semibold text-gray-900">Post-mitigation verification</h4>
+              <p className="mt-1 text-sm text-gray-600">{analysis.mitigationVerification.note}</p>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-gray-200 bg-black/[0.02] p-3 text-xs text-gray-700">
+                  Completed actions: <span className="font-semibold">{analysis.mitigationVerification.completedCount}</span>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-black/[0.02] p-3 text-xs text-gray-700">
+                  Baseline run: <span className="font-semibold">{compactDate(analysis.mitigationVerification.baselineComputedAt || undefined)}</span>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-black/[0.02] p-3 text-xs text-gray-700">
+                  Baseline premium: <span className="font-semibold">{money(analysis.mitigationVerification.baselineAnnualPremium)}</span>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-black/[0.02] p-3 text-xs text-gray-700">
+                  Current premium: <span className="font-semibold">{money(analysis.mitigationVerification.currentAnnualPremium)}</span>
+                </div>
+              </div>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${verificationTone(analysis.mitigationVerification.observedDirection)}`}>
+                  {analysis.mitigationVerification.observedDirection}
+                </span>
+                <span className="text-gray-700">
+                  Observed delta: {analysis.mitigationVerification.observedPremiumDelta == null ? '—' : money(analysis.mitigationVerification.observedPremiumDelta)}
+                </span>
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-2xl border border-black/10 bg-white p-5">
             <h4 className="text-base font-semibold text-gray-900">Premium drivers</h4>

@@ -61,7 +61,7 @@ const HOME_TOOL_GROUPS = [
     key: 'negotiation',
     title: 'Negotiation + Review',
     summary: 'Quote and premium review with response-ready guidance',
-    toolKeys: ['service-price-radar', 'quote-comparison', 'negotiation-shield', 'price-finalization'],
+    toolKeys: ['service-price-radar', 'negotiation-shield', 'price-finalization'],
   },
   {
     key: 'ownership',

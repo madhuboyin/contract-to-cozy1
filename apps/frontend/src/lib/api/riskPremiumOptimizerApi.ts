@@ -74,6 +74,16 @@ export type RiskPremiumOptimizationDTO = {
   }>;
 
   computedAt: string;
+  mitigationVerification?: {
+    hasCompletedMitigations: boolean;
+    completedCount: number;
+    baselineComputedAt?: string | null;
+    baselineAnnualPremium?: number | null;
+    currentAnnualPremium?: number | null;
+    observedPremiumDelta?: number | null;
+    observedDirection: 'DECREASED' | 'INCREASED' | 'UNCHANGED' | 'UNKNOWN';
+    note: string;
+  };
 };
 
 export type RiskPremiumOptimizerStatusResponse =

@@ -126,12 +126,14 @@ export function BottomNav() {
       isActive: tool.isActive,
     }));
 
-  const homeToolItems: MoreItem[] = MOBILE_HOME_TOOL_LINKS.map((tool) => ({
-    label: tool.name,
-    href: buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget),
-    icon: tool.icon,
-    isActive: tool.isActive,
-  }));
+  const homeToolItems: MoreItem[] = MOBILE_HOME_TOOL_LINKS
+    .filter((tool) => !tool.workflowOnly)
+    .map((tool) => ({
+      label: tool.name,
+      href: buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget),
+      icon: tool.icon,
+      isActive: tool.isActive,
+    }));
 
   const corePageItems: MoreItem[] = [
     {

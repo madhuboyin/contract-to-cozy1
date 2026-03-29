@@ -331,7 +331,13 @@ function buildNegotiationShieldHref(
   resolvedNextStepKey?: string | null
 ): string {
   const params = new URLSearchParams();
-  const targetStepKey = resolvedNextStepKey ?? 'prepare_negotiation';
+  const targetStepKey =
+    resolvedNextStepKey ??
+    (check.verdict === 'VERY_HIGH' || check.verdict === 'HIGH'
+      ? 'compare_quotes'
+      : check.verdict === 'FAIR' || check.verdict === 'UNDERPRICED'
+        ? 'finalize_price'
+        : 'prepare_negotiation');
 
   if (check.quoteVendorName) {
     params.set('contractorName', check.quoteVendorName);
@@ -360,6 +366,20 @@ function buildNegotiationShieldHref(
   params.set('scenario', 'contractor-quote-review');
 
   return `/dashboard/properties/${propertyId}/tools/negotiation-shield?${params.toString()}`;
+}
+
+function deriveHandoffStepKey(
+  check: ServicePriceRadarCheckDetail,
+  guidanceNextStepKey?: string | null
+): string {
+  return (
+    guidanceNextStepKey ??
+    (check.verdict === 'VERY_HIGH' || check.verdict === 'HIGH'
+      ? 'compare_quotes'
+      : check.verdict === 'FAIR' || check.verdict === 'UNDERPRICED'
+        ? 'finalize_price'
+        : 'prepare_negotiation')
+  );
 }
 
 function extractReasons(check: ServicePriceRadarCheckDetail): string[] {
@@ -669,6 +689,7 @@ export default function ServicePriceRadarClient() {
         expectedHigh: currentCheck.expectedHigh,
       })
     : null;
+  const handoffStepKey = currentCheck ? deriveHandoffStepKey(currentCheck, nextStepKey) : null;
   const hadPrefill = Boolean(
     prefilledCategoryValue ||
       searchParams.get('subcategory') ||
@@ -1497,17 +1518,18 @@ export default function ServicePriceRadarClient() {
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button asChild variant="outline" className="min-h-[40px] rounded-xl">
                       <Link
-                        href={buildNegotiationShieldHref(propertyId, currentCheck, guidanceContext, nextStepKey)}
+                        href={buildNegotiationShieldHref(propertyId, currentCheck, guidanceContext, handoffStepKey)}
                         onClick={() =>
                           trackRadarEvent('NEGOTIATION_HANDOFF_CLICKED', 'handoff', {
                             service_category: currentCheck.serviceCategory,
                             verdict: currentCheck.verdict || undefined,
+                            handoff_step: handoffStepKey || undefined,
                           })
                         }
                       >
-                        {nextStepKey === 'compare_quotes'
+                        {handoffStepKey === 'compare_quotes'
                           ? 'Compare quotes'
-                          : nextStepKey === 'finalize_price'
+                          : handoffStepKey === 'finalize_price'
                             ? 'Finalize accepted price'
                             : 'Need help responding?'}
                       </Link>

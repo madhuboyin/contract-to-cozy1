@@ -54,6 +54,71 @@ function normalizeLooseToken(value: string): string {
     .replace(/_+/g, '_');
 }
 
+const STATE_NAME_TO_CODE: Record<string, string> = {
+  ALABAMA: 'AL',
+  ALASKA: 'AK',
+  ARIZONA: 'AZ',
+  ARKANSAS: 'AR',
+  CALIFORNIA: 'CA',
+  COLORADO: 'CO',
+  CONNECTICUT: 'CT',
+  DELAWARE: 'DE',
+  FLORIDA: 'FL',
+  GEORGIA: 'GA',
+  HAWAII: 'HI',
+  IDAHO: 'ID',
+  ILLINOIS: 'IL',
+  INDIANA: 'IN',
+  IOWA: 'IA',
+  KANSAS: 'KS',
+  KENTUCKY: 'KY',
+  LOUISIANA: 'LA',
+  MAINE: 'ME',
+  MARYLAND: 'MD',
+  MASSACHUSETTS: 'MA',
+  MICHIGAN: 'MI',
+  MINNESOTA: 'MN',
+  MISSISSIPPI: 'MS',
+  MISSOURI: 'MO',
+  MONTANA: 'MT',
+  NEBRASKA: 'NE',
+  NEVADA: 'NV',
+  NEW_HAMPSHIRE: 'NH',
+  NEW_JERSEY: 'NJ',
+  NEW_MEXICO: 'NM',
+  NEW_YORK: 'NY',
+  NORTH_CAROLINA: 'NC',
+  NORTH_DAKOTA: 'ND',
+  OHIO: 'OH',
+  OKLAHOMA: 'OK',
+  OREGON: 'OR',
+  PENNSYLVANIA: 'PA',
+  RHODE_ISLAND: 'RI',
+  SOUTH_CAROLINA: 'SC',
+  SOUTH_DAKOTA: 'SD',
+  TENNESSEE: 'TN',
+  TEXAS: 'TX',
+  UTAH: 'UT',
+  VERMONT: 'VT',
+  VIRGINIA: 'VA',
+  WASHINGTON: 'WA',
+  WEST_VIRGINIA: 'WV',
+  WISCONSIN: 'WI',
+  WYOMING: 'WY',
+  DISTRICT_OF_COLUMBIA: 'DC',
+  WASHINGTON_DC: 'DC',
+};
+
+const STATE_CODE_TO_NAME_TOKEN: Record<string, string> = Object.entries(STATE_NAME_TO_CODE).reduce(
+  (acc, [nameToken, code]) => {
+    if (!acc[code]) {
+      acc[code] = nameToken;
+    }
+    return acc;
+  },
+  {} as Record<string, string>
+);
+
 function normalizeSubcategory(value?: string | null): string | null {
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return null;
@@ -78,6 +143,13 @@ function normalizeRegionKey(value?: string | null): string | null {
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return null;
   return normalizeLooseToken(trimmed);
+}
+
+function normalizeStateCode(value?: string | null): string | null {
+  const token = normalizeRegionKey(value);
+  if (!token) return null;
+  if (token.length === 2) return token;
+  return STATE_NAME_TO_CODE[token] ?? null;
 }
 
 function formatCurrencyRangeValue(value: number | null): number | null {
@@ -481,19 +553,35 @@ function normalizeBenchmarkRegionCandidates(property: PropertyContext): Record<S
     COUNTY: new Set<string>(),
   };
 
-  const state = normalizeRegionKey(property.state);
-  if (state) {
-    map.STATE.add(state);
+  const stateToken = normalizeRegionKey(property.state);
+  const stateCode = normalizeStateCode(property.state);
+  if (stateToken) {
+    map.STATE.add(stateToken);
+  }
+  if (stateCode) {
+    map.STATE.add(stateCode);
+    if (STATE_CODE_TO_NAME_TOKEN[stateCode]) {
+      map.STATE.add(STATE_CODE_TO_NAME_TOKEN[stateCode]);
+    }
   }
 
   const city = normalizeRegionKey(property.city);
-  if (city && state) {
-    map.METRO.add(`${city}_${state}`);
-    map.METRO.add(`${city}${state}`);
+  if (city) {
+    if (stateCode) {
+      map.METRO.add(`${city}_${stateCode}`);
+      map.METRO.add(`${city}${stateCode}`);
+    }
+    if (stateToken) {
+      map.METRO.add(`${city}_${stateToken}`);
+      map.METRO.add(`${city}${stateToken}`);
+    }
   }
 
   if (property.zipCode) {
-    map.ZIP_PREFIX.add(property.zipCode.slice(0, 3));
+    const digits = String(property.zipCode).replace(/\D/g, '');
+    if (digits.length >= 3) {
+      map.ZIP_PREFIX.add(digits.slice(0, 3));
+    }
   }
 
   return map;

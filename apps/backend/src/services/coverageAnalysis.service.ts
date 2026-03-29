@@ -80,6 +80,11 @@ export type CoverageAnalysisDTO = {
     title: string;
     detail?: string;
     priority?: 'LOW' | 'MEDIUM' | 'HIGH';
+    action?: {
+      label: string;
+      href: string;
+      targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+    };
   }>;
 
   insurance: {
@@ -130,6 +135,11 @@ export type ItemCoverageAnalysisDTO = {
     title: string;
     detail?: string;
     priority?: 'LOW' | 'MEDIUM' | 'HIGH';
+    action?: {
+      label: string;
+      href: string;
+      targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+    };
   }>;
 
   item: {
@@ -182,6 +192,11 @@ type NextStep = {
   title: string;
   detail?: string;
   priority?: Priority;
+  action?: {
+    label: string;
+    href: string;
+    targetTool: 'coverage-options' | 'providers' | 'insurance' | 'coverage-intelligence';
+  };
 };
 
 type ComputedSnapshot = {
@@ -1131,6 +1146,11 @@ export class CoverageIntelligenceService {
         title: 'Add your primary homeowner policy details',
         detail: 'Store premium and deductible values to improve insurance confidence.',
         priority: 'HIGH',
+        action: {
+          label: 'Update insurance profile',
+          href: `/dashboard/insurance?propertyId=${propertyId}`,
+          targetTool: 'insurance',
+        },
       });
     }
     if (coverageGaps.length > 0) {
@@ -1138,6 +1158,11 @@ export class CoverageIntelligenceService {
         title: 'Close inventory coverage gaps',
         detail: `${coverageGaps.length} high-value item(s) are missing active warranty or insurance mapping.`,
         priority: coverageGaps.length >= 3 ? 'HIGH' : 'MEDIUM',
+        action: {
+          label: 'Review coverage options',
+          href: `/dashboard/properties/${propertyId}/tools/coverage-options`,
+          targetTool: 'coverage-options',
+        },
       });
     }
     if (
@@ -1150,6 +1175,11 @@ export class CoverageIntelligenceService {
         title: 'Review deductible vs emergency cash buffer',
         detail: 'A lower deductible may reduce short-term out-of-pocket strain.',
         priority: deductibleUsd / cashBufferUsd > 0.4 ? 'HIGH' : 'MEDIUM',
+        action: {
+          label: 'Run deductible scenario',
+          href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence#scenario-simulator`,
+          targetTool: 'coverage-intelligence',
+        },
       });
     }
     if (warrantyVerdict === CoverageVerdict.NOT_WORTH_IT) {
@@ -1157,6 +1187,11 @@ export class CoverageIntelligenceService {
         title: 'Re-evaluate warranty spend for low-risk systems',
         detail: 'Current expected repair risk appears lower than annual warranty costs.',
         priority: 'LOW',
+        action: {
+          label: 'Compare warranty paths',
+          href: `/dashboard/properties/${propertyId}/tools/coverage-options?focus=warranty`,
+          targetTool: 'coverage-options',
+        },
       });
     }
     if (recommendedAddOns.length > 0) {
@@ -1164,6 +1199,11 @@ export class CoverageIntelligenceService {
         title: 'Review optional protection add-ons at next renewal',
         detail: 'Use the add-on list as questions for your current carrier/warranty provider.',
         priority: 'MEDIUM',
+        action: {
+          label: 'Find insurance services',
+          href: `/dashboard/providers?propertyId=${propertyId}&category=insurance`,
+          targetTool: 'providers',
+        },
       });
     }
 
@@ -1657,6 +1697,11 @@ export class CoverageIntelligenceService {
         title: `Request ${coverageType === 'SERVICE_PLAN' ? 'service plan' : 'warranty'} quotes for this item`,
         detail: 'Compare annual cost and service fee terms against this estimate.',
         priority: 'HIGH',
+        action: {
+          label: 'Find coverage providers',
+          href: `/dashboard/providers?propertyId=${propertyId}&category=${coverageType === 'SERVICE_PLAN' ? 'service-plan' : 'warranty'}`,
+          targetTool: 'providers',
+        },
       });
     }
     if (warrantyVerdict === CoverageVerdict.SITUATIONAL) {
@@ -1664,6 +1709,11 @@ export class CoverageIntelligenceService {
         title: 'Run 2-3 pricing scenarios before buying coverage',
         detail: 'Try lower annual cost or service fee assumptions to see break-even shifts.',
         priority: 'MEDIUM',
+        action: {
+          label: 'Run scenario simulator',
+          href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence#scenario-simulator`,
+          targetTool: 'coverage-intelligence',
+        },
       });
     }
     if (recommendation === 'REPLACE_SOON') {
@@ -1671,6 +1721,11 @@ export class CoverageIntelligenceService {
         title: 'Plan replacement budget',
         detail: `Remaining life is limited; compare coverage spend with replacement planning.`,
         priority: 'HIGH',
+        action: {
+          label: 'Open Service Price Radar',
+          href: `/dashboard/properties/${propertyId}/tools/service-price-radar?launchSurface=home_tools&category=APPLIANCE_REPLACEMENT`,
+          targetTool: 'coverage-options',
+        },
       });
     }
     if (ageYears === undefined) {
@@ -1678,6 +1733,11 @@ export class CoverageIntelligenceService {
         title: 'Add install or purchase date',
         detail: 'Known age improves confidence and break-even accuracy.',
         priority: 'MEDIUM',
+        action: {
+          label: 'Open inventory item',
+          href: `/dashboard/properties/${propertyId}/inventory/items/${item.id}`,
+          targetTool: 'coverage-options',
+        },
       });
     }
     if (cashBufferUsd !== undefined && cashBufferUsd > 0 && replacementCostUsd > cashBufferUsd * 0.8) {
@@ -1685,6 +1745,11 @@ export class CoverageIntelligenceService {
         title: 'Check emergency cash buffer vs replacement cost',
         detail: `Replacement estimate ($${toMoney(replacementCostUsd)}) is high relative to current buffer.`,
         priority: 'MEDIUM',
+        action: {
+          label: 'Run deductible scenario',
+          href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence#scenario-simulator`,
+          targetTool: 'coverage-intelligence',
+        },
       });
     }
 

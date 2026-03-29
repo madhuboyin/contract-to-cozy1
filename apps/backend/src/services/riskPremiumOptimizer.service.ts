@@ -100,6 +100,16 @@ export type RiskPremiumOptimizationDTO = {
     completedAt?: string | null;
   }>;
   computedAt: string;
+  mitigationVerification?: {
+    hasCompletedMitigations: boolean;
+    completedCount: number;
+    baselineComputedAt?: string | null;
+    baselineAnnualPremium?: number | null;
+    currentAnnualPremium?: number | null;
+    observedPremiumDelta?: number | null;
+    observedDirection: 'DECREASED' | 'INCREASED' | 'UNCHANGED' | 'UNKNOWN';
+    note: string;
+  };
 };
 
 type PremiumDriver = RiskPremiumOptimizationDTO['premiumDrivers'][number];
@@ -111,6 +121,9 @@ type Recommendation = RiskPremiumOptimizationDTO['recommendations'][number] & {
 type LatestAnalysisRecord = RiskPremiumOptimizationAnalysis & {
   planItems: RiskMitigationPlanItem[];
 };
+
+type MitigationVerification = NonNullable<RiskPremiumOptimizationDTO['mitigationVerification']>;
+type MitigationVerificationDirection = MitigationVerification['observedDirection'];
 
 const STORM_EXPOSURE_STATES = new Set(['FL', 'TX', 'LA', 'AL', 'MS', 'SC', 'NC', 'GA', 'NJ']);
 const FIRE_EXPOSURE_STATES = new Set(['CA', 'CO', 'AZ', 'NM', 'OR', 'WA', 'ID', 'MT']);
@@ -227,6 +240,46 @@ function parseSharedMetaFromSnapshot(
   };
 }
 
+function parseMitigationVerificationFromSnapshot(
+  value: Prisma.JsonValue | null | undefined
+): RiskPremiumOptimizationDTO['mitigationVerification'] | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const root = value as Record<string, unknown>;
+  const raw =
+    root.mitigationVerification &&
+    typeof root.mitigationVerification === 'object' &&
+    !Array.isArray(root.mitigationVerification)
+      ? (root.mitigationVerification as Record<string, unknown>)
+      : null;
+  if (!raw) return undefined;
+
+  const observedDirection = String(raw.observedDirection ?? '').toUpperCase();
+  const normalizedDirection: MitigationVerificationDirection =
+    observedDirection === 'DECREASED' ||
+    observedDirection === 'INCREASED' ||
+    observedDirection === 'UNCHANGED'
+      ? (observedDirection as MitigationVerificationDirection)
+      : 'UNKNOWN';
+
+  return {
+    hasCompletedMitigations: raw.hasCompletedMitigations === true,
+    completedCount: Number.isFinite(Number(raw.completedCount)) ? Number(raw.completedCount) : 0,
+    baselineComputedAt:
+      typeof raw.baselineComputedAt === 'string' ? raw.baselineComputedAt : null,
+    baselineAnnualPremium: asNumber(raw.baselineAnnualPremium) ?? null,
+    currentAnnualPremium: asNumber(raw.currentAnnualPremium) ?? null,
+    observedPremiumDelta: asNumber(raw.observedPremiumDelta) ?? null,
+    observedDirection: normalizedDirection,
+    note:
+      typeof raw.note === 'string' && raw.note.trim()
+        ? raw.note.trim()
+        : 'Mitigation verification metadata unavailable.',
+  };
+}
+
 function extractSignalNumber(signal: {
   valueNumber: number | null;
   valueJson: Prisma.JsonValue | null;
@@ -273,6 +326,7 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     return a.createdAt.getTime() - b.createdAt.getTime();
   });
   const sharedMeta = parseSharedMetaFromSnapshot(record.inputsSnapshot);
+  const mitigationVerification = parseMitigationVerificationFromSnapshot(record.inputsSnapshot);
 
   return {
     id: record.id,
@@ -293,6 +347,7 @@ function mapAnalysisToDto(record: LatestAnalysisRecord): RiskPremiumOptimization
     ),
     planItems: planItems.map(mapPlanItemToDto),
     computedAt: record.computedAt.toISOString(),
+    mitigationVerification,
   };
 }
 
@@ -492,7 +547,7 @@ export class RiskPremiumOptimizerService {
     const lookback = new Date();
     lookback.setMonth(lookback.getMonth() - 36);
 
-    const [policies, claims, inventoryItems, propertyDocuments, sharedSignalLookup] = await Promise.all([
+    const [policies, claims, inventoryItems, propertyDocuments, sharedSignalLookup, latestAnalysis] = await Promise.all([
       prisma.insurancePolicy.findMany({
         where: { propertyId },
         orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
@@ -553,6 +608,11 @@ export class RiskPremiumOptimizerService {
           refreshReason: 'risk-premium-optimizer',
         }
       ),
+      prisma.riskPremiumOptimizationAnalysis.findFirst({
+        where: { propertyId },
+        include: { planItems: true },
+        orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
+      }),
     ]);
     const sharedSignals = sharedSignalLookup.signals;
     if (sharedSignalLookup.fallbackUsed) {
@@ -1226,6 +1286,41 @@ export class RiskPremiumOptimizerService {
           ? RiskPremiumOptimizationConfidence.MEDIUM
           : RiskPremiumOptimizationConfidence.LOW;
 
+    const completedMitigations =
+      latestAnalysis?.planItems.filter((item) => item.status === MitigationPlanStatus.DONE) ?? [];
+    const baselineAnnualPremium = latestAnalysis
+      ? inferInputSnapshot(latestAnalysis.inputsSnapshot).annualPremium ?? null
+      : null;
+    const currentAnnualPremium = annualPremium ?? null;
+    const observedPremiumDelta =
+      baselineAnnualPremium !== null && currentAnnualPremium !== null
+        ? Math.round((currentAnnualPremium - baselineAnnualPremium) * 100) / 100
+        : null;
+    const observedDirection: MitigationVerificationDirection =
+      observedPremiumDelta === null
+        ? 'UNKNOWN'
+        : observedPremiumDelta < -1
+          ? 'DECREASED'
+          : observedPremiumDelta > 1
+            ? 'INCREASED'
+            : 'UNCHANGED';
+    const mitigationVerification: RiskPremiumOptimizationDTO['mitigationVerification'] | undefined =
+      completedMitigations.length > 0
+        ? {
+            hasCompletedMitigations: true,
+            completedCount: completedMitigations.length,
+            baselineComputedAt: latestAnalysis?.computedAt.toISOString() ?? null,
+            baselineAnnualPremium,
+            currentAnnualPremium,
+            observedPremiumDelta,
+            observedDirection,
+            note:
+              observedPremiumDelta !== null
+                ? `Observed annual premium delta after completed mitigations: $${Math.abs(observedPremiumDelta).toFixed(0)} (${observedDirection.toLowerCase()}).`
+                : 'Completed mitigation items were found, but premium delta cannot be verified until premium inputs are available in consecutive runs.',
+          }
+        : undefined;
+
     const topRecommendation = sortedRecommendations[0];
     const summaryParts: string[] = [];
     if (topRecommendation) {
@@ -1235,6 +1330,9 @@ export class RiskPremiumOptimizerService {
       summaryParts.push(
         `Estimated premium pressure reduction range: $${estimatedSavingsMin.toFixed(0)}-$${estimatedSavingsMax.toFixed(0)} per year.`
       );
+    }
+    if (mitigationVerification) {
+      summaryParts.push(mitigationVerification.note);
     }
     summaryParts.push('Educational guidance only; validate assumptions before policy changes.');
     const summary = summaryParts.join(' ');
@@ -1280,6 +1378,7 @@ export class RiskPremiumOptimizerService {
               savingsRealizationAnnual,
             },
             sharedSignalsUsed,
+            mitigationVerification: mitigationVerification ?? null,
           },
           premiumDrivers: drivers.slice(0, 6),
           recommendations: persistedRecommendations.slice(0, 8),

@@ -1114,19 +1114,32 @@ export default function CoverageIntelligencePanel({
                         Next Steps
                       </p>
                       <div className="space-y-3">
-                        {analysis.nextSteps.slice(0, 3).map((step, i) => (
-                          <div key={i} className="flex items-start gap-2.5">
-                            <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-500" />
-                            <div>
-                              <p className="text-xs font-medium text-slate-700">{step.title}</p>
-                              {step.detail && (
-                                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-                                  {step.detail}
-                                </p>
-                              )}
+                        {analysis.nextSteps.slice(0, 3).map((step, i) => {
+                          const stepAction = step.action;
+                          return (
+                            <div key={i} className="flex items-start gap-2.5">
+                              <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-500" />
+                              <div>
+                                <p className="text-xs font-medium text-slate-700">{step.title}</p>
+                                {step.detail && (
+                                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+                                    {step.detail}
+                                  </p>
+                                )}
+                                {stepAction ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2 h-7 rounded-lg px-2.5 text-[11px]"
+                                    onClick={() => router.push(stepAction.href)}
+                                  >
+                                    {stepAction.label}
+                                  </Button>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

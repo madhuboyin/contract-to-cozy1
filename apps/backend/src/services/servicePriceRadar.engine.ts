@@ -65,6 +65,73 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+const STATE_NAME_TO_CODE: Record<string, string> = {
+  ALABAMA: 'AL',
+  ALASKA: 'AK',
+  ARIZONA: 'AZ',
+  ARKANSAS: 'AR',
+  CALIFORNIA: 'CA',
+  COLORADO: 'CO',
+  CONNECTICUT: 'CT',
+  DELAWARE: 'DE',
+  FLORIDA: 'FL',
+  GEORGIA: 'GA',
+  HAWAII: 'HI',
+  IDAHO: 'ID',
+  ILLINOIS: 'IL',
+  INDIANA: 'IN',
+  IOWA: 'IA',
+  KANSAS: 'KS',
+  KENTUCKY: 'KY',
+  LOUISIANA: 'LA',
+  MAINE: 'ME',
+  MARYLAND: 'MD',
+  MASSACHUSETTS: 'MA',
+  MICHIGAN: 'MI',
+  MINNESOTA: 'MN',
+  MISSISSIPPI: 'MS',
+  MISSOURI: 'MO',
+  MONTANA: 'MT',
+  NEBRASKA: 'NE',
+  NEVADA: 'NV',
+  NEW_HAMPSHIRE: 'NH',
+  NEW_JERSEY: 'NJ',
+  NEW_MEXICO: 'NM',
+  NEW_YORK: 'NY',
+  NORTH_CAROLINA: 'NC',
+  NORTH_DAKOTA: 'ND',
+  OHIO: 'OH',
+  OKLAHOMA: 'OK',
+  OREGON: 'OR',
+  PENNSYLVANIA: 'PA',
+  RHODE_ISLAND: 'RI',
+  SOUTH_CAROLINA: 'SC',
+  SOUTH_DAKOTA: 'SD',
+  TENNESSEE: 'TN',
+  TEXAS: 'TX',
+  UTAH: 'UT',
+  VERMONT: 'VT',
+  VIRGINIA: 'VA',
+  WASHINGTON: 'WA',
+  WEST_VIRGINIA: 'WV',
+  WISCONSIN: 'WI',
+  WYOMING: 'WY',
+  DISTRICT_OF_COLUMBIA: 'DC',
+  WASHINGTON_DC: 'DC',
+};
+
+const FX_TO_USD_RATES: Record<string, { rate: number; asOf: string; source: string }> = {
+  USD: { rate: 1, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+  CAD: { rate: 0.74, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+  EUR: { rate: 1.08, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+  GBP: { rate: 1.27, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+  AUD: { rate: 0.66, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+  NZD: { rate: 0.61, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+  JPY: { rate: 0.0067, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+  INR: { rate: 0.012, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+  CHF: { rate: 1.11, asOf: '2026-03-29', source: 'Static baseline snapshot' },
+};
+
 function normalizeFreeform(value?: string | null): string | null {
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return null;
@@ -75,6 +142,15 @@ function normalizeFreeform(value?: string | null): string | null {
     .replace(/^_+|_+$/g, '')
     .replace(/_+/g, '_')
     .slice(0, 80);
+}
+
+function normalizeStateToken(value?: string | null): string {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
 }
 
 function sentenceCase(value: string): string {
@@ -128,32 +204,58 @@ function sizeMultiplier(sizeBand: string | null, areaSensitive: boolean): { mult
 }
 
 function normalizeStateCode(state?: string | null): string | null {
-  const raw = String(state ?? '').trim().toUpperCase();
-  if (!raw) return null;
-
-  const fullToCode: Record<string, string> = {
-    CALIFORNIA: 'CA',
-    NEW_YORK: 'NY',
-    NEW_JERSEY: 'NJ',
-    MASSACHUSETTS: 'MA',
-    CONNECTICUT: 'CT',
-    WASHINGTON: 'WA',
-    HAWAII: 'HI',
-    ALASKA: 'AK',
-    FLORIDA: 'FL',
-    TEXAS: 'TX',
-    GEORGIA: 'GA',
-    COLORADO: 'CO',
-    OREGON: 'OR',
-    VIRGINIA: 'VA',
-    MARYLAND: 'MD',
-    PENNSYLVANIA: 'PA',
-    ILLINOIS: 'IL',
-  };
-
-  const token = raw.replace(/[^A-Z]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  const token = normalizeStateToken(state);
+  if (!token) return null;
   if (token.length === 2) return token;
-  return fullToCode[token] ?? null;
+  return STATE_NAME_TO_CODE[token] ?? null;
+}
+
+function normalizeQuoteToUsd(
+  quoteAmount: number,
+  quoteCurrency?: string | null
+): {
+  quoteCurrency: string;
+  quoteAmountOriginal: number;
+  quoteAmountUsd: number;
+  fxApplied: boolean;
+  fxSupported: boolean;
+  fxRate: number | null;
+  fxAsOf: string | null;
+  fxSource: string | null;
+  note: string;
+} {
+  const currency = String(quoteCurrency ?? 'USD').trim().toUpperCase() || 'USD';
+  const fx = FX_TO_USD_RATES[currency];
+
+  if (!fx) {
+    return {
+      quoteCurrency: currency,
+      quoteAmountOriginal: round(quoteAmount),
+      quoteAmountUsd: round(quoteAmount),
+      fxApplied: false,
+      fxSupported: false,
+      fxRate: null,
+      fxAsOf: null,
+      fxSource: null,
+      note: `Currency ${currency} is not in the FX table, so quote amount was treated as USD for fairness scoring.`,
+    };
+  }
+
+  const quoteAmountUsd = round(quoteAmount * fx.rate);
+  return {
+    quoteCurrency: currency,
+    quoteAmountOriginal: round(quoteAmount),
+    quoteAmountUsd,
+    fxApplied: currency !== 'USD',
+    fxSupported: true,
+    fxRate: fx.rate,
+    fxAsOf: fx.asOf,
+    fxSource: fx.source,
+    note:
+      currency === 'USD'
+        ? 'Quote is already in USD; no FX conversion required.'
+        : `Converted ${currency} quote to USD using rate ${fx.rate} (${fx.source}, as of ${fx.asOf}).`,
+  };
 }
 
 function regionMultiplier(state?: string | null): { multiplier: number; note: string } {
@@ -376,6 +478,7 @@ export class ServicePriceRadarEngine {
     const age = ageMultiplier(property.yearBuilt, linkedEntities);
     const linked = linkedEntityMultiplier(linkedEntities);
     const benchmark = benchmarkAdjustments(benchmarkMatch);
+    const normalizedQuote = normalizeQuoteToUsd(input.quoteAmount, input.quoteCurrency);
 
     const adjustments: PriceAdjustment[] = [];
     const reasonCodes = new Set<string>();
@@ -411,10 +514,14 @@ export class ServicePriceRadarEngine {
       }
     }
 
-    if (input.quoteCurrency && input.quoteCurrency.toUpperCase() !== 'USD') {
-      adjustments.push(buildAdjustment('CURRENCY_ASSUMPTION', 1, 'Non-USD quotes are not FX-adjusted in this MVP.'));
+    if (normalizedQuote.fxApplied) {
+      adjustments.push(buildAdjustment('FX_NORMALIZATION', 1, normalizedQuote.note));
+      reasonCodes.add('FX_NORMALIZATION');
+      notes.push(normalizedQuote.note);
+    } else if (!normalizedQuote.fxSupported) {
+      adjustments.push(buildAdjustment('CURRENCY_ASSUMPTION', 1, normalizedQuote.note));
       reasonCodes.add('CURRENCY_ASSUMPTION');
-      notes.push('Quote currency was stored as provided, but the estimate assumes USD-oriented benchmark logic.');
+      notes.push(normalizedQuote.note);
     }
 
     low = round(clamp(low, 50, 250000));
@@ -429,14 +536,18 @@ export class ServicePriceRadarEngine {
     if (linkedEntities.length) confidence += 0.08;
     if (normalizedSubcategory) confidence += 0.04;
     if (input.serviceCategory === 'OTHER' || input.serviceCategory === 'ADMIN' || input.serviceCategory === 'FINANCE') confidence -= 0.08;
-    if (input.quoteCurrency && input.quoteCurrency.toUpperCase() !== 'USD') confidence -= 0.12;
+    if (!normalizedQuote.fxSupported) {
+      confidence -= 0.12;
+    } else if (normalizedQuote.fxApplied) {
+      confidence -= 0.03;
+    }
     confidence = round(clamp(confidence, 0.18, 0.92), 4);
 
-    const verdict = determineVerdict(input.quoteAmount, low, high, confidence);
+    const verdict = determineVerdict(normalizedQuote.quoteAmountUsd, low, high, confidence);
     const lowConfidence = confidence !== null && confidence < 0.5;
     const explanationShort = buildExplanationShort(
       verdict,
-      input.quoteAmount,
+      normalizedQuote.quoteAmountUsd,
       low,
       high,
       input.serviceCategory,
@@ -477,6 +588,16 @@ export class ServicePriceRadarEngine {
         subcategory: normalizedSubcategory,
         labelRaw: input.serviceLabelRaw ?? null,
       },
+      quote: {
+        amountOriginal: normalizedQuote.quoteAmountOriginal,
+        currency: normalizedQuote.quoteCurrency,
+        amountUsd: normalizedQuote.quoteAmountUsd,
+        fxApplied: normalizedQuote.fxApplied,
+        fxSupported: normalizedQuote.fxSupported,
+        fxRate: normalizedQuote.fxRate,
+        fxAsOf: normalizedQuote.fxAsOf,
+        fxSource: normalizedQuote.fxSource,
+      },
       benchmark: {
         matched: benchmarkMatch.matched,
         benchmarkId: benchmarkMatch.benchmark?.id ?? null,
@@ -505,6 +626,8 @@ export class ServicePriceRadarEngine {
       limitations:
         verdict === 'INSUFFICIENT_DATA'
           ? ['Estimate is broad because the available property or pricing context was limited.']
+          : !normalizedQuote.fxSupported
+            ? ['Quote currency is outside supported FX currencies; fairness result is directional only.']
           : !benchmarkMatch.matched
             ? ['Direct benchmark data was unavailable, so fallback regional assumptions were used.']
             : lowConfidence
