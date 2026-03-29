@@ -114,6 +114,8 @@ export type NegotiationShieldPricingAssessment = {
   summary: string;
   rationale: string[];
   confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
+  // Phase-3: human-readable explanation of why the confidence score was set
+  confidenceExplanation?: string;
   currency: string | null;
   quoteAmount?: number | null;
   priorPremium?: number | null;
@@ -197,6 +199,8 @@ export type NegotiationShieldAnalysisDTO = {
   recommendedActions: NegotiationShieldRecommendedAction[] | Record<string, unknown> | null;
   pricingAssessment: NegotiationShieldPricingAssessment | Record<string, unknown> | null;
   confidence: number | null;
+  // Phase-3: extracted from pricingAssessment.confidenceExplanation for convenience
+  confidenceExplanation: string | null;
   generatedAt: string;
   modelVersion: string | null;
   createdAt: string;

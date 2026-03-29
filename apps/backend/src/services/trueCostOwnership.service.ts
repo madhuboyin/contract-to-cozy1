@@ -64,6 +64,14 @@ export type TrueCostOwnershipDTO = {
     dataSources: string[];
     notes: string[];
     confidence: Confidence;
+
+    // Phase-3: transparency array
+    assumptions: Array<{
+      field: string;
+      source: 'DATA_BACKED' | 'HEURISTIC' | 'USER_OVERRIDE';
+      value: unknown;
+      note: string;
+    }>;
   };
 };
 
@@ -315,6 +323,53 @@ export class TrueCostOwnershipService {
       },
     ];
 
+    const assumptions: TrueCostOwnershipDTO['meta']['assumptions'] = [
+      {
+        field: 'homeValueNow',
+        source: input.homeValueNow !== undefined ? 'USER_OVERRIDE' : (property.propertySize ? 'HEURISTIC' : 'HEURISTIC'),
+        value: toMoney(homeValueNow),
+        note: input.homeValueNow !== undefined
+          ? 'Client-provided override.'
+          : property.propertySize
+            ? `Estimated from ${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft (Phase 1).`
+            : 'Generic $350,000 fallback — no property size on file.',
+      },
+      {
+        field: 'annualInsurance',
+        source: input.insuranceAnnualNow !== undefined ? 'USER_OVERRIDE' : (insuranceIsEducational ? 'HEURISTIC' : 'DATA_BACKED'),
+        value: toMoney(annualInsuranceNow),
+        note: input.insuranceAnnualNow !== undefined
+          ? 'Client-provided override.'
+          : insuranceIsEducational
+            ? 'InsuranceCostTrendService EDUCATIONAL_ESTIMATE — modeled, not DOI-filed data.'
+            : 'InsuranceCostTrendService modeled estimate.',
+      },
+      {
+        field: 'annualMaintenance',
+        source: input.maintenanceAnnualNow !== undefined ? 'USER_OVERRIDE' : 'HEURISTIC',
+        value: toMoney(annualMaintenanceNow),
+        note: input.maintenanceAnnualNow !== undefined
+          ? 'Client-provided override.'
+          : `~1% of home value × state factor (Phase 1 heuristic, state: ${state}).`,
+      },
+      {
+        field: 'annualUtilities',
+        source: input.utilitiesAnnualNow !== undefined ? 'USER_OVERRIDE' : 'HEURISTIC',
+        value: toMoney(annualUtilitiesNow),
+        note: input.utilitiesAnnualNow !== undefined
+          ? 'Client-provided override.'
+          : `State-level regional average for ${state} (Phase 1 — no provider/energy-rate dataset yet).`,
+      },
+      {
+        field: 'inflationRate',
+        source: input.inflationRate !== undefined ? 'USER_OVERRIDE' : 'HEURISTIC',
+        value: `${(inflationRate * 100).toFixed(1)}%`,
+        note: input.inflationRate !== undefined
+          ? 'Client-provided override.'
+          : `State-adjusted heuristic for ${state} — used for utilities + maintenance drift (Phase 1).`,
+      },
+    ];
+
     const dto: TrueCostOwnershipDTO = {
       input: {
         propertyId,
@@ -349,6 +404,7 @@ export class TrueCostOwnershipService {
           'Phase 1 is a storytelling estimator: no external utility provider data, no DOI filings, no snapshot persistence.',
         ],
         confidence,
+        assumptions,
       },
     };
 

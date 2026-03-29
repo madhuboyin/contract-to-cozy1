@@ -77,6 +77,19 @@ export interface RateTrendSummary {
   trendLabel: string;
 }
 
+/**
+ * Phase-3: modeled market rate for an individual loan product.
+ * ARM/FHA/VA/jumbo rates are estimated as spreads off the 30yr benchmark
+ * until live multi-product feed is wired (clearly labeled as modeled).
+ */
+export interface LoanProductRate {
+  product: 'FIXED_30' | 'FIXED_15' | 'ARM_5_1' | 'FHA_30' | 'VA_30' | 'JUMBO_30';
+  label: string;
+  ratePct: number;
+  source: 'LIVE' | 'MODELED_SPREAD';
+  spreadNote: string | null;
+}
+
 // ─── Service Return Types ────────────────────────────────────────────────────
 
 export interface RadarStatusResponse {
@@ -98,6 +111,9 @@ export interface RadarStatusResponse {
   missedOpportunitySummary: MissedOpportunityInsight | null;
   notQualifiedReasons: string[];
   disclaimer: string;
+  // Phase-3 additive fields
+  rateDataFreshnessAt: string | null;   // ISO date of latest rate snapshot
+  loanProducts: LoanProductRate[];       // Modeled rates for multiple loan products
 }
 
 export interface RadarUnavailableResponse {

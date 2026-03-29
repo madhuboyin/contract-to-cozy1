@@ -48,6 +48,12 @@ export type PropertyTaxEstimateDTO = {
     explanation: string;
   }[];
 
+  nextSteps: Array<{
+    title: string;
+    detail: string;
+    action?: { href: string; label: string; targetTool?: string };
+  }>;
+
   meta: {
     generatedAt: string;
     dataSources: string[];
@@ -279,6 +285,64 @@ function typicalEffectiveRateBand(state: string, rate: number): { band: ImpactLe
   return { band: 'MEDIUM', msg: 'around typical for your state' };
 }
 
+function buildPropertyTaxNextSteps(args: {
+  propertyId: string;
+  state: string;
+  confidence: PropertyTaxConfidence;
+  annualTax: number;
+  percentileApprox: number;
+}): PropertyTaxEstimateDTO['nextSteps'] {
+  const { propertyId, state, confidence, annualTax, percentileApprox } = args;
+  const steps: PropertyTaxEstimateDTO['nextSteps'] = [];
+
+  if (confidence === 'LOW') {
+    steps.push({
+      title: 'Complete your property profile',
+      detail: 'Adding your property size and confirmed assessed value will significantly improve the accuracy of this estimate.',
+      action: {
+        href: `/dashboard/properties/${propertyId}/settings`,
+        label: 'Update property profile',
+      },
+    });
+  }
+
+  if (percentileApprox >= 70) {
+    steps.push({
+      title: 'Review your assessed value for errors',
+      detail: `Your estimated tax is above typical for ${state}. Errors in square footage, lot size, or classification can inflate the bill — most counties allow a formal appeal.`,
+      action: {
+        href: `/dashboard/properties/${propertyId}/tools/negotiation-shield`,
+        label: 'Start a negotiation case',
+        targetTool: 'negotiation-shield',
+      },
+    });
+  }
+
+  if (stateHasHomestead(state)) {
+    steps.push({
+      title: 'Check homestead and exemption eligibility',
+      detail: `${state} offers homestead and potentially other exemptions that can reduce your taxable assessed value. Primary-residence owners are often eligible.`,
+      action: {
+        href: `/dashboard/properties/${propertyId}/tools/property-tax`,
+        label: 'Explore exemptions',
+        targetTool: 'property-tax',
+      },
+    });
+  }
+
+  steps.push({
+    title: 'Track your tax bill year-over-year',
+    detail: 'Use the Cost Volatility tool to monitor reassessment cadence and flag years where a step-change is likely.',
+    action: {
+      href: `/dashboard/properties/${propertyId}/tools/cost-volatility`,
+      label: 'View cost volatility',
+      targetTool: 'cost-volatility',
+    },
+  });
+
+  return steps;
+}
+
 export class PropertyTaxService {
   async estimate(propertyId: string, opts: PropertyTaxEstimateInput = {}): Promise<PropertyTaxEstimateDTO> {
     const property = await prisma.property.findUnique({
@@ -370,6 +434,14 @@ export class PropertyTaxService {
       schoolInsights
     );
       
+    const nextSteps = buildPropertyTaxNextSteps({
+      propertyId,
+      state,
+      confidence,
+      annualTax,
+      percentileApprox: comparison.percentileApprox,
+    });
+
     return {
       input: {
         propertyId,
@@ -392,6 +464,7 @@ export class PropertyTaxService {
       projection,
       comparison,
       drivers,
+      nextSteps,
       meta: {
         generatedAt: new Date().toISOString(),
         dataSources,

@@ -520,19 +520,32 @@ export function generateContractorQuoteAnalysis(
   const summary = buildSummary(ctx, pricingAssessment);
 
   let confidence = 0.3;
-  if (ctx.quoteAmount !== null) confidence += 0.15;
-  if (hasText(ctx.serviceCategory) || hasText(ctx.systemCategory)) confidence += 0.1;
-  if (hasText(ctx.rawText, 25)) confidence += 0.1;
-  if (hasText(ctx.notes, 20)) confidence += 0.05;
-  if (ctx.hasAnyDocument) confidence += 0.05;
-  if (ctx.lineItemBreakdownProvided) confidence += 0.1;
-  if (ctx.scopeClarityProvided) confidence += 0.05;
-  if (ctx.comparisonQuotesAvailable) confidence += 0.1;
-  if (ctx.repairOptionDiscussed !== null) confidence += 0.05;
-  if (!ctx.lineItemBreakdownProvided) confidence -= 0.05;
-  if (!hasText(ctx.serviceCategory) && !hasText(ctx.systemCategory)) confidence -= 0.05;
-  if (ctx.quoteAmount === null) confidence -= 0.1;
+  const confidenceFactors: string[] = [];
+
+  if (ctx.quoteAmount !== null) { confidence += 0.15; confidenceFactors.push('quote amount present (+15%)'); }
+  else { confidence -= 0.1; confidenceFactors.push('quote amount missing (-10%)'); }
+
+  if (hasText(ctx.serviceCategory) || hasText(ctx.systemCategory)) { confidence += 0.1; confidenceFactors.push('service category identified (+10%)'); }
+  else { confidence -= 0.05; confidenceFactors.push('service category unclear (-5%)'); }
+
+  if (hasText(ctx.rawText, 25)) { confidence += 0.1; confidenceFactors.push('meaningful raw text provided (+10%)'); }
+  if (hasText(ctx.notes, 20)) { confidence += 0.05; confidenceFactors.push('notes provided (+5%)'); }
+  if (ctx.hasAnyDocument) { confidence += 0.05; confidenceFactors.push('supporting document attached (+5%)'); }
+
+  if (ctx.lineItemBreakdownProvided) { confidence += 0.1; confidenceFactors.push('itemized breakdown present (+10%)'); }
+  else { confidence -= 0.05; confidenceFactors.push('no itemized breakdown (-5%)'); }
+
+  if (ctx.scopeClarityProvided) { confidence += 0.05; confidenceFactors.push('scope is clear (+5%)'); }
+  if (ctx.comparisonQuotesAvailable) { confidence += 0.1; confidenceFactors.push('comparison quotes available (+10%)'); }
+  if (ctx.repairOptionDiscussed !== null) { confidence += 0.05; confidenceFactors.push('repair vs. replace discussed (+5%)'); }
+
   confidence = clamp(Number(confidence.toFixed(2)), 0.2, 0.9);
+
+  const confidenceLabel = inferConfidenceLabel(confidence);
+  const confidenceExplanation =
+    `Confidence scored at ${Math.round(confidence * 100)}% (${confidenceLabel}). ` +
+    `Key factors: ${confidenceFactors.slice(0, 4).join('; ')}.` +
+    (confidenceFactors.length > 4 ? ` (+${confidenceFactors.length - 4} more)` : '');
 
   const draft = buildDraft(ctx, actions);
 
@@ -543,7 +556,8 @@ export function generateContractorQuoteAnalysis(
     recommendedActions: actions,
     pricingAssessment: {
       ...pricingAssessment,
-      confidenceLabel: inferConfidenceLabel(confidence),
+      confidenceLabel,
+      confidenceExplanation,
     },
     confidence,
     modelVersion: CONTRACTOR_QUOTE_MODEL_VERSION,

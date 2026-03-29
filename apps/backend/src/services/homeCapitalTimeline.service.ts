@@ -18,6 +18,52 @@ import {
 } from './financialAssumption.service';
 import { projectValueAtYear } from './tools/financialProjectionMath';
 
+// ─── Phase-3: Seasonal/climate wear adjustment by state ────────────
+// Multiplicative factor applied to lifespan (<1 shortens, >1 lengthens).
+// Drives earlier window predictions for high-wear climates.
+const CLIMATE_WEAR_FACTOR_BY_STATE: Record<string, Record<string, number>> = {
+  FL: { HVAC: 0.82, ROOF: 0.85, EXTERIOR: 0.80, PLUMBING: 0.92 },   // Heat, humidity, hurricane
+  TX: { HVAC: 0.85, ROOF: 0.87, EXTERIOR: 0.85 },                    // Heat, hail, convective storms
+  LA: { HVAC: 0.82, ROOF: 0.83, EXTERIOR: 0.78, PLUMBING: 0.90 },   // Gulf humidity, flooding
+  AZ: { HVAC: 0.88, ROOF: 0.90 },                                    // Extreme heat/UV
+  CA: { ROOF: 0.93, EXTERIOR: 0.92 },                                // Wildfire smoke, UV
+  MN: { PLUMBING: 0.88, EXTERIOR: 0.90, ROOF: 0.92 },               // Freeze/thaw cycles
+  IL: { PLUMBING: 0.90, EXTERIOR: 0.92 },                           // Freeze/thaw
+  WI: { PLUMBING: 0.88, EXTERIOR: 0.90 },                           // Severe freeze/thaw
+};
+
+function getClimateWearFactor(state: string, category: string): number {
+  const stateFactors = CLIMATE_WEAR_FACTOR_BY_STATE[state.toUpperCase().trim()];
+  return stateFactors?.[category] ?? 1.0;
+}
+
+// ─── Phase-3: Bundle coordination ───────────────────────────────────
+// Items within BUNDLE_WINDOW_MONTHS of each other get a bundleGroup tag,
+// enabling "coordinate these together for potential 10-15% contractor savings."
+const BUNDLE_WINDOW_MONTHS = 6;
+
+function assignBundleGroups(items: Array<{ windowStart: Date; windowEnd: Date }>) {
+  const bundleGroupIds: (string | null)[] = new Array(items.length).fill(null);
+  let groupCounter = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    for (let j = i + 1; j < items.length; j++) {
+      const startI = items[i].windowStart.getTime();
+      const startJ = items[j].windowStart.getTime();
+      const diffMonths = Math.abs(startI - startJ) / (30.44 * 24 * 60 * 60 * 1000);
+      if (diffMonths <= BUNDLE_WINDOW_MONTHS) {
+        const existingGroupI = bundleGroupIds[i];
+        const existingGroupJ = bundleGroupIds[j];
+        const groupId = existingGroupI ?? existingGroupJ ?? `bundle-${++groupCounter}`;
+        bundleGroupIds[i] = groupId;
+        bundleGroupIds[j] = groupId;
+      }
+    }
+  }
+
+  return bundleGroupIds;
+}
+
 // ─── Category defaults ─────────────────────────────────────────────
 type CategoryDefault = {
   lifespanYears: number;
@@ -136,8 +182,9 @@ export class HomeCapitalTimelineService {
       createdByUserId?: string | null;
     }
   ) {
-    // 1. Fetch inputs
-    const [inventoryItems, homeEvents, overrides] = await Promise.all([
+    // 1. Fetch inputs (Phase-3: also fetch property state for climate adjustments)
+    const [propertyRecord, inventoryItems, homeEvents, overrides] = await Promise.all([
+      prisma.property.findUnique({ where: { id: propertyId }, select: { state: true } }),
       prisma.inventoryItem.findMany({
         where: { propertyId },
         select: {
@@ -193,6 +240,7 @@ export class HomeCapitalTimelineService {
       eventsByItem.get(e.inventoryItemId)!.push(e);
     }
 
+    const propertyState = String(propertyRecord?.state || '').toUpperCase().trim();
     const now = new Date();
     const horizonEnd = addYears(now, horizonYears);
     const itemsToCreate: Array<{
@@ -225,8 +273,9 @@ export class HomeCapitalTimelineService {
       // Age calculation
       const age = ageInYears(item.installedOn || item.purchasedOn, 5);
 
-      // Adjusted lifespan
-      let adjustedLifespan = defaults.lifespanYears * conditionMultiplier(item.condition);
+      // Adjusted lifespan (Phase-3: apply climate/seasonal wear factor)
+      const climateFactor = getClimateWearFactor(propertyState, timelineCat);
+      let adjustedLifespan = defaults.lifespanYears * conditionMultiplier(item.condition) * climateFactor;
 
       // Repair frequency adjustment
       const repairEvents = eventsByItem.get(item.id) || [];
@@ -313,6 +362,9 @@ export class HomeCapitalTimelineService {
       if (repairCount > 0) {
         whyParts.push(`${repairCount} repair event(s) on record suggest increased wear.`);
       }
+      if (climateFactor < 1.0 && propertyState) {
+        whyParts.push(`Climate/seasonal wear factor applied for ${propertyState} (${(climateFactor * 100).toFixed(0)}% of standard lifespan).`);
+      }
       if (remainingLifeOverride) {
         whyParts.push(`Remaining life manually set to ${(remainingLifeOverride.payload as any)?.remainingYears} years.`);
       }
@@ -339,6 +391,27 @@ export class HomeCapitalTimelineService {
 
     // 3. Sort by windowStart
     itemsToCreate.sort((a, b) => a.windowStart.getTime() - b.windowStart.getTime());
+
+    // Phase-3: Bundling coordination — tag items close in time as a bundle group
+    const bundleGroups = assignBundleGroups(itemsToCreate);
+    const bundleGroupCounts = new Map<string, number>();
+    for (const gid of bundleGroups) {
+      if (gid) bundleGroupCounts.set(gid, (bundleGroupCounts.get(gid) ?? 0) + 1);
+    }
+    for (let i = 0; i < itemsToCreate.length; i++) {
+      const gid = bundleGroups[i];
+      if (gid && (bundleGroupCounts.get(gid) ?? 0) >= 2) {
+        // Append bundling note to why text
+        const existing = itemsToCreate[i].why;
+        if (!existing.includes('bundle')) {
+          (itemsToCreate[i] as any).why =
+            existing +
+            ` Bundling with other items in a similar timeframe (group ${gid}) may reduce contractor costs by 10–15%.`;
+        }
+        // Store bundle group ID in a side channel (not a DB column, stored in timelineJson snapshot only)
+        (itemsToCreate[i] as any)._bundleGroup = gid;
+      }
+    }
 
     // 4. Overall confidence & summary
     const confidences = itemsToCreate.map(i => i.confidence);

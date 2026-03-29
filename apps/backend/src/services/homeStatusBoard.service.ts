@@ -345,6 +345,55 @@ const CONDITION_SEVERITY: Record<string, number> = {
   GOOD: 2,
 };
 
+// Phase-3: Category-weighted priority (lower number = higher priority in sort)
+const CATEGORY_PRIORITY_WEIGHT: Record<string, number> = {
+  SAFETY: 0,
+  STRUCTURE: 1,
+  SYSTEMS: 2,
+  HVAC: 2,
+  APPLIANCE: 3,
+  KITCHEN: 3,
+  ELECTRONICS: 4,
+  FURNITURE: 5,
+  OTHER: 6,
+};
+
+function getCategoryPriorityWeight(category: string): number {
+  return CATEGORY_PRIORITY_WEIGHT[category] ?? 6;
+}
+
+// Phase-3: Estimate repair and replacement costs per item from RISK_ASSET_CONFIG
+// Repair is modeled as ~30% of replacement cost (common industry rule of thumb)
+const REPAIR_COST_RATIO = 0.30;
+
+function getCostEstimates(
+  assetType: string | null | undefined,
+  inventoryCategory: string | null | undefined
+): { estimatedReplaceCostUsd: number | null; estimatedRepairCostUsd: number | null } {
+  if (assetType) {
+    const cfg = RISK_ASSET_CONFIG.find((c) => c.systemType === assetType);
+    if (cfg) {
+      return {
+        estimatedReplaceCostUsd: cfg.replacementCost,
+        estimatedRepairCostUsd: Math.round(cfg.replacementCost * REPAIR_COST_RATIO),
+      };
+    }
+  }
+  if (inventoryCategory) {
+    const mapped = mapCategoryToAssetType(inventoryCategory);
+    if (mapped) {
+      const cfg = RISK_ASSET_CONFIG.find((c) => c.systemType === mapped);
+      if (cfg) {
+        return {
+          estimatedReplaceCostUsd: cfg.replacementCost,
+          estimatedRepairCostUsd: Math.round(cfg.replacementCost * REPAIR_COST_RATIO),
+        };
+      }
+    }
+  }
+  return { estimatedReplaceCostUsd: null, estimatedRepairCostUsd: null };
+}
+
 // ---------------------------------------------------------------------------
 // ensureHomeItems
 // ---------------------------------------------------------------------------
@@ -814,6 +863,12 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
     const needsInstallDateForPrediction =
       !installDate && effectiveCondition === 'GOOD' && effectiveRecommendation === 'OK';
 
+    // Phase-3: cost context per item
+    const assetTypeForCost = item.homeAsset?.assetType ?? item.inventoryItem?.homeAsset?.assetType ?? null;
+    const invCategoryForCost = item.inventoryItem?.category ?? null;
+    const { estimatedReplaceCostUsd, estimatedRepairCostUsd } = getCostEstimates(assetTypeForCost, invCategoryForCost);
+    const categoryPriorityWeight = getCategoryPriorityWeight(category);
+
     return {
       id: item.id,
       kind: item.kind,
@@ -839,6 +894,10 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
       pendingMaintenance,
       room: room ? { id: room.id, name: room.name } : null,
       needsInstallDateForPrediction,
+      // Phase-3: cost context
+      estimatedRepairCostUsd,
+      estimatedReplaceCostUsd,
+      categoryPriorityWeight,
       deepLinks: buildDeepLinks(
         {
           id: item.id,
@@ -854,12 +913,16 @@ export async function listBoard(propertyId: string, query: ListBoardQuery) {
     };
   });
 
-  // Sort: pinned first, then by condition severity, then alphabetical
+  // Sort: pinned first, then by condition severity, then by category priority weight, then alphabetical
   items.sort((a, b) => {
     if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
     const sa = CONDITION_SEVERITY[a.condition] ?? 2;
     const sb = CONDITION_SEVERITY[b.condition] ?? 2;
     if (sa !== sb) return sa - sb;
+    // Phase-3: within same condition, SAFETY > STRUCTURE > SYSTEMS > APPLIANCE > ...
+    const ca = a.categoryPriorityWeight;
+    const cb = b.categoryPriorityWeight;
+    if (ca !== cb) return ca - cb;
     return a.displayName.localeCompare(b.displayName);
   });
 

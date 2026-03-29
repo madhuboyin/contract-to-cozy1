@@ -61,6 +61,13 @@ export type CostVolatilityDTO = {
   // Phase-2 additive fields
   events?: CostVolatilityEvent[];
 
+  // Phase-3 additive field
+  nextSteps?: Array<{
+    title: string;
+    detail: string;
+    action?: { href: string; label: string; targetTool?: string };
+  }>;
+
   meta: {
     generatedAt: string;
     dataSources: string[];
@@ -513,6 +520,55 @@ export class CostVolatilityService {
             ],
           };
 
+    // Phase-3: action guidance
+    const nextSteps: CostVolatilityDTO['nextSteps'] = [];
+
+    if (band2.tier === 'HIGH') {
+      if (dominantDriver === 'INSURANCE') {
+        nextSteps.push({
+          title: 'Shop your insurance before renewal',
+          detail: 'High insurance volatility means your premium is at elevated repricing risk. Getting competing quotes 60–90 days before renewal gives you leverage.',
+          action: {
+            href: `/dashboard/properties/${propertyId}/tools/service-price-radar`,
+            label: 'Check insurance pricing',
+            targetTool: 'service-price-radar',
+          },
+        });
+      } else if (dominantDriver === 'TAX') {
+        nextSteps.push({
+          title: 'Review your assessed value before the next reset year',
+          detail: `${taxCadence.pattern === 'MULTI_YEAR_STEP' ? 'Your state uses a multi-year reassessment cadence — step-changes can be large.' : 'Annual reassessment means your bill can shift each year.'} Check for errors and exemptions now.`,
+          action: {
+            href: `/dashboard/properties/${propertyId}/tools/property-tax`,
+            label: 'Review property tax estimate',
+            targetTool: 'property-tax',
+          },
+        });
+      }
+    }
+
+    if (band2.tier !== 'LOW' || events.length > 0) {
+      nextSteps.push({
+        title: 'Build a cost buffer into your budget',
+        detail: `Volatility score of ${volatilityIndex}/100 means meaningful year-to-year swings are possible. A dedicated reserve of 1–3 months of annual costs reduces surprise risk.`,
+        action: {
+          href: `/dashboard/properties/${propertyId}/tools/budget-planner`,
+          label: 'Open budget planner',
+          targetTool: 'budget-planner',
+        },
+      });
+    }
+
+    nextSteps.push({
+      title: 'Compare volatility against your full cost picture',
+      detail: 'Use the Cost Growth tool to see whether appreciation is keeping pace with your rising ownership costs.',
+      action: {
+        href: `/dashboard/properties/${propertyId}/tools/cost-growth`,
+        label: 'View cost growth forecast',
+        targetTool: 'cost-growth',
+      },
+    });
+
     return {
       input: { propertyId, years, addressLabel, state, zipCode },
       index: {
@@ -527,6 +583,7 @@ export class CostVolatilityService {
       history: historyWindow,
       drivers,
       events,
+      nextSteps,
       meta: {
         generatedAt: new Date().toISOString(),
         dataSources,

@@ -18,6 +18,7 @@ import {
   mapScenarioToDTO,
 } from './mappers/refinanceRadar.mapper';
 import {
+  LoanProductRate,
   MissedOpportunityInsight,
   MortgageInputContext,
   RadarStatusResult,
@@ -29,6 +30,58 @@ import {
 import { IngestSnapshotInput } from './engine/mortgageRate.service';
 import { MortgageRateSnapshotDTO } from './types/refinanceRadar.types';
 import { DEFAULT_CLOSING_COST_PCT } from './config/refinanceRadar.config';
+
+// ─── Phase-3: Loan product spread modeling ───────────────────────────────────
+// These spreads are historical median differentials off the 30yr conventional
+// benchmark (as of 2026). Replace with live multi-product feed when available.
+
+function buildLoanProducts(rate30yr: number, rate15yr: number): LoanProductRate[] {
+  const r = (pct: number) => Math.round(pct * 1000) / 1000;
+  return [
+    {
+      product: 'FIXED_30',
+      label: '30-year fixed',
+      ratePct: r(rate30yr),
+      source: 'LIVE',
+      spreadNote: null,
+    },
+    {
+      product: 'FIXED_15',
+      label: '15-year fixed',
+      ratePct: r(rate15yr),
+      source: 'LIVE',
+      spreadNote: null,
+    },
+    {
+      product: 'ARM_5_1',
+      label: '5/1 ARM',
+      ratePct: r(rate30yr - 0.75), // ~75bps below 30yr historically
+      source: 'MODELED_SPREAD',
+      spreadNote: 'Estimated ~0.75% below 30yr fixed (historical spread). Rate adjusts after 5 years.',
+    },
+    {
+      product: 'FHA_30',
+      label: '30-year FHA',
+      ratePct: r(rate30yr - 0.25), // FHA typically ~25bps below conventional
+      source: 'MODELED_SPREAD',
+      spreadNote: 'Estimated ~0.25% below conventional 30yr (historical spread). Requires MIP.',
+    },
+    {
+      product: 'VA_30',
+      label: '30-year VA',
+      ratePct: r(rate30yr - 0.50), // VA typically ~50bps below conventional
+      source: 'MODELED_SPREAD',
+      spreadNote: 'Estimated ~0.50% below conventional 30yr (historical spread). VA-eligible borrowers only.',
+    },
+    {
+      product: 'JUMBO_30',
+      label: '30-year jumbo',
+      ratePct: r(rate30yr + 0.25), // Jumbo typically ~25bps above conventional
+      source: 'MODELED_SPREAD',
+      spreadNote: 'Estimated ~0.25% above conventional 30yr (historical spread). Loan amounts above conforming limit.',
+    },
+  ];
+}
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
@@ -209,6 +262,12 @@ export class RefinanceRadarService {
       select: { lastEvaluatedAt: true },
     });
 
+    const latestSnapshot = recentSnapshots[0] ?? null;
+    const loanProducts = buildLoanProducts(
+      latestSnapshot?.rate30yr ?? evalResult.marketRatePct,
+      latestSnapshot?.rate15yr ?? (evalResult.marketRatePct - 0.75),
+    );
+
     return {
       available: true,
       radarState: evalResult.radarState,
@@ -228,6 +287,8 @@ export class RefinanceRadarService {
       missedOpportunitySummary: missedOpportunity.hasMissedOpportunity ? missedOpportunity : null,
       notQualifiedReasons: evalResult.notQualifiedReasons,
       disclaimer: REFINANCE_DISCLAIMER,
+      rateDataFreshnessAt: latestSnapshot?.date ?? null,
+      loanProducts,
     };
   }
 
@@ -269,12 +330,19 @@ export class RefinanceRadarService {
       radarSummary = 'No actionable refinance opportunity detected at the last evaluation.';
     }
 
+    const latestSnapshot = recentSnapshots[0] ?? null;
+    const marketRate30yr = latestSnapshot?.rate30yr ?? 0;
+    const loanProducts = buildLoanProducts(
+      marketRate30yr,
+      latestSnapshot?.rate15yr ?? Math.max(0, marketRate30yr - 0.75),
+    );
+
     return {
       available: true,
       radarState: radarState.radarState,
       confidenceLevel: opp?.confidenceLevel ?? null,
       currentRatePct: mortgageContext.currentRatePct,
-      marketRatePct: recentSnapshots[0]?.rate30yr ?? 0,
+      marketRatePct: marketRate30yr,
       rateGapPct: opp?.rateGap ?? 0,
       loanBalance: opp?.loanBalance.toNumber() ?? mortgageContext.loanBalance,
       monthlySavings: opp?.monthlySavings.toNumber() ?? 0,
@@ -288,6 +356,8 @@ export class RefinanceRadarService {
       missedOpportunitySummary: missedOpportunity.hasMissedOpportunity ? missedOpportunity : null,
       notQualifiedReasons: [],
       disclaimer: REFINANCE_DISCLAIMER,
+      rateDataFreshnessAt: latestSnapshot?.date ?? null,
+      loanProducts,
     };
   }
 

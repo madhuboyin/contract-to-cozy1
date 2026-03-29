@@ -69,6 +69,14 @@ export type HomeCostGrowthDTO = {
     notes: string[];
     confidence: HomeCostGrowthConfidence;
 
+    // Phase-3: transparency array
+    assumptions: Array<{
+      field: string;
+      source: 'DATA_BACKED' | 'HEURISTIC' | 'USER_OVERRIDE';
+      value: unknown;
+      note: string;
+    }>;
+
     // ✅ Phase-3 additive (safe)
     appreciation?: {
       source: 'FHFA' | 'HEURISTIC';
@@ -441,6 +449,51 @@ export class HomeCostGrowthService {
       appreciationMeta,
     });
 
+    const assumptions: HomeCostGrowthDTO['meta']['assumptions'] = [
+      {
+        field: 'homeValueNow',
+        source: opts.homeValueNow !== undefined ? 'USER_OVERRIDE' : (property.propertySize ? 'HEURISTIC' : 'HEURISTIC'),
+        value: toMoney(homeValueNow),
+        note: opts.homeValueNow !== undefined
+          ? 'Client-provided override.'
+          : property.propertySize
+            ? `Estimated from ${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft (Phase 1).`
+            : 'Generic $350,000 fallback — no property size on file.',
+      },
+      {
+        field: 'appreciationRate',
+        source: opts.appreciationRate !== undefined ? 'USER_OVERRIDE' : (appreciationMeta?.source === 'FHFA' ? 'DATA_BACKED' : 'HEURISTIC'),
+        value: `${(appreciationRate * 100).toFixed(2)}%`,
+        note: opts.appreciationRate !== undefined
+          ? 'Client-provided override.'
+          : appreciationMeta?.source === 'FHFA'
+            ? `FHFA repeat-sale index — ${appreciationMeta.regionLevel}: ${appreciationMeta.regionLabel} (as of ${appreciationMeta.asOf}).`
+            : `State-level heuristic for ${state} (FHFA unavailable).`,
+      },
+      {
+        field: 'annualInsurance',
+        source: opts.insuranceAnnualNow !== undefined ? 'USER_OVERRIDE' : 'HEURISTIC',
+        value: toMoney(annualInsuranceNow),
+        note: opts.insuranceAnnualNow !== undefined
+          ? 'Client-provided override.'
+          : `0.5% of home value × state factor ${insuranceRateFactorByState(state)} (Phase 1 heuristic).`,
+      },
+      {
+        field: 'annualMaintenance',
+        source: opts.maintenanceAnnualNow !== undefined ? 'USER_OVERRIDE' : 'HEURISTIC',
+        value: toMoney(annualMaintenanceNow),
+        note: opts.maintenanceAnnualNow !== undefined
+          ? 'Client-provided override.'
+          : `1% of home value × state factor ${maintenanceRateFactorByState(state)} (Phase 1 heuristic).`,
+      },
+      {
+        field: 'inflationRate',
+        source: 'HEURISTIC',
+        value: `${(inflation * 100).toFixed(1)}%`,
+        note: `State-adjusted inflation estimate for ${state} (Phase 1).`,
+      },
+    ];
+
     return {
       input: {
         propertyId,
@@ -491,6 +544,7 @@ export class HomeCostGrowthService {
           `Insurance/maintenance use inflation ${(inflation * 100).toFixed(1)}%/yr (Phase 1).`,
         ],
         confidence,
+        assumptions,
         appreciation: appreciationMeta,
       },
     };

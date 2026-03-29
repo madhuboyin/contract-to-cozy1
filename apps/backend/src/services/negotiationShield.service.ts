@@ -210,6 +210,10 @@ export class NegotiationShieldService {
   }
 
   private serializeAnalysis(record: any): NegotiationShieldAnalysisDTO {
+    const pa = record.pricingAssessment as Record<string, unknown> | null;
+    const confidenceExplanation =
+      pa && typeof pa.confidenceExplanation === 'string' ? pa.confidenceExplanation : null;
+
     return {
       id: String(record.id),
       caseId: String(record.caseId),
@@ -221,6 +225,7 @@ export class NegotiationShieldService {
       pricingAssessment: record.pricingAssessment ?? null,
       confidence:
         typeof record.confidence === 'number' ? record.confidence : record.confidence ?? null,
+      confidenceExplanation,
       generatedAt: asIsoString(record.generatedAt) as string,
       modelVersion: record.modelVersion ?? null,
       createdAt: asIsoString(record.createdAt) as string,
@@ -1602,7 +1607,38 @@ export class NegotiationShieldService {
       );
     }
 
-    const result = generateContractorQuoteAnalysis(context.analysisInput);
+    // Phase-3: parsing sanity checks before generating
+    const sanityErrors: string[] = [];
+    const ai = context.analysisInput;
+    if (ai.quoteAmount !== null && (ai.quoteAmount < 0 || ai.quoteAmount > 10_000_000)) {
+      sanityErrors.push(`Quote amount ${ai.quoteAmount} is outside plausible range (0–$10M).`);
+    }
+    if (ai.rawText && ai.rawText.length > 50_000) {
+      sanityErrors.push('Raw text exceeds 50,000 character limit; truncate before analysis.');
+    }
+    if (sanityErrors.length > 0) {
+      throw new APIError(
+        `Input validation failed: ${sanityErrors.join(' ')}`,
+        400,
+        'NEGOTIATION_SHIELD_INPUT_SANITY_FAILED'
+      );
+    }
+
+    // Phase-3: AI fallback pattern — rule-based engine is the current fallback for when
+    // an AI engine is unavailable. Wrap in try/catch so future AI integration can be
+    // added above this line with safe degradation.
+    let result: NegotiationShieldGeneratedAnalysisResult;
+    try {
+      result = generateContractorQuoteAnalysis(context.analysisInput);
+    } catch (analysisErr) {
+      // Rule-based engine should not throw; if it does, surface a minimal degraded result
+      throw new APIError(
+        'Analysis engine encountered an unexpected error. Please try again.',
+        500,
+        'NEGOTIATION_SHIELD_ANALYSIS_ENGINE_ERROR'
+      );
+    }
+
     await this.persistAnalysisResult(caseId, 'CONTRACTOR_QUOTE_REVIEW', result);
     return this.getCaseDetail(propertyId, caseId);
   }

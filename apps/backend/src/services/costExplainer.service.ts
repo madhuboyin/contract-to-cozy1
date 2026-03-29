@@ -45,6 +45,14 @@ export type CostExplainerDTO = {
     generatedAt: string;
     notes: string[];
     dataSources: string[];
+
+    // Phase-3: transparency array
+    assumptions: Array<{
+      field: string;
+      source: 'DATA_BACKED' | 'HEURISTIC' | 'USER_OVERRIDE';
+      value: unknown;
+      note: string;
+    }>;
   };
 };
 
@@ -226,6 +234,29 @@ export class CostExplainerService {
       },
     ];
 
+    const assumptions: CostExplainerDTO['meta']['assumptions'] = [
+      {
+        field: 'annualTax',
+        source: 'HEURISTIC',
+        value: taxNow,
+        note: 'PropertyTaxService modeled estimate — state-level heuristic (no county/assessor live data).',
+      },
+      {
+        field: 'annualInsurance',
+        source: insuranceIsEducational ? 'HEURISTIC' : 'DATA_BACKED',
+        value: insNow,
+        note: insuranceIsEducational
+          ? 'InsuranceCostTrendService EDUCATIONAL_ESTIMATE — modeled, not sourced from DOI filings.'
+          : 'InsuranceCostTrendService modeled estimate.',
+      },
+      {
+        field: 'annualMaintenance',
+        source: 'HEURISTIC',
+        value: maintNow,
+        note: `~1% of home value/year × state adjustment for ${state}, drifted by ${Math.round(inflation * 100)}% inflation (Phase 1 rule-of-thumb).`,
+      },
+    ];
+
     return {
       input: { propertyId, years, addressLabel, state, zipCode: zip },
       snapshot: {
@@ -245,6 +276,7 @@ export class CostExplainerService {
       meta: {
         generatedAt: new Date().toISOString(),
         dataSources: ['PropertyTaxService (modeled)', 'InsuranceTrend (modeled)', 'Maintenance heuristic'],
+        assumptions,
         notes: [
           'Phase 1 uses modeled estimates (no external datasets) and does not store snapshots.',
           'Maintenance is a heuristic (~1% of value/year) adjusted lightly by state and inflation.',
