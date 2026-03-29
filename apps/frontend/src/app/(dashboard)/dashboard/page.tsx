@@ -40,7 +40,6 @@ import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 import MobileDashboardHome from './components/MobileDashboardHome';
 import MobileHomeBuyerDashboard from './components/MobileHomeBuyerDashboard';
-import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import {
   appendGuidanceContinuityToHref,
@@ -626,16 +625,6 @@ export default function DashboardPage() {
             <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
           </div>
         </motion.div>
-
-        <motion.div {...sectionMotion(3)}>
-          <GuidanceInlinePanel
-            propertyId={effectiveSelectedPropertyId}
-            title="What To Do Next"
-            subtitle="Based on your home data and recent tool results. Start with the highlighted step to reduce risk and avoid unnecessary spend."
-            limit={3}
-          />
-        </motion.div>
-        <div className="section-divider my-5 md:my-6" />
 
         {/* ROOMS SNAPSHOT */}
         <motion.div {...sectionMotion(3)}>
