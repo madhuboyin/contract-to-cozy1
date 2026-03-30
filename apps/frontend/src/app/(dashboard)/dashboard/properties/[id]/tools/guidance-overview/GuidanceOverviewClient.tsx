@@ -18,7 +18,7 @@ import {
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { useJourney } from '@/features/guidance/hooks/useJourney';
 import type { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
-import { formatIssueDomain } from '@/features/guidance/utils/guidanceDisplay';
+import { formatIssueDomain, resolveGuidanceStepHref } from '@/features/guidance/utils/guidanceDisplay';
 import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import {
   skipGuidanceStep,
@@ -422,10 +422,17 @@ export default function GuidanceOverviewClient() {
   const [customIssue, setCustomIssue] = React.useState('');
 
   // ---- Render helpers ----
+  // Resolve the step href via the shared helper that substitutes :propertyId, :itemId, etc.
+  // Never use step.routePath directly — it may contain unresolved template params.
+  const resolvedJourney = journeyDetail.data?.journey ?? primaryAction?.journey ?? null;
+
   function renderStepCta(step: GuidanceStepDTO, isActive: boolean) {
     if (!isActive) return null;
-    const routePath = step.routePath;
-    if (!routePath) {
+    const href = resolvedJourney
+      ? resolveGuidanceStepHref({ propertyId, journey: resolvedJourney, step })
+      : null;
+
+    if (!href) {
       return (
         <Button className="min-h-[44px] w-full" variant="secondary" disabled>
           Next step is being prepared
@@ -434,7 +441,7 @@ export default function GuidanceOverviewClient() {
     }
     return (
       <Link
-        href={routePath}
+        href={href}
         className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 py-2.5 text-sm font-semibold text-white hover:bg-[hsl(var(--mobile-brand-strong))]/90"
       >
         Continue: {step.label}
