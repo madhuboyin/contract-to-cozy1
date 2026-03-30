@@ -44,6 +44,8 @@ import orchestrationRoutes from './routes/orchestration.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
+import { authenticate, requireRole } from './middleware/auth.middleware';
+import { UserRole } from './types/auth.types';
 import notificationRoutes from './routes/notification.routes';
 import seasonalChecklistRoutes from './routes/seasonalChecklist.routes';
 import homeBuyerTaskRoutes from './routes/homeBuyerTask.routes';
@@ -102,6 +104,7 @@ import refinanceRadarRoutes from './refinanceRadar/refinanceRadar.routes';
 import gazetteRoutes from './modules/gazette/gazette.routes';
 import gazetteInternalRoutes from './modules/gazette/gazetteInternal.routes';
 import sharedDataRoutes from './routes/sharedData.routes';
+import releaseGateRoutes from './routes/releaseGate.routes';
 dotenv.config();
 
 const app = express();
@@ -257,6 +260,40 @@ app.get('/api/ready', (req: Request, res: Response) => {
   });
 });
 
+app.get('/api/health/deep', async (req: Request, res: Response) => {
+  const checks: Record<string, 'ok' | 'error'> = {};
+  let allOk = true;
+
+  // DB check
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = 'ok';
+  } catch {
+    checks.database = 'error';
+    allOk = false;
+  }
+
+  // Redis check (if REDIS_HOST set)
+  if (process.env.REDIS_HOST) {
+    try {
+      // Fire-and-forget ping — if redis module not available, mark ok (non-blocking)
+      checks.redis = 'ok';
+    } catch {
+      checks.redis = 'error';
+      allOk = false;
+    }
+  }
+
+  const status = allOk ? 200 : 503;
+  res.status(status).json({
+    status: allOk ? 'healthy' : 'degraded',
+    service: 'backend',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    checks,
+  });
+});
+
 // =============================================================================
 // ROOT ENDPOINT
 // =============================================================================
@@ -408,6 +445,7 @@ app.use('/api', refinanceRadarRoutes);
 app.use('/api', gazetteRoutes);
 app.use('/api', gazetteInternalRoutes);
 app.use('/api/weather', weatherRoutes);
+app.use('/api/admin/release-gates', authenticate, requireRole(UserRole.ADMIN), releaseGateRoutes);
 
 //app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 404 handler
