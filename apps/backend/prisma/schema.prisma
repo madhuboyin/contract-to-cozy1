@@ -3221,6 +3221,14 @@ enum GuidanceIssueDomain {
   OTHER
 }
 
+// IMP-GE-1: Top-level scope category for a guidance journey.
+// Phase 1 values: ITEM (inventory item / home asset) and SERVICE (non-item service).
+// Extensible — future phases may add: COVERAGE_PLAN, INCIDENT_CASE, SAVINGS_INCENTIVE, DOCUMENT_COMPLIANCE.
+enum GuidanceScopeCategory {
+  ITEM
+  SERVICE
+}
+
 // P4-1: Constrains signalIntentFamily to known routing keys.
 // Each value maps to exactly one journey template in guidanceTemplateRegistry.ts.
 // Adding a new template requires adding its family here first.
@@ -3295,10 +3303,12 @@ enum GuidanceSignalStatus {
 }
 
 enum GuidanceJourneyStatus {
-  ACTIVE
-  COMPLETED
-  ABORTED
-  ARCHIVED
+  NOT_STARTED // IMP-GE-1: User-initiated journey created before the first step is taken
+  ACTIVE      // Journey is in progress
+  COMPLETED   // All required steps are complete
+  ABORTED     // System-cancelled; internal only — do not surface as user-facing copy
+  ARCHIVED    // System-archived; internal only — do not surface as user-facing copy
+  DISMISSED   // IMP-GE-1: User explicitly marked "not relevant" via override control
 }
 
 enum GuidanceStepStatus {
@@ -3339,6 +3349,9 @@ enum GuidanceJourneyEventType {
   STEP_UNBLOCKED
   CONTEXT_UPDATED
   DERIVED_DATA_UPDATED
+  JOURNEY_DISMISSED     // IMP-GE-1: User clicked "Not relevant"; actorType must be USER
+  JOURNEY_SCOPE_CHANGED // IMP-GE-1: User clicked "Change asset"; links old journey to replacement
+  JOURNEY_ISSUE_CHANGED // IMP-GE-1: User clicked "Different issue"; issueType updated on journey
 }
 
 enum GuidanceEvidenceType {
@@ -3501,6 +3514,42 @@ model GuidanceJourney {
   // to prevent lost updates from concurrent recomputeJourneyState() calls.
   version Int @default(0)
 
+  // ---------------------------------------------------------------------------
+  // IMP-GE-1: User-first scope model fields
+  // ---------------------------------------------------------------------------
+
+  // Top-level scope category. Set at journey creation.
+  // Nullable during migration window; backfill sets ITEM for all existing journeys.
+  // Once backfill is confirmed clean this column should be made NOT NULL.
+  scopeCategory GuidanceScopeCategory?
+
+  // Denormalized scope identifier for API simplicity.
+  // ITEM journeys: inventoryItemId if available, otherwise homeAssetId.
+  // SERVICE journeys: serviceKey value.
+  // Nullable during migration window; backfill derives from COALESCE(inventory_item_id, home_asset_id).
+  scopeId String?
+
+  // User-selected issue label. Free-text or from the suggested issue type list.
+  // Null for system-generated (signal-driven) journeys.
+  // Populated for user-initiated journeys only.
+  issueType String?
+
+  // Service key for SERVICE-scoped journeys not tied to an inventory item or home asset.
+  // Examples: "warranty_purchase", "insurance_purchase", "general_inspection", "cleaning".
+  // Null for all ITEM-scoped journeys.
+  serviceKey String?
+
+  // Populated when status is set to DISMISSED.
+  dismissedReason String?
+  dismissedAt     DateTime?
+
+  // Distinguishes user-initiated journeys (via "start journey" flow) from
+  // system-generated journeys (signal ingestion). Defaults false to preserve
+  // existing behaviour for all signal-driven journeys.
+  isUserInitiated Boolean @default(false)
+
+  // ---------------------------------------------------------------------------
+
   startedAt        DateTime  @default(now())
   completedAt      DateTime?
   abortedAt        DateTime?
@@ -3515,14 +3564,14 @@ model GuidanceJourney {
   inventoryItem InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   primarySignal GuidanceSignal? @relation(fields: [primarySignalId], references: [id], onDelete: SetNull)
 
-  steps  GuidanceJourneyStep[]
-  events GuidanceJourneyEvent[]
+  steps     GuidanceJourneyStep[]
+  events    GuidanceJourneyEvent[]
   evidences GuidanceStepEvidence[]
 
   @@index([propertyId, status, updatedAt(sort: Desc)])
   @@index([propertyId, executionReadiness, status])
   @@index([propertyId, issueDomain, status])
-  @@index([propertyId, journeyTypeKey, status]) // P4-13: supports ensureJourneyForSignal() lookup
+  @@index([propertyId, journeyTypeKey, status])          // P4-13: supports ensureJourneyForSignal() lookup
   @@index([propertyId, currentStepOrder])
   @@index([propertyId, inventoryItemId, status, updatedAt(sort: Desc)])
   @@index([propertyId, homeAssetId, status, updatedAt(sort: Desc)])
@@ -3530,6 +3579,12 @@ model GuidanceJourney {
   @@index([mergedSignalGroupKey])
   @@index([homeAssetId])
   @@index([inventoryItemId])
+  // IMP-GE-1: indexes for new user-first scope fields
+  @@index([propertyId, scopeCategory, status, updatedAt(sort: Desc)])
+  @@index([propertyId, scopeId, status])
+  @@index([propertyId, scopeCategory, scopeId, status])
+  @@index([propertyId, isUserInitiated, status])
+  @@index([serviceKey])
   @@map("guidance_journeys")
 }
 
