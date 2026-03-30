@@ -31,6 +31,13 @@ interface ApplianceRecommendation {
   energyRating: string;
   warranty: string;
   reasoning: string;
+  confidence?: 'LOW' | 'MEDIUM';
+  validation?: {
+    costModel: 'REPLACEMENT_COST_BOUNDS_V1';
+    baselineEstimate: number;
+    costWasClamped: boolean;
+    notes: string[];
+  };
 }
 
 interface OracleReport {
@@ -41,6 +48,11 @@ interface OracleReport {
   highRiskCount: number;
   estimatedTotalCost: number;
   predictions: ApplianceFailurePrediction[];
+  meta: {
+    classification: 'EDUCATIONAL_ESTIMATE';
+    financialPlanningSafe: false;
+    disclaimer: string;
+  };
   generatedAt: Date;
 }
 
@@ -116,6 +128,14 @@ export class ApplianceOracleService {
         highRiskCount: 0,
         estimatedTotalCost: 0,
         predictions: [],
+        meta: {
+          classification: 'EDUCATIONAL_ESTIMATE',
+          financialPlanningSafe: false,
+          disclaimer:
+            'Replacement costs and product recommendations are educational estimates based on national baseline data. ' +
+            'Actual costs vary by region, installer, and current market conditions. ' +
+            'Obtain contractor bids before making purchasing or budgeting decisions.',
+        },
         generatedAt: new Date(),
       };
     }
@@ -153,6 +173,14 @@ export class ApplianceOracleService {
       highRiskCount,
       estimatedTotalCost,
       predictions,
+      meta: {
+        classification: 'EDUCATIONAL_ESTIMATE',
+        financialPlanningSafe: false,
+        disclaimer:
+          'Replacement costs and product recommendations are educational estimates based on national baseline data. ' +
+          'Actual costs vary by region, installer, and current market conditions. ' +
+          'Obtain contractor bids before making purchasing or budgeting decisions.',
+      },
       generatedAt: new Date(),
     };
   }
@@ -312,11 +340,45 @@ export class ApplianceOracleService {
       const cleanedText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const recommendations = JSON.parse(cleanedText);
 
-      return recommendations.slice(0, 3);
+      return this.applyReplacementCostGuardrails(
+        recommendations.slice(0, 3),
+        applianceName,
+        budget,
+      );
     } catch (error) {
       console.error('[APPLIANCE-ORACLE] AI recommendation error:', error);
       return this.getBasicRecommendations(applianceName, budget);
     }
+  }
+
+  private applyReplacementCostGuardrails(
+    recommendations: ApplianceRecommendation[],
+    applianceName: string,
+    baselineEstimate: number,
+  ): ApplianceRecommendation[] {
+    const minCost = Math.round(baselineEstimate * 0.6);
+    const maxCost = Math.round(baselineEstimate * 1.6);
+
+    return recommendations.map((rec) => {
+      const raw = Number(rec.estimatedCost);
+      const bounded = Math.max(minCost, Math.min(maxCost, Number.isFinite(raw) && raw > 0 ? Math.round(raw) : baselineEstimate));
+      const costWasClamped = bounded !== raw;
+      const notes: string[] = [];
+      if (costWasClamped) {
+        notes.push(`Cost adjusted to baseline range for ${applianceName} (±60% of national estimate).`);
+      }
+      return {
+        ...rec,
+        estimatedCost: bounded,
+        confidence: costWasClamped ? 'LOW' : 'MEDIUM',
+        validation: {
+          costModel: 'REPLACEMENT_COST_BOUNDS_V1',
+          baselineEstimate,
+          costWasClamped,
+          notes,
+        },
+      };
+    });
   }
 
   private getBasicRecommendations(applianceName: string, budget: number): ApplianceRecommendation[] {
