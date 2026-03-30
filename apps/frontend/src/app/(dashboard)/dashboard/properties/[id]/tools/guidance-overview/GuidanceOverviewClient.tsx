@@ -428,8 +428,19 @@ export default function GuidanceOverviewClient() {
 
   function renderStepCta(step: GuidanceStepDTO, isActive: boolean) {
     if (!isActive) return null;
-    const href = resolvedJourney
-      ? resolveGuidanceStepHref({ propertyId, journey: resolvedJourney, step })
+    // Patch: if the journey lacks inventoryItemId/homeAssetId but the user explicitly
+    // selected one via URL params, inject it so resolveGuidanceStepHref can substitute
+    // :itemId in the route template. This handles journeys originally linked via
+    // homeAsset signals where inventoryItemId was not stored on the journey row.
+    const journeyForHref = resolvedJourney
+      ? {
+          ...resolvedJourney,
+          inventoryItemId: resolvedJourney.inventoryItemId ?? selectedInventoryItemId ?? null,
+          homeAssetId: resolvedJourney.homeAssetId ?? selectedHomeAssetId ?? null,
+        }
+      : null;
+    const href = journeyForHref
+      ? resolveGuidanceStepHref({ propertyId, journey: journeyForHref, step })
       : null;
 
     if (!href) {
