@@ -121,9 +121,9 @@ export default function InsuranceTrendClient() {
       </Button>
 
       <MobilePageIntro
-        eyebrow="Home Tool"
+        eyebrow="Educational Estimate"
         title="Insurance Cost Trend Analyzer"
-        subtitle="Compare premium growth by ZIP against state baseline and climate/claims pressure."
+        subtitle="Directional heuristic only — not decision-grade for major financial planning."
        className="lg:hidden"/>
 
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
@@ -180,21 +180,20 @@ export default function InsuranceTrendClient() {
           </div>
         )}
 
-        {data?.meta?.classification === 'EDUCATIONAL_ESTIMATE' && (
-          <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/85 p-3 text-xs text-amber-900 backdrop-blur">
-            <div className="font-semibold">Educational Estimate</div>
-            <div className="mt-1">
-              This tool is directional and not decision-grade for major financial planning.
-            </div>
-            {Array.isArray(data?.meta?.usageRestrictions) && data.meta.usageRestrictions.length > 0 && (
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                {data.meta.usageRestrictions.map((restriction, idx) => (
-                  <li key={idx}>{restriction}</li>
-                ))}
-              </ul>
-            )}
+        <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/85 p-3 text-xs text-amber-900 backdrop-blur">
+          <div className="font-semibold">Educational Estimate — not decision-grade</div>
+          <div className="mt-1">
+            {data?.meta?.disclaimer ??
+              'This output is an educational estimate based on heuristic models. Do not use as a sole input for major financial decisions.'}
           </div>
-        )}
+          {Array.isArray(data?.meta?.usageRestrictions) && data.meta.usageRestrictions.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {data.meta.usageRestrictions.map((restriction, idx) => (
+                <li key={idx}>{restriction}</li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-12 lg:grid-cols-12">
           <div className="space-y-3 lg:col-span-4">

@@ -47,6 +47,7 @@ export type InsuranceCostTrendDTO = {
     confidence: 'HIGH' | 'MEDIUM' | 'LOW';
     classification: 'EDUCATIONAL_ESTIMATE';
     financialPlanningSafe: false;
+    disclaimer: string;
     usageRestrictions: string[];
   };
 };

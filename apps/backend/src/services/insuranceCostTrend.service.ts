@@ -57,6 +57,7 @@ export type InsuranceCostTrendDTO = {
     confidence: Confidence;
     classification: 'EDUCATIONAL_ESTIMATE';
     financialPlanningSafe: false;
+    disclaimer: string;
     usageRestrictions: string[];
   };
 };
@@ -300,6 +301,10 @@ export class InsuranceCostTrendService {
         confidence,
         classification: 'EDUCATIONAL_ESTIMATE',
         financialPlanningSafe: false,
+        disclaimer:
+          'This output is an educational estimate based on heuristic models and state-level baselines. ' +
+          'It is not derived from live DOI rate filings, FEMA/NOAA actuarial data, or your actual policy records. ' +
+          'Do not use as a sole input for refinancing, sell/hold/rent decisions, or other major financial planning.',
         usageRestrictions: [
           'Do not use as sole input for refinance, sell/hold/rent, or long-horizon financial decisions.',
           'Treat as directional education only until grounded external rate datasets are integrated.',
