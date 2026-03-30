@@ -71,12 +71,42 @@ const SUGGESTED_ISSUE_TYPES_ITEM = [
   { key: 'cost_estimate', label: 'Need a cost estimate' },
 ];
 
-const SUGGESTED_ISSUE_TYPES_SERVICE = [
-  { key: 'purchase_warranty', label: 'Purchase or find a home warranty' },
-  { key: 'purchase_insurance', label: 'Purchase or review home insurance' },
-  { key: 'schedule_inspection', label: 'Schedule a home inspection' },
-  { key: 'arrange_cleaning', label: 'Arrange a cleaning service' },
+const SUGGESTED_ISSUE_TYPES_BY_SERVICE: Record<string, { key: string; label: string }[]> = {
+  warranty_purchase: [
+    { key: 'purchase_warranty', label: 'Find and purchase a home warranty' },
+    { key: 'compare_warranty_plans', label: 'Compare home warranty plans' },
+    { key: 'understand_coverage', label: 'Understand what is covered' },
+    { key: 'warranty_renewal', label: 'Renew or extend an existing warranty' },
+    { key: 'get_quotes', label: 'Get quotes and compare options' },
+  ],
+  insurance_purchase: [
+    { key: 'purchase_insurance', label: 'Purchase or review home insurance' },
+    { key: 'compare_rates', label: 'Compare insurance rates and providers' },
+    { key: 'coverage_gap', label: 'Check for coverage gaps' },
+    { key: 'policy_renewal', label: 'Renew or update an existing policy' },
+    { key: 'get_quotes', label: 'Get quotes and compare options' },
+  ],
+  general_inspection: [
+    { key: 'schedule_inspection', label: 'Schedule a home inspection' },
+    { key: 'pre_purchase_inspection', label: 'Pre-purchase or due diligence inspection' },
+    { key: 'annual_maintenance', label: 'Annual or seasonal maintenance inspection' },
+    { key: 'post_repair_inspection', label: 'Post-repair or contractor inspection' },
+    { key: 'get_quotes', label: 'Get quotes and compare inspectors' },
+  ],
+  cleaning_service: [
+    { key: 'arrange_cleaning', label: 'Arrange a regular cleaning service' },
+    { key: 'deep_clean', label: 'One-time deep clean' },
+    { key: 'move_clean', label: 'Move-in or move-out clean' },
+    { key: 'post_construction', label: 'Post-construction or renovation clean-up' },
+    { key: 'get_quotes', label: 'Get quotes and compare cleaners' },
+  ],
+};
+
+// Fallback for any service key not explicitly mapped
+const SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT = [
   { key: 'get_quotes', label: 'Get quotes and compare options' },
+  { key: 'schedule_service', label: 'Schedule the service' },
+  { key: 'understand_options', label: 'Understand available options' },
 ];
 
 const SERVICE_CATEGORIES = [
@@ -418,7 +448,11 @@ export default function GuidanceOverviewClient() {
     (primaryAction ? resolveAssetLabel(primaryAction) : null);
 
   const suggestedIssueTypes =
-    scopeCategory === 'SERVICE' ? SUGGESTED_ISSUE_TYPES_SERVICE : SUGGESTED_ISSUE_TYPES_ITEM;
+    scopeCategory === 'SERVICE'
+      ? (selectedServiceKey
+          ? (SUGGESTED_ISSUE_TYPES_BY_SERVICE[selectedServiceKey] ?? SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT)
+          : SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT)
+      : SUGGESTED_ISSUE_TYPES_ITEM;
   const [customIssue, setCustomIssue] = React.useState('');
 
   // ---- Render helpers ----
@@ -712,7 +746,7 @@ export default function GuidanceOverviewClient() {
             </p>
             <input
               type="text"
-              placeholder="e.g. making loud noises, keeps tripping breaker..."
+              placeholder={scopeCategory === 'SERVICE' ? 'e.g. need urgent scheduling, looking for best price...' : 'e.g. making loud noises, keeps tripping breaker...'}
               value={customIssue}
               onChange={(e) => setCustomIssue(e.target.value)}
               className="w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm placeholder:text-[hsl(var(--mobile-text-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
