@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CircleAlert, ShieldCheck, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,8 +18,10 @@ import {
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import type { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
 import { formatIssueDomain } from '@/features/guidance/utils/guidanceDisplay';
-import type { AssetRiskDetail, RiskAssessmentReport } from '@/types';
-import { api } from '@/lib/api/client';
+import type { InventoryItem } from '@/types';
+import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
+import { skipGuidanceStep } from '@/lib/api/guidanceApi';
+import { GuidanceJourneyStrip } from '@/components/guidance/GuidanceJourneyStrip';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
@@ -51,27 +53,14 @@ type AssetScopeOption = {
   key: string;
   assetName: string;
   systemType: string;
-  category: AssetRiskDetail['category'];
+  category: string;
   actionCta: string | null;
-  riskLevel: AssetRiskDetail['riskLevel'];
+  riskLevel: 'HIGH' | 'ELEVATED' | 'MODERATE' | 'LOW';
   outOfPocketCost: number;
   inventoryItemId: string | null;
   homeAssetId: string | null;
   supportsPreciseScope: boolean;
 };
-
-const RISK_LEVEL_RANK: Record<AssetRiskDetail['riskLevel'], number> = {
-  HIGH: 4,
-  ELEVATED: 3,
-  MODERATE: 2,
-  LOW: 1,
-};
-
-function riskLevelTone(level: AssetRiskDetail['riskLevel']): 'danger' | 'elevated' | 'good' {
-  if (level === 'HIGH' || level === 'ELEVATED') return 'danger';
-  if (level === 'MODERATE') return 'elevated';
-  return 'good';
-}
 
 function buildScopedOverviewHref(args: {
   propertyId: string;
@@ -192,26 +181,93 @@ export default function GuidanceOverviewClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+
   const selectedInventoryItemId =
     searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
   const selectedHomeAssetId = searchParams.get('homeAssetId');
   const selectedAssetName = searchParams.get('assetName')?.trim() ?? '';
   const hasScopeFilter = Boolean(selectedInventoryItemId || selectedHomeAssetId || selectedAssetName);
 
+  const userSelectedScopeId = selectedInventoryItemId ?? selectedHomeAssetId ?? undefined;
+
+  // Phase 3.1/3.2: remove limit, pass userSelectedScopeId for suppression bypass
   const guidance = useGuidance(propertyId, {
     enabled: Boolean(propertyId),
-    limit: 10,
+    userSelectedScopeId,
   });
-  const riskReportQuery = useQuery({
-    queryKey: ['risk-report-summary', propertyId],
-    queryFn: async () => {
-      if (!propertyId) return null;
-      const reportOrStatus = await api.getRiskReportSummary(propertyId);
-      return reportOrStatus === 'QUEUED' ? null : (reportOrStatus as RiskAssessmentReport);
-    },
+
+  // Phase 3.3: source asset picker from inventory, not Risk Assessment
+  const inventoryQuery = useQuery({
+    queryKey: ['inventory-items', propertyId],
+    queryFn: () => listInventoryItems(propertyId, {}),
     enabled: Boolean(propertyId),
     staleTime: 60_000,
   });
+
+  // Phase 3.1: asset search filter state (replaces slice(0,6))
+  const [assetSearch, setAssetSearch] = React.useState('');
+
+  // Phase 3.7: skip step mutation
+  const skipStepMutation = useMutation({
+    mutationFn: ({ stepId }: { stepId: string }) =>
+      skipGuidanceStep(propertyId, stepId, { reasonCode: 'USER_SKIPPED' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+    },
+  });
+
+  // Phase 3.3: map InventoryItem → AssetScopeOption (full list, no truncation)
+  const allAssetScopeOptions = React.useMemo<AssetScopeOption[]>(() => {
+    const items = inventoryQuery.data ?? [];
+    const deduped: AssetScopeOption[] = [];
+    const seen = new Set<string>();
+    for (const item of items) {
+      const idKey = `${item.id}:${item.name.toLowerCase()}`;
+      if (seen.has(idKey)) continue;
+      seen.add(idKey);
+      deduped.push({
+        key: item.id,
+        assetName: item.name,
+        systemType: item.category ?? '',
+        category: item.category ?? '',
+        actionCta: null,
+        // Inventory items don't carry a riskLevel — use LOW as neutral default
+        riskLevel: 'LOW',
+        outOfPocketCost: item.replacementCostCents ? item.replacementCostCents / 100 : 0,
+        inventoryItemId: item.id,
+        homeAssetId: item.homeAssetId ?? null,
+        supportsPreciseScope: true,
+      });
+    }
+    return deduped;
+  }, [inventoryQuery.data]);
+
+  // Phase 3.1: filter by search text (no hard cap)
+  const filteredAssetOptions = React.useMemo(() => {
+    if (!assetSearch.trim()) return allAssetScopeOptions;
+    const needle = assetSearch.toLowerCase();
+    return allAssetScopeOptions.filter(
+      (o) =>
+        o.assetName.toLowerCase().includes(needle) ||
+        o.category.toLowerCase().includes(needle)
+    );
+  }, [allAssetScopeOptions, assetSearch]);
+
+  // Phase 3.4: look up selectedAssetOption from full list (not sliced display list)
+  const selectedAssetOption = React.useMemo(() => {
+    if (!hasScopeFilter) return null;
+    return (
+      allAssetScopeOptions.find((option) => {
+        const inventoryMatch =
+          selectedInventoryItemId && option.inventoryItemId === selectedInventoryItemId;
+        const homeAssetMatch = selectedHomeAssetId && option.homeAssetId === selectedHomeAssetId;
+        const nameMatch =
+          selectedAssetName && option.assetName.toLowerCase() === selectedAssetName.toLowerCase();
+        return Boolean(inventoryMatch || homeAssetMatch || nameMatch);
+      }) ?? null
+    );
+  }, [allAssetScopeOptions, hasScopeFilter, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId]);
 
   const allActions = React.useMemo(() => guidance.actions ?? [], [guidance.actions]);
   const filteredActions = React.useMemo(() => {
@@ -235,60 +291,11 @@ export default function GuidanceOverviewClient() {
         ]
           .join(' ')
           .toLowerCase();
-        if (haystack.includes(assetNameNeedle)) {
-          return true;
-        }
+        if (haystack.includes(assetNameNeedle)) return true;
       }
       return false;
     });
   }, [allActions, hasScopeFilter, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId]);
-
-  const assetScopeOptions = React.useMemo<AssetScopeOption[]>(() => {
-    const details = riskReportQuery.data?.details ?? [];
-    if (!details.length) return [];
-
-    const options = details
-      .map((item) => ({
-        key: `${item.inventoryItemId ?? 'none'}:${item.homeAssetId ?? 'none'}:${item.assetName}`,
-        assetName: item.assetName,
-        systemType: item.systemType,
-        category: item.category,
-        actionCta: item.actionCta ?? null,
-        riskLevel: item.riskLevel,
-        outOfPocketCost: item.outOfPocketCost,
-        inventoryItemId: item.inventoryItemId ?? null,
-        homeAssetId: item.homeAssetId ?? null,
-        supportsPreciseScope: Boolean(item.inventoryItemId || item.homeAssetId),
-      }))
-      .sort((a, b) => {
-        const rankDiff = RISK_LEVEL_RANK[b.riskLevel] - RISK_LEVEL_RANK[a.riskLevel];
-        if (rankDiff !== 0) return rankDiff;
-        return b.outOfPocketCost - a.outOfPocketCost;
-      });
-
-    const deduped: AssetScopeOption[] = [];
-    const seen = new Set<string>();
-    for (const option of options) {
-      const idKey = `${option.inventoryItemId ?? ''}:${option.homeAssetId ?? ''}:${option.assetName.toLowerCase()}`;
-      if (seen.has(idKey)) continue;
-      seen.add(idKey);
-      deduped.push(option);
-    }
-    return deduped.slice(0, 6);
-  }, [riskReportQuery.data?.details]);
-
-  const selectedAssetOption = React.useMemo(() => {
-    if (!hasScopeFilter) return null;
-    return (
-      assetScopeOptions.find((option) => {
-        const inventoryMatch =
-          selectedInventoryItemId && option.inventoryItemId === selectedInventoryItemId;
-        const homeAssetMatch = selectedHomeAssetId && option.homeAssetId === selectedHomeAssetId;
-        const nameMatch = selectedAssetName && option.assetName.toLowerCase() === selectedAssetName.toLowerCase();
-        return Boolean(inventoryMatch || homeAssetMatch || nameMatch);
-      }) ?? null
-    );
-  }, [assetScopeOptions, hasScopeFilter, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId]);
 
   const hasScopedMatch = filteredActions.length > 0;
   const actions = React.useMemo(() => {
@@ -302,40 +309,6 @@ export default function GuidanceOverviewClient() {
   const blockedCount = actions.filter((action) => action.executionReadiness === 'NOT_READY').length;
   const baseOverviewHref = `/dashboard/properties/${propertyId}/tools/guidance-overview`;
   const focusLabel = selectedAssetOption?.assetName ?? (primaryAction ? resolveAssetLabel(primaryAction) : null);
-  const fallbackJourneySteps = React.useMemo(() => {
-    if (!selectedAssetOption) return [];
-    const coverageHref = appendScopeParams(
-      `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,
-      selectedAssetOption
-    );
-    const replaceRepairHref = selectedAssetOption.inventoryItemId
-      ? appendScopeParams(
-          `/dashboard/properties/${propertyId}/inventory/items/${selectedAssetOption.inventoryItemId}/replace-repair`,
-          selectedAssetOption
-        )
-      : appendScopeParams(`/dashboard/replace-repair?propertyId=${propertyId}`, selectedAssetOption);
-    const priceRadarHref = appendScopeParams(
-      `/dashboard/properties/${propertyId}/tools/service-price-radar`,
-      selectedAssetOption
-    );
-    const providersHref = buildProvidersHref(propertyId, selectedAssetOption);
-    const negotiationHref = appendScopeParams(
-      `/dashboard/properties/${propertyId}/tools/negotiation-shield`,
-      selectedAssetOption
-    );
-    const finalizationHref = appendScopeParams(
-      `/dashboard/properties/${propertyId}/tools/price-finalization`,
-      selectedAssetOption
-    );
-    return [
-      { title: 'Step 1: Check Coverage', description: 'Confirm warranty/insurance applicability.', href: coverageHref, cta: 'Open Coverage Check' },
-      { title: 'Step 2: Decide Repair vs Replace', description: 'Choose the right execution path for this asset.', href: replaceRepairHref, cta: 'Open Repair vs Replace' },
-      { title: 'Step 3: Estimate Service Pricing', description: 'Use price radar to establish fair expected cost.', href: priceRadarHref, cta: 'Open Service Price Radar' },
-      { title: 'Step 4: Get Providers and Quotes', description: 'Find vendors and gather comparable quotes.', href: providersHref, cta: 'Find Providers' },
-      { title: 'Step 5: Negotiate Price', description: 'Use negotiation shield to prepare and execute bargaining.', href: negotiationHref, cta: 'Open Negotiation Shield' },
-      { title: 'Step 6: Finalize Terms', description: 'Capture accepted terms and final price before booking.', href: finalizationHref, cta: 'Open Price Finalization' },
-    ];
-  }, [propertyId, selectedAssetOption]);
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
@@ -354,26 +327,39 @@ export default function GuidanceOverviewClient() {
 
       <ScenarioInputCard
         title="Get guidance for any asset"
-        subtitle="Pick a risk item to launch an asset-scoped guidance path."
+        subtitle="Pick a home item to launch an asset-scoped guidance path."
       >
-        {riskReportQuery.isLoading ? (
-          <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">Loading assets from Risk Assessment...</p>
-        ) : assetScopeOptions.length === 0 ? (
+        {/* Phase 3.1: search filter input */}
+        <input
+          type="text"
+          placeholder="Search home items..."
+          value={assetSearch}
+          onChange={(e) => setAssetSearch(e.target.value)}
+          className="mb-3 w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm placeholder:text-[hsl(var(--mobile-text-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
+        />
+
+        {inventoryQuery.isLoading ? (
+          <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">Loading your home items...</p>
+        ) : filteredAssetOptions.length === 0 ? (
           <div className="space-y-2">
             <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-              No asset-level risk entries are ready yet. Run Risk Assessment to generate asset options.
+              {assetSearch
+                ? 'No items match your search. Try a different name or category.'
+                : 'No home items found. Add items to your inventory to get guidance.'}
             </p>
-            <ActionPriorityRow
-              primaryAction={
-                <Button asChild className="min-h-[42px] w-full">
-                  <Link href={`/dashboard/properties/${propertyId}/risk-assessment`}>Open Risk Assessment</Link>
-                </Button>
-              }
-            />
+            {!assetSearch && (
+              <ActionPriorityRow
+                primaryAction={
+                  <Button asChild className="min-h-[42px] w-full">
+                    <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open Inventory</Link>
+                  </Button>
+                }
+              />
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {assetScopeOptions.map((option) => {
+            {filteredAssetOptions.map((option) => {
               const href = buildScopedOverviewHref({
                 propertyId,
                 inventoryItemId: option.inventoryItemId,
@@ -383,14 +369,19 @@ export default function GuidanceOverviewClient() {
               const isSelected =
                 (selectedInventoryItemId && option.inventoryItemId === selectedInventoryItemId) ||
                 (selectedHomeAssetId && option.homeAssetId === selectedHomeAssetId) ||
-                (selectedAssetName && option.assetName.toLowerCase() === selectedAssetName.toLowerCase());
+                (selectedAssetName &&
+                  option.assetName.toLowerCase() === selectedAssetName.toLowerCase());
               return (
                 <div key={option.key} className="space-y-2">
                   <CompactEntityRow
                     title={option.assetName}
-                    subtitle={`Estimated out-of-pocket: ${formatCurrency(option.outOfPocketCost)}`}
-                    meta={`Risk: ${formatEnumLabel(option.riskLevel)}${option.supportsPreciseScope ? '' : ' · ID linking pending'}`}
-                    status={<StatusChip tone={riskLevelTone(option.riskLevel)}>{formatEnumLabel(option.riskLevel)}</StatusChip>}
+                    subtitle={
+                      option.outOfPocketCost > 0
+                        ? `Estimated replacement: ${formatCurrency(option.outOfPocketCost)}`
+                        : formatEnumLabel(option.category)
+                    }
+                    meta={formatEnumLabel(option.category)}
+                    status={<StatusChip tone="info">{formatEnumLabel(option.category)}</StatusChip>}
                   />
                   <ActionPriorityRow
                     primaryAction={
@@ -398,7 +389,7 @@ export default function GuidanceOverviewClient() {
                         href={href}
                         className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
                       >
-                        {isSelected ? 'Selected asset' : `Guide this asset: ${option.assetName}`}
+                        {isSelected ? 'Selected item' : `Guide this item: ${option.assetName}`}
                       </Link>
                     }
                   />
@@ -414,13 +405,14 @@ export default function GuidanceOverviewClient() {
           title="Asset focus enabled"
           subtitle="Showing guidance only for the selected asset context."
           actions={
+            // Phase 4.5: "Change asset" label replaces "Clear asset focus"
             <Button asChild variant="ghost" className="min-h-[40px] w-full">
-              <Link href={baseOverviewHref}>Clear asset focus</Link>
+              <Link href={baseOverviewHref}>Change asset</Link>
             </Button>
           }
         >
           <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-            If this does not match what you expected, pick a different asset above or open Risk Assessment.
+            If this does not match what you expected, pick a different asset above.
           </p>
         </ScenarioInputCard>
       ) : null}
@@ -435,9 +427,9 @@ export default function GuidanceOverviewClient() {
         }
         summary={
           !hasScopeFilter
-            ? 'Guidance is asset-first. Choose any asset above to launch the end-to-end journey.'
+            ? 'Guidance is asset-first. Choose any item above to launch the end-to-end journey.'
             : hasScopeFilter && !hasScopedMatch
-            ? 'No active asset-scoped journeys yet for this selected issue.'
+            ? 'No active guidance found for this item yet. Use the steps below to investigate.'
             : `${guidance.counts?.activeSignals ?? 0} signals detected · ${blockedCount} blocked by missing context`
         }
         highlights={
@@ -450,8 +442,8 @@ export default function GuidanceOverviewClient() {
                   : primaryAction.explanation?.risk ?? 'Follow the guided path to reduce risk.',
               ]
             : hasScopeFilter
-              ? ['No active backend journey yet for this asset.', 'Use the guided steps below to continue.']
-              : ['Choose an asset from the list above.', 'Guidance is always created per asset.']
+              ? ['No active guidance yet for this item.', 'Use the guided steps below to investigate.']
+              : ['Choose an item from the list above.', 'Guidance is always created per asset.']
         }
       />
 
@@ -469,34 +461,61 @@ export default function GuidanceOverviewClient() {
           subtitle="Guidance Engine does not run as property-wide flow."
         >
           <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-            Pick any asset in the section above and we will guide coverage, repair vs replace, pricing, provider selection, negotiation, and finalization for that asset.
+            Pick any item in the section above and we will guide coverage, repair vs replace, pricing, provider selection, negotiation, and finalization for that item.
           </p>
         </ScenarioInputCard>
       ) : actions.length === 0 ? (
         <ScenarioInputCard
-          title={`Guidance journey for ${focusLabel ?? 'selected asset'}`}
-          subtitle="No backend-generated journey exists yet, so use the standard asset resolution path."
+          title={`Guidance journey for ${focusLabel ?? 'selected item'}`}
+          subtitle="No active guidance found for this item yet. Use the steps below to investigate."
           badge={<StatusChip tone="elevated">Journey pending</StatusChip>}
         >
-          <div className="space-y-3">
-            {fallbackJourneySteps.map((step) => (
-              <div key={step.title} className="space-y-2">
-                <CompactEntityRow
-                  title={step.title}
-                  subtitle={step.description}
+          <div className="space-y-2">
+            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+              No system-detected issues exist for this item yet. You can check coverage, run a repair vs replace analysis, or find providers below.
+            </p>
+            {selectedAssetOption && (
+              <div className="space-y-2 pt-1">
+                {selectedAssetOption.inventoryItemId && (
+                  <ActionPriorityRow
+                    primaryAction={
+                      <Link
+                        href={appendScopeParams(
+                          `/dashboard/properties/${propertyId}/inventory/items/${selectedAssetOption.inventoryItemId}/replace-repair`,
+                          selectedAssetOption
+                        )}
+                        className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                      >
+                        Repair vs Replace Analysis
+                      </Link>
+                    }
+                  />
+                )}
+                <ActionPriorityRow
+                  primaryAction={
+                    <Link
+                      href={appendScopeParams(
+                        `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,
+                        selectedAssetOption
+                      )}
+                      className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                    >
+                      Check Coverage
+                    </Link>
+                  }
                 />
                 <ActionPriorityRow
                   primaryAction={
                     <Link
-                      href={step.href}
+                      href={buildProvidersHref(propertyId, selectedAssetOption)}
                       className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
                     >
-                      {step.cta}
+                      Find Providers
                     </Link>
                   }
                 />
               </div>
-            ))}
+            )}
           </div>
         </ScenarioInputCard>
       ) : (
@@ -507,6 +526,16 @@ export default function GuidanceOverviewClient() {
               subtitle={resolvePrimarySubtitle(primaryAction)}
               badge={<StatusChip tone={resolvePriorityTone(primaryAction)}>{primaryAction.priorityGroup.toLowerCase()}</StatusChip>}
             >
+              {/* Phase 3.6: visual progress bar above the why-now block */}
+              {primaryAction.steps.length > 0 && (
+                <div className="mb-2">
+                  <GuidanceJourneyStrip steps={primaryAction.steps} />
+                  <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+                    Step {primaryAction.progress.completedCount + 1} of {primaryAction.progress.totalCount}
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
                 <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
                   Why now
@@ -521,12 +550,25 @@ export default function GuidanceOverviewClient() {
                     Potential delay cost: ~{formatCurrency(primaryAction.costOfDelay)}
                   </p>
                 ) : null}
-                <p className="mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">
-                  Progress: {resolveProgressLabel(primaryAction)}
-                </p>
               </div>
 
               <ActionPriorityRow primaryAction={renderPrimaryActionButton(primaryAction)} />
+
+              {/* Phase 3.7: Skip button for the active step */}
+              {primaryAction.currentStep?.id && (
+                <Button
+                  variant="ghost"
+                  className="mt-1 min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
+                  disabled={skipStepMutation.isPending}
+                  onClick={() => {
+                    if (primaryAction.currentStep?.id) {
+                      skipStepMutation.mutate({ stepId: primaryAction.currentStep.id });
+                    }
+                  }}
+                >
+                  Skip this step
+                </Button>
+              )}
             </ScenarioInputCard>
           ) : null}
 
@@ -537,7 +579,7 @@ export default function GuidanceOverviewClient() {
             <div className="space-y-3">
               {remainingActions.length === 0 ? (
                 <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                  No additional backend steps are active yet for this asset.
+                  No additional active steps for this asset yet.
                 </p>
               ) : (
                 remainingActions.map((action) => {
@@ -566,6 +608,21 @@ export default function GuidanceOverviewClient() {
                           )
                         }
                       />
+                      {/* Phase 3.7: skip per remaining step */}
+                      {action.currentStep?.id && (
+                        <Button
+                          variant="ghost"
+                          className="min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
+                          disabled={skipStepMutation.isPending}
+                          onClick={() => {
+                            if (action.currentStep?.id) {
+                              skipStepMutation.mutate({ stepId: action.currentStep.id });
+                            }
+                          }}
+                        >
+                          Skip this step
+                        </Button>
+                      )}
                     </div>
                   );
                 })

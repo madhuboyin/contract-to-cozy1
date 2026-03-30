@@ -760,6 +760,270 @@ const templates: GuidanceJourneyTemplate[] = [
       },
     ],
   },
+
+  // ── Warranty Purchase (SERVICE) ───────────────────────────────────────────
+  {
+    journeyTypeKey: 'warranty_purchase_journey',
+    journeyKey: 'journey_warranty_purchase',
+    version: '1.0.0',
+    signalIntentFamilies: [],
+    issueDomain: 'INSURANCE',
+    defaultDecisionStage: 'AWARENESS',
+    defaultReadiness: 'NEEDS_CONTEXT',
+    canonicalFirstStepKey: 'review_warranty_options',
+    steps: [
+      {
+        stepOrder: 1,
+        stepKey: 'review_warranty_options',
+        stepType: 'AWARENESS',
+        label: 'Review warranty options',
+        description: 'Understand what home warranty plans are available and what they cover.',
+        decisionStage: 'AWARENESS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'coverage-intelligence',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-intelligence',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 2,
+        stepKey: 'compare_warranty_plans',
+        stepType: 'DECISION',
+        label: 'Compare warranty plans',
+        description: 'Evaluate coverage limits, deductibles, and provider reputation side by side.',
+        decisionStage: 'DECISION',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'coverage-options',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-options',
+        skipPolicy: 'DISCOURAGED',
+      },
+      {
+        stepOrder: 3,
+        stepKey: 'select_and_purchase_warranty',
+        stepType: 'EXECUTION',
+        label: 'Select and purchase a plan',
+        description: 'Commit to the chosen warranty plan and complete the purchase.',
+        decisionStage: 'EXECUTION',
+        executionReadiness: 'READY',
+        isRequired: true,
+        toolKey: 'coverage-options',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-options',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 4,
+        stepKey: 'confirm_warranty_coverage',
+        stepType: 'TRACKING',
+        label: 'Confirm coverage is active',
+        description: 'Upload proof of purchase and confirm the new warranty is on file.',
+        decisionStage: 'TRACKING',
+        executionReadiness: 'TRACKING_ONLY',
+        isRequired: false,
+        toolKey: 'documents',
+        routePath: '/dashboard/properties/:propertyId/inventory/coverage',
+        skipPolicy: 'ALLOWED',
+      },
+    ],
+  },
+
+  // ── Insurance Purchase (SERVICE) ──────────────────────────────────────────
+  {
+    journeyTypeKey: 'insurance_purchase_journey',
+    journeyKey: 'journey_insurance_purchase',
+    version: '1.0.0',
+    signalIntentFamilies: [],
+    issueDomain: 'INSURANCE',
+    defaultDecisionStage: 'AWARENESS',
+    defaultReadiness: 'NEEDS_CONTEXT',
+    canonicalFirstStepKey: 'assess_coverage_need',
+    steps: [
+      {
+        stepOrder: 1,
+        stepKey: 'assess_coverage_need',
+        stepType: 'AWARENESS',
+        label: 'Assess your coverage need',
+        description: 'Identify which systems or events are currently unprotected.',
+        decisionStage: 'AWARENESS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'coverage-intelligence',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-intelligence',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 2,
+        stepKey: 'compare_insurance_policies',
+        stepType: 'DECISION',
+        label: 'Compare policy options',
+        description: 'Evaluate coverage types, deductibles, and premiums.',
+        decisionStage: 'DECISION',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'coverage-options',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-options',
+        skipPolicy: 'DISCOURAGED',
+      },
+      {
+        stepOrder: 3,
+        stepKey: 'select_insurance_provider',
+        stepType: 'DECISION',
+        label: 'Select a provider',
+        description: 'Choose a licensed insurer and confirm premium and deductible.',
+        decisionStage: 'DECISION',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'coverage-options',
+        routePath: '/dashboard/properties/:propertyId/tools/coverage-options',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 4,
+        stepKey: 'bind_policy',
+        stepType: 'EXECUTION',
+        label: 'Bind the policy',
+        description: 'Complete the application and bind the selected insurance policy.',
+        decisionStage: 'EXECUTION',
+        executionReadiness: 'READY',
+        isRequired: true,
+        toolKey: 'documents',
+        routePath: '/dashboard/properties/:propertyId/inventory/coverage',
+        skipPolicy: 'DISALLOWED',
+      },
+    ],
+  },
+
+  // ── General Inspection (SERVICE) ──────────────────────────────────────────
+  {
+    journeyTypeKey: 'general_inspection_journey',
+    journeyKey: 'journey_general_inspection',
+    version: '1.0.0',
+    signalIntentFamilies: [],
+    issueDomain: 'MAINTENANCE',
+    defaultDecisionStage: 'AWARENESS',
+    defaultReadiness: 'NEEDS_CONTEXT',
+    canonicalFirstStepKey: 'schedule_inspection',
+    steps: [
+      {
+        stepOrder: 1,
+        stepKey: 'schedule_inspection',
+        stepType: 'AWARENESS',
+        label: 'Schedule inspection',
+        description: 'Book a licensed inspector for the date and scope you need.',
+        decisionStage: 'AWARENESS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'booking',
+        routePath: '/dashboard/providers?propertyId=:propertyId&category=INSPECTION',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 2,
+        stepKey: 'prepare_property_access',
+        stepType: 'DIAGNOSIS',
+        label: 'Prepare property access',
+        description: 'Ensure access to all areas the inspector needs to evaluate.',
+        decisionStage: 'DIAGNOSIS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: false,
+        toolKey: 'guidance-overview',
+        routePath: '/dashboard/properties/:propertyId/tools/guidance-overview',
+        skipPolicy: 'ALLOWED',
+      },
+      {
+        stepOrder: 3,
+        stepKey: 'review_inspection_report',
+        stepType: 'DECISION',
+        label: 'Review inspection report',
+        description: 'Go through the inspector\'s findings and flag any items requiring action.',
+        decisionStage: 'DECISION',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'inspection-report',
+        routePath: '/dashboard/inspection-report?propertyId=:propertyId',
+        skipPolicy: 'DISCOURAGED',
+      },
+      {
+        stepOrder: 4,
+        stepKey: 'act_on_inspection_findings',
+        stepType: 'EXECUTION',
+        label: 'Act on findings',
+        description: 'Create follow-up actions for any flagged items from the inspection.',
+        decisionStage: 'EXECUTION',
+        executionReadiness: 'READY',
+        isRequired: false,
+        toolKey: 'guidance-overview',
+        routePath: '/dashboard/properties/:propertyId/tools/guidance-overview',
+        skipPolicy: 'ALLOWED',
+      },
+    ],
+  },
+
+  // ── Cleaning Service (SERVICE) ─────────────────────────────────────────────
+  {
+    journeyTypeKey: 'cleaning_service_journey',
+    journeyKey: 'journey_cleaning_service',
+    version: '1.0.0',
+    signalIntentFamilies: [],
+    issueDomain: 'MAINTENANCE',
+    defaultDecisionStage: 'AWARENESS',
+    defaultReadiness: 'NEEDS_CONTEXT',
+    canonicalFirstStepKey: 'select_cleaning_type',
+    steps: [
+      {
+        stepOrder: 1,
+        stepKey: 'select_cleaning_type',
+        stepType: 'AWARENESS',
+        label: 'Select cleaning service type',
+        description: 'Choose between standard, deep clean, move-in/out, or specialty cleaning.',
+        decisionStage: 'AWARENESS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'guidance-overview',
+        routePath: '/dashboard/properties/:propertyId/tools/guidance-overview',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 2,
+        stepKey: 'get_cleaning_quotes',
+        stepType: 'DECISION',
+        label: 'Get quotes from cleaning providers',
+        description: 'Request at least two quotes for the selected cleaning type.',
+        decisionStage: 'DECISION',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'service-price-radar',
+        routePath: '/dashboard/properties/:propertyId/tools/service-price-radar',
+        skipPolicy: 'DISCOURAGED',
+      },
+      {
+        stepOrder: 3,
+        stepKey: 'book_cleaning_provider',
+        stepType: 'EXECUTION',
+        label: 'Book cleaning provider',
+        description: 'Schedule the selected provider for the desired date and time.',
+        decisionStage: 'EXECUTION',
+        executionReadiness: 'READY',
+        isRequired: true,
+        toolKey: 'booking',
+        routePath: '/dashboard/providers?propertyId=:propertyId&category=CLEANING',
+        skipPolicy: 'DISALLOWED',
+      },
+      {
+        stepOrder: 4,
+        stepKey: 'confirm_cleaning_complete',
+        stepType: 'TRACKING',
+        label: 'Confirm service completed',
+        description: 'Mark the cleaning job as done once the provider has finished.',
+        decisionStage: 'TRACKING',
+        executionReadiness: 'TRACKING_ONLY',
+        isRequired: false,
+        toolKey: 'guidance-overview',
+        routePath: '/dashboard/properties/:propertyId/tools/guidance-overview',
+        skipPolicy: 'ALLOWED',
+      },
+    ],
+  },
 ];
 
 const templateByFamily = new Map<string, GuidanceJourneyTemplate>();
@@ -908,6 +1172,76 @@ export function getGuidanceTemplateBySignalFamily(signalIntentFamily?: string | 
 export function listGuidanceTemplates(): GuidanceJourneyTemplate[] {
   return templates;
 }
+
+// Maps user-facing issue types to journey template keys.
+// Used by createUserInitiatedJourney() to route to the correct template.
+const ISSUE_TYPE_TO_TEMPLATE_KEY: Record<string, string> = {
+  // Asset lifecycle / maintenance issues
+  'not_working':               'asset_lifecycle_resolution',
+  'not_cooling':               'asset_lifecycle_resolution',
+  'not_heating':               'asset_lifecycle_resolution',
+  'past_life':                 'asset_lifecycle_resolution',
+  'aging':                     'asset_lifecycle_resolution',
+  'broken':                    'asset_lifecycle_resolution',
+  'maintenance_needed':        'inspection_followup_resolution',
+  'inspection_needed':         'general_inspection_journey',
+  // Coverage / financial issues
+  'coverage_question':         'coverage_gap_resolution',
+  'cost_estimate':             'financial_exposure_resolution',
+  // Leak / water damage — asset lifecycle path
+  'leak':                      'asset_lifecycle_resolution',
+  'water_damage':              'asset_lifecycle_resolution',
+  // SERVICE scope issue types
+  'purchase_warranty':         'warranty_purchase_journey',
+  'purchase_insurance':        'insurance_purchase_journey',
+  'schedule_inspection':       'general_inspection_journey',
+  'arrange_cleaning':          'cleaning_service_journey',
+  'get_quotes':                'financial_exposure_resolution',
+};
+
+/**
+ * Resolves the best journey template for a user-initiated journey given
+ * the issue type and scope category. Falls back to the generic resolution
+ * template when no specific mapping exists.
+ */
+export function getTemplateByIssueType(
+  issueType: string,
+  scopeCategory: string
+): GuidanceJourneyTemplate {
+  const normalised = issueType.trim().toLowerCase().replace(/\s+/g, '_');
+  const templateKey = ISSUE_TYPE_TO_TEMPLATE_KEY[normalised];
+  if (templateKey) {
+    const found = templates.find((t) => t.journeyTypeKey === templateKey);
+    if (found) return found;
+  }
+  // SERVICE scope with no specific mapping → warranty purchase as generic service journey
+  if (scopeCategory === 'SERVICE') {
+    return templates.find((t) => t.journeyTypeKey === 'warranty_purchase_journey') ?? DEFAULT_TEMPLATE;
+  }
+  // ITEM scope with no specific mapping → asset lifecycle as generic item journey
+  return templates.find((t) => t.journeyTypeKey === 'asset_lifecycle_resolution') ?? DEFAULT_TEMPLATE;
+}
+
+// List of suggested issue types returned by GET /guidance/issue-types
+export const SUGGESTED_ISSUE_TYPES_ITEM = [
+  { key: 'not_working',      label: 'Not working properly' },
+  { key: 'not_cooling',      label: 'Not cooling' },
+  { key: 'not_heating',      label: 'Not heating' },
+  { key: 'leak',             label: 'Leaking or water damage' },
+  { key: 'past_life',        label: 'Aging or past expected life' },
+  { key: 'broken',           label: 'Broken or damaged' },
+  { key: 'inspection_needed',label: 'Needs inspection or maintenance' },
+  { key: 'coverage_question',label: 'Coverage or warranty question' },
+  { key: 'cost_estimate',    label: 'Need a cost estimate' },
+] as const;
+
+export const SUGGESTED_ISSUE_TYPES_SERVICE = [
+  { key: 'purchase_warranty',    label: 'Purchase or find a home warranty' },
+  { key: 'purchase_insurance',   label: 'Purchase or review home insurance' },
+  { key: 'schedule_inspection',  label: 'Schedule a home inspection' },
+  { key: 'arrange_cleaning',     label: 'Arrange a cleaning service' },
+  { key: 'get_quotes',           label: 'Get quotes and compare options' },
+] as const;
 
 const stepSkipPolicyByJourney = new Map<string, Map<string, GuidanceStepSkipPolicy>>();
 for (const template of [...templates, DEFAULT_TEMPLATE]) {

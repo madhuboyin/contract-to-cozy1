@@ -39,7 +39,10 @@ export const GUIDANCE_EXECUTION_READINESS = [
 ] as const;
 
 export const GUIDANCE_SIGNAL_STATUS = ['ACTIVE', 'RESOLVED', 'SUPPRESSED', 'ARCHIVED'] as const;
-export const GUIDANCE_JOURNEY_STATUS = ['ACTIVE', 'COMPLETED', 'ABORTED', 'ARCHIVED'] as const;
+export const GUIDANCE_SCOPE_CATEGORIES = ['ITEM', 'SERVICE'] as const;
+export type GuidanceScopeCategory = (typeof GUIDANCE_SCOPE_CATEGORIES)[number];
+
+export const GUIDANCE_JOURNEY_STATUS = ['NOT_STARTED', 'ACTIVE', 'COMPLETED', 'ABORTED', 'ARCHIVED', 'DISMISSED'] as const;
 export const GUIDANCE_STEP_STATUS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'] as const;
 export const GUIDANCE_SEVERITY = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'UNKNOWN'] as const;
 export const GUIDANCE_STEP_SKIP_POLICY = ['ALLOWED', 'DISCOURAGED', 'DISALLOWED'] as const;
@@ -52,6 +55,15 @@ export type GuidanceJourneyStatus = (typeof GUIDANCE_JOURNEY_STATUS)[number];
 export type GuidanceStepStatus = (typeof GUIDANCE_STEP_STATUS)[number];
 export type GuidanceSeverity = (typeof GUIDANCE_SEVERITY)[number];
 export type GuidanceStepSkipPolicy = (typeof GUIDANCE_STEP_SKIP_POLICY)[number];
+
+export type UserInitiatedJourneyInput = {
+  scopeCategory: GuidanceScopeCategory;
+  scopeId: string;
+  issueType: string;
+  inventoryItemId?: string | null;
+  homeAssetId?: string | null;
+  serviceKey?: string | null;
+};
 
 export type GuidanceSignalSourceInput = {
   propertyId: string;

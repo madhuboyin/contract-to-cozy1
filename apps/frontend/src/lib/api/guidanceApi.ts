@@ -34,7 +34,8 @@ export type GuidanceExecutionReadiness =
   | 'TRACKING_ONLY'
   | 'UNKNOWN';
 
-export type GuidanceJourneyStatus = 'ACTIVE' | 'COMPLETED' | 'ABORTED' | 'ARCHIVED';
+export type GuidanceJourneyStatus = 'NOT_STARTED' | 'ACTIVE' | 'COMPLETED' | 'ABORTED' | 'ARCHIVED' | 'DISMISSED';
+export type GuidanceScopeCategory = 'ITEM' | 'SERVICE';
 export type GuidanceStepStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED' | 'BLOCKED';
 export type GuidanceSeverity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'UNKNOWN';
 
@@ -113,6 +114,14 @@ export type GuidanceJourneyDTO = {
   missingContextKeys: string[];
   contextSnapshot: Record<string, unknown> | null;
   derivedSnapshot: Record<string, unknown> | null;
+  // IMP-GE-1: user-first scope fields
+  scopeCategory: GuidanceScopeCategory | null;
+  scopeId: string | null;
+  issueType: string | null;
+  serviceKey: string | null;
+  isUserInitiated: boolean;
+  dismissedReason: string | null;
+  dismissedAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
   updatedAt: string | null;
@@ -275,8 +284,15 @@ export type GuidanceExecutionGuardResult = {
   evaluatedJourneyIds: string[];
 };
 
-export async function getPropertyGuidance(propertyId: string): Promise<GuidancePropertyResponse> {
-  const res = await api.get<GuidancePropertyResponse>(`/api/properties/${propertyId}/guidance`);
+export async function getPropertyGuidance(
+  propertyId: string,
+  options?: { userSelectedScopeId?: string }
+): Promise<GuidancePropertyResponse> {
+  const res = await api.get<GuidancePropertyResponse>(`/api/properties/${propertyId}/guidance`, {
+    params: options?.userSelectedScopeId
+      ? { userSelectedScopeId: options.userSelectedScopeId }
+      : undefined,
+  });
   return res.data;
 }
 
@@ -421,6 +437,82 @@ export async function recordGuidanceToolStatus(
   const res = await api.post<{ step: GuidanceStepDTO | null; journey: GuidanceJourneyDTO | null }>(
     `/api/properties/${propertyId}/guidance/tool-completions`,
     { sourceToolKey: payload.sourceToolKey ?? 'frontend', ...payload }
+  );
+  return res.data;
+}
+
+// IMP-GE-1: User-initiated journey mutations
+
+export type StartGuidanceJourneyInput = {
+  scopeCategory: GuidanceScopeCategory;
+  scopeId: string;
+  issueType: string;
+  inventoryItemId?: string;
+  homeAssetId?: string;
+  serviceKey?: string;
+};
+
+export type GuidanceIssueTypeOption = {
+  key: string;
+  label: string;
+};
+
+export type GuidanceServiceCategoryOption = {
+  key: string;
+  label: string;
+};
+
+export async function startGuidanceJourney(
+  propertyId: string,
+  input: StartGuidanceJourneyInput
+): Promise<{ journey: GuidanceJourneyDTO }> {
+  const res = await api.post<{ journey: GuidanceJourneyDTO }>(
+    `/api/properties/${propertyId}/guidance/journeys/start`,
+    input
+  );
+  return res.data;
+}
+
+export async function dismissGuidanceJourney(
+  propertyId: string,
+  journeyId: string,
+  reason?: string
+): Promise<{ journey: GuidanceJourneyDTO }> {
+  const res = await api.post<{ journey: GuidanceJourneyDTO }>(
+    `/api/properties/${propertyId}/guidance/journeys/${journeyId}/dismiss`,
+    { reason }
+  );
+  return res.data;
+}
+
+export async function changeGuidanceJourneyIssue(
+  propertyId: string,
+  journeyId: string,
+  issueType: string
+): Promise<{ journey: GuidanceJourneyDTO }> {
+  const res = await api.post<{ journey: GuidanceJourneyDTO }>(
+    `/api/properties/${propertyId}/guidance/journeys/${journeyId}/change-issue`,
+    { issueType }
+  );
+  return res.data;
+}
+
+export async function getGuidanceIssueTypes(
+  propertyId: string,
+  scopeCategory: GuidanceScopeCategory
+): Promise<{ scopeCategory: GuidanceScopeCategory; issueTypes: GuidanceIssueTypeOption[] }> {
+  const res = await api.get<{ scopeCategory: GuidanceScopeCategory; issueTypes: GuidanceIssueTypeOption[] }>(
+    `/api/properties/${propertyId}/guidance/issue-types`,
+    { params: { scopeCategory } }
+  );
+  return res.data;
+}
+
+export async function getGuidanceServiceCategories(
+  propertyId: string
+): Promise<{ serviceCategories: GuidanceServiceCategoryOption[] }> {
+  const res = await api.get<{ serviceCategories: GuidanceServiceCategoryOption[] }>(
+    `/api/properties/${propertyId}/guidance/service-categories`
   );
   return res.data;
 }

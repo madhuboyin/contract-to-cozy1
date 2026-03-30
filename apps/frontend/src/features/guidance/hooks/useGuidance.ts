@@ -15,14 +15,16 @@ type UseGuidanceOptions = {
   issueDomains?: readonly GuidanceIssueDomain[];
   toolKey?: string;
   limit?: number;
+  userSelectedScopeId?: string;
 };
 
 export function useGuidance(propertyId: string | null | undefined, options?: UseGuidanceOptions) {
+  const userSelectedScopeId = options?.userSelectedScopeId;
   const query = useQuery({
-    queryKey: ['guidance', 'property', propertyId],
+    queryKey: ['guidance', 'property', propertyId, userSelectedScopeId],
     queryFn: async () => {
       if (!propertyId) throw new Error('Property ID is required');
-      return getPropertyGuidance(propertyId);
+      return getPropertyGuidance(propertyId, { userSelectedScopeId });
     },
     enabled: Boolean(propertyId) && (options?.enabled ?? true),
     staleTime: 20_000,
@@ -39,7 +41,10 @@ export function useGuidance(propertyId: string | null | undefined, options?: Use
   const actions = useMemo(() => {
     if (!query.data || !propertyId) return [];
 
-    const base = query.data.journeys.map((journey) =>
+    // Filter out DISMISSED journeys — they are not visible to users
+    const visibleJourneys = query.data.journeys.filter((j) => j.status !== 'DISMISSED');
+
+    const base = visibleJourneys.map((journey) =>
       mapGuidanceJourneyToActionModel({
         propertyId,
         journey,

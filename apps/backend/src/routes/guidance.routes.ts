@@ -6,15 +6,20 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import {
   blockGuidanceStep,
+  changeGuidanceJourneyIssue,
   completeGuidanceStep,
+  dismissGuidanceJourney,
   getGuidanceExecutionGuard,
+  getGuidanceIssueTypes,
   getGuidanceJourneyDetail,
   getGuidanceNextStep,
+  getGuidanceServiceCategories,
   getPropertyGuidance,
   listActiveGuidanceJourneys,
   recordGuidanceToolCompletion,
   resolveGuidanceSignal,
   skipGuidanceStep,
+  startGuidanceJourney,
 } from '../controllers/guidance.controller';
 
 const router = Router();
@@ -114,6 +119,28 @@ const toolCompletionBodySchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+const startJourneyBodySchema = z.object({
+  scopeCategory: z.enum(['ITEM', 'SERVICE']),
+  scopeId: z.string().trim().min(1).max(255),
+  issueType: z.string().trim().min(1).max(120),
+  inventoryItemId: z.string().uuid().optional(),
+  homeAssetId: z.string().uuid().optional(),
+  serviceKey: z.string().trim().min(1).max(120).optional(),
+});
+
+const dismissJourneyBodySchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+
+const changeIssueBodySchema = z.object({
+  issueType: z.string().trim().min(1).max(120),
+});
+
+const issueTypesQuerySchema = z.object({
+  params: z.object({ propertyId: z.string().uuid() }),
+  query: z.object({ scopeCategory: z.enum(['ITEM', 'SERVICE']).optional() }),
+});
+
 router.use(apiRateLimiter);
 router.use(authenticate);
 
@@ -180,6 +207,45 @@ router.post(
   propertyAuthMiddleware,
   validateBody(toolCompletionBodySchema),
   recordGuidanceToolCompletion
+);
+
+// IMP-GE-1: User-initiated journey endpoints
+router.post(
+  '/properties/:propertyId/guidance/journeys/start',
+  validate(propertyParamsSchema),
+  propertyAuthMiddleware,
+  validateBody(startJourneyBodySchema),
+  startGuidanceJourney
+);
+
+router.post(
+  '/properties/:propertyId/guidance/journeys/:journeyId/dismiss',
+  validate(propertyJourneyParamsSchema),
+  propertyAuthMiddleware,
+  validateBody(dismissJourneyBodySchema),
+  dismissGuidanceJourney
+);
+
+router.post(
+  '/properties/:propertyId/guidance/journeys/:journeyId/change-issue',
+  validate(propertyJourneyParamsSchema),
+  propertyAuthMiddleware,
+  validateBody(changeIssueBodySchema),
+  changeGuidanceJourneyIssue
+);
+
+router.get(
+  '/properties/:propertyId/guidance/issue-types',
+  validate(issueTypesQuerySchema),
+  propertyAuthMiddleware,
+  getGuidanceIssueTypes
+);
+
+router.get(
+  '/properties/:propertyId/guidance/service-categories',
+  validate(propertyParamsSchema),
+  propertyAuthMiddleware,
+  getGuidanceServiceCategories
 );
 
 export default router;

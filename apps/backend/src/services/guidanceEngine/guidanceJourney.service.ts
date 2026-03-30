@@ -1,6 +1,6 @@
 import { APIError } from '../../middleware/error.middleware';
 import { prisma } from '../../lib/prisma';
-import { getGuidanceTemplateBySignalFamily, getDefaultStepKey } from './guidanceTemplateRegistry';
+import { getGuidanceTemplateBySignalFamily, getDefaultStepKey, getTemplateByIssueType } from './guidanceTemplateRegistry';
 import { guidanceSignalResolverService } from './guidanceSignalResolver.service';
 import { guidanceStepResolverService } from './guidanceStepResolver.service';
 import { guidanceFinancialContextService } from './guidanceFinancialContext.service';
@@ -16,6 +16,7 @@ import {
   GuidanceEvidenceType,
   GuidanceSignalSourceInput,
   GuidanceToolCompletionInput,
+  UserInitiatedJourneyInput,
   getGuidanceModels,
 } from './guidanceTypes';
 
@@ -1077,7 +1078,7 @@ export class GuidanceJourneyService {
     });
   }
 
-  async getPropertyGuidance(propertyId: string) {
+  async getPropertyGuidance(propertyId: string, options?: { userSelectedScopeId?: string }) {
     const journeys = await this.listActiveJourneysForProperty(propertyId);
     const signals = await this.listSignalsForProperty(propertyId);
 
@@ -1103,7 +1104,9 @@ export class GuidanceJourneyService {
       })
     );
 
-    const suppression = guidanceSuppressionService.suppress(enriched);
+    const suppression = guidanceSuppressionService.suppress(enriched, {
+      userSelectedScopeId: options?.userSelectedScopeId,
+    });
     const surfaced = suppression.filteredActions;
     const surfacedSignalIds = new Set(
       surfaced
@@ -1132,6 +1135,213 @@ export class GuidanceJourneyService {
         .filter((item): item is NonNullable<typeof item> => Boolean(item)),
       suppressedSignals: suppression.suppressedSignals,
     };
+  }
+
+  async createUserInitiatedJourney(
+    propertyId: string,
+    input: UserInitiatedJourneyInput,
+    actorUserId: string
+  ) {
+    const { guidanceJourney, guidanceJourneyEvent } = getGuidanceModels();
+    const template = getTemplateByIssueType(input.issueType, input.scopeCategory);
+    const now = new Date();
+
+    const scopeId = input.scopeId;
+    const inventoryItemId = input.inventoryItemId ?? (input.scopeCategory === 'ITEM' ? input.scopeId : null) ?? null;
+    const homeAssetId = input.homeAssetId ?? null;
+    const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
+
+    const journey = await guidanceJourney.create({
+      data: {
+        propertyId,
+        homeAssetId,
+        inventoryItemId,
+        primarySignalId: null,
+        journeyKey: template.journeyKey,
+        journeyTypeKey: template.journeyTypeKey,
+        templateVersion: `${template.journeyTypeKey}@${template.version}`,
+        issueDomain: template.issueDomain,
+        decisionStage: template.defaultDecisionStage,
+        executionReadiness: template.defaultReadiness,
+        status: 'NOT_STARTED',
+        scopeCategory: input.scopeCategory,
+        scopeId,
+        issueType: input.issueType,
+        serviceKey,
+        isUserInitiated: true,
+        isLowContext: false,
+        missingContextKeys: [],
+        currentStepOrder: null,
+        currentStepKey: template.canonicalFirstStepKey,
+        contextSnapshotJson: {
+          initiatedByUserId: actorUserId,
+          issueType: input.issueType,
+          scopeCategory: input.scopeCategory,
+          scopeId,
+        },
+        derivedSnapshotJson: null,
+        startedAt: now,
+        lastTransitionAt: now,
+      },
+      include: {
+        steps: { orderBy: [{ stepOrder: 'asc' }] },
+      },
+    });
+
+    await guidanceJourneyEvent.create({
+      data: {
+        propertyId,
+        journeyId: journey.id,
+        signalId: null,
+        eventType: 'JOURNEY_CREATED',
+        actorType: 'USER',
+        actorUserId,
+        payloadJson: {
+          journeyTypeKey: template.journeyTypeKey,
+          issueType: input.issueType,
+          scopeCategory: input.scopeCategory,
+          scopeId,
+          isUserInitiated: true,
+        },
+      },
+    });
+
+    await guidanceStepResolverService.ensureTemplateSteps({
+      propertyId,
+      journeyId: journey.id,
+      templateSteps: template.steps,
+      actorUserId,
+      signalId: null,
+    });
+
+    return guidanceStepResolverService.recomputeJourneyState({
+      propertyId,
+      journeyId: journey.id,
+      actorUserId,
+      signalId: null,
+    });
+  }
+
+  async dismissJourney(
+    propertyId: string,
+    journeyId: string,
+    actorUserId: string,
+    dismissedReason?: string | null
+  ) {
+    const { guidanceJourney, guidanceJourneyEvent } = getGuidanceModels();
+    const now = new Date();
+
+    const journey = await guidanceJourney.findFirst({
+      where: { id: journeyId, propertyId },
+    });
+
+    if (!journey) {
+      throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
+    }
+
+    const updated = await guidanceJourney.update({
+      where: { id: journeyId },
+      data: {
+        status: 'DISMISSED',
+        dismissedReason: dismissedReason ?? null,
+        dismissedAt: now,
+        lastTransitionAt: now,
+        version: { increment: 1 },
+      },
+      include: {
+        steps: { orderBy: [{ stepOrder: 'asc' }] },
+      },
+    });
+
+    await guidanceJourneyEvent.create({
+      data: {
+        propertyId,
+        journeyId,
+        signalId: journey.primarySignalId ?? null,
+        eventType: 'JOURNEY_DISMISSED',
+        fromJourneyStatus: journey.status as any,
+        toJourneyStatus: 'DISMISSED' as any,
+        actorType: 'USER',
+        actorUserId,
+        reasonCode: 'USER_DISMISSED',
+        reasonMessage: dismissedReason ?? null,
+        payloadJson: { dismissedReason: dismissedReason ?? null },
+      },
+    });
+
+    return updated;
+  }
+
+  async changeIssueForJourney(
+    propertyId: string,
+    journeyId: string,
+    actorUserId: string,
+    newIssueType: string
+  ) {
+    const { guidanceJourney, guidanceJourneyEvent } = getGuidanceModels();
+
+    const journey = await guidanceJourney.findFirst({
+      where: { id: journeyId, propertyId },
+    });
+
+    if (!journey) {
+      throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
+    }
+
+    const scopeCategory = (journey.scopeCategory as string) ?? 'ITEM';
+    const newTemplate = getTemplateByIssueType(newIssueType, scopeCategory);
+    const now = new Date();
+
+    await guidanceJourney.update({
+      where: { id: journeyId },
+      data: {
+        issueType: newIssueType,
+        journeyKey: newTemplate.journeyKey,
+        journeyTypeKey: newTemplate.journeyTypeKey,
+        templateVersion: `${newTemplate.journeyTypeKey}@${newTemplate.version}`,
+        issueDomain: newTemplate.issueDomain,
+        decisionStage: newTemplate.defaultDecisionStage,
+        executionReadiness: newTemplate.defaultReadiness,
+        status: 'NOT_STARTED',
+        currentStepOrder: null,
+        currentStepKey: newTemplate.canonicalFirstStepKey,
+        lastTransitionAt: now,
+        version: { increment: 1 },
+      },
+    });
+
+    await guidanceJourneyEvent.create({
+      data: {
+        propertyId,
+        journeyId,
+        signalId: journey.primarySignalId ?? null,
+        eventType: 'JOURNEY_ISSUE_CHANGED',
+        actorType: 'USER',
+        actorUserId,
+        reasonCode: 'USER_CHANGED_ISSUE',
+        reasonMessage: newIssueType,
+        payloadJson: {
+          previousIssueType: journey.issueType ?? null,
+          newIssueType,
+          newJourneyTypeKey: newTemplate.journeyTypeKey,
+        },
+      },
+    });
+
+    await guidanceStepResolverService.ensureTemplateSteps({
+      propertyId,
+      journeyId,
+      templateSteps: newTemplate.steps,
+      actorUserId,
+      signalId: null,
+    });
+
+    return guidanceStepResolverService.recomputeJourneyState({
+      propertyId,
+      journeyId,
+      actorUserId,
+      signalId: null,
+    });
   }
 
   async resolveNextStepWithIntelligence(params: { propertyId: string; journeyId: string }) {

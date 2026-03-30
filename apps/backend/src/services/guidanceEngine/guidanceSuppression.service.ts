@@ -109,9 +109,22 @@ function isRedundantAction(action: EnrichedGuidanceAction) {
 }
 
 export class GuidanceSuppressionService {
-  suppress(actions: EnrichedGuidanceAction[]): GuidanceSuppressionResult {
+  suppress(actions: EnrichedGuidanceAction[], options?: { userSelectedScopeId?: string }): GuidanceSuppressionResult {
     const dedupedByKey = new Map<string, EnrichedGuidanceAction>();
     const suppressedSignals: GuidanceSuppressionResult['suppressedSignals'] = [];
+
+    // IMP-GE-1: When the user has selected a specific scope, pin that journey through
+    // all suppression passes. This ensures user-chosen scopes are never silently removed
+    // by portfolio-level ranking or weak-signal filtering.
+    const pinnedJourneyIds = new Set<string>();
+    if (options?.userSelectedScopeId) {
+      for (const action of actions) {
+        const journeyScopeId = action.journey?.scopeId ?? action.journey?.inventoryItemId ?? action.journey?.homeAssetId ?? null;
+        if (journeyScopeId === options.userSelectedScopeId || action.journey?.id === options.userSelectedScopeId) {
+          pinnedJourneyIds.add(action.journey.id);
+        }
+      }
+    }
 
     for (const action of actions) {
       const dedupKey = signalDedupKey(action);
@@ -149,7 +162,7 @@ export class GuidanceSuppressionService {
         continue;
       }
 
-      if (isWeakSignal(action)) {
+      if (isWeakSignal(action) && !pinnedJourneyIds.has(action.journey.id)) {
         suppressedSignals.push({
           signalId: action.signal?.id ?? null,
           journeyId: action.journey.id,
@@ -158,7 +171,7 @@ export class GuidanceSuppressionService {
         continue;
       }
 
-      if (action.validationShouldSuppress) {
+      if (action.validationShouldSuppress && !pinnedJourneyIds.has(action.journey.id)) {
         suppressedSignals.push({
           signalId: action.signal?.id ?? null,
           journeyId: action.journey.id,
@@ -221,13 +234,30 @@ export class GuidanceSuppressionService {
         (intentA === 'DEFER' && intentB === 'REPLACE');
 
       if (!conflict) {
-        if (action.priorityScore > existing.priorityScore) {
+        // Pinned journeys always win a non-conflicting comparison
+        if (pinnedJourneyIds.has(action.journey.id)) {
+          conflictByScope.set(scopeKey, action);
+        } else if (!pinnedJourneyIds.has(existing.journey.id) && action.priorityScore > existing.priorityScore) {
           conflictByScope.set(scopeKey, action);
         }
         continue;
       }
 
-      if (action.priorityScore > existing.priorityScore) {
+      // Pinned journey wins conflict resolution unconditionally
+      if (pinnedJourneyIds.has(action.journey.id)) {
+        suppressedSignals.push({
+          signalId: existing.signal?.id ?? null,
+          journeyId: existing.journey.id,
+          reason: 'CONFLICTING_ACTION_SUPPRESSED',
+        });
+        conflictByScope.set(scopeKey, action);
+      } else if (pinnedJourneyIds.has(existing.journey.id)) {
+        suppressedSignals.push({
+          signalId: action.signal?.id ?? null,
+          journeyId: action.journey.id,
+          reason: 'CONFLICTING_ACTION_SUPPRESSED',
+        });
+      } else if (action.priorityScore > existing.priorityScore) {
         suppressedSignals.push({
           signalId: existing.signal?.id ?? null,
           journeyId: existing.journey.id,

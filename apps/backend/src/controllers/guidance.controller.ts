@@ -4,6 +4,10 @@ import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourn
 import { guidanceStepResolverService } from '../services/guidanceEngine/guidanceStepResolver.service';
 import { guidanceBookingGuardService } from '../services/guidanceEngine/guidanceBookingGuard.service';
 import {
+  SUGGESTED_ISSUE_TYPES_ITEM,
+  SUGGESTED_ISSUE_TYPES_SERVICE,
+} from '../services/guidanceEngine/guidanceTemplateRegistry';
+import {
   mapGuidanceJourney,
   mapGuidanceSignal,
   mapGuidanceStep,
@@ -32,8 +36,13 @@ export async function getPropertyGuidance(req: CustomRequest, res: Response, nex
   try {
     requireUserId(req);
     const propertyId = req.params.propertyId;
+    const userSelectedScopeId = req.query.userSelectedScopeId
+      ? String(req.query.userSelectedScopeId)
+      : undefined;
 
-    const payload = await guidanceJourneyService.getPropertyGuidance(propertyId);
+    const payload = await guidanceJourneyService.getPropertyGuidance(propertyId, {
+      userSelectedScopeId,
+    });
 
     res.json({
       success: true,
@@ -273,6 +282,108 @@ export async function recordGuidanceToolCompletion(req: CustomRequest, res: Resp
         journey: mapGuidanceJourney(result.journey),
         step: mapGuidanceStep(result.step),
         next: result.next,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function startGuidanceJourney(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = requireUserId(req);
+    const propertyId = req.params.propertyId;
+
+    const journey = await guidanceJourneyService.createUserInitiatedJourney(
+      propertyId,
+      req.body,
+      userId
+    );
+
+    res.status(201).json({
+      success: true,
+      data: { journey: mapGuidanceJourney(journey) },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function dismissGuidanceJourney(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = requireUserId(req);
+    const propertyId = req.params.propertyId;
+    const journeyId = req.params.journeyId;
+
+    const journey = await guidanceJourneyService.dismissJourney(
+      propertyId,
+      journeyId,
+      userId,
+      req.body?.reason ?? null
+    );
+
+    res.json({
+      success: true,
+      data: { journey: mapGuidanceJourney(journey) },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function changeGuidanceJourneyIssue(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = requireUserId(req);
+    const propertyId = req.params.propertyId;
+    const journeyId = req.params.journeyId;
+
+    if (!req.body?.issueType) {
+      throw new APIError('issueType is required.', 400, 'GUIDANCE_ISSUE_TYPE_REQUIRED');
+    }
+
+    const journey = await guidanceJourneyService.changeIssueForJourney(
+      propertyId,
+      journeyId,
+      userId,
+      req.body.issueType
+    );
+
+    res.json({
+      success: true,
+      data: { journey: mapGuidanceJourney(journey) },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getGuidanceIssueTypes(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    requireUserId(req);
+    const scopeCategory = String(req.query.scopeCategory || 'ITEM');
+    const issueTypes =
+      scopeCategory === 'SERVICE' ? SUGGESTED_ISSUE_TYPES_SERVICE : SUGGESTED_ISSUE_TYPES_ITEM;
+
+    res.json({
+      success: true,
+      data: { scopeCategory, issueTypes },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getGuidanceServiceCategories(_req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    res.json({
+      success: true,
+      data: {
+        serviceCategories: [
+          { key: 'warranty_purchase', label: 'Home warranty' },
+          { key: 'insurance_purchase', label: 'Home insurance' },
+          { key: 'general_inspection', label: 'Home inspection' },
+          { key: 'cleaning_service', label: 'Cleaning service' },
+        ],
       },
     });
   } catch (error) {
