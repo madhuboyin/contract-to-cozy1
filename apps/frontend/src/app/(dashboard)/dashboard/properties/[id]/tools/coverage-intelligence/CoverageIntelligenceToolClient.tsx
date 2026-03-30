@@ -64,6 +64,7 @@ export default function CoverageIntelligenceToolClient() {
         subtitle="Coverage Intelligence is part of active guidance journeys. Complete the next required step after review."
         toolKey="coverage-intelligence"
         limit={1}
+        journeyId={guidanceJourneyId}
       />
 
       <ToolExplainerSection toolKey="coverageIntelligence" id="how-it-works" />

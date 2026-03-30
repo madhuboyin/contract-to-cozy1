@@ -17,6 +17,8 @@ type GuidanceInlinePanelProps = {
   toolKey?: string;
   limit?: number;
   compact?: boolean;
+  /** When provided, pins the panel to this journey (used when arriving from a guidance CTA). */
+  journeyId?: string | null;
 };
 
 export function GuidanceInlinePanel({
@@ -27,6 +29,7 @@ export function GuidanceInlinePanel({
   toolKey,
   limit = 2,
   compact = false,
+  journeyId,
 }: GuidanceInlinePanelProps) {
   const [drawerAction, setDrawerAction] = useState<GuidanceActionModel | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -38,7 +41,14 @@ export function GuidanceInlinePanel({
     enabled: Boolean(propertyId),
   });
 
-  const actions = useMemo(() => guidance.actions, [guidance.actions]);
+  const actions = useMemo(() => {
+    const all = guidance.actions;
+    if (!journeyId) return all;
+    // Pin to the specific journey when arriving from a guidance CTA.
+    // Fall back to all toolKey-filtered actions if the journey isn't in the list.
+    const pinned = all.filter((a) => a.journeyId === journeyId);
+    return pinned.length > 0 ? pinned : all;
+  }, [guidance.actions, journeyId]);
 
   if (!propertyId) return null;
 

@@ -283,6 +283,7 @@ export default function ReplaceRepairClient() {
         subtitle="This decision step should happen before coverage checks, pricing validation, and booking."
         toolKey="replace-repair"
         limit={1}
+        journeyId={guidanceContext.guidanceJourneyId}
       />
 
       <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">

@@ -1185,6 +1185,7 @@ export default function ServicePriceRadarClient() {
         toolKey="service-price-radar"
         limit={1}
         compact
+        journeyId={guidanceContext?.guidanceJourneyId ?? null}
       />
 
       {toolError ? (

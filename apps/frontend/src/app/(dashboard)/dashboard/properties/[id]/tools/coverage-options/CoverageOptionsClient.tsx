@@ -136,6 +136,7 @@ export default function CoverageOptionsClient() {
         subtitle="Coverage Options is part of active guidance journeys. Compare options and mark complete when done."
         toolKey="coverage-options"
         limit={1}
+        journeyId={guidanceJourneyId}
       />
 
       {loading ? (
