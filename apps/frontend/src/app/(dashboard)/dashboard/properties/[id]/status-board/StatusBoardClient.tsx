@@ -59,6 +59,7 @@ import {
   Cpu,
   Building,
   Box,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback } from "react";
@@ -837,6 +838,20 @@ export default function StatusBoardClient() {
                       </Button>
                     </Link>
                   )}
+                  {/* FRD-FR-02: Report Issue — launches a user-initiated guidance journey */}
+                  {(item.inventoryItemId || item.homeAssetId) && (
+                    <Link
+                      href={`/dashboard/properties/${propertyId}/tools/guidance-overview?scopeCategory=ITEM${item.inventoryItemId ? `&inventoryItemId=${item.inventoryItemId}&itemId=${item.inventoryItemId}` : `&homeAssetId=${item.homeAssetId}`}&assetName=${encodeURIComponent(item.displayName)}`}
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-rose-200 text-rose-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-rose-50 hover:text-rose-800 hover:shadow-[0_10px_24px_-16px_rgba(225,29,72,0.4)] dark:border-rose-900/70 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                      >
+                        <AlertCircle className="h-3.5 w-3.5 mr-1" /> Report Issue
+                      </Button>
+                    </Link>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1054,6 +1069,16 @@ export default function StatusBoardClient() {
                 <Button size="sm" variant="outline" onClick={() => handleExpand(item)}>
                   {expandedId === item.id ? "Close Adjustments" : "Adjust Status"}
                 </Button>
+                {/* FRD-FR-02: Report Issue CTA — launches a user-initiated guidance journey */}
+                {(item.inventoryItemId || item.homeAssetId) && (
+                  <Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900/70 dark:text-rose-300 dark:hover:bg-rose-950/40" asChild>
+                    <Link
+                      href={`/dashboard/properties/${propertyId}/tools/guidance-overview?scopeCategory=ITEM${item.inventoryItemId ? `&inventoryItemId=${item.inventoryItemId}&itemId=${item.inventoryItemId}` : `&homeAssetId=${item.homeAssetId}`}&assetName=${encodeURIComponent(item.displayName)}`}
+                    >
+                      <AlertCircle className="h-3.5 w-3.5 mr-1" /> Report Issue
+                    </Link>
+                  </Button>
+                )}
               </>
             }
           />

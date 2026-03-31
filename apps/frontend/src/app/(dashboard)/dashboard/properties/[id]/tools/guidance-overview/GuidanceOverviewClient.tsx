@@ -116,6 +116,20 @@ const SERVICE_CATEGORIES = [
   { key: 'cleaning_service', label: 'Cleaning service', description: 'Arrange a home cleaning or deep clean.' },
 ];
 
+// FRD-FR-01: Category filter tabs for the ITEM inventory picker.
+// Keys match InventoryItemCategory enum values from the Prisma schema.
+const INVENTORY_CATEGORY_TABS: { key: string; label: string }[] = [
+  { key: 'ALL',          label: 'All' },
+  { key: 'APPLIANCE',    label: 'Appliances' },
+  { key: 'HVAC',         label: 'HVAC' },
+  { key: 'PLUMBING',     label: 'Plumbing' },
+  { key: 'ELECTRICAL',   label: 'Electrical' },
+  { key: 'ROOF_EXTERIOR',label: 'Roof & Exterior' },
+  { key: 'SAFETY',       label: 'Safety' },
+  { key: 'SMART_HOME',   label: 'Smart Home' },
+  { key: 'OTHER',        label: 'Other' },
+];
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -300,6 +314,8 @@ export default function GuidanceOverviewClient() {
 
   // ---- Asset scope options (full, unsliced) ----
   const [assetSearch, setAssetSearch] = React.useState('');
+  // FRD-FR-01: active category tab in the ITEM picker ('ALL' = no filter)
+  const [selectedCategory, setSelectedCategory] = React.useState<string>('ALL');
 
   const allAssetScopeOptions = React.useMemo<AssetScopeOption[]>(() => {
     const items = inventoryQuery.data ?? [];
@@ -324,14 +340,22 @@ export default function GuidanceOverviewClient() {
   }, [inventoryQuery.data]);
 
   const filteredAssetOptions = React.useMemo(() => {
-    if (!assetSearch.trim()) return allAssetScopeOptions;
-    const needle = assetSearch.toLowerCase();
-    return allAssetScopeOptions.filter(
-      (o) =>
-        o.assetName.toLowerCase().includes(needle) ||
-        o.category.toLowerCase().includes(needle)
-    );
-  }, [allAssetScopeOptions, assetSearch]);
+    let opts = allAssetScopeOptions;
+    // FRD-FR-01: category tab filter
+    if (selectedCategory !== 'ALL') {
+      opts = opts.filter((o) => o.category === selectedCategory);
+    }
+    // text search
+    if (assetSearch.trim()) {
+      const needle = assetSearch.toLowerCase();
+      opts = opts.filter(
+        (o) =>
+          o.assetName.toLowerCase().includes(needle) ||
+          o.category.toLowerCase().includes(needle)
+      );
+    }
+    return opts;
+  }, [allAssetScopeOptions, assetSearch, selectedCategory]);
 
   // Lookup selected asset from full list
   const selectedAssetOption = React.useMemo(() => {
@@ -597,9 +621,38 @@ export default function GuidanceOverviewClient() {
         />
 
         <ScenarioInputCard title="Select a home item" subtitle="All items from your inventory are shown below.">
+          {/* FRD-FR-01: Category filter tabs — only render tabs whose category has ≥1 item */}
+          {allAssetScopeOptions.length > 0 && (() => {
+            const presentCategories = new Set(allAssetScopeOptions.map((o) => o.category));
+            const visibleTabs = INVENTORY_CATEGORY_TABS.filter(
+              (t) => t.key === 'ALL' || presentCategories.has(t.key)
+            );
+            if (visibleTabs.length <= 2) return null; // only "All" + 1 category → no tabs needed
+            return (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {visibleTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => {
+                      setSelectedCategory(tab.key);
+                      setAssetSearch('');
+                    }}
+                    className={[
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      selectedCategory === tab.key
+                        ? 'border-[hsl(var(--mobile-brand-strong))] bg-[hsl(var(--mobile-brand-strong))] text-white'
+                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))] hover:border-[hsl(var(--mobile-brand-strong))]/60 hover:text-[hsl(var(--mobile-text-primary))]',
+                    ].join(' ')}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
           <input
             type="text"
-            placeholder="Search home items..."
+            placeholder={selectedCategory === 'ALL' ? 'Search home items...' : `Search ${INVENTORY_CATEGORY_TABS.find(t => t.key === selectedCategory)?.label ?? 'items'}...`}
             value={assetSearch}
             onChange={(e) => setAssetSearch(e.target.value)}
             className="mb-3 w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm placeholder:text-[hsl(var(--mobile-text-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
@@ -612,9 +665,11 @@ export default function GuidanceOverviewClient() {
               <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
                 {assetSearch
                   ? 'No items match your search.'
+                  : selectedCategory !== 'ALL'
+                  ? `No ${INVENTORY_CATEGORY_TABS.find(t => t.key === selectedCategory)?.label ?? 'items'} found in your inventory.`
                   : 'No home items found. Add items to your inventory to get guidance.'}
               </p>
-              {!assetSearch && (
+              {!assetSearch && selectedCategory === 'ALL' && (
                 <ActionPriorityRow
                   primaryAction={
                     <Button asChild className="min-h-[42px] w-full">
@@ -622,6 +677,14 @@ export default function GuidanceOverviewClient() {
                     </Button>
                   }
                 />
+              )}
+              {!assetSearch && selectedCategory !== 'ALL' && (
+                <button
+                  onClick={() => setSelectedCategory('ALL')}
+                  className="text-sm text-[hsl(var(--mobile-brand-strong))] underline-offset-2 hover:underline"
+                >
+                  Show all categories
+                </button>
               )}
             </div>
           ) : (
