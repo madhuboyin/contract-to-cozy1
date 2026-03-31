@@ -6,6 +6,7 @@ import { guidanceBookingGuardService } from '../services/guidanceEngine/guidance
 import {
   SUGGESTED_ISSUE_TYPES_ITEM,
   SUGGESTED_ISSUE_TYPES_SERVICE,
+  getSymptomTypesForCategory,
 } from '../services/guidanceEngine/guidanceTemplateRegistry';
 import {
   mapGuidanceJourney,
@@ -385,6 +386,50 @@ export async function getGuidanceServiceCategories(_req: CustomRequest, res: Res
           { key: 'cleaning_service', label: 'Cleaning service' },
         ],
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// FRD-FR-04: Returns asset-category-specific symptom types for the verify_history step.
+// ?category=HVAC returns HVAC-specific symptoms; omitting category returns the DEFAULT list.
+export async function getGuidanceSymptomTypes(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    requireUserId(req);
+    const category = req.query.category ? String(req.query.category) : undefined;
+    const symptomTypes = getSymptomTypesForCategory(category);
+
+    res.json({
+      success: true,
+      data: { category: category ?? 'DEFAULT', symptomTypes },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// FRD-FR-03: Returns the 2-year lookback context for a specific inventory item.
+// Used by the verify_history step to decide whether to show the lookback form
+// and to populate the asset history sidebar in GuidanceDrawer.
+export async function getAssetResolutionContext(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    requireUserId(req);
+    const propertyId = req.params.propertyId;
+    const inventoryItemId = String(req.query.inventoryItemId || '');
+
+    if (!inventoryItemId) {
+      throw new APIError('inventoryItemId is required.', 400, 'GUIDANCE_INVENTORY_ITEM_ID_REQUIRED');
+    }
+
+    const context = await guidanceJourneyService.getAssetResolutionContext(
+      propertyId,
+      inventoryItemId
+    );
+
+    res.json({
+      success: true,
+      data: context,
     });
   } catch (error) {
     next(error);

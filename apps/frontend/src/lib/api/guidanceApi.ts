@@ -516,3 +516,51 @@ export async function getGuidanceServiceCategories(
   );
   return res.data;
 }
+
+// ---------------------------------------------------------------------------
+// FRD-FR-04: Symptom types scoped to an InventoryItemCategory
+// ---------------------------------------------------------------------------
+
+export type SymptomTypeOption = {
+  key: string;
+  label: string;
+};
+
+export async function getGuidanceSymptomTypes(
+  propertyId: string,
+  category?: string
+): Promise<{ category: string; symptomTypes: SymptomTypeOption[] }> {
+  const res = await api.get<{ category: string; symptomTypes: SymptomTypeOption[] }>(
+    `/api/properties/${propertyId}/guidance/symptom-types`,
+    { params: category ? { category } : undefined }
+  );
+  return res.data;
+}
+
+// ---------------------------------------------------------------------------
+// FRD-FR-03: 2-Year Lookback context for the verify_history step
+// ---------------------------------------------------------------------------
+
+export type AssetResolutionContext = {
+  hasHistory: boolean;
+  lookbackRequired: boolean;
+  recentEvents: Array<{
+    id: string;
+    type: string;
+    title: string;
+    occurredAt: string;
+    amount: number | null;
+    isRetrospective: boolean;
+  }>;
+};
+
+export async function getAssetResolutionContext(
+  propertyId: string,
+  inventoryItemId: string
+): Promise<AssetResolutionContext> {
+  const res = await api.get<AssetResolutionContext>(
+    `/api/properties/${propertyId}/guidance/asset-resolution-context`,
+    { params: { inventoryItemId } }
+  );
+  return res.data;
+}

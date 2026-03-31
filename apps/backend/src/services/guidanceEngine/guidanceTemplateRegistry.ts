@@ -5,15 +5,37 @@ const templates: GuidanceJourneyTemplate[] = [
   {
     journeyTypeKey: 'asset_lifecycle_resolution',
     journeyKey: 'journey_asset_lifecycle_resolution',
-    version: '1.3.0',
+    // FRD-FR-03/FR-04: bumped to 2.0.0 — verify_history inserted as step 1,
+    // all prior steps shifted +1. Journeys created on v1.x will have stale
+    // stepOrder values; templateVersion mismatch surfaces a staleness warning.
+    version: '2.0.0',
     signalIntentFamilies: ['lifecycle_end_or_past_life', 'maintenance_failure_risk'],
     issueDomain: 'ASSET_LIFECYCLE',
     defaultDecisionStage: 'DIAGNOSIS',
     defaultReadiness: 'NEEDS_CONTEXT',
-    canonicalFirstStepKey: 'repair_replace_decision',
+    canonicalFirstStepKey: 'verify_history',
     steps: [
+      // FRD-FR-03/FR-04: Step 1 — Verify issue & capture 2-year service history.
+      // Rendered inline inside GuidanceActionCard (toolKey: 'history-verify').
+      // Three sub-sections:
+      //   A) Symptom Picker  — dropdown driven by SYMPTOM_TYPES_BY_CATEGORY
+      //   B) 2-Year Lookback — form shown when no HomeEvent found in last 24mo
+      //   C) Visual Evidence — optional photo/video upload → GuidanceStepEvidence
       {
         stepOrder: 1,
+        stepKey: 'verify_history',
+        stepType: 'DIAGNOSIS',
+        label: 'Verify issue & service history',
+        description: 'Describe the symptom and review or add the last 2 years of service records so the engine can give accurate guidance.',
+        decisionStage: 'DIAGNOSIS',
+        executionReadiness: 'NEEDS_CONTEXT',
+        isRequired: true,
+        toolKey: 'history-verify',
+        // No routePath — rendered inline, does not navigate away
+        skipPolicy: 'DISCOURAGED',
+      },
+      {
+        stepOrder: 2,
         stepKey: 'repair_replace_decision',
         stepType: 'DECISION',
         label: 'Decide repair vs replace',
@@ -23,11 +45,14 @@ const templates: GuidanceJourneyTemplate[] = [
         isRequired: true,
         toolKey: 'replace-repair',
         routePath: '/dashboard/properties/:propertyId/inventory/items/:itemId/replace-repair',
-        skipPolicy: 'DISALLOWED',
+        // FRD-FR-07: may be auto-SKIPPED at journey creation for low-value assets
+        // (purchaseCost < HIGH_VALUE_THRESHOLD). Skip policy set to ALLOWED to
+        // support that path; the system skips it programmatically, not the user.
+        skipPolicy: 'ALLOWED',
       },
       // P1-6: Add cost framing before execution decision
       {
-        stepOrder: 2,
+        stepOrder: 3,
         stepKey: 'estimate_cost_impact',
         stepType: 'DIAGNOSIS',
         label: 'Estimate cost of ownership vs replacement',
@@ -40,7 +65,7 @@ const templates: GuidanceJourneyTemplate[] = [
         skipPolicy: 'ALLOWED',
       },
       {
-        stepOrder: 3,
+        stepOrder: 4,
         stepKey: 'check_coverage',
         stepType: 'VALIDATION',
         label: 'Check coverage and deductible exposure',
@@ -53,10 +78,11 @@ const templates: GuidanceJourneyTemplate[] = [
         skipPolicy: 'DISALLOWED',
       },
       {
-        stepOrder: 4,
+        stepOrder: 5,
         stepKey: 'validate_price',
         stepType: 'VALIDATION',
         label: 'Validate fair market price',
+        description: 'Pull localized labor and parts ranges. NegotiationShield surfaces inline once a quote is entered.',
         decisionStage: 'VALIDATION',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
@@ -65,7 +91,7 @@ const templates: GuidanceJourneyTemplate[] = [
         skipPolicy: 'DISALLOWED',
       },
       {
-        stepOrder: 5,
+        stepOrder: 6,
         stepKey: 'compare_quotes',
         stepType: 'DECISION',
         label: 'Compare quotes side by side',
@@ -77,11 +103,16 @@ const templates: GuidanceJourneyTemplate[] = [
         routePath: '/dashboard/properties/:propertyId/tools/quote-comparison',
         skipPolicy: 'ALLOWED',
       },
+      // FRD-FR-09: prepare_negotiation is now auto-completed inline by the
+      // NegotiationShieldInline sub-component within the validate_price step.
+      // Kept in the template as isRequired:false / skipPolicy:ALLOWED so existing
+      // v1.x journeys that have it as a manual step continue to resolve correctly.
       {
-        stepOrder: 6,
+        stepOrder: 7,
         stepKey: 'prepare_negotiation',
         stepType: 'VALIDATION',
         label: 'Prepare negotiation strategy',
+        description: 'Scripts and leverage points to lower the final quote price.',
         decisionStage: 'VALIDATION',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: false,
@@ -90,27 +121,28 @@ const templates: GuidanceJourneyTemplate[] = [
         skipPolicy: 'ALLOWED',
       },
       {
-        stepOrder: 7,
+        stepOrder: 8,
         stepKey: 'finalize_price',
         stepType: 'DECISION',
         label: 'Finalize accepted terms and price',
         decisionStage: 'DECISION',
         executionReadiness: 'NEEDS_CONTEXT',
-        isRequired: true,
+        isRequired: false,
         toolKey: 'price-finalization',
         routePath: '/dashboard/properties/:propertyId/tools/price-finalization',
-        skipPolicy: 'DISALLOWED',
+        skipPolicy: 'ALLOWED',
       },
       {
-        stepOrder: 8,
+        stepOrder: 9,
         stepKey: 'book_service',
         stepType: 'EXECUTION',
         label: 'Book service execution',
+        description: 'Select a provider. Asset ID and issue description are pre-populated.',
         decisionStage: 'EXECUTION',
         executionReadiness: 'READY',
         isRequired: true,
         toolKey: 'booking',
-        routePath: '/dashboard/providers?propertyId=:propertyId',
+        routePath: '/dashboard/providers?propertyId=:propertyId&inventoryItemId=:inventoryItemId&issueDescription=:issueType',
         skipPolicy: 'DISALLOWED',
       },
     ],
@@ -1260,4 +1292,109 @@ export function getStepSkipPolicy(
   const journeyPolicies = stepSkipPolicyByJourney.get(journeyTypeKey);
   if (!journeyPolicies) return 'DISCOURAGED';
   return journeyPolicies.get(stepKey) ?? 'DISCOURAGED';
+}
+
+// ---------------------------------------------------------------------------
+// FRD-FR-04: Asset-category-specific symptom pickers for the verify_history step.
+// Keys match InventoryItemCategory enum values from the Prisma schema.
+// The DEFAULT bucket is used when the item category has no dedicated list.
+// ---------------------------------------------------------------------------
+
+export type SymptomTypeOption = { key: string; label: string };
+
+export const SYMPTOM_TYPES_BY_CATEGORY: Record<string, SymptomTypeOption[]> = {
+  APPLIANCE: [
+    { key: 'not_working',        label: 'Not working / won\'t turn on' },
+    { key: 'not_cooling',        label: 'Not cooling properly' },
+    { key: 'not_heating',        label: 'Not heating properly' },
+    { key: 'leak',               label: 'Leaking water' },
+    { key: 'unusual_noise',      label: 'Making unusual noise' },
+    { key: 'error_code',         label: 'Showing error code or fault light' },
+    { key: 'broken_part',        label: 'Broken or damaged part' },
+    { key: 'past_life',          label: 'Aging or past expected life' },
+    { key: 'inspection_needed',  label: 'Needs inspection or maintenance' },
+    { key: 'cost_estimate',      label: 'Need a cost estimate' },
+  ],
+  HVAC: [
+    { key: 'not_cooling',        label: 'Not cooling' },
+    { key: 'not_heating',        label: 'Not heating' },
+    { key: 'poor_airflow',       label: 'Poor airflow or weak output' },
+    { key: 'unusual_noise',      label: 'Loud or unusual noise' },
+    { key: 'short_cycling',      label: 'Turning on and off repeatedly' },
+    { key: 'refrigerant_issue',  label: 'Possible refrigerant / freon issue' },
+    { key: 'thermostat_issue',   label: 'Thermostat not responding correctly' },
+    { key: 'filter_clog',        label: 'Filter clogged or overdue for replacement' },
+    { key: 'past_life',          label: 'Aging or past expected life' },
+    { key: 'inspection_needed',  label: 'Annual maintenance or tune-up needed' },
+    { key: 'cost_estimate',      label: 'Need a cost estimate' },
+  ],
+  PLUMBING: [
+    { key: 'leak',               label: 'Leak or drip' },
+    { key: 'low_pressure',       label: 'Low water pressure' },
+    { key: 'no_hot_water',       label: 'No hot water' },
+    { key: 'drain_slow',         label: 'Slow or blocked drain' },
+    { key: 'pipe_noise',         label: 'Banging or rattling pipes' },
+    { key: 'water_discoloration',label: 'Discolored or smelly water' },
+    { key: 'past_life',          label: 'Aging pipes or fixtures' },
+    { key: 'inspection_needed',  label: 'Needs inspection or maintenance' },
+    { key: 'cost_estimate',      label: 'Need a cost estimate' },
+  ],
+  ELECTRICAL: [
+    { key: 'no_power',           label: 'No power to outlet or circuit' },
+    { key: 'breaker_tripping',   label: 'Breaker keeps tripping' },
+    { key: 'flickering_lights',  label: 'Flickering or dimming lights' },
+    { key: 'burning_smell',      label: 'Burning smell or warm outlet' },
+    { key: 'gfci_tripping',      label: 'GFCI outlet keeps tripping' },
+    { key: 'panel_upgrade',      label: 'Panel upgrade or capacity concern' },
+    { key: 'past_life',          label: 'Aging wiring or panel' },
+    { key: 'inspection_needed',  label: 'Needs inspection or code compliance check' },
+    { key: 'cost_estimate',      label: 'Need a cost estimate' },
+  ],
+  ROOF_EXTERIOR: [
+    { key: 'leak',               label: 'Leak or water intrusion' },
+    { key: 'missing_shingles',   label: 'Missing or damaged shingles' },
+    { key: 'gutter_issue',       label: 'Gutter blockage or damage' },
+    { key: 'storm_damage',       label: 'Storm or hail damage' },
+    { key: 'moss_algae',         label: 'Moss or algae growth' },
+    { key: 'past_life',          label: 'Aging or past expected life' },
+    { key: 'inspection_needed',  label: 'Needs inspection or assessment' },
+    { key: 'cost_estimate',      label: 'Need a cost estimate' },
+  ],
+  SAFETY: [
+    { key: 'not_working',        label: 'Device not functioning' },
+    { key: 'battery_low',        label: 'Low battery or chirping' },
+    { key: 'false_alarm',        label: 'Frequent false alarms' },
+    { key: 'past_life',          label: 'Past replacement date' },
+    { key: 'inspection_needed',  label: 'Needs testing or inspection' },
+    { key: 'cost_estimate',      label: 'Need a cost estimate' },
+  ],
+  SMART_HOME: [
+    { key: 'not_working',        label: 'Device offline or unresponsive' },
+    { key: 'connectivity_issue', label: 'Wi-Fi or connectivity problem' },
+    { key: 'app_issue',          label: 'App or integration not working' },
+    { key: 'broken_part',        label: 'Physical damage' },
+    { key: 'past_life',          label: 'Past expected life' },
+    { key: 'cost_estimate',      label: 'Need a cost estimate' },
+  ],
+  // Fallback for FURNITURE, ELECTRONICS, OTHER, and any unmapped category
+  DEFAULT: [
+    { key: 'not_working',        label: 'Not working properly' },
+    { key: 'not_cooling',        label: 'Not cooling' },
+    { key: 'not_heating',        label: 'Not heating' },
+    { key: 'leak',               label: 'Leaking or water damage' },
+    { key: 'past_life',          label: 'Aging or past expected life' },
+    { key: 'broken',             label: 'Broken or damaged' },
+    { key: 'inspection_needed',  label: 'Needs inspection or maintenance' },
+    { key: 'coverage_question',  label: 'Coverage or warranty question' },
+    { key: 'cost_estimate',      label: 'Need a cost estimate' },
+  ],
+};
+
+/**
+ * Returns the symptom type list for a given InventoryItemCategory.
+ * Falls back to DEFAULT if the category has no dedicated list.
+ */
+export function getSymptomTypesForCategory(category: string | null | undefined): SymptomTypeOption[] {
+  if (!category) return SYMPTOM_TYPES_BY_CATEGORY.DEFAULT;
+  return SYMPTOM_TYPES_BY_CATEGORY[category] ?? SYMPTOM_TYPES_BY_CATEGORY.DEFAULT;
 }

@@ -3564,9 +3564,10 @@ model GuidanceJourney {
   inventoryItem InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   primarySignal GuidanceSignal? @relation(fields: [primarySignalId], references: [id], onDelete: SetNull)
 
-  steps     GuidanceJourneyStep[]
-  events    GuidanceJourneyEvent[]
-  evidences GuidanceStepEvidence[]
+  steps      GuidanceJourneyStep[]
+  events     GuidanceJourneyEvent[]
+  evidences  GuidanceStepEvidence[]
+  homeEvents HomeEvent[]           // FRD-FR-11/FR-03: retrospective lookback + verified resolution events
 
   @@index([propertyId, status, updatedAt(sort: Desc)])
   @@index([propertyId, executionReadiness, status])
@@ -4013,6 +4014,10 @@ enum HomeEventType {
   INSPECTION
   NOTE
   MILESTONE
+  // FRD-FR-11: Created automatically when a user-initiated guidance journey reaches
+  // COMPLETED status. Marks the asset as officially serviced and links back to the
+  // journey that produced the evidence (guidanceJourneyId on HomeEvent).
+  VERIFIED_RESOLUTION
   OTHER
 }
 
@@ -4082,17 +4087,35 @@ model HomeEvent {
   confidenceScore Int?
   provenanceId    String?
 
+  // ---------------------------------------------------------------------------
+  // FRD-FR-03/FR-04: 2-Year Lookback & Journey Linkage
+  // ---------------------------------------------------------------------------
+
+  // FK to the guidance journey that produced or linked this event.
+  // Set on:
+  //   - retrospective entries created during the verify_history step (isRetrospective=true)
+  //   - VERIFIED_RESOLUTION events auto-created on journey completion (FR-11)
+  guidanceJourneyId String?
+
+  // True for events entered by the user during the "2-Year Lookback" step of the
+  // verify_history guidance step. These are historical records the user supplies
+  // (date, cost, what was done) and have not been verified by the system.
+  isRetrospective Boolean @default(false)
+
+  // ---------------------------------------------------------------------------
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  room          InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  inventoryItem InventoryItem?    @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  claim         Claim?            @relation(fields: [claimId], references: [id], onDelete: SetNull)
-  expense       Expense?          @relation(fields: [expenseId], references: [id], onDelete: SetNull)
-  provenance    SignalProvenance? @relation("HomeEventProvenance", fields: [provenanceId], references: [id], onDelete: SetNull)
+  room            InventoryRoom?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  inventoryItem   InventoryItem?    @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  claim           Claim?            @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  expense         Expense?          @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  provenance      SignalProvenance? @relation("HomeEventProvenance", fields: [provenanceId], references: [id], onDelete: SetNull)
+  guidanceJourney GuidanceJourney?  @relation(fields: [guidanceJourneyId], references: [id], onDelete: SetNull)
 
   documents               HomeEventDocument[]
   riskMitigationPlanItems RiskMitigationPlanItem[]
@@ -4108,6 +4131,8 @@ model HomeEvent {
   @@index([propertyId, sourceBadge, occurredAt])
   @@index([propertyId, groupKey])
   @@index([provenanceId])
+  @@index([propertyId, guidanceJourneyId])           // FRD-FR-11: journey → events lookup
+  @@index([propertyId, isRetrospective, occurredAt]) // FRD-FR-03: lookback query filter
   @@map("home_events")
 }
 

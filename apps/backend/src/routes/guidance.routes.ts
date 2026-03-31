@@ -9,11 +9,13 @@ import {
   changeGuidanceJourneyIssue,
   completeGuidanceStep,
   dismissGuidanceJourney,
+  getAssetResolutionContext,
   getGuidanceExecutionGuard,
   getGuidanceIssueTypes,
   getGuidanceJourneyDetail,
   getGuidanceNextStep,
   getGuidanceServiceCategories,
+  getGuidanceSymptomTypes,
   getPropertyGuidance,
   listActiveGuidanceJourneys,
   recordGuidanceToolCompletion,
@@ -141,6 +143,22 @@ const issueTypesQuerySchema = z.object({
   query: z.object({ scopeCategory: z.enum(['ITEM', 'SERVICE']).optional() }),
 });
 
+// FRD-FR-04: symptom types by InventoryItemCategory
+const symptomTypesQuerySchema = z.object({
+  params: z.object({ propertyId: z.string().uuid() }),
+  query: z.object({
+    category: z.string().trim().min(1).max(80).optional(),
+  }),
+});
+
+// FRD-FR-03: asset resolution context (2-year lookback)
+const assetResolutionContextQuerySchema = z.object({
+  params: z.object({ propertyId: z.string().uuid() }),
+  query: z.object({
+    inventoryItemId: z.string().uuid(),
+  }),
+});
+
 router.use(apiRateLimiter);
 router.use(authenticate);
 
@@ -246,6 +264,22 @@ router.get(
   validate(propertyParamsSchema),
   propertyAuthMiddleware,
   getGuidanceServiceCategories
+);
+
+// FRD-FR-04: symptom types scoped to an InventoryItemCategory
+router.get(
+  '/properties/:propertyId/guidance/symptom-types',
+  validate(symptomTypesQuerySchema),
+  propertyAuthMiddleware,
+  getGuidanceSymptomTypes
+);
+
+// FRD-FR-03: 2-year lookback context for the verify_history step
+router.get(
+  '/properties/:propertyId/guidance/asset-resolution-context',
+  validate(assetResolutionContextQuerySchema),
+  propertyAuthMiddleware,
+  getAssetResolutionContext
 );
 
 export default router;

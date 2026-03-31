@@ -1357,6 +1357,112 @@ export class GuidanceJourneyService {
       next,
     }).next;
   }
+
+  // ---------------------------------------------------------------------------
+  // FRD-FR-03: Context Injector — 2-Year Lookback
+  // Called during the verify_history step to determine whether the user needs
+  // to fill in historical service data. Also returns the last 3 events for the
+  // asset history sidebar rendered inside GuidanceDrawer.
+  // ---------------------------------------------------------------------------
+  async getAssetResolutionContext(
+    propertyId: string,
+    inventoryItemId: string
+  ): Promise<{
+    hasHistory: boolean;
+    lookbackRequired: boolean;
+    recentEvents: Array<{
+      id: string;
+      type: string;
+      title: string;
+      occurredAt: Date;
+      amount: unknown;
+      isRetrospective: boolean;
+    }>;
+  }> {
+    const db = prisma as any;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 24);
+
+    const events = await db.homeEvent.findMany({
+      where: {
+        propertyId,
+        inventoryItemId,
+        occurredAt: { gte: cutoff },
+        type: { in: ['REPAIR', 'MAINTENANCE', 'INSPECTION', 'VERIFIED_RESOLUTION'] },
+      },
+      orderBy: { occurredAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        occurredAt: true,
+        amount: true,
+        isRetrospective: true,
+      },
+    });
+
+    const hasHistory = events.length > 0;
+    return {
+      hasHistory,
+      lookbackRequired: !hasHistory,
+      recentEvents: events.slice(0, 3),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // FRD-FR-11/FR-12: Journey Completion Side Effects
+  // Called by guidanceStepResolver.service.ts when all required steps are done
+  // and the journey transitions to COMPLETED.
+  // Side effects:
+  //   1. Sets InventoryItem.condition = GOOD  (FR-12)
+  //   2. Creates HomeEvent of type VERIFIED_RESOLUTION linked to journey (FR-11)
+  // Note: lastServicedOn is already set by booking.service.ts at booking
+  // completion (Phase 5.1) — do not overwrite it here to avoid stale timestamps.
+  // ---------------------------------------------------------------------------
+  async onJourneyCompleted(journeyId: string): Promise<void> {
+    const { guidanceJourney } = getGuidanceModels();
+    const db = prisma as any;
+
+    const journey = await guidanceJourney.findUnique({
+      where: { id: journeyId },
+      select: {
+        id: true,
+        propertyId: true,
+        inventoryItemId: true,
+        issueType: true,
+        isUserInitiated: true,
+      },
+    });
+
+    if (!journey || !journey.isUserInitiated) return;
+
+    await db.$transaction(async (tx: any) => {
+      // FR-12: Update asset condition to GOOD
+      if (journey.inventoryItemId) {
+        await tx.inventoryItem.update({
+          where: { id: journey.inventoryItemId },
+          data: { condition: 'GOOD' },
+        });
+      }
+
+      // FR-11: Create certified VERIFIED_RESOLUTION HomeEvent
+      await tx.homeEvent.create({
+        data: {
+          propertyId: journey.propertyId,
+          inventoryItemId: journey.inventoryItemId ?? undefined,
+          guidanceJourneyId: journey.id,
+          type: 'VERIFIED_RESOLUTION',
+          title: `Issue resolved: ${journey.issueType ?? 'Asset serviced'}`,
+          summary: 'Guided resolution completed via the Guidance Engine. All required steps were verified.',
+          occurredAt: new Date(),
+          sourceBadge: 'VERIFIED',
+          importance: 'HIGH',
+          isRetrospective: false,
+        },
+      });
+    });
+  }
 }
 
 export const guidanceJourneyService = new GuidanceJourneyService();

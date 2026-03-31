@@ -10,6 +10,7 @@ import {
 import { guidanceDerivedDataService } from './guidanceDerivedData.service';
 import { guidanceValidationService } from './guidanceValidation.service';
 import { getStepSkipPolicy } from './guidanceTemplateRegistry';
+import { runJourneyCompletionHooks } from './guidanceCompletionHooks.service';
 
 const VALID_STEP_TRANSITIONS: Record<GuidanceStepStatus, GuidanceStepStatus[]> = {
   PENDING: ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'],
@@ -493,6 +494,16 @@ export class GuidanceStepResolverService {
           actorUserId: params.actorUserId ?? null,
         },
       });
+
+      // FRD-FR-11/FR-12: Run completion side-effects (asset condition + HomeEvent)
+      // when the journey transitions to COMPLETED for the first time.
+      // Fire-and-forget with a caught error so a hook failure never blocks the
+      // step transition response returned to the user.
+      if (nextStatus === 'COMPLETED' && journey.status !== 'COMPLETED') {
+        runJourneyCompletionHooks(params.journeyId).catch((err) => {
+          console.error('[guidance] runJourneyCompletionHooks failed:', err);
+        });
+      }
     }
 
     return guidanceJourney.findFirst({
