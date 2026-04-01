@@ -35,29 +35,65 @@ export function GuidanceJourneyStrip({ steps, className }: GuidanceJourneyStripP
   }
 
   return (
-    <ol className={cn('grid grid-cols-1 gap-2 sm:grid-cols-2', className)}>
-      {steps.map((step, index) => {
-        const safeOrder = typeof step.stepOrder === 'number' && Number.isFinite(step.stepOrder) ? step.stepOrder : index + 1;
-        const safeLabel = step.label?.trim() ? step.label.trim() : `Step ${safeOrder}`;
-        const safeId = step.id?.trim() ? step.id : `${safeOrder}:${step.stepKey || 'unknown'}`;
+    <>
+      {/* Mobile: vertical timeline (< md) */}
+      <ol className={cn('flex flex-col md:hidden', className)}>
+        {steps.map((step, index) => {
+          const safeOrder = typeof step.stepOrder === 'number' && Number.isFinite(step.stepOrder) ? step.stepOrder : index + 1;
+          const safeLabel = step.label?.trim() ? step.label.trim() : `Step ${safeOrder}`;
+          const safeId = step.id?.trim() ? step.id : `${safeOrder}:${step.stepKey || 'unknown'}`;
+          const isLast = index === steps.length - 1;
 
-        return (
-        <li
-          key={safeId}
-          className={cn(
-            'flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs',
-            toneForStatus(step.status)
-          )}
-        >
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/40">
-            {dotForStatus(step.status)}
-          </span>
-          <span className="truncate">
-            {safeOrder}. {safeLabel}
-          </span>
-        </li>
-        );
-      })}
-    </ol>
+          return (
+            <li key={safeId} className="flex gap-3">
+              {/* Connector column */}
+              <div className="flex flex-col items-center">
+                <span
+                  className={cn(
+                    'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs',
+                    toneForStatus(step.status)
+                  )}
+                >
+                  {dotForStatus(step.status)}
+                </span>
+                {!isLast && <div className="mt-0.5 w-px flex-1 bg-slate-200" />}
+              </div>
+              {/* Label */}
+              <div className={cn('pb-3 pt-0.5 text-xs', isLast ? 'pb-0' : '')}>
+                <span className={cn('font-medium', step.status === 'IN_PROGRESS' ? 'text-sky-700' : 'text-slate-700')}>
+                  {safeOrder}. {safeLabel}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      {/* Desktop: grid (md+) */}
+      <ol className={cn('hidden md:grid grid-cols-2 gap-2', className)}>
+        {steps.map((step, index) => {
+          const safeOrder = typeof step.stepOrder === 'number' && Number.isFinite(step.stepOrder) ? step.stepOrder : index + 1;
+          const safeLabel = step.label?.trim() ? step.label.trim() : `Step ${safeOrder}`;
+          const safeId = step.id?.trim() ? step.id : `${safeOrder}:${step.stepKey || 'unknown'}`;
+
+          return (
+            <li
+              key={safeId}
+              className={cn(
+                'flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs',
+                toneForStatus(step.status)
+              )}
+            >
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/40">
+                {dotForStatus(step.status)}
+              </span>
+              <span className="truncate">
+                {safeOrder}. {safeLabel}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </>
   );
 }

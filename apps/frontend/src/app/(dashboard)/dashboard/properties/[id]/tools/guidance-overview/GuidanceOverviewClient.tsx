@@ -237,6 +237,8 @@ export default function GuidanceOverviewClient() {
   const selectedAssetName = searchParams.get('assetName')?.trim() ?? '';
   const selectedServiceKey = searchParams.get('serviceKey');
   const selectedIssueType = searchParams.get('issueType');
+  // Phase 6c: direct journey resume — bypasses the wizard when present
+  const pinnedJourneyId = searchParams.get('journeyId');
 
   // Infer scopeCategory: if asset params present without explicit scopeCategory, treat as ITEM
   const rawScopeCategory = searchParams.get('scopeCategory') as GuidanceScopeCategory | null;
@@ -422,6 +424,8 @@ export default function GuidanceOverviewClient() {
 
   // ---- Single-journey steps (4.4) ----
   const journeyDetail = useJourney(propertyId, primaryAction?.journeyId ?? null);
+  // Phase 6c: fetch pinned journey detail when arriving via journeyId URL param
+  const pinnedJourneyDetail = useJourney(propertyId, pinnedJourneyId ?? null);
   const journeySteps: GuidanceStepDTO[] = journeyDetail.data?.journey.steps ?? primaryAction?.steps ?? [];
   const currentStepIndex = journeySteps.findIndex(
     (s) => s.status === 'IN_PROGRESS' || s.status === 'PENDING'
@@ -482,17 +486,33 @@ export default function GuidanceOverviewClient() {
       : SUGGESTED_ISSUE_TYPES_ITEM;
   const [customIssue, setCustomIssue] = React.useState('');
 
+  // ---- Phase 6c: pinned journey mode ----
+  const pinnedAction = React.useMemo(
+    () => (pinnedJourneyId ? (allActions.find((a) => a.journeyId === pinnedJourneyId) ?? null) : null),
+    [pinnedJourneyId, allActions]
+  );
+  const isInPinnedMode = Boolean(pinnedJourneyId);
+  // When pinned, use the pinned journey's action + detail so Step 4 renders directly.
+  const activePrimaryAction = isInPinnedMode ? (pinnedAction ?? primaryAction) : primaryAction;
+  const activeJourneyDetail = isInPinnedMode ? pinnedJourneyDetail : journeyDetail;
+  const activeJourneySteps: GuidanceStepDTO[] =
+    activeJourneyDetail.data?.journey.steps ?? activePrimaryAction?.steps ?? [];
+  const activeStepIndex = activeJourneySteps.findIndex(
+    (s) => s.status === 'IN_PROGRESS' || s.status === 'PENDING'
+  );
+  const activeHasScopedMatch = isInPinnedMode ? Boolean(activePrimaryAction) : hasScopedMatch;
+
   // ---- Render helpers ----
   // Resolve the step href via the shared helper that substitutes :propertyId, :itemId, etc.
   // Never use step.routePath directly — it may contain unresolved template params.
-  const resolvedJourney = journeyDetail.data?.journey ?? primaryAction?.journey ?? null;
+  const resolvedJourney = activeJourneyDetail.data?.journey ?? activePrimaryAction?.journey ?? null;
 
   function renderStepCta(step: GuidanceStepDTO, isActive: boolean) {
     if (!isActive) return null;
 
     // FRD-FR-03/04: Inline verify_history step — render the VerifyHistoryStep form
     // instead of navigating to a separate page (history-verify has no routePath).
-    if (step.toolKey === 'history-verify' && primaryAction) {
+    if (step.toolKey === 'history-verify' && activePrimaryAction) {
       const journeyInventoryItemId =
         resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
       const assetCategory =
@@ -504,7 +524,7 @@ export default function GuidanceOverviewClient() {
       return (
         <VerifyHistoryStep
           propertyId={propertyId}
-          journeyId={primaryAction.journeyId}
+          journeyId={activePrimaryAction.journeyId}
           stepId={step.id}
           stepKey={step.stepKey}
           inventoryItemId={journeyInventoryItemId}
@@ -521,7 +541,7 @@ export default function GuidanceOverviewClient() {
     // FRD-FR-07: Inline repair vs replace gate for high-value asset decisions.
     // Only renders inline when inventoryItemId is available; otherwise falls through
     // to the standard navigation link for the replace-repair page.
-    if (step.toolKey === 'replace-repair' && primaryAction) {
+    if (step.toolKey === 'replace-repair' && activePrimaryAction) {
       const gateItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
       if (gateItemId) {
         const displayAssetName =
@@ -532,7 +552,7 @@ export default function GuidanceOverviewClient() {
           <RepairReplaceGate
             propertyId={propertyId}
             inventoryItemId={gateItemId}
-            journeyId={primaryAction.journeyId}
+            journeyId={activePrimaryAction.journeyId}
             stepId={step.id}
             stepKey={step.stepKey}
             assetName={displayAssetName}
@@ -546,7 +566,7 @@ export default function GuidanceOverviewClient() {
     }
 
     // FRD-FR-09: Inline NegotiationShield for prepare_negotiation step.
-    if (step.toolKey === 'negotiation-shield' && primaryAction) {
+    if (step.toolKey === 'negotiation-shield' && activePrimaryAction) {
       const nsItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
       const displayAssetName =
         resolvedJourney?.inventoryItem?.name?.trim() ||
@@ -555,7 +575,7 @@ export default function GuidanceOverviewClient() {
       return (
         <NegotiationShieldInline
           propertyId={propertyId}
-          journeyId={primaryAction.journeyId}
+          journeyId={activePrimaryAction.journeyId}
           stepId={step.id}
           stepKey={step.stepKey}
           inventoryItemId={nsItemId}
@@ -602,9 +622,9 @@ export default function GuidanceOverviewClient() {
   }
 
   // ---------------------------------------------------------------------------
-  // Step 1: No scope category → show selector
+  // Step 1: No scope category → show selector (skipped in pinned mode)
   // ---------------------------------------------------------------------------
-  if (!scopeCategory) {
+  if (!scopeCategory && !isInPinnedMode) {
     return (
       <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
         <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
@@ -685,9 +705,9 @@ export default function GuidanceOverviewClient() {
   }
 
   // ---------------------------------------------------------------------------
-  // Step 2a: ITEM scope, no asset selected → inventory picker
+  // Step 2a: ITEM scope, no asset selected → inventory picker (skipped in pinned mode)
   // ---------------------------------------------------------------------------
-  if (scopeCategory === 'ITEM' && !hasAssetSelected) {
+  if (scopeCategory === 'ITEM' && !hasAssetSelected && !isInPinnedMode) {
     return (
       <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
         <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
@@ -804,9 +824,9 @@ export default function GuidanceOverviewClient() {
   }
 
   // ---------------------------------------------------------------------------
-  // Step 2b: SERVICE scope, no service selected → service category picker (4.6)
+  // Step 2b: SERVICE scope, no service selected → service category picker (4.6) (skipped in pinned mode)
   // ---------------------------------------------------------------------------
-  if (scopeCategory === 'SERVICE' && !hasServiceSelected) {
+  if (scopeCategory === 'SERVICE' && !hasServiceSelected && !isInPinnedMode) {
     return (
       <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
         <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
@@ -846,9 +866,9 @@ export default function GuidanceOverviewClient() {
   }
 
   // ---------------------------------------------------------------------------
-  // Step 3: Target selected, no issueType → issue selector (4.2)
+  // Step 3: Target selected, no issueType → issue selector (4.2) (skipped in pinned mode)
   // ---------------------------------------------------------------------------
-  if (hasTargetSelected && !hasIssueSelected) {
+  if (hasTargetSelected && !hasIssueSelected && !isInPinnedMode) {
     const targetLabel =
       selectedAssetOption?.assetName ??
       SERVICE_CATEGORIES.find((s) => s.key === selectedServiceKey)?.label ??
@@ -919,11 +939,13 @@ export default function GuidanceOverviewClient() {
     selectedAssetOption?.assetName ??
     SERVICE_CATEGORIES.find((s) => s.key === selectedServiceKey)?.label ??
     selectedAssetName ??
+    (isInPinnedMode && activePrimaryAction ? resolveAssetLabel(activePrimaryAction) : null) ??
     'your item';
 
   const issueLabelDisplay =
     suggestedIssueTypes.find((i) => i.key === selectedIssueType)?.label ??
     selectedIssueType ??
+    (isInPinnedMode ? (activePrimaryAction?.journey.issueType ?? '') : '') ??
     '';
 
   return (
@@ -968,12 +990,12 @@ export default function GuidanceOverviewClient() {
       >
         <p className="text-xs text-[hsl(var(--mobile-text-muted))]">
           {scopeCategory === 'SERVICE' ? 'Service guidance' : 'Item guidance'} ·{' '}
-          {hasScopedMatch ? 'Active journey found' : 'Ready to start'}
+          {activeHasScopedMatch ? 'Active journey found' : 'Ready to start'}
         </p>
       </ScenarioInputCard>
 
       {/* Journey load states */}
-      {guidance.isLoading ? (
+      {guidance.isLoading || (isInPinnedMode && pinnedJourneyDetail.isLoading) ? (
         <ScenarioInputCard title="Loading guidance" subtitle="Fetching your active journeys.">
           <p className="text-sm text-slate-600">Please wait while we prepare your next best actions.</p>
         </ScenarioInputCard>
@@ -981,7 +1003,7 @@ export default function GuidanceOverviewClient() {
         <ScenarioInputCard title="Guidance unavailable" subtitle="Could not load journeys right now.">
           <p className="text-sm text-rose-700">Try refreshing the page or contact support.</p>
         </ScenarioInputCard>
-      ) : !hasScopedMatch ? (
+      ) : !activeHasScopedMatch ? (
         // 4.3: No journey → start button
         <ScenarioInputCard
           title={`Start guided journey for ${startLabel}`}
@@ -1018,13 +1040,13 @@ export default function GuidanceOverviewClient() {
       ) : (
         <>
           {/* Primary action card with steps from the single journey (4.4) */}
-          {primaryAction && (
+          {activePrimaryAction && (
             <ScenarioInputCard
-              title={`${focusLabel ?? resolveAssetLabel(primaryAction)}`}
-              subtitle={resolvePrimarySubtitle(primaryAction)}
+              title={`${focusLabel ?? resolveAssetLabel(activePrimaryAction)}`}
+              subtitle={resolvePrimarySubtitle(activePrimaryAction)}
               badge={
-                <StatusChip tone={resolvePriorityTone(primaryAction)}>
-                  {primaryAction.priorityGroup.toLowerCase()}
+                <StatusChip tone={resolvePriorityTone(activePrimaryAction)}>
+                  {activePrimaryAction.priorityGroup.toLowerCase()}
                 </StatusChip>
               }
             >
@@ -1032,7 +1054,7 @@ export default function GuidanceOverviewClient() {
               <div className="flex justify-end">
                 <button
                   onClick={() =>
-                    dismissMutation.mutate({ journeyId: primaryAction.journeyId })
+                    dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId })
                   }
                   disabled={dismissMutation.isPending}
                   className="text-xs text-[hsl(var(--mobile-text-muted))] hover:text-rose-600 disabled:opacity-50"
@@ -1042,11 +1064,11 @@ export default function GuidanceOverviewClient() {
               </div>
 
               {/* Progress strip */}
-              {journeySteps.length > 0 && (
+              {activeJourneySteps.length > 0 && (
                 <div className="mb-2">
-                  <GuidanceJourneyStrip steps={journeySteps} />
+                  <GuidanceJourneyStrip steps={activeJourneySteps} />
                   <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
-                    Step {Math.max(currentStepIndex, 0) + 1} of {journeySteps.length}
+                    Step {Math.max(activeStepIndex, 0) + 1} of {activeJourneySteps.length}
                   </p>
                 </div>
               )}
@@ -1057,33 +1079,33 @@ export default function GuidanceOverviewClient() {
                   Why now
                 </p>
                 <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                  {primaryAction.explanation?.why ??
-                    primaryAction.subtitle ??
+                  {activePrimaryAction.explanation?.why ??
+                    activePrimaryAction.subtitle ??
                     'Following this journey now reduces cost and execution risk.'}
                 </p>
-                {primaryAction.costOfDelay ? (
+                {activePrimaryAction.costOfDelay ? (
                   <p className="mb-0 text-sm font-semibold text-amber-700">
-                    Potential delay cost: ~{formatCurrency(primaryAction.costOfDelay)}
+                    Potential delay cost: ~{formatCurrency(activePrimaryAction.costOfDelay)}
                   </p>
                 ) : null}
               </div>
 
               {/* Active step CTA */}
-              {currentStepIndex >= 0 && journeySteps[currentStepIndex] && (
+              {activeStepIndex >= 0 && activeJourneySteps[activeStepIndex] && (
                 <ActionPriorityRow
-                  primaryAction={renderStepCta(journeySteps[currentStepIndex], true)}
+                  primaryAction={renderStepCta(activeJourneySteps[activeStepIndex], true)}
                 />
               )}
 
               {/* 4.5: Skip button for active step */}
-              {primaryAction.currentStep?.id && (
+              {activePrimaryAction.currentStep?.id && (
                 <Button
                   variant="ghost"
                   className="mt-1 min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
                   disabled={skipStepMutation.isPending}
                   onClick={() => {
-                    if (primaryAction.currentStep?.id) {
-                      skipStepMutation.mutate({ stepId: primaryAction.currentStep.id });
+                    if (activePrimaryAction.currentStep?.id) {
+                      skipStepMutation.mutate({ stepId: activePrimaryAction.currentStep.id });
                     }
                   }}
                 >
@@ -1098,16 +1120,16 @@ export default function GuidanceOverviewClient() {
             title="Journey Steps"
             subtitle="All steps for this guided resolution path, in order."
           >
-            {journeySteps.length === 0 ? (
+            {activeJourneySteps.length === 0 ? (
               <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
                 Steps are being prepared for this journey.
               </p>
             ) : (
               <div className="space-y-3">
-                {journeySteps.map((step, idx) => {
-                  const isActiveStep = idx === currentStepIndex;
+                {activeJourneySteps.map((step, idx) => {
+                  const isActiveStep = idx === activeStepIndex;
                   const isFutureStep =
-                    currentStepIndex >= 0 ? idx > currentStepIndex : step.status === 'PENDING';
+                    activeStepIndex >= 0 ? idx > activeStepIndex : step.status === 'PENDING';
                   const isCompletedStep = step.status === 'COMPLETED' || step.status === 'SKIPPED';
 
                   return (
@@ -1155,7 +1177,7 @@ export default function GuidanceOverviewClient() {
       )}
 
       {/* Fallback tools when no journey exists for ITEM scope */}
-      {!hasScopedMatch && scopeCategory === 'ITEM' && selectedAssetOption && (
+      {!activeHasScopedMatch && scopeCategory === 'ITEM' && selectedAssetOption && (
         <ScenarioInputCard
           title="Explore related tools"
           subtitle="While your journey is being set up, you can use these tools directly."

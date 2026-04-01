@@ -60,6 +60,7 @@ import { buildHomeRiskReplayHref } from '@/lib/routes/homeRiskReplay';
 import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
 import { SmartContextToolsSection } from './components/SmartContextToolsSection';
 import PlantAdvisorDashboardCard from './components/PlantAdvisorDashboardCard';
+import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -1255,6 +1256,8 @@ export default function PropertyDetailPage() {
       <PropertyHeroCard property={property} />
 
       <SellingPrepBanner propertyId={property.id} />
+
+      <GuidanceResumeBanner propertyId={property.id} />
 
       {onboardingStatus && onboardingStatus.status !== "COMPLETED" && (
         <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
