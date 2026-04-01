@@ -48,13 +48,18 @@ export default function QuoteComparisonPlaceholderClient() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const contextQuery = buildQuery(searchParams);
+  const isGuidanceContext = Boolean(guidanceJourneyId);
+
+  const backHref = isGuidanceContext
+    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
+    : `/dashboard/properties/${propertyId}`;
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
+        <Link href={backHref}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to property
+          {isGuidanceContext ? 'Back to guidance' : 'Back to property'}
         </Link>
       </Button>
 
