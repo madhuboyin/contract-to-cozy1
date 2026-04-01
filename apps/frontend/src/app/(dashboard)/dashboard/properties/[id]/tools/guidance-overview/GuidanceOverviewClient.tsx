@@ -72,11 +72,91 @@ const SUGGESTED_ISSUE_TYPES_ITEM = [
   { key: 'cost_estimate', label: 'Need a cost estimate' },
 ];
 
+// Name-based overrides within APPLIANCE — matched by lowercase keyword in asset name.
+// Checked before the category-level fallback so "Washer Dryer" gets washer issues,
+// not oven/cooking issues.
+const APPLIANCE_ISSUES_BY_NAME: Array<{
+  keywords: string[];
+  issues: { key: string; label: string }[];
+}> = [
+  {
+    keywords: ['washer', 'dryer', 'washing machine', 'laundry'],
+    issues: [
+      { key: 'not_working', label: 'Not working properly' },
+      { key: 'not_draining', label: 'Not draining or spinning' },
+      { key: 'not_drying', label: 'Not drying clothes properly' },
+      { key: 'leak', label: 'Leaking water' },
+      { key: 'unusual_noise', label: 'Making unusual noise or vibration' },
+      { key: 'error_code', label: 'Showing an error code or warning light' },
+      { key: 'past_life', label: 'Aging or past expected life' },
+      { key: 'coverage_question', label: 'Warranty or coverage question' },
+    ],
+  },
+  {
+    keywords: ['refrigerator', 'fridge', 'freezer'],
+    issues: [
+      { key: 'not_cooling', label: 'Not cooling or freezing properly' },
+      { key: 'ice_maker', label: 'Ice maker or water dispenser not working' },
+      { key: 'unusual_noise', label: 'Making unusual noise' },
+      { key: 'leak', label: 'Leaking water' },
+      { key: 'error_code', label: 'Showing an error code or warning light' },
+      { key: 'past_life', label: 'Aging or past expected life' },
+      { key: 'coverage_question', label: 'Warranty or coverage question' },
+      { key: 'cost_estimate', label: 'Need a repair or replacement cost estimate' },
+    ],
+  },
+  {
+    keywords: ['dishwasher'],
+    issues: [
+      { key: 'not_cleaning', label: 'Not cleaning dishes properly' },
+      { key: 'not_draining', label: 'Not draining' },
+      { key: 'leak', label: 'Leaking water' },
+      { key: 'door_issue', label: 'Door not latching or sealing' },
+      { key: 'error_code', label: 'Showing an error code or warning light' },
+      { key: 'unusual_noise', label: 'Making unusual noise' },
+      { key: 'past_life', label: 'Aging or past expected life' },
+      { key: 'coverage_question', label: 'Warranty or coverage question' },
+    ],
+  },
+  {
+    keywords: ['oven', 'range', 'stove', 'cooktop', 'microwave'],
+    issues: [
+      { key: 'not_working', label: 'Not working properly' },
+      { key: 'not_heating', label: 'Not heating or cooking evenly' },
+      { key: 'burner_issue', label: 'Burner or element not working' },
+      { key: 'error_code', label: 'Showing an error code or warning light' },
+      { key: 'unusual_noise', label: 'Making unusual noise' },
+      { key: 'past_life', label: 'Aging or past expected life' },
+      { key: 'coverage_question', label: 'Warranty or coverage question' },
+      { key: 'cost_estimate', label: 'Need a repair or replacement cost estimate' },
+    ],
+  },
+  {
+    keywords: ['water heater', 'water heater'],
+    issues: [
+      { key: 'no_hot_water', label: 'No hot water' },
+      { key: 'leak', label: 'Leaking or dripping' },
+      { key: 'unusual_noise', label: 'Rumbling or unusual noise' },
+      { key: 'past_life', label: 'Aging or past expected life' },
+      { key: 'high_utility_cost', label: 'Unusually high energy bills' },
+      { key: 'coverage_question', label: 'Warranty or coverage question' },
+      { key: 'cost_estimate', label: 'Need a replacement cost estimate' },
+    ],
+  },
+];
+
+function resolveApplianceIssues(assetName: string): { key: string; label: string }[] | null {
+  const lower = assetName.toLowerCase();
+  for (const entry of APPLIANCE_ISSUES_BY_NAME) {
+    if (entry.keywords.some((kw) => lower.includes(kw))) return entry.issues;
+  }
+  return null;
+}
+
 // Per-category issue types — keys match InventoryItemCategory enum values
 const SUGGESTED_ISSUE_TYPES_BY_CATEGORY: Record<string, { key: string; label: string }[]> = {
   APPLIANCE: [
     { key: 'not_working', label: 'Not working properly' },
-    { key: 'not_heating', label: 'Not heating or cooking evenly' },
     { key: 'error_code', label: 'Showing an error code or warning light' },
     { key: 'unusual_noise', label: 'Making unusual noise or vibration' },
     { key: 'broken', label: 'Broken, cracked, or physically damaged' },
@@ -543,14 +623,23 @@ export default function GuidanceOverviewClient() {
       : null) ??
     (primaryAction ? resolveAssetLabel(primaryAction) : null);
 
-  const suggestedIssueTypes =
-    scopeCategory === 'SERVICE'
-      ? (selectedServiceKey
-          ? (SUGGESTED_ISSUE_TYPES_BY_SERVICE[selectedServiceKey] ?? SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT)
-          : SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT)
-      : (selectedAssetOption?.category
-          ? (SUGGESTED_ISSUE_TYPES_BY_CATEGORY[selectedAssetOption.category] ?? SUGGESTED_ISSUE_TYPES_ITEM)
-          : SUGGESTED_ISSUE_TYPES_ITEM);
+  const suggestedIssueTypes = React.useMemo(() => {
+    if (scopeCategory === 'SERVICE') {
+      return selectedServiceKey
+        ? (SUGGESTED_ISSUE_TYPES_BY_SERVICE[selectedServiceKey] ?? SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT)
+        : SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT;
+    }
+    const category = selectedAssetOption?.category ?? null;
+    const assetName = selectedAssetOption?.assetName ?? selectedAssetName;
+    // For APPLIANCE, attempt a name-based sub-match first (washer ≠ oven ≠ fridge)
+    if (category === 'APPLIANCE' && assetName) {
+      const named = resolveApplianceIssues(assetName);
+      if (named) return named;
+    }
+    return category
+      ? (SUGGESTED_ISSUE_TYPES_BY_CATEGORY[category] ?? SUGGESTED_ISSUE_TYPES_ITEM)
+      : SUGGESTED_ISSUE_TYPES_ITEM;
+  }, [scopeCategory, selectedServiceKey, selectedAssetOption, selectedAssetName]);
   const [customIssue, setCustomIssue] = React.useState('');
 
   // ---- Phase 6c: pinned journey mode ----
