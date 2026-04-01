@@ -68,7 +68,12 @@ export function mapGuidanceStep(step: any) {
 }
 
 export function mapGuidanceJourney(journey: any) {
-  const steps = (journey.steps ?? []).map(mapGuidanceStep);
+  const allSteps = (journey.steps ?? []).map(mapGuidanceStep);
+  // Exclude steps that were silently removed from the template (TEMPLATE_REMOVED).
+  // These are historically persisted steps that no longer exist in the current
+  // template version — they should be invisible to the frontend in all contexts:
+  // step strip, progress counts, and next-step resolution.
+  const steps = allSteps.filter((step: any) => step.skippedReasonCode !== 'TEMPLATE_REMOVED');
   const completedCount = steps.filter((step: any) => step.status === 'COMPLETED').length;
   const totalCount = steps.length;
 
