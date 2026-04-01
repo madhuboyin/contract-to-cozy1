@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Box, CircleAlert, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
+import { ArrowLeft, Box, ChevronRight, CircleAlert, Package, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   ActionPriorityRow,
@@ -27,6 +27,7 @@ import {
   type GuidanceScopeCategory,
   type GuidanceStepDTO,
 } from '@/lib/api/guidanceApi';
+import { GuidanceInventoryDrawer } from '@/components/guidance/GuidanceInventoryDrawer';
 import { GuidanceJourneyStrip } from '@/components/guidance/GuidanceJourneyStrip';
 import { VerifyHistoryStep } from '@/components/guidance/VerifyHistoryStep';
 import { RepairReplaceGate } from '@/components/guidance/RepairReplaceGate';
@@ -466,6 +467,8 @@ export default function GuidanceOverviewClient() {
   const [assetSearch, setAssetSearch] = React.useState('');
   // FRD-FR-01: active category tab in the ITEM picker ('ALL' = no filter)
   const [selectedCategory, setSelectedCategory] = React.useState<string>('ALL');
+  // Drawer: which item row is expanded in the detail panel
+  const [selectedDrawerOption, setSelectedDrawerOption] = React.useState<AssetScopeOption | null>(null);
 
   const allAssetScopeOptions = React.useMemo<AssetScopeOption[]>(() => {
     const items = inventoryQuery.data ?? [];
@@ -520,6 +523,12 @@ export default function GuidanceOverviewClient() {
       }) ?? null
     );
   }, [allAssetScopeOptions, hasAssetSelected, selectedAssetName, selectedHomeAssetId, selectedInventoryItemId]);
+
+  // Full InventoryItem for the drawer — looked up from the already-fetched list
+  const selectedDrawerItem = React.useMemo(() => {
+    if (!selectedDrawerOption?.inventoryItemId) return null;
+    return (inventoryQuery.data ?? []).find((i) => i.id === selectedDrawerOption.inventoryItemId) ?? null;
+  }, [selectedDrawerOption, inventoryQuery.data]);
 
   // ---- Guidance actions (scoped) ----
   const allActions = React.useMemo(() => guidance.actions ?? [], [guidance.actions]);
@@ -918,7 +927,19 @@ export default function GuidanceOverviewClient() {
           />
 
           {inventoryQuery.isLoading ? (
-            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">Loading your home items...</p>
+            // Skeleton rows while inventory loads
+            <div className="space-y-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3.5">
+                  <span className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-slate-100" />
+                  <div className="flex-1 space-y-1.5">
+                    <span className="block h-4 w-32 animate-pulse rounded bg-slate-100" />
+                    <span className="block h-3 w-20 animate-pulse rounded bg-slate-100" />
+                  </div>
+                  <span className="h-4 w-4 animate-pulse rounded bg-slate-100" />
+                </div>
+              ))}
+            </div>
           ) : filteredAssetOptions.length === 0 ? (
             <div className="space-y-2">
               <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
@@ -947,34 +968,44 @@ export default function GuidanceOverviewClient() {
               )}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {filteredAssetOptions.map((option) => (
-                <div key={option.key} className="space-y-2">
-                  <CompactEntityRow
-                    title={option.assetName}
-                    subtitle={
-                      option.outOfPocketCost > 0
-                        ? `Estimated replacement: ${formatCurrency(option.outOfPocketCost)}`
-                        : formatEnumLabel(option.category)
-                    }
-                    meta={formatEnumLabel(option.category)}
-                    status={<StatusChip tone="info">{formatEnumLabel(option.category)}</StatusChip>}
-                  />
-                  <ActionPriorityRow
-                    primaryAction={
-                      <button
-                        onClick={() => navigateToAsset(option)}
-                        className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-                      >
-                        Guide this item: {option.assetName}
-                      </button>
-                    }
-                  />
-                </div>
+                <button
+                  key={option.key}
+                  onClick={() => setSelectedDrawerOption(option)}
+                  className="group w-full text-left flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
+                >
+                  <span className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors group-hover:bg-sky-50 group-hover:text-sky-600">
+                    <Package className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{option.assetName}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {formatEnumLabel(option.category)}
+                      {option.outOfPocketCost > 0
+                        ? ` · ~${formatCurrency(option.outOfPocketCost)}`
+                        : ''}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition-colors group-hover:text-slate-600" />
+                </button>
               ))}
             </div>
           )}
         </ScenarioInputCard>
+
+        {/* Item detail drawer — opens when a row is tapped */}
+        <GuidanceInventoryDrawer
+          item={selectedDrawerItem}
+          isOpen={selectedDrawerOption !== null}
+          onClose={() => setSelectedDrawerOption(null)}
+          onStartGuidance={() => {
+            if (selectedDrawerOption) {
+              navigateToAsset(selectedDrawerOption);
+              setSelectedDrawerOption(null);
+            }
+          }}
+        />
       </MobilePageContainer>
     );
   }
