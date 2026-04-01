@@ -4,7 +4,23 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Box, ChevronRight, CircleAlert, Package, ShieldCheck, Sparkles, Wrench } from 'lucide-react';
+import {
+  ArrowLeft,
+  Box,
+  ChevronRight,
+  CircleAlert,
+  Droplets,
+  Home,
+  Package,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  UtensilsCrossed,
+  Wifi,
+  Wind,
+  Wrench,
+  Zap,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   ActionPriorityRow,
@@ -33,6 +49,7 @@ import { VerifyHistoryStep } from '@/components/guidance/VerifyHistoryStep';
 import { RepairReplaceGate } from '@/components/guidance/RepairReplaceGate';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
+import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 
@@ -282,6 +299,25 @@ const INVENTORY_CATEGORY_TABS: { key: string; label: string }[] = [
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+// Semantic icon + subtle tint per inventory category — used in the item picker list
+const CATEGORY_ICON_STYLES: Record<
+  string,
+  { icon: React.ElementType; bg: string; color: string; selectedBg: string; selectedColor: string }
+> = {
+  APPLIANCE:     { icon: UtensilsCrossed, bg: 'bg-orange-50',  color: 'text-orange-500',  selectedBg: 'bg-orange-100',  selectedColor: 'text-orange-600'  },
+  HVAC:          { icon: Wind,            bg: 'bg-blue-50',    color: 'text-blue-500',    selectedBg: 'bg-blue-100',    selectedColor: 'text-blue-600'    },
+  PLUMBING:      { icon: Droplets,        bg: 'bg-cyan-50',    color: 'text-cyan-600',    selectedBg: 'bg-cyan-100',    selectedColor: 'text-cyan-700'    },
+  ELECTRICAL:    { icon: Zap,             bg: 'bg-amber-50',   color: 'text-amber-500',   selectedBg: 'bg-amber-100',   selectedColor: 'text-amber-600'   },
+  ROOF_EXTERIOR: { icon: Home,            bg: 'bg-stone-50',   color: 'text-stone-500',   selectedBg: 'bg-stone-100',   selectedColor: 'text-stone-600'   },
+  SAFETY:        { icon: ShieldAlert,     bg: 'bg-rose-50',    color: 'text-rose-500',    selectedBg: 'bg-rose-100',    selectedColor: 'text-rose-600'    },
+  SMART_HOME:    { icon: Wifi,            bg: 'bg-violet-50',  color: 'text-violet-500',  selectedBg: 'bg-violet-100',  selectedColor: 'text-violet-600'  },
+};
+const CATEGORY_ICON_FALLBACK = { icon: Package, bg: 'bg-slate-100', color: 'text-slate-500', selectedBg: 'bg-slate-200', selectedColor: 'text-slate-600' };
+
+function getCategoryIconStyle(category: string) {
+  return CATEGORY_ICON_STYLES[category] ?? CATEGORY_ICON_FALLBACK;
+}
 
 type AssetScopeOption = {
   key: string;
@@ -968,28 +1004,55 @@ export default function GuidanceOverviewClient() {
               )}
             </div>
           ) : (
-            <div className="space-y-2">
-              {filteredAssetOptions.map((option) => (
-                <button
-                  key={option.key}
-                  onClick={() => setSelectedDrawerOption(option)}
-                  className="group w-full text-left flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1"
-                >
-                  <span className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors group-hover:bg-sky-50 group-hover:text-sky-600">
-                    <Package className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-900">{option.assetName}</p>
-                    <p className="truncate text-xs text-slate-500">
-                      {formatEnumLabel(option.category)}
-                      {option.outOfPocketCost > 0
-                        ? ` · ~${formatCurrency(option.outOfPocketCost)}`
-                        : ''}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition-colors group-hover:text-slate-600" />
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              {filteredAssetOptions.map((option) => {
+                const isSelected = selectedDrawerOption?.key === option.key;
+                const iconCfg = getCategoryIconStyle(option.category);
+                const Icon = iconCfg.icon;
+                return (
+                  <button
+                    key={option.key}
+                    onClick={() => setSelectedDrawerOption(option)}
+                    className={cn(
+                      'group w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3.5',
+                      'transition-all active:scale-[0.99]',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1',
+                      isSelected
+                        ? 'border-sky-200 bg-sky-50 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+                        isSelected
+                          ? cn(iconCfg.selectedBg, iconCfg.selectedColor)
+                          : cn(iconCfg.bg, iconCfg.color)
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={cn(
+                        'truncate text-sm font-semibold',
+                        isSelected ? 'text-sky-900' : 'text-slate-900'
+                      )}>
+                        {option.assetName}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {formatEnumLabel(option.category)}
+                        {option.outOfPocketCost > 0
+                          ? ` · ~${formatCurrency(option.outOfPocketCost)}`
+                          : ''}
+                      </p>
+                    </div>
+                    <ChevronRight className={cn(
+                      'h-4 w-4 shrink-0 transition-colors',
+                      isSelected ? 'text-sky-500' : 'text-slate-400 group-hover:text-slate-600'
+                    )} />
+                  </button>
+                );
+              })}
             </div>
           )}
         </ScenarioInputCard>
