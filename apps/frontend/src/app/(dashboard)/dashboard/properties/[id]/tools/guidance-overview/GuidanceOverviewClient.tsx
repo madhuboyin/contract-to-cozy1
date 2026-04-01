@@ -50,6 +50,7 @@ import { RepairReplaceGate } from '@/components/guidance/RepairReplaceGate';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { CoverageCheckInline } from '@/components/guidance/CoverageCheckInline';
 import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
+import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
@@ -810,6 +811,30 @@ export default function GuidanceOverviewClient() {
           inventoryItemCategory={priceItemCategory}
           assetName={displayAssetName}
           issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+          }}
+        />
+      );
+    }
+
+    // Inline recall check for safety_alert, check_recall_coverage,
+    // review_remedy_instructions, recall_resolution steps.
+    if (step.toolKey === 'recalls' && activePrimaryAction) {
+      const recallItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
+      const displayAssetName =
+        resolvedJourney?.inventoryItem?.name?.trim() ||
+        selectedAssetOption?.assetName ||
+        'this item';
+      return (
+        <RecallCheckInline
+          propertyId={propertyId}
+          journeyId={activePrimaryAction.journeyId}
+          stepId={step.id}
+          stepKey={step.stepKey}
+          inventoryItemId={recallItemId}
+          assetName={displayAssetName}
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
