@@ -8,7 +8,11 @@ const templates: GuidanceJourneyTemplate[] = [
     // FRD-FR-03/FR-04: bumped to 2.0.0 — verify_history inserted as step 1,
     // all prior steps shifted +1. Journeys created on v1.x will have stale
     // stepOrder values; templateVersion mismatch surfaces a staleness warning.
-    version: '2.0.0',
+    // 2.1.0: removed estimate_cost_impact (stepOrder 3). The repair/replace cost
+    // analysis is fully covered inline by RepairReplaceGate in step 2. Routing
+    // to the property-level true-cost page was context-inappropriate for an
+    // item-scoped issue journey. Steps formerly at 4–9 renumbered to 3–8.
+    version: '2.1.0',
     signalIntentFamilies: ['lifecycle_end_or_past_life', 'maintenance_failure_risk'],
     issueDomain: 'ASSET_LIFECYCLE',
     defaultDecisionStage: 'DIAGNOSIS',
@@ -50,22 +54,8 @@ const templates: GuidanceJourneyTemplate[] = [
         // support that path; the system skips it programmatically, not the user.
         skipPolicy: 'ALLOWED',
       },
-      // P1-6: Add cost framing before execution decision
       {
         stepOrder: 3,
-        stepKey: 'estimate_cost_impact',
-        stepType: 'DIAGNOSIS',
-        label: 'Estimate cost of ownership vs replacement',
-        description: 'Understand full cost context before committing to repair or replace.',
-        decisionStage: 'DIAGNOSIS',
-        executionReadiness: 'NEEDS_CONTEXT',
-        isRequired: false,
-        toolKey: 'true-cost',
-        routePath: '/dashboard/properties/:propertyId/tools/true-cost',
-        skipPolicy: 'ALLOWED',
-      },
-      {
-        stepOrder: 4,
         stepKey: 'check_coverage',
         stepType: 'VALIDATION',
         label: 'Check coverage and deductible exposure',
@@ -78,7 +68,7 @@ const templates: GuidanceJourneyTemplate[] = [
         skipPolicy: 'DISALLOWED',
       },
       {
-        stepOrder: 5,
+        stepOrder: 4,
         stepKey: 'validate_price',
         stepType: 'VALIDATION',
         label: 'Validate fair market price',
@@ -91,7 +81,7 @@ const templates: GuidanceJourneyTemplate[] = [
         skipPolicy: 'DISALLOWED',
       },
       {
-        stepOrder: 6,
+        stepOrder: 5,
         stepKey: 'compare_quotes',
         stepType: 'DECISION',
         label: 'Compare quotes side by side',
@@ -108,7 +98,7 @@ const templates: GuidanceJourneyTemplate[] = [
       // Kept in the template as isRequired:false / skipPolicy:ALLOWED so existing
       // v1.x journeys that have it as a manual step continue to resolve correctly.
       {
-        stepOrder: 7,
+        stepOrder: 6,
         stepKey: 'prepare_negotiation',
         stepType: 'VALIDATION',
         label: 'Prepare negotiation strategy',
@@ -121,7 +111,7 @@ const templates: GuidanceJourneyTemplate[] = [
         skipPolicy: 'ALLOWED',
       },
       {
-        stepOrder: 8,
+        stepOrder: 7,
         stepKey: 'finalize_price',
         stepType: 'DECISION',
         label: 'Finalize accepted terms and price',
@@ -133,7 +123,7 @@ const templates: GuidanceJourneyTemplate[] = [
         skipPolicy: 'ALLOWED',
       },
       {
-        stepOrder: 9,
+        stepOrder: 8,
         stepKey: 'book_service',
         stepType: 'EXECUTION',
         label: 'Book service execution',
