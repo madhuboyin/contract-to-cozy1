@@ -29,6 +29,8 @@ import {
 } from '@/lib/api/guidanceApi';
 import { GuidanceJourneyStrip } from '@/components/guidance/GuidanceJourneyStrip';
 import { VerifyHistoryStep } from '@/components/guidance/VerifyHistoryStep';
+import { RepairReplaceGate } from '@/components/guidance/RepairReplaceGate';
+import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
@@ -508,6 +510,57 @@ export default function GuidanceOverviewClient() {
           inventoryItemId={journeyInventoryItemId}
           assetCategory={assetCategory}
           assetName={displayAssetName}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+          }}
+        />
+      );
+    }
+
+    // FRD-FR-07: Inline repair vs replace gate for high-value asset decisions.
+    // Only renders inline when inventoryItemId is available; otherwise falls through
+    // to the standard navigation link for the replace-repair page.
+    if (step.toolKey === 'replace-repair' && primaryAction) {
+      const gateItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
+      if (gateItemId) {
+        const displayAssetName =
+          resolvedJourney?.inventoryItem?.name?.trim() ||
+          selectedAssetOption?.assetName ||
+          'this item';
+        return (
+          <RepairReplaceGate
+            propertyId={propertyId}
+            inventoryItemId={gateItemId}
+            journeyId={primaryAction.journeyId}
+            stepId={step.id}
+            stepKey={step.stepKey}
+            assetName={displayAssetName}
+            onComplete={() => {
+              queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+              queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+            }}
+          />
+        );
+      }
+    }
+
+    // FRD-FR-09: Inline NegotiationShield for prepare_negotiation step.
+    if (step.toolKey === 'negotiation-shield' && primaryAction) {
+      const nsItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
+      const displayAssetName =
+        resolvedJourney?.inventoryItem?.name?.trim() ||
+        selectedAssetOption?.assetName ||
+        'this service';
+      return (
+        <NegotiationShieldInline
+          propertyId={propertyId}
+          journeyId={primaryAction.journeyId}
+          stepId={step.id}
+          stepKey={step.stepKey}
+          inventoryItemId={nsItemId}
+          assetName={displayAssetName}
+          issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });

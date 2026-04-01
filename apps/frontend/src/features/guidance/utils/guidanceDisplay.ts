@@ -69,6 +69,13 @@ function appendGuidanceContext(
   if (journey.homeAssetId) {
     params.set('homeAssetId', journey.homeAssetId);
   }
+  // FRD-FR-10: For booking steps, pass asset name and issue description so the
+  // booking form can auto-populate the description field.
+  if (step.toolKey === 'booking') {
+    const assetName = journey.inventoryItem?.name?.trim() ?? null;
+    if (assetName) params.set('assetName', assetName);
+    if (journey.issueType) params.set('issueDescription', journey.issueType);
+  }
 
   const query = params.toString();
   if (!query) return path;
@@ -110,6 +117,8 @@ export function resolveGuidanceStepHref(args: {
   route = replaceRouteParam(route, 'itemId', journey.inventoryItemId ?? null);
   route = replaceRouteParam(route, 'inventoryItemId', journey.inventoryItemId ?? null);
   route = replaceRouteParam(route, 'homeAssetId', journey.homeAssetId ?? null);
+  // FRD-FR-10: Substitute :issueType from the journey's issueType for booking step pre-population
+  route = replaceRouteParam(route, 'issueType', journey.issueType ?? null);
 
   if (step.toolKey === 'replace-repair' && journey.inventoryItemId) {
     return appendGuidanceContext(

@@ -51,6 +51,9 @@ export default function BookProviderPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId');
   const finalPrice = searchParams.get('finalPrice');
   const vendorName = searchParams.get('vendorName');
+  // FRD-FR-10: Guidance pre-population fields from book_service step
+  const guidanceAssetName = searchParams.get('assetName');
+  const guidanceIssueDescription = searchParams.get('issueDescription');
   const hasGuardScopeContext = Boolean(
     guidanceJourneyId ||
       guidanceStepKey ||
@@ -105,6 +108,19 @@ export default function BookProviderPage() {
       setEstimatedPrice(parsed);
     }
   }, [finalPrice]);
+
+  // FRD-FR-10: Pre-populate description from guidance booking step context
+  useEffect(() => {
+    if (!guidanceJourneyId) return;
+    setDescription((prev) => {
+      if (prev.trim().length > 0) return prev;
+      const parts: string[] = [];
+      if (guidanceAssetName) parts.push(guidanceAssetName);
+      if (guidanceIssueDescription) parts.push(guidanceIssueDescription);
+      if (parts.length === 0) return prev;
+      return parts.join(' — ');
+    });
+  }, [guidanceJourneyId, guidanceAssetName, guidanceIssueDescription]);
 
   useEffect(() => {
     loadData();
