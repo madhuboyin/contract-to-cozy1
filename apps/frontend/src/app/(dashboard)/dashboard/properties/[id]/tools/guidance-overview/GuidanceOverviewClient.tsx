@@ -62,17 +62,82 @@ const SIGNAL_SUBTITLE_LABELS: Record<string, string> = {
   high_utility_cost: 'This issue may be increasing your ongoing utility costs.',
 };
 
+// Generic fallback — used when no category-specific list matches
 const SUGGESTED_ISSUE_TYPES_ITEM = [
   { key: 'not_working', label: 'Not working properly' },
-  { key: 'not_cooling', label: 'Not cooling' },
-  { key: 'not_heating', label: 'Not heating' },
-  { key: 'leak', label: 'Leaking or water damage' },
   { key: 'past_life', label: 'Aging or past expected life' },
   { key: 'broken', label: 'Broken or damaged' },
   { key: 'inspection_needed', label: 'Needs inspection or maintenance' },
   { key: 'coverage_question', label: 'Coverage or warranty question' },
   { key: 'cost_estimate', label: 'Need a cost estimate' },
 ];
+
+// Per-category issue types — keys match InventoryItemCategory enum values
+const SUGGESTED_ISSUE_TYPES_BY_CATEGORY: Record<string, { key: string; label: string }[]> = {
+  APPLIANCE: [
+    { key: 'not_working', label: 'Not working properly' },
+    { key: 'not_heating', label: 'Not heating or cooking evenly' },
+    { key: 'error_code', label: 'Showing an error code or warning light' },
+    { key: 'unusual_noise', label: 'Making unusual noise or vibration' },
+    { key: 'broken', label: 'Broken, cracked, or physically damaged' },
+    { key: 'past_life', label: 'Aging or past expected life' },
+    { key: 'coverage_question', label: 'Warranty or coverage question' },
+    { key: 'cost_estimate', label: 'Need a repair or replacement cost estimate' },
+  ],
+  HVAC: [
+    { key: 'not_cooling', label: 'Not cooling' },
+    { key: 'not_heating', label: 'Not heating' },
+    { key: 'poor_airflow', label: 'Poor airflow or uneven temperatures' },
+    { key: 'unusual_noise', label: 'Making unusual noise' },
+    { key: 'high_utility_cost', label: 'Unusually high energy bills' },
+    { key: 'past_life', label: 'Aging or past expected life' },
+    { key: 'inspection_needed', label: 'Needs seasonal inspection or tune-up' },
+    { key: 'coverage_question', label: 'Warranty or coverage question' },
+  ],
+  PLUMBING: [
+    { key: 'leak', label: 'Leaking or dripping' },
+    { key: 'low_pressure', label: 'Low water pressure' },
+    { key: 'no_hot_water', label: 'No hot water' },
+    { key: 'slow_drain', label: 'Slow drain or clog' },
+    { key: 'unusual_noise', label: 'Banging or unusual pipe noise' },
+    { key: 'past_life', label: 'Aging or past expected life' },
+    { key: 'inspection_needed', label: 'Needs inspection or maintenance' },
+    { key: 'cost_estimate', label: 'Need a cost estimate' },
+  ],
+  ELECTRICAL: [
+    { key: 'not_working', label: 'Not working or no power' },
+    { key: 'tripping_breaker', label: 'Tripping circuit breaker' },
+    { key: 'flickering', label: 'Flickering lights or power fluctuations' },
+    { key: 'outlet_issue', label: 'Outlet or switch not functioning' },
+    { key: 'past_life', label: 'Panel or wiring aging or outdated' },
+    { key: 'inspection_needed', label: 'Needs safety inspection' },
+    { key: 'coverage_question', label: 'Coverage or warranty question' },
+    { key: 'cost_estimate', label: 'Need a cost estimate' },
+  ],
+  ROOF_EXTERIOR: [
+    { key: 'leak', label: 'Leaking or water intrusion' },
+    { key: 'visible_damage', label: 'Visible damage (missing shingles, dents, cracks)' },
+    { key: 'past_life', label: 'Aging or near end of life' },
+    { key: 'inspection_needed', label: 'Needs inspection after storm or event' },
+    { key: 'gutter_issue', label: 'Gutter or drainage issue' },
+    { key: 'coverage_question', label: 'Insurance or warranty question' },
+    { key: 'cost_estimate', label: 'Need a repair or replacement estimate' },
+  ],
+  SAFETY: [
+    { key: 'not_working', label: 'Device not working or alarming unexpectedly' },
+    { key: 'battery_low', label: 'Low battery or needs replacement' },
+    { key: 'past_life', label: 'Past recommended replacement date' },
+    { key: 'inspection_needed', label: 'Needs testing or professional inspection' },
+    { key: 'coverage_question', label: 'Coverage or warranty question' },
+  ],
+  SMART_HOME: [
+    { key: 'not_working', label: 'Device not responding or offline' },
+    { key: 'connectivity_issue', label: 'Connectivity or pairing issue' },
+    { key: 'error_code', label: 'Showing an error or fault code' },
+    { key: 'past_life', label: 'Outdated or past expected life' },
+    { key: 'cost_estimate', label: 'Need a replacement cost estimate' },
+  ],
+};
 
 const SUGGESTED_ISSUE_TYPES_BY_SERVICE: Record<string, { key: string; label: string }[]> = {
   warranty_purchase: [
@@ -483,7 +548,9 @@ export default function GuidanceOverviewClient() {
       ? (selectedServiceKey
           ? (SUGGESTED_ISSUE_TYPES_BY_SERVICE[selectedServiceKey] ?? SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT)
           : SUGGESTED_ISSUE_TYPES_SERVICE_DEFAULT)
-      : SUGGESTED_ISSUE_TYPES_ITEM;
+      : (selectedAssetOption?.category
+          ? (SUGGESTED_ISSUE_TYPES_BY_CATEGORY[selectedAssetOption.category] ?? SUGGESTED_ISSUE_TYPES_ITEM)
+          : SUGGESTED_ISSUE_TYPES_ITEM);
   const [customIssue, setCustomIssue] = React.useState('');
 
   // ---- Phase 6c: pinned journey mode ----
