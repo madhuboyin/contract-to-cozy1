@@ -67,11 +67,31 @@ export type HomeEventListParams = {
   limit?: number;
 };
 
+export type CreateHomeEventPayload = {
+  type: HomeEventType;
+  title: string;
+  occurredAt: string; // ISO datetime
+  summary?: string | null;
+  amount?: number | null;
+  inventoryItemId?: string | null;
+  guidanceJourneyId?: string | null;
+  isRetrospective?: boolean;
+  meta?: Record<string, unknown> | null;
+  idempotencyKey?: string | null;
+};
+
 type HomeEventsResponse = {
   events: HomeEvent[];
   signalEvents?: TimelineProjectionEntry[];
   timelineEntries?: TimelineProjectionEntry[];
 };
+export async function createHomeEvent(propertyId: string, payload: CreateHomeEventPayload) {
+  return api.post<{ event: HomeEvent }>(
+    `/api/properties/${propertyId}/home-events`,
+    payload
+  );
+}
+
 export async function listHomeEvents(propertyId: string, params: HomeEventListParams = {}) {
   const qs = new URLSearchParams();
 

@@ -36,6 +36,10 @@ export const createHomeEventBodySchema = z.object({
   meta: z.unknown().optional().nullable(),
   groupKey: z.string().max(120).optional().nullable(),
   idempotencyKey: z.string().max(160).optional().nullable(),
+
+  // FRD-FR-03: guidance journey linkage for retrospective history records
+  guidanceJourneyId: z.string().uuid().optional().nullable(),
+  isRetrospective: z.boolean().optional(),
 });
 
 export const updateHomeEventBodySchema = createHomeEventBodySchema.partial();

@@ -28,6 +28,7 @@ import {
   type GuidanceStepDTO,
 } from '@/lib/api/guidanceApi';
 import { GuidanceJourneyStrip } from '@/components/guidance/GuidanceJourneyStrip';
+import { VerifyHistoryStep } from '@/components/guidance/VerifyHistoryStep';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
@@ -486,6 +487,35 @@ export default function GuidanceOverviewClient() {
 
   function renderStepCta(step: GuidanceStepDTO, isActive: boolean) {
     if (!isActive) return null;
+
+    // FRD-FR-03/04: Inline verify_history step — render the VerifyHistoryStep form
+    // instead of navigating to a separate page (history-verify has no routePath).
+    if (step.toolKey === 'history-verify' && primaryAction) {
+      const journeyInventoryItemId =
+        resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
+      const assetCategory =
+        resolvedJourney?.inventoryItem?.category ?? selectedAssetOption?.category ?? null;
+      const displayAssetName =
+        resolvedJourney?.inventoryItem?.name?.trim() ||
+        selectedAssetOption?.assetName ||
+        'this item';
+      return (
+        <VerifyHistoryStep
+          propertyId={propertyId}
+          journeyId={primaryAction.journeyId}
+          stepId={step.id}
+          stepKey={step.stepKey}
+          inventoryItemId={journeyInventoryItemId}
+          assetCategory={assetCategory}
+          assetName={displayAssetName}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+          }}
+        />
+      );
+    }
+
     // Patch: if the journey lacks inventoryItemId/homeAssetId but the user explicitly
     // selected one via URL params, inject it so resolveGuidanceStepHref can substitute
     // :itemId in the route template. This handles journeys originally linked via
