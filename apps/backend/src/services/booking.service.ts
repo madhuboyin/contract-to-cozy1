@@ -28,6 +28,8 @@ import { NotificationService } from './notification.service';
 import { incrementStreak } from './gamification.service';
 import { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory.util';
 import { priceFinalizationService } from './priceFinalization.service';
+// Phase 5 (TR-03): fire-and-forget guidance step advancement on service completion
+import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 
 export class BookingService {
   /**
@@ -261,6 +263,12 @@ export class BookingService {
         insightContext: predictiveInsightContext,
         maintenancePredictionId: input.maintenancePredictionId || null,
         inventoryItemId: resolvedInventoryItemId,
+        // Phase 5 (TR-03): persist so service completion can auto-advance the journey.
+        // Spread-cast required until `npx prisma generate` is run after migration.
+        ...({
+          guidanceJourneyId: options?.guidanceJourneyId ?? null,
+          guidanceStepKey: options?.guidanceStepKey ?? null,
+        } as Record<string, unknown>),
         timeline: {
           create: {
             status: 'PENDING',
@@ -799,6 +807,39 @@ export class BookingService {
       );
     }
 
+    // Phase 5 (TR-03): Auto-advance the linked guidance journey step when service completes.
+    // Fire-and-forget — booking completion must not fail if guidance side-effects error.
+    // Cast required until `npx prisma generate` is run after the schema migration.
+    const bookingAny = booking as typeof booking & {
+      guidanceJourneyId?: string | null;
+      guidanceStepKey?: string | null;
+    };
+    if (bookingAny.guidanceJourneyId) {
+      guidanceJourneyService
+        .recordToolCompletion({
+          propertyId: booking.propertyId,
+          actorUserId: providerId,
+          journeyId: bookingAny.guidanceJourneyId,
+          sourceToolKey: 'booking',
+          sourceEntityType: 'BOOKING',
+          sourceEntityId: bookingId,
+          stepKey: bookingAny.guidanceStepKey ?? undefined,
+          status: 'COMPLETED',
+          inventoryItemId: booking.inventoryItemId ?? null,
+          producedData: {
+            proofType: 'service_completion',
+            proofId: bookingId,
+            bookingId,
+            finalPrice: input.finalPrice != null ? String(input.finalPrice) : null,
+            actualStartTime: input.actualStartTime,
+            actualEndTime: input.actualEndTime,
+          },
+        })
+        .catch((err) =>
+          console.warn('[BOOKING] guidance step advance on service completion failed:', err)
+        );
+    }
+
     return this.formatBookingResponse(updated);
   }
 
@@ -1103,6 +1144,8 @@ export class BookingService {
       maintenancePredictionId: booking.maintenancePredictionId || null,
       inventoryItemId: booking.inventoryItemId || null,
       priceFinalizationId: booking.priceFinalization?.id || null,
+      // Phase 5: cast until Prisma client is regenerated after schema migration
+      guidanceJourneyId: (booking as any).guidanceJourneyId || null,
       cancelledAt: booking.cancelledAt,
       cancelledBy: booking.cancelledBy,
       cancellationReason: booking.cancellationReason,

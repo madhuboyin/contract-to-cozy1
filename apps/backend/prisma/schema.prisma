@@ -2229,6 +2229,11 @@ model Booking {
   inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
   priceFinalization PriceFinalization?
 
+  // Phase 5: Guidance journey linkage — stored at booking creation so that
+  // service completion can automatically advance the journey step (TR-03).
+  guidanceJourneyId String?
+  guidanceStepKey   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2241,6 +2246,7 @@ model Booking {
   @@index([scheduledDate])
   @@index([category])
   @@index([insightFactor]) // For fast lookups
+  @@index([guidanceJourneyId])  // Phase 5: journey → bookings lookup
   @@map("bookings")
 }
 
