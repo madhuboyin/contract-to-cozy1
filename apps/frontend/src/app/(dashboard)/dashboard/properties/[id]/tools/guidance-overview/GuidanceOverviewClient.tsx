@@ -49,6 +49,7 @@ import { VerifyHistoryStep } from '@/components/guidance/VerifyHistoryStep';
 import { RepairReplaceGate } from '@/components/guidance/RepairReplaceGate';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { CoverageCheckInline } from '@/components/guidance/CoverageCheckInline';
+import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
@@ -782,6 +783,33 @@ export default function GuidanceOverviewClient() {
           stepKey={step.stepKey}
           inventoryItemId={coverageItemId}
           assetName={displayAssetName}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+          }}
+        />
+      );
+    }
+
+    // Inline price check for validate_price / estimate_improvement_cost steps.
+    if (step.toolKey === 'service-price-radar' && activePrimaryAction) {
+      const priceItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
+      const priceItemCategory =
+        resolvedJourney?.inventoryItem?.category ?? selectedAssetOption?.category ?? null;
+      const displayAssetName =
+        resolvedJourney?.inventoryItem?.name?.trim() ||
+        selectedAssetOption?.assetName ||
+        'this item';
+      return (
+        <PriceCheckInline
+          propertyId={propertyId}
+          journeyId={activePrimaryAction.journeyId}
+          stepId={step.id}
+          stepKey={step.stepKey}
+          inventoryItemId={priceItemId}
+          inventoryItemCategory={priceItemCategory}
+          assetName={displayAssetName}
+          issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
