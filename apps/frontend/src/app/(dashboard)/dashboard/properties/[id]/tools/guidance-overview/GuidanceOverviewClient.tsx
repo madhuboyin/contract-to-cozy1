@@ -48,6 +48,7 @@ import { GuidanceJourneyStrip } from '@/components/guidance/GuidanceJourneyStrip
 import { VerifyHistoryStep } from '@/components/guidance/VerifyHistoryStep';
 import { RepairReplaceGate } from '@/components/guidance/RepairReplaceGate';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
+import { CoverageCheckInline } from '@/components/guidance/CoverageCheckInline';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
@@ -764,6 +765,29 @@ export default function GuidanceOverviewClient() {
           />
         );
       }
+    }
+
+    // Inline coverage check for check_coverage step — no page navigation.
+    if (step.toolKey === 'coverage-intelligence' && activePrimaryAction) {
+      const coverageItemId = resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
+      const displayAssetName =
+        resolvedJourney?.inventoryItem?.name?.trim() ||
+        selectedAssetOption?.assetName ||
+        'this item';
+      return (
+        <CoverageCheckInline
+          propertyId={propertyId}
+          journeyId={activePrimaryAction.journeyId}
+          stepId={step.id}
+          stepKey={step.stepKey}
+          inventoryItemId={coverageItemId}
+          assetName={displayAssetName}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+          }}
+        />
+      );
     }
 
     // FRD-FR-09: Inline NegotiationShield for prepare_negotiation step.
