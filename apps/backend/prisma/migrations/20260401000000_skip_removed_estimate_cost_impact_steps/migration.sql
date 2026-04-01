@@ -14,14 +14,16 @@
 --
 --   Steps already COMPLETED or SKIPPED are left untouched — the user
 --   either already visited it (completed) or it was previously bypassed.
+--
+-- Note: Prisma maps camelCase field names to snake_case column names in PostgreSQL.
 
 UPDATE "guidance_journey_steps"
 SET
-  "status"            = 'SKIPPED',
-  "skippedReasonCode" = 'TEMPLATE_REMOVED',
-  "skippedReason"     = 'Step removed from asset_lifecycle_resolution template v2.1.0. Repair/replace cost analysis is covered inline by RepairReplaceGate in the preceding step.',
-  "skippedAt"         = NOW(),
-  "updatedAt"         = NOW()
+  "status"               = 'SKIPPED',
+  "skipped_reason_code"  = 'TEMPLATE_REMOVED',
+  "skipped_reason"       = 'Step removed from asset_lifecycle_resolution template v2.1.0. Repair/replace cost analysis is covered inline by RepairReplaceGate in the preceding step.',
+  "skipped_at"           = NOW(),
+  "updated_at"           = NOW()
 WHERE
-  "stepKey" = 'estimate_cost_impact'
+  "step_key" = 'estimate_cost_impact'
   AND "status" IN ('PENDING', 'IN_PROGRESS');
