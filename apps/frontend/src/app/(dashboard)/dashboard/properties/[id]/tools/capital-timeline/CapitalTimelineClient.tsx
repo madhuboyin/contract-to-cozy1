@@ -33,7 +33,6 @@ import {
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
-import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -310,8 +309,6 @@ export default function CapitalTimelineClient() {
           </button>
         </MobileActionRow>
       </MobileFilterSurface>
-
-      <PropertyOrchestrationStrip propertyId={propertyId} contextTool="capital-timeline" />
 
       {/* Loading */}
       {(loading || running) && !data && (

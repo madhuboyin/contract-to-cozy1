@@ -13,7 +13,6 @@ import {
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
-import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 export default function DoNothingToolClient() {
   const params = useParams<{ id: string }>();
@@ -54,8 +53,6 @@ export default function DoNothingToolClient() {
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} />
       </MobileFilterSurface>
-
-      <PropertyOrchestrationStrip propertyId={propertyId} contextTool="do-nothing" />
 
       <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
 

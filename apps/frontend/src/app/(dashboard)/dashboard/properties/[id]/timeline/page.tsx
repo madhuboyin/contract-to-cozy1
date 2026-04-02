@@ -18,7 +18,6 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -386,11 +385,6 @@ export default function Page() {
       summary={
         <>
           <HomeToolHeader toolId="home-timeline" propertyId={propertyId} />
-          <PropertyOrchestrationStrip
-            propertyId={propertyId}
-            contextTool="home-timeline"
-            className="mt-3"
-          />
           <ResultHeroCard
             eyebrow="Property History"
             title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}

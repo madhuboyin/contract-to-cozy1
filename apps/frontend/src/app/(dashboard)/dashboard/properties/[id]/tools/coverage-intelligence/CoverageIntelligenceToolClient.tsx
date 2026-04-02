@@ -14,7 +14,6 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
-import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 export default function CoverageIntelligenceToolClient() {
   const params = useParams<{ id: string }>();
@@ -70,8 +69,6 @@ export default function CoverageIntelligenceToolClient() {
       {/* Standalone-only widgets — hidden when arriving from a guidance step */}
       {!isGuidanceContext && (
         <>
-          <PropertyOrchestrationStrip propertyId={propertyId} contextTool="coverage-intelligence" />
-
           <GuidanceInlinePanel
             propertyId={propertyId}
             title="Where This Tool Fits"

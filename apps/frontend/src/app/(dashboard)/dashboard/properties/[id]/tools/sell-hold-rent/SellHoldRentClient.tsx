@@ -13,7 +13,6 @@ import {
   MobilePageContainer,
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 
 import ComparisonBars from './ComparisonBars';
 import {
@@ -181,8 +180,6 @@ export default function SellHoldRentClient() {
       <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
         <HomeToolsRail propertyId={propertyId} context="sell-hold-rent" currentToolId="sell-hold-rent" />
       </MobileFilterSurface>
-
-      <PropertyOrchestrationStrip propertyId={propertyId} contextTool="sell-hold-rent" />
 
       <div className="rounded-2xl border border-white/70 bg-white/65 p-3 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
         <div className="flex flex-wrap items-center justify-between gap-3">

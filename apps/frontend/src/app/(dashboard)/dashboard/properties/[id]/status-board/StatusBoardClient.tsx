@@ -69,7 +69,6 @@ import InventoryItemDrawer from '../../../components/inventory/InventoryItemDraw
 import { getInventoryItem, listInventoryRooms } from '../../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import HomeToolHeader from "@/components/tools/HomeToolHeader";
-import PropertyOrchestrationStrip from "@/components/orchestration/PropertyOrchestrationStrip";
 import { recordGuidanceToolStatus } from "@/lib/api/guidanceApi";
 import {
   appendGuidanceContinuityToHref,
@@ -1187,11 +1186,6 @@ export default function StatusBoardClient() {
                       : []),
                   ]}
                 />
-                <PropertyOrchestrationStrip
-                  propertyId={propertyId}
-                  contextTool="status-board"
-                  className="mt-3"
-                />
               </>
             ) : undefined
           }
@@ -1406,10 +1400,6 @@ export default function StatusBoardClient() {
       <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
         <div className="relative z-10 space-y-3">
         <HomeToolHeader toolId="status-board" propertyId={propertyId} />
-        <PropertyOrchestrationStrip
-          propertyId={propertyId}
-          contextTool="status-board"
-        />
         {signalSummary ? (
           <div className={`rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-xs text-slate-600 shadow-sm ${GLASS_CARD_CLASS}`}>
             <div className="flex flex-wrap gap-2">

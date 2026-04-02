@@ -22,7 +22,6 @@ import { RadarFeedItem } from '@/components/features/homeEventRadar/RadarFeedIte
 import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFeedSkeleton';
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
 
@@ -517,11 +516,6 @@ export default function HomeEventRadarPage() {
             toolId="home-event-radar"
             propertyId={propertyId}
             monitoringAddress={propertyAddress || undefined}
-          />
-
-          <PropertyOrchestrationStrip
-            propertyId={propertyId}
-            contextTool="home-event-radar"
           />
 
           <MobileSection className="space-y-3 lg:space-y-4">

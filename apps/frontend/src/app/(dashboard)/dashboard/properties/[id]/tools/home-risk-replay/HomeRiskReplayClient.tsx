@@ -40,7 +40,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ReplayDetailSheet } from '@/components/features/homeRiskReplay/ReplayDetailSheet';
 import { ReplayTimelineItem } from '@/components/features/homeRiskReplay/ReplayTimelineItem';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
-import PropertyOrchestrationStrip from '@/components/orchestration/PropertyOrchestrationStrip';
 import {
   formatDriverCode,
   formatReplayDate,
@@ -819,11 +818,6 @@ export default function HomeRiskReplayClient() {
           <HomeToolHeader
             toolId="home-risk-replay"
             propertyId={propertyId}
-          />
-          <PropertyOrchestrationStrip
-            propertyId={propertyId}
-            contextTool="home-risk-replay"
-            className="mt-3"
           />
         </div>
 
