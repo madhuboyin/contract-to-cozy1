@@ -15,6 +15,13 @@ const ICON_KEY_ALIASES: Record<string, InventoryItemIconKey> = {
   water_softener: 'water_softener',
   softener: 'water_softener',
 
+  water_heater: 'water_heater',
+  hot_water_heater: 'water_heater',
+  water_tank: 'water_heater',
+
+  furnace: 'furnace',
+  boiler: 'furnace',
+
   oven: 'oven_range',
   range: 'oven_range',
   stove: 'oven_range',
@@ -67,6 +74,8 @@ const HEURISTIC_RULES: Array<{ key: InventoryItemIconKey; test: (value: string) 
   { key: 'computer_desk', test: (value) => value.includes('computer') && value.includes('desk') },
   { key: 'microwave_hood', test: (value) => value.includes('microwave') && value.includes('hood') },
   { key: 'water_softener', test: (value) => value.includes('water') && value.includes('softener') },
+  { key: 'water_heater', test: (value) => value.includes('water') && value.includes('heater') },
+  { key: 'furnace', test: (value) => value.includes('furnace') || value.includes('boiler') },
   { key: 'oven_range', test: (value) => value.includes('oven') || value.includes('range') || value.includes('stove') },
   { key: 'refrigerator', test: (value) => value.includes('refrigerator') || value.includes('fridge') },
   { key: 'dishwasher', test: (value) => value.includes('dishwasher') },

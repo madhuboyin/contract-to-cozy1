@@ -9,17 +9,9 @@ import {
   Box,
   ChevronRight,
   CircleAlert,
-  Droplets,
-  Home,
-  Package,
-  ShieldAlert,
   ShieldCheck,
   Sparkles,
-  UtensilsCrossed,
-  Wifi,
-  Wind,
   Wrench,
-  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,6 +44,7 @@ import { CoverageCheckInline } from '@/components/guidance/CoverageCheckInline';
 import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
+import { getGuidanceItemVisual } from '@/components/guidance/guidanceItemVisual';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
@@ -304,23 +297,6 @@ const INVENTORY_CATEGORY_TABS: { key: string; label: string }[] = [
 // ---------------------------------------------------------------------------
 
 // Semantic icon + subtle tint per inventory category — used in the item picker list
-const CATEGORY_ICON_STYLES: Record<
-  string,
-  { icon: React.ElementType; bg: string; color: string; selectedBg: string; selectedColor: string }
-> = {
-  APPLIANCE:     { icon: UtensilsCrossed, bg: 'bg-orange-50',  color: 'text-orange-500',  selectedBg: 'bg-orange-100',  selectedColor: 'text-orange-600'  },
-  HVAC:          { icon: Wind,            bg: 'bg-blue-50',    color: 'text-blue-500',    selectedBg: 'bg-blue-100',    selectedColor: 'text-blue-600'    },
-  PLUMBING:      { icon: Droplets,        bg: 'bg-cyan-50',    color: 'text-cyan-600',    selectedBg: 'bg-cyan-100',    selectedColor: 'text-cyan-700'    },
-  ELECTRICAL:    { icon: Zap,             bg: 'bg-amber-50',   color: 'text-amber-500',   selectedBg: 'bg-amber-100',   selectedColor: 'text-amber-600'   },
-  ROOF_EXTERIOR: { icon: Home,            bg: 'bg-stone-50',   color: 'text-stone-500',   selectedBg: 'bg-stone-100',   selectedColor: 'text-stone-600'   },
-  SAFETY:        { icon: ShieldAlert,     bg: 'bg-rose-50',    color: 'text-rose-500',    selectedBg: 'bg-rose-100',    selectedColor: 'text-rose-600'    },
-  SMART_HOME:    { icon: Wifi,            bg: 'bg-violet-50',  color: 'text-violet-500',  selectedBg: 'bg-violet-100',  selectedColor: 'text-violet-600'  },
-};
-const CATEGORY_ICON_FALLBACK = { icon: Package, bg: 'bg-slate-100', color: 'text-slate-500', selectedBg: 'bg-slate-200', selectedColor: 'text-slate-600' };
-
-function getCategoryIconStyle(category: string) {
-  return CATEGORY_ICON_STYLES[category] ?? CATEGORY_ICON_FALLBACK;
-}
 
 type AssetScopeOption = {
   key: string;
@@ -1084,8 +1060,10 @@ export default function GuidanceOverviewClient() {
             <div className="space-y-1.5">
               {filteredAssetOptions.map((option) => {
                 const isSelected = selectedDrawerOption?.key === option.key;
-                const iconCfg = getCategoryIconStyle(option.category);
-                const Icon = iconCfg.icon;
+                const { icon: Icon, bg, color, selectedBg, selectedColor } = getGuidanceItemVisual({
+                  name: option.assetName,
+                  category: option.category,
+                });
                 return (
                   <button
                     key={option.key}
@@ -1103,8 +1081,8 @@ export default function GuidanceOverviewClient() {
                       className={cn(
                         'shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
                         isSelected
-                          ? cn(iconCfg.selectedBg, iconCfg.selectedColor)
-                          : cn(iconCfg.bg, iconCfg.color)
+                          ? cn(selectedBg, selectedColor)
+                          : cn(bg, color)
                       )}
                     >
                       <Icon className="h-4 w-4" />

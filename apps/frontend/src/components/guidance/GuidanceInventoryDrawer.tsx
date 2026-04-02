@@ -1,18 +1,10 @@
 'use client';
 
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import {
   Building2,
   ChevronRight,
-  Droplets,
-  Home,
-  Package,
-  ShieldAlert,
   ShieldCheck,
-  UtensilsCrossed,
-  Wifi,
-  Wind,
-  Zap,
 } from 'lucide-react';
 import {
   Sheet,
@@ -22,6 +14,7 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { getGuidanceItemVisual } from './guidanceItemVisual';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import type { InventoryItem } from '@/types';
@@ -34,27 +27,6 @@ type Props = {
   onClose: () => void;
   onStartGuidance: () => void;
 };
-
-type IconStyle = {
-  icon: ComponentType<{ className?: string }>;
-  bg: string;
-  color: string;
-};
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function categoryIconStyle(category: string): IconStyle {
-  switch (category) {
-    case 'APPLIANCE':      return { icon: UtensilsCrossed, bg: 'bg-orange-50',  color: 'text-orange-500'  };
-    case 'HVAC':           return { icon: Wind,            bg: 'bg-blue-50',    color: 'text-blue-500'    };
-    case 'PLUMBING':       return { icon: Droplets,        bg: 'bg-cyan-50',    color: 'text-cyan-600'    };
-    case 'ELECTRICAL':     return { icon: Zap,             bg: 'bg-amber-50',   color: 'text-amber-500'   };
-    case 'ROOF_EXTERIOR':  return { icon: Home,            bg: 'bg-stone-50',   color: 'text-stone-500'   };
-    case 'SAFETY':         return { icon: ShieldAlert,     bg: 'bg-rose-50',    color: 'text-rose-500'    };
-    case 'SMART_HOME':     return { icon: Wifi,            bg: 'bg-violet-50',  color: 'text-violet-500'  };
-    default:               return { icon: Package,         bg: 'bg-slate-100',  color: 'text-slate-500'   };
-  }
-}
 
 function conditionStyle(condition: string): { badge: string; dot: string } {
   switch (condition) {
@@ -99,8 +71,10 @@ function DetailRow({ label, value }: { label: string; value: ReactNode }) {
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function GuidanceInventoryDrawer({ item, isOpen, onClose, onStartGuidance }: Props) {
-  const iconStyle = item ? categoryIconStyle(item.category) : categoryIconStyle('OTHER');
-  const IconComponent = iconStyle.icon;
+  const visual = getGuidanceItemVisual(
+    item ? { name: item.name, category: item.category, sourceHash: item.sourceHash } : {}
+  );
+  const IconComponent = visual.icon;
   const condStyle = item?.condition ? conditionStyle(item.condition) : null;
 
   // Overview rows: brand, model, costs
@@ -145,14 +119,14 @@ export function GuidanceInventoryDrawer({ item, isOpen, onClose, onStartGuidance
         <div className="px-6 pb-6 pt-5">
           {/* Icon · Name · Condition — pr-12 clears the built-in × button */}
           <div className="flex items-start gap-3 pr-12">
-            {/* Category icon */}
+            {/* Item icon */}
             <span
               className={cn(
                 'mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
-                item ? iconStyle.bg : 'animate-pulse bg-slate-200'
+                item ? visual.bg : 'animate-pulse bg-slate-200'
               )}
             >
-              {item && <IconComponent className={cn('h-5 w-5', iconStyle.color)} />}
+              {item && <IconComponent className={cn('h-5 w-5', visual.color)} />}
             </span>
 
             {/* Name + meta */}
