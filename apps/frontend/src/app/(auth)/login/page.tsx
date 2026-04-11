@@ -1,11 +1,13 @@
 // apps/frontend/src/app/(auth)/login/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import LoginSuccessTransition from '@/components/auth/LoginSuccessTransition';
+import { UserRole } from '@/types';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +15,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionRole, setTransitionRole] = useState<UserRole>('HOMEOWNER');
+  const [transitionName, setTransitionName] = useState<string>('');
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -21,7 +27,7 @@ export default function LoginPage() {
 
   // Redirect if already authenticated — in useEffect to avoid render-time side effects
   useEffect(() => {
-    if (user) {
+    if (user && !isTransitioning) {
       if (user.role === 'PROVIDER') {
         router.replace('/providers/dashboard');
       } else if (user.role === 'ADMIN') {
@@ -30,7 +36,15 @@ export default function LoginPage() {
         router.replace('/dashboard');
       }
     }
-  }, [user, router]);
+  }, [user, router, isTransitioning]);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   // Show nothing while redirecting
   if (user) return null;
@@ -51,15 +65,23 @@ export default function LoginPage() {
       const result = await login({ email: formData.email, password: formData.password });
 
       if (result) {
-        const userRole = result.user.role;
+        const userRole = result.user.role as UserRole;
+        const firstName = result.user.firstName || '';
+        let destination = '/dashboard';
 
         if (userRole === 'PROVIDER') {
-          router.replace('/providers/dashboard');
+          destination = '/providers/dashboard';
         } else if (userRole === 'ADMIN') {
-          router.replace('/dashboard/knowledge-admin');
-        } else {
-          router.replace('/dashboard');
+          destination = '/dashboard/knowledge-admin';
         }
+
+        setTransitionRole(userRole);
+        setTransitionName(firstName);
+        setIsTransitioning(true);
+
+        redirectTimerRef.current = setTimeout(() => {
+          router.replace(destination);
+        }, 1100);
       } else {
         setError('Invalid email or password.');
       }
@@ -70,6 +92,10 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (isTransitioning) {
+    return <LoginSuccessTransition role={transitionRole} firstName={transitionName} />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">

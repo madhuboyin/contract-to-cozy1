@@ -3,13 +3,15 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { isValidEmail } from '@/lib/utils';
 // FIX 1: Import APIError for robust error handling
 import { APIError } from '@/types/index'; 
+import LoginSuccessTransition from '@/components/auth/LoginSuccessTransition';
+import { UserRole } from '@/types';
 
 export default function ProviderLoginPage() {
   const router = useRouter();
@@ -21,6 +23,18 @@ export default function ProviderLoginPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionRole, setTransitionRole] = useState<UserRole>('PROVIDER');
+  const [transitionName, setTransitionName] = useState<string>('');
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -76,14 +90,20 @@ export default function ProviderLoginPage() {
       }
 
       // Redirect based on role
+      let destination = '/dashboard';
       if (userRole === 'PROVIDER') {
-        router.push('/providers/dashboard');
+        destination = '/providers/dashboard';
       } else if (userRole === 'ADMIN') {
-        router.push('/dashboard/knowledge-admin');
-      } else {
-        // Homeowners using provider login? Redirect to regular dashboard
-        router.push('/dashboard');
+        destination = '/dashboard/knowledge-admin';
       }
+
+      setTransitionRole((userRole as UserRole) || 'PROVIDER');
+      setTransitionName(result.user?.firstName || '');
+      setIsTransitioning(true);
+
+      redirectTimerRef.current = setTimeout(() => {
+        router.replace(destination);
+      }, 1100);
     } else {
       // FIX 3: Safely handle error or null result
       const errorResponse = result as (APIError | null);
@@ -105,6 +125,10 @@ export default function ProviderLoginPage() {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
+
+  if (isTransitioning) {
+    return <LoginSuccessTransition role={transitionRole} firstName={transitionName} />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
