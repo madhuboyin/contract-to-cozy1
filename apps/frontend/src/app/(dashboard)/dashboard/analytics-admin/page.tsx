@@ -17,6 +17,7 @@ import {
   Layers,
   Loader2,
   RefreshCw,
+  Sparkles,
   TrendingUp,
   Users,
   Zap,
@@ -503,6 +504,149 @@ function DecisionGuidedSection({
           ))}
         </div>
       )}
+    </Section>
+  );
+}
+
+// ============================================================================
+// AHA JOURNEY (TESTING SUPPORT)
+// ============================================================================
+
+function AhaJourneySection({
+  filters,
+  enabled,
+}: {
+  filters: AdminAnalyticsFilters;
+  enabled: boolean;
+}) {
+  const q = useAdminAnalyticsFeatureAdoption(filters, enabled);
+
+  if (q.isLoading)
+    return (
+      <Section title="Aha Journey Events" icon={Sparkles}>
+        <ChartSkeleton label="Aha Journey Events" />
+      </Section>
+    );
+
+  if (q.isError)
+    return (
+      <Section title="Aha Journey Events" icon={Sparkles}>
+        <ErrorBanner message="Unable to load Aha journey event data." />
+      </Section>
+    );
+
+  const ahaFeatures = (q.data?.features ?? []).filter((f) =>
+    f.featureKey.startsWith('dashboard_aha_'),
+  );
+
+  if (ahaFeatures.length === 0)
+    return (
+      <Section
+        title="Aha Journey Events"
+        description="No Aha dashboard events were found in the selected period."
+        icon={Sparkles}
+      >
+        <p className="text-sm text-slate-500">
+          Expected events: <code>dashboard_aha_viewed</code>, <code>dashboard_aha_cta_clicked</code>,{' '}
+          <code>dashboard_aha_celebrated</code>.
+        </p>
+      </Section>
+    );
+
+  const eventStats = {
+    viewed: { events: 0, homes: 0 },
+    clicked: { events: 0, homes: 0 },
+    celebrated: { events: 0, homes: 0 },
+  };
+
+  for (const feature of ahaFeatures) {
+    if (feature.featureKey.includes('viewed')) {
+      eventStats.viewed.events += feature.totalEvents;
+      eventStats.viewed.homes += feature.uniqueHomes;
+    } else if (feature.featureKey.includes('cta_clicked')) {
+      eventStats.clicked.events += feature.totalEvents;
+      eventStats.clicked.homes += feature.uniqueHomes;
+    } else if (feature.featureKey.includes('celebrated')) {
+      eventStats.celebrated.events += feature.totalEvents;
+      eventStats.celebrated.homes += feature.uniqueHomes;
+    }
+  }
+
+  const eventCtr =
+    eventStats.viewed.events > 0 ? eventStats.clicked.events / eventStats.viewed.events : null;
+  const celebrationRate =
+    eventStats.viewed.events > 0
+      ? eventStats.celebrated.events / eventStats.viewed.events
+      : null;
+
+  const sortedRows = [...ahaFeatures].sort((a, b) => b.totalEvents - a.totalEvents);
+
+  return (
+    <Section
+      title="Aha Journey Events"
+      description="Testing visibility for dashboard Aha flow engagement."
+      icon={Sparkles}
+    >
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <OverviewCard
+          label="Aha Viewed"
+          value={num(eventStats.viewed.events)}
+          sub={`${num(eventStats.viewed.homes)} homes`}
+        />
+        <OverviewCard
+          label="Aha CTA Clicked"
+          value={num(eventStats.clicked.events)}
+          sub={`${num(eventStats.clicked.homes)} homes`}
+        />
+        <OverviewCard
+          label="Aha Celebrated"
+          value={num(eventStats.celebrated.events)}
+          sub={`${num(eventStats.celebrated.homes)} homes`}
+        />
+        <OverviewCard
+          label="CTA / View"
+          value={eventCtr != null ? pct(eventCtr) : '—'}
+          sub="click-through ratio"
+        />
+        <OverviewCard
+          label="Celebrate / View"
+          value={celebrationRate != null ? pct(celebrationRate) : '—'}
+          sub="celebration trigger rate"
+        />
+      </div>
+
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Event Key</TableHead>
+              <TableHead>Module</TableHead>
+              <TableHead className="text-right">Unique Homes</TableHead>
+              <TableHead className="text-right">Events</TableHead>
+              <TableHead className="text-right">Adoption</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedRows.map((row) => (
+              <TableRow key={`${row.moduleKey}/${row.featureKey}`}>
+                <TableCell className="font-mono text-xs text-slate-700">{row.featureKey}</TableCell>
+                <TableCell className="font-mono text-xs capitalize text-slate-500">
+                  {row.moduleKey.replace(/_/g, ' ')}
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-slate-700">
+                  {num(row.uniqueHomes)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-slate-600">
+                  {num(row.totalEvents)}
+                </TableCell>
+                <TableCell className="text-right text-xs font-semibold text-slate-700">
+                  {pct(row.adoptionRate)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </Section>
   );
 }
@@ -1058,6 +1202,9 @@ export default function AnalyticsAdminPage() {
             overview={overviewQ.data}
           />
         )}
+
+        {/* ── Aha Journey (testing) ── */}
+        <AhaJourneySection filters={filters} enabled={isAdmin} key={`aha-${refreshKey}`} />
 
         {/* ── Feature Adoption ── */}
         <FeatureAdoptionTable filters={filters} enabled={isAdmin} key={`adopt-${refreshKey}`} />
