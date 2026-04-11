@@ -660,3 +660,13 @@ html {
 .animate-fade-in-up {
   animation: fadeInUp 0.3s ease-out forwards;
 }
+
+@keyframes ring-fill-in {
+  from {
+    stroke-dasharray: 0 999;
+  }
+}
+
+.score-ring-animated circle:last-of-type {
+  animation: ring-fill-in 0.7s cubic-bezier(0.4, 0, 0.2, 1) both;
+}

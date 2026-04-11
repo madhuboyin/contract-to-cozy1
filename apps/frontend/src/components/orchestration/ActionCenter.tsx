@@ -1,7 +1,7 @@
 // apps/frontend/src/components/orchestration/ActionCenter.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 
 import { api } from '@/lib/api/client';
 import { OrchestratedActionDTO, Property, SuppressionSourceDTO, CompletionDataDTO, InventoryItem, InventoryRoom } from '@/types';
@@ -23,7 +23,7 @@ import { SnoozeModal } from './SnoozeModal';
 import { CompletionModal } from './CompletionModal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle2, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import humanizeActionType from '@/lib/utils/humanize';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -37,6 +37,15 @@ type Props = {
   propertyId: string;
   maxItems?: number;
 };
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 
 export const ActionCenter: React.FC<Props> = ({
@@ -57,6 +66,7 @@ export const ActionCenter: React.FC<Props> = ({
 
   const [showSuppressed, setShowSuppressed] = useState(false);
   const [showSnoozed, setShowSnoozed] = useState(false);
+  const suppressedSectionRef = useRef<HTMLDivElement | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [template, setTemplate] = useState<MaintenanceTaskTemplate | null>(null);
@@ -399,6 +409,14 @@ export const ActionCenter: React.FC<Props> = ({
     }
   }, [propertyId]);
 
+  const scrollToSuppressed = useCallback(() => {
+    setShowSuppressed(true);
+    suppressedSectionRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }, []);
+
   /* ------------------------------------------------------------------
      Derived Groups - 🔑 FIXED: Only group by risk level, don't re-filter
   ------------------------------------------------------------------- */
@@ -409,6 +427,33 @@ export const ActionCenter: React.FC<Props> = ({
   const other = useMemo(() => actions.filter(
     a => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH'
   ), [actions]);
+
+  const totalEstCost = useMemo(
+    () =>
+      [...actions, ...suppressedActions].reduce((sum, action) => {
+        const estimatedCost = Number(action.exposure ?? (action as { estimatedCost?: number | null }).estimatedCost ?? 0);
+        return sum + (Number.isFinite(estimatedCost) ? estimatedCost : 0);
+      }, 0),
+    [actions, suppressedActions]
+  );
+
+  const completedCount = useMemo(
+    () =>
+      [...suppressedActions, ...snoozedActions].filter((action) => {
+        const suppressionSource = action.suppression?.suppressionSource;
+        return (
+          suppressionSource?.type === 'USER_EVENT' &&
+          suppressionSource?.eventType === 'USER_MARKED_COMPLETE'
+        );
+      }).length,
+    [suppressedActions, snoozedActions]
+  );
+
+  const completedPct = useMemo(() => {
+    const denominator = actions.length + suppressedActions.length + completedCount;
+    if (!denominator) return 0;
+    return Math.round((completedCount / denominator) * 100);
+  }, [actions.length, suppressedActions.length, completedCount]);
 
   useEffect(() => {
     if (!loading && actions.length === 0 && suppressedActions.length > 0) {
@@ -521,15 +566,53 @@ export const ActionCenter: React.FC<Props> = ({
   return (
     <>
       <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Active</p>
+            <p className="mt-0.5 text-xl font-bold text-gray-900">{actions.length}</p>
+            <p className={suppressedActions.length > 0 ? 'mt-0.5 text-[11px] text-amber-600' : 'mt-0.5 text-[11px] text-gray-400'}>
+              {suppressedActions.length > 0
+                ? `+${suppressedActions.length} suppressed`
+                : 'tasks in progress'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Est. Costs</p>
+            <p className="mt-0.5 text-xl font-bold text-gray-900">{formatCurrency(totalEstCost)}</p>
+            <p className="mt-0.5 text-[11px] text-gray-400">
+              {suppressedActions.length > 0 ? 'Includes suppressed items' : 'for active tasks'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Completed</p>
+            <p className="mt-0.5 text-xl font-bold text-gray-900">{completedPct}%</p>
+            <p className="mt-0.5 text-[11px] text-gray-400">
+              {completedCount} recently completed
+            </p>
+          </div>
+        </div>
+
         {actions.length === 0 && suppressedActions.length > 0 && (
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
-            <div className="flex flex-col items-center gap-2">
-              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-              <p className="font-semibold text-gray-700">No active priority actions</p>
-              <p className="text-sm text-gray-500">
-                {suppressedActions.length} action{suppressedActions.length !== 1 ? 's are' : ' is'} currently suppressed
-                {' '}review below to confirm or reactivate.
-              </p>
+          <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 text-amber-500" />
+                <div>
+                  <p className="text-sm font-medium text-amber-900">
+                    {suppressedActions.length} high-priority task{suppressedActions.length !== 1 ? 's' : ''} suppressed
+                  </p>
+                  <p className="text-sm text-amber-800">
+                    Review suppressed items. They may still require attention.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={scrollToSuppressed}
+                className="inline-flex min-h-[40px] items-center rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100"
+              >
+                Review →
+              </button>
             </div>
           </div>
         )}
@@ -540,7 +623,7 @@ export const ActionCenter: React.FC<Props> = ({
 
         {/* Suppressed Actions */}
         {suppressedActions.length > 0 && (
-          <div className="pt-2">
+          <div ref={suppressedSectionRef} className="pt-2">
             <button
               type="button"
               onClick={() => setShowSuppressed(v => !v)}
