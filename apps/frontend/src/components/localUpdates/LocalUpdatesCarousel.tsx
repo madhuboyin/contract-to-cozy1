@@ -31,7 +31,7 @@ export function LocalUpdatesCarousel({
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
-    if (items.length <= 1 || variant === "ticker") return;
+    if (items.length <= 1) return;
 
     const t = setInterval(() => {
       if (pausedRef.current) return;
@@ -57,9 +57,8 @@ export function LocalUpdatesCarousel({
   const current = items[idx];
 
   if (variant === "ticker") {
-    const queued = items[0];
-    if (!queued) return null;
-    const isPartner = queued.isSponsored;
+    if (!current) return null;
+    const isPartner = current.isSponsored;
     return (
       <div className="w-full">
         <div
@@ -82,16 +81,16 @@ export function LocalUpdatesCarousel({
 
             <button
               type="button"
-              onClick={() => onCtaClick(queued.id)}
+              onClick={() => onCtaClick(current.id)}
               className="min-w-0 flex-1 truncate text-left text-sm font-medium text-slate-800 hover:text-brand-700"
-              title={queued.title}
+              title={current.title}
             >
-              {queued.title}
+              {current.title}
             </button>
 
             <button
               type="button"
-              onClick={() => onDismiss(queued.id)}
+              onClick={() => onDismiss(current.id)}
               className="shrink-0 rounded-md px-2 py-1 text-slate-400 hover:bg-white hover:text-slate-700"
               aria-label="Dismiss update"
             >

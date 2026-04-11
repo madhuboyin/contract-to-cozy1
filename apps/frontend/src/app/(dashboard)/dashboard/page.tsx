@@ -26,6 +26,7 @@ import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
 import { WelcomeSection } from '@/components/WelcomeSection';
+import AhaHero from './components/AhaHero';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
 import CoverageIntelligenceToolCard from './components/CoverageIntelligenceToolCard';
@@ -49,27 +50,28 @@ import {
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
+const DASHBOARD_AHA_SEEN_PREFIX = 'dashboardAhaSeen';
 
 const DEFAULT_LOCAL_UPDATES: LocalUpdate[] = [
   {
-    id: 'demo-local-update-verizon',
-    title: 'Verizon Fios owner offer',
-    shortDescription: 'Check current fiber pricing and owner discounts available in your area.',
-    category: 'INTERNET',
-    sourceName: 'Verizon Fios',
-    isSponsored: true,
-    ctaText: 'View offer',
-    ctaUrl: 'https://www.verizon.com/home/fios/',
+    id: 'demo-local-update-daily-pulse',
+    title: 'Morning Home Pulse refreshed',
+    shortDescription: 'New weather + maintenance signals are ready for your review.',
+    category: 'MAINTENANCE',
+    sourceName: 'ContractToCozy',
+    isSponsored: false,
+    ctaText: 'Open pulse',
+    ctaUrl: '/dashboard/daily-snapshot',
   },
   {
-    id: 'demo-local-update-tmobile',
-    title: 'T-Mobile 5G Home promotion',
-    shortDescription: 'Compare 5G home internet promotions against your current monthly bill.',
-    category: 'INTERNET',
-    sourceName: 'T-Mobile',
-    isSponsored: true,
-    ctaText: 'Compare plans',
-    ctaUrl: 'https://www.t-mobile.com/home-internet',
+    id: 'demo-local-update-maintenance-plan',
+    title: 'Maintenance forecast updated',
+    shortDescription: 'See your highest-impact preventive task for this week.',
+    category: 'MAINTENANCE',
+    sourceName: 'ContractToCozy',
+    isSponsored: false,
+    ctaText: 'Review forecast',
+    ctaUrl: '/dashboard/maintenance',
   },
   {
     id: 'demo-local-update-insurance',
@@ -219,6 +221,56 @@ const formatAddress = (property: Property) => {
   return `${property.address}, ${property.city}, ${property.state}`;
 }
 
+function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string): string {
+  const fallbackPropertyId = propertyId || undefined;
+  const actionPropertyId =
+    action.propertyId && action.propertyId !== 'N/A' ? action.propertyId : fallbackPropertyId;
+
+  const propertyQuery = actionPropertyId ? `?propertyId=${encodeURIComponent(actionPropertyId)}` : '';
+
+  if (action.type === 'MAINTENANCE_OVERDUE') {
+    return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=overdue` : '?filter=overdue'}`;
+  }
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
+    return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=unscheduled` : '?filter=unscheduled'}`;
+  }
+  if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
+    return `/dashboard/insurance${propertyQuery}`;
+  }
+  if (actionPropertyId) {
+    return `/dashboard/properties/${actionPropertyId}`;
+  }
+  return '/dashboard/actions';
+}
+
+function urgentActionCtaLabel(action?: UrgentActionItem): string {
+  if (!action) return 'Start Recommended Check';
+  if (action.type === 'MAINTENANCE_OVERDUE') return 'Resolve Overdue Task';
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Schedule Maintenance';
+  if (action.type === 'RENEWAL_EXPIRED') return 'Fix Coverage Gap';
+  if (action.type === 'RENEWAL_UPCOMING') return 'Review Renewal Risk';
+  return 'Review Priority Insight';
+}
+
+function urgentActionEtaLabel(action?: UrgentActionItem): string {
+  if (!action) return 'ETA 2 min';
+  if (action.type === 'HEALTH_INSIGHT') return 'ETA 2-3 min';
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'ETA 90 sec';
+  return 'ETA 2 min';
+}
+
+function urgentActionImpactLabel(action?: UrgentActionItem): string {
+  if (!action) return 'High-impact recommendation';
+  if (action.daysUntilDue !== undefined && action.daysUntilDue < 0) {
+    return `Overdue by ${Math.abs(action.daysUntilDue)} day${Math.abs(action.daysUntilDue) === 1 ? '' : 's'}`;
+  }
+  if (action.type === 'RENEWAL_UPCOMING' && action.daysUntilDue !== undefined) {
+    return `Expires in ${Math.max(0, action.daysUntilDue)} days`;
+  }
+  if (action.type === 'HEALTH_INSIGHT') return 'Direct HomeScore impact';
+  return 'Priority action for this week';
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -227,6 +279,7 @@ export default function DashboardPage() {
   const [redirectChecked, setRedirectChecked] = useState(false);
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isReturningVisitor, setIsReturningVisitor] = useState(false);
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
@@ -448,6 +501,14 @@ export default function DashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user?.id || typeof window === 'undefined') return;
+    const storageKey = `${DASHBOARD_AHA_SEEN_PREFIX}:${user.id}`;
+    const seenBefore = window.localStorage.getItem(storageKey) === '1';
+    setIsReturningVisitor(seenBefore);
+    window.localStorage.setItem(storageKey, '1');
+  }, [user?.id]);
+
   // --- CONDITIONAL RENDERING ---
   const loadingMessage = !redirectChecked
     ? 'Checking your account...'
@@ -483,6 +544,54 @@ export default function DashboardPage() {
   
   // Derived property values using a validated property selection
   const selectedProperty = properties.find(p => p.id === effectiveSelectedPropertyId); 
+  const scopedUrgentActions = data.urgentActions.filter(
+    (action) => action.propertyId === effectiveSelectedPropertyId
+  );
+  const primaryUrgentAction = scopedUrgentActions[0] || data.urgentActions[0];
+  const ahaPropertyLabel = selectedProperty?.name || selectedProperty?.address || 'your home';
+  const ahaCtaHref = primaryUrgentAction
+    ? resolveUrgentActionHref(primaryUrgentAction, effectiveSelectedPropertyId)
+    : effectiveSelectedPropertyId
+      ? `/dashboard/home-savings?propertyId=${encodeURIComponent(effectiveSelectedPropertyId)}`
+      : '/dashboard/home-savings';
+  const ahaConfidence = Math.min(
+    96,
+    74 +
+      (primaryUrgentAction ? 10 : 0) +
+      (localUpdates.length > 0 ? 8 : 0) +
+      ((selectedProperty?.healthScore?.totalScore || 0) > 0 ? 6 : 0)
+  );
+  const ahaTitle = primaryUrgentAction
+    ? isReturningVisitor
+      ? `Welcome back, ${user.firstName}. One high-impact move is ready today.`
+      : `${user.firstName}, your home brief is ready. Start with one focused action.`
+    : isReturningVisitor
+      ? `Welcome back, ${user.firstName}. Your next best home move is ready.`
+      : `${user.firstName}, let’s create your first quick win.`;
+  const ahaSubtitle = primaryUrgentAction
+    ? primaryUrgentAction.description
+    : 'We prioritized your dashboard around one action with immediate value before everything else.';
+  const ahaFeed: string[] = [];
+  if (primaryUrgentAction) {
+    const cleanTitle = primaryUrgentAction.title
+      .replace(/^OVERDUE:\s*/i, '')
+      .replace(/^UNSCHEDULED:\s*/i, '')
+      .replace(/^EXPIRED:\s*/i, '')
+      .replace(/^UPCOMING:\s*/i, '');
+    ahaFeed.push(`Priority signal: ${cleanTitle}`);
+  }
+  if (selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 0) {
+    ahaFeed.push(`Current HomeScore: ${Math.round(selectedProperty.healthScore.totalScore)} for ${ahaPropertyLabel}`);
+  }
+  if (localUpdates[0]?.title) {
+    ahaFeed.push(localUpdates[0].title);
+  }
+  if (ahaFeed.length < 3) {
+    ahaFeed.push('Morning Home Pulse refreshed with latest weather and maintenance context.');
+  }
+  if (ahaFeed.length < 3) {
+    ahaFeed.push('Action queue sorted by urgency and homeowner impact.');
+  }
   const sectionMotion = (index: number) => ({
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
@@ -505,12 +614,31 @@ export default function DashboardPage() {
     }
 
     return (
-      <HomeBuyerDashboard 
-        userFirstName={user.firstName}
-        bookings={data.bookings}
-        properties={data.properties}
-        checklistItems={checklistItems}
-      />
+      <>
+        {selectedProperty && (
+          <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-4 md:pt-5">
+            <AhaHero
+              userFirstName={user.firstName}
+              propertyLabel={ahaPropertyLabel}
+              isReturningVisitor={isReturningVisitor}
+              title={ahaTitle}
+              subtitle={ahaSubtitle}
+              ctaHref={ahaCtaHref}
+              ctaLabel={urgentActionCtaLabel(primaryUrgentAction)}
+              etaLabel={urgentActionEtaLabel(primaryUrgentAction)}
+              impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
+              confidenceLabel={`${ahaConfidence}% confidence`}
+              feed={ahaFeed}
+            />
+          </div>
+        )}
+        <HomeBuyerDashboard 
+          userFirstName={user.firstName}
+          bookings={data.bookings}
+          properties={data.properties}
+          checklistItems={checklistItems}
+        />
+      </>
     );
   }
 
@@ -529,6 +657,24 @@ export default function DashboardPage() {
   // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
     <>
+      {selectedProperty && properties.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-5 md:pt-6">
+          <AhaHero
+            userFirstName={user.firstName}
+            propertyLabel={ahaPropertyLabel}
+            isReturningVisitor={isReturningVisitor}
+            title={ahaTitle}
+            subtitle={ahaSubtitle}
+            ctaHref={ahaCtaHref}
+            ctaLabel={urgentActionCtaLabel(primaryUrgentAction)}
+            etaLabel={urgentActionEtaLabel(primaryUrgentAction)}
+            impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
+            confidenceLabel={`${ahaConfidence}% confidence`}
+            feed={ahaFeed}
+          />
+        </div>
+      )}
+
       {/* 1. WELCOME SECTION - FULL WIDTH */}
       {selectedProperty && properties.length > 0 && (
         <WelcomeSection
