@@ -3,11 +3,9 @@
 import { useMemo, useState } from 'react';
 import {
   ArrowRight,
-  CalendarClock,
-  CircleDollarSign,
+  Clock3,
   ShieldCheck,
   Sparkles,
-  Timer,
   TrendingUp,
 } from 'lucide-react';
 import styles from './aha-mock.module.css';
@@ -16,325 +14,292 @@ type Persona = 'HOMEOWNER' | 'PROVIDER';
 type VisitMode = 'FIRST_LOGIN' | 'RETURNING_VISIT';
 
 type Snapshot = {
-  heroTitle: string;
-  heroDetail: string;
-  impactPill: string;
-  primaryAction: {
-    title: string;
-    detail: string;
-    eta: string;
-    impact: string;
-    cta: string;
-  };
-  changes: string[];
-  confidence: string[];
-  moments: string[];
+  heroEyebrow: string;
+  headline: string;
+  subhead: string;
+  ctaLabel: string;
+  heroPills: string[];
+  confidence: number;
+  briefNotes: string[];
+  metrics: Array<{ label: string; value: string; delta: string }>;
+  feed: string[];
+  steps: string[];
 };
 
 const MOCK: Record<Persona, Record<VisitMode, Snapshot>> = {
   HOMEOWNER: {
     FIRST_LOGIN: {
-      heroTitle: 'Welcome back, Madhu. Your home could save $420 this month.',
-      heroDetail:
-        'We found one insurance optimization, one maintenance risk, and one quick action to improve your HomeScore in under 3 minutes.',
-      impactPill: '+6 HomeScore Opportunity',
-      primaryAction: {
-        title: 'Run Coverage Gap Check for Maple Street',
-        detail: 'Your deductible is out of sync with current weather-risk profile.',
-        eta: '2 min',
-        impact: '$280 annual upside',
-        cta: 'Start Guided Check',
-      },
-      changes: [
-        'Roof risk moved from Moderate to Elevated after local hail advisory.',
-        'Water-heater maintenance is now overdue by 12 days.',
-        'Provider pricing in your zip dropped 9% for annual HVAC tune-up.',
+      heroEyebrow: 'Personalized Home Brief',
+      headline: 'You could save $420 this month. Start with one 2-minute move.',
+      subhead:
+        'We ranked your next action by impact, urgency, and confidence so your first click feels immediately valuable.',
+      ctaLabel: 'Start Guided Check',
+      heroPills: ['ETA 2 min', 'Projected upside $280/yr', 'Confidence 91%'],
+      confidence: 91,
+      briefNotes: [
+        'Coverage gap detected after recent weather-risk shift.',
+        'One maintenance item moved to overdue and now affects risk score.',
+        'Provider pricing in your area dropped this week.',
       ],
-      confidence: [
-        'Data refreshed 8 minutes ago from policy + task + weather feeds.',
-        'Recommendation confidence: 91%',
-        'One-click rollback available for every automated suggestion.',
+      metrics: [
+        { label: 'HomeScore Opportunity', value: '+6', delta: 'Most impact from coverage action' },
+        { label: 'Projected Risk Exposure', value: '$8,300', delta: '14% reduction possible this week' },
+        { label: 'Active Decisions', value: '1', delta: 'Everything else can wait for now' },
       ],
-      moments: [
-        'Login transition: “Preparing your personalized home brief…”',
-        'Hero reveal with one decisive recommendation',
-        'Completion micro-celebration after first action',
+      feed: [
+        'Roof risk moved from Moderate to Elevated after hail advisory.',
+        'Water-heater maintenance overdue by 12 days.',
+        'HVAC tune-up market rates are down 9% in your zip code.',
+      ],
+      steps: [
+        'Open recommended action and review impact preview.',
+        'Confirm one-click recommendation in less than 2 minutes.',
+        'See immediate score and savings delta update on dashboard.',
       ],
     },
     RETURNING_VISIT: {
-      heroTitle: 'Great momentum. You reduced projected risk exposure by 14%.',
-      heroDetail:
-        'Last action worked. We now recommend one follow-up task to lock in savings before the weekend.',
-      impactPill: 'Risk -14% This Week',
-      primaryAction: {
-        title: 'Book Preventive Plumbing Inspection',
-        detail: 'Recent pressure anomaly suggests minor leak risk in utility zone.',
-        eta: '90 sec',
-        impact: 'Avoid ~ $1,200 potential repair',
-        cta: 'Book Recommended Provider',
-      },
-      changes: [
+      heroEyebrow: 'Momentum Snapshot',
+      headline: 'Great progress. Risk exposure is already down 14% this week.',
+      subhead:
+        'You have one high-impact follow-up left. Finishing it now likely locks in this week’s savings and stabilizes your score.',
+      ctaLabel: 'Book Recommended Provider',
+      heroPills: ['ETA 90 sec', 'Potential loss avoided ~$1,200', 'Confidence 88%'],
+      confidence: 88,
+      briefNotes: [
         'Daily pulse streak reached 5 days.',
         'HomeScore improved from 73 to 79.',
-        'Three open actions reduced to one high-impact next step.',
+        'Only one urgent item remains in your queue.',
       ],
-      confidence: [
-        'Forecast uses your property history and neighborhood trends.',
-        'No unresolved critical alerts today.',
-        'Action queue is prioritized by financial impact first.',
+      metrics: [
+        { label: 'HomeScore Change', value: '+6', delta: 'Strong upward momentum since last visit' },
+        { label: 'Current Weekly Savings', value: '$94', delta: 'Estimated from completed actions' },
+        { label: 'Urgent Actions', value: '1', delta: 'Single recommended next move' },
       ],
-      moments: [
-        'Personal progress badge appears instantly on load',
-        '“Since last visit” strip confirms concrete progress',
-        'Focused CTA keeps the visit outcome-driven',
+      feed: [
+        'Leak anomaly now low risk after your prior update.',
+        'Insurance optimization review is still pending confirmation.',
+        'Weather severity forecast softened for next 72 hours.',
+      ],
+      steps: [
+        'Review one pending high-impact recommendation.',
+        'Schedule preventive task with one tap.',
+        'Return tomorrow to verify score stabilization.',
       ],
     },
   },
   PROVIDER: {
     FIRST_LOGIN: {
-      heroTitle: 'Welcome back. You have 3 requests likely to convert today.',
-      heroDetail:
-        'We prioritized jobs by conversion probability, travel efficiency, and revenue fit so you can act fast.',
-      impactPill: 'Est. $1,120 Pipeline Today',
-      primaryAction: {
-        title: 'Respond to Home Inspection Request (92% fit)',
-        detail: 'Closest route match and highest review alignment in your queue.',
-        eta: '1 min',
-        impact: '$340 expected revenue',
-        cta: 'Send Fast Quote',
-      },
-      changes: [
-        'Your response time improved by 22% this week.',
+      heroEyebrow: 'Revenue Pulse',
+      headline: 'Three warm leads today. One is a 92% fit and ready now.',
+      subhead:
+        'We prioritized your queue by conversion probability, travel efficiency, and schedule alignment so you can win the next booking quickly.',
+      ctaLabel: 'Send Fast Quote',
+      heroPills: ['ETA 1 min', 'Expected value $340', 'Lead fit 92%'],
+      confidence: 92,
+      briefNotes: [
+        'Best-fit inspection request is 4.2 miles away.',
+        'No schedule conflict detected for this job window.',
+        'Response speed historically lifts conversion for this lead type.',
+      ],
+      metrics: [
+        { label: 'Pipeline Today', value: '$1,120', delta: 'From top-ranked active opportunities' },
+        { label: 'Utilization Forecast', value: '84%', delta: 'One acceptance from full target day' },
+        { label: 'Priority Leads', value: '3', delta: 'Ranked by fit and expected value' },
+      ],
+      feed: [
         'Two homeowners favorited your profile overnight.',
-        'Calendar has one high-value opening this afternoon.',
+        'Your average response time improved by 22% this week.',
+        'One afternoon slot has highest expected revenue density.',
       ],
-      confidence: [
-        'Lead scoring calibrated with your completed booking history.',
-        'Route and availability conflicts pre-checked.',
-        'Suggested pricing within your configured range.',
-      ],
-      moments: [
-        'Login lands on “highest-converting lead” first',
-        'Quick actions adapt to real booking context',
-        'Post-quote feedback celebrates speed + expected value',
+      steps: [
+        'Open top-ranked lead and preview quick quote guidance.',
+        'Send response using one-click template.',
+        'Watch utilization and revenue forecast update in real time.',
       ],
     },
     RETURNING_VISIT: {
-      heroTitle: 'Strong day so far. You are 1 response away from full schedule.',
-      heroDetail:
-        'One pending request is still warm. Claiming it now likely completes your target utilization for today.',
-      impactPill: 'Utilization at 84%',
-      primaryAction: {
-        title: 'Reply to Minor Repair Request (sent 43 min ago)',
-        detail: 'Lead intent is high and there is no competing provider response yet.',
-        eta: '45 sec',
-        impact: '$210 expected revenue',
-        cta: 'Reply Now',
-      },
-      changes: [
-        'Average rating moved from 4.7 to 4.8.',
-        'Cancellation risk is down to low for all confirmed bookings.',
-        'Projected week revenue up 11% versus last week.',
+      heroEyebrow: 'Operator Mode',
+      headline: 'You are one response away from a fully optimized day.',
+      subhead:
+        'The remaining request is warm, nearby, and still uncontested. Reply now to maximize today’s schedule and expected revenue.',
+      ctaLabel: 'Reply Now',
+      heroPills: ['ETA 45 sec', 'Expected value $210', 'Lead heat High'],
+      confidence: 89,
+      briefNotes: [
+        'Last incoming request arrived 43 minutes ago.',
+        'No competing provider response yet.',
+        'Calendar remains collision-free for this slot.',
       ],
-      confidence: [
-        'Predictions combine acceptance rates + distance + schedule fit.',
-        'No calendar collisions detected.',
-        'All active jobs include next-step reminders.',
+      metrics: [
+        { label: 'Week Revenue Trend', value: '+11%', delta: 'Compared with prior week pace' },
+        { label: 'Current Rating', value: '4.8', delta: 'Up from 4.7 after recent completions' },
+        { label: 'Unclaimed Warm Leads', value: '1', delta: 'Highest leverage action right now' },
       ],
-      moments: [
-        'Returning users see momentum and one clear next move',
-        'Context-rich CTA removes decision fatigue',
-        'Outcome feedback reinforces business progress',
+      feed: [
+        'Cancellation risk is low across confirmed bookings.',
+        'Portfolio view rate increased 18% this week.',
+        'Fast response behavior remains your best conversion lever.',
+      ],
+      steps: [
+        'Send response to remaining warm request.',
+        'Confirm appointment and auto-sync calendar.',
+        'Review refreshed utilization forecast for tomorrow.',
       ],
     },
   },
 };
 
-const personaButtonClass =
-  'inline-flex min-h-[42px] items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors';
-
-const sectionShellClass =
-  'rounded-2xl border border-slate-200/80 bg-white/85 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]';
-
 export default function AhaMockPage() {
   const [persona, setPersona] = useState<Persona>('HOMEOWNER');
   const [visitMode, setVisitMode] = useState<VisitMode>('FIRST_LOGIN');
-
   const snapshot = useMemo(() => MOCK[persona][visitMode], [persona, visitMode]);
 
   return (
     <main className={styles.canvas}>
-      <div className="relative overflow-hidden">
-        <div className={`${styles.orb} ${styles.orbA}`} />
-        <div className={`${styles.orb} ${styles.orbB}`} />
+      <section className={styles.hero}>
+        <div className={styles.heroBackdrop} />
+        <div className={styles.gridLines} />
 
-        <section className="relative px-4 pb-6 pt-10 sm:px-6 lg:px-8 lg:pt-14">
-          <div className="mx-auto max-w-7xl">
-            <div className={`${styles.reveal} grid gap-6 lg:grid-cols-[1.2fr_0.8fr]`}>
-              <div>
-                <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-teal-800">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Aha Experience Mock
-                </p>
-                <h1 className="max-w-4xl text-balance font-heading text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl lg:text-[2.85rem]">
-                  {snapshot.heroTitle}
-                </h1>
-                <p className="mt-3 max-w-3xl text-pretty text-base text-slate-600 sm:text-lg">
-                  {snapshot.heroDetail}
-                </p>
+        <div className={styles.heroInner}>
+          <div className={styles.topBar}>
+            <div className={styles.brand}>
+              <span className={styles.brandMark}>C2</span>
+              <span className={styles.brandText}>Aha Experience v2 Mock</span>
+            </div>
 
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setPersona('HOMEOWNER')}
-                    aria-pressed={persona === 'HOMEOWNER'}
-                    className={`${personaButtonClass} ${
-                      persona === 'HOMEOWNER'
-                        ? 'border-teal-600 bg-teal-600 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-teal-300'
-                    }`}
-                  >
-                    Homeowner View
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPersona('PROVIDER')}
-                    aria-pressed={persona === 'PROVIDER'}
-                    className={`${personaButtonClass} ${
-                      persona === 'PROVIDER'
-                        ? 'border-cyan-700 bg-cyan-700 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-cyan-300'
-                    }`}
-                  >
-                    Provider View
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVisitMode('FIRST_LOGIN')}
-                    aria-pressed={visitMode === 'FIRST_LOGIN'}
-                    className={`${personaButtonClass} ${
-                      visitMode === 'FIRST_LOGIN'
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'
-                    }`}
-                  >
-                    First Login
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVisitMode('RETURNING_VISIT')}
-                    aria-pressed={visitMode === 'RETURNING_VISIT'}
-                    className={`${personaButtonClass} ${
-                      visitMode === 'RETURNING_VISIT'
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'
-                    }`}
-                  >
-                    Returning Visit
-                  </button>
-                </div>
-              </div>
-
-              <aside className={`${sectionShellClass} h-fit`}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                  Instant Brief
-                </p>
-                <div className={`${styles.shimmer} mb-4 rounded-xl px-3 py-2 text-sm font-semibold text-white`}>
-                  {snapshot.impactPill}
-                </div>
-                <div className="space-y-2 text-sm text-slate-600">
-                  <p className="inline-flex items-center gap-2">
-                    <Timer className="h-4 w-4 text-slate-500" />
-                    Time-to-value target: under 10 seconds
-                  </p>
-                  <p className="inline-flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-slate-500" />
-                    Primary KPI visible before any scroll
-                  </p>
-                  <p className="inline-flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-slate-500" />
-                    Every recommendation includes confidence context
-                  </p>
-                </div>
-              </aside>
+            <div className={styles.modeCluster}>
+              <ModeButton
+                active={persona === 'HOMEOWNER'}
+                onClick={() => setPersona('HOMEOWNER')}
+                label="Homeowner"
+              />
+              <ModeButton
+                active={persona === 'PROVIDER'}
+                onClick={() => setPersona('PROVIDER')}
+                label="Provider"
+              />
+              <ModeButton
+                active={visitMode === 'FIRST_LOGIN'}
+                onClick={() => setVisitMode('FIRST_LOGIN')}
+                label="First Login"
+              />
+              <ModeButton
+                active={visitMode === 'RETURNING_VISIT'}
+                onClick={() => setVisitMode('RETURNING_VISIT')}
+                label="Returning"
+              />
             </div>
           </div>
-        </section>
-      </div>
 
-      <section className="px-4 pb-14 sm:px-6 lg:px-8">
-        <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[1.25fr_1fr_1fr]">
-          <article className={`${sectionShellClass} ${styles.reveal}`}>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Highest-Impact Next Step
-            </p>
-            <h2 className="mb-2 text-2xl font-semibold leading-tight text-slate-900">
-              {snapshot.primaryAction.title}
-            </h2>
-            <p className="mb-4 text-sm text-slate-600">{snapshot.primaryAction.detail}</p>
-            <div className="mb-5 flex flex-wrap gap-2 text-xs font-semibold">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
-                ETA {snapshot.primaryAction.eta}
-              </span>
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
-                Impact {snapshot.primaryAction.impact}
-              </span>
+          <div className={`${styles.heroGrid} ${styles.reveal}`}>
+            <div>
+              <p className={styles.eyebrow}>{snapshot.heroEyebrow}</p>
+              <h1 className={styles.headline}>{snapshot.headline}</h1>
+              <p className={styles.subhead}>{snapshot.subhead}</p>
+
+              <div className={styles.primaryRail}>
+                <button type="button" className={styles.mainCta}>
+                  {snapshot.ctaLabel}
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+                {snapshot.heroPills.map((pill) => (
+                  <span key={pill} className={styles.pill}>
+                    {pill}
+                  </span>
+                ))}
+              </div>
             </div>
-            <button
-              type="button"
-              className="inline-flex min-h-[46px] items-center gap-2 rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
-            >
-              {snapshot.primaryAction.cta}
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </article>
 
-          <article className={`${sectionShellClass} ${styles.reveal}`}>
-            <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-              <CalendarClock className="h-3.5 w-3.5" />
-              Since Last Visit
-            </p>
-            <ul className="space-y-2 text-sm text-slate-700">
-              {snapshot.changes.map((item) => (
-                <li key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </article>
-
-          <article className={`${sectionShellClass} ${styles.reveal}`}>
-            <p className="mb-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-              <CircleDollarSign className="h-3.5 w-3.5" />
-              Trust & Confidence
-            </p>
-            <ul className="space-y-2 text-sm text-slate-700">
-              {snapshot.confidence.map((item) => (
-                <li key={item} className="rounded-lg border border-teal-100 bg-teal-50/70 px-3 py-2">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </article>
+            <aside className={styles.briefPanel}>
+              <p className={styles.briefHeader}>Live Brief Confidence</p>
+              <div className={styles.confidenceRing}>{snapshot.confidence}%</div>
+              <div className={styles.briefList}>
+                {snapshot.briefNotes.map((note) => (
+                  <p key={note} className={styles.briefItem}>
+                    {note}
+                  </p>
+                ))}
+              </div>
+            </aside>
+          </div>
         </div>
+      </section>
 
-        <div className={`${styles.reveal} mx-auto mt-4 max-w-7xl rounded-2xl border border-slate-200 bg-white/90 p-5`}>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-            Experience Moments in This Mock
-          </p>
-          <div className="grid gap-2 md:grid-cols-3">
-            {snapshot.moments.map((moment, index) => (
-              <div
-                key={moment}
-                className="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3 text-sm text-slate-700"
-              >
-                <p className="mb-1 text-xs font-semibold text-slate-400">Moment {index + 1}</p>
-                {moment}
+      <section className={`${styles.metricsRail} ${styles.reveal}`}>
+        {snapshot.metrics.map((metric) => (
+          <div key={metric.label} className={styles.metricCell}>
+            <p className={styles.metricLabel}>{metric.label}</p>
+            <p className={styles.metricValue}>{metric.value}</p>
+            <p className={styles.metricDelta}>{metric.delta}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className={styles.body}>
+        <div className={`${styles.feedShell} ${styles.reveal}`}>
+          <h2 className={styles.feedTitle}>Since Last Visit</h2>
+          <div className={styles.feedGrid}>
+            {snapshot.feed.map((item) => (
+              <div key={item} className={styles.feedItem}>
+                {item}
               </div>
             ))}
           </div>
         </div>
+
+        <div className={`${styles.storyboard} ${styles.reveal}`}>
+          <h2 className={styles.storyboardTitle}>Aha Flow Storyboard</h2>
+          <div className={styles.steps}>
+            {snapshot.steps.map((step, index) => (
+              <div key={step} className={styles.step}>
+                <span className={styles.stepIndex}>{index + 1}</span>
+                <p className={styles.stepText}>{step}</p>
+              </div>
+            ))}
+          </div>
+          <p className={styles.footerNote}>
+            This mock is intentionally cinematic and focused on one decisive action so each visit feels outcome-first, not dashboard-first.
+          </p>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-300">
+          <span className="inline-flex items-center gap-1.5">
+            <Sparkles className="h-4 w-4 text-cyan-300" />
+            Designed to create immediate emotional impact.
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Clock3 className="h-4 w-4 text-cyan-300" />
+            Time-to-value visible in first viewport.
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-4 w-4 text-cyan-300" />
+            Trust context included with every recommendation.
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <TrendingUp className="h-4 w-4 text-cyan-300" />
+            Progress and momentum shown before detail.
+          </span>
+        </div>
       </section>
     </main>
+  );
+}
+
+type ModeButtonProps = {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+};
+
+function ModeButton({ active, onClick, label }: ModeButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${styles.modeButton} ${active ? styles.modeButtonActive : ''}`}
+      aria-pressed={active}
+    >
+      {label}
+    </button>
   );
 }
