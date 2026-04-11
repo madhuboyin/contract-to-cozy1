@@ -52,6 +52,14 @@ cd apps/workers && npm run build   # tsc → dist/
 cd apps/frontend && npm run lint   # next lint (ESLint 9)
 ```
 
+### Tests
+```bash
+# E2E, load, and security tests live at repo root:
+tests/e2e/       # End-to-end tests
+tests/load/      # Load testing
+tests/security/  # Security tests
+```
+
 ### Database
 ```bash
 cd apps/backend && npx prisma generate        # Regenerate Prisma client after schema changes
@@ -74,11 +82,12 @@ make deploy-pi        # Deploy to Raspberry Pi k3s cluster
 **Pattern:** Routes → Controllers → Services → Prisma ORM
 
 - **Entry point:** `src/index.ts` — Express app with all route mounting
-- **Routes (52 files):** `src/routes/` — Define endpoints with middleware chains. Some feature routes live in colocated directories (`src/community/`, `src/sellerPrep/`, `src/localUpdates/`)
+- **Routes (52 files):** `src/routes/` — Define endpoints with middleware chains. Some feature routes live in colocated directories (`src/community/`, `src/sellerPrep/`, `src/localUpdates/`, `src/homeRenovationAdvisor/`, `src/refinanceRadar/`, `src/neighborhoodIntelligence/`)
 - **Controllers (41 files):** `src/controllers/` — Request handling and response formatting
 - **Services (77+ files):** `src/services/` — Business logic and Prisma queries
 - **Middleware:** `src/middleware/` — `auth.middleware` (JWT verification + profile attachment), `validate.middleware` (Zod schema validation), `rateLimiter.middleware`, `propertyAuth.middleware` (property-level access control)
-- **Validators:** `src/utils/validators.ts` — Zod v4 schemas for request validation, applied via `validateBody(schema)` middleware
+- **Validators:** `src/utils/validators.ts` for core schemas; `src/validators/` for per-feature Zod schemas (e.g. `inventory.validators.ts`, `narrative.validators.ts`). Applied via `validateBody(schema)` middleware.
+- **Modules:** `src/modules/gazette/` — Self-contained feature module with its own controllers, services, routes, validators, mappers, and DTOs. New complex features may follow this pattern.
 - **Prisma schema:** `prisma/schema.prisma` (~102KB) — PostgreSQL, 30+ models
 
 **Key API prefixes:** `/api/auth`, `/api/properties`, `/api/providers`, `/api/bookings`, `/api/risk`, `/api/gemini`, `/api/inventory`, `/api/room-insights`, `/api/home-events`
@@ -93,13 +102,17 @@ make deploy-pi        # Deploy to Raspberry Pi k3s cluster
 
 **Framework:** Next.js 14 with App Router
 
-- **Route groups:** `(auth)/` for login/register, `(dashboard)/` for authenticated pages
+- **Route groups:** `(auth)/` for login/register, `(dashboard)/` for authenticated pages (dashboard, guidance, savings, tools)
 - **Path alias:** `@/*` maps to `./src/*`
 - **API client:** `src/lib/api/client.ts` — Centralized typed client with ~120 endpoint methods
 - **Auth:** `src/lib/auth/AuthContext.tsx` — React context for JWT session management
 - **State:** TanStack React Query v5 for server state (5min stale time, 10min cache)
-- **UI:** Radix UI primitives + Tailwind CSS. Components in `src/components/ui/`
+- **UI:** Radix UI primitives + Tailwind CSS. Components in `src/components/ui/`; feature-specific components colocated in `src/components/<feature>/`
 - **Types:** `src/types/index.ts` (~37KB) — All shared TypeScript interfaces
+- **Adapters:** `src/adapters/` — Orchestration adapter (`orchestration.adapter.ts`) and feature-specific adapters
+- **Store:** `src/store/` — Client-side state (separate from React Query server state)
+- **Features:** `src/features/` — Self-contained feature slices (guidance, tools)
+- **Content:** `src/content/` — Static content and copy
 - **PWA:** Service worker registration, IndexedDB storage (`src/lib/storage/`), offline fallback pages
 - **Styling:** Tailwind with CSS variable theming, dark mode via class strategy, custom fonts (Poppins headings, Inter body)
 
