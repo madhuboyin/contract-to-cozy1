@@ -38,11 +38,48 @@ export function WelcomeSection({
     setHasCoverPhotoError(false);
   }, [coverPhotoUrl]);
 
+  if (compact) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 md:px-6 w-full mt-2 mb-5 md:mb-6">
+        <div className="rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 md:px-5 md:py-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-[0.14em]">
+                Property Workspace
+              </p>
+              <p className="mt-1 text-sm text-gray-600">
+                Viewing context for scores, alerts, and recommendations.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 md:shrink-0">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Viewing:
+              </span>
+              <div className="min-w-[280px]">
+                <Select value={selectedPropertyId || ''} onValueChange={onPropertyChange}>
+                  <SelectTrigger className="bg-white border-gray-200 shadow-sm font-semibold text-xs text-gray-900 h-9 px-3 focus:ring-1 focus:ring-teal-500/20">
+                    <SelectValue placeholder="Select a property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {properties.map((property) => (
+                      <SelectItem key={property.id} value={property.id} className="text-xs font-medium">
+                        {formatPropertyDisplay(property)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-gradient-to-b from-teal-50 to-white border-b border-gray-100 ${
-        compact ? 'py-4 mb-6' : 'py-7 mb-8'
-      }`}
+      className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-gradient-to-b from-teal-50 to-white border-b border-gray-100 py-7 mb-8"
     >
       
       {/* INNER CONTENT WRAPPER: Aligns with DashboardShell (max-w-7xl px-4 md:px-6) */}
