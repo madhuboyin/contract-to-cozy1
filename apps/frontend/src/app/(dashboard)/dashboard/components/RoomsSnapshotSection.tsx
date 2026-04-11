@@ -24,6 +24,7 @@ import { getRoomInsights, listInventoryRooms } from '@/app/(dashboard)/dashboard
 import RoomHealthScoreRing from '@/components/rooms/RoomHealthScoreRing';
 import { cn } from '@/lib/utils';
 import type { InventoryRoom } from '@/types';
+import { BadgeStatus, StatusBadge } from '@/components/ui/StatusBadge';
 
 interface RoomsSnapshotSectionProps {
   propertyId?: string;
@@ -106,18 +107,18 @@ function normalizeStatusLabel(label: string): 'HEALTHY' | 'NEEDS ATTENTION' | 'A
   return 'AT RISK';
 }
 
-function statusPillClass(label: string): string {
-  const normalized = normalizeStatusLabel(label);
-  if (normalized === 'HEALTHY') return 'border-emerald-200/80 bg-emerald-50/75 text-emerald-700';
-  if (normalized === 'NEEDS ATTENTION') return 'border-amber-200/80 bg-amber-50/75 text-amber-700';
-  return 'border-rose-200/80 bg-rose-50/75 text-rose-700';
-}
-
 function statusPillLabel(label: string): string {
   const normalized = normalizeStatusLabel(label);
   if (normalized === 'HEALTHY') return 'Healthy';
   if (normalized === 'NEEDS ATTENTION') return 'Needs attention';
   return 'At risk';
+}
+
+function roomStatusBadge(label: string): { status: BadgeStatus; customLabel: string } {
+  const normalized = normalizeStatusLabel(label);
+  if (normalized === 'HEALTHY') return { status: 'good', customLabel: 'Healthy' };
+  if (normalized === 'NEEDS ATTENTION') return { status: 'action', customLabel: 'Needs attention' };
+  return { status: 'critical', customLabel: 'At risk' };
 }
 
 /**
@@ -413,6 +414,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                 ? buildRoomInsight(score, itemCount, docsCount, gapCount, whyFactors)
                 : null;
               const statusKey = normalizeStatusLabel(statusLabel);
+              const roomBadge = roomStatusBadge(statusLabel);
               const isInsightLoading = Boolean(insightsLoading[room.id]);
               const hasInsights = Boolean(insights);
               const headerMetaText = isInsightLoading
@@ -447,14 +449,11 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                         <p className="text-[11px] text-gray-500">{headerMetaText}</p>
                       </div>
                     </div>
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium',
-                        statusPillClass(statusLabel),
-                      )}
-                    >
-                      {statusPillLabel(statusLabel)}
-                    </span>
+                    <StatusBadge
+                      status={roomBadge.status}
+                      customLabel={statusPillLabel(statusLabel)}
+                      className="shrink-0"
+                    />
                   </div>
 
                   <div className="mt-3">

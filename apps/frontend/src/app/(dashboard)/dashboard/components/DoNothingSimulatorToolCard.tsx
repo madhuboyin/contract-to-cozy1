@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Loader2, PauseCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { BadgeStatus, StatusBadge } from '@/components/ui/StatusBadge';
 import {
   DoNothingRunDTO,
   getLatestDoNothingRun,
@@ -19,36 +19,34 @@ const CARD_BASE =
 const HEADER_ICON_WRAP = 'flex h-7 w-7 items-center justify-center rounded-md bg-slate-100/60';
 const HEADER_ICON = 'h-3.5 w-3.5 text-slate-600';
 const TITLE_CLASS = 'text-[12px] font-semibold leading-none text-gray-900 whitespace-nowrap';
-const BADGE_BASE =
-  'inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none';
 const VALUE_ZONE = 'mt-1 rounded-lg border border-gray-200/70 bg-gray-50/70 px-2.5 py-2';
 const CTA_CLASS =
   'group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50';
 
 function statusMeta(loading: boolean, run: DoNothingRunDTO | null, hasRun: boolean) {
   if (loading) {
-    return { label: 'Checking', className: 'border-slate-200/80 bg-slate-50/70 text-slate-700' };
+    return { status: 'watch' as BadgeStatus, customLabel: 'Checking' };
   }
   if (!hasRun || !run) {
-    return { label: 'Not run yet', className: 'border-slate-200/80 bg-slate-50/70 text-slate-700' };
+    return { status: 'watch' as BadgeStatus, customLabel: 'Not run yet' };
   }
   if (run.status === 'STALE') {
-    return {
-      label: 'Review recommended',
-      className: 'border-amber-200/80 bg-amber-50/70 text-amber-700',
-    };
+    return { status: 'action' as BadgeStatus, customLabel: 'Review Recommended' };
   }
   if (run.status === 'ERROR') {
-    return { label: 'Needs refresh', className: 'border-rose-200/80 bg-rose-50/70 text-rose-700' };
+    return { status: 'action' as BadgeStatus, customLabel: 'Review Recommended' };
   }
-  return { label: 'Ready', className: 'border-emerald-200/80 bg-emerald-50/70 text-emerald-700' };
+  return { status: 'good' as BadgeStatus, customLabel: 'Stable' };
 }
 
-function likelihoodTone(likelihood?: DoNothingRunDTO['incidentLikelihood']): string {
-  if (likelihood === 'HIGH') return 'border-rose-200/80 bg-rose-50/70 text-rose-700';
-  if (likelihood === 'MEDIUM') return 'border-amber-200/80 bg-amber-50/70 text-amber-700';
-  if (likelihood === 'LOW') return 'border-emerald-200/80 bg-emerald-50/70 text-emerald-700';
-  return 'border-slate-200/80 bg-slate-50/70 text-slate-700';
+function likelihoodBadge(likelihood?: DoNothingRunDTO['incidentLikelihood']): {
+  status: BadgeStatus;
+  customLabel: string;
+} {
+  if (likelihood === 'HIGH') return { status: 'critical', customLabel: 'At Risk' };
+  if (likelihood === 'MEDIUM') return { status: 'watch', customLabel: 'Watch' };
+  if (likelihood === 'LOW') return { status: 'good', customLabel: 'Stable' };
+  return { status: 'suppressed', customLabel: 'N/A' };
 }
 
 function moneyFromCents(value?: number | null): string {
@@ -154,6 +152,7 @@ export default function DoNothingSimulatorToolCard({
     hasRun && run
       ? `${moneyFromCents(run.expectedCostDeltaCentsMin)} - ${moneyFromCents(run.expectedCostDeltaCentsMax)}`
       : '—';
+  const likelihood = likelihoodBadge(run?.incidentLikelihood);
 
   return (
     <div className={CARD_BASE}>
@@ -164,7 +163,7 @@ export default function DoNothingSimulatorToolCard({
           </div>
           <h3 className={TITLE_CLASS}>Do-Nothing Simulator</h3>
         </div>
-        <span className={cn(BADGE_BASE, status.className)}>{status.label}</span>
+        <StatusBadge status={status.status} customLabel={status.customLabel} />
       </div>
 
       <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">
@@ -198,9 +197,7 @@ export default function DoNothingSimulatorToolCard({
         <span>
           Risk delta <span className="font-medium text-gray-800">{riskDeltaLabel}</span>
         </span>
-        <span className={cn(BADGE_BASE, likelihoodTone(run?.incidentLikelihood))}>
-          {run?.incidentLikelihood ?? 'N/A'}
-        </span>
+        <StatusBadge status={likelihood.status} customLabel={likelihood.customLabel} />
       </div>
 
       <div className="pt-2">

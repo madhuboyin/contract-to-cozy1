@@ -6,19 +6,19 @@ import { Activity, ArrowRight, Loader2 } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { HomeScoreConfidence } from "@/types";
+import { ScoreRing } from "@/components/dashboard/ScoreRing";
+import { BadgeStatus, StatusBadge } from "@/components/ui/StatusBadge";
 
 interface HomeScoreReportCardProps {
   propertyId?: string;
 }
 
 const CARD_BASE =
-  "flex h-full flex-col gap-3.5 rounded-2xl border border-gray-200/85 bg-white p-4 shadow-sm sm:p-5";
-const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-gray-400";
-const TITLE_CLASS = "truncate whitespace-nowrap text-sm font-semibold text-gray-900";
-const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500";
-const META_VALUE = "text-sm font-semibold text-gray-900";
-
-const BADGE_BASE = "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium";
+  "score-card flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm";
+const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
+const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
+const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground";
+const META_VALUE = "text-sm font-semibold text-foreground";
 
 type NormalizedScoreBand = "EXCELLENT" | "GOOD" | "FAIR" | "NEEDS_ATTENTION";
 
@@ -44,13 +44,13 @@ function getScoreColor(scoreBand: NormalizedScoreBand) {
   if (scoreBand === "EXCELLENT") return "text-emerald-600";
   if (scoreBand === "GOOD") return "text-teal-600";
   if (scoreBand === "FAIR") return "text-amber-600";
-  return "text-rose-600";
+  return "text-red-600";
 }
 
-function getConfidenceWidth(confidence: HomeScoreConfidence) {
-  if (confidence === "HIGH") return "w-full";
-  if (confidence === "MEDIUM") return "w-2/3";
-  return "w-1/3";
+function getConfidencePct(confidence: HomeScoreConfidence) {
+  if (confidence === "HIGH") return 100;
+  if (confidence === "MEDIUM") return 66;
+  return 33;
 }
 
 function getConfidenceFillColor(confidence: HomeScoreConfidence) {
@@ -94,23 +94,23 @@ function buildHomeScoreMeaning(scoreBand: NormalizedScoreBand): string {
   return "Unresolved items are creating meaningful drag.";
 }
 
-function buildHomeScorePriority(reasonsCount: number, scoreBand: NormalizedScoreBand) {
-  if (scoreBand === "NEEDS_ATTENTION" || reasonsCount >= 2) {
-    return {
-      label: "Needs Focus",
-      className: "border-rose-200/80 bg-rose-50/70 text-rose-700",
-    };
+function buildHomeScorePriority(
+  reasonsCount: number,
+  scoreBand: NormalizedScoreBand,
+): { status: BadgeStatus; customLabel?: string } {
+  if (scoreBand === "EXCELLENT") {
+    return { status: "excellent" };
+  }
+  if (scoreBand === "GOOD") {
+    return { status: "good" };
   }
   if (scoreBand === "FAIR") {
-    return {
-      label: "Watch",
-      className: "border-amber-200/80 bg-amber-50/70 text-amber-700",
-    };
+    return { status: "watch" };
   }
-  return {
-    label: "Stable",
-    className: "border-emerald-200/80 bg-emerald-50/70 text-emerald-700",
-  };
+  if (scoreBand === "NEEDS_ATTENTION" || reasonsCount >= 2) {
+    return { status: "action", customLabel: "Needs Focus" };
+  }
+  return { status: "action" };
 }
 
 function formatWeeklyDelta(delta: number | null) {
@@ -119,9 +119,9 @@ function formatWeeklyDelta(delta: number | null) {
 }
 
 function weeklyDeltaClass(weeklyChange: string) {
-  if (weeklyChange === "No change") return "text-gray-500";
-  if (weeklyChange.startsWith("-")) return "text-rose-700";
-  return "text-emerald-700";
+  if (weeklyChange === "No change") return "text-muted-foreground";
+  if (weeklyChange.startsWith("-")) return "text-red-600";
+  return "text-emerald-600";
 }
 
 function weeklyDeltaLabel(weeklyChange: string) {
@@ -146,30 +146,30 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
   if (!propertyId) {
     return (
-      <div className={cn(CARD_BASE, "border-gray-200")}>
+      <div className={cn(CARD_BASE, "border-border")}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
             <span className={TITLE_CLASS}>HomeScore</span>
           </div>
-          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
-        <div className="text-sm text-gray-500">Select a property to view scores.</div>
+        <div className="text-sm text-muted-foreground">Select a property to view scores.</div>
       </div>
     );
   }
 
   if (reportQuery.isLoading) {
     return (
-      <div className={cn(CARD_BASE, "border-gray-200")}>
+      <div className={cn(CARD_BASE, "border-border")}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
             <span className={TITLE_CLASS}>HomeScore</span>
           </div>
-          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
-        <div className="inline-flex items-center gap-2 text-sm text-gray-500">
+        <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
           Loading score...
         </div>
@@ -179,20 +179,20 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
   if (reportQuery.isError) {
     return (
-      <div className={cn(CARD_BASE, "border-gray-200")}>
+      <div className={cn(CARD_BASE, "border-border")}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
             <span className={TITLE_CLASS}>HomeScore</span>
           </div>
-          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-muted-foreground">
           HomeScore is temporarily unavailable. You can still open full details.
         </div>
         <Link
           href={reportLink}
-          className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900"
+          className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
         >
           Open HomeScore details
           <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
@@ -202,12 +202,13 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
   }
 
   const report = reportQuery.data;
-  const score = Math.round(report?.homeScore ?? 0);
+  const score = Math.max(0, Math.round(report?.homeScore ?? 0));
   const scoreBand = normalizeScoreBand(report?.scoreBand ?? null);
   const scoreLabel = getLabel(scoreBand);
   const scoreColor = getScoreColor(scoreBand);
   const weeklyChange = formatWeeklyDelta(report?.deltaFromPreviousWeek ?? null);
   const confidence = report?.confidence ?? "LOW";
+  const confidencePct = getConfidencePct(confidence);
   const reasonsCount = report?.topReasonsScoreNotHigher?.length ?? 0;
   const reasonPreview = (report?.topReasonsScoreNotHigher ?? [])
     .map((reason) => toReasonLine(reason))
@@ -215,64 +216,54 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
     .slice(0, 2);
   const insight = buildHomeScoreInsight(reasonsCount, scoreBand);
   const meaning = buildHomeScoreMeaning(scoreBand);
-  const priority = buildHomeScorePriority(reasonsCount, scoreBand);
+  const badge = buildHomeScorePriority(reasonsCount, scoreBand);
 
   return (
     <div className={CARD_BASE}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Activity className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>HomeScore</span>
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Activity className={HEADER_ICON} />
+          <span className={TITLE_CLASS}>HomeScore</span>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-          <span className={cn(BADGE_BASE, priority.className)}>{priority.label}</span>
-          {weeklyChange !== "No change" ? (
-            <span className={cn("text-[11px] font-medium", weeklyDeltaClass(weeklyChange))}>
-              {weeklyDeltaLabel(weeklyChange)}
-            </span>
-          ) : null}
-        </div>
-      </div>
-      <p className="line-clamp-2 text-[11px] leading-snug text-gray-500">{meaning}</p>
-
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex items-end gap-1.5">
-          <span className={cn("text-4xl font-display font-semibold tracking-tight", scoreColor)}>
-            {score}
-          </span>
-          <span className="mb-1 text-sm font-medium text-gray-400">/100</span>
-        </div>
-        <span className={cn("text-sm font-semibold", scoreColor)}>{scoreLabel}</span>
+        <StatusBadge status={badge.status} customLabel={badge.customLabel} />
       </div>
 
-      <div className="rounded-xl border border-gray-200/80 bg-gray-50/80 px-3 py-2.5">
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className={SUPPORT_LABEL}>Confidence</span>
-          <span className="text-[11px] font-semibold text-gray-700">{confidence}</span>
+      <div className="flex items-center gap-3">
+        <ScoreRing
+          value={score}
+          maxValue={100}
+          colorScheme="auto"
+          label={String(score)}
+          ariaLabel={`HomeScore: ${score} out of 100, ${scoreLabel}`}
+        />
+        <div>
+          <div className={cn("text-xl font-semibold", scoreColor)}>{score}</div>
+          <div className="text-xs text-muted-foreground">{scoreLabel}</div>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-gray-200/70">
+      </div>
+
+      <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{meaning}</p>
+
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Confidence</div>
+        <div className="h-1 overflow-hidden rounded bg-border">
           <div
-            className={cn(
-              "h-full rounded-full transition-all duration-300",
-              getConfidenceWidth(confidence),
-              getConfidenceFillColor(confidence),
-            )}
+            className={cn("h-full rounded transition-all duration-700", getConfidenceFillColor(confidence))}
+            style={{ width: `${confidencePct}%` }}
           />
         </div>
       </div>
 
-      <p className="text-[11px] leading-relaxed text-gray-600">{insight}</p>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">{insight}</p>
 
       {reasonPreview.length > 0 ? (
         <details>
-          <summary className="cursor-pointer select-none list-none text-[10px] font-medium text-gray-500 transition-colors hover:text-gray-700 [&::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer select-none list-none text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
             Top drivers
           </summary>
-          <ul className="mt-1.5 space-y-1 border-l border-gray-200 pl-2.5">
+          <ul className="mt-1.5 space-y-1 border-l border-border pl-2.5">
             {reasonPreview.map((reason) => (
-              <li key={reason} className="text-[10px] leading-relaxed text-gray-600">
+              <li key={reason} className="text-[10px] leading-relaxed text-muted-foreground">
                 {reason}
               </li>
             ))}
@@ -280,27 +271,28 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         </details>
       ) : null}
 
-      <div className="mt-auto space-y-2.5 border-t border-gray-200/80 pt-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className={SUPPORT_LABEL}>Elevated Assets</span>
-          <span className={cn(META_VALUE, reasonsCount > 0 ? "text-amber-700" : "text-gray-900")}>
+      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
+        <div>
+          <span className={SUPPORT_LABEL}>Elevated assets</span>
+          <div className={cn(META_VALUE, reasonsCount > 0 ? "text-amber-600" : "text-foreground")}>
             {reasonsCount > 0 ? `${reasonsCount} driving risk` : "None flagged"}
-          </span>
+          </div>
         </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <span className={SUPPORT_LABEL}>Weekly Change</span>
-          <span className={cn(META_VALUE, weeklyDeltaClass(weeklyChange))}>
+        <div>
+          <span className={SUPPORT_LABEL}>Weekly change</span>
+          <div className={cn(META_VALUE, weeklyDeltaClass(weeklyChange))}>
             {weeklyDeltaLabel(weeklyChange)}
-          </span>
+          </div>
         </div>
-        <Link
-          href={reportLink}
-          className="group inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 transition-colors hover:text-gray-900"
-        >
-          Open HomeScore details
-          <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
-        </Link>
       </div>
+
+      <Link
+        href={reportLink}
+        className="group inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
+      >
+        Open home score details
+        <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+      </Link>
     </div>
   );
 }

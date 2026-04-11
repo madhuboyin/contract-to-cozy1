@@ -18,8 +18,8 @@ import {
   Zap,
 } from 'lucide-react';
 import humanizeActionType from '@/lib/utils/humanize';
-import { SEVERITY_CHIP } from '@/lib/utils/chipTokens';
 import { resolveIconByToken } from '@/lib/icons';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 
 type Props = {
@@ -95,22 +95,22 @@ function riskBadge(riskLevel?: string | null) {
   if (!riskLevel) return null;
 
   const level = safeUpper(riskLevel);
-  const base = 'inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full border';
-  const pulseDot = <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-current" />;
 
   switch (level) {
     case 'CRITICAL':
+      return <StatusBadge status="critical" customLabel="At Risk" />;
     case 'HIGH':
-      return <span className={`${base} ${SEVERITY_CHIP.critical}`}>{pulseDot}{level}</span>;
+      return <StatusBadge status="action" customLabel="Needs attention" />;
     case 'ELEVATED':
+      return <StatusBadge status="action" customLabel="Needs attention" />;
     case 'MODERATE':
-      return <span className={`${base} ${SEVERITY_CHIP.elevated}`}>{level}</span>;
+      return <StatusBadge status="watch" customLabel="Watch" />;
     case 'MEDIUM':
-      return <span className={`${base} ${SEVERITY_CHIP.medium}`}>{level}</span>;
+      return <StatusBadge status="watch" customLabel="Watch" />;
     case 'LOW':
-      return <span className={`${base} ${SEVERITY_CHIP.low}`}>{level}</span>;
+      return <StatusBadge status="good" customLabel="Stable" />;
     default:
-      return <span className={`${base} ${SEVERITY_CHIP.neutral}`}>{level}</span>;
+      return <StatusBadge status="suppressed" customLabel={humanizeTokenLabel(level) ?? level} />;
   }
 }
 
