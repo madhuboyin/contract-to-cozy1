@@ -247,13 +247,13 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
   return '/dashboard/actions';
 }
 
-function urgentActionCtaLabel(action?: UrgentActionItem): string {
-  if (!action) return 'Start Recommended Check';
-  if (action.type === 'MAINTENANCE_OVERDUE') return 'Resolve Overdue Task';
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Schedule Maintenance';
-  if (action.type === 'RENEWAL_EXPIRED') return 'Fix Coverage Gap';
-  if (action.type === 'RENEWAL_UPCOMING') return 'Review Renewal Risk';
-  return 'Review Priority Insight';
+function urgentActionCtaLabel(action?: UrgentActionItem, isReturningVisitor = true): string {
+  if (!action) return isReturningVisitor ? 'Take Priority Move' : 'Start First 2-Min Move';
+  if (action.type === 'MAINTENANCE_OVERDUE') return 'Resolve Overdue Item';
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Schedule In 90 Seconds';
+  if (action.type === 'RENEWAL_EXPIRED') return 'Restore Coverage Now';
+  if (action.type === 'RENEWAL_UPCOMING') return 'Lock Renewal Savings';
+  return 'Run 2-Minute Risk Check';
 }
 
 function urgentActionEtaLabel(action?: UrgentActionItem): string {
@@ -264,15 +264,141 @@ function urgentActionEtaLabel(action?: UrgentActionItem): string {
 }
 
 function urgentActionImpactLabel(action?: UrgentActionItem): string {
-  if (!action) return 'High-impact recommendation';
+  if (!action) return 'Highest-value move this week';
   if (action.daysUntilDue !== undefined && action.daysUntilDue < 0) {
     return `Overdue by ${Math.abs(action.daysUntilDue)} day${Math.abs(action.daysUntilDue) === 1 ? '' : 's'}`;
   }
   if (action.type === 'RENEWAL_UPCOMING' && action.daysUntilDue !== undefined) {
     return `Expires in ${Math.max(0, action.daysUntilDue)} days`;
   }
-  if (action.type === 'HEALTH_INSIGHT') return 'Direct HomeScore impact';
-  return 'Priority action for this week';
+  if (action.type === 'HEALTH_INSIGHT') return 'Potential downside reduced early';
+  return 'Priority move for this week';
+}
+
+function cleanUrgentActionTitle(action?: UrgentActionItem): string {
+  if (!action) return 'Priority home signal';
+  return action.title
+    .replace(/^OVERDUE:\s*/i, '')
+    .replace(/^UNSCHEDULED:\s*/i, '')
+    .replace(/^EXPIRED:\s*/i, '')
+    .replace(/^UPCOMING:\s*/i, '')
+    .trim();
+}
+
+function urgentActionHeroTitle(
+  action: UrgentActionItem | undefined,
+  userFirstName: string,
+  isReturningVisitor: boolean
+): string {
+  if (!action) {
+    return isReturningVisitor
+      ? `Welcome back, ${userFirstName}. Your highest-value home move is ready.`
+      : `${userFirstName}, start with one move that delivers immediate value.`;
+  }
+
+  if (action.type === 'MAINTENANCE_OVERDUE') {
+    return `${userFirstName}, prevent a bigger repair bill with one 2-minute move today.`;
+  }
+  if (action.type === 'RENEWAL_EXPIRED') {
+    return `${userFirstName}, coverage risk is active. Resolve one move now.`;
+  }
+  if (action.type === 'RENEWAL_UPCOMING') {
+    return `${userFirstName}, your best renewal window is open right now.`;
+  }
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
+    return `${userFirstName}, one quick schedule decision protects this month’s momentum.`;
+  }
+
+  return `${userFirstName}, one high-impact move can protect up to $420 this month.`;
+}
+
+function urgentActionHeroSubtitle(action?: UrgentActionItem): string {
+  if (!action) {
+    return 'We ranked your queue by urgency, confidence, and outcome so the first click delivers visible progress.';
+  }
+  if (action.type === 'MAINTENANCE_OVERDUE') {
+    return 'An overdue maintenance risk moved into the critical window and now carries avoidable cost exposure.';
+  }
+  if (action.type === 'RENEWAL_EXPIRED') {
+    return 'Your renewal status indicates an active gap that should be closed before exploring lower-priority work.';
+  }
+  if (action.type === 'RENEWAL_UPCOMING') {
+    return 'Renewal timing favors action now while lower-friction and better-rate options are still available.';
+  }
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
+    return 'A recurring task lost schedule anchoring and can now drift into higher-risk territory.';
+  }
+  return 'We detected one insight with strong confidence and direct downstream effect on risk and cost.';
+}
+
+function urgentActionBriefLabel(isReturningVisitor: boolean): string {
+  return isReturningVisitor ? 'Do Now Vs Wait' : 'First-Click Advantage';
+}
+
+function urgentActionBriefValue(action: UrgentActionItem | undefined, userFirstName: string): string {
+  if (!action) {
+    return `Good to see you, ${userFirstName}.`;
+  }
+  if (action.type === 'MAINTENANCE_OVERDUE') {
+    return 'Act now to avoid a compounding repair window.';
+  }
+  if (action.type === 'RENEWAL_EXPIRED') {
+    return 'Act now to restore protection and stability.';
+  }
+  if (action.type === 'RENEWAL_UPCOMING') {
+    return 'Act now while better renewal options are open.';
+  }
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
+    return 'Act now to re-anchor this recurring risk.';
+  }
+  return 'Act now to convert this signal into measurable progress.';
+}
+
+function urgentActionBriefDetail(action?: UrgentActionItem): string {
+  if (!action) {
+    return 'This brief is intentionally ranked so your first click creates momentum before you scroll.';
+  }
+  if (action.type === 'MAINTENANCE_OVERDUE') {
+    return 'Completing this first prevents downstream failures and protects HomeScore consistency.';
+  }
+  if (action.type === 'RENEWAL_EXPIRED') {
+    return 'Closing the gap first reduces downside exposure and clarifies your next best optimization step.';
+  }
+  if (action.type === 'RENEWAL_UPCOMING') {
+    return 'Using this renewal window first keeps optionality high and makes price comparisons easier.';
+  }
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
+    return 'Reinstating schedule clarity now helps your monthly planning stay predictable.';
+  }
+  return 'Addressing this signal first keeps your dashboard aligned to impact instead of activity.';
+}
+
+function urgentActionDoNowLabel(action?: UrgentActionItem): string {
+  if (!action) return 'Capture the quick-win path and protect this week’s momentum.';
+  if (action.type === 'MAINTENANCE_OVERDUE') return 'Cut failure risk and avoid avoidable repair escalation.';
+  if (action.type === 'RENEWAL_EXPIRED') return 'Reinstate coverage and reduce downside exposure immediately.';
+  if (action.type === 'RENEWAL_UPCOMING') return 'Compare options early and lock better-rate leverage.';
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Restore calendar control and prevent silent slippage.';
+  return 'Resolve the signal early and preserve upside potential.';
+}
+
+function urgentActionWaitRiskLabel(action?: UrgentActionItem): string {
+  if (!action) return 'Priority context can stale and lower your confidence advantage.';
+  if (action.type === 'MAINTENANCE_OVERDUE') return 'Repair cost and disruption risk typically increase with delay.';
+  if (action.type === 'RENEWAL_EXPIRED') return 'Unprotected intervals can increase financial downside.';
+  if (action.type === 'RENEWAL_UPCOMING') return 'Fewer options and potential premium pressure near expiry.';
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Task drift can compound into a higher-friction fix later.';
+  return 'Signal quality drops as conditions change and issues compound.';
+}
+
+function urgentActionWhyNow(action?: UrgentActionItem): string {
+  if (!action) return 'Queue ranked by confidence and urgency.';
+  if (action.type === 'HEALTH_INSIGHT') return 'Risk moved to Needs Review after latest signal refresh.';
+  if (action.type === 'MAINTENANCE_OVERDUE') return 'Maintenance timing moved past due and now impacts risk.';
+  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Recurring task lost schedule anchor and needs reassignment.';
+  if (action.type === 'RENEWAL_EXPIRED') return 'Renewal date has passed and requires immediate attention.';
+  if (action.type === 'RENEWAL_UPCOMING') return 'Renewal window is open now, before option quality narrows.';
+  return cleanUrgentActionTitle(action);
 }
 
 export default function DashboardPage() {
@@ -558,25 +684,15 @@ export default function DashboardPage() {
       (localUpdates.length > 0 ? 8 : 0) +
       ((selectedProperty?.healthScore?.totalScore || 0) > 0 ? 6 : 0)
   );
-  const ahaTitle = primaryUrgentAction
-    ? isReturningVisitor
-      ? `Welcome back, ${safeFirstName}. One high-impact move is ready today.`
-      : `${safeFirstName}, your home brief is ready. Start with one focused action.`
-    : isReturningVisitor
-      ? `Welcome back, ${safeFirstName}. Your next best home move is ready.`
-      : `${safeFirstName}, let’s create your first quick win.`;
-  const ahaSubtitle = primaryUrgentAction
-    ? primaryUrgentAction.description
-    : 'We prioritized your dashboard around one action with immediate value before everything else.';
+  const ahaTitle = urgentActionHeroTitle(primaryUrgentAction, safeFirstName, isReturningVisitor);
+  const ahaSubtitle = urgentActionHeroSubtitle(primaryUrgentAction);
+  const ahaBriefLabel = urgentActionBriefLabel(isReturningVisitor);
+  const ahaBriefValue = urgentActionBriefValue(primaryUrgentAction, safeFirstName);
+  const ahaBriefDetail = urgentActionBriefDetail(primaryUrgentAction);
+  const ahaDoNowLabel = urgentActionDoNowLabel(primaryUrgentAction);
+  const ahaWaitRiskLabel = urgentActionWaitRiskLabel(primaryUrgentAction);
   const ahaFeed: string[] = [];
-  if (primaryUrgentAction) {
-    const cleanTitle = primaryUrgentAction.title
-      .replace(/^OVERDUE:\s*/i, '')
-      .replace(/^UNSCHEDULED:\s*/i, '')
-      .replace(/^EXPIRED:\s*/i, '')
-      .replace(/^UPCOMING:\s*/i, '');
-    ahaFeed.push(`Priority signal: ${cleanTitle}`);
-  }
+  ahaFeed.push(`Why now: ${urgentActionWhyNow(primaryUrgentAction)}`);
   if (selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 0) {
     ahaFeed.push(`Current HomeScore: ${Math.round(selectedProperty.healthScore.totalScore)} for ${ahaPropertyLabel}`);
   }
@@ -746,13 +862,16 @@ export default function DashboardPage() {
         {selectedProperty && (
           <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-4 md:pt-5">
             <AhaHero
-              userFirstName={user.firstName}
               propertyLabel={ahaPropertyLabel}
-              isReturningVisitor={isReturningVisitor}
               title={ahaTitle}
               subtitle={ahaSubtitle}
+              briefLabel={ahaBriefLabel}
+              briefValue={ahaBriefValue}
+              briefDetail={ahaBriefDetail}
+              doNowLabel={ahaDoNowLabel}
+              waitRiskLabel={ahaWaitRiskLabel}
               ctaHref={ahaCtaHref}
-              ctaLabel={urgentActionCtaLabel(primaryUrgentAction)}
+              ctaLabel={urgentActionCtaLabel(primaryUrgentAction, isReturningVisitor)}
               onCtaClick={handleAhaCtaClick}
               etaLabel={urgentActionEtaLabel(primaryUrgentAction)}
               impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
@@ -794,13 +913,16 @@ export default function DashboardPage() {
       {selectedProperty && properties.length > 0 && (
         <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-5 md:pt-6">
           <AhaHero
-            userFirstName={user.firstName}
             propertyLabel={ahaPropertyLabel}
-            isReturningVisitor={isReturningVisitor}
             title={ahaTitle}
             subtitle={ahaSubtitle}
+            briefLabel={ahaBriefLabel}
+            briefValue={ahaBriefValue}
+            briefDetail={ahaBriefDetail}
+            doNowLabel={ahaDoNowLabel}
+            waitRiskLabel={ahaWaitRiskLabel}
             ctaHref={ahaCtaHref}
-            ctaLabel={urgentActionCtaLabel(primaryUrgentAction)}
+            ctaLabel={urgentActionCtaLabel(primaryUrgentAction, isReturningVisitor)}
             onCtaClick={handleAhaCtaClick}
             etaLabel={urgentActionEtaLabel(primaryUrgentAction)}
             impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
@@ -817,6 +939,7 @@ export default function DashboardPage() {
           properties={properties}
           selectedPropertyId={effectiveSelectedPropertyId}
           onPropertyChange={setSelectedPropertyId}
+          compact
         />
       )}
 

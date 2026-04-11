@@ -11,6 +11,7 @@ interface WelcomeSectionProps {
   properties: Property[];
   selectedPropertyId: string | undefined;
   onPropertyChange: (propertyId: string) => void;
+  compact?: boolean;
 }
 
 function formatPropertyDisplay(property: Property): string {
@@ -23,7 +24,8 @@ export function WelcomeSection({
   userName, 
   properties, 
   selectedPropertyId, 
-  onPropertyChange 
+  onPropertyChange,
+  compact = false,
 }: WelcomeSectionProps) {
   const selectedProperty = useMemo(
     () => properties.find((property) => property.id === selectedPropertyId) ?? properties[0] ?? null,
@@ -37,23 +39,34 @@ export function WelcomeSection({
   }, [coverPhotoUrl]);
 
   return (
-    /* OUTER WRAPPER: 
-       - py-7 provides the slight height increase requested.
-       - Full viewport width background.
-    */
-    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-gradient-to-b from-teal-50 to-white border-b border-gray-100 py-7 mb-8">
+    <div
+      className={`relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen bg-gradient-to-b from-teal-50 to-white border-b border-gray-100 ${
+        compact ? 'py-4 mb-6' : 'py-7 mb-8'
+      }`}
+    >
       
       {/* INNER CONTENT WRAPPER: Aligns with DashboardShell (max-w-7xl px-4 md:px-6) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
         <div className="flex items-center justify-between gap-6">
           
-          {/* Left Column: Welcome Text & Refined Selector */}
+          {/* Left Column: Context + Selector */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">
-              Welcome, {userName}! <span className="text-gray-500 font-medium">Property Intelligence Dashboard</span>
-            </h1>
+            {compact ? (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-[0.14em]">
+                  Property Workspace
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Viewing context for scores, alerts, and recommendations.
+                </p>
+              </div>
+            ) : (
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">
+                Welcome, {userName}! <span className="text-gray-500 font-medium">Property Intelligence Dashboard</span>
+              </h1>
+            )}
             
-            <div className="flex items-center gap-2 mt-4">
+            <div className={`flex items-center gap-2 ${compact ? 'mt-2' : 'mt-4'}`}>
               <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                 Viewing:
               </span>
@@ -80,7 +93,7 @@ export function WelcomeSection({
           </div>
           
           {/* Right Column: Property photo (if available) with fallback illustration */}
-          <div className="hidden md:flex justify-end shrink-0">
+          <div className={`hidden md:flex justify-end shrink-0 ${compact ? 'opacity-70' : ''}`}>
             <div className="relative w-48 h-32 overflow-hidden rounded-xl border border-teal-100/70 bg-white/70">
               {coverPhotoUrl && !hasCoverPhotoError ? (
                 <Image

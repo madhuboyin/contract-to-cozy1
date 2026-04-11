@@ -5,11 +5,14 @@ import { ArrowRight } from 'lucide-react';
 import styles from './AhaHero.module.css';
 
 type AhaHeroProps = {
-  userFirstName: string;
   propertyLabel: string;
-  isReturningVisitor: boolean;
   title: string;
   subtitle: string;
+  briefLabel: string;
+  briefValue: string;
+  briefDetail: string;
+  doNowLabel: string;
+  waitRiskLabel: string;
   ctaHref: string;
   ctaLabel: string;
   onCtaClick?: () => void;
@@ -20,11 +23,14 @@ type AhaHeroProps = {
 };
 
 export default function AhaHero({
-  userFirstName,
   propertyLabel,
-  isReturningVisitor,
   title,
   subtitle,
+  briefLabel,
+  briefValue,
+  briefDetail,
+  doNowLabel,
+  waitRiskLabel,
   ctaHref,
   ctaLabel,
   onCtaClick,
@@ -57,15 +63,19 @@ export default function AhaHero({
         </div>
 
         <aside className={styles.brief}>
-          <p className={styles.briefLabel}>{isReturningVisitor ? 'Welcome Back' : 'First-Visit Focus'}</p>
-          <p className={styles.briefValue}>
-            {isReturningVisitor ? `Good to see you, ${userFirstName}.` : `Welcome, ${userFirstName}.`}
-          </p>
-          <p className={styles.briefDetail}>
-            {isReturningVisitor
-              ? 'We prioritized one high-impact move so this visit ends with measurable progress.'
-              : 'Start with one focused action to unlock immediate value before exploring the full dashboard.'}
-          </p>
+          <p className={styles.briefLabel}>{briefLabel}</p>
+          <p className={styles.briefValue}>{briefValue}</p>
+          <p className={styles.briefDetail}>{briefDetail}</p>
+          <div className={styles.deltaGrid}>
+            <div className={styles.deltaItem}>
+              <span className={styles.deltaTitle}>Do now</span>
+              <span className={styles.deltaText}>{doNowLabel}</span>
+            </div>
+            <div className={styles.deltaItem}>
+              <span className={styles.deltaTitle}>Wait 30 days</span>
+              <span className={styles.deltaText}>{waitRiskLabel}</span>
+            </div>
+          </div>
         </aside>
       </div>
 
