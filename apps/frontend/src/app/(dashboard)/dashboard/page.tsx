@@ -1198,8 +1198,17 @@ export default function DashboardPage() {
 
     return (
       <>
+        {selectedProperty && properties.length > 0 && (
+          <WelcomeSection
+            userName={user?.firstName || 'there'}
+            properties={properties}
+            selectedPropertyId={effectiveSelectedPropertyId}
+            onPropertyChange={setSelectedPropertyId}
+            compact
+          />
+        )}
         {selectedProperty && (
-          <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-4 md:pt-5">
+          <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-1 md:pt-1">
             <AhaHero
               propertyLabel={ahaPropertyLabel}
               isReturningVisitor={isReturningVisitor}
@@ -1267,7 +1276,16 @@ export default function DashboardPage() {
   return (
     <>
       {selectedProperty && properties.length > 0 && (
-        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-5 md:pt-6">
+        <WelcomeSection
+          userName={user?.firstName || 'there'}
+          properties={properties}
+          selectedPropertyId={effectiveSelectedPropertyId}
+          onPropertyChange={setSelectedPropertyId}
+          compact
+        />
+      )}
+      {selectedProperty && properties.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-1 md:pt-1">
           <AhaHero
             propertyLabel={ahaPropertyLabel}
             isReturningVisitor={isReturningVisitor}
@@ -1305,18 +1323,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 1. WELCOME SECTION - FULL WIDTH */}
-      {selectedProperty && properties.length > 0 && (
-        <WelcomeSection
-          userName={user?.firstName || 'there'}
-          properties={properties}
-          selectedPropertyId={effectiveSelectedPropertyId}
-          onPropertyChange={setSelectedPropertyId}
-          compact
-        />
-      )}
-
-      {/* 2. CONSTRAINED WIDTH AREA (Aligns with other cards) */}
+      {/* CONSTRAINED WIDTH AREA (Aligns with other cards) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
         {isOwnerSegment && effectiveSelectedPropertyId && (
           <motion.div {...sectionMotion(0)}>
