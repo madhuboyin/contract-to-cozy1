@@ -1402,7 +1402,7 @@ export default function DashboardPage() {
             className="mb-6 rounded-2xl border border-white/70 bg-white/85 p-3 shadow-sm sm:p-4"
             {...sectionMotion(2)}
           >
-            <div className="grid grid-cols-1 items-stretch gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 items-stretch gap-[10px] md:grid-cols-2 lg:grid-cols-4">
               <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
               <PropertyHealthScoreCard property={selectedProperty} />
               <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />

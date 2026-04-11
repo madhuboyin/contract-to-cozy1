@@ -18,13 +18,13 @@ type RiskSummaryCardModel = PrimaryRiskSummary & {
 };
 
 const CARD_BASE =
-  "score-card score-card-status-tinted score-card-status-red score-card-status-animate flex h-full flex-col gap-3 rounded-xl p-4 shadow-sm";
+  "score-card score-card-status-tinted score-card-status-red score-card-status-animate flex h-full flex-col gap-[0.6rem] rounded-xl px-[0.9rem] py-[0.85rem] shadow-sm";
 const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
 const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
-const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
-const META_VALUE = "text-[13px] font-medium text-foreground";
+const SUPPORT_LABEL = "mb-[2px] block text-[9px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
+const META_VALUE = "text-[12px] font-medium text-foreground";
 const DESCRIPTION_CLASS =
-  "text-xs text-muted-foreground leading-relaxed line-clamp-2 min-h-[2.4rem] mb-3";
+  "text-[11.5px] text-muted-foreground leading-[1.55] line-clamp-2 min-h-[2.3rem]";
 const EXPOSURE_CRITICAL_THRESHOLD = 10_000;
 
 function formatCurrency(value: number) {
@@ -207,46 +207,47 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
         <StatusBadge status={badge.status} customLabel={badge.label} />
       </div>
 
-      <div className="flex justify-center">
+      <div className="flex items-center gap-3">
         <ScoreRing
           value={coverageRatio * 100}
           maxValue={100}
-          size={88}
-          strokeWidth={6}
-          ringPadding={5}
+          size={64}
+          strokeWidth={5}
+          ringPadding={3.5}
           colorScheme={totalExposure > 0 ? "red" : "teal"}
           label={coverageLabel}
           subLabel="covered"
-          labelFontSize={16}
+          labelFontSize={12}
           labelFontWeight={600}
-          subLabelFontSize={10}
-          subLabelOpacity={0.65}
+          labelY={30}
+          subLabelY={43}
+          subLabelFontSize={9}
+          subLabelOpacity={0.6}
           ariaLabel={`Risk Exposure coverage: ${Math.round(coverageRatio * 100)}% covered, ${formatCurrency(
             totalExposure,
           )} gap`}
         />
+        <div className="flex min-w-0 flex-col justify-center">
+          <div className={cn("text-[20px] font-bold leading-none", exposureTone)}>{exposureHeadline}</div>
+          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">Unprotected</p>
+        </div>
       </div>
 
-      <div className={cn("text-center text-[20px] font-bold leading-none", exposureTone)}>{exposureHeadline}</div>
-      <p className="text-center text-[11px] text-muted-foreground whitespace-nowrap">Unprotected exposure</p>
-
-      <div className="h-px bg-border/80" />
+      <div className="h-[0.5px] bg-border/80" />
 
       <p className={DESCRIPTION_CLASS}>{description}</p>
 
-      <div className="conf-spacer h-5 mb-3" aria-hidden="true" />
+      <div className="h-[15px]" aria-hidden="true" />
 
-      <div className="border-t border-border pt-3">
-        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-          <div>
-            <span className={SUPPORT_LABEL}>Covered</span>
-            <div className={cn(META_VALUE, "text-teal-600")}>{formatCurrency(Math.round(coveredAmount))}</div>
-          </div>
-          <div>
-            <span className={SUPPORT_LABEL}>Gap</span>
-            <div className={cn(META_VALUE, totalExposure > 0 ? "text-red-600" : "text-teal-600")}>
-              {formatCurrency(totalExposure)}
-            </div>
+      <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">
+        <div>
+          <span className={SUPPORT_LABEL}>Covered</span>
+          <div className={cn(META_VALUE, "text-teal-600")}>{formatCurrency(Math.round(coveredAmount))}</div>
+        </div>
+        <div>
+          <span className={SUPPORT_LABEL}>Gap</span>
+          <div className={cn(META_VALUE, totalExposure > 0 ? "text-red-600" : "text-teal-600")}>
+            {formatCurrency(totalExposure)}
           </div>
         </div>
       </div>

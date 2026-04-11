@@ -14,13 +14,13 @@ interface HomeScoreReportCardProps {
 }
 
 const CARD_BASE =
-  "score-card score-card-status-tinted score-card-status-amber score-card-status-animate flex h-full flex-col gap-3 rounded-xl p-4 shadow-sm";
+  "score-card score-card-status-tinted score-card-status-amber score-card-status-animate flex h-full flex-col gap-[0.6rem] rounded-xl px-[0.9rem] py-[0.85rem] shadow-sm";
 const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
 const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
-const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
-const META_VALUE = "text-[13px] font-medium text-foreground";
+const SUPPORT_LABEL = "mb-[2px] block text-[9px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
+const META_VALUE = "text-[12px] font-medium text-foreground";
 const DESCRIPTION_CLASS =
-  "text-xs text-muted-foreground leading-relaxed line-clamp-2 min-h-[2.4rem] mb-3";
+  "text-[11.5px] text-muted-foreground leading-[1.55] line-clamp-2 min-h-[2.3rem]";
 
 type NormalizedScoreBand = "EXCELLENT" | "GOOD" | "FAIR" | "NEEDS_ATTENTION";
 
@@ -192,30 +192,32 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <StatusBadge status={badge.status} customLabel={badge.customLabel} />
       </div>
 
-      <div className="flex justify-center">
+      <div className="flex items-center gap-3">
         <ScoreRing
           value={score}
           maxValue={100}
-          size={88}
-          strokeWidth={6}
-          ringPadding={5}
+          size={64}
+          strokeWidth={5}
+          ringPadding={3.5}
           colorScheme="amber"
           label={String(score)}
-          labelFontSize={22}
+          labelFontSize={14}
           labelFontWeight={600}
+          labelY={37}
           ariaLabel={`HomeScore: ${score} out of 100, ${scoreLabel}`}
         />
+        <div className="flex min-w-0 flex-col justify-center">
+          <div className={cn("text-[20px] font-bold leading-none", scoreColor)}>{scoreLabel}</div>
+          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">Quality mixed</p>
+        </div>
       </div>
 
-      <div className={cn("text-center text-[20px] font-bold leading-none", scoreColor)}>{scoreLabel}</div>
-      <p className="text-center text-[11px] text-muted-foreground whitespace-nowrap">Quality mixed</p>
-
-      <div className="h-px bg-border/80" />
+      <div className="h-[0.5px] bg-border/80" />
 
       <p className={DESCRIPTION_CLASS}>{description}</p>
 
-      <div className="conf-wrap mb-3">
-        <div className="mb-1 text-[10px] uppercase tracking-[0.06em] text-muted-foreground">Confidence</div>
+      <div className="conf-wrap">
+        <div className="mb-[3px] text-[9px] uppercase tracking-[0.07em] text-muted-foreground">Confidence</div>
         <div className="h-[3px] overflow-hidden rounded bg-border">
           <div
             className={cn("h-full rounded transition-all duration-700", getConfidenceFillColor(confidence))}
@@ -224,7 +226,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
+      <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">
         <div>
           <span className={SUPPORT_LABEL}>Elevated assets</span>
           <div className={cn(META_VALUE, reasonsCount > 0 ? "text-amber-600" : "text-foreground")}>
