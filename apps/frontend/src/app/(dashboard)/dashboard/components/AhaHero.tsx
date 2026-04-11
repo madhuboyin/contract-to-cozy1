@@ -12,6 +12,7 @@ type AhaHeroProps = {
   subtitle: string;
   ctaHref: string;
   ctaLabel: string;
+  onCtaClick?: () => void;
   etaLabel: string;
   impactLabel: string;
   confidenceLabel: string;
@@ -26,6 +27,7 @@ export default function AhaHero({
   subtitle,
   ctaHref,
   ctaLabel,
+  onCtaClick,
   etaLabel,
   impactLabel,
   confidenceLabel,
@@ -44,7 +46,7 @@ export default function AhaHero({
           </p>
 
           <div className={styles.ctaRow}>
-            <Link href={ctaHref} className={styles.cta}>
+            <Link href={ctaHref} className={styles.cta} onClick={onCtaClick}>
               {ctaLabel}
               <ArrowRight className="h-4 w-4" />
             </Link>

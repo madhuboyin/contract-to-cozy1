@@ -41,6 +41,8 @@ import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 import MobileDashboardHome from './components/MobileDashboardHome';
 import MobileHomeBuyerDashboard from './components/MobileHomeBuyerDashboard';
+import { useCelebration } from '@/hooks/useCelebration';
+import { MilestoneCelebration } from '@/components/ui/MilestoneCelebration';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import {
   appendGuidanceContinuityToHref,
@@ -51,6 +53,8 @@ import {
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 const DASHBOARD_AHA_SEEN_PREFIX = 'dashboardAhaSeen';
+const DASHBOARD_AHA_VIEWED_PREFIX = 'dashboardAhaViewed';
+const DASHBOARD_AHA_CELEBRATED_PREFIX = 'dashboardAhaCelebrated';
 
 const DEFAULT_LOCAL_UPDATES: LocalUpdate[] = [
   {
@@ -297,6 +301,9 @@ export default function DashboardPage() {
   const [userType, setUserType] = useState<string | null>(null);
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
+  const { celebration, celebrate, dismiss } = useCelebration(
+    `dashboard-aha-${user?.id ?? 'anon'}-${selectedPropertyId ?? 'none'}`
+  );
   const { data: homeownerSegment } = useHomeownerSegment(); // Get user segment for conditional features
   const properties = data.properties;
   const effectiveSelectedPropertyId =
@@ -509,6 +516,188 @@ export default function DashboardPage() {
     window.localStorage.setItem(storageKey, '1');
   }, [user?.id]);
 
+  const trackAhaHeroEvent = useCallback(
+    (event: string, metadata?: Record<string, unknown>) => {
+      if (!effectiveSelectedPropertyId) return;
+
+      void api
+        .trackHomeScoreEvent(effectiveSelectedPropertyId, {
+          event,
+          section: 'dashboard_aha_hero',
+          metadata,
+        })
+        .catch((error) => {
+          console.warn('[dashboard] aha hero analytics event failed:', error);
+        });
+    },
+    [effectiveSelectedPropertyId]
+  );
+
+  const safeFirstName = user?.firstName || 'there';
+  const userSegment = homeownerSegment ?? user?.segment;
+  const isHomeBuyerSegment = userSegment === 'HOME_BUYER';
+  const isOwnerSegment = !isHomeBuyerSegment;
+  const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
+  
+  // Derived property values using a validated property selection
+  const selectedProperty = properties.find(p => p.id === effectiveSelectedPropertyId); 
+  const scopedUrgentActions = data.urgentActions.filter(
+    (action) => action.propertyId === effectiveSelectedPropertyId
+  );
+  const primaryUrgentAction = scopedUrgentActions[0] || data.urgentActions[0];
+  const ahaPropertyLabel = selectedProperty?.name || selectedProperty?.address || 'your home';
+  const ahaCtaHref = primaryUrgentAction
+    ? resolveUrgentActionHref(primaryUrgentAction, effectiveSelectedPropertyId)
+    : effectiveSelectedPropertyId
+      ? `/dashboard/home-savings?propertyId=${encodeURIComponent(effectiveSelectedPropertyId)}`
+      : '/dashboard/home-savings';
+  const ahaConfidence = Math.min(
+    96,
+    74 +
+      (primaryUrgentAction ? 10 : 0) +
+      (localUpdates.length > 0 ? 8 : 0) +
+      ((selectedProperty?.healthScore?.totalScore || 0) > 0 ? 6 : 0)
+  );
+  const ahaTitle = primaryUrgentAction
+    ? isReturningVisitor
+      ? `Welcome back, ${safeFirstName}. One high-impact move is ready today.`
+      : `${safeFirstName}, your home brief is ready. Start with one focused action.`
+    : isReturningVisitor
+      ? `Welcome back, ${safeFirstName}. Your next best home move is ready.`
+      : `${safeFirstName}, let’s create your first quick win.`;
+  const ahaSubtitle = primaryUrgentAction
+    ? primaryUrgentAction.description
+    : 'We prioritized your dashboard around one action with immediate value before everything else.';
+  const ahaFeed: string[] = [];
+  if (primaryUrgentAction) {
+    const cleanTitle = primaryUrgentAction.title
+      .replace(/^OVERDUE:\s*/i, '')
+      .replace(/^UNSCHEDULED:\s*/i, '')
+      .replace(/^EXPIRED:\s*/i, '')
+      .replace(/^UPCOMING:\s*/i, '');
+    ahaFeed.push(`Priority signal: ${cleanTitle}`);
+  }
+  if (selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 0) {
+    ahaFeed.push(`Current HomeScore: ${Math.round(selectedProperty.healthScore.totalScore)} for ${ahaPropertyLabel}`);
+  }
+  if (localUpdates[0]?.title) {
+    ahaFeed.push(localUpdates[0].title);
+  }
+  if (ahaFeed.length < 3) {
+    ahaFeed.push('Morning Home Pulse refreshed with latest weather and maintenance context.');
+  }
+  if (ahaFeed.length < 3) {
+    ahaFeed.push('Action queue sorted by urgency and homeowner impact.');
+  }
+
+  const handleAhaCtaClick = useCallback(() => {
+    trackAhaHeroEvent('dashboard_aha_cta_clicked', {
+      isReturningVisitor,
+      urgentActionType: primaryUrgentAction?.type ?? null,
+      urgentActionTitle: primaryUrgentAction?.title ?? null,
+      ctaHref: ahaCtaHref,
+      propertyId: effectiveSelectedPropertyId ?? null,
+    });
+  }, [
+    ahaCtaHref,
+    effectiveSelectedPropertyId,
+    isReturningVisitor,
+    primaryUrgentAction?.title,
+    primaryUrgentAction?.type,
+    trackAhaHeroEvent,
+  ]);
+
+  useEffect(() => {
+    if (
+      !user?.id ||
+      !effectiveSelectedPropertyId ||
+      !redirectChecked ||
+      showWelcomeScreen ||
+      isMobileViewport
+    ) {
+      return;
+    }
+
+    if (typeof window === 'undefined') return;
+
+    const viewedKey = `${DASHBOARD_AHA_VIEWED_PREFIX}:${user.id}:${effectiveSelectedPropertyId}:${
+      isReturningVisitor ? 'returning' : 'first'
+    }`;
+
+    if (window.sessionStorage.getItem(viewedKey) === '1') {
+      return;
+    }
+
+    window.sessionStorage.setItem(viewedKey, '1');
+
+    trackAhaHeroEvent('dashboard_aha_viewed', {
+      isReturningVisitor,
+      urgentActionType: primaryUrgentAction?.type ?? null,
+      urgentActionTitle: primaryUrgentAction?.title ?? null,
+      localUpdatesCount: localUpdates.length,
+      confidenceScore: ahaConfidence,
+    });
+  }, [
+    ahaConfidence,
+    effectiveSelectedPropertyId,
+    isMobileViewport,
+    isReturningVisitor,
+    localUpdates.length,
+    primaryUrgentAction?.title,
+    primaryUrgentAction?.type,
+    redirectChecked,
+    showWelcomeScreen,
+    trackAhaHeroEvent,
+    user?.id,
+  ]);
+
+  useEffect(() => {
+    if (
+      !user?.id ||
+      !effectiveSelectedPropertyId ||
+      !redirectChecked ||
+      showWelcomeScreen ||
+      isMobileViewport
+    ) {
+      return;
+    }
+
+    if (typeof window === 'undefined') return;
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const celebrationKey = `${DASHBOARD_AHA_CELEBRATED_PREFIX}:${user.id}:${todayKey}`;
+
+    if (window.localStorage.getItem(celebrationKey) === '1') {
+      return;
+    }
+
+    window.localStorage.setItem(celebrationKey, '1');
+    celebrate('cozy');
+
+    trackAhaHeroEvent('dashboard_aha_celebrated', {
+      isReturningVisitor,
+      urgentActionType: primaryUrgentAction?.type ?? null,
+      confidenceScore: ahaConfidence,
+    });
+  }, [
+    ahaConfidence,
+    celebrate,
+    effectiveSelectedPropertyId,
+    isMobileViewport,
+    isReturningVisitor,
+    primaryUrgentAction?.type,
+    redirectChecked,
+    showWelcomeScreen,
+    trackAhaHeroEvent,
+    user?.id,
+  ]);
+
+  const sectionMotion = (index: number) => ({
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.4, delay: index * 0.08 },
+  });
+
   // --- CONDITIONAL RENDERING ---
   const loadingMessage = !redirectChecked
     ? 'Checking your account...'
@@ -536,67 +725,6 @@ export default function DashboardPage() {
     );
   }
   // --- END CONDITIONAL RENDERING ---
-
-  const userSegment = homeownerSegment ?? user.segment;
-  const isHomeBuyerSegment = userSegment === 'HOME_BUYER';
-  const isOwnerSegment = !isHomeBuyerSegment;
-  const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
-  
-  // Derived property values using a validated property selection
-  const selectedProperty = properties.find(p => p.id === effectiveSelectedPropertyId); 
-  const scopedUrgentActions = data.urgentActions.filter(
-    (action) => action.propertyId === effectiveSelectedPropertyId
-  );
-  const primaryUrgentAction = scopedUrgentActions[0] || data.urgentActions[0];
-  const ahaPropertyLabel = selectedProperty?.name || selectedProperty?.address || 'your home';
-  const ahaCtaHref = primaryUrgentAction
-    ? resolveUrgentActionHref(primaryUrgentAction, effectiveSelectedPropertyId)
-    : effectiveSelectedPropertyId
-      ? `/dashboard/home-savings?propertyId=${encodeURIComponent(effectiveSelectedPropertyId)}`
-      : '/dashboard/home-savings';
-  const ahaConfidence = Math.min(
-    96,
-    74 +
-      (primaryUrgentAction ? 10 : 0) +
-      (localUpdates.length > 0 ? 8 : 0) +
-      ((selectedProperty?.healthScore?.totalScore || 0) > 0 ? 6 : 0)
-  );
-  const ahaTitle = primaryUrgentAction
-    ? isReturningVisitor
-      ? `Welcome back, ${user.firstName}. One high-impact move is ready today.`
-      : `${user.firstName}, your home brief is ready. Start with one focused action.`
-    : isReturningVisitor
-      ? `Welcome back, ${user.firstName}. Your next best home move is ready.`
-      : `${user.firstName}, let’s create your first quick win.`;
-  const ahaSubtitle = primaryUrgentAction
-    ? primaryUrgentAction.description
-    : 'We prioritized your dashboard around one action with immediate value before everything else.';
-  const ahaFeed: string[] = [];
-  if (primaryUrgentAction) {
-    const cleanTitle = primaryUrgentAction.title
-      .replace(/^OVERDUE:\s*/i, '')
-      .replace(/^UNSCHEDULED:\s*/i, '')
-      .replace(/^EXPIRED:\s*/i, '')
-      .replace(/^UPCOMING:\s*/i, '');
-    ahaFeed.push(`Priority signal: ${cleanTitle}`);
-  }
-  if (selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 0) {
-    ahaFeed.push(`Current HomeScore: ${Math.round(selectedProperty.healthScore.totalScore)} for ${ahaPropertyLabel}`);
-  }
-  if (localUpdates[0]?.title) {
-    ahaFeed.push(localUpdates[0].title);
-  }
-  if (ahaFeed.length < 3) {
-    ahaFeed.push('Morning Home Pulse refreshed with latest weather and maintenance context.');
-  }
-  if (ahaFeed.length < 3) {
-    ahaFeed.push('Action queue sorted by urgency and homeowner impact.');
-  }
-  const sectionMotion = (index: number) => ({
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.4, delay: index * 0.08 },
-  });
   
   if (isHomeBuyerSegment) {
     if (isMobileViewport) {
@@ -625,6 +753,7 @@ export default function DashboardPage() {
               subtitle={ahaSubtitle}
               ctaHref={ahaCtaHref}
               ctaLabel={urgentActionCtaLabel(primaryUrgentAction)}
+              onCtaClick={handleAhaCtaClick}
               etaLabel={urgentActionEtaLabel(primaryUrgentAction)}
               impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
               confidenceLabel={`${ahaConfidence}% confidence`}
@@ -637,6 +766,11 @@ export default function DashboardPage() {
           bookings={data.bookings}
           properties={data.properties}
           checklistItems={checklistItems}
+        />
+        <MilestoneCelebration
+          type={celebration.type}
+          isOpen={celebration.isOpen}
+          onClose={dismiss}
         />
       </>
     );
@@ -667,6 +801,7 @@ export default function DashboardPage() {
             subtitle={ahaSubtitle}
             ctaHref={ahaCtaHref}
             ctaLabel={urgentActionCtaLabel(primaryUrgentAction)}
+            onCtaClick={handleAhaCtaClick}
             etaLabel={urgentActionEtaLabel(primaryUrgentAction)}
             impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
             confidenceLabel={`${ahaConfidence}% confidence`}
@@ -841,6 +976,11 @@ export default function DashboardPage() {
         );
       })()}
       </DashboardShell>
+      <MilestoneCelebration
+        type={celebration.type}
+        isOpen={celebration.isOpen}
+        onClose={dismiss}
+      />
     </>
   );
 }
