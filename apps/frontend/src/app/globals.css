@@ -661,6 +661,58 @@ html {
   animation: fadeInUp 0.3s ease-out forwards;
 }
 
+.score-card-status-tinted {
+  border-style: solid;
+  border-width: 0.5px 0.5px 0.5px 3px;
+  border-color: hsl(var(--border));
+  border-left-color: var(--score-card-accent, hsl(var(--border)));
+  background-color: var(--score-card-bg, hsl(var(--card)));
+  transition: background-color 0.4s ease;
+}
+
+.score-card-status-amber {
+  --score-card-bg: rgba(251, 191, 36, 0.06);
+  --score-card-accent: #d97706;
+}
+
+.score-card-status-teal {
+  --score-card-bg: rgba(20, 184, 166, 0.06);
+  --score-card-accent: #0d9488;
+}
+
+.score-card-status-red {
+  --score-card-bg: rgba(239, 68, 68, 0.06);
+  --score-card-accent: #dc2626;
+}
+
+.dark .score-card-status-amber {
+  --score-card-bg: rgba(120, 53, 15, 0.2);
+}
+
+.dark .score-card-status-teal {
+  --score-card-bg: rgba(19, 78, 74, 0.2);
+}
+
+.dark .score-card-status-red {
+  --score-card-bg: rgba(127, 29, 29, 0.2);
+}
+
+@keyframes score-card-tint-in {
+  from {
+    background-color: transparent;
+  }
+
+  to {
+    background-color: var(--score-card-bg, hsl(var(--card)));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .score-card-status-animate {
+    animation: score-card-tint-in 0.4s ease 0.72s both;
+  }
+}
+
 @keyframes ring-fill-in {
   from {
     stroke-dasharray: 0 999;

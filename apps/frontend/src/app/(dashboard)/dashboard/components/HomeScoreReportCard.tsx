@@ -14,11 +14,11 @@ interface HomeScoreReportCardProps {
 }
 
 const CARD_BASE =
-  "score-card flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm";
+  "score-card score-card-status-tinted score-card-status-amber score-card-status-animate flex flex-col gap-3 rounded-xl p-4 shadow-sm";
 const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
 const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
-const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground";
-const META_VALUE = "text-sm font-semibold text-foreground";
+const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
+const META_VALUE = "text-[13px] font-medium text-foreground";
 
 type NormalizedScoreBand = "EXCELLENT" | "GOOD" | "FAIR" | "NEEDS_ATTENTION";
 
@@ -116,12 +116,6 @@ function buildHomeScorePriority(
 function formatWeeklyDelta(delta: number | null) {
   if (delta === null || Math.abs(delta) < 0.05) return "No change";
   return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
-}
-
-function weeklyDeltaClass(weeklyChange: string) {
-  if (weeklyChange === "No change") return "text-muted-foreground";
-  if (weeklyChange.startsWith("-")) return "text-red-600";
-  return "text-emerald-600";
 }
 
 function weeklyDeltaLabel(weeklyChange: string) {
@@ -233,18 +227,19 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
           value={score}
           maxValue={100}
           size={72}
-          strokeWidth={6}
-          colorScheme="auto"
+          strokeWidth={5}
+          colorScheme="amber"
           label={String(score)}
+          labelFontWeight={500}
           ariaLabel={`HomeScore: ${score} out of 100, ${scoreLabel}`}
         />
-        <div>
-          <div className={cn("text-xl font-semibold", scoreColor)}>{score}</div>
-          <div className="text-xs text-muted-foreground">{scoreLabel}</div>
+        <div className="min-w-0">
+          <div className={cn("text-[22px] font-semibold leading-none", scoreColor)}>{scoreLabel}</div>
+          <div className="mt-1 text-sm leading-snug text-muted-foreground">
+            {meaning}
+          </div>
         </div>
       </div>
-
-      <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{meaning}</p>
 
       <div>
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Confidence</div>
@@ -282,7 +277,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         </div>
         <div>
           <span className={SUPPORT_LABEL}>Weekly change</span>
-          <div className={cn(META_VALUE, weeklyDeltaClass(weeklyChange))}>
+          <div className={META_VALUE}>
             {weeklyDeltaLabel(weeklyChange)}
           </div>
         </div>

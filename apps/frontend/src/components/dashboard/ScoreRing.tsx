@@ -10,6 +10,8 @@ interface ScoreRingProps {
   animate?: boolean;
   className?: string;
   ariaLabel?: string;
+  labelFontSize?: number;
+  labelFontWeight?: number | string;
 }
 
 function clampRatio(value: number, maxValue: number) {
@@ -28,9 +30,10 @@ function ringColor(colorScheme: ScoreRingProps['colorScheme'], ratio: number): s
   return '#E05050';
 }
 
-function centerFontSize(size: number): number {
+function centerFontSize(size: number, label: string): number {
   if (size >= 110) return 26;
   if (size >= 96) return 22;
+  if (size >= 72 && label.includes("%")) return 13;
   if (size >= 72) return 15;
   if (size >= 64) return 14;
   if (size > 50) return 12;
@@ -47,6 +50,8 @@ export function ScoreRing({
   animate = true,
   className,
   ariaLabel,
+  labelFontSize,
+  labelFontWeight,
 }: ScoreRingProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -54,6 +59,8 @@ export function ScoreRing({
   const dashArray = ratio * circumference;
   const dashOffset = circumference * 0.25;
   const color = ringColor(colorScheme, ratio);
+  const resolvedFontSize = labelFontSize ?? centerFontSize(size, label);
+  const resolvedFontWeight = labelFontWeight ?? 600;
 
   return (
     <svg
@@ -90,8 +97,8 @@ export function ScoreRing({
         x={size / 2}
         y={size / 2 + 4}
         textAnchor="middle"
-        fontSize={centerFontSize(size)}
-        fontWeight="600"
+        fontSize={resolvedFontSize}
+        fontWeight={resolvedFontWeight}
         fill={color}
       >
         {label}

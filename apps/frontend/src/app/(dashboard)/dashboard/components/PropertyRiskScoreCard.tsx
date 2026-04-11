@@ -19,11 +19,11 @@ type RiskSummaryCardModel = PrimaryRiskSummary & {
 };
 
 const CARD_BASE =
-  "score-card flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm";
+  "score-card score-card-status-tinted score-card-status-red score-card-status-animate flex flex-col gap-3 rounded-xl p-4 shadow-sm";
 const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
 const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
-const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground";
-const META_VALUE = "text-sm font-semibold text-foreground";
+const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
+const META_VALUE = "text-[13px] font-medium text-foreground";
 const EXPOSURE_CRITICAL_THRESHOLD = 10_000;
 
 function formatCurrency(value: number) {
@@ -80,12 +80,6 @@ function buildRiskMeaning(coverageRatio: number, totalExposure: number): string 
 function formatWeeklyDelta(delta: number | null) {
   if (delta === null || Math.abs(delta) < 0.05) return "No change";
   return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`;
-}
-
-function weeklyDeltaClass(weeklyChange: string) {
-  if (weeklyChange === "No change") return "text-muted-foreground";
-  if (weeklyChange.startsWith("-")) return "text-red-600";
-  return "text-emerald-600";
 }
 
 function weeklyDeltaLabel(weeklyChange: string) {
@@ -213,28 +207,29 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
           value={coverageRatio * 100}
           maxValue={100}
           size={72}
-          strokeWidth={6}
-          colorScheme="auto"
+          strokeWidth={5}
+          colorScheme={totalExposure > 0 ? "red" : "teal"}
           label={coverageLabel}
+          labelFontWeight={500}
           ariaLabel={`Risk Exposure coverage: ${Math.round(coverageRatio * 100)}% covered, ${formatCurrency(
             totalExposure,
           )} gap`}
         />
-        <div>
-          <div className={cn("text-xl font-semibold", exposureTone)}>{exposureHeadline}</div>
-          <div className="text-xs text-muted-foreground">
+        <div className="min-w-0">
+          <div className={cn("text-[22px] font-bold leading-none", exposureTone)}>{exposureHeadline}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
             {totalExposure === 0 ? "Fully protected" : "Unprotected exposure"}
           </div>
         </div>
       </div>
 
-      <p className="text-[11px] leading-relaxed text-muted-foreground">{meaning}</p>
+      <p className="text-sm leading-snug text-muted-foreground">{meaning}</p>
 
       <div className="mt-auto border-t border-border pt-3">
         <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
           <div>
             <span className={SUPPORT_LABEL}>Covered</span>
-            <div className={META_VALUE}>{formatCurrency(Math.round(coveredAmount))}</div>
+            <div className={cn(META_VALUE, "text-teal-600")}>{formatCurrency(Math.round(coveredAmount))}</div>
           </div>
           <div>
             <span className={SUPPORT_LABEL}>Gap</span>
@@ -244,7 +239,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
           </div>
           <div>
             <span className={SUPPORT_LABEL}>Weekly change</span>
-            <div className={cn(META_VALUE, weeklyDeltaClass(weeklyChange))}>
+            <div className={META_VALUE}>
               {weeklyDeltaLabel(weeklyChange)}
             </div>
           </div>
