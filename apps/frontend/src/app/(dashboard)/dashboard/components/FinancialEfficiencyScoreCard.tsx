@@ -52,7 +52,7 @@ function buildFinancialInsight(score: number, annualCost: number): string {
 
 function getFinancialPriority(score: number): { status: BadgeStatus; customLabel?: string } {
   if (score < 60) {
-    return { status: "action", customLabel: "Needs Focus" };
+    return { status: "action", customLabel: "Needs focus" };
   }
   if (score < 80) {
     return { status: "watch" };
@@ -181,6 +181,8 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
         <ScoreRing
           value={score}
           maxValue={100}
+          size={72}
+          strokeWidth={6}
           colorScheme="teal"
           label={String(score)}
           ariaLabel={`Financial: ${score} out of 100, ${status.label}`}

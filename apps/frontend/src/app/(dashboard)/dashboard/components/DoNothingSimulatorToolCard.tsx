@@ -31,10 +31,10 @@ function statusMeta(loading: boolean, run: DoNothingRunDTO | null, hasRun: boole
     return { status: 'watch' as BadgeStatus, customLabel: 'Not run yet' };
   }
   if (run.status === 'STALE') {
-    return { status: 'action' as BadgeStatus, customLabel: 'Review Recommended' };
+    return { status: 'action' as BadgeStatus, customLabel: 'Review recommended' };
   }
   if (run.status === 'ERROR') {
-    return { status: 'action' as BadgeStatus, customLabel: 'Review Recommended' };
+    return { status: 'action' as BadgeStatus, customLabel: 'Review recommended' };
   }
   return { status: 'good' as BadgeStatus, customLabel: 'Stable' };
 }
@@ -43,7 +43,7 @@ function likelihoodBadge(likelihood?: DoNothingRunDTO['incidentLikelihood']): {
   status: BadgeStatus;
   customLabel: string;
 } {
-  if (likelihood === 'HIGH') return { status: 'critical', customLabel: 'At Risk' };
+  if (likelihood === 'HIGH') return { status: 'critical', customLabel: 'At risk' };
   if (likelihood === 'MEDIUM') return { status: 'watch', customLabel: 'Watch' };
   if (likelihood === 'LOW') return { status: 'good', customLabel: 'Stable' };
   return { status: 'suppressed', customLabel: 'N/A' };

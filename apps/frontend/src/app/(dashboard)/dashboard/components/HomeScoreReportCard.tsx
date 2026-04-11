@@ -108,7 +108,7 @@ function buildHomeScorePriority(
     return { status: "watch" };
   }
   if (scoreBand === "NEEDS_ATTENTION" || reasonsCount >= 2) {
-    return { status: "action", customLabel: "Needs Focus" };
+    return { status: "action", customLabel: "Needs focus" };
   }
   return { status: "action" };
 }
@@ -232,6 +232,8 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <ScoreRing
           value={score}
           maxValue={100}
+          size={72}
+          strokeWidth={6}
           colorScheme="auto"
           label={String(score)}
           ariaLabel={`HomeScore: ${score} out of 100, ${scoreLabel}`}

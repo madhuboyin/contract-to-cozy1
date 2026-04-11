@@ -10,6 +10,7 @@ import { Warranty, InsurancePolicy } from '@/types';
 import { format, differenceInDays } from 'date-fns'; 
 import Link from 'next/link';
 import { RefreshCw, ArrowRight } from 'lucide-react';
+import { BadgeStatus, StatusBadge } from '@/components/ui/StatusBadge';
 
 interface RenewalItem {
   id: string;
@@ -24,13 +25,13 @@ interface RenewalItem {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case 'expired':
-      return { label: 'Expired', className: 'bg-red-100 text-red-700 hover:bg-red-100' };
+      return { status: 'critical' as BadgeStatus, customLabel: 'Expired' };
     case 'due_30d':
-      return { label: 'Due in 30d', className: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100' };
+      return { status: 'due-soon' as BadgeStatus, customLabel: 'Due soon' };
     case 'active':
-      return { label: 'Active', className: 'bg-green-100 text-green-700 hover:bg-green-100' };
+      return { status: 'good' as BadgeStatus, customLabel: 'Active' };
     default:
-      return { label: 'Unknown', className: 'bg-gray-100 text-gray-700 hover:bg-gray-100' };
+      return { status: 'watch' as BadgeStatus, customLabel: 'Unknown' };
   }
 };
 
@@ -159,9 +160,11 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
                       <p className="text-xs text-gray-600 mb-1.5 truncate min-w-0">
                         Expires: {format(renewal.expiryDate, 'MMM dd, yyyy')}
                       </p>
-                      <Badge variant="secondary" className={`text-xs font-medium shrink-0 ${badge.className}`}>
-                        {badge.label}
-                      </Badge>
+                      <StatusBadge
+                        status={badge.status}
+                        customLabel={badge.customLabel}
+                        className="shrink-0"
+                      />
                     </div>
                   </Link>
                 );

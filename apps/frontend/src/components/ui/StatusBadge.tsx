@@ -31,12 +31,12 @@ const BADGE_CONFIG: Record<BadgeStatus, { label: string; className: string }> = 
       'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-700/60 dark:bg-orange-950/40 dark:text-orange-300',
   },
   critical: {
-    label: 'At Risk',
+    label: 'At risk',
     className:
       'border-red-200 bg-red-50 text-red-700 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-300',
   },
   'due-soon': {
-    label: 'Due Soon',
+    label: 'Due soon',
     className:
       'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700/60 dark:bg-blue-950/40 dark:text-blue-300',
   },

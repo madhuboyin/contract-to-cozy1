@@ -10,6 +10,7 @@ import { PropertyMaintenanceTask } from '@/types';
 import { format, differenceInDays } from 'date-fns';
 import humanizeActionType from '@/lib/utils/humanize';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { BadgeStatus, StatusBadge } from '@/components/ui/StatusBadge';
 
 interface RecurringMaintenanceCardProps {
   maintenance: PropertyMaintenanceTask[]; 
@@ -19,7 +20,7 @@ interface RecurringMaintenanceCardProps {
 
 const getStatusBadge = (task: PropertyMaintenanceTask) => {
   if (!task.nextDueDate) {
-    return { label: 'Pending', className: 'bg-gray-100 text-gray-700 hover:bg-gray-100' };
+    return { status: 'watch' as BadgeStatus, customLabel: 'Pending' };
   }
 
   const dueDate = new Date(task.nextDueDate);
@@ -27,11 +28,11 @@ const getStatusBadge = (task: PropertyMaintenanceTask) => {
   const daysUntilDue = differenceInDays(dueDate, now);
 
   if (daysUntilDue < 0) {
-    return { label: 'Overdue', className: 'bg-red-100 text-red-700 hover:bg-red-100' };
+    return { status: 'critical' as BadgeStatus, customLabel: 'Overdue' };
   } else if (daysUntilDue <= 14) {
-    return { label: 'Due Soon', className: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100' };
+    return { status: 'due-soon' as BadgeStatus, customLabel: 'Due soon' };
   } else {
-    return { label: 'Scheduled', className: 'bg-blue-100 text-blue-700 hover:bg-blue-100' };
+    return { status: 'good' as BadgeStatus, customLabel: 'Scheduled' };
   }
 };
 
@@ -123,9 +124,11 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
                           Due {task.nextDueDate ? format(new Date(task.nextDueDate), 'MMM dd') : 'N/A'}
                         </p>
                       </div>
-                      <Badge className={`shrink-0 ${statusBadge.className}`}>
-                        {statusBadge.label}
-                      </Badge>
+                      <StatusBadge
+                        status={statusBadge.status}
+                        customLabel={statusBadge.customLabel}
+                        className="shrink-0"
+                      />
                     </div>
                   </Link>
                 );

@@ -31,10 +31,10 @@ function statusMeta(loading: boolean, analysis: RiskPremiumOptimizationDTO | nul
     return { status: 'watch' as BadgeStatus, customLabel: 'Not run yet' };
   }
   if (analysis.status === 'STALE') {
-    return { status: 'action' as BadgeStatus, customLabel: 'Review Recommended' };
+    return { status: 'action' as BadgeStatus, customLabel: 'Review recommended' };
   }
   if (analysis.status === 'ERROR') {
-    return { status: 'action' as BadgeStatus, customLabel: 'Review Recommended' };
+    return { status: 'action' as BadgeStatus, customLabel: 'Review recommended' };
   }
   return { status: 'good' as BadgeStatus, customLabel: 'Stable' };
 }

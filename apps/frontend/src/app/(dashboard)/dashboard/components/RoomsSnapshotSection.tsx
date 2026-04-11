@@ -92,17 +92,19 @@ function computeHealthScore(insights: any): number {
 }
 
 function deriveLabel(score: number): string {
-  if (score >= 80) return 'HEALTHY';
+  if (score > 75) return 'HEALTHY';
+  if (score >= 60) return 'WATCH';
   if (score >= 40) return 'NEEDS ATTENTION';
   return 'AT RISK';
 }
 
-function normalizeStatusLabel(label: string): 'HEALTHY' | 'NEEDS ATTENTION' | 'AT RISK' {
+function normalizeStatusLabel(label: string): 'HEALTHY' | 'WATCH' | 'NEEDS ATTENTION' | 'AT RISK' {
   const normalized = String(label || '')
     .toUpperCase()
     .replace(/_/g, ' ')
     .trim();
   if (normalized === 'HEALTHY') return 'HEALTHY';
+  if (normalized === 'WATCH') return 'WATCH';
   if (normalized === 'NEEDS ATTENTION') return 'NEEDS ATTENTION';
   return 'AT RISK';
 }
@@ -110,6 +112,7 @@ function normalizeStatusLabel(label: string): 'HEALTHY' | 'NEEDS ATTENTION' | 'A
 function statusPillLabel(label: string): string {
   const normalized = normalizeStatusLabel(label);
   if (normalized === 'HEALTHY') return 'Healthy';
+  if (normalized === 'WATCH') return 'Watch';
   if (normalized === 'NEEDS ATTENTION') return 'Needs attention';
   return 'At risk';
 }
@@ -117,6 +120,7 @@ function statusPillLabel(label: string): string {
 function roomStatusBadge(label: string): { status: BadgeStatus; customLabel: string } {
   const normalized = normalizeStatusLabel(label);
   if (normalized === 'HEALTHY') return { status: 'good', customLabel: 'Healthy' };
+  if (normalized === 'WATCH') return { status: 'watch', customLabel: 'Watch' };
   if (normalized === 'NEEDS ATTENTION') return { status: 'action', customLabel: 'Needs attention' };
   return { status: 'critical', customLabel: 'At risk' };
 }

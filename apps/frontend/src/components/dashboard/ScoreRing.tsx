@@ -28,6 +28,15 @@ function ringColor(colorScheme: ScoreRingProps['colorScheme'], ratio: number): s
   return '#E05050';
 }
 
+function centerFontSize(size: number): number {
+  if (size >= 110) return 26;
+  if (size >= 96) return 22;
+  if (size >= 72) return 15;
+  if (size >= 64) return 14;
+  if (size > 50) return 12;
+  return 10;
+}
+
 export function ScoreRing({
   value,
   maxValue = 100,
@@ -81,7 +90,7 @@ export function ScoreRing({
         x={size / 2}
         y={size / 2 + 4}
         textAnchor="middle"
-        fontSize={size > 50 ? 12 : 10}
+        fontSize={centerFontSize(size)}
         fontWeight="600"
         fill={color}
       >

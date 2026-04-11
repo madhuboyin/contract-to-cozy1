@@ -38,18 +38,18 @@ function statusMeta(loading: boolean, analysis: CoverageAnalysisDTO | null, hasA
     return { status: 'watch' as BadgeStatus, customLabel: 'Not run yet' };
   }
   if (analysis.status === 'STALE') {
-    return { status: 'action' as BadgeStatus, customLabel: 'Review Recommended' };
+    return { status: 'action' as BadgeStatus, customLabel: 'Review recommended' };
   }
   if (analysis.status === 'ERROR') {
-    return { status: 'action' as BadgeStatus, customLabel: 'Review Recommended' };
+    return { status: 'action' as BadgeStatus, customLabel: 'Review recommended' };
   }
   if (analysis.overallVerdict === 'WORTH_IT') {
-    return { status: 'excellent' as BadgeStatus, customLabel: 'Found Savings' };
+    return { status: 'excellent' as BadgeStatus, customLabel: 'Found savings' };
   }
   if (analysis.overallVerdict === 'SITUATIONAL') {
     return { status: 'watch' as BadgeStatus, customLabel: 'Watch' };
   }
-  return { status: 'watch' as BadgeStatus, customLabel: 'Not Worth It' };
+  return { status: 'watch' as BadgeStatus, customLabel: 'Not worth it' };
 }
 
 function primaryInsight(analysis: CoverageAnalysisDTO | null, hasAnalysis: boolean) {

@@ -61,7 +61,7 @@ function statusMeta(
   if (foundSavingsCount > 0) {
     return {
       status: 'excellent' as BadgeStatus,
-      customLabel: 'Found Savings',
+      customLabel: 'Found savings',
     };
   }
   return {

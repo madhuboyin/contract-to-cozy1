@@ -91,14 +91,23 @@ function formatDateLabel(date?: string | Date | null) {
   return d.toLocaleDateString();
 }
 
-function riskBadge(riskLevel?: string | null) {
+function riskBadge(riskLevel?: string | null, suppressed = false) {
   if (!riskLevel) return null;
 
   const level = safeUpper(riskLevel);
 
+  if (suppressed) {
+    if (level === 'CRITICAL' || level === 'HIGH') {
+      return <StatusBadge status="critical" customLabel="High priority" />;
+    }
+    if (level === 'ELEVATED' || level === 'MODERATE' || level === 'MEDIUM') {
+      return <StatusBadge status="action" customLabel="Med priority" />;
+    }
+  }
+
   switch (level) {
     case 'CRITICAL':
-      return <StatusBadge status="critical" customLabel="At Risk" />;
+      return <StatusBadge status="critical" customLabel="At risk" />;
     case 'HIGH':
       return <StatusBadge status="action" customLabel="Needs attention" />;
     case 'ELEVATED':
@@ -427,7 +436,8 @@ export const OrchestrationActionCard: React.FC<Props> = ({
               {actionTitle}
             </h3>
 
-            {riskBadge(action.riskLevel)}
+            {riskBadge(action.riskLevel, suppressed)}
+            {suppressed && <StatusBadge status="suppressed" />}
             {signalBadge(action)}
             {categoryChipLabel && (
               <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700">

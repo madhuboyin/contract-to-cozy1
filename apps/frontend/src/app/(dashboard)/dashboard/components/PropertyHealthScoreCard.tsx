@@ -36,7 +36,7 @@ function getHealthLabel(score: number) {
 
 function getHealthPriority(score: number, maintenanceCount: number): { status: BadgeStatus; customLabel?: string } {
   if (maintenanceCount >= 2 || score < 60) {
-    return { status: "action", customLabel: "Needs Focus" };
+    return { status: "action", customLabel: "Needs focus" };
   }
   if (maintenanceCount === 1) {
     return { status: "watch" };
@@ -126,6 +126,8 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         <ScoreRing
           value={healthScore}
           maxValue={100}
+          size={72}
+          strokeWidth={6}
           colorScheme="auto"
           label={String(healthScore)}
           ariaLabel={`Health: ${healthScore} out of 100, ${healthDetails.label}`}
