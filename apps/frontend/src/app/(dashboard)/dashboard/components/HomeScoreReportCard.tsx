@@ -14,11 +14,13 @@ interface HomeScoreReportCardProps {
 }
 
 const CARD_BASE =
-  "score-card score-card-status-tinted score-card-status-amber score-card-status-animate flex flex-col gap-3 rounded-xl p-4 shadow-sm";
+  "score-card score-card-status-tinted score-card-status-amber score-card-status-animate flex h-full flex-col gap-3 rounded-xl p-4 shadow-sm";
 const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
 const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
 const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
 const META_VALUE = "text-[13px] font-medium text-foreground";
+const DESCRIPTION_CLASS =
+  "text-xs text-muted-foreground leading-relaxed line-clamp-2 min-h-[2.4rem] mb-3";
 
 type NormalizedScoreBand = "EXCELLENT" | "GOOD" | "FAIR" | "NEEDS_ATTENTION";
 
@@ -65,33 +67,6 @@ function buildHomeScoreInsight(reasonsCount: number, scoreBand: NormalizedScoreB
   if (scoreBand === "FAIR") return "A few assets are pulling overall quality down.";
   if (reasonsCount <= 1) return "One issue is currently weighing on readiness.";
   return `${reasonsCount} issues are currently weighing on readiness.`;
-}
-
-function toReasonLine(reason: unknown): string {
-  if (reason === null || reason === undefined) return "";
-
-  if (typeof reason === "object") {
-    const reasonObj = reason as { title?: unknown; detail?: unknown };
-    const title = String(reasonObj.title ?? "").trim();
-    const detail = String(reasonObj.detail ?? "").trim();
-    const combined = [title, detail].filter(Boolean).join(": ");
-    if (!combined) return "";
-    const normalized = combined.replace(/\s+/g, " ");
-    if (normalized.length <= 96) return normalized;
-    return `${normalized.slice(0, 95).trimEnd()}…`;
-  }
-
-  const normalized = String(reason).trim().replace(/\s+/g, " ");
-  if (!normalized) return "";
-  if (normalized.length <= 80) return normalized;
-  return `${normalized.slice(0, 79).trimEnd()}…`;
-}
-
-function buildHomeScoreMeaning(scoreBand: NormalizedScoreBand): string {
-  if (scoreBand === "EXCELLENT") return "Home fundamentals look resilient this week.";
-  if (scoreBand === "GOOD") return "Core systems are healthy with a few watch items.";
-  if (scoreBand === "FAIR") return "Quality is mixed and may need near-term upkeep.";
-  return "Unresolved items are creating meaningful drag.";
 }
 
 function buildHomeScorePriority(
@@ -204,12 +179,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
   const confidence = report?.confidence ?? "LOW";
   const confidencePct = getConfidencePct(confidence);
   const reasonsCount = report?.topReasonsScoreNotHigher?.length ?? 0;
-  const reasonPreview = (report?.topReasonsScoreNotHigher ?? [])
-    .map((reason) => toReasonLine(reason))
-    .filter(Boolean)
-    .slice(0, 2);
-  const insight = buildHomeScoreInsight(reasonsCount, scoreBand);
-  const meaning = buildHomeScoreMeaning(scoreBand);
+  const description = buildHomeScoreInsight(reasonsCount, scoreBand);
   const badge = buildHomeScorePriority(reasonsCount, scoreBand);
 
   return (
@@ -222,28 +192,31 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <StatusBadge status={badge.status} customLabel={badge.customLabel} />
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex justify-center">
         <ScoreRing
           value={score}
           maxValue={100}
-          size={72}
-          strokeWidth={5}
+          size={88}
+          strokeWidth={6}
+          ringPadding={5}
           colorScheme="amber"
           label={String(score)}
-          labelFontWeight={500}
+          labelFontSize={22}
+          labelFontWeight={600}
           ariaLabel={`HomeScore: ${score} out of 100, ${scoreLabel}`}
         />
-        <div className="min-w-0">
-          <div className={cn("text-[22px] font-semibold leading-none", scoreColor)}>{scoreLabel}</div>
-          <div className="mt-1 text-sm leading-snug text-muted-foreground">
-            {meaning}
-          </div>
-        </div>
       </div>
 
-      <div>
-        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Confidence</div>
-        <div className="h-1 overflow-hidden rounded bg-border">
+      <div className={cn("text-center text-[20px] font-bold leading-none", scoreColor)}>{scoreLabel}</div>
+      <p className="text-center text-[11px] text-muted-foreground whitespace-nowrap">Quality mixed</p>
+
+      <div className="h-px bg-border/80" />
+
+      <p className={DESCRIPTION_CLASS}>{description}</p>
+
+      <div className="conf-wrap mb-3">
+        <div className="mb-1 text-[10px] uppercase tracking-[0.06em] text-muted-foreground">Confidence</div>
+        <div className="h-[3px] overflow-hidden rounded bg-border">
           <div
             className={cn("h-full rounded transition-all duration-700", getConfidenceFillColor(confidence))}
             style={{ width: `${confidencePct}%` }}
@@ -251,24 +224,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         </div>
       </div>
 
-      <p className="text-[11px] leading-relaxed text-muted-foreground">{insight}</p>
-
-      {reasonPreview.length > 0 ? (
-        <details>
-          <summary className="cursor-pointer select-none list-none text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
-            Top drivers
-          </summary>
-          <ul className="mt-1.5 space-y-1 border-l border-border pl-2.5">
-            {reasonPreview.map((reason) => (
-              <li key={reason} className="text-[10px] leading-relaxed text-muted-foreground">
-                {reason}
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-
-      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
+      <div className="grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
         <div>
           <span className={SUPPORT_LABEL}>Elevated assets</span>
           <div className={cn(META_VALUE, reasonsCount > 0 ? "text-amber-600" : "text-foreground")}>
@@ -285,7 +241,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
       <Link
         href={reportLink}
-        className="group inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
+        className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
         Open home score details
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />

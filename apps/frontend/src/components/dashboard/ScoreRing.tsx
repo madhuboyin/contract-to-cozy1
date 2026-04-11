@@ -5,13 +5,20 @@ interface ScoreRingProps {
   maxValue?: number;
   size?: number;
   strokeWidth?: number;
+  ringPadding?: number;
   colorScheme: 'teal' | 'amber' | 'red' | 'auto';
   label: string;
+  subLabel?: string;
   animate?: boolean;
   className?: string;
   ariaLabel?: string;
   labelFontSize?: number;
   labelFontWeight?: number | string;
+  labelY?: number;
+  subLabelFontSize?: number;
+  subLabelFontWeight?: number | string;
+  subLabelOpacity?: number;
+  subLabelY?: number;
 }
 
 function clampRatio(value: number, maxValue: number) {
@@ -45,15 +52,22 @@ export function ScoreRing({
   maxValue = 100,
   size = 52,
   strokeWidth = 5,
+  ringPadding = 0,
   colorScheme,
   label,
+  subLabel,
   animate = true,
   className,
   ariaLabel,
   labelFontSize,
   labelFontWeight,
+  labelY,
+  subLabelFontSize,
+  subLabelFontWeight,
+  subLabelOpacity = 0.65,
+  subLabelY,
 }: ScoreRingProps) {
-  const radius = (size - strokeWidth) / 2;
+  const radius = Math.max(0, size / 2 - strokeWidth / 2 - ringPadding);
   const circumference = 2 * Math.PI * radius;
   const ratio = clampRatio(value, maxValue);
   const dashArray = ratio * circumference;
@@ -61,6 +75,10 @@ export function ScoreRing({
   const color = ringColor(colorScheme, ratio);
   const resolvedFontSize = labelFontSize ?? centerFontSize(size, label);
   const resolvedFontWeight = labelFontWeight ?? 600;
+  const resolvedLabelY = labelY ?? (subLabel ? size / 2 + 3 : size / 2 + 4);
+  const resolvedSubLabelY = subLabelY ?? size / 2 + 17;
+  const resolvedSubLabelFontSize = subLabelFontSize ?? (size >= 72 ? 10 : 8);
+  const resolvedSubLabelFontWeight = subLabelFontWeight ?? 500;
 
   return (
     <svg
@@ -95,7 +113,7 @@ export function ScoreRing({
       />
       <text
         x={size / 2}
-        y={size / 2 + 4}
+        y={resolvedLabelY}
         textAnchor="middle"
         fontSize={resolvedFontSize}
         fontWeight={resolvedFontWeight}
@@ -103,6 +121,19 @@ export function ScoreRing({
       >
         {label}
       </text>
+      {subLabel ? (
+        <text
+          x={size / 2}
+          y={resolvedSubLabelY}
+          textAnchor="middle"
+          fontSize={resolvedSubLabelFontSize}
+          fontWeight={resolvedSubLabelFontWeight}
+          fill={color}
+          opacity={subLabelOpacity}
+        >
+          {subLabel}
+        </text>
+      ) : null}
     </svg>
   );
 }

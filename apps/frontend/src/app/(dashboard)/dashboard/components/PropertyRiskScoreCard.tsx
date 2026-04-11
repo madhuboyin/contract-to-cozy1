@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, HelpCircle, Loader2, Shield } from "lucide-react";
+import { ArrowRight, Loader2, Shield } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { AssetRiskDetail, PrimaryRiskSummary, RiskSummaryStatus } from "@/types";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ScoreRing } from "@/components/dashboard/ScoreRing";
 import { BadgeStatus, StatusBadge } from "@/components/ui/StatusBadge";
@@ -19,11 +18,13 @@ type RiskSummaryCardModel = PrimaryRiskSummary & {
 };
 
 const CARD_BASE =
-  "score-card score-card-status-tinted score-card-status-red score-card-status-animate flex flex-col gap-3 rounded-xl p-4 shadow-sm";
+  "score-card score-card-status-tinted score-card-status-red score-card-status-animate flex h-full flex-col gap-3 rounded-xl p-4 shadow-sm";
 const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
 const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
 const SUPPORT_LABEL = "text-[10px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
 const META_VALUE = "text-[13px] font-medium text-foreground";
+const DESCRIPTION_CLASS =
+  "text-xs text-muted-foreground leading-relaxed line-clamp-2 min-h-[2.4rem] mb-3";
 const EXPOSURE_CRITICAL_THRESHOLD = 10_000;
 
 function formatCurrency(value: number) {
@@ -191,6 +192,10 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
   const exposureTone = totalExposure === 0 ? "text-teal-600" : "text-red-600";
   const coveragePct = Math.round(coverageRatio * 100);
   const coverageLabel = `${coveragePct}%`;
+  const description =
+    weeklyChange === "No change"
+      ? meaning
+      : `${meaning} Weekly change: ${weeklyDeltaLabel(weeklyChange)}.`;
 
   return (
     <div className={CARD_BASE}>
@@ -202,31 +207,37 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
         <StatusBadge status={badge.status} customLabel={badge.label} />
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex justify-center">
         <ScoreRing
           value={coverageRatio * 100}
           maxValue={100}
-          size={72}
-          strokeWidth={5}
+          size={88}
+          strokeWidth={6}
+          ringPadding={5}
           colorScheme={totalExposure > 0 ? "red" : "teal"}
           label={coverageLabel}
-          labelFontWeight={500}
+          subLabel="covered"
+          labelFontSize={16}
+          labelFontWeight={600}
+          subLabelFontSize={10}
+          subLabelOpacity={0.65}
           ariaLabel={`Risk Exposure coverage: ${Math.round(coverageRatio * 100)}% covered, ${formatCurrency(
             totalExposure,
           )} gap`}
         />
-        <div className="min-w-0">
-          <div className={cn("text-[22px] font-bold leading-none", exposureTone)}>{exposureHeadline}</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {totalExposure === 0 ? "Fully protected" : "Unprotected exposure"}
-          </div>
-        </div>
       </div>
 
-      <p className="text-sm leading-snug text-muted-foreground">{meaning}</p>
+      <div className={cn("text-center text-[20px] font-bold leading-none", exposureTone)}>{exposureHeadline}</div>
+      <p className="text-center text-[11px] text-muted-foreground whitespace-nowrap">Unprotected exposure</p>
 
-      <div className="mt-auto border-t border-border pt-3">
-        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+      <div className="h-px bg-border/80" />
+
+      <p className={DESCRIPTION_CLASS}>{description}</p>
+
+      <div className="conf-spacer h-5 mb-3" aria-hidden="true" />
+
+      <div className="border-t border-border pt-3">
+        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
           <div>
             <span className={SUPPORT_LABEL}>Covered</span>
             <div className={cn(META_VALUE, "text-teal-600")}>{formatCurrency(Math.round(coveredAmount))}</div>
@@ -237,37 +248,12 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
               {formatCurrency(totalExposure)}
             </div>
           </div>
-          <div>
-            <span className={SUPPORT_LABEL}>Weekly change</span>
-            <div className={META_VALUE}>
-              {weeklyDeltaLabel(weeklyChange)}
-            </div>
-          </div>
         </div>
       </div>
 
-      <TooltipProvider delayDuration={120}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label="How risk exposure is calculated"
-              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <HelpCircle className="h-3.5 w-3.5" />
-              How this is calculated
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="start" className="max-w-[280px] text-[11px] leading-relaxed">
-            Exposure combines each asset&apos;s estimated cost, risk probability, and coverage status.
-            Coverage ratio uses covered value over total asset value.
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
       <Link
         href={reportLink}
-        className="group inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
+        className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
         Open risk details
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
