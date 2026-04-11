@@ -1,11 +1,14 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import styles from './AhaHero.module.css';
 
 type AhaHeroProps = {
   propertyLabel: string;
+  isReturningVisitor: boolean;
+  showSpotlight?: boolean;
   title: string;
   subtitle: string;
   briefLabel: string;
@@ -24,6 +27,8 @@ type AhaHeroProps = {
 
 export default function AhaHero({
   propertyLabel,
+  isReturningVisitor,
+  showSpotlight = false,
   title,
   subtitle,
   briefLabel,
@@ -39,6 +44,18 @@ export default function AhaHero({
   confidenceLabel,
   feed,
 }: AhaHeroProps) {
+  const [showCoachmark, setShowCoachmark] = useState(showSpotlight);
+
+  useEffect(() => {
+    setShowCoachmark(showSpotlight);
+  }, [showSpotlight]);
+
+  useEffect(() => {
+    if (!showCoachmark) return;
+    const timeoutId = window.setTimeout(() => setShowCoachmark(false), 9000);
+    return () => window.clearTimeout(timeoutId);
+  }, [showCoachmark]);
+
   return (
     <section className={styles.hero}>
       <div className={styles.grid}>
@@ -52,10 +69,26 @@ export default function AhaHero({
           </p>
 
           <div className={styles.ctaRow}>
-            <Link href={ctaHref} className={styles.cta} onClick={onCtaClick}>
-              {ctaLabel}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className={styles.ctaStack}>
+              <Link
+                href={ctaHref}
+                className={`${styles.cta} ${showCoachmark ? styles.ctaSpotlight : ''}`}
+                onClick={onCtaClick}
+              >
+                {ctaLabel}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              {showCoachmark && (
+                <button
+                  type="button"
+                  className={styles.coachmark}
+                  onClick={() => setShowCoachmark(false)}
+                  aria-label="Dismiss first action tip"
+                >
+                  Recommended first click
+                </button>
+              )}
+            </div>
             <span className={styles.pill}>{etaLabel}</span>
             <span className={styles.pill}>{impactLabel}</span>
             <span className={styles.pill}>{confidenceLabel}</span>
@@ -82,8 +115,12 @@ export default function AhaHero({
       <div className={styles.feed}>
         <p className={styles.feedTitle}>Since Last Refresh</p>
         <div className={styles.feedGrid}>
-          {feed.map((item) => (
-            <div key={item} className={styles.feedItem}>
+          {feed.map((item, index) => (
+            <div
+              key={`${item}-${index}`}
+              className={styles.feedItem}
+              style={{ animationDelay: `${index * 90}ms` }}
+            >
               {item}
             </div>
           ))}

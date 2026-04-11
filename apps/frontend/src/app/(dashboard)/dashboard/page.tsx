@@ -863,6 +863,8 @@ export default function DashboardPage() {
           <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-4 md:pt-5">
             <AhaHero
               propertyLabel={ahaPropertyLabel}
+              isReturningVisitor={isReturningVisitor}
+              showSpotlight={!isReturningVisitor}
               title={ahaTitle}
               subtitle={ahaSubtitle}
               briefLabel={ahaBriefLabel}
@@ -914,6 +916,8 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-5 md:pt-6">
           <AhaHero
             propertyLabel={ahaPropertyLabel}
+            isReturningVisitor={isReturningVisitor}
+            showSpotlight={!isReturningVisitor}
             title={ahaTitle}
             subtitle={ahaSubtitle}
             briefLabel={ahaBriefLabel}
