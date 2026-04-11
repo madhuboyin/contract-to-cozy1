@@ -26,7 +26,9 @@ type AhaHeroProps = {
   purchasePriceCents?: number | null;
   homeScore?: number | null;
   financialScore?: number | null;
+  financialScoreLoading?: boolean;
   criticalTaskCount?: number;
+  criticalTaskCountLoading?: boolean;
 };
 
 function formatCurrency(cents?: number | null): string {
@@ -50,10 +52,12 @@ function MiniStat({
   value,
   label,
   color,
+  loading = false,
 }: {
-  value: string | number;
+  value: string | number | null;
   label: string;
   color: 'amber' | 'teal' | 'red';
+  loading?: boolean;
 }) {
   const colorMap = {
     amber: 'text-amber-400',
@@ -63,7 +67,16 @@ function MiniStat({
 
   return (
     <div className="rounded-lg bg-white/[0.06] px-3 py-2">
-      <div className={`text-base font-semibold ${colorMap[color]}`}>{value}</div>
+      <div className={`text-base font-semibold ${colorMap[color]}`}>
+        {loading ? (
+          <>
+            <span aria-hidden="true" className="block h-5 w-12 animate-pulse rounded bg-white/20" />
+            <span className="sr-only">Loading {label}</span>
+          </>
+        ) : (
+          value ?? 'N/A'
+        )}
+      </div>
       <div className="mt-0.5 text-[10px] text-[#6B8499]">{label}</div>
     </div>
   );
@@ -80,14 +93,16 @@ export default function AhaHero({
   etaLabel,
   impactLabel,
   confidenceLabel,
-  feed,
+  feed: _feed,
   checkInStreak = 0,
   equityGainCents = null,
   appraisedValueCents = null,
   purchasePriceCents = null,
   homeScore = null,
   financialScore = null,
+  financialScoreLoading = false,
   criticalTaskCount = 0,
+  criticalTaskCountLoading = false,
 }: AhaHeroProps) {
   const formattedDate = formatDisplayDate();
   const chips = [etaLabel, impactLabel, confidenceLabel].filter(Boolean);
@@ -102,12 +117,12 @@ export default function AhaHero({
 
   return (
     <section className="relative overflow-hidden rounded-2xl bg-[#0f1f2e] p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <span className="text-[10px] uppercase tracking-widest text-[#6ECFA8]">
           {formattedDate} · {isReturningVisitor ? 'Morning Home Pulse' : 'Personalized Home Brief'}
         </span>
         {safeStreak > 0 && (
-          <div className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1">
+          <div className="shrink-0 flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1">
             <span className="text-xs font-medium text-amber-400">🔥 {safeStreak}-day streak</span>
           </div>
         )}
@@ -147,20 +162,20 @@ export default function AhaHero({
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <MiniStat value={homeScore !== null ? Math.round(homeScore) : '—'} label="HomeScore" color="amber" />
+        <MiniStat value={homeScore !== null ? Math.round(homeScore) : 'N/A'} label="HomeScore" color="amber" />
         <MiniStat
-          value={financialScore !== null ? Math.round(financialScore) : '—'}
+          value={financialScore !== null ? Math.round(financialScore) : null}
           label="Financial"
           color="teal"
+          loading={financialScoreLoading}
         />
-        <MiniStat value={`${criticalTaskCount} critical`} label="Spring tasks" color="red" />
+        <MiniStat
+          value={`${criticalTaskCount} critical`}
+          label="Spring tasks"
+          color="red"
+          loading={criticalTaskCountLoading}
+        />
       </div>
-
-      {feed.length > 0 && (
-        <div className="mt-4 text-xs text-[#6B8499]">
-          {feed.slice(0, 3).join(' · ')}
-        </div>
-      )}
     </section>
   );
 }

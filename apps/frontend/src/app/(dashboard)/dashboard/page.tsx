@@ -44,6 +44,8 @@ import MobileHomeBuyerDashboard from './components/MobileHomeBuyerDashboard';
 import { useCelebration } from '@/hooks/useCelebration';
 import { MilestoneCelebration } from '@/components/ui/MilestoneCelebration';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import { seasonalAPI } from '@/lib/api/seasonal.api';
+import { useQuery } from '@tanstack/react-query';
 import {
   appendGuidanceContinuityToHref,
   extractGuidanceContinuityContext,
@@ -437,6 +439,27 @@ export default function DashboardPage() {
       ? selectedPropertyId
       : properties[0]?.id;
 
+  const financialScoreQuery = useQuery({
+    queryKey: ['property-score-snapshot', effectiveSelectedPropertyId, 'FINANCIAL'],
+    queryFn: async () => {
+      if (!effectiveSelectedPropertyId) return null;
+      return api.getPropertyScoreSnapshots(effectiveSelectedPropertyId, 16);
+    },
+    enabled: Boolean(effectiveSelectedPropertyId),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const seasonalChecklistQuery = useQuery({
+    queryKey: ['seasonal-checklist', effectiveSelectedPropertyId],
+    queryFn: async () => {
+      if (!effectiveSelectedPropertyId) return null;
+      return seasonalAPI.getCurrentChecklist(effectiveSelectedPropertyId);
+    },
+    enabled: Boolean(effectiveSelectedPropertyId),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+
   const resolveLocalUpdateHref = useCallback(
     (href: string | null | undefined) => {
       const fallbackHref = href || '/dashboard';
@@ -707,10 +730,19 @@ export default function DashboardPage() {
   }
   const heroCheckInStreak = Math.max(0, selectedProperty?.currentStreak ?? 0);
   const heroHomeScore = selectedProperty?.healthScore?.totalScore ?? null;
-  const heroFinancialScore: number | null = null;
-  const heroCriticalTaskCount = scopedUrgentActions.filter(
-    (action) => action.type === 'MAINTENANCE_OVERDUE' || action.type === 'RENEWAL_EXPIRED' || action.type === 'HEALTH_INSIGHT'
-  ).length;
+  const heroFinancialScoreRaw = financialScoreQuery.data?.scores?.FINANCIAL?.latest?.score;
+  const heroFinancialScore =
+    typeof heroFinancialScoreRaw === 'number' && Number.isFinite(heroFinancialScoreRaw)
+      ? Math.round(heroFinancialScoreRaw)
+      : null;
+  const seasonalChecklistItems = Array.isArray(seasonalChecklistQuery.data?.checklist?.items)
+    ? seasonalChecklistQuery.data.checklist.items
+    : [];
+  const heroCriticalTaskCount = seasonalChecklistItems.filter((item: { priority?: string; status?: string }) => {
+    const priority = String(item.priority || '').toUpperCase();
+    const status = String(item.status || '').toLowerCase();
+    return priority === 'CRITICAL' && ['recommended', 'added'].includes(status);
+  }).length;
   const heroPurchasePriceCents = selectedProperty?.purchasePriceCents ?? null;
   const heroAppraisedValueCents = selectedProperty?.lastAppraisedValue ?? null;
   const heroEquityGainCents =
@@ -900,7 +932,9 @@ export default function DashboardPage() {
               purchasePriceCents={heroPurchasePriceCents}
               homeScore={heroHomeScore}
               financialScore={heroFinancialScore}
+              financialScoreLoading={financialScoreQuery.isLoading}
               criticalTaskCount={heroCriticalTaskCount}
+              criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
             />
           </div>
         )}
@@ -960,7 +994,9 @@ export default function DashboardPage() {
             purchasePriceCents={heroPurchasePriceCents}
             homeScore={heroHomeScore}
             financialScore={heroFinancialScore}
+            financialScoreLoading={financialScoreQuery.isLoading}
             criticalTaskCount={heroCriticalTaskCount}
+            criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
           />
         </div>
       )}
@@ -1055,7 +1091,7 @@ export default function DashboardPage() {
             className="mb-6 rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4"
             {...sectionMotion(2)}
           >
-            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
               <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
               <PropertyHealthScoreCard property={selectedProperty} />
               <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />

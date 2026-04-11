@@ -5,13 +5,15 @@
 import React from 'react';
 import Link from 'next/link';
 import {
+  AlertCircle,
   AlertTriangle,
   CheckCircle2,
-  DollarSign,
   ArrowRight,
   ListChecks,
 } from 'lucide-react';
-import { MaintenanceTaskStats } from '@/types';
+import { OrchestratedActionDTO, MaintenanceTaskStats } from '@/types';
+import { api } from '@/lib/api/client';
+import { adaptOrchestrationSummary } from '@/adapters/orchestration.adapter';
 
 interface HomePulseProps {
   stats: MaintenanceTaskStats | null;
@@ -19,23 +21,69 @@ interface HomePulseProps {
 }
 
 export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
+  const [suppressedSummary, setSuppressedSummary] = React.useState({
+    count: 0,
+    cost: 0,
+    loading: false,
+  });
+
+  React.useEffect(() => {
+    if (!selectedPropertyId) {
+      setSuppressedSummary({ count: 0, cost: 0, loading: false });
+      return;
+    }
+
+    let cancelled = false;
+    setSuppressedSummary((prev) => ({ ...prev, loading: true }));
+
+    api
+      .getOrchestrationSummary(selectedPropertyId)
+      .then((summary) => {
+        if (cancelled) return;
+        const adapted = adaptOrchestrationSummary(summary);
+        const suppressedActions = adapted.suppressedActions ?? [];
+        const suppressedCost = suppressedActions.reduce((sum, action) => {
+          const estimatedCost = Number(
+            action.exposure ?? (action as OrchestratedActionDTO & { estimatedCost?: number | null }).estimatedCost ?? 0
+          );
+          return sum + (Number.isFinite(estimatedCost) ? estimatedCost : 0);
+        }, 0);
+        setSuppressedSummary({
+          count: suppressedActions.length,
+          cost: suppressedCost,
+          loading: false,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSuppressedSummary({ count: 0, cost: 0, loading: false });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPropertyId]);
+
   // No stats yet (loading or no property selected)
   if (!stats) return null;
 
   const overdueCount = stats.overdue || 0;
   const urgentCount =
     (stats.byPriority?.urgent || 0) + (stats.byPriority?.high || 0);
-  const needsAttention = overdueCount + urgentCount;
+  const hasSuppressedItems = suppressedSummary.count > 0;
+  const needsAttention = overdueCount + urgentCount + suppressedSummary.count;
   const activeTasks =
     (stats.pending || 0) + (stats.inProgress || 0);
+  const combinedActiveTasks = activeTasks + suppressedSummary.count;
   const completed = stats.completed || 0;
   const total = stats.total || 0;
   const estimatedCost = stats.totalEstimatedCost || 0;
+  const combinedEstimatedCost = estimatedCost + suppressedSummary.cost;
   const completionRate =
     total > 0 ? Math.round((completed / total) * 100) : 0;
 
   // === EMPTY STATE: No tasks at all ===
-  if (total === 0) {
+  if (total === 0 && !hasSuppressedItems && !suppressedSummary.loading) {
     return (
       <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-5 py-6 text-center">
         <ListChecks className="h-8 w-8 text-gray-300 mx-auto mb-2" />
@@ -59,7 +107,7 @@ export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
   }
 
   // === ALL CLEAR STATE: Nothing overdue, nothing urgent ===
-  if (needsAttention === 0 && overdueCount === 0) {
+  if (needsAttention === 0 && overdueCount === 0 && !hasSuppressedItems) {
     return (
       <div className="space-y-3">
         {/* All-clear banner */}
@@ -77,11 +125,13 @@ export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
 
         {/* Compact stats row underneath */}
         <CompactStatsRow
-          activeTasks={activeTasks}
-          estimatedCost={estimatedCost}
+          activeTasks={combinedActiveTasks}
+          estimatedCost={combinedEstimatedCost}
           completionRate={completionRate}
           completed={completed}
           total={total}
+          suppressedCount={suppressedSummary.count}
+          includesSuppressed={hasSuppressedItems}
           selectedPropertyId={selectedPropertyId}
         />
       </div>
@@ -91,6 +141,20 @@ export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
   // === ATTENTION STATE: Overdue and/or urgent tasks ===
   return (
     <div className="space-y-3">
+      {hasSuppressedItems && overdueCount === 0 && urgentCount === 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
+          <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-amber-900">
+              {suppressedSummary.count} high-priority task{suppressedSummary.count === 1 ? '' : 's'} suppressed
+            </p>
+            <p className="text-xs text-amber-700">
+              Review suppressed items in Action Center. They may still need attention.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Overdue alert — only when overdue > 0 */}
       {overdueCount > 0 && (
         <Link
@@ -139,11 +203,13 @@ export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
 
       {/* Compact stats row */}
       <CompactStatsRow
-        activeTasks={activeTasks}
-        estimatedCost={estimatedCost}
+        activeTasks={combinedActiveTasks}
+        estimatedCost={combinedEstimatedCost}
         completionRate={completionRate}
         completed={completed}
         total={total}
+        suppressedCount={suppressedSummary.count}
+        includesSuppressed={hasSuppressedItems}
         selectedPropertyId={selectedPropertyId}
       />
     </div>
@@ -158,6 +224,8 @@ interface CompactStatsRowProps {
   completionRate: number;
   completed: number;
   total: number;
+  suppressedCount: number;
+  includesSuppressed: boolean;
   selectedPropertyId: string | undefined;
 }
 
@@ -167,6 +235,8 @@ function CompactStatsRow({
   completionRate,
   completed,
   total,
+  suppressedCount,
+  includesSuppressed,
   selectedPropertyId,
 }: CompactStatsRowProps) {
   return (
@@ -182,8 +252,10 @@ function CompactStatsRow({
         <p className="text-xl font-bold text-gray-900 mt-0.5">
           {activeTasks}
         </p>
-        <p className="text-[11px] text-gray-400 mt-0.5">
-          {activeTasks === 1 ? 'task' : 'tasks'} in progress
+        <p className={`text-[11px] mt-0.5 ${includesSuppressed ? 'text-amber-600' : 'text-gray-400'}`}>
+          {includesSuppressed
+            ? `+${suppressedCount} suppressed`
+            : `${activeTasks === 1 ? 'task' : 'tasks'} in progress`}
         </p>
       </Link>
 
@@ -195,8 +267,8 @@ function CompactStatsRow({
         <p className="text-xl font-bold text-gray-900 mt-0.5">
           ${estimatedCost.toLocaleString()}
         </p>
-        <p className="text-[11px] text-gray-400 mt-0.5">
-          for active tasks
+        <p className={`text-[11px] mt-0.5 ${includesSuppressed ? 'text-amber-600' : 'text-gray-400'}`}>
+          {includesSuppressed ? 'Includes suppressed items' : 'for active tasks'}
         </p>
       </div>
 

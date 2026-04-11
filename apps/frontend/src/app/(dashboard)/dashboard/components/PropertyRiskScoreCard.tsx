@@ -65,9 +65,9 @@ function getExposureBadge(totalExposure: number): { status: BadgeStatus; label: 
     return { status: "excellent", label: "Protected" };
   }
   if (totalExposure >= EXPOSURE_CRITICAL_THRESHOLD) {
-    return { status: "critical", label: "High Risk" };
+    return { status: "critical", label: "High risk" };
   }
-  return { status: "action", label: "Needs Focus" };
+  return { status: "action", label: "Needs focus" };
 }
 
 function buildRiskMeaning(coverageRatio: number, totalExposure: number): string {
@@ -195,7 +195,8 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
 
   const exposureHeadline = totalExposure === 0 ? "$0 gap" : formatCurrency(totalExposure);
   const exposureTone = totalExposure === 0 ? "text-teal-600" : "text-red-600";
-  const coverageLabel = coverageRatio < 0.3 ? "Low" : "OK";
+  const coveragePct = Math.round(coverageRatio * 100);
+  const coverageLabel = `${coveragePct}%`;
 
   return (
     <div className={CARD_BASE}>
@@ -211,6 +212,8 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
         <ScoreRing
           value={coverageRatio * 100}
           maxValue={100}
+          size={72}
+          strokeWidth={6}
           colorScheme="auto"
           label={coverageLabel}
           ariaLabel={`Risk Exposure coverage: ${Math.round(coverageRatio * 100)}% covered, ${formatCurrency(

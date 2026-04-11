@@ -26,7 +26,7 @@ import {
   completeMicroAction,
 } from '@/lib/api/dailySnapshotApi';
 import { Button } from '@/components/ui/button';
-import ScoreGauge from '@/components/ui/ScoreGauge';
+import { ScoreRing } from '@/components/dashboard/ScoreRing';
 import humanizeActionType from '@/lib/utils/humanize';
 import LottieBadge from '@/components/ui/LottieBadge';
 import {
@@ -137,7 +137,7 @@ function scoreTooltip(kind: SummaryKind) {
     return 'Health score measures how well-maintained your home is across all tracked items.';
   }
   if (kind === 'RISK') {
-    return 'Your risk level score (0-100) based on current weather conditions, overdue maintenance, and property-specific factors. Lower is better.';
+    return 'Risk ring shows protection level (100 - risk exposure). Lower protection indicates higher current risk.';
   }
   return 'Financial score reflects expected cost efficiency based on projected maintenance and risk trends.';
 }
@@ -166,9 +166,10 @@ function formatDeltaPoints(delta: number) {
 
 function getPulseCardStyle(kind: SummaryKind, score: number) {
   if (kind === 'RISK') {
-    if (score >= 80) return 'bg-red-50/30 border-red-200/50';
-    if (score >= 60) return 'bg-amber-50/30 border-amber-200/50';
-    return 'bg-emerald-50/30 border-emerald-200/50';
+    if (score >= 80) return 'bg-emerald-50/30 border-emerald-200/50';
+    if (score >= 60) return 'bg-teal-50/30 border-teal-200/50';
+    if (score >= 40) return 'bg-amber-50/30 border-amber-200/50';
+    return 'bg-red-50/30 border-red-200/50';
   }
 
   if (score >= 80) return 'bg-emerald-50/30 border-emerald-200/50';
@@ -198,10 +199,10 @@ function extractDateLabel(input: string): string | null {
 
 function scoreStatusClass(kind: SummaryKind, score: number) {
   if (kind === 'RISK') {
-    if (score >= 80) return 'text-red-600';
-    if (score >= 60) return 'text-amber-600';
-    if (score >= 40) return 'text-teal-600';
-    return 'text-emerald-600';
+    if (score >= 80) return 'text-emerald-600';
+    if (score >= 60) return 'text-teal-600';
+    if (score >= 40) return 'text-amber-600';
+    return 'text-red-600';
   }
   if (score >= 80) return 'text-emerald-600';
   if (score >= 60) return 'text-teal-600';
@@ -384,9 +385,13 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
         {payload.summary.map((row) => {
           const label = getMetricLabel(row.kind, row.value);
           const gaugeLabel = row.kind === 'RISK' ? 'RISK LEVEL' : row.label.toUpperCase();
-          const scoreValue =
+          const riskExposurePct =
             row.kind === 'RISK'
               ? Math.round(getMetricPosition('RISK', row.value) * 100)
+              : null;
+          const scoreValue =
+            row.kind === 'RISK'
+              ? Math.max(0, 100 - (riskExposurePct ?? 0))
               : Math.round(row.value);
           const riskExposure = new Intl.NumberFormat(undefined, {
             style: 'currency',
@@ -401,7 +406,11 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">Freeze warning</span>
               : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Weather alert</span>;
 
-          const inferredGapCount = hasRecallSignal ? recallMatchCount : scoreValue >= 60 ? 1 : 0;
+          const inferredGapCount = hasRecallSignal
+            ? recallMatchCount
+            : row.kind === 'RISK' && (riskExposurePct ?? 0) >= 60
+              ? 1
+              : 0;
           const annualCost =
             extractCurrency(`${row.reason} ${payload.homeWin.detail} ${payload.surprise.detail}`) ?? 'No data yet';
           const nextRenewal = extractDateLabel(`${payload.surprise.headline} ${payload.surprise.detail}`) ?? 'Not scheduled';
@@ -512,32 +521,26 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               </div>
 
               <div className="mt-1 flex flex-col items-center">
-                <div className="md:hidden">
-                  <ScoreGauge
+                <div className="md:hidden" title={scoreTooltip(row.kind)}>
+                  <ScoreRing
                     value={scoreValue}
-                    label={gaugeLabel}
-                    sublabel={label}
-                    size="pulse-sm"
+                    maxValue={100}
+                    size={96}
                     strokeWidth={8}
-                    animate
-                    showLabel={false}
-                    showSublabel={false}
-                    tooltipText={scoreTooltip(row.kind)}
-                    direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
+                    colorScheme="auto"
+                    label={String(scoreValue)}
+                    ariaLabel={`${gaugeLabel}: ${scoreValue} out of 100, ${label}`}
                   />
                 </div>
-                <div className="hidden md:block">
-                  <ScoreGauge
+                <div className="hidden md:block" title={scoreTooltip(row.kind)}>
+                  <ScoreRing
                     value={scoreValue}
-                    label={gaugeLabel}
-                    sublabel={label}
-                    size="pulse-md"
+                    maxValue={100}
+                    size={116}
                     strokeWidth={8}
-                    animate
-                    showLabel={false}
-                    showSublabel={false}
-                    tooltipText={scoreTooltip(row.kind)}
-                    direction={row.kind === 'RISK' ? 'lower-better' : 'higher-better'}
+                    colorScheme="auto"
+                    label={String(scoreValue)}
+                    ariaLabel={`${gaugeLabel}: ${scoreValue} out of 100, ${label}`}
                   />
                 </div>
                 <span className={`mt-1.5 text-sm font-semibold ${scoreStatusClass(row.kind, scoreValue)}`}>
