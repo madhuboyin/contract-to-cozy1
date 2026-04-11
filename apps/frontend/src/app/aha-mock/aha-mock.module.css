@@ -1,0 +1,82 @@
+.canvas {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 700px at 10% 0%, rgba(15, 118, 110, 0.2), transparent 55%),
+    radial-gradient(900px 600px at 95% 10%, rgba(14, 116, 144, 0.18), transparent 60%),
+    linear-gradient(180deg, #f3faf8 0%, #f8fbff 40%, #ffffff 100%);
+}
+
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(8px);
+  opacity: 0.5;
+  animation: float 11s ease-in-out infinite;
+}
+
+.orbA {
+  top: 5rem;
+  left: -2rem;
+  height: 10rem;
+  width: 10rem;
+  background: rgba(20, 184, 166, 0.35);
+}
+
+.orbB {
+  top: 8rem;
+  right: 4rem;
+  height: 7rem;
+  width: 7rem;
+  background: rgba(14, 165, 233, 0.35);
+  animation-delay: 0.8s;
+}
+
+.reveal {
+  animation: reveal 550ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shimmer {
+  background: linear-gradient(100deg, #0f766e 0%, #0891b2 45%, #0f766e 100%);
+  background-size: 240% 240%;
+  animation: shimmer 8s linear infinite;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .reveal,
+  .shimmer {
+    animation: none !important;
+  }
+}
