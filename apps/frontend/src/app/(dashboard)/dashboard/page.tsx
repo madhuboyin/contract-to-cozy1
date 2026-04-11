@@ -705,6 +705,21 @@ export default function DashboardPage() {
   if (ahaFeed.length < 3) {
     ahaFeed.push('Action queue sorted by urgency and homeowner impact.');
   }
+  const heroCheckInStreak = Math.max(0, selectedProperty?.currentStreak ?? 0);
+  const heroHomeScore = selectedProperty?.healthScore?.totalScore ?? null;
+  const heroFinancialScore: number | null = null;
+  const heroCriticalTaskCount = scopedUrgentActions.filter(
+    (action) => action.type === 'MAINTENANCE_OVERDUE' || action.type === 'RENEWAL_EXPIRED' || action.type === 'HEALTH_INSIGHT'
+  ).length;
+  const heroPurchasePriceCents = selectedProperty?.purchasePriceCents ?? null;
+  const heroAppraisedValueCents = selectedProperty?.lastAppraisedValue ?? null;
+  const heroEquityGainCents =
+    typeof heroPurchasePriceCents === 'number' &&
+    heroPurchasePriceCents > 0 &&
+    typeof heroAppraisedValueCents === 'number' &&
+    heroAppraisedValueCents > 0
+      ? heroAppraisedValueCents - heroPurchasePriceCents
+      : null;
 
   const handleAhaCtaClick = useCallback(() => {
     trackAhaHeroEvent('dashboard_aha_cta_clicked', {
@@ -879,6 +894,13 @@ export default function DashboardPage() {
               impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
               confidenceLabel={`${ahaConfidence}% confidence`}
               feed={ahaFeed}
+              checkInStreak={heroCheckInStreak}
+              equityGainCents={heroEquityGainCents}
+              appraisedValueCents={heroAppraisedValueCents}
+              purchasePriceCents={heroPurchasePriceCents}
+              homeScore={heroHomeScore}
+              financialScore={heroFinancialScore}
+              criticalTaskCount={heroCriticalTaskCount}
             />
           </div>
         )}
@@ -932,6 +954,13 @@ export default function DashboardPage() {
             impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
             confidenceLabel={`${ahaConfidence}% confidence`}
             feed={ahaFeed}
+            checkInStreak={heroCheckInStreak}
+            equityGainCents={heroEquityGainCents}
+            appraisedValueCents={heroAppraisedValueCents}
+            purchasePriceCents={heroPurchasePriceCents}
+            homeScore={heroHomeScore}
+            financialScore={heroFinancialScore}
+            criticalTaskCount={heroCriticalTaskCount}
           />
         </div>
       )}
@@ -999,74 +1028,71 @@ export default function DashboardPage() {
           </section>
         )}
         
-        {/* PROPERTY INTELLIGENCE SCORES - IMMEDIATELY BELOW WELCOME */}
-        <motion.div
-          className="mb-4 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-center sm:justify-between"
-          {...sectionMotion(2)}
-        >
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
-              <TrendingUp className="h-5 w-5 text-slate-600" />
+        <section className="tier-intelligence mb-8">
+          <motion.div
+            className="mb-4 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-center sm:justify-between"
+            {...sectionMotion(2)}
+          >
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
+                <TrendingUp className="h-5 w-5 text-slate-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+                  Property Intelligence Scores
+                </h2>
+                <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
-                Property Intelligence Scores
-              </h2>
-              <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
+            {effectiveSelectedPropertyId && (
+              <ShareVaultButton
+                propertyId={effectiveSelectedPropertyId}
+                propertyAddress={selectedProperty?.address}
+              />
+            )}
+          </motion.div>
+          <motion.div
+            className="mb-6 rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4"
+            {...sectionMotion(2)}
+          >
+            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
+              <PropertyHealthScoreCard property={selectedProperty} />
+              <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />
+              <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
             </div>
-          </div>
-          {effectiveSelectedPropertyId && (
-            <ShareVaultButton
-              propertyId={effectiveSelectedPropertyId}
-              propertyAddress={selectedProperty?.address}
-            />
-          )}
-        </motion.div>
-        <motion.div
-          className="mb-8 rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4"
-          {...sectionMotion(2)}
-        >
-          <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
-            <PropertyHealthScoreCard property={selectedProperty} />
-            <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />
-            <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
-          </div>
-        </motion.div>
+          </motion.div>
 
-        {/* ROOMS SNAPSHOT */}
-        <motion.div {...sectionMotion(3)}>
-          <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
-        </motion.div>
+          <motion.div {...sectionMotion(3)}>
+            <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
+          </motion.div>
+        </section>
 
-        {/* HORIZONTAL SEPARATOR */}
-        <div className="section-divider my-5 md:my-6" />
-        
-        {/* AI INSURANCE/PREMIUM DECISION TOOLS */}
-        <motion.section className="mb-4" {...sectionMotion(6)}>
-          <div className="mb-4 flex items-start gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
-              <ShieldAlert className="h-5 w-5 text-slate-600" />
+        <div className="tier-context mb-8 space-y-6">
+          <motion.section {...sectionMotion(6)}>
+            <div className="mb-4 flex items-start gap-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
+                <ShieldAlert className="h-5 w-5 text-slate-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+                  Coverage, Premium & Inaction Intelligence
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Educational guidance to compare coverage, premium pressure, and delayed-action downside.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
-                Coverage, Premium & Inaction Intelligence
-              </h2>
-              <p className="text-sm text-gray-500">
-                Educational guidance to compare coverage, premium pressure, and delayed-action downside.
-              </p>
+            <div className="rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4">
+              <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId || ''} />
+                <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId || ''} />
+                <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId || ''} />
+                <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId || ''} />
+              </div>
             </div>
-          </div>
-          <div className="rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4">
-            <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId || ''} />
-              <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId || ''} />
-              <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId || ''} />
-              <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId || ''} />
-            </div>
-          </div>
-        </motion.section>
-        <div className="section-divider my-5 md:my-6" />
+          </motion.section>
+        </div>
       </div>
 
       <DashboardShell className="pt-0 md:pt-0">

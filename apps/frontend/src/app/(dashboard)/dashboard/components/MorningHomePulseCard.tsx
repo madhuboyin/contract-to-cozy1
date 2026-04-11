@@ -9,7 +9,6 @@ import {
   Cloud,
   CloudSun,
   DollarSign,
-  Flame,
   Loader2,
   Shield,
   Snowflake,
@@ -31,7 +30,6 @@ import ScoreGauge from '@/components/ui/ScoreGauge';
 import humanizeActionType from '@/lib/utils/humanize';
 import LottieBadge from '@/components/ui/LottieBadge';
 import {
-  flamePulseAnimation,
   snowflakePulseAnimation,
 } from '@/components/animations/lottieData';
 import Link from 'next/link';
@@ -43,6 +41,11 @@ type MorningHomePulseCardProps = {
 type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
 
 const RISK_EXPOSURE_CAP = 15000;
+const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100];
+
+function getNextMilestone(current: number): number {
+  return STREAK_MILESTONES.find((milestone) => milestone > current) ?? current + 10;
+}
 
 function toneForSeverity(severity: 'LOW' | 'MEDIUM' | 'HIGH') {
   if (severity === 'HIGH') return 'border-red-200 bg-red-50 text-red-700';
@@ -68,31 +71,6 @@ function freezeLottieTone(severity: 'LOW' | 'MEDIUM' | 'HIGH') {
   return {
     iconClass: 'absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-blue-700',
     reducedBgClass: 'bg-blue-100',
-    speed: 0.8,
-  };
-}
-
-function streakTone(days: number) {
-  if (days >= 21) {
-    return {
-      badgeClass: 'bg-orange-50 text-orange-700',
-      iconClass: 'absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 text-orange-600',
-      reducedBgClass: 'bg-orange-100',
-      speed: 1.15,
-    };
-  }
-  if (days >= 7) {
-    return {
-      badgeClass: 'bg-amber-50 text-amber-700',
-      iconClass: 'absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 text-amber-600',
-      reducedBgClass: 'bg-amber-100',
-      speed: 1,
-    };
-  }
-  return {
-    badgeClass: 'bg-teal-50 text-teal-700',
-    iconClass: 'absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 text-teal-600',
-    reducedBgClass: 'bg-teal-100',
     speed: 0.8,
   };
 }
@@ -329,7 +307,8 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   );
   const freezeTone = freezeLottieTone(payload.weatherInsight.severity);
   const dailyStreak = snapshot.streaks.dailyPulseCheckin;
-  const streakToneState = streakTone(dailyStreak);
+  const nextStreakMilestone = getNextMilestone(dailyStreak);
+  const streakProgress = Math.min(100, Math.max(0, (dailyStreak / nextStreakMilestone) * 100));
   const recallSignalText = `${payload.surprise.headline} ${payload.surprise.detail}`;
   const hasRecallSignal = /recall|affected|safety/i.test(recallSignalText);
   const recallMatchCount = extractFirstCount(recallSignalText) ?? 1;
@@ -375,23 +354,31 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
             <p className="mt-0.5 text-xs font-medium uppercase tracking-wide text-gray-400">{payload.dateLabel}</p>
           </div>
         </div>
-        <span
-          className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${streakToneState.badgeClass}`}
-        >
-          {dailyStreak > 0 ? (
-            <LottieBadge
-              animationData={flamePulseAnimation}
-              icon={Flame}
-              size={20}
-              className="mr-1"
-              iconClassName={streakToneState.iconClass}
-              speed={streakToneState.speed}
-              reducedMotionBgClassName={streakToneState.reducedBgClass}
-            />
-          ) : null}
-          {dailyStreak}-day check-in streak
-        </span>
       </div>
+
+      {dailyStreak > 0 ? (
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-100 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🔥</span>
+            <div>
+              <div className="text-sm font-medium text-amber-900">{dailyStreak}-day check-in streak</div>
+              <div className="text-xs text-amber-700">
+                {Math.max(nextStreakMilestone - dailyStreak, 0)} days to your next milestone
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            <div className="text-xs font-medium text-amber-600">→ {nextStreakMilestone} days</div>
+            <div className="h-1.5 w-20 overflow-hidden rounded bg-amber-200">
+              <div className="h-full rounded bg-amber-500 transition-all duration-500" style={{ width: `${streakProgress}%` }} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-4 text-xs text-muted-foreground">
+          Check in daily to build your streak and unlock property insights.
+        </div>
+      )}
 
       <div className="grid items-stretch gap-3 md:grid-cols-3">
         {payload.summary.map((row) => {
