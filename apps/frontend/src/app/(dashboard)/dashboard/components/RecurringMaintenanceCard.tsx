@@ -85,10 +85,11 @@ export const RecurringMaintenanceCard: React.FC<RecurringMaintenanceCardProps> =
           ) : totalTasks === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <CheckCircle className="h-10 w-10 text-green-500 mb-3" />
-              <p className="text-sm font-medium text-gray-700">All maintenance up to date</p>
+              <p className="text-sm font-medium text-gray-700">Nothing urgent right now</p>
+              <p className="mt-1 text-xs text-gray-500">Your biggest maintenance items are already being tracked.</p>
               <Link href="/dashboard/maintenance-setup">
                 <Button variant="link" className="mt-2 text-blue-600">
-                  Setup Schedule <ArrowRight className="ml-1 h-3 w-3" />
+                  Add a preventive schedule <ArrowRight className="ml-1 h-3 w-3" />
                 </Button>
               </Link>
             </div>

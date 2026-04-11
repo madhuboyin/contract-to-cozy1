@@ -20,6 +20,14 @@ interface HomePulseProps {
   selectedPropertyId: string | undefined;
 }
 
+function formatUsd(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
   const [suppressedSummary, setSuppressedSummary] = React.useState({
     count: 0,
@@ -81,6 +89,18 @@ export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
   const combinedEstimatedCost = estimatedCost + suppressedSummary.cost;
   const completionRate =
     total > 0 ? Math.round((completed / total) * 100) : 0;
+  const outcomeHeadline =
+    combinedEstimatedCost > 0
+      ? `${formatUsd(combinedEstimatedCost)} estimated impact is in play`
+      : needsAttention > 0
+        ? `${needsAttention} items could become more expensive if delayed`
+        : 'Nothing urgent right now';
+  const outcomeSubline =
+    needsAttention > 0
+      ? overdueCount > 0
+        ? `${overdueCount} overdue item${overdueCount === 1 ? '' : 's'} is the biggest risk right now.`
+        : 'A quick review now can prevent avoidable spend this month.'
+      : 'Your biggest items are already being tracked and monitored.';
 
   // === EMPTY STATE: No tasks at all ===
   if (total === 0 && !hasSuppressedItems && !suppressedSummary.loading) {
@@ -110,6 +130,10 @@ export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
   if (needsAttention === 0 && overdueCount === 0 && !hasSuppressedItems) {
     return (
       <div className="space-y-3">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+          <p className="text-sm font-semibold text-emerald-900">{outcomeHeadline}</p>
+          <p className="mt-0.5 text-xs text-emerald-700">{outcomeSubline}</p>
+        </div>
         {/* All-clear banner */}
         <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50/60 px-5 py-4">
           <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
@@ -141,6 +165,10 @@ export function HomePulse({ stats, selectedPropertyId }: HomePulseProps) {
   // === ATTENTION STATE: Overdue and/or urgent tasks ===
   return (
     <div className="space-y-3">
+      <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+        <p className="text-sm font-semibold text-slate-900">{outcomeHeadline}</p>
+        <p className="mt-0.5 text-xs text-slate-600">{outcomeSubline}</p>
+      </div>
       {hasSuppressedItems && overdueCount === 0 && urgentCount === 0 && (
         <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
           <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />

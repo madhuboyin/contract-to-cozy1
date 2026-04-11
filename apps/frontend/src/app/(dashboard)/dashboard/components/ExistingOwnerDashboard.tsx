@@ -10,7 +10,7 @@ import { RecurringMaintenanceCard } from './RecurringMaintenanceCard';
 import { UpcomingRenewalsCard } from './UpcomingRenewalsCard';
 import { FavoriteProvidersCard } from './FavoriteProvidersCard';
 import { SeasonalChecklistCard } from '@/app/(dashboard)/dashboard/components/SeasonalChecklistCard';
-import { ArrowRight, Activity, AlertTriangle, ClipboardList } from 'lucide-react';
+import { ArrowRight, Activity, AlertTriangle, ClipboardList, Sparkles } from 'lucide-react';
 import { ActionCenter } from '@/components/orchestration/ActionCenter';
 import { api } from '@/lib/api/client';
 import { HomePulse } from './HomePulse';
@@ -26,6 +26,14 @@ interface ExistingOwnerDashboardProps {
   properties: ScoredProperty[];
   checklistItems: ChecklistItem[];
   selectedPropertyId: string | undefined;
+}
+
+function formatUsd(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 export const ExistingOwnerDashboard = ({
@@ -82,6 +90,24 @@ export const ExistingOwnerDashboard = ({
 
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);
   const isPropertySelected = !!selectedProperty;
+  const estimatedImpact = Number(stats?.totalEstimatedCost ?? 0);
+  const overdueCount = Number(stats?.overdue ?? 0);
+  const urgentCount = Number((stats?.byPriority?.urgent ?? 0) + (stats?.byPriority?.high ?? 0));
+  const totalAttentionItems = overdueCount + urgentCount;
+  const completionRate =
+    Number(stats?.total ?? 0) > 0
+      ? Math.round(((stats?.completed ?? 0) / Number(stats?.total ?? 1)) * 100)
+      : 0;
+  const attentionHeadline =
+    estimatedImpact > 0
+      ? `${formatUsd(estimatedImpact)} estimated impact needs review`
+      : totalAttentionItems > 0
+        ? `${totalAttentionItems} items may cost more if delayed`
+        : 'Nothing urgent right now';
+  const attentionSubline =
+    totalAttentionItems > 0
+      ? 'Top issues are ranked by downside first so one action creates immediate protection.'
+      : 'Your biggest items are already being tracked and monitored.';
   const sectionMotion = (index: number) => ({
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
@@ -91,15 +117,34 @@ export const ExistingOwnerDashboard = ({
   return (
     <div className="space-y-6 pb-8 md:space-y-8">
       <div className="tier-context mb-8 space-y-6">
-        <section className="space-y-3">
+        <section className="space-y-3 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50/70 to-white p-4 shadow-sm">
           <div className="flex items-start gap-3">
-            <div className="rounded-lg bg-blue-100 p-2">
+            <div className="rounded-lg bg-blue-100 p-2 shadow-sm">
               <AlertTriangle className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Here&apos;s what needs your attention today</h2>
-              <p className="text-sm text-gray-500">
-                A quick summary of urgent items, progress, and estimated costs.
+              <h2 className="text-2xl font-semibold text-gray-900">What matters most today</h2>
+              <p className="text-sm text-gray-600">{attentionHeadline}</p>
+              <p className="text-xs text-gray-500 mt-1">{attentionSubline}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700">Estimated impact</p>
+              <p className="text-base font-semibold text-emerald-900">
+                {estimatedImpact > 0 ? formatUsd(estimatedImpact) : 'No major cost risk'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-amber-200/80 bg-amber-50/75 px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-700">Delay risk</p>
+              <p className="text-base font-semibold text-amber-900">
+                {totalAttentionItems > 0 ? `${totalAttentionItems} priority item${totalAttentionItems === 1 ? '' : 's'}` : 'Low'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-blue-200/80 bg-blue-50/70 px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-700">Momentum</p>
+              <p className="text-base font-semibold text-blue-900">
+                {completionRate > 0 ? `${completionRate}% completion` : 'Build today'}
               </p>
             </div>
           </div>
@@ -142,20 +187,26 @@ export const ExistingOwnerDashboard = ({
         <FavoriteProvidersCard />
       </div>
 
-      <div className="tier-activity space-y-4 opacity-95">
+      <div className="tier-activity space-y-4 opacity-95 rounded-2xl border border-slate-200/70 bg-slate-50/50 p-4 shadow-sm">
         <SeasonalChecklistCard propertyId={selectedPropertyId} />
 
         <motion.section className="space-y-3" {...sectionMotion(5)}>
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-100 p-2">
-              <Activity className="h-5 w-5 text-blue-600" />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-blue-100 p-2">
+                <Activity className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-900">Activity Center</h2>
+                <p className="text-sm text-gray-500">
+                  Operational details for bookings, recurring upkeep, and renewals.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-semibold text-gray-900">Activity Center</h2>
-              <p className="text-sm text-gray-500">
-                Track upcoming bookings, maintenance, and renewals for your home.
-              </p>
-            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+              <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
+              Keep this zone lightweight and current
+            </span>
           </div>
 
           <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 lg:grid-cols-3">

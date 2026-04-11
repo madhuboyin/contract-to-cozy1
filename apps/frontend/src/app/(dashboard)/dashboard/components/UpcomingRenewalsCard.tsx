@@ -132,10 +132,11 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
           ) : displayItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <span className="text-4xl mb-3">📋</span>
-              <p className="text-sm text-gray-600 mb-4">No upcoming renewals</p>
+              <p className="text-sm text-gray-700 mb-1">No urgent renewals right now</p>
+              <p className="text-xs text-gray-500 mb-4">Coverage timing looks stable. Keep policy details updated.</p>
               <Link href={propertyId ? `/dashboard/properties/${propertyId}` : '/dashboard/properties'}>
                 <Button variant="outline" size="sm" className="gap-2">
-                  Add Coverage <ArrowRight className="h-4 w-4" />
+                  Update coverage details <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </div>

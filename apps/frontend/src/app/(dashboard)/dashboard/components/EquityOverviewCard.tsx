@@ -165,13 +165,13 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
           <LineChart className="h-5 w-5 text-emerald-700" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">Home Equity Overview</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Ownership Progress & Equity</h3>
           <p className="mt-1 text-sm text-gray-700">
             {!hasValidAppraisal
-              ? "Add your home's appraised value to track equity growth."
+              ? "Add your home's appraised value to start tracking ownership growth."
               : isMissingPurchasePrice
-                ? 'Add purchase price to calculate appreciation.'
-                : `Appreciation since purchase: ${formatCents(appreciationCents)}`}
+                ? 'Add your purchase price to unlock equity progress and appreciation insights.'
+                : `Value growth since purchase: ${formatCents(appreciationCents)}`}
           </p>
           {!hasValidAppraisal && (
             <div className="mt-3">
@@ -229,7 +229,7 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
 
           <div className="mt-3">
             <div className="mb-1 flex justify-between text-sm text-gray-600">
-              <span>Equity progress</span>
+              <span>Ownership progress</span>
               <span>{equityPercent === null ? 'No data yet' : `${Math.round(equityPercent)}%`}</span>
             </div>
             <div className={`h-2 w-full overflow-hidden rounded-full ${equityPercent === null ? 'bg-gray-200' : 'bg-emerald-100'}`}>
@@ -241,10 +241,17 @@ export function EquityOverviewCard({ propertyId, healthScore }: EquityOverviewCa
           </div>
 
           <div className="mt-3 grid gap-1 text-sm text-gray-700 sm:grid-cols-3">
-            <p>Purchase: {formatCentsOrPlaceholder(data.purchasePriceCents)}</p>
-            <p>Appraised: {formatCentsOrPlaceholder(hasValidAppraisal ? data.lastAppraisedValueCents : null, 'Not set')}</p>
-            <p>Maintenance Premium: {formatCents(data.maintenancePremiumCents)}</p>
+            <p>Value at purchase: {formatCentsOrPlaceholder(data.purchasePriceCents)}</p>
+            <p>Current appraised value: {formatCentsOrPlaceholder(hasValidAppraisal ? data.lastAppraisedValueCents : null, 'Not set')}</p>
+            <p>Care premium: {formatCents(data.maintenancePremiumCents)}</p>
           </div>
+
+          {typeof appreciationCents === 'number' && appreciationCents > 0 ? (
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+              <Sparkles className="h-3.5 w-3.5" />
+              You&apos;ve built {formatCents(appreciationCents)} in ownership value so far.
+            </div>
+          ) : null}
 
           {showMaintenanceAlpha && (
             <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-sm font-medium text-amber-900">

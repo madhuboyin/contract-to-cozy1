@@ -5,7 +5,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
-import { Loader2 } from 'lucide-react';
+import {
+  CalendarClock,
+  Gauge,
+  Landmark,
+  Loader2,
+  PiggyBank,
+  Shield,
+  ShieldAlert,
+  Sprout,
+  TrendingUp,
+} from 'lucide-react';
 import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
 import { ScoredProperty } from './types'; 
 import { differenceInDays, isPast, parseISO } from 'date-fns'; 
@@ -20,8 +30,6 @@ import { WelcomeModal } from './components/WelcomeModal';
 
 import { HomeBuyerDashboard } from './components/HomeBuyerDashboard';
 import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
-import { TrendingUp } from 'lucide-react';
-import { ShieldAlert } from 'lucide-react';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
@@ -45,7 +53,10 @@ import { useCelebration } from '@/hooks/useCelebration';
 import { MilestoneCelebration } from '@/components/ui/MilestoneCelebration';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { seasonalAPI } from '@/lib/api/seasonal.api';
+import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { useQuery } from '@tanstack/react-query';
+import { HeroValueStrip, ValueStripTile } from './components/HeroValueStrip';
+import { RecommendedMove, SignatureRecommendationCard } from './components/SignatureRecommendationCard';
 import {
   appendGuidanceContinuityToHref,
   extractGuidanceContinuityContext,
@@ -94,6 +105,24 @@ const DEFAULT_LOCAL_UPDATES: LocalUpdate[] = [
 function withLocalUpdatesFallback(updates?: LocalUpdate[] | null): LocalUpdate[] {
   if (Array.isArray(updates) && updates.length > 0) return updates;
   return DEFAULT_LOCAL_UPDATES;
+}
+
+function formatUsd(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatUsdFromCents(value: number): string {
+  return formatUsd(value / 100);
+}
+
+function formatSignedPoints(value: number | null | undefined): string | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  if (Math.abs(value) < 0.05) return 'No change';
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)} pts`;
 }
 
 // --- START PHASE 1: DATA CONSOLIDATION TYPES ---
@@ -439,14 +468,25 @@ export default function DashboardPage() {
       ? selectedPropertyId
       : properties[0]?.id;
 
-  const financialScoreQuery = useQuery({
-    queryKey: ['property-score-snapshot', effectiveSelectedPropertyId, 'FINANCIAL'],
+  const scoreSnapshotQuery = useQuery({
+    queryKey: ['property-score-snapshot', effectiveSelectedPropertyId],
     queryFn: async () => {
       if (!effectiveSelectedPropertyId) return null;
       return api.getPropertyScoreSnapshots(effectiveSelectedPropertyId, 16);
     },
     enabled: Boolean(effectiveSelectedPropertyId),
     staleTime: 10 * 60 * 1000,
+  });
+
+  const riskSummaryQuery = useQuery({
+    queryKey: ['risk-report-summary', effectiveSelectedPropertyId],
+    queryFn: async () => {
+      if (!effectiveSelectedPropertyId) return null;
+      const report = await api.getRiskReportSummary(effectiveSelectedPropertyId);
+      return typeof report === 'string' ? null : report;
+    },
+    enabled: Boolean(effectiveSelectedPropertyId),
+    staleTime: 5 * 60 * 1000,
   });
 
   const seasonalChecklistQuery = useQuery({
@@ -458,6 +498,20 @@ export default function DashboardPage() {
     enabled: Boolean(effectiveSelectedPropertyId),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
+  });
+
+  const homeSavingsSummaryQuery = useQuery({
+    queryKey: ['home-savings-summary', effectiveSelectedPropertyId],
+    queryFn: async () => {
+      if (!effectiveSelectedPropertyId) return null;
+      try {
+        return await getHomeSavingsSummary(effectiveSelectedPropertyId);
+      } catch {
+        return null;
+      }
+    },
+    enabled: Boolean(effectiveSelectedPropertyId),
+    staleTime: 5 * 60 * 1000,
   });
 
   const resolveLocalUpdateHref = useCallback(
@@ -695,6 +749,139 @@ export default function DashboardPage() {
   );
   const primaryUrgentAction = scopedUrgentActions[0] || data.urgentActions[0];
   const ahaPropertyLabel = selectedProperty?.name || selectedProperty?.address || 'your home';
+
+  const seasonalChecklist = seasonalChecklistQuery.data?.checklist ?? null;
+  const seasonalChecklistItems = Array.isArray(seasonalChecklist?.items)
+    ? seasonalChecklist.items
+    : [];
+  const seasonalTotalTasks =
+    typeof seasonalChecklist?.totalTasks === 'number'
+      ? seasonalChecklist.totalTasks
+      : seasonalChecklistItems.length;
+  const seasonalCompletedTasks =
+    typeof seasonalChecklist?.tasksCompleted === 'number'
+      ? seasonalChecklist.tasksCompleted
+      : seasonalChecklistItems.filter((item: { status?: string }) =>
+          String(item.status || '').toUpperCase() === 'COMPLETED'
+        ).length;
+  const seasonalReadinessPct =
+    seasonalTotalTasks > 0 ? Math.round((seasonalCompletedTasks / seasonalTotalTasks) * 100) : 0;
+  const heroCriticalTaskCount = seasonalChecklistItems.filter((item: { priority?: string; status?: string }) => {
+    const priority = String(item.priority || '').toUpperCase();
+    const status = String(item.status || '').toLowerCase();
+    return priority === 'CRITICAL' && ['recommended', 'added'].includes(status);
+  }).length;
+
+  const heroHomeScore = selectedProperty?.healthScore?.totalScore ?? null;
+  const heroFinancialScoreRaw = scoreSnapshotQuery.data?.scores?.FINANCIAL?.latest?.score;
+  const heroFinancialScore =
+    typeof heroFinancialScoreRaw === 'number' && Number.isFinite(heroFinancialScoreRaw)
+      ? Math.round(heroFinancialScoreRaw)
+      : null;
+  const homeScoreDelta = scoreSnapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? null;
+  const financialScoreDelta = scoreSnapshotQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null;
+
+  const heroCheckInStreak = Math.max(0, selectedProperty?.currentStreak ?? 0);
+  const annualSavingsPotential = Math.max(
+    0,
+    Math.round(homeSavingsSummaryQuery.data?.potentialAnnualSavings ?? 0)
+  );
+  const riskExposureGap = Math.max(
+    0,
+    Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0)
+  );
+  const overdueMaintenanceCount = scopedUrgentActions.filter(
+    (action) => action.type === 'MAINTENANCE_OVERDUE'
+  ).length;
+  const unscheduledMaintenanceCount = scopedUrgentActions.filter(
+    (action) => action.type === 'MAINTENANCE_UNSCHEDULED'
+  ).length;
+  const renewalDueCount = scopedUrgentActions.filter(
+    (action) => action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING'
+  ).length;
+
+  const heroPurchasePriceCents = selectedProperty?.purchasePriceCents ?? null;
+  const heroAppraisedValueCents = selectedProperty?.lastAppraisedValue ?? null;
+  const heroEquityGainCents =
+    typeof heroPurchasePriceCents === 'number' &&
+    heroPurchasePriceCents > 0 &&
+    typeof heroAppraisedValueCents === 'number' &&
+    heroAppraisedValueCents > 0
+      ? heroAppraisedValueCents - heroPurchasePriceCents
+      : null;
+  const hasEquityGain = typeof heroEquityGainCents === 'number' && heroEquityGainCents > 0;
+  const seasonalRemaining = Math.max(seasonalTotalTasks - seasonalCompletedTasks, 0);
+
+  const heroNarrative = (() => {
+    if (annualSavingsPotential >= 180) {
+      return {
+        title: `We found ${formatUsd(annualSavingsPotential)}/year you may be overpaying.`,
+        subtitle: 'One adjustment could lower recurring home costs this month.',
+        ctaLabel: 'Review savings',
+        impactLabel: `${formatUsd(annualSavingsPotential)} annual potential`,
+        etaLabel: 'ETA 2 min',
+      };
+    }
+    if (riskExposureGap >= 3000) {
+      return {
+        title: `${formatUsd(riskExposureGap)} remains exposed in your protection profile.`,
+        subtitle: 'One uncovered gap still carries meaningful downside risk.',
+        ctaLabel: 'Close exposure gap',
+        impactLabel: `${formatUsd(riskExposureGap)} unprotected`,
+        etaLabel: 'ETA 3 min',
+      };
+    }
+    if (overdueMaintenanceCount > 0) {
+      return {
+        title:
+          overdueMaintenanceCount === 1
+            ? 'One key system is entering higher-cost delay territory.'
+            : `${overdueMaintenanceCount} systems may cost more if delayed.`,
+        subtitle: 'Addressing the top issue now protects both reliability and budget.',
+        ctaLabel: 'Fix top issue',
+        impactLabel: `${overdueMaintenanceCount} overdue item${overdueMaintenanceCount === 1 ? '' : 's'}`,
+        etaLabel: 'ETA 2 min',
+      };
+    }
+    if (renewalDueCount > 0) {
+      return {
+        title:
+          renewalDueCount === 1
+            ? 'An important renewal decision is approaching.'
+            : `${renewalDueCount} renewal decisions are approaching soon.`,
+        subtitle: 'A quick review now keeps rates and coverage options in your favor.',
+        ctaLabel: 'Review renewals',
+        impactLabel: `${renewalDueCount} policy decision${renewalDueCount === 1 ? '' : 's'}`,
+        etaLabel: 'ETA 2 min',
+      };
+    }
+    if (hasEquityGain) {
+      return {
+        title: `Your home gained ${formatUsdFromCents(heroEquityGainCents)} in value.`,
+        subtitle: 'Strong ownership progress. One smart move can better protect that gain.',
+        ctaLabel: 'Protect equity',
+        impactLabel: 'Ownership value up',
+        etaLabel: 'ETA 2 min',
+      };
+    }
+    if (homeScoreDelta !== null && homeScoreDelta > 0) {
+      return {
+        title: `Your HomeScore improved ${formatSignedPoints(homeScoreDelta)} this cycle.`,
+        subtitle: 'Momentum is building. One more move keeps this trend working for you.',
+        ctaLabel: 'Keep momentum',
+        impactLabel: 'Upward trend',
+        etaLabel: 'ETA 90 sec',
+      };
+    }
+    return {
+      title: urgentActionHeroTitle(primaryUrgentAction, safeFirstName, isReturningVisitor),
+      subtitle: urgentActionHeroSubtitle(primaryUrgentAction),
+      ctaLabel: urgentActionCtaLabel(primaryUrgentAction, isReturningVisitor),
+      impactLabel: urgentActionImpactLabel(primaryUrgentAction),
+      etaLabel: urgentActionEtaLabel(primaryUrgentAction),
+    };
+  })();
+
   const ahaCtaHref = primaryUrgentAction
     ? resolveUrgentActionHref(primaryUrgentAction, effectiveSelectedPropertyId)
     : effectiveSelectedPropertyId
@@ -707,51 +894,156 @@ export default function DashboardPage() {
       (localUpdates.length > 0 ? 8 : 0) +
       ((selectedProperty?.healthScore?.totalScore || 0) > 0 ? 6 : 0)
   );
-  const ahaTitle = urgentActionHeroTitle(primaryUrgentAction, safeFirstName, isReturningVisitor);
-  const ahaSubtitle = urgentActionHeroSubtitle(primaryUrgentAction);
+  const ahaTitle = heroNarrative.title;
+  const ahaSubtitle = heroNarrative.subtitle;
   const ahaBriefLabel = urgentActionBriefLabel(isReturningVisitor);
   const ahaBriefValue = urgentActionBriefValue(primaryUrgentAction, safeFirstName);
   const ahaBriefDetail = urgentActionBriefDetail(primaryUrgentAction);
   const ahaDoNowLabel = urgentActionDoNowLabel(primaryUrgentAction);
   const ahaWaitRiskLabel = urgentActionWaitRiskLabel(primaryUrgentAction);
+  const heroCtaLabel = heroNarrative.ctaLabel;
+  const heroEtaLabel = heroNarrative.etaLabel;
+  const heroImpactLabel = heroNarrative.impactLabel;
+  const heroConfidenceLabel = `${ahaConfidence}% confidence`;
   const ahaFeed: string[] = [];
-  ahaFeed.push(`Why now: ${urgentActionWhyNow(primaryUrgentAction)}`);
-  if (selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 0) {
-    ahaFeed.push(`Current HomeScore: ${Math.round(selectedProperty.healthScore.totalScore)} for ${ahaPropertyLabel}`);
+
+  const valueStripTiles: ValueStripTile[] = [
+    {
+      id: 'savings-potential',
+      label: 'Savings potential',
+      value: annualSavingsPotential > 0 ? `${formatUsd(annualSavingsPotential)}/yr` : 'Monitor costs',
+      delta: annualSavingsPotential > 0 ? 'Opportunity' : 'No major leak',
+      icon: PiggyBank,
+      tone: annualSavingsPotential > 0 ? 'teal' : 'slate',
+      href: effectiveSelectedPropertyId
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/tools/home-savings`
+        : undefined,
+    },
+    {
+      id: 'exposure-gap',
+      label: 'Exposure gap',
+      value: riskExposureGap > 0 ? formatUsd(riskExposureGap) : 'Protected',
+      delta: riskExposureGap > 0 ? 'Needs focus' : 'Covered',
+      icon: Shield,
+      tone: riskExposureGap > 0 ? 'red' : 'teal',
+      href: effectiveSelectedPropertyId
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/risk-assessment`
+        : undefined,
+    },
+    {
+      id: 'homescore-trend',
+      label: 'HomeScore trend',
+      value: heroHomeScore !== null ? `${Math.round(heroHomeScore)}/100` : 'N/A',
+      delta: formatSignedPoints(homeScoreDelta),
+      icon: Gauge,
+      tone: homeScoreDelta !== null && homeScoreDelta < 0 ? 'amber' : 'blue',
+      href: effectiveSelectedPropertyId
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/home-score`
+        : undefined,
+    },
+    {
+      id: 'seasonal-readiness',
+      label: 'Seasonal readiness',
+      value: seasonalTotalTasks > 0 ? `${seasonalReadinessPct}% ready` : 'Not started',
+      delta: seasonalRemaining > 0 ? `${seasonalRemaining} left` : 'On track',
+      icon: Sprout,
+      tone: seasonalReadinessPct >= 70 ? 'teal' : seasonalReadinessPct >= 40 ? 'amber' : 'red',
+      href: effectiveSelectedPropertyId ? `/dashboard/seasonal?propertyId=${effectiveSelectedPropertyId}` : undefined,
+    },
+    hasEquityGain
+      ? {
+          id: 'equity-gain',
+          label: 'Equity gain',
+          value: formatUsdFromCents(heroEquityGainCents),
+          delta: 'Since purchase',
+          icon: Landmark,
+          tone: 'blue',
+          href: effectiveSelectedPropertyId ? `/dashboard/appreciation?propertyId=${effectiveSelectedPropertyId}` : undefined,
+        }
+      : {
+          id: 'renewals',
+          label: 'Renewals due',
+          value: `${renewalDueCount}`,
+          delta: renewalDueCount > 0 ? 'Action needed' : 'All clear',
+          icon: CalendarClock,
+          tone: renewalDueCount > 0 ? 'amber' : 'slate',
+          href: '/dashboard/insurance',
+        },
+  ];
+
+  const recommendationMoves: RecommendedMove[] = [];
+  if (riskExposureGap > 0) {
+    recommendationMoves.push({
+      id: 'rec-risk-gap',
+      title: `Close ${formatUsd(Math.min(riskExposureGap, 5000))} of your biggest exposure gap`,
+      detail: 'Review uncovered items and increase protected coverage where impact is highest.',
+      impact: 'Direct downside protection',
+      href: effectiveSelectedPropertyId
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/risk-assessment`
+        : '/dashboard/risk-radar',
+    });
   }
-  if (localUpdates[0]?.title) {
-    ahaFeed.push(localUpdates[0].title);
+  if (overdueMaintenanceCount > 0 || unscheduledMaintenanceCount > 0) {
+    recommendationMoves.push({
+      id: 'rec-maintenance',
+      title:
+        overdueMaintenanceCount > 0
+          ? `Handle ${overdueMaintenanceCount} overdue maintenance item${overdueMaintenanceCount === 1 ? '' : 's'}`
+          : `Schedule ${unscheduledMaintenanceCount} recurring maintenance task${unscheduledMaintenanceCount === 1 ? '' : 's'}`,
+      detail: 'Clearing this first prevents avoidable escalation and keeps systems predictable.',
+      impact: 'Lower failure risk',
+      href: effectiveSelectedPropertyId ? `/dashboard/maintenance?propertyId=${effectiveSelectedPropertyId}` : '/dashboard/maintenance',
+    });
   }
-  if (ahaFeed.length < 3) {
-    ahaFeed.push('Morning Home Pulse refreshed with latest weather and maintenance context.');
+  if (heroCriticalTaskCount > 0) {
+    recommendationMoves.push({
+      id: 'rec-seasonal',
+      title: `Review ${heroCriticalTaskCount} critical seasonal task${heroCriticalTaskCount === 1 ? '' : 's'}`,
+      detail: 'Finishing these high-impact items improves readiness before peak season.',
+      impact: `${seasonalReadinessPct}% seasonal ready`,
+      href: effectiveSelectedPropertyId ? `/dashboard/seasonal?propertyId=${effectiveSelectedPropertyId}` : '/dashboard/seasonal',
+    });
   }
-  if (ahaFeed.length < 3) {
-    ahaFeed.push('Action queue sorted by urgency and homeowner impact.');
+  if (recommendationMoves.length < 3 && annualSavingsPotential > 0) {
+    recommendationMoves.push({
+      id: 'rec-savings',
+      title: `Capture up to ${formatUsd(annualSavingsPotential)} in annual savings`,
+      detail: 'Compare your current spend against optimized options for this property profile.',
+      impact: 'Recurring cashflow win',
+      href: effectiveSelectedPropertyId
+        ? `/dashboard/properties/${effectiveSelectedPropertyId}/tools/home-savings`
+        : '/dashboard/home-savings',
+    });
   }
-  const heroCheckInStreak = Math.max(0, selectedProperty?.currentStreak ?? 0);
-  const heroHomeScore = selectedProperty?.healthScore?.totalScore ?? null;
-  const heroFinancialScoreRaw = financialScoreQuery.data?.scores?.FINANCIAL?.latest?.score;
-  const heroFinancialScore =
-    typeof heroFinancialScoreRaw === 'number' && Number.isFinite(heroFinancialScoreRaw)
-      ? Math.round(heroFinancialScoreRaw)
-      : null;
-  const seasonalChecklistItems = Array.isArray(seasonalChecklistQuery.data?.checklist?.items)
-    ? seasonalChecklistQuery.data.checklist.items
-    : [];
-  const heroCriticalTaskCount = seasonalChecklistItems.filter((item: { priority?: string; status?: string }) => {
-    const priority = String(item.priority || '').toUpperCase();
-    const status = String(item.status || '').toLowerCase();
-    return priority === 'CRITICAL' && ['recommended', 'added'].includes(status);
-  }).length;
-  const heroPurchasePriceCents = selectedProperty?.purchasePriceCents ?? null;
-  const heroAppraisedValueCents = selectedProperty?.lastAppraisedValue ?? null;
-  const heroEquityGainCents =
-    typeof heroPurchasePriceCents === 'number' &&
-    heroPurchasePriceCents > 0 &&
-    typeof heroAppraisedValueCents === 'number' &&
-    heroAppraisedValueCents > 0
-      ? heroAppraisedValueCents - heroPurchasePriceCents
-      : null;
+  if (recommendationMoves.length < 3 && renewalDueCount > 0) {
+    recommendationMoves.push({
+      id: 'rec-renewals',
+      title: `Review ${renewalDueCount} renewal${renewalDueCount === 1 ? '' : 's'} before rates shift`,
+      detail: 'A quick renewal review can protect both coverage quality and premium position.',
+      impact: 'Coverage confidence',
+      href: '/dashboard/insurance',
+    });
+  }
+  if (recommendationMoves.length < 3) {
+    recommendationMoves.push({
+      id: 'rec-momentum',
+      title: 'Run your morning pulse and lock in one quick win',
+      detail: 'Daily check-ins keep your plan current and surface the next best move early.',
+      impact: heroCheckInStreak > 0 ? `${heroCheckInStreak}-day streak active` : 'Build daily momentum',
+      href: effectiveSelectedPropertyId ? `/dashboard/daily-snapshot?propertyId=${effectiveSelectedPropertyId}` : '/dashboard/daily-snapshot',
+    });
+  }
+  const topRecommendationMoves = recommendationMoves.slice(0, 3);
+  const recommendationSignals: string[] = ['current maintenance signals'];
+  if (riskExposureGap > 0) recommendationSignals.unshift('protection gaps');
+  if (annualSavingsPotential > 0) recommendationSignals.unshift('savings potential');
+  const recommendationSummary = `Based on ${recommendationSignals.join(', ')}.`;
+  const heroMomentumLabel =
+    heroCheckInStreak > 0
+      ? `${heroCheckInStreak}-day streak`
+      : homeScoreDelta !== null && homeScoreDelta > 0
+        ? `HomeScore ${formatSignedPoints(homeScoreDelta)}`
+        : null;
 
   const handleAhaCtaClick = useCallback(() => {
     trackAhaHeroEvent('dashboard_aha_cta_clicked', {
@@ -920,11 +1212,11 @@ export default function DashboardPage() {
               doNowLabel={ahaDoNowLabel}
               waitRiskLabel={ahaWaitRiskLabel}
               ctaHref={ahaCtaHref}
-              ctaLabel={urgentActionCtaLabel(primaryUrgentAction, isReturningVisitor)}
+              ctaLabel={heroCtaLabel}
               onCtaClick={handleAhaCtaClick}
-              etaLabel={urgentActionEtaLabel(primaryUrgentAction)}
-              impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
-              confidenceLabel={`${ahaConfidence}% confidence`}
+              etaLabel={heroEtaLabel}
+              impactLabel={heroImpactLabel}
+              confidenceLabel={heroConfidenceLabel}
               feed={ahaFeed}
               checkInStreak={heroCheckInStreak}
               equityGainCents={heroEquityGainCents}
@@ -932,9 +1224,15 @@ export default function DashboardPage() {
               purchasePriceCents={heroPurchasePriceCents}
               homeScore={heroHomeScore}
               financialScore={heroFinancialScore}
-              financialScoreLoading={financialScoreQuery.isLoading}
+              financialScoreLoading={scoreSnapshotQuery.isLoading}
               criticalTaskCount={heroCriticalTaskCount}
               criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
+            />
+            <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
+            <SignatureRecommendationCard
+              propertyLabel={ahaPropertyLabel}
+              moves={topRecommendationMoves}
+              summary={recommendationSummary}
             />
           </div>
         )}
@@ -982,11 +1280,11 @@ export default function DashboardPage() {
             doNowLabel={ahaDoNowLabel}
             waitRiskLabel={ahaWaitRiskLabel}
             ctaHref={ahaCtaHref}
-            ctaLabel={urgentActionCtaLabel(primaryUrgentAction, isReturningVisitor)}
+            ctaLabel={heroCtaLabel}
             onCtaClick={handleAhaCtaClick}
-            etaLabel={urgentActionEtaLabel(primaryUrgentAction)}
-            impactLabel={urgentActionImpactLabel(primaryUrgentAction)}
-            confidenceLabel={`${ahaConfidence}% confidence`}
+            etaLabel={heroEtaLabel}
+            impactLabel={heroImpactLabel}
+            confidenceLabel={heroConfidenceLabel}
             feed={ahaFeed}
             checkInStreak={heroCheckInStreak}
             equityGainCents={heroEquityGainCents}
@@ -994,9 +1292,15 @@ export default function DashboardPage() {
             purchasePriceCents={heroPurchasePriceCents}
             homeScore={heroHomeScore}
             financialScore={heroFinancialScore}
-            financialScoreLoading={financialScoreQuery.isLoading}
+            financialScoreLoading={scoreSnapshotQuery.isLoading}
             criticalTaskCount={heroCriticalTaskCount}
             criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
+          />
+          <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
+          <SignatureRecommendationCard
+            propertyLabel={ahaPropertyLabel}
+            moves={topRecommendationMoves}
+            summary={recommendationSummary}
           />
         </div>
       )}
@@ -1064,9 +1368,9 @@ export default function DashboardPage() {
           </section>
         )}
         
-        <section className="tier-intelligence mb-8">
+        <section className="tier-intelligence mb-8 rounded-3xl border border-slate-200/70 bg-gradient-to-b from-slate-50/80 to-white p-4 shadow-sm sm:p-5">
           <motion.div
-            className="mb-4 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-center sm:justify-between"
+            className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
             {...sectionMotion(2)}
           >
             <div className="flex items-center gap-3">
@@ -1088,7 +1392,7 @@ export default function DashboardPage() {
             )}
           </motion.div>
           <motion.div
-            className="mb-6 rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4"
+            className="mb-6 rounded-2xl border border-white/70 bg-white/85 p-3 shadow-sm sm:p-4"
             {...sectionMotion(2)}
           >
             <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -1099,12 +1403,12 @@ export default function DashboardPage() {
             </div>
           </motion.div>
 
-          <motion.div {...sectionMotion(3)}>
+          <motion.div className="rounded-2xl border border-white/70 bg-white/75 p-3 shadow-sm sm:p-4" {...sectionMotion(3)}>
             <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
           </motion.div>
         </section>
 
-        <div className="tier-context mb-8 space-y-6">
+        <div className="tier-context mb-8 space-y-8">
           <motion.section {...sectionMotion(6)}>
             <div className="mb-4 flex items-start gap-3">
               <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
@@ -1119,7 +1423,7 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-            <div className="rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 sm:p-4">
+            <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50 p-3 shadow-sm sm:p-4">
               <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId || ''} />
                 <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId || ''} />

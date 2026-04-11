@@ -77,10 +77,10 @@ export const UpcomingBookingsCard: React.FC<UpcomingBookingsCardProps> = ({
                 speed={0.8}
                 reducedMotionBgClassName="bg-brand-50"
               />
-              <p className="text-sm text-gray-500">No upcoming bookings found</p>
+              <p className="text-sm text-gray-600">Nothing booked yet. Need help finding a trusted pro?</p>
               <Link href="/dashboard/providers">
                 <Button variant="link" className="mt-2 text-blue-600">
-                  Browse Providers <ArrowRight className="ml-1 h-3 w-3" />
+                  Find a trusted pro <ArrowRight className="ml-1 h-3 w-3" />
                 </Button>
               </Link>
             </div>
