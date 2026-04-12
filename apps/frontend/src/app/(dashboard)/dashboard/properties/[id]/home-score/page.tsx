@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Copy,
+  ChevronDown,
   ChevronRight,
   FileDown,
   FileText,
@@ -743,6 +744,7 @@ export default function HomeScoreReportPage() {
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const [weeks, setWeeks] = useState<26 | 52>(26);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [showFullReport, setShowFullReport] = useState(false);
   const viewedRef = useRef<string | null>(null);
 
   const trackEvent = useCallback((event: string, section?: string, metadata?: Record<string, unknown>) => {
@@ -1027,6 +1029,31 @@ export default function HomeScoreReportPage() {
       : (report.trustAndVerification?.verifiedPct ?? 0) >= 35
         ? "border-amber-200 bg-amber-100 text-amber-700"
         : "border-rose-200 bg-rose-100 text-rose-700";
+  const topRiskDriver = rankedNegativeDrivers[0] ?? null;
+  const topAction = improvementActions[0] ?? null;
+  const decisionRiskLabel = topRiskDriver
+    ? topRiskDriver.title
+    : systemRiskOverview.immediateAttention.count > 0
+      ? `${systemRiskOverview.immediateAttention.count} immediate system risk${systemRiskOverview.immediateAttention.count > 1 ? "s" : ""}`
+      : "No immediate critical risk identified";
+  const decisionRiskDetail = topRiskDriver?.explanation ?? systemHealthInsight;
+  const decisionActionTitle = topAction?.title ?? "Review highest-risk systems";
+  const decisionActionDetail = topAction
+    ? `Estimated +${topAction.projectedPointGain} points and ${formatCurrency(topAction.projectedRiskReduction)} risk reduction.`
+    : "No ranked action yet. Start by verifying the highest-risk systems to improve confidence.";
+  const decisionImpactLabel = topAction
+    ? `+${topAction.projectedPointGain} score · ${formatCurrency(topAction.projectedRiskReduction)} risk reduction`
+    : `Current money at risk: ${formatCurrency(financialExposure.headlineMoneyAtRisk)}`;
+  const decisionConfidenceLabel = formatConstantLabel(meta?.confidenceLevel || report.confidence);
+  const decisionFreshnessLabel =
+    reportStatus === "Current"
+      ? `Current · ${formatDate(meta?.generatedDate || report.generatedAt)}`
+      : `${reportStatus} · ${formatDate(meta?.generatedDate || report.generatedAt)}`;
+  const decisionSourceLabel =
+    report.trustAndVerification?.badgeTaxonomy?.length
+      ? report.trustAndVerification.badgeTaxonomy.slice(0, 2).map(formatConstantLabel).join(" + ")
+      : "Mixed homeowner and verified records";
+  const decisionActionHref = topAction?.actionHref || topRiskDriver?.actionHref || null;
 
   const copyShareLink = async () => {
     trackEvent("SHARE_ACTION_CLICKED", "share-card", { action: "copy_link" });
@@ -1070,7 +1097,8 @@ export default function HomeScoreReportPage() {
               size="sm"
               onClick={() => {
                 trackEvent("SHARE_EXPORT_INITIATED", "header", { action: "print" });
-                window.print();
+                setShowFullReport(true);
+                window.setTimeout(() => window.print(), 0);
               }}
             >
               Print
@@ -1082,6 +1110,89 @@ export default function HomeScoreReportPage() {
           </div>
         </div>
 
+        <section className="rounded-2xl border border-slate-200 bg-[linear-gradient(150deg,#ffffff,#f8fafc)] p-4 shadow-sm md:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+                Decision Mode
+              </p>
+              <h1 className="mb-0 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+                What to do next for this home
+              </h1>
+              <p className="mt-1 mb-0 text-sm text-slate-600">
+                One clear risk, one clear action, and confidence-backed impact before diving into full report detail.
+              </p>
+            </div>
+            <Badge variant="outline" className={confidenceBadgeClass(meta?.confidenceLevel || report.confidence)}>
+              Confidence: {decisionConfidenceLabel}
+            </Badge>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 p-3">
+              <p className="text-[11px] uppercase tracking-[0.09em] text-rose-700">Top risk</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{decisionRiskLabel}</p>
+              <p className="mt-1 text-sm text-slate-700">{decisionRiskDetail}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-3">
+              <p className="text-[11px] uppercase tracking-[0.09em] text-emerald-700">Top action</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{decisionActionTitle}</p>
+              <p className="mt-1 text-sm text-slate-700">{decisionActionDetail}</p>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <p className="mb-0 rounded-lg bg-slate-50 px-3 py-2">
+              <span className="font-semibold text-slate-900">Expected impact:</span> {decisionImpactLabel}
+            </p>
+            <p className="mb-0 rounded-lg bg-slate-50 px-3 py-2">
+              <span className="font-semibold text-slate-900">Freshness:</span> {decisionFreshnessLabel}
+            </p>
+            <p className="mb-0 rounded-lg bg-slate-50 px-3 py-2 sm:col-span-2">
+              <span className="font-semibold text-slate-900">Source mix:</span> {decisionSourceLabel}
+            </p>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {decisionActionHref ? (
+              <Button asChild>
+                <Link
+                  href={decisionActionHref}
+                  onClick={() =>
+                    trackEvent("IMPROVEMENT_ACTION_CLICKED", "decision-mode", { actionId: topAction?.id || topRiskDriver?.id })
+                  }
+                >
+                  Start top action
+                </Link>
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => setShowFullReport((prev) => !prev)}>
+              {showFullReport ? "Hide full report" : "Open full report"}
+            </Button>
+          </div>
+        </section>
+
+        <details
+          open={showFullReport}
+          className="group rounded-2xl border border-slate-200 bg-white"
+          onToggle={(event) => {
+            setShowFullReport(event.currentTarget.open);
+            trackEvent(event.currentTarget.open ? "SECTION_EXPANDED" : "SECTION_COLLAPSED", "full-report");
+          }}
+        >
+          <summary className="list-none cursor-pointer px-5 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Full Report Mode</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">
+                  Full report detail, methodology, and supporting evidence
+                </p>
+              </div>
+              <ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" />
+            </div>
+          </summary>
+
+          <div className="space-y-5 border-t border-slate-200 px-4 py-4 md:px-5 md:py-5">
         <section className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-6 py-4">
             <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Report Header</p>
@@ -1263,7 +1374,8 @@ export default function HomeScoreReportPage() {
                 size="sm"
                 onClick={() => {
                   trackEvent("PDF_EXPORT_CLICKED", "share-card", { action: "print" });
-                  window.print();
+                  setShowFullReport(true);
+                  window.setTimeout(() => window.print(), 0);
                 }}
               >
                 <Link2 className="mr-2 h-4 w-4" /> Print
@@ -2085,6 +2197,8 @@ export default function HomeScoreReportPage() {
             HomeScore report optimized for homeowner mode today, with buyer/seller, certification, and share-link workflow support prepared in this architecture.
           </div>
         </div>
+          </div>
+        </details>
       </div>
     </DashboardShell>
   );

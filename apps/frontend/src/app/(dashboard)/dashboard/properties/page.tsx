@@ -11,12 +11,21 @@ import { useToast } from '@/components/ui/use-toast';
 import {
   BottomSafeAreaReserve,
   MobileCard,
-  MobilePageIntro,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+import PortfolioListTemplate from './components/PortfolioListTemplate';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   SINGLE_FAMILY: 'Single Family',
@@ -62,6 +71,7 @@ export default function PropertiesPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const navTarget = searchParams.get('navTarget');
 
@@ -135,16 +145,21 @@ export default function PropertiesPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const requestDelete = (id: string, name: string) => {
     setMenuOpenId(null);
-    if (!confirm(`Are you sure you want to delete "${name || 'this property'}"?`)) return;
+    setDeleteTarget({ id, name: name || 'this property' });
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
     setDeleting(id);
     try {
       const response = await api.deleteProperty(id);
       if (response.success) {
-        setProperties(properties.filter(p => p.id !== id));
+        setProperties((current) => current.filter((property) => property.id !== id));
         toast({ title: 'Property deleted successfully' });
+        setDeleteTarget(null);
       } else {
         toast({ title: response.message || 'Failed to delete property', variant: 'destructive' });
       }
@@ -152,6 +167,7 @@ export default function PropertiesPage() {
       toast({ title: 'Failed to delete property. It may have active bookings.', variant: 'destructive' });
     } finally {
       setDeleting(null);
+      setDeleteTarget(null);
     }
   };
 
@@ -174,13 +190,20 @@ export default function PropertiesPage() {
   const canAddMore = properties.length < MAX_PROPERTIES;
   const primaryHomesCount = properties.filter((property) => property.isPrimary).length;
   const slotsAvailable = Math.max(MAX_PROPERTIES - properties.length, 0);
-  const askCozyDockVisible = !menuOpenId;
+  const askCozyDockVisible = !menuOpenId && !deleteTarget;
+  const handoffCtaLabel = navTargetLabel ? `Continue to ${navTargetLabel}` : 'Open property hub';
 
   return (
     <div className="space-y-5 px-4 pb-6 sm:px-6 lg:px-8 lg:pb-8">
-      <MobilePageIntro
+      <PortfolioListTemplate
         title="Properties"
         subtitle={`${properties.length} of ${MAX_PROPERTIES} properties added`}
+        contextLabel={navTargetLabel}
+        metrics={[
+          { label: 'Properties', value: `${properties.length} / ${MAX_PROPERTIES}` },
+          { label: 'Primary', value: `${primaryHomesCount}` },
+          { label: 'Available', value: `${slotsAvailable}` },
+        ]}
         action={
           canAddMore ? (
             <Link
@@ -192,15 +215,7 @@ export default function PropertiesPage() {
             </Link>
           ) : null
         }
-      />
-
-      {navTargetLabel && (
-        <MobileCard className="border-blue-200 bg-blue-50 p-3">
-          <p className="text-sm text-blue-800">
-            Select a property to continue to <span className="font-semibold">{navTargetLabel}</span>.
-          </p>
-        </MobileCard>
-      )}
+      >
 
       <div className="md:hidden">
         {properties.length === 0 ? (
@@ -222,29 +237,6 @@ export default function PropertiesPage() {
           </MobileCard>
         ) : (
           <div className="space-y-3">
-            <MobileCard variant="compact" className="space-y-3 border-slate-200/90 bg-white shadow-[0_16px_36px_-28px_rgba(15,23,42,0.5)]">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-base font-semibold text-slate-900">Portfolio Snapshot</p>
-                <StatusChip tone={canAddMore ? 'good' : 'elevated'}>
-                  {slotsAvailable} slots
-                </StatusChip>
-              </div>
-              <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(145deg,#f8fafc,#eef2ff)]">
-                <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Properties</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">{properties.length} / {MAX_PROPERTIES}</p>
-                </div>
-                <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Primary</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">{primaryHomesCount}</p>
-                </div>
-                <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Available</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">{slotsAvailable}</p>
-                </div>
-              </div>
-            </MobileCard>
-
             <div className="space-y-3">
               {properties.map((property) => {
                 const isMenuOpen = menuOpenId === property.id;
@@ -298,6 +290,9 @@ export default function PropertiesPage() {
                               {metadata}
                             </p>
                           ) : null}
+                          <p className="mt-1.5 text-xs font-semibold text-[#0D9488]">
+                            {handoffCtaLabel}
+                          </p>
                         </div>
                       </div>
                       <ChevronRight className="pointer-events-none absolute bottom-4 right-4 h-5 w-5 text-slate-400 transition-colors group-hover:text-slate-600" />
@@ -326,7 +321,7 @@ export default function PropertiesPage() {
                             Edit
                           </Link>
                           <button
-                            onClick={() => handleDelete(property.id, property.name || property.address)}
+                            onClick={() => requestDelete(property.id, property.name || property.address)}
                             disabled={isDeleting}
                             className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                           >
@@ -478,7 +473,7 @@ export default function PropertiesPage() {
                       className="text-sm font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
                       tabIndex={-1}
                     >
-                      View Details
+                      {handoffCtaLabel}
                       <svg className="w-4 h-4 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-150" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
@@ -513,7 +508,7 @@ export default function PropertiesPage() {
                             Edit
                           </Link>
                           <button
-                            onClick={() => handleDelete(property.id, property.name || property.address)}
+                            onClick={() => requestDelete(property.id, property.name || property.address)}
                             disabled={isDeleting}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                           >
@@ -550,6 +545,35 @@ export default function PropertiesPage() {
           </div>
         )}
       </div>
+      </PortfolioListTemplate>
+
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete property?</DialogTitle>
+            <DialogDescription>
+              This removes <span className="font-semibold text-slate-900">{deleteTarget?.name || 'this property'}</span> from your portfolio.
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={Boolean(deleting)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleDeleteConfirm()}
+              disabled={!deleteTarget || Boolean(deleting)}
+            >
+              {deleting ? 'Deleting…' : 'Delete property'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {askCozyDockVisible && (
         <div
