@@ -1,18 +1,8 @@
 // apps/backend/src/services/vault.service.ts
 
+import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Password — env-overridable. In production replace with per-property hashed
-// vaultPassword field on the Property model.
-// ─────────────────────────────────────────────────────────────────────────────
-const VAULT_PASSWORD = process.env.VAULT_PASSWORD ?? 'vault_test_2026';
-const VAULT_BYPASS_PASSWORD = String(process.env.VAULT_BYPASS_PASSWORD ?? '').toLowerCase() === 'true';
-
-if (VAULT_BYPASS_PASSWORD) {
-  console.warn('[VAULT] Password validation is temporarily bypassed (VAULT_BYPASS_PASSWORD=true).');
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Output shape
@@ -67,16 +57,55 @@ export interface VaultData {
 // Service
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getVaultData(propertyId: string, password: string): Promise<VaultData> {
-  // 1. Password gate — intentionally generic error message to prevent enumeration
-  if (!VAULT_BYPASS_PASSWORD && (!password || password !== VAULT_PASSWORD)) {
-    throw new APIError('Invalid vault password', 401, 'INVALID_VAULT_PASSWORD');
+/**
+ * Returns whether a vault password has been configured for the given property.
+ * Used by the homeowner's dashboard to know whether to show the "set password" form.
+ */
+export async function getVaultStatus(propertyId: string): Promise<{ isConfigured: boolean }> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { vaultPasswordHash: true },
+  });
+
+  if (!property) {
+    throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
   }
 
-  // 2. Property overview fields
+  return { isConfigured: property.vaultPasswordHash !== null };
+}
+
+/**
+ * Sets (or replaces) the vault password for a property.
+ * Caller must be authenticated and own the property (enforced at the route layer).
+ */
+export async function setVaultPassword(propertyId: string, plainPassword: string): Promise<void> {
+  if (!plainPassword || plainPassword.length < 8) {
+    throw new APIError(
+      'Vault password must be at least 8 characters',
+      400,
+      'INVALID_VAULT_PASSWORD'
+    );
+  }
+
+  const hash = await bcrypt.hash(plainPassword, 12);
+
+  await prisma.property.update({
+    where: { id: propertyId },
+    data: { vaultPasswordHash: hash },
+  });
+}
+
+/**
+ * Verifies the supplied password and returns vault data on success.
+ * Uses bcrypt.compare — timing-safe by design.
+ * Intentionally generic error messages to prevent property/password enumeration.
+ */
+export async function getVaultData(propertyId: string, password: string): Promise<VaultData> {
+  // 1. Fetch property — includes hash for comparison
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
     select: {
+      vaultPasswordHash: true,
       address: true,
       city: true,
       state: true,
@@ -92,8 +121,15 @@ export async function getVaultData(propertyId: string, password: string): Promis
     },
   });
 
-  if (!property) {
-    throw new APIError('Property vault not found', 404, 'PROPERTY_NOT_FOUND');
+  // Return identical error for "not found" and "not configured" to prevent enumeration
+  if (!property || property.vaultPasswordHash === null) {
+    throw new APIError('Invalid vault password', 401, 'INVALID_VAULT_PASSWORD');
+  }
+
+  // 2. Timing-safe password check
+  const isValid = await bcrypt.compare(password, property.vaultPasswordHash);
+  if (!isValid) {
+    throw new APIError('Invalid vault password', 401, 'INVALID_VAULT_PASSWORD');
   }
 
   // 3. Verified assets + service timeline in parallel

@@ -2897,6 +2897,22 @@ class APIClient {
     return res.json() as Promise<APIResponse<import('@/types').VaultData>>;
   }
 
+  /** Check whether a vault password has been set for a property (authenticated). */
+  async getVaultStatus(propertyId: string): Promise<APIResponse<{ isConfigured: boolean }>> {
+    return this.request<{ isConfigured: boolean }>(`/api/vault/status/${propertyId}`);
+  }
+
+  /** Set or replace the vault password for a property (authenticated, owner only). */
+  async setVaultPassword(
+    propertyId: string,
+    password: string
+  ): Promise<APIResponse<void>> {
+    return this.request<void>(`/api/vault/setup/${propertyId}`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  }
+
   // ==========================================================================
   // HOME EVENT RADAR
   // ==========================================================================

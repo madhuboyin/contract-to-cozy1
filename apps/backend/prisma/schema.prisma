@@ -1918,6 +1918,10 @@ model Property {
   estimatedMaintenancePremiumCents Int     @default(0)
   isEquityVerified                 Boolean @default(false)
 
+  // Seller's Vault — per-property bcrypt-hashed access password.
+  // null means the homeowner has not configured a vault password yet (vault is locked).
+  vaultPasswordHash String?
+
   homeDigitalWill HomeDigitalWill?
 
   homeDigitalTwin    HomeDigitalTwin?
