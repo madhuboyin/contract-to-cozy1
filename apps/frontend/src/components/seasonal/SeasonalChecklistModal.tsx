@@ -6,9 +6,7 @@ import { X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useSeasonalChecklistDetails, useDismissChecklist, useAddAllCriticalTasks } from '@/lib/hooks/useSeasonalChecklists';
 import { SeasonalTaskCard } from './SeasonalTaskCard';
 import { getSeasonName, getSeasonIcon, getClimateRegionName } from '@/lib/utils/seasonHelpers';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
+import { DiyDifficultyBadge } from './DiyDifficultyBadge';
 
 interface SeasonalChecklistModalProps {
   checklistId: string;
@@ -18,72 +16,26 @@ interface SeasonalChecklistModalProps {
 export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalChecklistModalProps) {
   const [activeTab, setActiveTab] = useState<'critical' | 'recommended' | 'optional'>('critical');
   const [dismissing, setDismissing] = useState(false);
-  const [hideForSeason, setHideForSeason] = useState(false);
-  const [showDismissConfirm, setShowDismissConfirm] = useState(false);
 
-  const { data, isLoading, error, refetch, isRefetching } = useSeasonalChecklistDetails(checklistId);
+  const { data, isLoading, error } = useSeasonalChecklistDetails(checklistId);
   const dismissChecklistMutation = useDismissChecklist();
   const addAllCriticalMutation = useAddAllCriticalTasks();
 
   if (isLoading) {
     return (
-      <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-        <DialogContent className="[&>button]:hidden sm:max-w-lg">
-          <DialogTitle className="sr-only">Loading seasonal checklist</DialogTitle>
-          <DialogDescription className="sr-only">
-            Loading seasonal checklist details.
-          </DialogDescription>
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-green-600 motion-reduce:animate-none" />
-            <p className="mt-3 text-sm text-gray-600">Loading checklist details...</p>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+        </div>
+      </div>
     );
   }
 
-  const checklistDetails = ((data as any)?.data ?? data) as
-    | {
-        checklist?: any;
-        tasks?: {
-          critical: any[];
-          recommended: any[];
-          optional: any[];
-        };
-      }
-    | undefined;
-
-  if (error || !checklistDetails?.checklist || !checklistDetails?.tasks) {
-    return (
-      <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-        <DialogContent className="[&>button]:hidden sm:max-w-lg">
-          <DialogTitle className="text-xl">Unable to load checklist</DialogTitle>
-          <DialogDescription>
-            We couldn&apos;t load this seasonal checklist. Please try again.
-          </DialogDescription>
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              disabled={isRefetching}
-              className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isRefetching ? 'Retrying...' : 'Retry'}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
+  if (error || !data) {
+    return null;
   }
 
-  const { checklist, tasks } = checklistDetails;
+  const { checklist, tasks } = data?.data || data;
   const seasonName = getSeasonName(checklist.season);
   const SeasonIcon = getSeasonIcon(checklist.season);
   const climateName = getClimateRegionName(checklist.climateRegion);
@@ -91,20 +43,17 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   const criticalCount = tasks.critical.length;
   const recommendedCount = tasks.recommended.length;
   const optionalCount = tasks.optional.length;
-  const totalTasks = Math.max(checklist.totalTasks ?? 0, 0);
-  const completionRatio = totalTasks > 0 ? checklist.tasksCompleted / totalTasks : 0;
-  const completionWidth = Math.min(100, Math.max(0, completionRatio * 100));
-  const completionPercent = Math.round(completionWidth);
 
   const handleDismissChecklist = async () => {
+    if (!confirm('Are you sure you want to dismiss this seasonal checklist?')) {
+      return;
+    }
     setDismissing(true);
     try {
       await dismissChecklistMutation.mutateAsync(checklistId);
-      setShowDismissConfirm(false);
       onClose();
     } catch (error) {
       console.error('Failed to dismiss checklist:', error);
-    } finally {
       setDismissing(false);
     }
   };
@@ -117,211 +66,178 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
     }
   };
 
-  const handleDone = () => {
-    if (hideForSeason) {
-      setShowDismissConfirm(true);
-      return;
-    }
-    onClose();
-  };
-
-  const tabLabelByKey = {
-    critical: `Critical (${criticalCount})`,
-    recommended: `Recommended (${recommendedCount})`,
-    optional: `Optional (${optionalCount})`,
-  } as const;
-
   return (
-    <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="[&>button]:hidden max-h-[90vh] max-w-4xl overflow-hidden p-0">
-        <DialogTitle className="sr-only">
-          {seasonName} {checklist.year} Maintenance Checklist
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          Recommended for climate zone {climateName}.
-        </DialogDescription>
-        <div className="flex max-h-[90vh] flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center space-x-3">
-              <SeasonIcon className="h-8 w-8 text-brand-primary" />
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {seasonName} {checklist.year} Maintenance Checklist
-                </h2>
-                <p className="text-sm text-gray-600">
-                  Recommended for Climate Zone: {climateName}
-                </p>
-              </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <SeasonIcon className="h-8 w-8 text-brand-primary" />
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {seasonName} {checklist.year} Maintenance Checklist
+              </h2>
+              <p className="text-sm text-gray-600">
+                Recommended for Climate Zone: {climateName}
+              </p>
             </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">
+              {checklist.tasksCompleted} of {checklist.totalTasks} tasks completed
+            </span>
+            <span className="text-sm text-gray-600">
+              {Math.round((checklist.tasksCompleted / checklist.totalTasks) * 100)}%
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-green-600 h-2 rounded-full transition-all"
+              style={{
+                width: `${(checklist.tasksCompleted / checklist.totalTasks) * 100}%`,
+              }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="px-6 py-3 border-b border-gray-200">
+          <div className="flex space-x-6">
             <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close checklist"
-              className="rounded-md p-1 text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2"
+              onClick={() => setActiveTab('critical')}
+              className={`pb-2 font-medium text-sm border-b-2 transition-colors ${
+                activeTab === 'critical'
+                  ? 'border-red-600 text-red-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
             >
-              <X className="h-6 w-6" />
+              Critical ({criticalCount})
+            </button>
+            <button
+              onClick={() => setActiveTab('recommended')}
+              className={`pb-2 font-medium text-sm border-b-2 transition-colors ${
+                activeTab === 'recommended'
+                  ? 'border-orange-600 text-orange-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Recommended ({recommendedCount})
+            </button>
+            <button
+              onClick={() => setActiveTab('optional')}
+              className={`pb-2 font-medium text-sm border-b-2 transition-colors ${
+                activeTab === 'optional'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Optional ({optionalCount})
             </button>
           </div>
+        </div>
 
-          {/* Progress Bar */}
-          <div className="border-b border-gray-200 bg-gray-50 px-6 py-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">
-                {checklist.tasksCompleted} of {totalTasks} tasks completed
-              </span>
-              <span className="text-sm text-gray-600">{completionPercent}%</span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-gray-200">
-              <div
-                className="h-2 rounded-full bg-green-600 transition-[width] motion-reduce:transition-none"
-                style={{ width: `${completionWidth}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value as 'critical' | 'recommended' | 'optional')}
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            <div className="border-b border-gray-200 px-6 py-3">
-              <TabsList className="h-auto w-full justify-start gap-1 rounded-none bg-transparent p-0">
-                {(['critical', 'recommended', 'optional'] as const).map((tabKey) => (
-                  <TabsTrigger
-                    key={tabKey}
-                    value={tabKey}
-                    className={cn(
-                      'rounded-none border-b-2 border-transparent pb-2 text-sm font-medium text-gray-600 shadow-none focus-visible:ring-green-600 focus-visible:ring-offset-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none',
-                      tabKey === 'critical' && 'data-[state=active]:border-red-600 data-[state=active]:text-red-600',
-                      tabKey === 'recommended' &&
-                        'data-[state=active]:border-orange-600 data-[state=active]:text-orange-600',
-                      tabKey === 'optional' && 'data-[state=active]:border-green-600 data-[state=active]:text-green-600',
-                    )}
-                  >
-                    {tabLabelByKey[tabKey]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
-
-            {/* Content - Scrollable */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-              <TabsContent value="critical" className="mt-0 space-y-4">
-                {criticalCount > 0 ? (
-                  <>
-                    <div className="flex items-start space-x-3 rounded-lg border border-red-200 bg-red-50 p-4">
-                      <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
-                      <div className="flex-1">
-                        <p className="mb-2 text-sm font-medium text-red-800">
-                          These critical tasks help prevent expensive damage and safety issues.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleAddAllCritical}
-                          disabled={addAllCriticalMutation.isPending}
-                          className="inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          {addAllCriticalMutation.isPending ? 'Adding...' : 'Add all critical tasks'}
-                        </button>
-                      </div>
-                    </div>
-                    {tasks.critical.map((item: any) => (
-                      <SeasonalTaskCard key={item.id} item={item} />
-                    ))}
-                  </>
-                ) : (
-                  <div className="py-12 text-center text-gray-500">No critical tasks for this season</div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="recommended" className="mt-0 space-y-4">
-                {recommendedCount > 0 ? (
-                  tasks.recommended.map((item: any) => <SeasonalTaskCard key={item.id} item={item} />)
-                ) : (
-                  <div className="py-12 text-center text-gray-500">No recommended tasks for this season</div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="optional" className="mt-0 space-y-4">
-                {optionalCount > 0 ? (
-                  tasks.optional.map((item: any) => <SeasonalTaskCard key={item.id} item={item} />)
-                ) : (
-                  <div className="py-12 text-center text-gray-500">No optional tasks for this season</div>
-                )}
-              </TabsContent>
-            </div>
-          </Tabs>
-
-          {/* Confirm Dismiss */}
-          {showDismissConfirm && (
-            <div className="border-t border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-sm font-medium text-amber-900">
-                Hide this checklist for the current season?
-              </p>
-              <p className="mt-1 text-xs text-amber-800">
-                You can bring it back later from seasonal settings.
-              </p>
-              <div className="mt-3 flex items-center justify-end gap-2">
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {/* Critical Tasks Info Banner */}
+          {activeTab === 'critical' && criticalCount > 0 && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-red-800 font-medium mb-2">
+                  These critical tasks help prevent expensive damage and safety issues.
+                </p>
                 <button
-                  type="button"
-                  onClick={() => setShowDismissConfirm(false)}
-                  className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2"
+                  onClick={handleAddAllCritical}
+                  disabled={addAllCriticalMutation.isPending}
+                  className="inline-flex items-center px-3 py-1.5 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDismissChecklist}
-                  disabled={dismissing || dismissChecklistMutation.isPending}
-                  className="rounded-md bg-amber-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 disabled:opacity-60"
-                >
-                  {dismissing || dismissChecklistMutation.isPending ? 'Hiding...' : 'Yes, hide checklist'}
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  {addAllCriticalMutation.isPending ? 'Adding...' : 'Add all critical tasks'}
                 </button>
               </div>
             </div>
           )}
 
-          {/* Footer - Compact on mobile */}
-          <div className="flex items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-4 py-3">
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600 sm:text-sm">
-              <input
-                type="checkbox"
-                checked={hideForSeason}
-                onChange={(e) => {
-                  setHideForSeason(e.target.checked);
-                  if (!e.target.checked) {
-                    setShowDismissConfirm(false);
-                  }
-                }}
-                className="h-4 w-4 shrink-0 rounded border-gray-300 text-green-600 focus:ring-green-500"
-              />
-              <span className="hidden sm:inline">Don&apos;t show me this again this season</span>
-              <span className="sm:hidden">Hide this season</span>
-            </label>
+          {/* Task List */}
+          <div className="space-y-4">
+            {activeTab === 'critical' &&
+              (criticalCount > 0 ? (
+                tasks.critical.map((item: any) => (
+                  <SeasonalTaskCard key={item.id} item={item} />
+                ))
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  No critical tasks for this season
+                </div>
+              ))}
 
-            {/* Buttons - compact */}
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 sm:text-sm"
-              >
-                Later
-              </button>
-              <button
-                type="button"
-                onClick={handleDone}
-                className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2 sm:text-sm"
-              >
-                Done
-              </button>
-            </div>
+            {activeTab === 'recommended' &&
+              (recommendedCount > 0 ? (
+                tasks.recommended.map((item: any) => (
+                  <SeasonalTaskCard key={item.id} item={item} />
+                ))
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  No recommended tasks for this season
+                </div>
+              ))}
+
+            {activeTab === 'optional' &&
+              (optionalCount > 0 ? (
+                tasks.optional.map((item: any) => (
+                  <SeasonalTaskCard key={item.id} item={item} />
+                ))
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  No optional tasks for this season
+                </div>
+              ))}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Footer - Compact on mobile */}
+        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              onChange={(e) => {
+                if (e.target.checked) {
+                  handleDismissChecklist();
+                }
+              }}
+              className="rounded border-gray-300 text-green-600 focus:ring-green-500 h-4 w-4 shrink-0"
+            />
+            <span className="hidden sm:inline">Don&apos;t show me this again this season</span>
+            <span className="sm:hidden">Hide</span>
+          </label>
+          
+          {/* Buttons - compact */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 font-medium text-xs sm:text-sm hover:bg-gray-100"
+            >
+              Later
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-md bg-green-600 text-white font-medium text-xs sm:text-sm hover:bg-green-700"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

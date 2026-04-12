@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, X, Info, DollarSign, Timer, CheckCircle2, Loader2, Eye } from 'lucide-react';
+import { Check, X, Clock, Info, DollarSign, Timer, CheckCircle2, Loader2, Eye } from 'lucide-react';
 import { SeasonalChecklistItem } from '@/types/seasonal.types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +34,6 @@ export function SeasonalTaskCard({
   onTaskRemoved,
 }: SeasonalTaskCardProps) {
   const [showDetails, setShowDetails] = useState(false);
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -82,7 +81,6 @@ export function SeasonalTaskCard({
         title: 'Removed from Maintenance',
         description: `"${item.title}" is no longer linked to maintenance`,
       });
-      setShowRemoveConfirm(false);
       
       onTaskRemoved?.();
     },
@@ -120,7 +118,9 @@ export function SeasonalTaskCard({
   };
 
   const handleRemoveFromMaintenance = () => {
-    removeFromMaintenanceMutation.mutate();
+    if (window.confirm(`Remove "${item.title}" from your maintenance schedule?`)) {
+      removeFromMaintenanceMutation.mutate();
+    }
   };
 
   const handleDismiss = () => {
@@ -133,13 +133,6 @@ export function SeasonalTaskCard({
   const isAdded = (item.status === 'ADDED' || !!item.maintenanceTask) && !isCompleted;
   const isNotAdded = !isAdded && !isCompleted;
   const isLoading = addToMaintenanceMutation.isPending || removeFromMaintenanceMutation.isPending;
-  let maintenanceTaskHref: string | null = null;
-  if (item.maintenanceTask?.id) {
-    maintenanceTaskHref = `/dashboard/maintenance?taskId=${item.maintenanceTask.id}&from=seasonal`;
-    if (item.propertyId) {
-      maintenanceTaskHref += `&propertyId=${item.propertyId}`;
-    }
-  }
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -267,7 +260,7 @@ export function SeasonalTaskCard({
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0 motion-reduce:animate-none" />
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0" />
                       <span>Adding...</span>
                     </>
                   ) : (
@@ -296,89 +289,49 @@ export function SeasonalTaskCard({
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>Task completed</span>
               </div>
-            ) : (
-              // ADDED (PENDING) STATE - Show view link and remove button
-              <>
-                    <div className="flex flex-1 flex-col gap-2">
-                      <div className="flex flex-col gap-1 text-xs text-green-700 sm:flex-row sm:items-center sm:text-sm">
-                        <div className="flex items-center gap-1">
-                          <CheckCircle2 className="h-4 w-4 shrink-0" />
-                          <span className="hidden sm:inline">This task is in your maintenance schedule</span>
-                          <span className="sm:hidden">Scheduled</span>
-                        </div>
-
-                        {/* View in Maintenance link */}
-                        {maintenanceTaskHref ? (
-                          <Link
-                            href={maintenanceTaskHref}
-                            className="ml-0 flex items-center gap-1 text-teal-600 transition-colors hover:text-teal-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 sm:ml-2"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            <span>View in Maintenance</span>
-                          </Link>
-                        ) : null}
-                      </div>
-
-                      {showRemoveConfirm ? (
-                        <div className="rounded-md border border-amber-200 bg-amber-50 p-2">
-                          <p className="text-xs font-medium text-amber-900 sm:text-sm">
-                            Remove this task from maintenance?
-                          </p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowRemoveConfirm(false)}
-                              disabled={isLoading}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              onClick={handleRemoveFromMaintenance}
-                              disabled={isLoading}
-                            >
-                              {isLoading ? (
-                                <>
-                                  <Loader2 className="mr-1 h-4 w-4 animate-spin shrink-0 motion-reduce:animate-none" />
-                                  <span>Removing...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <X className="mr-1 h-4 w-4 shrink-0" />
-                                  <span>Yes, remove</span>
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : null}
+              ) : (
+                // ADDED (PENDING) STATE - Show view link and remove button
+                <>
+                  <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-1 text-xs sm:text-sm text-green-700">
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <span className="hidden sm:inline">This task is in your maintenance schedule</span>
+                      <span className="sm:hidden">Scheduled</span>
                     </div>
+                    
+                    {/* View in Maintenance link */}
+                    {item.maintenanceTask?.id && (
+                      <Link 
+                      href={`/dashboard/maintenance?taskId=${item.maintenanceTask.id}&from=seasonal&propertyId=${item.propertyId || ''}`}
+                        className="flex items-center gap-1 text-teal-600 hover:text-teal-800 hover:underline ml-0 sm:ml-2"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>View in Maintenance</span>
+                      </Link>
+                    )}
+                  </div>
 
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowRemoveConfirm(true)}
-                      disabled={isLoading}
-                      size="sm"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0 motion-reduce:animate-none" />
-                          <span>...</span>
-                        </>
-                      ) : (
-                        <>
-                          <X className="h-4 w-4 mr-1 shrink-0" />
-                          <span className="hidden sm:inline">Remove</span>
-                          <span className="sm:hidden">Undo</span>
-                        </>
-                      )}
-                    </Button>
-              </>
-            )}
+                  <Button
+                    variant="outline"
+                    onClick={handleRemoveFromMaintenance}
+                    disabled={isLoading}
+                    size="sm"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin shrink-0" />
+                        <span>...</span>
+                      </>
+                    ) : (
+                      <>
+                        <X className="h-4 w-4 mr-1 shrink-0" />
+                        <span className="hidden sm:inline">Remove</span>
+                        <span className="sm:hidden">Undo</span>
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
           </div>
         </div>
       </CardContent>
