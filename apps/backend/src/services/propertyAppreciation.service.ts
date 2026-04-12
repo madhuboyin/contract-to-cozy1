@@ -90,13 +90,32 @@ export class PropertyAppreciationService {
       throw new Error('Property not found');
     }
 
-    // Require user to provide purchase price
-    if (!purchasePrice) {
-        throw new Error('Purchase price is required');
+    const parsedRequestPurchasePrice =
+      typeof purchasePrice === 'number' && Number.isFinite(purchasePrice) && purchasePrice > 0
+        ? purchasePrice
+        : undefined;
+    const storedPurchasePrice =
+      typeof property.purchasePriceCents === 'number' && property.purchasePriceCents > 0
+        ? property.purchasePriceCents / 100
+        : undefined;
+    const finalPurchasePrice = parsedRequestPurchasePrice ?? storedPurchasePrice;
+
+    if (!finalPurchasePrice) {
+      throw new Error('Purchase price is required');
     }
-    
-    const finalPurchasePrice = purchasePrice;
-    const finalPurchaseDate = purchaseDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+
+    const parsedRequestPurchaseDate =
+      typeof purchaseDate === 'string' && !Number.isNaN(new Date(purchaseDate).getTime())
+        ? purchaseDate
+        : undefined;
+    const storedPurchaseDate =
+      property.purchaseDate && !Number.isNaN(new Date(property.purchaseDate).getTime())
+        ? new Date(property.purchaseDate).toISOString()
+        : undefined;
+    const finalPurchaseDate =
+      parsedRequestPurchaseDate ||
+      storedPurchaseDate ||
+      new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
     
     // Get regional appreciation rate
     const regionalRate = REGIONAL_APPRECIATION_RATES[property.state] || REGIONAL_APPRECIATION_RATES['DEFAULT'];

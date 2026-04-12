@@ -22,6 +22,7 @@ function AppreciationContent() {
   const [properties, setProperties] = useState<Property[]>([]);
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
   const [loading, setLoading] = useState(true);
+  const selectedProperty = properties.find((property) => property.id === selectedPropertyId) || null;
 
   useEffect(() => {
     loadProperties();
@@ -97,7 +98,11 @@ function AppreciationContent() {
 
       {/* Appreciation Tracker Component */}
       {selectedPropertyId ? (
-        <PropertyAppreciationTracker propertyId={selectedPropertyId} />
+        <PropertyAppreciationTracker
+          propertyId={selectedPropertyId}
+          propertyPurchasePriceCents={selectedProperty?.purchasePriceCents ?? null}
+          propertyPurchaseDate={selectedProperty?.purchaseDate ?? null}
+        />
       ) : (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />

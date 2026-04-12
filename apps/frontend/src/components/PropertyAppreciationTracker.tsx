@@ -1,7 +1,7 @@
 // apps/frontend/src/components/PropertyAppreciationTracker.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   TrendingUp, 
   DollarSign, 
@@ -52,25 +52,45 @@ interface AppreciationReport {
 
 interface PropertyAppreciationTrackerProps {
   propertyId: string;
+  propertyPurchasePriceCents?: number | null;
+  propertyPurchaseDate?: string | null;
 }
 
-export default function PropertyAppreciationTracker({ propertyId }: PropertyAppreciationTrackerProps) {
+const normalizeInputDate = (value?: string | null) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+};
+
+export default function PropertyAppreciationTracker({
+  propertyId,
+  propertyPurchasePriceCents = null,
+  propertyPurchaseDate = null,
+}: PropertyAppreciationTrackerProps) {
   const [report, setReport] = useState<AppreciationReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showInputForm, setShowInputForm] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
+  const autoLoadedKeyRef = useRef<string | null>(null);
+  const storedPurchasePrice =
+    typeof propertyPurchasePriceCents === 'number' && propertyPurchasePriceCents > 0
+      ? propertyPurchasePriceCents / 100
+      : undefined;
+  const storedPurchaseDate = normalizeInputDate(propertyPurchaseDate);
 
   useEffect(() => {
     setReport(null);
     setError('');
     setShowInputForm(false);
-    setPurchasePrice('');
-    setPurchaseDate('');
-  }, [propertyId]);
+    setPurchasePrice(storedPurchasePrice ? String(storedPurchasePrice) : '');
+    setPurchaseDate(storedPurchaseDate);
+    autoLoadedKeyRef.current = null;
+  }, [propertyId, storedPurchasePrice, storedPurchaseDate]);
 
-  const loadReport = async (customPrice?: number, customDate?: string) => {
+  const loadReport = useCallback(async (customPrice?: number, customDate?: string) => {
     setLoading(true);
     setError('');
 
@@ -92,7 +112,15 @@ export default function PropertyAppreciationTracker({ propertyId }: PropertyAppr
     } finally {
       setLoading(false);
     }
-  };
+  }, [propertyId]);
+
+  useEffect(() => {
+    if (!storedPurchasePrice) return;
+    const autoLoadKey = `${propertyId}:${storedPurchasePrice}:${storedPurchaseDate}`;
+    if (autoLoadedKeyRef.current === autoLoadKey) return;
+    autoLoadedKeyRef.current = autoLoadKey;
+    void loadReport(storedPurchasePrice, storedPurchaseDate || undefined);
+  }, [propertyId, storedPurchasePrice, storedPurchaseDate, loadReport]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,9 +169,40 @@ export default function PropertyAppreciationTracker({ propertyId }: PropertyAppr
         title="Unable to load appreciation data"
         subtitle={error}
         badge={<StatusChip tone="danger">Error</StatusChip>}
-        actions={<ActionPriorityRow primaryAction={<Button onClick={() => setShowInputForm(true)}>Try Again</Button>} />}
+        actions={
+          <ActionPriorityRow
+            primaryAction={
+              <Button
+                onClick={() => {
+                  if (storedPurchasePrice) {
+                    void loadReport(storedPurchasePrice, storedPurchaseDate || undefined);
+                    return;
+                  }
+                  setShowInputForm(true);
+                }}
+              >
+                Try Again
+              </Button>
+            }
+          />
+        }
       >
         <p className="text-sm text-red-700">Update inputs and rerun the analysis.</p>
+      </ScenarioInputCard>
+    );
+  }
+
+  if (!report && !showInputForm && storedPurchasePrice) {
+    return (
+      <ScenarioInputCard
+        title="Preparing appreciation analysis"
+        subtitle="Using your saved purchase details."
+        badge={<StatusChip tone="info">Loading</StatusChip>}
+      >
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+          <span>Building your value trend from stored baseline data.</span>
+        </div>
       </ScenarioInputCard>
     );
   }
@@ -152,7 +211,7 @@ export default function PropertyAppreciationTracker({ propertyId }: PropertyAppr
     return (
       <ScenarioInputCard
         title="Track Your Property Value"
-        subtitle="Enter purchase info to generate AI-powered appreciation analysis."
+        subtitle="Add purchase info to generate AI-powered appreciation analysis."
         badge={<StatusChip tone="info">Setup</StatusChip>}
         actions={<ActionPriorityRow primaryAction={<Button onClick={() => setShowInputForm(true)}>Get Started</Button>} />}
       >
