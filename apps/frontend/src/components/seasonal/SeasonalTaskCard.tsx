@@ -316,7 +316,7 @@ export function SeasonalTaskCard({
                             <Eye className="h-3.5 w-3.5" />
                             <span>View in Maintenance</span>
                           </Link>
-                        )}
+                        ) : null}
                       </div>
 
                       {showRemoveConfirm ? (
