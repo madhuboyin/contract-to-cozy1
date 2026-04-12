@@ -6,12 +6,13 @@ import {
     getDetailedFESReport, 
     recalculateFES 
 } from '../controllers/financialEfficiency.controller';
-import { authenticate } from '../middleware/auth.middleware'; 
+import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 
 const router = Router();
 
 // Middleware to ensure user is authenticated for all routes
-router.use(authenticate); 
+router.use(authenticate);
 
 /**
  * @swagger
@@ -80,7 +81,7 @@ router.get('/summary', getPrimaryFESSummary);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get('/:propertyId/financial-efficiency', getDetailedFESReport);
+router.get('/:propertyId/financial-efficiency', propertyAuthMiddleware, getDetailedFESReport);
 
 /**
  * @swagger
@@ -115,7 +116,7 @@ router.get('/:propertyId/financial-efficiency', getDetailedFESReport);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.post('/:propertyId/financial-efficiency/recalculate', recalculateFES);
+router.post('/:propertyId/financial-efficiency/recalculate', propertyAuthMiddleware, recalculateFES);
 
 
 export default router;

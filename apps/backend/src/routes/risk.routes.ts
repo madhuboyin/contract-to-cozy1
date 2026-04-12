@@ -2,7 +2,8 @@
 
 import { Router } from 'express';
 import RiskAssessmentController from '../controllers/riskAssessment.controller';
-import { authenticate } from '../middleware/auth.middleware'; // Assuming authentication middleware exists
+import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 
 const router = Router();
 
@@ -49,8 +50,9 @@ const router = Router();
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get(
-  '/report/:propertyId', 
-  authenticate, 
+  '/report/:propertyId',
+  authenticate,
+  propertyAuthMiddleware,
   RiskAssessmentController.getRiskReportSummary.bind(RiskAssessmentController)
 );
 
@@ -84,8 +86,9 @@ router.get(
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.get(
-  '/report/:propertyId/pdf', 
-  authenticate, 
+  '/report/:propertyId/pdf',
+  authenticate,
+  propertyAuthMiddleware,
   RiskAssessmentController.generateRiskReportPdf.bind(RiskAssessmentController)
 );
 
@@ -123,8 +126,9 @@ router.get(
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.post(
-  '/calculate/:propertyId', 
-  authenticate, 
+  '/calculate/:propertyId',
+  authenticate,
+  propertyAuthMiddleware,
   RiskAssessmentController.triggerRecalculation.bind(RiskAssessmentController)
 );
 

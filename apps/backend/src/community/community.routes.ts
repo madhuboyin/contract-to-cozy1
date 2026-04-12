@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import { CommunityService } from './community.service';
 import { CommunityController } from './community.controller';
 import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 
 export function communityRoutes(prisma: PrismaClient) {
   const router = Router();
@@ -17,7 +18,7 @@ export function communityRoutes(prisma: PrismaClient) {
   router.get('/api/v1/community/open-data', authenticate, controller.getCityOpenData);
 
   // Property-based endpoints (backwards compatible)
-  router.get('/api/v1/properties/:propertyId/community/events', authenticate, controller.getEventsByProperty);
+  router.get('/api/v1/properties/:propertyId/community/events', authenticate, propertyAuthMiddleware, controller.getEventsByProperty);
   
   // On-the-fly endpoints (no DB writes)
   router.get('/api/community/trash', authenticate, controller.getTrash);

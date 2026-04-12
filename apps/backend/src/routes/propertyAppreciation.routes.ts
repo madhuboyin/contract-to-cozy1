@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import { Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { propertyAppreciationService } from '../services/propertyAppreciation.service';
 
@@ -37,7 +38,7 @@ const router = Router();
  *       200:
  *         description: Appreciation report generated
  */
-router.post('/analyze/:propertyId', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/analyze/:propertyId', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { propertyId } = req.params;

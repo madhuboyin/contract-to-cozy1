@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { propertyMaintenanceTaskController } from '../controllers/propertyMaintenanceTask.controller';
 import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 
 const router = Router();
 
@@ -13,13 +14,13 @@ router.use(authenticate);
  * Get all tasks for a property
  * Query params: ?status=PENDING,IN_PROGRESS&priority=HIGH&source=USER_CREATED&includeCompleted=false
  */
-router.get('/property/:propertyId', propertyMaintenanceTaskController.handleGetPropertyTasks);
+router.get('/property/:propertyId', propertyAuthMiddleware, propertyMaintenanceTaskController.handleGetPropertyTasks);
 
 /**
  * GET /api/maintenance-tasks/property/:propertyId/stats
  * Get task statistics for a property
  */
-router.get('/property/:propertyId/stats', propertyMaintenanceTaskController.handleGetPropertyStats);
+router.get('/property/:propertyId/stats', propertyAuthMiddleware, propertyMaintenanceTaskController.handleGetPropertyStats);
 
 /**
  * GET /api/maintenance-tasks/:taskId
@@ -31,7 +32,7 @@ router.get('/:taskId', propertyMaintenanceTaskController.handleGetTask);
  * POST /api/maintenance-tasks/property/:propertyId
  * Create a user-defined maintenance task
  */
-router.post('/property/:propertyId', propertyMaintenanceTaskController.handleCreateTask);
+router.post('/property/:propertyId', propertyAuthMiddleware, propertyMaintenanceTaskController.handleCreateTask);
 
 /**
  * POST /api/maintenance-tasks/from-action-center

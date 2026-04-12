@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { Response } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { inspectionAnalysisService } from '../services/inspectionAnalysis.service';
 import { prisma } from '../config/database';
@@ -216,7 +217,7 @@ router.get('/:reportId', authenticate, async (req: AuthRequest, res: Response) =
  *       200:
  *         description: List of inspection reports
  */
-router.get('/property/:propertyId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/property/:propertyId', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { propertyId } = req.params;

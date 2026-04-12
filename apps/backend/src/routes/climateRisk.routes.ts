@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import { Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { climateRiskPredictorService } from '../services/climateRiskPredictor.service';
 
@@ -26,7 +27,7 @@ const router = Router();
  *       200:
  *         description: Climate risk report generated
  */
-router.get('/analyze/:propertyId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/analyze/:propertyId', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { propertyId } = req.params;

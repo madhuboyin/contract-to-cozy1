@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import { Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { movingConciergeService } from '../services/movingConcierge.service';
 
@@ -165,7 +166,7 @@ router.post('/save-plan', authenticate, async (req: AuthRequest, res: Response) 
  *     security:
  *       - bearerAuth: []
  */
-router.get('/get-plan/:propertyId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/get-plan/:propertyId', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { propertyId } = req.params;
@@ -236,7 +237,7 @@ router.post('/update-tasks', authenticate, async (req: AuthRequest, res: Respons
  *     security:
  *       - bearerAuth: []
  */
-router.delete('/delete-plan/:propertyId', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/delete-plan/:propertyId', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { propertyId } = req.params;
