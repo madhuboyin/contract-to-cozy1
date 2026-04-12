@@ -292,9 +292,9 @@ export function SeasonalTaskCard({
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>Task completed</span>
               </div>
-	              ) : (
-	                // ADDED (PENDING) STATE - Show view link and remove button
-	                <>
+            ) : (
+              // ADDED (PENDING) STATE - Show view link and remove button
+              <>
                     <div className="flex flex-1 flex-col gap-2">
                       <div className="flex flex-col gap-1 text-xs text-green-700 sm:flex-row sm:items-center sm:text-sm">
                         <div className="flex items-center gap-1">
@@ -373,8 +373,8 @@ export function SeasonalTaskCard({
                         </>
                       )}
                     </Button>
-	                </>
-	              )}
+              </>
+            )}
           </div>
         </div>
       </CardContent>
