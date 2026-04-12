@@ -130,6 +130,7 @@ export default function MobileDashboardHome({
   const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
   const propertyId = selectedProperty?.id;
+  const [showMoreModules, setShowMoreModules] = React.useState(false);
 
   const resolveLocalUpdateHref = React.useCallback(
     (href: string | null | undefined) => appendGuidanceContinuityToHref(href || '/dashboard', guidanceContext),
@@ -302,6 +303,8 @@ export default function MobileDashboardHome({
   const riskScore = Math.round(riskSummaryQuery.data?.riskScore ?? 0);
   const financialScore = Math.round(financialSummaryQuery.data?.financialEfficiencyScore ?? 0);
   const riskExposure = Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0);
+  const confidenceLabel = homeScore >= 80 ? 'High confidence' : homeScore >= 60 ? 'Medium confidence' : 'Confidence building';
+  const freshnessLabel = dailySnapshotQuery.data ? 'Updated today' : 'Refreshing signals';
   const urgentActionCount = orchestrationQuery.data?.pendingActionCount ?? 0;
   const topActions = (orchestrationQuery.data?.actions ?? []).slice(0, 2);
   const overdueCount = maintenanceStatsQuery.data?.overdue ?? 0;
@@ -573,379 +576,401 @@ export default function MobileDashboardHome({
               />
             </MobileSection>
 
-            {localUpdates.length > 0 ? (
-              <MobileSection>
-                <ExpandableSummaryCard
-                  title="What's New"
-                  summary={`${localUpdates.length} local updates available`}
-                  metric={`${localUpdates.length} new`}
-                >
-                  <div className="space-y-2">
-                    {localUpdates.slice(0, 3).map((update) => (
-                      <PreviewListRow
-                        key={update.id}
-                        title={update.title}
-                        subtitle={update.shortDescription}
-                        href={resolveLocalUpdateHref(update.ctaUrl)}
-                        onClick={() => trackLocalUpdateProgress(update)}
-                        icon={<Sparkles className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
-                      />
-                    ))}
-                  </div>
-                </ExpandableSummaryCard>
-              </MobileSection>
-            ) : null}
-
             <MobileSection>
-              <MobileSectionHeader
-                title="AI Tools"
-                subtitle="Smart insights for your home"
-                action={
-                  <Link href={buildAiToolHref(propertyId, '/dashboard/ai-tools')} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
-                    View all
-                  </Link>
-                }
-              />
-              <QuickActionGrid className="gap-2.5">
-                {aiToolTiles.map((tile) => (
-                  <QuickActionTile key={tile.title} {...tile} variant="compact" />
-                ))}
-              </QuickActionGrid>
-            </MobileSection>
-
-            <MobileSection>
-              <SummaryCard
-                title="Attention Today"
-                subtitle="Urgency unified into one focus block"
-                action={
-                  <StatusChip tone={urgentActionCount > 0 || overdueCount > 0 ? 'needsAction' : 'good'}>
-                    {urgentActionCount + overdueCount} items
-                  </StatusChip>
-                }
-              >
-                <MetricRow
-                  label="Urgent actions"
-                  value={`${urgentActionCount}`}
-                  trend={
-                    urgentActionCount > 0 ? (
-                      <span className="inline-flex items-center text-rose-600">
-                        <Flame className="mr-1 h-3.5 w-3.5" />
-                        High
-                      </span>
-                    ) : (
-                      <span className="text-emerald-600">Clear</span>
-                    )
-                  }
-                />
-                <MetricRow
-                  label="Overdue tasks"
-                  value={`${overdueCount}`}
-                  trend={overdueCount > 0 ? <span className="text-amber-600">Elevated</span> : <span className="text-emerald-600">On track</span>}
-                />
-                <MetricRow
-                  label="Money at risk"
-                  value={formatCurrency(riskExposure)}
-                  trend={riskExposure > 0 ? <span className="text-rose-600">Exposure</span> : <span className="text-emerald-600">Protected</span>}
-                />
-                {topActions.length > 0 ? (
-                  <div className="pt-1">
-                    {topActions.map((action) => (
-                      <PreviewListRow
-                        key={action.actionKey}
-                        title={action.title}
-                        subtitle={action.description || 'Needs review'}
-                        icon={
-                          <IconBadge tone="warning">
-                            <Wrench className="h-4 w-4" />
-                          </IconBadge>
-                        }
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                <Link
-                  href={`/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`}
-                  className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-                >
-                  Review Actions
-                </Link>
+              <SummaryCard title="Trust Signals" subtitle="How we prioritized your next move today.">
+                <MetricRow label="Confidence" value={confidenceLabel} />
+                <MetricRow label="Freshness" value={freshnessLabel} />
+                <MetricRow label="Source" value="Property profile + tasks + risk signals" />
               </SummaryCard>
             </MobileSection>
 
-            <MobileSection>
-              <SummaryCard
-                title="Property Intelligence"
-                subtitle="Glanceable score summary"
-                action={
-                  <Link href={riskRadarHref} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
-                    Risk Radar
-                  </Link>
-                }
+            <MobileSection className="pt-0">
+              <button
+                type="button"
+                onClick={() => setShowMoreModules((prev) => !prev)}
+                className="w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
               >
-                <MetricRow
-                  label="HomeScore"
-                  value={`${homeScore}/100`}
-                  trend={<StatusChip tone={scoreChipTone(homeScore)}>{homeScore >= 80 ? 'Good' : homeScore >= 60 ? 'Elevated' : 'Needs Action'}</StatusChip>}
-                />
-                <MetricRow
-                  label="Health"
-                  value={`${healthScore}/100`}
-                  trend={<StatusChip tone={scoreChipTone(healthScore)}>{healthScore >= 80 ? 'Good' : healthScore >= 60 ? 'Elevated' : 'At Risk'}</StatusChip>}
-                />
-                <MetricRow
-                  label="Risk"
-                  value={`${riskScore}/100`}
-                  trend={<StatusChip tone={riskChipTone(riskScore)}>{riskScore >= 80 ? 'Protected' : riskScore >= 60 ? 'Elevated' : 'At Risk'}</StatusChip>}
-                />
-                <MetricRow
-                  label="Financial"
-                  value={`${financialScore}/100`}
-                  trend={<StatusChip tone={scoreChipTone(financialScore)}>{financialScore >= 80 ? 'Strong' : financialScore >= 60 ? 'Stable' : 'Needs Work'}</StatusChip>}
-                />
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <Link
-                    href={dailySnapshotHref}
-                    className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
+                {showMoreModules ? 'Show fewer modules' : 'View more modules'}
+              </button>
+            </MobileSection>
+
+            {showMoreModules ? (
+              <>
+                <MobileSection>
+                  <SummaryCard
+                    title="Attention Today"
+                    subtitle="Urgency unified into one focus block"
+                    action={
+                      <StatusChip tone={urgentActionCount > 0 || overdueCount > 0 ? 'needsAction' : 'good'}>
+                        {urgentActionCount + overdueCount} items
+                      </StatusChip>
+                    }
                   >
-                    Daily Snapshot
-                  </Link>
-                  <Link
-                    href={riskRadarHref}
-                    className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
-                  >
-                    Open Risk Radar
-                  </Link>
-                </div>
-              </SummaryCard>
-            </MobileSection>
-
-            <MobileSection>
-              <SummaryCard
-                title="Home Event Radar"
-                subtitle={
-                  radarFeedQuery.isLoading
-                    ? 'Checking for matched events…'
-                    : radarActiveCount > 0
-                      ? `${radarActiveCount} active event${radarActiveCount === 1 ? '' : 's'} matched to your home`
-                      : 'No active events detected for your home'
-                }
-                action={
-                  radarNewCount > 0 ? (
-                    <StatusChip tone="needsAction">{radarNewCount} new</StatusChip>
-                  ) : (
-                    <IconBadge tone="info">
-                      <Radio className="h-4 w-4" />
-                    </IconBadge>
-                  )
-                }
-              >
-                <Link
-                  href={radarHref}
-                  className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-                >
-                  Open Radar
-                </Link>
-              </SummaryCard>
-            </MobileSection>
-
-            <MobileSection>
-              <ExpandableSummaryCard
-                title="Seasonal Tasks"
-                summary={
-                  seasonalChecklist
-                    ? `${seasonalChecklist.season} tasks for ${seasonalChecklist.year}`
-                    : 'Seasonal checklist unavailable'
-                }
-                metric={`${seasonalRemaining} remaining`}
-              >
-                {seasonalChecklist ? (
-                  <div className="space-y-2.5">
-                    {seasonalPreview.length > 0 ? (
-                      seasonalPreview.map((task: { id: string; title: string }) => (
-                        <PreviewListRow
-                          key={task.id}
-                          title={task.title}
-                          subtitle="Seasonal recommendation"
-                          icon={
-                            <IconBadge tone="info">
-                              <Flame className="h-4 w-4" />
-                            </IconBadge>
-                          }
-                        />
-                      ))
-                    ) : (
-                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                        No pending tasks for this season.
-                      </p>
-                    )}
+                    <MetricRow
+                      label="Urgent actions"
+                      value={`${urgentActionCount}`}
+                      trend={
+                        urgentActionCount > 0 ? (
+                          <span className="inline-flex items-center text-rose-600">
+                            <Flame className="mr-1 h-3.5 w-3.5" />
+                            High
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600">Clear</span>
+                        )
+                      }
+                    />
+                    <MetricRow
+                      label="Overdue tasks"
+                      value={`${overdueCount}`}
+                      trend={overdueCount > 0 ? <span className="text-amber-600">Elevated</span> : <span className="text-emerald-600">On track</span>}
+                    />
+                    <MetricRow
+                      label="Money at risk"
+                      value={formatCurrency(riskExposure)}
+                      trend={riskExposure > 0 ? <span className="text-rose-600">Exposure</span> : <span className="text-emerald-600">Protected</span>}
+                    />
+                    {topActions.length > 0 ? (
+                      <div className="pt-1">
+                        {topActions.map((action) => (
+                          <PreviewListRow
+                            key={action.actionKey}
+                            title={action.title}
+                            subtitle={action.description || 'Needs review'}
+                            icon={
+                              <IconBadge tone="warning">
+                                <Wrench className="h-4 w-4" />
+                              </IconBadge>
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : null}
                     <Link
-                      href={`/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`}
+                      href={`/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`}
                       className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
                     >
-                      Review Tasks
+                      Review Actions
                     </Link>
-                  </div>
-                ) : (
-                  <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                    Seasonal checklist will appear once generated.
-                  </p>
-                )}
-              </ExpandableSummaryCard>
-            </MobileSection>
+                  </SummaryCard>
+                </MobileSection>
 
-            <MobileSection>
-              <SummaryCard
-                title="Rooms Snapshot"
-                subtitle="Room-level coverage at a glance"
-                action={
-                  <Link href={roomsHref} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
-                    View all
-                  </Link>
-                }
-              >
-                {rooms.length > 0 ? (
-                  <MobileHorizontalScroller>
-                    {previewRooms.map((room) => {
-                      const stats = roomInsightsQuery.data?.[room.id];
-                      return (
-                      <Link
-                        key={room.id}
-                        href={roomsHref}
-                        className="no-brand-style min-w-[162px] snap-start rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-3"
-                      >
-                        <p className="mb-1 text-2xl leading-none">{roomEmoji(room.name)}</p>
-                        <p className="mb-0 truncate text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-                          {room.name}
-                        </p>
-                        <div className="mt-1 flex items-center gap-3 text-xs text-[hsl(var(--mobile-text-secondary))]">
-                          <span className="inline-flex items-center gap-1">
-                            <Package className="h-3.5 w-3.5" />
-                            {stats?.itemCount ?? 0}
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <FileText className="h-3.5 w-3.5" />
-                            {stats?.docsLinkedCount ?? 0}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-rose-600">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            {stats?.coverageGapsCount ?? 0}
-                          </span>
-                        </div>
-                      </Link>
-                    );
-                    })}
-                  </MobileHorizontalScroller>
-                ) : (
-                  <EmptyStateCard
-                    title="No rooms yet"
-                    description="Add your first room to start room-level tracking."
+                {localUpdates.length > 0 ? (
+                  <MobileSection>
+                    <ExpandableSummaryCard
+                      title="What's New"
+                      summary={`${localUpdates.length} local updates available`}
+                      metric={`${localUpdates.length} new`}
+                    >
+                      <div className="space-y-2">
+                        {localUpdates.slice(0, 3).map((update) => (
+                          <PreviewListRow
+                            key={update.id}
+                            title={update.title}
+                            subtitle={update.shortDescription}
+                            href={resolveLocalUpdateHref(update.ctaUrl)}
+                            onClick={() => trackLocalUpdateProgress(update)}
+                            icon={<Sparkles className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
+                          />
+                        ))}
+                      </div>
+                    </ExpandableSummaryCard>
+                  </MobileSection>
+                ) : null}
+
+                <MobileSection>
+                  <MobileSectionHeader
+                    title="AI Tools"
+                    subtitle="Smart insights for your home"
                     action={
-                      <Link
-                        href={buildPropertyAwareHref(propertyId, 'inventory/rooms', 'inventory-rooms')}
-                        className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-                      >
-                        Add Rooms
+                      <Link href={buildAiToolHref(propertyId, '/dashboard/ai-tools')} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
+                        View all
                       </Link>
                     }
                   />
-                )}
-              </SummaryCard>
-            </MobileSection>
+                  <QuickActionGrid className="gap-2.5">
+                    {aiToolTiles.map((tile) => (
+                      <QuickActionTile key={tile.title} {...tile} variant="compact" />
+                    ))}
+                  </QuickActionGrid>
+                </MobileSection>
 
-            <MobileSection>
-              <SummaryCard
-                title="Financial Insights"
-                subtitle="High-value money signals"
-                action={
-                  <IconBadge tone="positive">
-                    <Wallet className="h-4 w-4" />
-                  </IconBadge>
-                }
-              >
-                <MetricRow
-                  label="Annual ownership exposure"
-                  value={formatCurrency(financialSummaryQuery.data?.financialExposureTotal)}
-                />
-                <MetricRow
-                  label="Potential monthly savings"
-                  value={formatCurrency(monthlySavings)}
-                  trend={monthlySavings > 0 ? <span className="text-emerald-600">Opportunity</span> : <span className="text-gray-500">No signal</span>}
-                />
-                <MetricRow
-                  label="Potential annual savings"
-                  value={formatCurrency(savingsQuery.data?.potentialAnnualSavings)}
-                />
-                <Link
-                  href={buildPropertyAwareHref(propertyId, 'tools/home-savings', 'tool:home-savings')}
-                  className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-                >
-                  Open Financial Tools
-                </Link>
-              </SummaryCard>
-              <MoneyImpactTrackerCard
-                annualExposure={financialSummaryQuery.data?.financialExposureTotal || 0}
-                annualSavings={savingsQuery.data?.potentialAnnualSavings || 0}
-                monthlySavings={monthlySavings}
-                weeklyFinancialDelta={snapshotsQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null}
-                financialTrend={(snapshotsQuery.data?.scores?.FINANCIAL?.trend || []).map((point) => point.score)}
-              />
-            </MobileSection>
+                <MobileSection>
+                  <SummaryCard
+                    title="Property Intelligence"
+                    subtitle="Glanceable score summary"
+                    action={
+                      <Link href={riskRadarHref} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
+                        Risk Radar
+                      </Link>
+                    }
+                  >
+                    <MetricRow
+                      label="HomeScore"
+                      value={`${homeScore}/100`}
+                      trend={<StatusChip tone={scoreChipTone(homeScore)}>{homeScore >= 80 ? 'Good' : homeScore >= 60 ? 'Elevated' : 'Needs Action'}</StatusChip>}
+                    />
+                    <MetricRow
+                      label="Health"
+                      value={`${healthScore}/100`}
+                      trend={<StatusChip tone={scoreChipTone(healthScore)}>{healthScore >= 80 ? 'Good' : healthScore >= 60 ? 'Elevated' : 'At Risk'}</StatusChip>}
+                    />
+                    <MetricRow
+                      label="Risk"
+                      value={`${riskScore}/100`}
+                      trend={<StatusChip tone={riskChipTone(riskScore)}>{riskScore >= 80 ? 'Protected' : riskScore >= 60 ? 'Elevated' : 'At Risk'}</StatusChip>}
+                    />
+                    <MetricRow
+                      label="Financial"
+                      value={`${financialScore}/100`}
+                      trend={<StatusChip tone={scoreChipTone(financialScore)}>{financialScore >= 80 ? 'Strong' : financialScore >= 60 ? 'Stable' : 'Needs Work'}</StatusChip>}
+                    />
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <Link
+                        href={dailySnapshotHref}
+                        className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
+                      >
+                        Daily Snapshot
+                      </Link>
+                      <Link
+                        href={riskRadarHref}
+                        className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
+                      >
+                        Open Risk Radar
+                      </Link>
+                    </div>
+                  </SummaryCard>
+                </MobileSection>
 
-            <MobileSection>
-              <ExpandableSummaryCard
-                title="Action Center"
-                summary={
-                  urgentActionCount > 0
-                    ? `${urgentActionCount} priority items queued`
-                    : 'No high-priority items queued'
-                }
-                metric={`${urgentActionCount} open`}
-              >
-                <div className="space-y-2.5">
-                  {topActions.length > 0 ? (
-                    topActions.map((action) => (
-                      <PreviewListRow
-                        key={`action-preview-${action.actionKey}`}
-                        title={action.title}
-                        subtitle={action.description || 'Prioritized action'}
-                        icon={
-                          <IconBadge tone="danger">
-                            <Shield className="h-4 w-4" />
-                          </IconBadge>
+                <MobileSection>
+                  <SummaryCard
+                    title="Home Event Radar"
+                    subtitle={
+                      radarFeedQuery.isLoading
+                        ? 'Checking for matched events…'
+                        : radarActiveCount > 0
+                          ? `${radarActiveCount} active event${radarActiveCount === 1 ? '' : 's'} matched to your home`
+                          : 'No active events detected for your home'
+                    }
+                    action={
+                      radarNewCount > 0 ? (
+                        <StatusChip tone="needsAction">{radarNewCount} new</StatusChip>
+                      ) : (
+                        <IconBadge tone="info">
+                          <Radio className="h-4 w-4" />
+                        </IconBadge>
+                      )
+                    }
+                  >
+                    <Link
+                      href={radarHref}
+                      className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                    >
+                      Open Radar
+                    </Link>
+                  </SummaryCard>
+                </MobileSection>
+
+                <MobileSection>
+                  <ExpandableSummaryCard
+                    title="Seasonal Tasks"
+                    summary={
+                      seasonalChecklist
+                        ? `${seasonalChecklist.season} tasks for ${seasonalChecklist.year}`
+                        : 'Seasonal checklist unavailable'
+                    }
+                    metric={`${seasonalRemaining} remaining`}
+                  >
+                    {seasonalChecklist ? (
+                      <div className="space-y-2.5">
+                        {seasonalPreview.length > 0 ? (
+                          seasonalPreview.map((task: { id: string; title: string }) => (
+                            <PreviewListRow
+                              key={task.id}
+                              title={task.title}
+                              subtitle="Seasonal recommendation"
+                              icon={
+                                <IconBadge tone="info">
+                                  <Flame className="h-4 w-4" />
+                                </IconBadge>
+                              }
+                            />
+                          ))
+                        ) : (
+                          <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                            No pending tasks for this season.
+                          </p>
+                        )}
+                        <Link
+                          href={`/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`}
+                          className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                        >
+                          Review Tasks
+                        </Link>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                        Seasonal checklist will appear once generated.
+                      </p>
+                    )}
+                  </ExpandableSummaryCard>
+                </MobileSection>
+
+                <MobileSection>
+                  <SummaryCard
+                    title="Rooms Snapshot"
+                    subtitle="Room-level coverage at a glance"
+                    action={
+                      <Link href={roomsHref} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
+                        View all
+                      </Link>
+                    }
+                  >
+                    {rooms.length > 0 ? (
+                      <MobileHorizontalScroller>
+                        {previewRooms.map((room) => {
+                          const stats = roomInsightsQuery.data?.[room.id];
+                          return (
+                          <Link
+                            key={room.id}
+                            href={roomsHref}
+                            className="no-brand-style min-w-[162px] snap-start rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-3"
+                          >
+                            <p className="mb-1 text-2xl leading-none">{roomEmoji(room.name)}</p>
+                            <p className="mb-0 truncate text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                              {room.name}
+                            </p>
+                            <div className="mt-1 flex items-center gap-3 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                              <span className="inline-flex items-center gap-1">
+                                <Package className="h-3.5 w-3.5" />
+                                {stats?.itemCount ?? 0}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <FileText className="h-3.5 w-3.5" />
+                                {stats?.docsLinkedCount ?? 0}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-rose-600">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                {stats?.coverageGapsCount ?? 0}
+                              </span>
+                            </div>
+                          </Link>
+                        );
+                        })}
+                      </MobileHorizontalScroller>
+                    ) : (
+                      <EmptyStateCard
+                        title="No rooms yet"
+                        description="Add your first room to start room-level tracking."
+                        action={
+                          <Link
+                            href={buildPropertyAwareHref(propertyId, 'inventory/rooms', 'inventory-rooms')}
+                            className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                          >
+                            Add Rooms
+                          </Link>
                         }
                       />
-                    ))
-                  ) : (
-                    <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                      You are caught up. No urgent action needed now.
-                    </p>
-                  )}
-                  <Link
-                    href={`/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`}
-                    className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    Go to Action Center
-                  </Link>
-                </div>
-              </ExpandableSummaryCard>
-            </MobileSection>
+                    )}
+                  </SummaryCard>
+                </MobileSection>
 
-            <MobileSection>
-              <MobileSectionHeader
-                title="Home Tools"
-                subtitle="Ownership planning tools at a glance"
-                action={
-                  <Link href={homeToolsPageHref} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
-                    View all
-                  </Link>
-                }
-              />
-              <QuickActionGrid className="gap-2.5">
-                {homeToolTiles.map((tile) => (
-                  <QuickActionTile key={tile.title} {...tile} variant="compact" />
-                ))}
-              </QuickActionGrid>
-            </MobileSection>
+                <MobileSection>
+                  <SummaryCard
+                    title="Financial Insights"
+                    subtitle="High-value money signals"
+                    action={
+                      <IconBadge tone="positive">
+                        <Wallet className="h-4 w-4" />
+                      </IconBadge>
+                    }
+                  >
+                    <MetricRow
+                      label="Annual ownership exposure"
+                      value={formatCurrency(financialSummaryQuery.data?.financialExposureTotal)}
+                    />
+                    <MetricRow
+                      label="Potential monthly savings"
+                      value={formatCurrency(monthlySavings)}
+                      trend={monthlySavings > 0 ? <span className="text-emerald-600">Opportunity</span> : <span className="text-gray-500">No signal</span>}
+                    />
+                    <MetricRow
+                      label="Potential annual savings"
+                      value={formatCurrency(savingsQuery.data?.potentialAnnualSavings)}
+                    />
+                    <Link
+                      href={buildPropertyAwareHref(propertyId, 'tools/home-savings', 'tool:home-savings')}
+                      className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                    >
+                      Open Financial Tools
+                    </Link>
+                  </SummaryCard>
+                  <MoneyImpactTrackerCard
+                    annualExposure={financialSummaryQuery.data?.financialExposureTotal || 0}
+                    annualSavings={savingsQuery.data?.potentialAnnualSavings || 0}
+                    monthlySavings={monthlySavings}
+                    weeklyFinancialDelta={snapshotsQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null}
+                    financialTrend={(snapshotsQuery.data?.scores?.FINANCIAL?.trend || []).map((point) => point.score)}
+                  />
+                </MobileSection>
+
+                <MobileSection>
+                  <ExpandableSummaryCard
+                    title="Action Center"
+                    summary={
+                      urgentActionCount > 0
+                        ? `${urgentActionCount} priority items queued`
+                        : 'No high-priority items queued'
+                    }
+                    metric={`${urgentActionCount} open`}
+                  >
+                    <div className="space-y-2.5">
+                      {topActions.length > 0 ? (
+                        topActions.map((action) => (
+                          <PreviewListRow
+                            key={`action-preview-${action.actionKey}`}
+                            title={action.title}
+                            subtitle={action.description || 'Prioritized action'}
+                            icon={
+                              <IconBadge tone="danger">
+                                <Shield className="h-4 w-4" />
+                              </IconBadge>
+                            }
+                          />
+                        ))
+                      ) : (
+                        <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                          You are caught up. No urgent action needed now.
+                        </p>
+                      )}
+                      <Link
+                        href={`/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`}
+                        className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        Go to Action Center
+                      </Link>
+                    </div>
+                  </ExpandableSummaryCard>
+                </MobileSection>
+
+                <MobileSection>
+                  <MobileSectionHeader
+                    title="Home Tools"
+                    subtitle="Ownership planning tools at a glance"
+                    action={
+                      <Link href={homeToolsPageHref} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">
+                        View all
+                      </Link>
+                    }
+                  />
+                  <QuickActionGrid className="gap-2.5">
+                    {homeToolTiles.map((tile) => (
+                      <QuickActionTile key={tile.title} {...tile} variant="compact" />
+                    ))}
+                  </QuickActionGrid>
+                </MobileSection>
+              </>
+            ) : null}
           </>
         )}
 

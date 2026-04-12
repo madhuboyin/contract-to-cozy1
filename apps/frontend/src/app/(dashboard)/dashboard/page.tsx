@@ -10,16 +10,15 @@ import {
   CalendarClock,
   Gauge,
   Landmark,
-  Loader2,
   PiggyBank,
   Shield,
   ShieldAlert,
   Sprout,
   TrendingUp,
 } from 'lucide-react';
-import { Booking, Property, User, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
+import { Booking, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
 import { ScoredProperty } from './types'; 
-import { differenceInDays, isPast, parseISO } from 'date-fns'; 
+import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'date-fns'; 
 
 // NEW IMPORTS FOR SCORECARDS AND LAYOUT
 import { DashboardShell } from '@/components/DashboardShell';
@@ -58,6 +57,10 @@ import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { useQuery } from '@tanstack/react-query';
 import { HeroValueStrip, ValueStripTile } from './components/HeroValueStrip';
 import { RecommendedMove, SignatureRecommendationCard } from './components/SignatureRecommendationCard';
+import CommandCenterTemplate from './components/CommandCenterTemplate';
+import SupportingActionCard from './components/SupportingActionCard';
+import DashboardRouteState from './components/DashboardRouteState';
+import { Button } from '@/components/ui/button';
 import {
   appendGuidanceContinuityToHref,
   extractGuidanceContinuityContext,
@@ -69,44 +72,6 @@ const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 const DASHBOARD_AHA_SEEN_PREFIX = 'dashboardAhaSeen';
 const DASHBOARD_AHA_VIEWED_PREFIX = 'dashboardAhaViewed';
 const DASHBOARD_AHA_CELEBRATED_PREFIX = 'dashboardAhaCelebrated';
-
-const DEFAULT_LOCAL_UPDATES: LocalUpdate[] = [
-  {
-    id: 'demo-local-update-daily-pulse',
-    title: 'Morning Home Pulse refreshed',
-    shortDescription: 'New weather + maintenance signals are ready for your review.',
-    category: 'MAINTENANCE',
-    sourceName: 'ContractToCozy',
-    isSponsored: false,
-    ctaText: 'Open pulse',
-    ctaUrl: '/dashboard/daily-snapshot',
-  },
-  {
-    id: 'demo-local-update-maintenance-plan',
-    title: 'Maintenance forecast updated',
-    shortDescription: 'See your highest-impact preventive task for this week.',
-    category: 'MAINTENANCE',
-    sourceName: 'ContractToCozy',
-    isSponsored: false,
-    ctaText: 'Review forecast',
-    ctaUrl: '/dashboard/maintenance',
-  },
-  {
-    id: 'demo-local-update-insurance',
-    title: 'Annual insurance savings check',
-    shortDescription: 'Run a quick annual premium check to spot coverage and deductible optimization.',
-    category: 'INSURANCE',
-    sourceName: 'ContractToCozy',
-    isSponsored: false,
-    ctaText: 'Review now',
-    ctaUrl: '/dashboard/insurance',
-  },
-];
-
-function withLocalUpdatesFallback(updates?: LocalUpdate[] | null): LocalUpdate[] {
-  if (Array.isArray(updates) && updates.length > 0) return updates;
-  return DEFAULT_LOCAL_UPDATES;
-}
 
 function formatUsd(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -260,10 +225,6 @@ const consolidateUrgentActions = (
 };
 
 // --- END PHASE 1: DATA CONSOLIDATION TYPES ---
-
-const formatAddress = (property: Property) => {
-  return `${property.address}, ${property.city}, ${property.state}`;
-}
 
 function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string): string {
   const fallbackPropertyId = propertyId || undefined;
@@ -659,7 +620,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!effectiveSelectedPropertyId) {
-      setLocalUpdates(withLocalUpdatesFallback([]));
+      setLocalUpdates([]);
       return;
     }
 
@@ -667,13 +628,13 @@ export default function DashboardPage() {
       .getLocalUpdates(effectiveSelectedPropertyId)
       .then((res) => {
         if (res.success) {
-          setLocalUpdates(withLocalUpdatesFallback(res.data.updates || []));
+          setLocalUpdates(res.data.updates || []);
         } else {
-          setLocalUpdates(withLocalUpdatesFallback([]));
+          setLocalUpdates([]);
         }
       })
       .catch(() => {
-        setLocalUpdates(withLocalUpdatesFallback([]));
+        setLocalUpdates([]);
       });
   }, [effectiveSelectedPropertyId]);
 
@@ -1026,6 +987,20 @@ export default function DashboardPage() {
       : homeScoreDelta !== null && homeScoreDelta > 0
         ? `HomeScore ${formatSignedPoints(homeScoreDelta)}`
         : null;
+  const supportingMove = topRecommendationMoves[0];
+  const commandCenterFreshnessLabel = scoreSnapshotQuery.dataUpdatedAt
+    ? `Updated ${formatDistanceToNowStrict(new Date(scoreSnapshotQuery.dataUpdatedAt), {
+        addSuffix: true,
+      })}`
+    : 'Updated today';
+  const commandCenterSourceLabel = [
+    selectedProperty ? 'Property profile' : null,
+    checklistItems.length > 0 ? 'Maintenance checklist' : null,
+    data.urgentActions.length > 0 ? 'Risk and renewal signals' : 'Account activity',
+  ]
+    .filter(Boolean)
+    .join(' + ');
+  const commandCenterRationale = urgentActionWhyNow(primaryUrgentAction);
 
   const handleAhaCtaClick = useCallback(() => {
     trackAhaHeroEvent('dashboard_aha_cta_clicked', {
@@ -1142,17 +1117,247 @@ export default function DashboardPage() {
           transition: { duration: 0.4, delay: index * 0.08 },
         };
 
-  // --- CONDITIONAL RENDERING ---
-  const loadingMessage = !redirectChecked
-    ? 'Checking your account...'
-    : 'Loading your dashboard...';
+  const loadingMessage = !redirectChecked ? 'Checking your account...' : 'Loading your command center...';
+
+  const primaryActionHero = selectedProperty ? (
+    <AhaHero
+      propertyLabel={ahaPropertyLabel}
+      isReturningVisitor={isReturningVisitor}
+      showSpotlight={!isReturningVisitor}
+      title={ahaTitle}
+      subtitle={ahaSubtitle}
+      briefLabel={ahaBriefLabel}
+      briefValue={ahaBriefValue}
+      briefDetail={ahaBriefDetail}
+      doNowLabel={ahaDoNowLabel}
+      waitRiskLabel={ahaWaitRiskLabel}
+      ctaHref={ahaCtaHref}
+      ctaLabel={heroCtaLabel}
+      onCtaClick={handleAhaCtaClick}
+      etaLabel={heroEtaLabel}
+      impactLabel={heroImpactLabel}
+      confidenceLabel={heroConfidenceLabel}
+      feed={ahaFeed}
+      checkInStreak={heroCheckInStreak}
+      equityGainCents={heroEquityGainCents}
+      appraisedValueCents={heroAppraisedValueCents}
+      purchasePriceCents={heroPurchasePriceCents}
+      homeScore={heroHomeScore}
+      financialScore={heroFinancialScore}
+      financialScoreLoading={scoreSnapshotQuery.isLoading}
+      seasonLabel={heroSeasonLabel}
+      criticalTaskCount={heroCriticalTaskCount}
+      criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
+    />
+  ) : (
+    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-2xl font-semibold text-slate-900">Choose a property to start</h2>
+      <p className="mt-2 mb-0 text-sm text-slate-600">
+        Your command center prioritizes actions by property context.
+      </p>
+      <Link
+        href="/dashboard/properties"
+        className="mt-4 inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+      >
+        Select property
+      </Link>
+    </section>
+  );
+
+  const supportingAction = supportingMove ? (
+    <SupportingActionCard
+      title={supportingMove.title}
+      detail={supportingMove.detail}
+      href={supportingMove.href}
+      impact={supportingMove.impact}
+    />
+  ) : undefined;
+
+  const homeBuyerSecondaryModules = (
+    <>
+      <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
+      <SignatureRecommendationCard
+        propertyLabel={ahaPropertyLabel}
+        moves={topRecommendationMoves}
+        summary={recommendationSummary}
+      />
+      <HomeBuyerDashboard
+        userFirstName={user?.firstName || 'there'}
+        bookings={data.bookings}
+        properties={data.properties}
+        checklistItems={checklistItems}
+      />
+    </>
+  );
+
+  const ownerSecondaryModules = (
+    <>
+      <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
+      <SignatureRecommendationCard
+        propertyLabel={ahaPropertyLabel}
+        moves={topRecommendationMoves}
+        summary={recommendationSummary}
+      />
+
+      {isOwnerSegment && effectiveSelectedPropertyId && (
+        <motion.div {...sectionMotion(0)}>
+          <PriorityAlertBanner propertyId={effectiveSelectedPropertyId} />
+        </motion.div>
+      )}
+
+      {isOwnerSegment && effectiveSelectedPropertyId && (
+        <motion.section className="mb-5 md:mb-6" {...sectionMotion(1)}>
+          <MorningHomePulseCard propertyId={effectiveSelectedPropertyId} />
+        </motion.section>
+      )}
+
+      {isOwnerSegment && localUpdates.length > 0 && (
+        <section className="mb-5 md:mb-6">
+          <LocalUpdatesCarousel
+            updates={localUpdates}
+            variant="ticker"
+            onDismiss={async (id) => {
+              setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
+              await api.dismissLocalUpdate(id);
+              const toastRef = toast({
+                title: 'Offer dismissed',
+                description: 'You can manage offers in Settings.',
+              });
+              window.setTimeout(() => toastRef.dismiss(), 2000);
+            }}
+            onCtaClick={(id) => {
+              const update = localUpdates.find((u) => u.id === id);
+              if (update?.ctaUrl) {
+                const resolvedHref = resolveLocalUpdateHref(update.ctaUrl);
+                trackLocalUpdateGuidanceProgress(update, resolvedHref);
+                const isExternal = /^https?:\/\//i.test(resolvedHref);
+                if (isExternal) {
+                  window.open(resolvedHref, '_blank', 'noopener,noreferrer');
+                } else {
+                  router.push(resolvedHref);
+                }
+              }
+            }}
+          />
+        </section>
+      )}
+
+      <section className="tier-intelligence mb-8 rounded-3xl border border-slate-200/70 bg-gradient-to-b from-slate-50/80 to-white p-4 shadow-sm sm:p-5">
+        <motion.div
+          className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          {...sectionMotion(2)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
+              <TrendingUp className="h-5 w-5 text-slate-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+                Property Intelligence Scores
+              </h2>
+              <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
+            </div>
+          </div>
+          {effectiveSelectedPropertyId && (
+            <ShareVaultButton
+              propertyId={effectiveSelectedPropertyId}
+              propertyAddress={selectedProperty?.address}
+            />
+          )}
+        </motion.div>
+        <motion.div
+          className="mb-6 rounded-2xl border border-white/70 bg-white/85 p-3 shadow-sm sm:p-4"
+          {...sectionMotion(2)}
+        >
+          <div className="grid grid-cols-1 items-stretch gap-[10px] md:grid-cols-2 lg:grid-cols-4">
+            <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
+            <PropertyHealthScoreCard property={selectedProperty} />
+            <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />
+            <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
+          </div>
+        </motion.div>
+
+        <motion.div className="rounded-2xl border border-white/70 bg-white/75 p-3 shadow-sm sm:p-4" {...sectionMotion(3)}>
+          <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
+        </motion.div>
+      </section>
+
+      <div className="tier-context mb-8 space-y-8">
+        <motion.section {...sectionMotion(6)}>
+          <div className="mb-4 flex items-start gap-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
+              <ShieldAlert className="h-5 w-5 text-slate-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
+                Coverage, Premium & Inaction Intelligence
+              </h2>
+              <p className="text-sm text-gray-500">
+                Educational guidance to compare coverage, premium pressure, and delayed-action downside.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50 p-3 shadow-sm sm:p-4">
+            {effectiveSelectedPropertyId ? (
+              <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId} />
+                <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId} />
+                <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId} />
+                <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId} />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-sm text-slate-600">
+                  Select a property to load coverage, premium, and risk tools.
+                </p>
+                <Link
+                  href="/dashboard/properties"
+                  className="mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
+                >
+                  Select Property
+                </Link>
+              </div>
+            )}
+          </div>
+        </motion.section>
+      </div>
+
+      <DashboardShell className="pt-0 md:pt-0">
+        {(() => {
+          const filteredProperties = selectedProperty ? [selectedProperty] : [];
+          const filteredChecklistItems = effectiveSelectedPropertyId
+            ? checklistItems.filter((item) => item.propertyId === effectiveSelectedPropertyId)
+            : [];
+
+          return (
+            <>
+              <ExistingOwnerDashboard
+                bookings={data.bookings}
+                properties={filteredProperties}
+                checklistItems={filteredChecklistItems}
+                selectedPropertyId={effectiveSelectedPropertyId}
+              />
+
+              {homeownerSegment === 'EXISTING_OWNER' && effectiveSelectedPropertyId && (
+                <motion.div {...sectionMotion(6)}>
+                  <SeasonalBanner propertyId={effectiveSelectedPropertyId} />
+                  <SeasonalWidget propertyId={effectiveSelectedPropertyId} />
+                </motion.div>
+              )}
+            </>
+          );
+        })()}
+      </DashboardShell>
+    </>
+  );
 
   if (userLoading || data.isLoading || !redirectChecked) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        <p className="ml-3 text-lg text-gray-600">{loadingMessage}</p>
-      </div>
+      <DashboardRouteState
+        state="loading"
+        title="Preparing your command center"
+        description={loadingMessage}
+      />
     );
   }
 
@@ -1160,16 +1365,57 @@ export default function DashboardPage() {
     return <WelcomeModal userFirstName={user.firstName} />;
   }
 
-  if (!user || data.error) {
+  if (!user) {
     return (
-      <div className="p-8 text-center">
-        <h2 className="text-2xl font-bold text-red-600">Error Loading Dashboard</h2>
-        <p className="text-muted-foreground">{data.error || 'Please try logging in again.'}</p>
-      </div>
+      <DashboardRouteState
+        state="error"
+        title="You are signed out"
+        description="Sign in to continue to your command center."
+        action={
+          <Button asChild>
+            <Link href="/login">Sign in</Link>
+          </Button>
+        }
+      />
     );
   }
-  // --- END CONDITIONAL RENDERING ---
-  
+
+  if (data.error) {
+    return (
+      <DashboardRouteState
+        state="error"
+        title="We couldn’t load your command center"
+        description={data.error}
+        action={<Button onClick={fetchDashboardData}>Try again</Button>}
+        secondaryAction={
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/properties">Open properties</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (!showWelcomeScreen && properties.length === 0) {
+    return (
+      <DashboardRouteState
+        state="empty"
+        title="Add your first property"
+        description="Your command center is ready. Add a property to unlock prioritized actions and trust-backed guidance."
+        action={
+          <Button asChild>
+            <Link href="/dashboard/properties/new">Add property</Link>
+          </Button>
+        }
+        secondaryAction={
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/properties">View properties</Link>
+          </Button>
+        }
+      />
+    );
+  }
+
   if (isHomeBuyerSegment) {
     if (isMobileViewport) {
       return (
@@ -1196,51 +1442,19 @@ export default function DashboardPage() {
             compact
           />
         )}
-        {selectedProperty && (
-          <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-1 md:pt-1">
-            <AhaHero
-              propertyLabel={ahaPropertyLabel}
-              isReturningVisitor={isReturningVisitor}
-              showSpotlight={!isReturningVisitor}
-              title={ahaTitle}
-              subtitle={ahaSubtitle}
-              briefLabel={ahaBriefLabel}
-              briefValue={ahaBriefValue}
-              briefDetail={ahaBriefDetail}
-              doNowLabel={ahaDoNowLabel}
-              waitRiskLabel={ahaWaitRiskLabel}
-              ctaHref={ahaCtaHref}
-              ctaLabel={heroCtaLabel}
-              onCtaClick={handleAhaCtaClick}
-              etaLabel={heroEtaLabel}
-              impactLabel={heroImpactLabel}
-              confidenceLabel={heroConfidenceLabel}
-              feed={ahaFeed}
-              checkInStreak={heroCheckInStreak}
-              equityGainCents={heroEquityGainCents}
-              appraisedValueCents={heroAppraisedValueCents}
-              purchasePriceCents={heroPurchasePriceCents}
-              homeScore={heroHomeScore}
-              financialScore={heroFinancialScore}
-              financialScoreLoading={scoreSnapshotQuery.isLoading}
-              seasonLabel={heroSeasonLabel}
-              criticalTaskCount={heroCriticalTaskCount}
-              criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
-            />
-            <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
-            <SignatureRecommendationCard
-              propertyLabel={ahaPropertyLabel}
-              moves={topRecommendationMoves}
-              summary={recommendationSummary}
-            />
-          </div>
-        )}
-        <HomeBuyerDashboard 
-          userFirstName={user.firstName}
-          bookings={data.bookings}
-          properties={data.properties}
-          checklistItems={checklistItems}
-        />
+
+        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
+          <CommandCenterTemplate
+            primaryAction={primaryActionHero}
+            supportingAction={supportingAction}
+            confidenceLabel={heroConfidenceLabel}
+            freshnessLabel={commandCenterFreshnessLabel}
+            sourceLabel={commandCenterSourceLabel}
+            rationale={commandCenterRationale}
+            secondaryModules={homeBuyerSecondaryModules}
+          />
+        </div>
+
         <MilestoneCelebration
           type={celebration.type}
           isOpen={celebration.isOpen}
@@ -1262,7 +1476,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Existing Owner Dashboard (now incorporates the scorecard grid at the top level)
   return (
     <>
       {selectedProperty && properties.length > 0 && (
@@ -1274,213 +1487,19 @@ export default function DashboardPage() {
           compact
         />
       )}
-      {selectedProperty && properties.length > 0 && (
-        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-1 md:pt-1">
-          <AhaHero
-            propertyLabel={ahaPropertyLabel}
-            isReturningVisitor={isReturningVisitor}
-            showSpotlight={!isReturningVisitor}
-            title={ahaTitle}
-            subtitle={ahaSubtitle}
-            briefLabel={ahaBriefLabel}
-            briefValue={ahaBriefValue}
-            briefDetail={ahaBriefDetail}
-            doNowLabel={ahaDoNowLabel}
-            waitRiskLabel={ahaWaitRiskLabel}
-            ctaHref={ahaCtaHref}
-            ctaLabel={heroCtaLabel}
-            onCtaClick={handleAhaCtaClick}
-            etaLabel={heroEtaLabel}
-            impactLabel={heroImpactLabel}
-            confidenceLabel={heroConfidenceLabel}
-            feed={ahaFeed}
-            checkInStreak={heroCheckInStreak}
-            equityGainCents={heroEquityGainCents}
-            appraisedValueCents={heroAppraisedValueCents}
-            purchasePriceCents={heroPurchasePriceCents}
-            homeScore={heroHomeScore}
-            financialScore={heroFinancialScore}
-            financialScoreLoading={scoreSnapshotQuery.isLoading}
-            seasonLabel={heroSeasonLabel}
-            criticalTaskCount={heroCriticalTaskCount}
-            criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
-          />
-          <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
-          <SignatureRecommendationCard
-            propertyLabel={ahaPropertyLabel}
-            moves={topRecommendationMoves}
-            summary={recommendationSummary}
-          />
-        </div>
-      )}
 
-      {/* CONSTRAINED WIDTH AREA (Aligns with other cards) */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
-        {isOwnerSegment && effectiveSelectedPropertyId && (
-          <motion.div {...sectionMotion(0)}>
-            <PriorityAlertBanner propertyId={effectiveSelectedPropertyId} />
-          </motion.div>
-        )}
-
-        {/* MORNING HOME PULSE */}
-        {isOwnerSegment && effectiveSelectedPropertyId && (
-          <motion.section className="mb-5 md:mb-6" {...sectionMotion(1)}>
-            <MorningHomePulseCard propertyId={effectiveSelectedPropertyId} />
-          </motion.section>
-        )}
-
-        {/* LOCAL UPDATES TICKER */}
-        {isOwnerSegment && localUpdates.length > 0 && (
-          <section className="mb-5 md:mb-6">
-            <LocalUpdatesCarousel
-              updates={localUpdates}
-              variant="ticker"
-              onDismiss={async (id) => {
-                setLocalUpdates((prev) => {
-                  const next = prev.filter((u) => u.id !== id);
-                  return next.length > 0 ? next : DEFAULT_LOCAL_UPDATES;
-                });
-                if (!id.startsWith('demo-local-update-')) {
-                  await api.dismissLocalUpdate(id);
-                }
-                const toastRef = toast({
-                  title: 'Offer dismissed',
-                  description: 'You can manage offers in Settings.',
-                });
-                window.setTimeout(() => toastRef.dismiss(), 2000);
-              }}
-              onCtaClick={(id) => {
-                const update = localUpdates.find((u) => u.id === id);
-                if (update?.ctaUrl) {
-                  const resolvedHref = resolveLocalUpdateHref(update.ctaUrl);
-                  trackLocalUpdateGuidanceProgress(update, resolvedHref);
-                  const isExternal = /^https?:\/\//i.test(resolvedHref);
-                  if (isExternal) {
-                    window.open(resolvedHref, '_blank', 'noopener,noreferrer');
-                  } else {
-                    router.push(resolvedHref);
-                  }
-                }
-              }}
-            />
-          </section>
-        )}
-        
-        <section className="tier-intelligence mb-8 rounded-3xl border border-slate-200/70 bg-gradient-to-b from-slate-50/80 to-white p-4 shadow-sm sm:p-5">
-          <motion.div
-            className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-            {...sectionMotion(2)}
-          >
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
-                <TrendingUp className="h-5 w-5 text-slate-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
-                  Property Intelligence Scores
-                </h2>
-                <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
-              </div>
-            </div>
-            {effectiveSelectedPropertyId && (
-              <ShareVaultButton
-                propertyId={effectiveSelectedPropertyId}
-                propertyAddress={selectedProperty?.address}
-              />
-            )}
-          </motion.div>
-          <motion.div
-            className="mb-6 rounded-2xl border border-white/70 bg-white/85 p-3 shadow-sm sm:p-4"
-            {...sectionMotion(2)}
-          >
-            <div className="grid grid-cols-1 items-stretch gap-[10px] md:grid-cols-2 lg:grid-cols-4">
-              <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
-              <PropertyHealthScoreCard property={selectedProperty} />
-              <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />
-              <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
-            </div>
-          </motion.div>
-
-          <motion.div className="rounded-2xl border border-white/70 bg-white/75 p-3 shadow-sm sm:p-4" {...sectionMotion(3)}>
-            <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
-          </motion.div>
-        </section>
-
-        <div className="tier-context mb-8 space-y-8">
-          <motion.section {...sectionMotion(6)}>
-            <div className="mb-4 flex items-start gap-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
-                <ShieldAlert className="h-5 w-5 text-slate-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
-                  Coverage, Premium & Inaction Intelligence
-                </h2>
-                <p className="text-sm text-gray-500">
-                  Educational guidance to compare coverage, premium pressure, and delayed-action downside.
-                </p>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50 p-3 shadow-sm sm:p-4">
-              {effectiveSelectedPropertyId ? (
-                <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId} />
-                  <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId} />
-                  <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId} />
-                  <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId} />
-                </div>
-              ) : (
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <p className="text-sm text-slate-600">
-                    Select a property to load coverage, premium, and risk tools.
-                  </p>
-                  <Link
-                    href="/dashboard/properties"
-                    className="mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
-                  >
-                    Select Property
-                  </Link>
-                </div>
-              )}
-            </div>
-          </motion.section>
-        </div>
+        <CommandCenterTemplate
+          primaryAction={primaryActionHero}
+          supportingAction={supportingAction}
+          confidenceLabel={heroConfidenceLabel}
+          freshnessLabel={commandCenterFreshnessLabel}
+          sourceLabel={commandCenterSourceLabel}
+          rationale={commandCenterRationale}
+          secondaryModules={ownerSecondaryModules}
+        />
       </div>
 
-      <DashboardShell className="pt-0 md:pt-0">
-      {/* Filter data by selected property before passing to child components */}
-      {/* This ensures the red banner and other components show data for the currently selected property only */}
-      {(() => {
-        // Filter properties to only the selected one (for consistency)
-        const filteredProperties = selectedProperty ? [selectedProperty] : [];
-        
-        // FIX: Filter checklist items by selected property ID
-        const filteredChecklistItems = effectiveSelectedPropertyId
-            ? checklistItems.filter(item => item.propertyId === effectiveSelectedPropertyId)
-            : []; 
-
-        return (
-          <>
-            <ExistingOwnerDashboard
-              bookings={data.bookings}
-              properties={filteredProperties} // Pass only selected property
-              checklistItems={filteredChecklistItems} // Pass the newly filtered list
-              selectedPropertyId={effectiveSelectedPropertyId}
-            />
-
-            {/* ========================================= */}
-            {/* SEASONAL MAINTENANCE BANNER - EXISTING_OWNER ONLY */}
-            {/* ========================================= */}
-            {homeownerSegment === 'EXISTING_OWNER' && effectiveSelectedPropertyId && (
-              <motion.div {...sectionMotion(6)}>
-                <SeasonalBanner propertyId={effectiveSelectedPropertyId} />
-                <SeasonalWidget propertyId={effectiveSelectedPropertyId} />
-              </motion.div>
-            )}
-          </>
-        );
-      })()}
-      </DashboardShell>
       <MilestoneCelebration
         type={celebration.type}
         isOpen={celebration.isOpen}

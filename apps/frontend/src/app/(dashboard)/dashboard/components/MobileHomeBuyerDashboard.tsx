@@ -79,6 +79,7 @@ export default function MobileHomeBuyerDashboard({
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
   const heroProperty = selectedProperty || properties[0];
   const propertyId = selectedProperty?.id || properties[0]?.id;
+  const [showMoreModules, setShowMoreModules] = React.useState(false);
   const selectedPropertyName = selectedProperty?.name || selectedProperty?.address || 'Primary Property';
 
   const resolveLocalUpdateHref = React.useCallback(
@@ -251,6 +252,8 @@ export default function MobileHomeBuyerDashboard({
   const homeScore = Math.round(homeScoreQuery.data?.homeScore ?? 0);
   const exposure = Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0);
   const seasonalChecklist = seasonalQuery.data;
+  const confidenceLabel = progress >= 70 ? 'High confidence' : progress >= 40 ? 'Medium confidence' : 'Confidence building';
+  const freshnessLabel = seasonalChecklist ? 'Updated today' : 'Refreshing signals';
   const seasonalRemaining = Math.max(
     0,
     Number(seasonalChecklist?.totalTasks ?? 0) - Number(seasonalChecklist?.tasksCompleted ?? 0)
@@ -340,165 +343,187 @@ export default function MobileHomeBuyerDashboard({
               <CompactInsightStrip items={sinceLastVisitItems} />
             </MobileSection>
 
-            {localUpdates.length > 0 ? (
-              <MobileSection>
-                <ExpandableSummaryCard
-                  title="What's New"
-                  summary={`${localUpdates.length} local updates`}
-                  metric={`${localUpdates.length} new`}
-                >
-                  <div className="space-y-2">
-                    {localUpdates.slice(0, 3).map((update) => (
-                      <PreviewListRow
-                        key={update.id}
-                        title={update.title}
-                        subtitle={update.shortDescription}
-                        href={resolveLocalUpdateHref(update.ctaUrl)}
-                        onClick={() => trackLocalUpdateProgress(update)}
-                        icon={<Sparkles className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
-                      />
+            <MobileSection>
+              <SummaryCard title="Trust Signals" subtitle="How this dashboard prioritizes your next step.">
+                <MetricRow label="Confidence" value={confidenceLabel} />
+                <MetricRow label="Freshness" value={freshnessLabel} />
+                <MetricRow label="Source" value="Property data + tasks + bookings" />
+              </SummaryCard>
+            </MobileSection>
+
+            <MobileSection className="pt-0">
+              <button
+                type="button"
+                onClick={() => setShowMoreModules((prev) => !prev)}
+                className="w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+              >
+                {showMoreModules ? 'Show fewer modules' : 'View more modules'}
+              </button>
+            </MobileSection>
+
+            {showMoreModules ? (
+              <>
+                {localUpdates.length > 0 ? (
+                  <MobileSection>
+                    <ExpandableSummaryCard
+                      title="What's New"
+                      summary={`${localUpdates.length} local updates`}
+                      metric={`${localUpdates.length} new`}
+                    >
+                      <div className="space-y-2">
+                        {localUpdates.slice(0, 3).map((update) => (
+                          <PreviewListRow
+                            key={update.id}
+                            title={update.title}
+                            subtitle={update.shortDescription}
+                            href={resolveLocalUpdateHref(update.ctaUrl)}
+                            onClick={() => trackLocalUpdateProgress(update)}
+                            icon={<Sparkles className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
+                          />
+                        ))}
+                      </div>
+                    </ExpandableSummaryCard>
+                  </MobileSection>
+                ) : null}
+
+                <MobileSection>
+                  <MobileSectionHeader title="AI Tools" subtitle="Smart guidance for home buyers" />
+                  <QuickActionGrid>
+                    {aiToolTiles.map((tile) => (
+                      <QuickActionTile key={tile.title} {...tile} />
                     ))}
-                  </div>
-                </ExpandableSummaryCard>
-              </MobileSection>
-            ) : null}
+                  </QuickActionGrid>
+                </MobileSection>
 
-            <MobileSection>
-              <MobileSectionHeader title="AI Tools" subtitle="Smart guidance for home buyers" />
-              <QuickActionGrid>
-                {aiToolTiles.map((tile) => (
-                  <QuickActionTile key={tile.title} {...tile} />
-                ))}
-              </QuickActionGrid>
-            </MobileSection>
-
-            <MobileSection>
-              <SummaryCard
-                title="Attention Today"
-                subtitle="Priority items for closing momentum"
-                action={<StatusChip tone={pending > 0 ? 'needsAction' : 'good'}>{pending} pending</StatusChip>}
-              >
-                <MetricRow label="Pending tasks" value={`${pending}`} />
-                <MetricRow label="In progress tasks" value={`${inProgress}`} />
-                <MetricRow
-                  label="Upcoming booking"
-                  value={
-                    upcomingBooking?.scheduledDate
-                      ? new Date(upcomingBooking.scheduledDate).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                        })
-                      : 'None'
-                  }
-                />
-                <div className="space-y-2 pt-1">
-                  {openChecklist.map((item) => (
-                    <PreviewListRow
-                      key={item.id}
-                      title={item.title}
-                      subtitle="Checklist task"
-                      href="/dashboard/checklist"
-                      icon={<Truck className="h-4 w-4 text-amber-600" />}
+                <MobileSection>
+                  <SummaryCard
+                    title="Attention Today"
+                    subtitle="Priority items for closing momentum"
+                    action={<StatusChip tone={pending > 0 ? 'needsAction' : 'good'}>{pending} pending</StatusChip>}
+                  >
+                    <MetricRow label="Pending tasks" value={`${pending}`} />
+                    <MetricRow label="In progress tasks" value={`${inProgress}`} />
+                    <MetricRow
+                      label="Upcoming booking"
+                      value={
+                        upcomingBooking?.scheduledDate
+                          ? new Date(upcomingBooking.scheduledDate).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'None'
+                      }
                     />
-                  ))}
-                </div>
-              </SummaryCard>
-            </MobileSection>
+                    <div className="space-y-2 pt-1">
+                      {openChecklist.map((item) => (
+                        <PreviewListRow
+                          key={item.id}
+                          title={item.title}
+                          subtitle="Checklist task"
+                          href="/dashboard/checklist"
+                          icon={<Truck className="h-4 w-4 text-amber-600" />}
+                        />
+                      ))}
+                    </div>
+                  </SummaryCard>
+                </MobileSection>
 
-            <MobileSection>
-              <SummaryCard title="Property Intelligence" subtitle={selectedPropertyName}>
-                <MetricRow label="HomeScore" value={`${homeScore}/100`} />
-                <MetricRow label="Risk score" value={`${riskScore}/100`} />
-                <MetricRow label="Exposure signal" value={formatCurrency(exposure)} />
-              </SummaryCard>
-            </MobileSection>
+                <MobileSection>
+                  <SummaryCard title="Property Intelligence" subtitle={selectedPropertyName}>
+                    <MetricRow label="HomeScore" value={`${homeScore}/100`} />
+                    <MetricRow label="Risk score" value={`${riskScore}/100`} />
+                    <MetricRow label="Exposure signal" value={formatCurrency(exposure)} />
+                  </SummaryCard>
+                </MobileSection>
 
-            <MobileSection>
-              <ExpandableSummaryCard
-                title="Seasonal Tasks"
-                summary={
-                  seasonalChecklist
-                    ? `${seasonalChecklist.season} ${seasonalChecklist.year} checklist`
-                    : 'No seasonal checklist yet'
-                }
-                metric={`${seasonalRemaining} left`}
-              >
-                <div className="space-y-2">
-                  {seasonalChecklist?.items?.slice(0, 2).map((task: { id: string; title: string }) => (
-                    <PreviewListRow key={task.id} title={task.title} subtitle="Seasonal recommendation" href={`/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`} />
-                  ))}
-                  <Link
-                    href={`/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`}
-                    className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                <MobileSection>
+                  <ExpandableSummaryCard
+                    title="Seasonal Tasks"
+                    summary={
+                      seasonalChecklist
+                        ? `${seasonalChecklist.season} ${seasonalChecklist.year} checklist`
+                        : 'No seasonal checklist yet'
+                    }
+                    metric={`${seasonalRemaining} left`}
                   >
-                    Review Tasks
-                  </Link>
-                </div>
-              </ExpandableSummaryCard>
-            </MobileSection>
+                    <div className="space-y-2">
+                      {seasonalChecklist?.items?.slice(0, 2).map((task: { id: string; title: string }) => (
+                        <PreviewListRow key={task.id} title={task.title} subtitle="Seasonal recommendation" href={`/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`} />
+                      ))}
+                      <Link
+                        href={`/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`}
+                        className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                      >
+                        Review Tasks
+                      </Link>
+                    </div>
+                  </ExpandableSummaryCard>
+                </MobileSection>
 
-            <MobileSection>
-              <SummaryCard
-                title="Rooms Snapshot"
-                subtitle="Set up room-level tracking early"
-                action={<StatusChip tone="info">{properties.length} properties</StatusChip>}
-              >
-                <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                  Room-level setup improves inspection and maintenance planning once you move in.
-                </p>
-                <Link
-                  href="/dashboard/properties"
-                  className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
-                >
-                  Open Properties
-                </Link>
-              </SummaryCard>
-            </MobileSection>
-
-            <MobileSection>
-              <SummaryCard
-                title="Financial Insights"
-                subtitle="Savings and exposure preview"
-                action={
-                  <IconBadge tone="positive">
-                    <Wallet className="h-4 w-4" />
-                  </IconBadge>
-                }
-              >
-                <MetricRow label="Potential monthly savings" value={formatCurrency(savingsQuery.data?.potentialMonthlySavings || 0)} />
-                <MetricRow label="Potential annual savings" value={formatCurrency(savingsQuery.data?.potentialAnnualSavings || 0)} />
-                <MetricRow label="Risk exposure signal" value={formatCurrency(exposure)} />
-              </SummaryCard>
-            </MobileSection>
-
-            <MobileSection>
-              <ExpandableSummaryCard
-                title="Action Center Preview"
-                summary="Closing checklist and bookings"
-                metric={`${pending + inProgress} active`}
-              >
-                <div className="space-y-2">
-                  <PreviewListRow
-                    title="Checklist"
-                    subtitle={`${pending} pending · ${inProgress} in progress`}
-                    href="/dashboard/checklist"
-                    icon={<FileText className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
-                  />
-                  <PreviewListRow
-                    title="Bookings"
-                    subtitle={`${bookings.length} total bookings`}
-                    href="/dashboard/bookings"
-                    icon={<Truck className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
-                  />
-                  <Link
-                    href="/dashboard/checklist"
-                    className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
+                <MobileSection>
+                  <SummaryCard
+                    title="Rooms Snapshot"
+                    subtitle="Set up room-level tracking early"
+                    action={<StatusChip tone="info">{properties.length} properties</StatusChip>}
                   >
-                    Continue Closing Plan
-                  </Link>
-                </div>
-              </ExpandableSummaryCard>
-            </MobileSection>
+                    <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                      Room-level setup improves inspection and maintenance planning once you move in.
+                    </p>
+                    <Link
+                      href="/dashboard/properties"
+                      className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                    >
+                      Open Properties
+                    </Link>
+                  </SummaryCard>
+                </MobileSection>
+
+                <MobileSection>
+                  <SummaryCard
+                    title="Financial Insights"
+                    subtitle="Savings and exposure preview"
+                    action={
+                      <IconBadge tone="positive">
+                        <Wallet className="h-4 w-4" />
+                      </IconBadge>
+                    }
+                  >
+                    <MetricRow label="Potential monthly savings" value={formatCurrency(savingsQuery.data?.potentialMonthlySavings || 0)} />
+                    <MetricRow label="Potential annual savings" value={formatCurrency(savingsQuery.data?.potentialAnnualSavings || 0)} />
+                    <MetricRow label="Risk exposure signal" value={formatCurrency(exposure)} />
+                  </SummaryCard>
+                </MobileSection>
+
+                <MobileSection>
+                  <ExpandableSummaryCard
+                    title="Action Center Preview"
+                    summary="Closing checklist and bookings"
+                    metric={`${pending + inProgress} active`}
+                  >
+                    <div className="space-y-2">
+                      <PreviewListRow
+                        title="Checklist"
+                        subtitle={`${pending} pending · ${inProgress} in progress`}
+                        href="/dashboard/checklist"
+                        icon={<FileText className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
+                      />
+                      <PreviewListRow
+                        title="Bookings"
+                        subtitle={`${bookings.length} total bookings`}
+                        href="/dashboard/bookings"
+                        icon={<Truck className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
+                      />
+                      <Link
+                        href="/dashboard/checklist"
+                        className="no-brand-style inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        Continue Closing Plan
+                      </Link>
+                    </div>
+                  </ExpandableSummaryCard>
+                </MobileSection>
+              </>
+            ) : null}
           </>
         )}
 
