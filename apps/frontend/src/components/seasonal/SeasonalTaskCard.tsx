@@ -133,8 +133,9 @@ export function SeasonalTaskCard({
   const isAdded = (item.status === 'ADDED' || !!item.maintenanceTask) && !isCompleted;
   const isNotAdded = !isAdded && !isCompleted;
   const isLoading = addToMaintenanceMutation.isPending || removeFromMaintenanceMutation.isPending;
+  const propertyQuery = item.propertyId ? `&propertyId=${item.propertyId}` : '';
   const maintenanceTaskHref = item.maintenanceTask?.id
-    ? `/dashboard/maintenance?taskId=${item.maintenanceTask.id}&from=seasonal${item.propertyId ? `&propertyId=${item.propertyId}` : ''}`
+    ? `/dashboard/maintenance?taskId=${item.maintenanceTask.id}&from=seasonal${propertyQuery}`
     : null;
 
   return (
