@@ -14,6 +14,9 @@ import {
   MOBILE_TYPE_TOKENS,
 } from './mobileDesignTokens';
 
+const MOBILE_INTERACTIVE_FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--mobile-brand-strong))]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+
 export function MobilePageContainer({
   className,
   children,
@@ -226,7 +229,11 @@ export function PreviewListRow({
 
   if (!href) return content;
   return (
-    <Link href={href} className="no-brand-style block" onClick={onClick}>
+    <Link
+      href={href}
+      className={cn('no-brand-style block rounded-xl', MOBILE_INTERACTIVE_FOCUS_RING)}
+      onClick={onClick}
+    >
       {content}
     </Link>
   );
@@ -253,7 +260,7 @@ export function CompactInsightStrip({
 
   if (!href) return content;
   return (
-    <Link href={href} className="no-brand-style block">
+    <Link href={href} className={cn('no-brand-style block rounded-xl', MOBILE_INTERACTIVE_FOCUS_RING)}>
       {content}
     </Link>
   );
@@ -294,6 +301,7 @@ export function QuickActionTile({
         href={href}
         className={cn(
           'no-brand-style block rounded-[18px] border px-3 py-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]',
+          MOBILE_INTERACTIVE_FOCUS_RING,
           tone === 'brand'
             ? 'border-[hsl(var(--mobile-brand-border))] bg-[linear-gradient(145deg,hsl(var(--mobile-brand-soft)),#fff7e3)]'
             : 'border-[hsl(var(--mobile-border-subtle))] bg-white'
@@ -342,6 +350,7 @@ export function QuickActionTile({
       href={href}
       className={cn(
         'no-brand-style block rounded-[20px] border p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-transform active:scale-[0.99]',
+        MOBILE_INTERACTIVE_FOCUS_RING,
         tone === 'brand'
           ? 'border-[hsl(var(--mobile-brand-border))] bg-[linear-gradient(145deg,hsl(var(--mobile-brand-soft)),#fff7e3)]'
           : 'border-[hsl(var(--mobile-border-subtle))] bg-white'
@@ -493,7 +502,10 @@ export function HeroSummaryCard({
       </div>
       <Link
         href={ctaHref}
-        className="no-brand-style mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 py-2.5 text-sm font-semibold text-white"
+        className={cn(
+          'no-brand-style mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[hsl(var(--mobile-brand-strong))] px-3 py-2.5 text-sm font-semibold text-white',
+          MOBILE_INTERACTIVE_FOCUS_RING
+        )}
       >
         {ctaLabel}
       </Link>
@@ -519,7 +531,12 @@ export function ExpandableSummaryCard({
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <MobileCard variant="compact">
-        <CollapsibleTrigger className="flex w-full min-h-[44px] items-center justify-between gap-3 text-left">
+        <CollapsibleTrigger
+          className={cn(
+            'flex w-full min-h-[44px] items-center justify-between gap-3 rounded-xl text-left',
+            MOBILE_INTERACTIVE_FOCUS_RING
+          )}
+        >
           <div className="min-w-0">
             <p className={cn('mb-0 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>{title}</p>
             <p className={cn('mb-0 mt-1 truncate text-[hsl(var(--mobile-text-secondary))]', MOBILE_TYPE_TOKENS.body)}>
@@ -784,7 +801,7 @@ export function CompactEntityRow({
 
   if (!href) return content;
   return (
-    <Link href={href} className="no-brand-style block">
+    <Link href={href} className={cn('no-brand-style block rounded-xl', MOBILE_INTERACTIVE_FOCUS_RING)}>
       {content}
     </Link>
   );

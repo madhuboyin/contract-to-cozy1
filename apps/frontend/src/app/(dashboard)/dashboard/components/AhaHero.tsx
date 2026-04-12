@@ -27,25 +27,49 @@ type AhaHeroProps = {
   homeScore?: number | null;
   financialScore?: number | null;
   financialScoreLoading?: boolean;
+  seasonLabel?: string | null;
   criticalTaskCount?: number;
   criticalTaskCountLoading?: boolean;
 };
 
 function formatCurrency(cents?: number | null): string {
   const safe = typeof cents === 'number' && Number.isFinite(cents) ? cents : 0;
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(safe / 100);
 }
 
-function formatDisplayDate() {
-  return new Intl.DateTimeFormat('en-US', {
+function formatDisplayDate(locale?: string) {
+  return new Intl.DateTimeFormat(locale, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
   }).format(new Date());
+}
+
+function getDaypartLabel(date: Date): 'Morning' | 'Afternoon' | 'Evening' {
+  const hour = date.getHours();
+  if (hour < 12) return 'Morning';
+  if (hour < 17) return 'Afternoon';
+  return 'Evening';
+}
+
+function inferSeason(date: Date): 'Winter' | 'Spring' | 'Summer' | 'Fall' {
+  const month = date.getMonth();
+  if (month === 11 || month <= 1) return 'Winter';
+  if (month <= 4) return 'Spring';
+  if (month <= 7) return 'Summer';
+  return 'Fall';
+}
+
+function formatSeasonLabel(rawSeason?: string | null): string | null {
+  if (!rawSeason) return null;
+  return rawSeason
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 function MiniStat({
@@ -101,10 +125,16 @@ export default function AhaHero({
   homeScore = null,
   financialScore = null,
   financialScoreLoading = false,
+  seasonLabel = null,
   criticalTaskCount = 0,
   criticalTaskCountLoading = false,
 }: AhaHeroProps) {
-  const formattedDate = formatDisplayDate();
+  const now = new Date();
+  const runtimeLocale =
+    typeof navigator !== 'undefined' ? navigator.languages?.[0] || navigator.language : undefined;
+  const formattedDate = formatDisplayDate(runtimeLocale);
+  const daypartLabel = getDaypartLabel(now);
+  const resolvedSeasonLabel = formatSeasonLabel(seasonLabel) ?? inferSeason(now);
   const chips = [etaLabel, impactLabel, confidenceLabel].filter(Boolean);
   const safeStreak = Math.max(0, Number(checkInStreak || 0));
   const showEquityBlock =
@@ -118,8 +148,8 @@ export default function AhaHero({
   return (
     <section className="relative overflow-hidden rounded-2xl bg-[#0f1f2e] p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <span className="text-[10px] uppercase tracking-widest text-[#6ECFA8]">
-          {formattedDate} · {isReturningVisitor ? 'Morning Home Pulse' : 'Personalized Home Brief'}
+        <span suppressHydrationWarning className="text-[10px] uppercase tracking-widest text-[#6ECFA8]">
+          {formattedDate} · {isReturningVisitor ? `${daypartLabel} Home Pulse` : 'Personalized Home Brief'}
         </span>
         {safeStreak > 0 && (
           <div className="shrink-0 flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1">
@@ -150,7 +180,7 @@ export default function AhaHero({
           href={ctaHref}
           onClick={onCtaClick}
           aria-describedby="hero-risk-subheadline"
-          className="inline-flex items-center rounded-full bg-[#1DBFAA] px-5 py-2 text-sm font-medium text-[#0f1f2e] transition-colors hover:bg-[#19A898]"
+          className="inline-flex items-center rounded-full bg-[#1DBFAA] px-5 py-2 text-sm font-medium text-[#0f1f2e] transition-colors hover:bg-[#19A898] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DBFAA] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f1f2e]"
         >
           {ctaLabel} →
         </Link>
@@ -171,7 +201,7 @@ export default function AhaHero({
         />
         <MiniStat
           value={`${criticalTaskCount} critical`}
-          label="Spring tasks"
+          label={`${resolvedSeasonLabel} tasks`}
           color="red"
           loading={criticalTaskCountLoading}
         />

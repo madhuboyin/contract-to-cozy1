@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { api } from '@/lib/api/client';
@@ -45,7 +46,7 @@ import MorningHomePulseCard from './components/MorningHomePulseCard';
 import { HomeScoreReportCard } from './components/HomeScoreReportCard';
 import { ShareVaultButton } from './components/ShareVaultButton';
 import PriorityAlertBanner from '@/components/dashboard/PriorityAlertBanner';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 import MobileDashboardHome from './components/MobileDashboardHome';
 import MobileHomeBuyerDashboard from './components/MobileHomeBuyerDashboard';
@@ -123,6 +124,14 @@ function formatSignedPoints(value: number | null | undefined): string | null {
   if (value === null || value === undefined || !Number.isFinite(value)) return null;
   if (Math.abs(value) < 0.05) return 'No change';
   return `${value > 0 ? '+' : ''}${value.toFixed(1)} pts`;
+}
+
+function formatSeasonLabel(rawSeason: string | null | undefined): string | null {
+  if (!rawSeason) return null;
+  return rawSeason
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 // --- START PHASE 1: DATA CONSOLIDATION TYPES ---
@@ -442,6 +451,7 @@ export default function DashboardPage() {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isReturningVisitor, setIsReturningVisitor] = useState(false);
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
+  const prefersReducedMotion = useReducedMotion();
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
   
@@ -453,9 +463,6 @@ export default function DashboardPage() {
     isLoading: true,
     error: null,
   });
-  
-  // Track user type for conditional feature display (HOME_BUYER vs EXISTING_OWNER)
-  const [userType, setUserType] = useState<string | null>(null);
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const { celebration, celebrate, dismiss } = useCelebration(
@@ -562,6 +569,7 @@ export default function DashboardPage() {
     if (!user) return;
     
     setData(prev => ({ ...prev, isLoading: true }));
+    setRedirectChecked(false);
     
     try {
       const [bookingsRes, propertiesRes, checklistRes, warrantiesRes, policiesRes] = await Promise.all([
@@ -612,25 +620,10 @@ export default function DashboardPage() {
         isLoading: false,
         error: null,
       });
-  
-      // Extract user type from first property
-      if (scoredProperties.length > 0) {
-        const firstProperty = scoredProperties[0] as ScoredProperty & Record<string, unknown>;
 
-        let detectedUserType = null;
-
-        const profile = (firstProperty as Record<string, unknown>).homeownerProfile as Record<string, unknown> | undefined;
-        const userProfile = ((firstProperty as Record<string, unknown>).user as Record<string, unknown> | undefined)?.homeownerProfile as Record<string, unknown> | undefined;
-
-        if (profile?.userType) {
-          detectedUserType = profile.userType as string;
-        } else if (userProfile?.userType) {
-          detectedUserType = userProfile.userType as string;
-        }
-
-        if (detectedUserType) {
-          setUserType(detectedUserType);
-        }
+      if (typeof window !== 'undefined') {
+        const skipped = window.localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
+        setShowWelcomeScreen(scoredProperties.length === 0 && !skipped);
       }
   
     } catch (error) {
@@ -640,6 +633,8 @@ export default function DashboardPage() {
         isLoading: false,
         error: 'Failed to load dashboard data',
       }));
+    } finally {
+      setRedirectChecked(true);
     }
   }, [user]);
   
@@ -656,27 +651,11 @@ export default function DashboardPage() {
   }, [effectiveSelectedPropertyId, selectedPropertyId, setSelectedPropertyId]);
 
   useEffect(() => {
-    if (!userLoading && user && !redirectChecked) {
-      const checkRedirect = async () => {
-        try {
-          const propertiesRes = await api.getProperties();
-          const hasProperties = propertiesRes.success && propertiesRes.data.properties.length > 0;
-
-          if (!hasProperties) {
-            const skipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
-            if (!skipped) {
-              setShowWelcomeScreen(true);
-            }
-          }
-        } catch (error) {
-          console.error('Error checking properties:', error);
-        } finally {
-          setRedirectChecked(true);
-        }
-      };
-      checkRedirect();
+    if (!userLoading && !user) {
+      setData((prev) => ({ ...prev, isLoading: false }));
+      setRedirectChecked(true);
     }
-  }, [userLoading, user, redirectChecked]);
+  }, [userLoading, user]);
 
   useEffect(() => {
     if (!effectiveSelectedPropertyId) {
@@ -766,6 +745,9 @@ export default function DashboardPage() {
         ).length;
   const seasonalReadinessPct =
     seasonalTotalTasks > 0 ? Math.round((seasonalCompletedTasks / seasonalTotalTasks) * 100) : 0;
+  const heroSeasonLabel = formatSeasonLabel(
+    typeof seasonalChecklist?.season === 'string' ? seasonalChecklist.season : null
+  );
   const heroCriticalTaskCount = seasonalChecklistItems.filter((item: { priority?: string; status?: string }) => {
     const priority = String(item.priority || '').toUpperCase();
     const status = String(item.status || '').toLowerCase();
@@ -1147,11 +1129,18 @@ export default function DashboardPage() {
     user?.id,
   ]);
 
-  const sectionMotion = (index: number) => ({
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.4, delay: index * 0.08 },
-  });
+  const sectionMotion = (index: number) =>
+    prefersReducedMotion
+      ? {
+          initial: { opacity: 1, y: 0 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0, delay: 0 },
+        }
+      : {
+          initial: { opacity: 0, y: 20 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.4, delay: index * 0.08 },
+        };
 
   // --- CONDITIONAL RENDERING ---
   const loadingMessage = !redirectChecked
@@ -1234,6 +1223,7 @@ export default function DashboardPage() {
               homeScore={heroHomeScore}
               financialScore={heroFinancialScore}
               financialScoreLoading={scoreSnapshotQuery.isLoading}
+              seasonLabel={heroSeasonLabel}
               criticalTaskCount={heroCriticalTaskCount}
               criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
             />
@@ -1311,6 +1301,7 @@ export default function DashboardPage() {
             homeScore={heroHomeScore}
             financialScore={heroFinancialScore}
             financialScoreLoading={scoreSnapshotQuery.isLoading}
+            seasonLabel={heroSeasonLabel}
             criticalTaskCount={heroCriticalTaskCount}
             criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
           />
@@ -1431,12 +1422,26 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50 p-3 shadow-sm sm:p-4">
-              <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId || ''} />
-                <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId || ''} />
-                <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId || ''} />
-                <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId || ''} />
-              </div>
+              {effectiveSelectedPropertyId ? (
+                <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId} />
+                  <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId} />
+                  <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId} />
+                  <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId} />
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm text-slate-600">
+                    Select a property to load coverage, premium, and risk tools.
+                  </p>
+                  <Link
+                    href="/dashboard/properties"
+                    className="mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
+                  >
+                    Select Property
+                  </Link>
+                </div>
+              )}
             </div>
           </motion.section>
         </div>
