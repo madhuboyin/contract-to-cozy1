@@ -1,0 +1,77 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly scan every Monday at 08:00 UTC — catches newly-disclosed CVEs
+    # in unchanged deps between code pushes
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+jobs:
+  audit-backend:
+    name: Audit backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/backend/package-lock.json
+
+      # --ignore-scripts prevents malicious postinstall hooks from running in CI
+      - run: npm ci --ignore-scripts
+
+      # Fails the job on any high or critical severity vulnerability
+      - run: npm audit --audit-level=high
+
+  audit-workers:
+    name: Audit workers
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/workers
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/workers/package-lock.json
+
+      - run: npm ci --ignore-scripts
+
+      - run: npm audit --audit-level=high
+
+  audit-frontend:
+    name: Audit frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - run: npm ci --ignore-scripts
+
+      # audit-ci is used here instead of plain `npm audit` because Next.js 14
+      # has known HIGH advisories with no v14 patch available (fix = Next.js 15+
+      # upgrade, tracked separately). The allowlist in .audit-ci.json names every
+      # bypassed advisory ID explicitly — any new HIGH not in that list still
+      # fails this job. Remove entries from .audit-ci.json as advisories are fixed.
+      - run: npx audit-ci --config .audit-ci.json

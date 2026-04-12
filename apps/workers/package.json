@@ -9,14 +9,14 @@
     "postinstall": "npx prisma generate && cp -r ../backend/node_modules/@prisma/client node_modules/ && mkdir -p node_modules/.prisma && cp -r ../backend/node_modules/.prisma/client node_modules/.prisma/ || true"
   },
   "dependencies": {
-    "@google/genai": "^1.33.0",
     "@aws-sdk/client-s3": "^3.962.0",
+    "@google/genai": "^1.33.0",
     "@prisma/client": "^5.22.0",
     "bullmq": "^5.65.0",
     "dotenv": "^16.3.1",
     "node-cron": "^3.0.3",
     "node-fetch": "^2.7.0",
-    "nodemailer": "^6.9.8",
+    "nodemailer": "^8.0.5",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "playwright": "^1.57.0"
