@@ -1,72 +1,60 @@
-// apps/frontend/src/components/landing/Features.tsx
-// Sleeker, more compact feature cards with reduced font sizes.
-
-import Link from "next/link";
+import Link from 'next/link';
 import { resolveIconByConcept } from '@/lib/icons';
 import type { IconConcept } from '@/lib/icons';
 
-export default function Features() {
-  const features: Array<{
-    concept: IconConcept;
-    title: string;
-    description: string;
-  }> = [
-    {
-      concept: 'property',
-      title: 'Effortless Home Management',
-      description: 'Centralize all your home maintenance, repairs, and upgrades in one intuitive dashboard.',
-    },
-    {
-      concept: 'providers',
-      title: 'Trusted Local Professionals',
-      description: 'Connect with fully vetted, licensed, and insured experts in your neighborhood.',
-    },
-    {
-      concept: 'expenses',
-      title: 'Transparent Pricing & Savings',
-      description: 'Get upfront, guaranteed quotes and track your savings on every service.',
-    },
-    {
-      concept: 'notifications',
-      title: 'Never Miss a Beat',
-      description: 'Automated reminders for routine maintenance and upcoming service appointments.',
-    },
-  ];
+const FEATURES: Array<{ concept: IconConcept; title: string; description: string }> = [
+  {
+    concept: 'property',
+    title: 'Know What Matters Now',
+    description: 'See your highest-priority home action first, not a cluttered dashboard.',
+  },
+  {
+    concept: 'notifications',
+    title: 'Stay Ahead of Risk',
+    description: 'Get early signals for maintenance, coverage gaps, and upcoming deadlines.',
+  },
+  {
+    concept: 'expenses',
+    title: 'Protect Your Budget',
+    description: 'Understand true cost, avoid preventable spend, and spot savings opportunities.',
+  },
+  {
+    concept: 'providers',
+    title: 'Act With Confidence',
+    description: 'Move from insight to vetted providers and clear next steps in minutes.',
+  },
+];
 
+export default function Features() {
   return (
-    <section id="features" className="py-10 md:py-12 px-4 sm:px-6 lg:px-8 bg-white"> {/* Slightly reduced vertical padding for the section itself */}
-      <div className="max-w-7xl mx-auto">
-        {/* Features Grid - Set to 4 columns on large screens for single row */}
-        {/* Adjusted gap to be slightly smaller */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6"> 
-          {features.map((feature, index) => {
+    <section id="features" className="bg-white px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-6 text-center">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Why Homeowners Choose CtC</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">A calmer way to run your home</h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+          {FEATURES.map((feature) => {
             const FeatureIcon = resolveIconByConcept(feature.concept);
             return (
-              <div
-                key={index}
-                // Reduced padding (p-5 -> p-4) and added flex for better alignment
-                className="bg-white rounded-xl shadow-lg p-4 text-center transform hover:scale-105 transition-transform duration-300 border border-gray-100 flex flex-col items-center justify-start h-full"
-              >
-                {/* Icon size reduced (text-4xl -> text-3xl) and margin adjusted */}
-                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <article key={feature.title} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
                   <FeatureIcon className="h-5 w-5" />
-                </div>
-                {/* Title font size reduced (text-xl -> text-lg) */}
-                <h3 className="text-lg font-semibold text-gray-900 mb-1.5">{feature.title}</h3> 
-                {/* Description font size reduced (text-sm -> text-xs) */}
-                <p className="text-gray-600 text-xs leading-relaxed">{feature.description}</p>
-              </div>
+                </span>
+                <h3 className="mt-3 text-lg font-semibold text-slate-900">{feature.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-slate-600">{feature.description}</p>
+              </article>
             );
           })}
         </div>
 
-        {/* CTA (Optional, kept it here) */}
-        <div className="mt-10 text-center"> {/* Reduced top margin */}
+        <div className="mt-8 text-center">
           <Link
             href="/signup"
-            className="inline-flex items-center px-5 py-2.5 bg-blue-600 text-white text-base font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md" // Slightly smaller button padding and font
+            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
           >
-            Explore All Features
+            Create free account
           </Link>
         </div>
       </div>
