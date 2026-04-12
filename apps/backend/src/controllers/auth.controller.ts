@@ -9,6 +9,7 @@ import {
   ForgotPasswordInput,
   ResetPasswordInput,
 } from '../utils/validators';
+import { auditLog, redactEmail } from '../lib/logger';
 
 const authService = new AuthService();
 
@@ -18,10 +19,14 @@ export class AuthController {
    * POST /api/auth/register
    */
   async register(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const data: RegisterInput = req.body;
     try {
-      const data: RegisterInput = req.body;
       const result = await authService.register(data);
-
+      auditLog('AUTH_REGISTER_SUCCESS', result.user.id, {
+        ip: req.ip,
+        role: data.role,
+        email: redactEmail(data.email),
+      });
       res.status(201).json({
         success: true,
         data: result,
@@ -36,15 +41,27 @@ export class AuthController {
    * POST /api/auth/login
    */
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const data: LoginInput = req.body;
     try {
-      const data: LoginInput = req.body;
       const result = await authService.login(data);
-
+      auditLog('AUTH_LOGIN_SUCCESS', result.user.id, {
+        ip: req.ip,
+        email: redactEmail(data.email),
+        role: result.user.role,
+      });
       res.status(200).json({
         success: true,
         data: result,
       });
-    } catch (error) {
+    } catch (error: any) {
+      const auditableFailures = ['INVALID_CREDENTIALS', 'ACCOUNT_SUSPENDED', 'ACCOUNT_INACTIVE'];
+      if (auditableFailures.includes(error?.code)) {
+        auditLog('AUTH_LOGIN_FAILURE', null, {
+          ip: req.ip,
+          email: redactEmail(data.email),
+          reason: error.code,
+        });
+      }
       next(error);
     }
   }

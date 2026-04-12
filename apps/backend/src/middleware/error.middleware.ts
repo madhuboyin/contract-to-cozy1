@@ -4,6 +4,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import multer from 'multer';
+import { logger } from '../lib/logger';
 /**
  * Custom error class for API errors
  */
@@ -42,8 +43,8 @@ export const errorHandler = (
   let message = apiErr?.message || error.message || 'An unexpected error occurred';
   let errorCode = apiErr?.code || 'INTERNAL_ERROR';
 
-  // ✅ Safe logging
-  console.error('Error:', {
+  // Structured error log — redact fields are handled by pino's redact config
+  logger.error({
     name: error.name,
     message: error.message,
     code: apiErr?.code,
@@ -51,7 +52,7 @@ export const errorHandler = (
     path: req.path,
     method: req.method,
     ...(isProd ? {} : { stack: error.stack }),
-  });
+  }, 'Request error');
 
   // Handle Serialization Crash
   if (
@@ -61,7 +62,7 @@ export const errorHandler = (
     statusCode = 500;
     message = 'Data serialization failed. Unconverted Decimal/BigInt type detected.';
     errorCode = 'JSON_SERIALIZATION_CRASH';
-    console.error('FATAL JSON SERIALIZATION CRASH:', { message: error.message, ...(isProd ? {} : { stack: error.stack }) });
+    logger.error({ message: error.message, ...(isProd ? {} : { stack: error.stack }) }, 'FATAL JSON SERIALIZATION CRASH');
   }
 
   // ✅ Handle custom API errors first
@@ -115,12 +116,12 @@ export const errorHandler = (
 
   // Prisma validation errors
   if (error instanceof Prisma.PrismaClientValidationError) {
-    console.error('PRISMA VALIDATION ERROR:', {
+    logger.error({
       message: error.message,
       path: req.path,
       method: req.method,
-      ...(isProd ? {} : { body: req.body, params: req.params, stack: error.stack }),
-    });
+      ...(isProd ? {} : { params: req.params, stack: error.stack }),
+    }, 'Prisma validation error');
 
     res.status(400).json({
       success: false,

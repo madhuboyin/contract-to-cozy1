@@ -4,6 +4,7 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest, UserRole } from '../types/auth.types';
 import { verifyAccessToken } from '../utils/jwt.util';
 import { prisma } from '../lib/prisma';
+import { auditLog } from '../lib/logger';
 
 // NOTE: AuthRequest type is defined in '../types/auth.types' and is assumed
 // to have been updated to include homeownerProfile and providerProfile on req.user.
@@ -21,6 +22,7 @@ export const authenticate = async (
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      auditLog('AUTH_NO_TOKEN', null, { ip: req.ip, path: req.path, method: req.method });
       res.status(401).json({
         success: false,
         error: {
@@ -53,6 +55,7 @@ export const authenticate = async (
     });
 
     if (!user) {
+      auditLog('AUTH_USER_NOT_FOUND', decoded.userId, { ip: req.ip, path: req.path, method: req.method });
       res.status(401).json({
         success: false,
         error: {
@@ -65,6 +68,7 @@ export const authenticate = async (
 
     // Check if user is active
     if (user.status === 'SUSPENDED') {
+      auditLog('AUTH_ACCOUNT_SUSPENDED', user.id, { ip: req.ip, path: req.path, method: req.method });
       res.status(403).json({
         success: false,
         error: {
@@ -76,6 +80,7 @@ export const authenticate = async (
     }
 
     if (user.status === 'INACTIVE') {
+      auditLog('AUTH_ACCOUNT_INACTIVE', user.id, { ip: req.ip, path: req.path, method: req.method });
       res.status(403).json({
         success: false,
         error: {
@@ -102,6 +107,7 @@ export const authenticate = async (
 
     next();
   } catch (error: any) {
+    auditLog('AUTH_INVALID_TOKEN', null, { ip: req.ip, path: req.path, method: req.method, reason: error.name });
     res.status(401).json({
       success: false,
       error: {

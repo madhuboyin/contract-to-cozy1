@@ -1,15 +1,16 @@
 // apps/backend/src/routes/document.routes.ts (MODIFIED)
 
 import { Router, Response } from 'express';
-import multer from 'multer'; 
+import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 // Use the unified, extended request type
-import { CustomRequest } from '../types'; 
+import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { documentIntelligenceService } from '../services/documentIntelligence.service';
 import { DocumentType } from '@prisma/client';
 import { validateDocumentUpload } from '../utils/documentValidator.util'; // Assuming this was added in the previous step
 import { HomeEventsAutoGen } from '../services/homeEvents/homeEvents.autogen';
+import { auditLog } from '../lib/logger';
 
 const router = Router();
 
@@ -108,7 +109,13 @@ router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpl
       return res.status(400).json({ success: false, message: 'File is required for analysis' });
     }
 
-    console.log('[DOCUMENT-AI] Analyzing file:', file.originalname);
+    auditLog('DOCUMENT_UPLOAD_ATTEMPT', userId, {
+      ip: req.ip,
+      propertyId: propertyId || null,
+      fileName: file.originalname,
+      fileType: file.mimetype,
+      fileSizeBytes: file.size,
+    });
 
     // Analyze the document
     const insights = await documentIntelligenceService.analyzeDocument(

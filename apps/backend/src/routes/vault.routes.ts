@@ -6,6 +6,7 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { strictRateLimiter } from '../middleware/rateLimiter.middleware';
 import { getVaultData, getVaultStatus, setVaultPassword } from '../services/vault.service';
 import { AuthRequest } from '../types/auth.types';
+import { auditLog } from '../lib/logger';
 
 const router = Router();
 
@@ -45,8 +46,8 @@ const router = Router();
  *         description: Too many attempts
  */
 router.post('/access/:propertyId', strictRateLimiter, async (req: Request, res: Response) => {
+  const { propertyId } = req.params;
   try {
-    const { propertyId } = req.params;
     const password = String(req.body?.password ?? '').trim();
 
     if (!password) {
@@ -54,8 +55,10 @@ router.post('/access/:propertyId', strictRateLimiter, async (req: Request, res: 
     }
 
     const data = await getVaultData(propertyId, password);
+    auditLog('VAULT_ACCESS_SUCCESS', null, { ip: req.ip, propertyId });
     return res.json({ success: true, data });
   } catch (error: any) {
+    auditLog('VAULT_ACCESS_FAILURE', null, { ip: req.ip, propertyId, reason: error?.code });
     const status = error?.statusCode ?? 500;
     return res.status(status).json({
       success: false,
@@ -150,8 +153,9 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   async (req: AuthRequest, res: Response) => {
+    const { propertyId } = req.params;
+    const userId = req.user!.userId;
     try {
-      const { propertyId } = req.params;
       const password = String(req.body?.password ?? '').trim();
 
       if (!password) {
@@ -159,6 +163,7 @@ router.post(
       }
 
       await setVaultPassword(propertyId, password);
+      auditLog('VAULT_PASSWORD_SET', userId, { ip: req.ip, propertyId });
       return res.json({ success: true, message: 'Vault password set successfully' });
     } catch (error: any) {
       const status = error?.statusCode ?? 500;
