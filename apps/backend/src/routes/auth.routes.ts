@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { validateBody } from '../middleware/validate.middleware';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, authenticateAllowUnverified } from '../middleware/auth.middleware';
 import { authRateLimiter, strictRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
   registerSchema,
@@ -293,7 +293,7 @@ router.post(
  */
 router.get(
   '/me',
-  authenticate,
+  authenticateAllowUnverified,
   authController.getCurrentUser.bind(authController)
 );
 
@@ -317,7 +317,7 @@ router.get(
  */
 router.post(
   '/logout',
-  authenticate,
+  authenticateAllowUnverified,
   authController.logout.bind(authController)
 );
 
@@ -343,7 +343,7 @@ router.post(
  */
 router.post(
   '/resend-verification',
-  authenticate,
+  authenticateAllowUnverified,
   strictRateLimiter,
   authController.resendVerification.bind(authController)
 );

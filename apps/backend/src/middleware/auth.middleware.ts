@@ -10,14 +10,18 @@ import { auditLog } from '../lib/logger';
 // to have been updated to include homeownerProfile and providerProfile on req.user.
 
 /**
- * Middleware to authenticate requests using JWT
- * Extracts token from Authorization header and verifies it
+ * Shared implementation for authenticate and authenticateAllowUnverified.
+ * requireEmailVerified=true  → used by all application routes (the default)
+ * requireEmailVerified=false → used only by auth-flow routes that unverified
+ *                              users must be able to reach (me, logout,
+ *                              resend-verification).
  */
-export const authenticate = async (
+async function _authenticate(
   req: AuthRequest,
   res: Response,
-  next: NextFunction
-): Promise<void> => {
+  next: NextFunction,
+  requireEmailVerified: boolean
+): Promise<void> {
   try {
     const authHeader = req.headers.authorization;
 
@@ -38,7 +42,7 @@ export const authenticate = async (
     // Verify token
     const decoded = verifyAccessToken(token);
 
-    // Fetch user and include profile IDs (CRITICAL CHANGE)
+    // Fetch user and include profile IDs
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: {
@@ -49,8 +53,8 @@ export const authenticate = async (
         role: true,
         status: true,
         emailVerified: true,
-        homeownerProfile: { select: { id: true } }, // NEW: Fetch Profile IDs
-        providerProfile: { select: { id: true } },  // NEW: Fetch Profile IDs
+        homeownerProfile: { select: { id: true } },
+        providerProfile: { select: { id: true } },
       },
     });
 
@@ -66,7 +70,6 @@ export const authenticate = async (
       return;
     }
 
-    // Check if user is active
     if (user.status === 'SUSPENDED') {
       auditLog('AUTH_ACCOUNT_SUSPENDED', user.id, { ip: req.ip, path: req.path, method: req.method });
       res.status(403).json({
@@ -91,18 +94,30 @@ export const authenticate = async (
       return;
     }
 
-    // Attach user to request, including the new profile IDs
-    // [FIXED] Removed 'id: user.id' to comply with AuthUser type
+    // Email verification gate — blocks unverified users from all application
+    // routes. Auth-flow routes (/me, /logout, /resend-verification) bypass this
+    // by calling authenticateAllowUnverified instead.
+    if (requireEmailVerified && !user.emailVerified) {
+      res.status(403).json({
+        success: false,
+        error: {
+          message: 'Email verification required',
+          code: 'EMAIL_NOT_VERIFIED',
+        },
+      });
+      return;
+    }
+
     req.user = {
-      userId: user.id, // This is the correct property name expected by AuthUser
+      userId: user.id,
       email: user.email,
       role: user.role as UserRole,
       firstName: user.firstName,
       lastName: user.lastName,
       emailVerified: user.emailVerified,
       status: user.status as any,
-      homeownerProfile: user.homeownerProfile, // ATTACHED
-      providerProfile: user.providerProfile,   // ATTACHED
+      homeownerProfile: user.homeownerProfile,
+      providerProfile: user.providerProfile,
     };
 
     next();
@@ -116,7 +131,31 @@ export const authenticate = async (
       },
     });
   }
-};
+}
+
+/**
+ * Standard authentication middleware.
+ * Verifies JWT, checks account status, and enforces email verification.
+ * Use this on all application routes.
+ */
+export const authenticate = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => _authenticate(req, res, next, true);
+
+/**
+ * Authentication middleware that skips the email verification check.
+ * Use ONLY for auth-flow endpoints that unverified users must reach:
+ *   GET  /api/auth/me
+ *   POST /api/auth/logout
+ *   POST /api/auth/resend-verification
+ */
+export const authenticateAllowUnverified = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => _authenticate(req, res, next, false);
 
 
 /**
