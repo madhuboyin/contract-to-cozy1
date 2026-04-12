@@ -1,5 +1,5 @@
 // apps/backend/src/services/inventoryImport.service.ts
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { v4 as uuidv4 } from 'uuid';
 import {
   InventoryItemCategory,
@@ -49,16 +49,11 @@ function asString(v: any): string | null {
 
 function parseIsoDateOrExcel(v: any): Date | null {
   if (v === undefined || v === null || v === '') return null;
-  if (v instanceof Date) return v;
-  // XLSX may give numbers for Excel dates depending on cell type
-  if (typeof v === 'number') {
-    const d = XLSX.SSF.parse_date_code(v);
-    if (!d) return null;
-    return new Date(Date.UTC(d.y, d.m - 1, d.d));
-  }
+  // exceljs returns native Date objects for date-formatted cells — no serial conversion needed
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
   const s = String(v).trim();
   if (!s) return null;
-  // accept YYYY-MM-DD
+  // accept YYYY-MM-DD strings
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d;
 }
@@ -92,57 +87,57 @@ function normalizeEnum<T extends string>(
 
 export class InventoryImportService {
   async buildTemplateXlsx(propertyId: string): Promise<Buffer> {
-    // Template with headers + an example row
-    const example = {
-      Room: 'Kitchen',
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Inventory');
+
+    // Define columns — this sets the header row (row 1) and column keys
+    ws.columns = HEADERS.map((h) => ({ header: h, key: h, width: 20 }));
+
+    // Add the example data row
+    ws.addRow({
+      'Room': 'Kitchen',
       'Item Name': 'Refrigerator',
-      Category: 'APPLIANCE',
-      Condition: 'GOOD',
-      Brand: 'Whirlpool',
-      Model: 'WRX735SDHZ',
+      'Category': 'APPLIANCE',
+      'Condition': 'GOOD',
+      'Brand': 'Whirlpool',
+      'Model': 'WRX735SDHZ',
       'Serial No': 'ABC1234567',
       'Installed On': '2020-06-01',
       'Purchased On': '2020-05-15',
       'Last Serviced On': '',
       'Purchase Cost (cents)': 189900,
       'Replacement Cost (cents)': 219900,
-      Currency: 'USD',
-      Tags: 'kitchen, major',
-      Notes: 'Stainless steel. Left door has minor scratch.',
-    };
+      'Currency': 'USD',
+      'Tags': 'kitchen, major',
+      'Notes': 'Stainless steel. Left door has minor scratch.',
+    });
 
-    const ws = XLSX.utils.json_to_sheet([example], { header: [...HEADERS] as any });
-    // Force header order
-    XLSX.utils.sheet_add_aoa(ws, [HEADERS as any], { origin: 'A1' });
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
-
-    const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-    return out;
+    const arrayBuffer = await wb.xlsx.writeBuffer();
+    return Buffer.from(arrayBuffer);
   }
 
   async importFromXlsx(args: ImportArgs) {
-    // Ensure property exists (and avoid IDOR via your propertyAuthMiddleware already)
+    // Ensure property exists
     const prop = await prisma.property.findUnique({
       where: { id: args.propertyId },
       select: { id: true },
     });
     if (!prop) throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
 
-    const wb = XLSX.read(args.xlsxBuffer, { type: 'buffer' });
-    const sheetName = wb.SheetNames[0];
-    if (!sheetName) throw new APIError('XLSX has no sheets', 400, 'XLSX_EMPTY');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(args.xlsxBuffer as unknown as ArrayBuffer);
 
-    const ws = wb.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, {
-      defval: '',
-      raw: true,
+    const ws = wb.worksheets[0];
+    if (!ws) throw new APIError('XLSX has no sheets', 400, 'XLSX_EMPTY');
+
+    // Extract header row (row 1) for validation
+    const headerRow = ws.getRow(1);
+    const headerSet = new Set<string>();
+    headerRow.eachCell((cell) => {
+      const val = asString(cell.value);
+      if (val) headerSet.add(val);
     });
 
-    // Validate headers (best effort): require at least required columns
-    const headerRow = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1 })[0] as any[] | undefined;
-    const headerSet = new Set((headerRow || []).map((h) => String(h || '').trim()));
     const missing = ['Item Name', 'Category'].filter((h) => !headerSet.has(h));
     if (missing.length) {
       throw new APIError(
@@ -151,6 +146,13 @@ export class InventoryImportService {
         'XLSX_BAD_HEADERS'
       );
     }
+
+    // Build column-index → header-name map from row 1
+    const colIndexToHeader = new Map<number, string>();
+    headerRow.eachCell((cell, colNumber) => {
+      const val = asString(cell.value);
+      if (val) colIndexToHeader.set(colNumber, val);
+    });
 
     // Preload rooms for property
     const existingRooms = await prisma.inventoryRoom.findMany({
@@ -170,15 +172,32 @@ export class InventoryImportService {
     const allowedCategories = Object.values(InventoryItemCategory) as any;
     const allowedConditions = Object.values(InventoryItemCondition) as any;
 
-    // rows[] is data rows (header already consumed by sheet_to_json)
-    for (let i = 0; i < rows.length; i++) {
-      const excelRowNumber = i + 2; // header is row 1
-      const r = rows[i];
+    // Iterate data rows (skip row 1 = header)
+    ws.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // skip header
+
+      // Build a keyed record from this row using the column map
+      const r: Record<string, any> = {};
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        const header = colIndexToHeader.get(colNumber);
+        if (header) {
+          // exceljs returns cell.value — may be string, number, Date, RichText, etc.
+          const val = cell.value;
+          // Unwrap RichText objects to plain string
+          if (val && typeof val === 'object' && 'richText' in (val as any)) {
+            r[header] = (val as any).richText.map((rt: any) => rt.text).join('');
+          } else {
+            r[header] = val;
+          }
+        }
+      });
+
+      const excelRowNumber = rowNumber;
 
       const name = asString(r['Item Name']);
       if (!name) {
         errors.push({ row: excelRowNumber, field: 'Item Name', message: 'Required' });
-        continue;
+        return;
       }
 
       const category = normalizeEnum(r['Category'], allowedCategories);
@@ -188,13 +207,20 @@ export class InventoryImportService {
           field: 'Category',
           message: `Invalid. Allowed: ${allowedCategories.join(', ')}`,
         });
-        continue;
+        return;
       }
 
       const condition =
         normalizeEnum(r['Condition'], allowedConditions) || 'UNKNOWN';
 
-      // Room: optional; create if flag enabled
+      toCreate.push({ r, name, category, condition, excelRowNumber });
+    });
+
+    // Second pass: resolve rooms (needs async)
+    const resolved: any[] = [];
+    for (const item of toCreate) {
+      const { r, name, category, condition, excelRowNumber } = item;
+
       let roomId: string | null = null;
       const roomName = asString(r['Room']);
       if (roomName) {
@@ -203,12 +229,8 @@ export class InventoryImportService {
         if (existing) {
           roomId = existing.id;
         } else if (args.createRooms) {
-          // create later (batched) or now
           const created = await prisma.inventoryRoom.create({
-            data: {
-              propertyId: args.propertyId,
-              name: roomName,
-            },
+            data: { propertyId: args.propertyId, name: roomName },
             select: { id: true, name: true },
           });
           roomByName.set(key, created);
@@ -228,7 +250,7 @@ export class InventoryImportService {
       const lastServicedOn = parseIsoDateOrExcel(r['Last Serviced On']);
 
       const purchaseCostCents = parseCents(r['Purchase Cost (cents)']);
-      if (r['Purchase Cost (cents)'] !== '' && purchaseCostCents === null) {
+      if (r['Purchase Cost (cents)'] !== '' && r['Purchase Cost (cents)'] !== null && purchaseCostCents === null) {
         errors.push({
           row: excelRowNumber,
           field: 'Purchase Cost (cents)',
@@ -238,7 +260,7 @@ export class InventoryImportService {
       }
 
       const replacementCostCents = parseCents(r['Replacement Cost (cents)']);
-      if (r['Replacement Cost (cents)'] !== '' && replacementCostCents === null) {
+      if (r['Replacement Cost (cents)'] !== '' && r['Replacement Cost (cents)'] !== null && replacementCostCents === null) {
         errors.push({
           row: excelRowNumber,
           field: 'Replacement Cost (cents)',
@@ -251,12 +273,11 @@ export class InventoryImportService {
       const tags = parseTags(r['Tags']);
       const notes = asString(r['Notes']);
 
-      // Optional identity fields
       const brand = asString(r['Brand']);
       const model = asString(r['Model']);
       const serialNo = asString(r['Serial No']);
 
-      toCreate.push({
+      resolved.push({
         propertyId: args.propertyId,
         roomId,
         name,
@@ -273,8 +294,6 @@ export class InventoryImportService {
         currency,
         tags,
         notes,
-
-        // provenance
         source: InventoryItemSource.BULK_UPLOAD,
         sourceBatchId: batchId,
         sourceRowNumber: excelRowNumber,
@@ -286,16 +305,15 @@ export class InventoryImportService {
       return {
         mode: 'DRY_RUN',
         batchId,
-        totalRows: rows.length,
-        validRows: toCreate.length,
+        totalRows: ws.rowCount - 1, // subtract header
+        validRows: resolved.length,
         createdCount: 0,
         errors,
       };
     }
 
-    // Create valid rows (partial import by design)
     let createdCount = 0;
-    for (const data of toCreate) {
+    for (const data of resolved) {
       await prisma.inventoryItem.create({ data });
       createdCount++;
     }
@@ -303,8 +321,8 @@ export class InventoryImportService {
     return {
       mode: 'IMPORT',
       batchId,
-      totalRows: rows.length,
-      validRows: toCreate.length,
+      totalRows: ws.rowCount - 1,
+      validRows: resolved.length,
       createdCount,
       errors,
     };
