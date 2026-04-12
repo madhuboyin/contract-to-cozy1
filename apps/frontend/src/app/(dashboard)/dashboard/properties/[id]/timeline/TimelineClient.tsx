@@ -7,6 +7,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { listHomeEvents, HomeEvent, TimelineProjectionEntry } from './homeEventsApi';
 import { EmptyStateCard } from '@/components/mobile/dashboard/MobilePrimitives';
+import DetailTemplate from '../components/route-templates/DetailTemplate';
+import TableToMobileCards from '../components/route-templates/TableToMobileCards';
 
 // Optional: if you have shared UI components already, feel free to swap these out.
 // Keeping it plain + drop-in.
@@ -36,6 +38,11 @@ function iconForType(type?: string) {
     case 'DOCUMENT': return '📄';
     default: return '•';
   }
+}
+
+function shortImportanceLabel(importance: HomeEvent['importance'] | null | undefined) {
+  if (!importance) return null;
+  return importance === 'HIGHLIGHT' ? 'High Priority' : importance;
 }
 
 function toHomeEventFromTimelineEntry(entry: TimelineProjectionEntry): HomeEvent {
@@ -122,18 +129,156 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
 
   const onRefresh = props.onRefresh ?? (() => query.refetch());
 
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      {!props.hideHeader ? (
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Home Timeline</h1>
-            <p className="text-sm text-muted-foreground">
-              Your home’s story — purchases, repairs, claims, improvements, and key documents.
-            </p>
-          </div>
+  const filters = !props.hideFilters ? (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+      <div className="text-sm text-muted-foreground">Filter:</div>
 
+      <select
+        className="rounded-md border px-2 py-2 text-sm"
+        value={type}
+        onChange={(e) => setType(e.target.value)}
+        disabled={isControlled}
+      >
+        <option value="">All</option>
+        <option value="PURCHASE">Purchase</option>
+        <option value="REPAIR">Repair</option>
+        <option value="MAINTENANCE">Maintenance</option>
+        <option value="IMPROVEMENT">Improvement</option>
+        <option value="CLAIM">Claim</option>
+        <option value="INSPECTION">Inspection</option>
+        <option value="DOCUMENT">Document</option>
+        <option value="VALUE_UPDATE">Value</option>
+        <option value="MILESTONE">Milestone</option>
+        <option value="NOTE">Note</option>
+        <option value="OTHER">Other</option>
+      </select>
+
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Limit</span>
+        <input
+          className="w-24 rounded-md border px-2 py-2 text-sm"
+          type="number"
+          min={10}
+          max={200}
+          value={limit}
+          onChange={(e) => setLimit(Number(e.target.value))}
+          disabled={isControlled}
+        />
+      </div>
+
+      <div className="ml-auto text-xs text-muted-foreground">
+        {isFetching ? 'Updating…' : `${events.length} event(s)`}
+      </div>
+
+      {isControlled ? (
+        <div className="text-xs text-muted-foreground">
+          (Filters managed by view mode)
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
+  const body = isLoading ? (
+    <EmptyStateCard
+      title="Loading timeline"
+      description="Fetching your home events now."
+    />
+  ) : error ? (
+    <EmptyStateCard
+      title="Failed to load timeline"
+      description={error instanceof Error ? error.message : 'Unknown error'}
+      action={
+        <button
+          className="rounded-md border px-3 py-2 text-sm"
+          onClick={onRefresh}
+          disabled={isFetching}
+        >
+          Try again
+        </button>
+      }
+    />
+  ) : events.length === 0 ? (
+    <EmptyStateCard
+      title="No timeline events yet"
+      description="Create an item, add an expense, upload a document, or open a claim and your story will appear here."
+    />
+  ) : (
+    <TableToMobileCards
+      rows={events}
+      getRowKey={(event) => event.id}
+      title={(event) => (
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden>{iconForType(event.type)}</span>
+          <span>{event.title}</span>
+        </span>
+      )}
+      subtitle={(event) => formatDate(event.occurredAt)}
+      columns={[
+        {
+          key: 'classification',
+          label: 'Classification',
+          render: (event) => (
+            <div className="flex flex-wrap gap-1.5">
+              {event.type ? <Badge>{event.type}</Badge> : null}
+              {shortImportanceLabel(event.importance) ? <Badge>{shortImportanceLabel(event.importance)}</Badge> : null}
+              {event.subtype ? <Badge>{event.subtype}</Badge> : null}
+            </div>
+          ),
+        },
+        {
+          key: 'summary',
+          label: 'Summary',
+          render: (event) => event.summary ? (
+            <p className="mb-0 text-sm text-slate-700">{event.summary}</p>
+          ) : (
+            <p className="mb-0 text-sm text-slate-500">No additional summary</p>
+          ),
+        },
+        {
+          key: 'documents',
+          label: 'Documents',
+          render: (event) => Array.isArray(event.documents) && event.documents.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {event.documents.slice(0, 4).map((doc) => (
+                <Badge key={doc.id}>
+                  {doc.kind || 'DOC'}: {doc.document?.name || 'Attachment'}
+                </Badge>
+              ))}
+              {event.documents.length > 4 ? <Badge>+{event.documents.length - 4} more</Badge> : null}
+            </div>
+          ) : (
+            <p className="mb-0 text-sm text-slate-500">None attached</p>
+          ),
+        },
+        {
+          key: 'financial',
+          label: 'Financial',
+          render: (event) => (
+            <div className="space-y-1">
+              <p className="mb-0 text-sm text-slate-700">
+                Amount: {event.amount != null ? `$${event.amount}` : '—'}
+              </p>
+              <p className="mb-0 text-sm text-slate-700">
+                Delta: {event.valueDelta != null ? `${event.valueDelta}` : '—'}
+              </p>
+            </div>
+          ),
+        },
+      ]}
+    />
+  );
+
+  return (
+    props.hideHeader ? (
+      <div className="space-y-4">
+        {filters}
+        {body}
+      </div>
+    ) : (
+      <DetailTemplate
+        title="Home Timeline"
+        subtitle="Your home story, organized into a clear event stream you can trust."
+        controls={(
           <button
             className="rounded-md border px-3 py-2 text-sm"
             onClick={onRefresh}
@@ -141,140 +286,17 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
           >
             {isFetching ? 'Refreshing…' : 'Refresh'}
           </button>
-        </div>
-      ) : null}
-
-      {/* Filters */}
-      {!props.hideFilters ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-          <div className="text-sm text-muted-foreground">Filter:</div>
-
-          <select
-            className="rounded-md border px-2 py-2 text-sm"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            disabled={isControlled} // parent controls filtering in controlled mode
-          >
-            <option value="">All</option>
-            <option value="PURCHASE">Purchase</option>
-            <option value="REPAIR">Repair</option>
-            <option value="MAINTENANCE">Maintenance</option>
-            <option value="IMPROVEMENT">Improvement</option>
-            <option value="CLAIM">Claim</option>
-            <option value="INSPECTION">Inspection</option>
-            <option value="DOCUMENT">Document</option>
-            <option value="VALUE_UPDATE">Value</option>
-            <option value="MILESTONE">Milestone</option>
-            <option value="NOTE">Note</option>
-            <option value="OTHER">Other</option>
-          </select>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Limit</span>
-            <input
-              className="w-24 rounded-md border px-2 py-2 text-sm"
-              type="number"
-              min={10}
-              max={200}
-              value={limit}
-              onChange={(e) => setLimit(Number(e.target.value))}
-              disabled={isControlled}
-            />
-          </div>
-
-          <div className="ml-auto text-xs text-muted-foreground">
-            {isFetching ? 'Updating…' : `${events.length} event(s)`}
-          </div>
-
-          {isControlled ? (
-            <div className="text-xs text-muted-foreground">
-              (Filters managed by view mode)
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Body */}
-      {isLoading ? (
-        <EmptyStateCard
-          title="Loading timeline"
-          description="Fetching your home events now."
-        />
-      ) : error ? (
-        <EmptyStateCard
-          title="Failed to load timeline"
-          description={error instanceof Error ? error.message : 'Unknown error'}
-          action={
-            <button
-              className="rounded-md border px-3 py-2 text-sm"
-              onClick={onRefresh}
-              disabled={isFetching}
-            >
-              Try again
-            </button>
-          }
-        />
-      ) : events.length === 0 ? (
-        <EmptyStateCard
-          title="No timeline events yet"
-          description="Create an item, add an expense, upload a document, or open a claim and your story will appear here."
-        />
-      ) : (
-        <div className="space-y-3">
-          {events.map((e) => (
-            <div key={e.id} className="rounded-lg border p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{iconForType(e.type)}</span>
-                    <div className="font-medium truncate">{e.title}</div>
-                  </div>
-
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>{formatDate(e.occurredAt)}</span>
-                    {e.type && <Badge>{e.type}</Badge>}
-                    {e.importance && <Badge>{e.importance}</Badge>}
-                    {e.subtype && <Badge>{e.subtype}</Badge>}
-                  </div>
-
-                  {e.summary ? (
-                    <div className="mt-2 text-sm text-muted-foreground">{e.summary}</div>
-                  ) : null}
-
-                  {/* Attachments preview */}
-                  {Array.isArray(e.documents) && e.documents.length > 0 ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {e.documents.slice(0, 6).map((d) => (
-                        <Badge key={d.id}>
-                          {d.kind || 'DOC'}: {d.document?.name || 'Attachment'}
-                        </Badge>
-                      ))}
-                      {e.documents.length > 6 ? <Badge>+{e.documents.length - 6} more</Badge> : null}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-col items-end gap-2">
-                  {e.amount != null ? <Badge>${e.amount}</Badge> : null}
-                  {e.valueDelta != null ? <Badge>Δ {e.valueDelta}</Badge> : null}
-                </div>
-              </div>
-
-              {/* Semantic promotion debug (optional) */}
-              {e?.meta?.semantic && typeof e.meta.semantic === 'object' ? (() => {
-                const sem = e.meta.semantic as Record<string, unknown>;
-                return (
-                  <div className="mt-3 text-xs text-muted-foreground">
-                    Semantic: {sem.promoted ? 'promoted' : 'not promoted'}
-                    {sem.confidence != null ? ` · conf=${sem.confidence}` : ''}
-                    {sem.reason ? ` · ${String(sem.reason)}` : ''}
-                  </div>
-                );
-              })() : null}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+        )}
+        trust={{
+          confidenceLabel: `${events.length} events from linked records and modeled timeline entries`,
+          freshnessLabel: isFetching ? 'Refreshing now' : 'Updates when claims, repairs, docs, and value events are added',
+          sourceLabel: 'Home events API + timeline projections + attached document metadata',
+          rationale: 'Events are grouped in one sequence to reduce report hunting and preserve decision context.',
+        }}
+      >
+        {filters}
+        {body}
+      </DetailTemplate>
+    )
   );
 }

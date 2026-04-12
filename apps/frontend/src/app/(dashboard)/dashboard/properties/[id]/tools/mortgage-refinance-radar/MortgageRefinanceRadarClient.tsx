@@ -2,11 +2,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   AlertTriangle,
-  ArrowLeft,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -34,10 +32,8 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   MobileActionRow,
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -885,40 +881,38 @@ export default function MortgageRefinanceRadarClient() {
   const available = data?.available === true ? (data as RadarStatusAvailable) : null;
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      {/* Back */}
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to property
-        </Link>
-      </Button>
-
-      {/* Page intro */}
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Mortgage Refinance Radar"
-        subtitle="Monitor the market and know when it's worth refinancing your home."
-       className="lg:hidden"/>
-
-      {/* Filter surface + rail */}
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail
-          propertyId={propertyId}
-          context="mortgage-refinance-radar"
-          currentToolId="mortgage-refinance-radar"
-        />
-        <MobileActionRow className="justify-end">
-          <button
-            onClick={handleEvaluate}
-            disabled={evaluating || loading}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
-          >
-            <RefreshCw className={`h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
-            Re-evaluate
-          </button>
-        </MobileActionRow>
-      </MobileFilterSurface>
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home Tool"
+      title="Mortgage Refinance Radar"
+      subtitle="Monitor rates and know when refinancing is likely worth the effort."
+      trust={{
+        confidenceLabel: available?.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} fit from current loan context` : 'Model fit pending evaluation',
+        freshnessLabel: available?.lastEvaluatedAt ? `Last evaluated ${new Date(available.lastEvaluatedAt).toLocaleDateString()}` : 'Evaluate now to refresh',
+        sourceLabel: 'Mortgage profile + market rate snapshots + CtC refinance model',
+        rationale: 'Opportunity scoring weighs rate gap, break-even horizon, and closing-cost assumptions together.',
+      }}
+      rail={(
+        <div className="space-y-3">
+          <HomeToolsRail
+            propertyId={propertyId}
+            context="mortgage-refinance-radar"
+            currentToolId="mortgage-refinance-radar"
+          />
+          <MobileActionRow className="justify-end">
+            <button
+              onClick={handleEvaluate}
+              disabled={evaluating || loading}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              <RefreshCw className={`h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
+              Re-evaluate
+            </button>
+          </MobileActionRow>
+        </div>
+      )}
+    >
 
       {/* Loading */}
       {loading && !data && (
@@ -978,6 +972,6 @@ export default function MortgageRefinanceRadarClient() {
           )}
         </>
       )}
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

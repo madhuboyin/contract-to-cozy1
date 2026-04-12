@@ -1,19 +1,13 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
 import { Button } from '@/components/ui/button';
 import ToolExplainerSection, { openToolExplainer } from '@/components/tool-explainer/ToolExplainerSection';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 export default function CoverageIntelligenceToolClient() {
   const params = useParams<{ id: string }>();
@@ -32,39 +26,36 @@ export default function CoverageIntelligenceToolClient() {
     : `/dashboard/properties/${propertyId}`;
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={backHref}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          {isGuidanceContext ? 'Back to guidance' : 'Back to property'}
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Coverage Intelligence"
-        subtitle="Insurance and warranty coverage assessment for this property."
-        action={
-          !isGuidanceContext ? (
-            <Button
-              variant="outline"
-              className="min-h-[44px] lg:hidden"
-              onClick={() =>
-                openToolExplainer({
-                  id: 'how-it-works',
-                  toolKey: 'coverageIntelligence',
-                })
-              }
-            >
-              Learn how it works
-            </Button>
-          ) : undefined
-        }
-      />
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} />
-      </MobileFilterSurface>
+    <ToolWorkspaceTemplate
+      backHref={backHref}
+      backLabel={isGuidanceContext ? 'Back to guidance' : 'Back to property'}
+      eyebrow="Home Tool"
+      title="Coverage Intelligence"
+      subtitle="Insurance and warranty coverage assessment for this property."
+      trust={{
+        confidenceLabel: 'Medium-High, based on linked policy and inventory signals',
+        freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',
+        sourceLabel: 'CtC coverage graph + property inventory + policy metadata',
+        rationale: 'Coverage gaps are prioritized by uncovered exposure, expiration state, and room context.',
+      }}
+      rail={<HomeToolsRail propertyId={propertyId} />}
+      introAction={
+        !isGuidanceContext ? (
+          <Button
+            variant="outline"
+            className="min-h-[44px] lg:hidden"
+            onClick={() =>
+              openToolExplainer({
+                id: 'how-it-works',
+                toolKey: 'coverageIntelligence',
+              })
+            }
+          >
+            Learn how it works
+          </Button>
+        ) : undefined
+      }
+    >
 
       {/* Standalone-only widgets — hidden when arriving from a guidance step */}
       {!isGuidanceContext && (
@@ -91,6 +82,6 @@ export default function CoverageIntelligenceToolClient() {
         guidanceJourneyId={guidanceJourneyId}
         actionLabel="Mark coverage review complete"
       />
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

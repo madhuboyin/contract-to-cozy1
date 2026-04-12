@@ -3,14 +3,11 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { Button } from '@/components/ui/button';
 import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
   ResultHeroCard,
   ScenarioInputCard,
   CompactEntityRow,
@@ -21,6 +18,7 @@ import {
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import CompareTemplate from '../../components/route-templates/CompareTemplate';
 
 export default function CoverageOptionsClient() {
   const params = useParams<{ id: string }>();
@@ -28,6 +26,9 @@ export default function CoverageOptionsClient() {
   const searchParams = useSearchParams();
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') ?? 'compare_coverage_options';
+  const backHref = guidanceJourneyId
+    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
+    : `/dashboard/properties/${propertyId}`;
 
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<any>(null);
@@ -112,113 +113,111 @@ export default function CoverageOptionsClient() {
   }, [guidanceJourneyId, guidanceStepKey, proofCompleted, propertyId, totalGaps]);
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Coverage Options"
-        subtitle="Compare available home warranty and insurance policy options to close identified coverage gaps."
-      />
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} />
-      </MobileFilterSurface>
-
-      <GuidanceInlinePanel
-        propertyId={propertyId}
-        title="Where This Tool Fits"
-        subtitle="Coverage Options is part of active guidance journeys. Compare options and mark complete when done."
-        toolKey="coverage-options"
-        limit={1}
-        journeyId={guidanceJourneyId}
-      />
-
-      {loading ? (
-        <ScenarioInputCard title="Loading" subtitle="Loading coverage gaps..." badge={<StatusChip tone="info">Please wait</StatusChip>}>
-          <p className="text-sm text-slate-600">Fetching coverage data for your property.</p>
-        </ScenarioInputCard>
-      ) : err ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>
-      ) : gaps.length === 0 ? (
-        <EmptyStateCard
-          title="No coverage gaps found"
-          description="All tracked items currently have coverage. No policy comparisons are needed at this time."
+    <CompareTemplate
+      backHref={backHref}
+      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
+      title="Coverage Options"
+      subtitle="Compare warranty and insurance options to close identified coverage gaps."
+      rail={<HomeToolsRail propertyId={propertyId} />}
+      trust={{
+        confidenceLabel: 'Medium, based on current item coverage states',
+        freshnessLabel: 'Real-time when coverage records are updated',
+        sourceLabel: 'Inventory coverage gaps + linked warranty/insurance metadata',
+        rationale: 'Recommendations prioritize no-coverage items first, then partial or expired protection.',
+      }}
+      summary={
+        <GuidanceInlinePanel
+          propertyId={propertyId}
+          title="Where This Tool Fits"
+          subtitle="Coverage Options is part of active guidance journeys. Compare options and mark complete when done."
+          toolKey="coverage-options"
+          limit={1}
+          journeyId={guidanceJourneyId}
         />
-      ) : (
-        <>
-          <ResultHeroCard
-            title="Open Coverage Gaps"
-            value={totalGaps}
-            status={<StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>{totalGaps > 0 ? 'Review options' : 'Covered'}</StatusChip>}
-            summary={`${counts.NO_COVERAGE ?? 0} uncovered · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} partially covered`}
-          />
-
-          <ScenarioInputCard
-            title="Gap Breakdown"
-            subtitle="Review each gap and select the best coverage option to close it."
-          >
-            <div className="space-y-3">
-              {gaps.map((gap: any) => {
-                const gapLabel = formatEnumLabel(gap.gapType) || 'Coverage Gap';
-                return (
-                  <div key={gap.inventoryItemId} className="space-y-2.5 rounded-xl border border-black/10 p-2.5">
-                    <CompactEntityRow
-                      title={gap.itemName}
-                      subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
-                      meta={gap.roomName ? `${gap.roomName} · ${gapLabel}` : gapLabel}
-                      status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gapLabel}</StatusChip>}
-                    />
-                    <ActionPriorityRow
-                      primaryAction={
-                        <Link
-                          href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/coverage`}
-                          className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm text-white hover:bg-black/90"
-                        >
-                          Get coverage
-                        </Link>
-                      }
-                      secondaryActions={
-                        <Link
-                          href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/replace-repair`}
-                          className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
-                        >
-                          Repair/Replace
-                        </Link>
-                      }
-                    />
-                  </div>
-                );
-              })}
-            </div>
+      }
+      compareContent={
+        loading ? (
+          <ScenarioInputCard title="Loading" subtitle="Loading coverage gaps..." badge={<StatusChip tone="info">Please wait</StatusChip>}>
+            <p className="text-sm text-slate-600">Fetching coverage data for your property.</p>
           </ScenarioInputCard>
-        </>
-      )}
-
-      <ScenarioInputCard
-        title="Guidance Progress"
-        subtitle="This step auto-completes when proof-backed coverage state is available."
-      >
-        {proofCompleted ? (
-          <div className="flex items-center gap-2 text-sm text-green-700">
-            <CheckCircle className="h-4 w-4" />
-            Proof-backed completion recorded. Return to your guidance journey to continue.
-          </div>
+        ) : err ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>
+        ) : gaps.length === 0 ? (
+          <EmptyStateCard
+            title="No coverage gaps found"
+            description="All tracked items currently have coverage. No policy comparisons are needed at this time."
+          />
         ) : (
-          <Button
-            className="min-h-[44px] w-full"
-            onClick={handleMarkReviewed}
-            disabled={progressing}
-          >
-            {progressing ? 'Saving...' : progressRecorded ? 'Progress recorded' : 'Record progress'}
-          </Button>
-        )}
-      </ScenarioInputCard>
-    </MobilePageContainer>
+          <>
+            <ResultHeroCard
+              title="Open Coverage Gaps"
+              value={totalGaps}
+              status={<StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>{totalGaps > 0 ? 'Review options' : 'Covered'}</StatusChip>}
+              summary={`${counts.NO_COVERAGE ?? 0} uncovered · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} partially covered`}
+            />
+
+            <ScenarioInputCard
+              title="Gap Breakdown"
+              subtitle="Review each gap and select the best coverage option to close it."
+            >
+              <div className="space-y-3">
+                {gaps.map((gap: any) => {
+                  const gapLabel = formatEnumLabel(gap.gapType) || 'Coverage Gap';
+                  return (
+                    <div key={gap.inventoryItemId} className="space-y-2.5 rounded-xl border border-black/10 p-2.5">
+                      <CompactEntityRow
+                        title={gap.itemName}
+                        subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
+                        meta={gap.roomName ? `${gap.roomName} · ${gapLabel}` : gapLabel}
+                        status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gapLabel}</StatusChip>}
+                      />
+                      <ActionPriorityRow
+                        primaryAction={
+                          <Link
+                            href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/coverage`}
+                            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm text-white hover:bg-black/90"
+                          >
+                            Get coverage
+                          </Link>
+                        }
+                        secondaryActions={
+                          <Link
+                            href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/replace-repair`}
+                            className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                          >
+                            Repair/Replace
+                          </Link>
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </ScenarioInputCard>
+          </>
+        )
+      }
+      footer={
+        <ScenarioInputCard
+          title="Guidance Progress"
+          subtitle="This step auto-completes when proof-backed coverage state is available."
+        >
+          {proofCompleted ? (
+            <div className="flex items-center gap-2 text-sm text-green-700">
+              <CheckCircle className="h-4 w-4" />
+              Proof-backed completion recorded. Return to your guidance journey to continue.
+            </div>
+          ) : (
+            <Button
+              className="min-h-[44px] w-full"
+              onClick={handleMarkReviewed}
+              disabled={progressing}
+            >
+              {progressing ? 'Saving...' : progressRecorded ? 'Progress recorded' : 'Record progress'}
+            </Button>
+          )}
+        </ScenarioInputCard>
+      }
+    />
   );
 }

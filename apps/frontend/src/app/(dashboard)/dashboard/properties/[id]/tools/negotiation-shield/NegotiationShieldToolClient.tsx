@@ -61,6 +61,7 @@ import {
   type SaveNegotiationShieldInputPayload,
 } from './negotiationShieldApi';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import TrustStrip from '../../components/route-templates/TrustStrip';
 
 type ScenarioRouteValue =
   | 'contractor-quote-review'
@@ -2917,6 +2918,12 @@ export default function NegotiationShieldToolClient() {
           title="Negotiation Shield"
           subtitle="This route is missing the property context Negotiation Shield needs."
          className="lg:hidden"/>
+        <TrustStrip
+          confidenceLabel="Low until a property is selected"
+          freshnessLabel="Context refreshes once you open this tool from a property"
+          sourceLabel="Negotiation case data requires an active property scope"
+          rationale="Property context anchors estimates, comps, and leverage signals to the right home."
+        />
         <Card className={SECTION_CARD_CLASS}>
           <CardHeader className={SECTION_HEADER_CLASS}>
             <CardTitle>Property context missing</CardTitle>
@@ -2941,6 +2948,12 @@ export default function NegotiationShieldToolClient() {
           title="Negotiation Shield"
           subtitle="Loading the property context for this review..."
          className="lg:hidden"/>
+        <TrustStrip
+          confidenceLabel="Pending property context"
+          freshnessLabel="Syncing current property profile"
+          sourceLabel="Property data + negotiation case history"
+          rationale="Negotiation recommendations are only reliable after property profile and prior case signals load."
+        />
         <DetailSkeleton />
       </MobilePageContainer>
     );
@@ -2955,6 +2968,12 @@ export default function NegotiationShieldToolClient() {
           title="Negotiation Shield"
           subtitle="We could not load the property context for this tool."
          className="lg:hidden"/>
+        <TrustStrip
+          confidenceLabel="Low while context is unavailable"
+          freshnessLabel="Retry to restore current property and case data"
+          sourceLabel="Property profile + negotiation case records"
+          rationale="Without property context, leverage and pricing recommendations may be incomplete."
+        />
         <Card className={SECTION_CARD_CLASS}>
           <CardHeader className={SECTION_HEADER_CLASS}>
             <CardTitle>Property unavailable</CardTitle>
@@ -2985,6 +3004,12 @@ export default function NegotiationShieldToolClient() {
         subtitle="Review quotes, insurance disputes, and buyer requests, then get a message you can actually send."
         action={introAction}
        className="lg:hidden"/>
+      <TrustStrip
+        confidenceLabel={hasOpenCase ? 'Medium-High when case inputs and documents are complete' : 'Medium while setting up a new review'}
+        freshnessLabel="Updates with each saved input, parsed document, and analysis run"
+        sourceLabel="Case inputs + uploaded evidence + CtC negotiation analysis engine"
+        rationale="Recommendations are calibrated to your scenario type and supporting evidence, not generic scripts."
+      />
 
       <div className={cn(hasOpenCase ? 'grid gap-5 xl:items-start xl:grid-cols-[280px_minmax(0,1fr)]' : 'space-y-4 xl:space-y-5')}>
         {hasOpenCase ? (

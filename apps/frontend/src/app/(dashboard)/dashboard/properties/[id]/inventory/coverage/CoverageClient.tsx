@@ -27,9 +27,12 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
+import TrustStrip from '../../components/route-templates/TrustStrip';
+import { useToast } from '@/components/ui/use-toast';
 
 export default function CoverageClient({ propertyId }: { propertyId: string }) {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+  const { toast } = useToast();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentPathWithQuery = React.useMemo(() => {
@@ -107,7 +110,11 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
       setDrawerOpen(true);
     } catch (e) {
       console.error('[CoverageClient] failed to open item from coverage', e);
-      alert('Unable to open this item from coverage. Please try again.');
+      toast({
+        title: 'Unable to open item',
+        description: 'We could not open this inventory item right now. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setOpeningItemId(null);
     }
@@ -223,6 +230,13 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         issueDomains={['INSURANCE', 'FINANCIAL'] as const}
         limit={2}
         compact
+      />
+
+      <TrustStrip
+        confidenceLabel={`${counts.total ?? 0} gaps detected across tracked inventory`}
+        freshnessLabel="Live from coverage gap analysis and linked policy metadata"
+        sourceLabel="Inventory records + warranty links + insurance policy linkage"
+        rationale="Uncovered and expired items are prioritized first to reduce exposure quickly."
       />
 
       {guidanceStepKey && (

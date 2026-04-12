@@ -26,6 +26,7 @@ import {
   MobileSection,
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import TrustStrip from '../components/route-templates/TrustStrip';
 
 function guessRoomType(name: string) {
   const t = (name || '').toLowerCase();
@@ -248,6 +249,15 @@ export default function RoomsHubClient() {
             <RoomsHealthSummaryCard overallHealth={overallHealth} lowestRoomName={lowestRoomName} />
           </MobileSection>
 
+          <MobileSection>
+            <TrustStrip
+              confidenceLabel={overallHealth != null ? `Room health score ${overallHealth}/100 from captured room signals` : 'Improves as room insights load'}
+              freshnessLabel="Refreshed when room scans, items, and docs change"
+              sourceLabel="Room insights + inventory counts + coverage/document completeness"
+              rationale="Focus room is chosen from lowest health score so effort starts where risk is highest."
+            />
+          </MobileSection>
+
           {focusRoom ? (
             <MobileSection>
               <MobileSectionHeader title="Focus Room" subtitle="Start here first" />
@@ -332,6 +342,15 @@ export default function RoomsHubClient() {
                   </Link>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4">
+              <TrustStrip
+                confidenceLabel={overallHealth != null ? `Room health score ${overallHealth}/100 from loaded room insights` : 'Insight confidence increases as room data loads'}
+                freshnessLabel="Live from room scans, inventory updates, and coverage metadata"
+                sourceLabel="CtC room insight model + room-level inventory statistics"
+                rationale="Prioritizing lowest-scoring rooms first reduces hidden risk and improves maintenance readiness."
+              />
             </div>
           </div>
 

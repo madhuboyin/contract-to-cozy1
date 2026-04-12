@@ -41,6 +41,8 @@ import {
   MobileSection,
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { useToast } from '@/components/ui/use-toast';
+import TrustStrip from '../components/route-templates/TrustStrip';
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' {
   const hasWarranty = Boolean(item.warrantyId);
@@ -78,6 +80,7 @@ export default function InventoryClient() {
   const propertyId = params.id;
 
   const router = useRouter();
+  const { toast } = useToast();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentPathWithQuery = useMemo(() => {
@@ -278,7 +281,11 @@ export default function InventoryClient() {
       await downloadInventoryExport(propertyId);
     } catch (error) {
       console.error('Inventory export failed', error);
-      alert('Failed to export CSV. Please try again.');
+      toast({
+        title: 'Export failed',
+        description: 'We could not generate the CSV right now. Please try again.',
+        variant: 'destructive',
+      });
     }
   }
 
@@ -374,6 +381,15 @@ export default function InventoryClient() {
               stats={portfolioStats}
               activeFilter={portfolioFilter}
               onToggleFilter={togglePortfolioFilter}
+            />
+          </MobileSection>
+
+          <MobileSection>
+            <TrustStrip
+              confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage confidence across ${portfolioStats.totalItems} items`}
+              freshnessLabel="Updates from latest inventory, docs, recalls, and coverage links"
+              sourceLabel="Inventory data + warranty/insurance linkage + recall matches"
+              rationale="Priority recommendations focus on uncovered value, missing documentation, and unresolved recalls."
             />
           </MobileSection>
 
@@ -539,6 +555,13 @@ export default function InventoryClient() {
             stats={portfolioStats}
             activeFilter={portfolioFilter}
             onToggleFilter={togglePortfolioFilter}
+          />
+
+          <TrustStrip
+            confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage confidence across ${portfolioStats.totalItems} items`}
+            freshnessLabel="Live from inventory updates, coverage links, and recall scans"
+            sourceLabel="CtC inventory graph + documents + policy associations"
+            rationale="Use gaps and missing-value filters first to lower financial exposure and speed claim readiness."
           />
 
           <InventoryFilterBar
