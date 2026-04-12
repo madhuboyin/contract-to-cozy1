@@ -3,14 +3,11 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   ActionPriorityRow,
   CompactEntityRow,
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
   ResultHeroCard,
   ScenarioInputCard,
   StatusChip,
@@ -27,6 +24,8 @@ import {
   type PriceFinalizationDraftInput,
 } from '@/lib/api/priceFinalizationApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
+import CompareTemplate from '../../components/route-templates/CompareTemplate';
+import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 type FormState = {
   serviceCategory: ServiceCategory | '';
@@ -355,223 +354,239 @@ export default function PriceFinalizationToolClient() {
     itemId,
     homeAssetId,
   ]);
+  const backHref = guidanceJourneyId
+    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
+    : `/dashboard/properties/${propertyId}`;
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Price Finalization"
-        subtitle="Capture accepted quote terms and final price before moving to booking."
-      />
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} context="price-finalization" currentToolId="price-finalization" />
-      </MobileFilterSurface>
-
-      <ResultHeroCard
-        eyebrow="MVP"
-        title="Finalize Before You Book"
-        value={items.length}
-        status={<StatusChip tone={finalizedDetail ? 'good' : 'info'}>{finalizedDetail ? 'Finalized' : 'Draft mode'}</StatusChip>}
-        summary="Persist accepted terms so booking can prefill scope and target price."
-      />
-
-      {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
-
-      <ScenarioInputCard title="Accepted Price Details" subtitle="Capture the minimum contract details before booking.">
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Service category</span>
-            <select
-              value={form.serviceCategory}
-              onChange={(event) => setField('serviceCategory', event.target.value as ServiceCategory)}
-              className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-            >
-              <option value="">Select category</option>
-              {ALL_SERVICE_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {formatEnumLabel(category)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Vendor name</span>
-            <input
-              value={form.vendorName}
-              onChange={(event) => setField('vendorName', event.target.value)}
-              placeholder="Acme HVAC"
-              className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Accepted price</span>
-            <input
-              value={form.acceptedPrice}
-              onChange={(event) => setField('acceptedPrice', event.target.value)}
-              placeholder="2500.00"
-              inputMode="decimal"
-              className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Original quote</span>
-            <input
-              value={form.quotePrice}
-              onChange={(event) => setField('quotePrice', event.target.value)}
-              placeholder="3200.00"
-              inputMode="decimal"
-              className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm md:col-span-2">
-            <span className="font-medium">Currency</span>
-            <input
-              value={form.currency}
-              onChange={(event) => setField('currency', event.target.value.toUpperCase())}
-              placeholder="USD"
-              maxLength={3}
-              className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-            />
-          </label>
-        </div>
-
-        <div className="mt-3 grid gap-3">
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Scope summary</span>
-            <textarea
-              value={form.scopeSummary}
-              onChange={(event) => setField('scopeSummary', event.target.value)}
-              rows={3}
-              placeholder="What exactly is included?"
-              className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Payment terms</span>
-            <textarea
-              value={form.paymentTerms}
-              onChange={(event) => setField('paymentTerms', event.target.value)}
-              rows={2}
-              placeholder="Deposit, milestones, due dates"
-              className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Warranty terms</span>
-            <textarea
-              value={form.warrantyTerms}
-              onChange={(event) => setField('warrantyTerms', event.target.value)}
-              rows={2}
-              placeholder="Labor / parts warranty summary"
-              className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Timeline terms</span>
-            <textarea
-              value={form.timelineTerms}
-              onChange={(event) => setField('timelineTerms', event.target.value)}
-              rows={2}
-              placeholder="Start date, completion date, delay terms"
-              className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="space-y-1 text-sm">
-            <span className="font-medium">Notes</span>
-            <textarea
-              value={form.notes}
-              onChange={(event) => setField('notes', event.target.value)}
-              rows={2}
-              placeholder="Additional contract notes"
-              className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
-            />
-          </label>
-        </div>
-
-        <ActionPriorityRow
-          primaryAction={
-            <Button className="min-h-[40px] w-full" onClick={handleSaveDraft} disabled={saving || finalizing || loading}>
-              {saving ? 'Saving draft...' : 'Save Draft'}
-            </Button>
-          }
-          secondaryActions={
-            <Button
-              variant="outline"
-              className="min-h-[40px] w-full"
-              onClick={handleFinalize}
-              disabled={saving || finalizing || loading}
-            >
-              {finalizing ? 'Finalizing...' : 'Finalize Price'}
-            </Button>
-          }
+    <CompareTemplate
+      backHref={backHref}
+      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
+      title="Price Finalization"
+      subtitle="Capture accepted quote terms and final price before moving to booking."
+      rail={<HomeToolsRail propertyId={propertyId} context="price-finalization" currentToolId="price-finalization" />}
+      trust={{
+        confidenceLabel: finalizedDetail ? 'High for finalized records; medium for draft entries' : 'Medium while drafting',
+        freshnessLabel: 'Updates with every draft save and finalization action',
+        sourceLabel: 'Quote context + selected vendor terms + guidance continuity metadata',
+        rationale: 'Finalized pricing is used to reduce re-entry and keep booking decisions aligned with accepted terms.',
+      }}
+      summary={
+        <ResultHeroCard
+          eyebrow="Workspace"
+          title="Finalize Before You Book"
+          value={items.length}
+          status={<StatusChip tone={finalizedDetail ? 'good' : 'info'}>{finalizedDetail ? 'Finalized' : 'Draft mode'}</StatusChip>}
+          summary="Persist accepted terms so booking can prefill scope and target price."
         />
-      </ScenarioInputCard>
+      }
+      compareContent={
+        <>
+          {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
 
-      <ScenarioInputCard title="Saved Finalizations" subtitle="Recent records for this property.">
-        {loading ? (
-          <p className="mb-0 text-sm text-slate-500">Loading records...</p>
-        ) : items.length === 0 ? (
-          <p className="mb-0 text-sm text-slate-500">No saved records yet. Save a draft to start.</p>
-        ) : (
-          <div className="space-y-2">
-            {items.slice(0, 5).map((entry) => (
-              <button
-                type="button"
-                key={entry.id}
-                onClick={() => {
-                  setActiveId(entry.id);
-                  setForm(buildFormFromDetail(entry));
-                }}
-                className="w-full rounded-xl border border-black/10 bg-white p-2.5 text-left hover:bg-black/[0.02]"
-              >
-                <CompactEntityRow
-                  title={entry.vendorName || 'Unnamed vendor'}
-                  subtitle={entry.serviceCategory ? formatEnumLabel(entry.serviceCategory) : 'Service category not set'}
-                  meta={entry.acceptedPrice ? `$${entry.acceptedPrice.toFixed(2)} ${entry.currency}` : 'No accepted price'}
-                  status={
-                    <StatusChip tone={entry.status === 'FINALIZED' ? 'good' : 'info'}>
-                      {entry.status === 'FINALIZED' ? 'Finalized' : 'Draft'}
-                    </StatusChip>
-                  }
+          <ScenarioInputCard title="Accepted Price Details" subtitle="Capture the minimum contract details before booking.">
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Service category</span>
+                <select
+                  value={form.serviceCategory}
+                  onChange={(event) => setField('serviceCategory', event.target.value as ServiceCategory)}
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                >
+                  <option value="">Select category</option>
+                  {ALL_SERVICE_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {formatEnumLabel(category)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Vendor name</span>
+                <input
+                  value={form.vendorName}
+                  onChange={(event) => setField('vendorName', event.target.value)}
+                  placeholder="Acme HVAC"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
                 />
-              </button>
-            ))}
-          </div>
-        )}
-      </ScenarioInputCard>
+              </label>
 
-      {bookingHref ? (
-        <ScenarioInputCard title="Next Step" subtitle="Your accepted terms can now prefill booking.">
-          <div className="flex items-center gap-2 text-sm text-emerald-700">
-            <CheckCircle2 className="h-4 w-4" />
-            Price finalized and ready for booking.
-          </div>
-          <div className="pt-2">
-            <Link
-              href={bookingHref}
-              className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-4 text-sm font-semibold text-white hover:bg-black/90"
-            >
-              Continue to Provider Booking
-            </Link>
-          </div>
-        </ScenarioInputCard>
-      ) : null}
-    </MobilePageContainer>
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Accepted price</span>
+                <input
+                  value={form.acceptedPrice}
+                  onChange={(event) => setField('acceptedPrice', event.target.value)}
+                  placeholder="2500.00"
+                  inputMode="decimal"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Original quote</span>
+                <input
+                  value={form.quotePrice}
+                  onChange={(event) => setField('quotePrice', event.target.value)}
+                  placeholder="3200.00"
+                  inputMode="decimal"
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+
+              <label className="space-y-1 text-sm md:col-span-2">
+                <span className="font-medium">Currency</span>
+                <input
+                  value={form.currency}
+                  onChange={(event) => setField('currency', event.target.value.toUpperCase())}
+                  placeholder="USD"
+                  maxLength={3}
+                  className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 grid gap-3">
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Scope summary</span>
+                <textarea
+                  value={form.scopeSummary}
+                  onChange={(event) => setField('scopeSummary', event.target.value)}
+                  rows={3}
+                  placeholder="What exactly is included?"
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Payment terms</span>
+                <textarea
+                  value={form.paymentTerms}
+                  onChange={(event) => setField('paymentTerms', event.target.value)}
+                  rows={2}
+                  placeholder="Deposit, milestones, due dates"
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Warranty terms</span>
+                <textarea
+                  value={form.warrantyTerms}
+                  onChange={(event) => setField('warrantyTerms', event.target.value)}
+                  rows={2}
+                  placeholder="Labor / parts warranty summary"
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Timeline terms</span>
+                <textarea
+                  value={form.timelineTerms}
+                  onChange={(event) => setField('timelineTerms', event.target.value)}
+                  rows={2}
+                  placeholder="Start date, completion date, delay terms"
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="font-medium">Notes</span>
+                <textarea
+                  value={form.notes}
+                  onChange={(event) => setField('notes', event.target.value)}
+                  rows={2}
+                  placeholder="Additional contract notes"
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+
+            <ActionPriorityRow
+              primaryAction={
+                <Button className="min-h-[40px] w-full" onClick={handleSaveDraft} disabled={saving || finalizing || loading}>
+                  {saving ? 'Saving draft...' : 'Save Draft'}
+                </Button>
+              }
+              secondaryActions={
+                <Button
+                  variant="outline"
+                  className="min-h-[40px] w-full"
+                  onClick={handleFinalize}
+                  disabled={saving || finalizing || loading}
+                >
+                  {finalizing ? 'Finalizing...' : 'Finalize Price'}
+                </Button>
+              }
+            />
+          </ScenarioInputCard>
+
+          <ScenarioInputCard title="Saved Finalizations" subtitle="Recent records for this property.">
+            {loading ? (
+              <p className="mb-0 text-sm text-slate-500">Loading records...</p>
+            ) : items.length === 0 ? (
+              <p className="mb-0 text-sm text-slate-500">No saved records yet. Save a draft to start.</p>
+            ) : (
+              <div className="space-y-2">
+                {items.slice(0, 5).map((entry) => (
+                  <button
+                    type="button"
+                    key={entry.id}
+                    onClick={() => {
+                      setActiveId(entry.id);
+                      setForm(buildFormFromDetail(entry));
+                    }}
+                    className="w-full rounded-xl border border-black/10 bg-white p-2.5 text-left hover:bg-black/[0.02]"
+                  >
+                    <CompactEntityRow
+                      title={entry.vendorName || 'Unnamed vendor'}
+                      subtitle={entry.serviceCategory ? formatEnumLabel(entry.serviceCategory) : 'Service category not set'}
+                      meta={entry.acceptedPrice ? `$${entry.acceptedPrice.toFixed(2)} ${entry.currency}` : 'No accepted price'}
+                      status={
+                        <StatusChip tone={entry.status === 'FINALIZED' ? 'good' : 'info'}>
+                          {entry.status === 'FINALIZED' ? 'Finalized' : 'Draft'}
+                        </StatusChip>
+                      }
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </ScenarioInputCard>
+        </>
+      }
+      footer={
+        <>
+          {bookingHref ? (
+            <ScenarioInputCard title="Next Step" subtitle="Your accepted terms can now prefill booking.">
+              <div className="flex items-center gap-2 text-sm text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" />
+                Price finalized and ready for booking.
+              </div>
+              <div className="pt-2">
+                <Link
+                  href={bookingHref}
+                  className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-4 text-sm font-semibold text-white hover:bg-black/90"
+                >
+                  Continue to Provider Booking
+                </Link>
+              </div>
+            </ScenarioInputCard>
+          ) : null}
+          <GuidanceStepCompletionCard
+            propertyId={propertyId}
+            guidanceStepKey={guidanceStepKey}
+            guidanceJourneyId={guidanceJourneyId}
+            actionLabel="Mark price finalization reviewed"
+            producedData={
+              guidanceSignalIntentFamily
+                ? { signalIntentFamily: guidanceSignalIntentFamily }
+                : undefined
+            }
+          />
+        </>
+      }
+    />
   );
 }

@@ -5,7 +5,6 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft,
   Calendar,
   ChevronDown,
   ChevronRight,
@@ -28,11 +27,9 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   MobileActionRow,
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function money(cents: number | null | undefined) {
@@ -266,49 +263,50 @@ export default function CapitalTimelineClient() {
   })();
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home Tool"
+      title="Capital Timeline"
+      subtitle={`Predicted major expenses over the next ${horizonYears} years.`}
+      trust={{
+        confidenceLabel: data?.confidence ? `${data.confidence.toLowerCase()} confidence across projected line items` : 'Confidence updates after analysis run',
+        freshnessLabel: 'Recomputed from latest property context and selected horizon',
+        sourceLabel: 'CtC capital timeline model + inventory/home asset state + planning assumptions',
+        rationale: 'Prioritizes high-cost, high-likelihood capital events so homeowners can sequence budget and action timing.',
+      }}
+      rail={(
+        <div className="space-y-3">
+          <HomeToolsRail propertyId={propertyId} context="capital-timeline" currentToolId="capital-timeline" />
+          <MobileActionRow className="justify-between">
+            <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
+              {([5, 10] as const).map((h) => (
+                <button
+                  key={h}
+                  onClick={() => handleHorizonChange(h)}
+                  className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all ${
+                    horizonYears === h
+                      ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                      : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+                  }`}
+                >
+                  {h}yr
+                </button>
+              ))}
+            </div>
 
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Capital Timeline"
-        subtitle={`Predicted major expenses over the next ${horizonYears} years.`}
-       className="lg:hidden"/>
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} context="capital-timeline" currentToolId="capital-timeline" />
-        <MobileActionRow className="justify-between">
-          <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
-            {([5, 10] as const).map((h) => (
-              <button
-                key={h}
-                onClick={() => handleHorizonChange(h)}
-                className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all ${
-                  horizonYears === h
-                    ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
-                    : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
-                }`}
-              >
-                {h}yr
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={() => doRun(horizonYears)}
-            disabled={running}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
-          >
-            <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
-            Re-analyze
-          </button>
-        </MobileActionRow>
-      </MobileFilterSurface>
+            <button
+              onClick={() => doRun(horizonYears)}
+              disabled={running}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
+            >
+              <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
+              Re-analyze
+            </button>
+          </MobileActionRow>
+        </div>
+      )}
+    >
 
       {/* Loading */}
       {(loading || running) && !data && (
@@ -481,6 +479,6 @@ export default function CapitalTimelineClient() {
         guidanceJourneyId={guidanceJourneyId}
         actionLabel="Mark capital plan reviewed"
       />
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

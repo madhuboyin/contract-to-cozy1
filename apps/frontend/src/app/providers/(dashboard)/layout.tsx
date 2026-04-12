@@ -62,15 +62,20 @@ export default function ProviderDashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-100">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+        <div className="mx-auto max-w-7xl px-4 py-2.5 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <Link href="/providers/dashboard" className="text-base font-semibold text-slate-900 hover:text-brand-primary">
                 Contract to Cozy
               </Link>
-              <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Provider Portal</p>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">Provider Ops</p>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                  Dense Mode
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -116,7 +121,7 @@ export default function ProviderDashboardLayout({
             </div>
           </div>
 
-          <nav className="mt-3 hidden items-center gap-2 overflow-x-auto pb-1 md:flex">
+          <nav className="mt-2 hidden items-center gap-1.5 overflow-x-auto pb-1 md:flex">
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href || pathname?.startsWith(item.href + '/');
@@ -124,8 +129,8 @@ export default function ProviderDashboardLayout({
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
-                    active ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold uppercase tracking-[0.08em] transition-colors ${
+                    active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -146,8 +151,8 @@ export default function ProviderDashboardLayout({
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`inline-flex min-h-[40px] items-center gap-2 rounded-lg px-3 text-sm font-medium ${
-                      active ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-700'
+                    className={`inline-flex min-h-[40px] items-center gap-2 rounded-md px-3 text-xs font-semibold uppercase tracking-[0.08em] ${
+                      active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
                     }`}
                   >
                     <Icon className="h-4 w-4" />
@@ -160,7 +165,7 @@ export default function ProviderDashboardLayout({
         ) : null}
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">{children}</main>
+      <main className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">{children}</main>
     </div>
   );
 }

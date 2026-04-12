@@ -6,7 +6,6 @@
 // Optimized for status scanning, failure identification, and job re-runs.
 
 import React, { useState, useCallback } from 'react';
-import Link from 'next/link';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -20,28 +19,10 @@ import {
 import { useAuth } from '@/lib/auth/AuthContext';
 import { DashboardShell } from '@/components/DashboardShell';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
 import { useWorkerJobs, useTriggerWorkerJob } from '@/hooks/useAdminWorkerJobs';
 import type { WorkerJobDetail, JobCategory, RecentRun } from '@/lib/api/adminWorkerJobs';
-
-// ─── Access Guard ─────────────────────────────────────────────────────────────
-
-function AccessState({ title, description }: { title: string; description: string }) {
-  return (
-    <DashboardShell className="py-10">
-      <Card className="rounded-[28px] border-slate-200 bg-white shadow-sm">
-        <CardContent className="space-y-3 py-12 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
-          <p className="mx-auto max-w-xl text-sm leading-6 text-slate-600">{description}</p>
-          <Button asChild variant="outline" className="rounded-full">
-            <Link href="/dashboard">Return to dashboard</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    </DashboardShell>
-  );
-}
+import { AdminAccessState, AdminConsoleShell } from '@/components/ops/AdminConsoleShell';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -416,6 +397,7 @@ function PageSkeleton() {
 
 export default function WorkerJobsPage() {
   const { user, loading } = useAuth();
+  const { toast } = useToast();
   const isAdmin = !loading && user?.role === 'ADMIN';
 
   const jobsQ = useWorkerJobs(isAdmin);
@@ -446,13 +428,13 @@ export default function WorkerJobsPage() {
 
   if (!user) {
     return (
-      <AccessState title="Sign in required" description="Please sign in to access this page." />
+      <AdminAccessState title="Sign in required" description="Please sign in to access this page." />
     );
   }
 
   if (user.role !== 'ADMIN') {
     return (
-      <AccessState
+      <AdminAccessState
         title="Admin access required"
         description="This page is restricted to platform administrators."
       />
@@ -470,7 +452,11 @@ export default function WorkerJobsPage() {
       },
       onError: (err: any) => {
         setTriggeringKey(null);
-        alert(err?.message ?? 'Failed to trigger job. Please try again.');
+        toast({
+          title: 'Unable to queue job',
+          description: err?.message ?? 'Failed to trigger job. Please try again.',
+          variant: 'destructive',
+        });
       },
     });
   }
@@ -490,64 +476,10 @@ export default function WorkerJobsPage() {
   const warning = jobs.filter((j) => getHealth(j.recentRuns) === 'warning').length;
 
   return (
-    <DashboardShell className="lg:max-w-7xl lg:px-8 lg:pb-10">
-      {/* Back link */}
-      <div className="hidden lg:block mb-2">
-        <Link
-          href="/dashboard"
-          className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
-        >
-          ← Dashboard
-        </Link>
-      </div>
-
-      {/* Page header */}
-      <div className="flex items-center justify-between gap-4 mb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <Cpu className="h-4 w-4 text-slate-400" />
-            <h1 className="text-base font-semibold tracking-tight text-slate-900">
-              Worker Jobs
-            </h1>
-            <Badge
-              variant="outline"
-              className="rounded px-1.5 py-0 text-[10px] font-semibold border-slate-200 text-slate-500"
-            >
-              Admin
-            </Badge>
-            {/* Health summary */}
-            {!jobsQ.isLoading && jobs.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                {failing > 0 && (
-                  <span className="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600">
-                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                    {failing} failing
-                  </span>
-                )}
-                {warning > 0 && (
-                  <span className="flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                    {warning} warning
-                  </span>
-                )}
-                {failing === 0 && warning === 0 && (
-                  <span className="flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                    All healthy
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          <p className="mt-0.5 text-[11px] text-slate-400">
-            {jobs.length} jobs · {jobs.filter((j) => j.triggerSupported).length} triggerable
-            {lastRefreshed && (
-              <span className="ml-3 text-slate-400">
-                Last refreshed: {fmtRefreshedAt(lastRefreshed)}
-              </span>
-            )}
-          </p>
-        </div>
+    <AdminConsoleShell
+      title="Worker Jobs"
+      subtitle="Monitor queue health, identify failures quickly, and trigger supported jobs with minimal navigation friction."
+      actions={
         <Button
           variant="outline"
           size="sm"
@@ -555,12 +487,42 @@ export default function WorkerJobsPage() {
           onClick={handleRefresh}
           disabled={jobsQ.isFetching}
         >
-          <RefreshCw
-            className={`mr-1.5 h-3 w-3 ${jobsQ.isFetching ? 'animate-spin' : ''}`}
-          />
+          <RefreshCw className={`mr-1.5 h-3 w-3 ${jobsQ.isFetching ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
-      </div>
+      }
+      chips={
+        <>
+          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+            <Cpu className="h-3 w-3" />
+            {jobs.length} jobs
+          </span>
+          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+            {jobs.filter((j) => j.triggerSupported).length} triggerable
+          </span>
+          {failing > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-600">
+              {failing} failing
+            </span>
+          ) : null}
+          {warning > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600">
+              {warning} warning
+            </span>
+          ) : null}
+          {failing === 0 && warning === 0 ? (
+            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              All healthy
+            </span>
+          ) : null}
+          {lastRefreshed ? (
+            <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+              Refreshed {fmtRefreshedAt(lastRefreshed)}
+            </span>
+          ) : null}
+        </>
+      }
+    >
 
       {/* Error */}
       {jobsQ.isError && (
@@ -595,6 +557,6 @@ export default function WorkerJobsPage() {
           Cron jobs run on schedule via node-cron. Queue stats and run history available for BullMQ-backed jobs only. Run Job available for recall jobs only.
         </p>
       )}
-    </DashboardShell>
+    </AdminConsoleShell>
   );
 }

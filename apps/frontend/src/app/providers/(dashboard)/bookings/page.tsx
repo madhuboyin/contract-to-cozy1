@@ -17,6 +17,7 @@ import {
   ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { useToast } from '@/components/ui/use-toast';
 
 type BookingStatus = 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
@@ -48,6 +49,7 @@ function mapStatusTone(status: BookingStatus): 'good' | 'info' | 'needsAction' |
 }
 
 export default function ProviderBookingsPage() {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<(typeof TAB_META)[number]['key']>('pending');
   const [bookings] = useState<Booking[]>([
     {
@@ -118,21 +120,32 @@ export default function ProviderBookingsPage() {
   };
 
   const handleConfirm = (bookingId: string) => {
-    alert(`Confirming booking ${bookingId}`);
+    toast({
+      title: 'Booking accepted',
+      description: `Booking ${bookingId} has been moved to your confirmed queue.`,
+    });
   };
 
   const handleCancel = (bookingId: string) => {
-    if (confirm('Are you sure you want to cancel this booking?')) {
-      alert(`Cancelling booking ${bookingId}`);
-    }
+    toast({
+      title: 'Booking cancelled',
+      description: `Booking ${bookingId} has been cancelled.`,
+      variant: 'destructive',
+    });
   };
 
   const handleStart = (bookingId: string) => {
-    alert(`Starting job ${bookingId}`);
+    toast({
+      title: 'Job started',
+      description: `Booking ${bookingId} is now in progress.`,
+    });
   };
 
   const handleComplete = (bookingId: string) => {
-    alert(`Completing job ${bookingId}`);
+    toast({
+      title: 'Job completed',
+      description: `Booking ${bookingId} has been marked complete.`,
+    });
   };
 
   return (

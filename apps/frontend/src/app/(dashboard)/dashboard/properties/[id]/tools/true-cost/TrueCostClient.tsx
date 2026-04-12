@@ -2,18 +2,11 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { getTrueCostOwnership, TrueCostOwnershipDTO } from './trueCostApi';
-import { Button } from '@/components/ui/button';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 // Use the upgraded chart you already shipped (legend + tooltip)
 import MultiLineChart from '../cost-growth/MultiLineChart';
@@ -76,23 +69,20 @@ export default function TrueCostClient() {
   }, [data]);
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="True Cost of Home Ownership"
-        subtitle="A 5-year reality check including taxes, insurance, maintenance, and utilities."
-       className="lg:hidden"/>
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} context="true-cost" currentToolId="true-cost" />
-      </MobileFilterSurface>
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home Tool"
+      title="True Cost of Home Ownership"
+      subtitle="A 5-year reality check including taxes, insurance, maintenance, and utilities."
+      trust={{
+        confidenceLabel: 'Medium, based on localized tax, insurance, and maintenance assumptions',
+        freshnessLabel: data?.meta?.generatedAt ? 'Updated from latest projection run' : 'Run analysis to generate latest view',
+        sourceLabel: 'CtC cost model + property profile + localized trend assumptions',
+        rationale: 'Bundles recurring and structural cost drivers into one ownership view to reduce hidden-spend blind spots.',
+      }}
+      rail={<HomeToolsRail propertyId={propertyId} context="true-cost" currentToolId="true-cost" />}
+    >
 
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
@@ -196,6 +186,6 @@ export default function TrueCostClient() {
         actionLabel="Mark cost review complete"
         producedData={guidanceSignalIntentFamily ? { signalIntentFamily: guidanceSignalIntentFamily } : undefined}
       />
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

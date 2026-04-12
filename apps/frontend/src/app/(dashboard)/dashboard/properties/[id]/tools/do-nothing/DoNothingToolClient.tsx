@@ -1,18 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
 import { Button } from '@/components/ui/button';
 import ToolExplainerSection, { openToolExplainer } from '@/components/tool-explainer/ToolExplainerSection';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 export default function DoNothingToolClient() {
   const params = useParams<{ id: string }>();
@@ -20,39 +14,39 @@ export default function DoNothingToolClient() {
   const searchParams = useSearchParams();
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const backHref = guidanceJourneyId
+    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
+    : `/dashboard/properties/${propertyId}`;
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Do-Nothing Simulator"
-        subtitle="See risk and cost impact if you delay action for 6, 12, 24, or 36 months."
-        action={
-          <Button
-            variant="outline"
-            className="min-h-[44px] lg:hidden"
-            onClick={() =>
-              openToolExplainer({
-                id: 'how-it-works',
-                toolKey: 'doNothingSimulator',
-              })
-            }
-          >
-            Learn how it works
-          </Button>
-        }
-      />
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} />
-      </MobileFilterSurface>
+    <ToolWorkspaceTemplate
+      backHref={backHref}
+      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
+      eyebrow="Home Tool"
+      title="Do-Nothing Simulator"
+      subtitle="See risk and cost impact if you delay action for 6, 12, 24, or 36 months."
+      trust={{
+        confidenceLabel: 'Medium, scenario-based cost and risk projections',
+        freshnessLabel: 'Updates when property risk or maintenance context changes',
+        sourceLabel: 'CtC delay-impact model + property system context + risk signals',
+        rationale: 'Shows likely cost escalation and risk compounding when recommended actions are deferred.',
+      }}
+      rail={<HomeToolsRail propertyId={propertyId} />}
+      introAction={
+        <Button
+          variant="outline"
+          className="min-h-[44px] lg:hidden"
+          onClick={() =>
+            openToolExplainer({
+              id: 'how-it-works',
+              toolKey: 'doNothingSimulator',
+            })
+          }
+        >
+          Learn how it works
+        </Button>
+      }
+    >
 
       <ToolExplainerSection toolKey="doNothingSimulator" id="how-it-works" />
 
@@ -64,6 +58,6 @@ export default function DoNothingToolClient() {
         guidanceJourneyId={guidanceJourneyId}
         actionLabel="Mark delay cost reviewed"
       />
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

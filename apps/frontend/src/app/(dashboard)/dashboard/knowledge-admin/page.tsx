@@ -17,28 +17,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getKnowledgeAdminArticles } from '@/lib/knowledge/adminApi';
+import { AdminAccessState, AdminConsoleShell } from '@/components/ops/AdminConsoleShell';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString();
-}
-
-function AccessState({ title, description }: { title: string; description: string }) {
-  return (
-    <DashboardShell className="py-10">
-      <Card className="rounded-[28px] border-slate-200 bg-white shadow-sm">
-        <CardContent className="space-y-3 py-12 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
-          <p className="mx-auto max-w-xl text-sm leading-6 text-slate-600">{description}</p>
-          <Button asChild variant="outline" className="rounded-full">
-            <Link href="/dashboard">Return to dashboard</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    </DashboardShell>
-  );
 }
 
 export default function KnowledgeAdminPage() {
@@ -64,41 +49,39 @@ export default function KnowledgeAdminPage() {
   }
 
   if (!user) {
-    return <AccessState title="Sign in required" description="This internal Knowledge Hub admin view requires authentication." />;
+    return <AdminAccessState title="Sign in required" description="This internal Knowledge Hub admin view requires authentication." />;
   }
 
   if (user.role !== 'ADMIN') {
-    return <AccessState title="Admin access required" description="Only CtC admins can manage Knowledge Hub articles." />;
+    return <AdminAccessState title="Admin access required" description="Only CtC admins can manage Knowledge Hub articles." />;
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_30%,#f8fafc_100%)]">
-      <DashboardShell className="space-y-8 py-8 md:py-10">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-900">
-                Knowledge Admin
-              </Badge>
-              <Badge variant="outline" className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
-                Internal
-              </Badge>
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Knowledge Hub Editor</h1>
-            <p className="max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-              Create, publish, and update Knowledge Hub articles with categories, tags, sections, tools, and CTAs.
-            </p>
-          </div>
+    <AdminConsoleShell
+      title="Knowledge Hub Editor"
+      subtitle="Create, publish, and update homeowner knowledge articles with clear taxonomy and operational visibility."
+      actions={
+        <Button asChild className="rounded-full">
+          <Link href="/dashboard/knowledge-admin/new">
+            <Plus className="mr-2 h-4 w-4" />
+            New article
+          </Link>
+        </Button>
+      }
+      chips={
+        <>
+          <Badge className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]">Knowledge Admin</Badge>
+          <Badge variant="outline" className="rounded border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+            Internal
+          </Badge>
+          <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+            {articles.length} articles
+          </span>
+        </>
+      }
+    >
 
-          <Button asChild className="rounded-full">
-            <Link href="/dashboard/knowledge-admin/new">
-              <Plus className="mr-2 h-4 w-4" />
-              New article
-            </Link>
-          </Button>
-        </div>
-
-        <Card className="rounded-[28px] border-slate-200/80 bg-white shadow-sm">
+        <Card className="rounded-2xl border-slate-200/80 bg-white shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl text-slate-950">
               <BookOpenText className="h-5 w-5 text-slate-500" />
@@ -181,7 +164,6 @@ export default function KnowledgeAdminPage() {
             )}
           </CardContent>
         </Card>
-      </DashboardShell>
-    </div>
+    </AdminConsoleShell>
   );
 }

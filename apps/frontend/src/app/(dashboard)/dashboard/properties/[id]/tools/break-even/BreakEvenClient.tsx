@@ -4,15 +4,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 
 import HomeToolsRail from '../../components/HomeToolsRail';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import { Button } from '@/components/ui/button';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
 
 import MultiLineChart from '../insurance-trend/MultiLineChart';
 import { getBreakEven, BreakEvenDTO } from './breakEvenApi';
@@ -116,23 +111,20 @@ export default function BreakEvenClient() {
       : 'border-rose-200/70 bg-gradient-to-br from-rose-50/85 via-white/75 to-amber-50/65 text-rose-800';
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Break-Even Ownership Year"
-        subtitle="See when appreciation is projected to outweigh cumulative ownership costs."
-       className="lg:hidden"/>
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} context="break-even" currentToolId="break-even" />
-      </MobileFilterSurface>
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home Tool"
+      title="Break-Even Ownership Year"
+      subtitle="See when appreciation is projected to outweigh cumulative ownership costs."
+      trust={{
+        confidenceLabel: data?.meta?.confidence ? `${data.meta.confidence.toLowerCase()} projection confidence` : 'Model confidence pending',
+        freshnessLabel: 'Refreshes when assumption sets or horizon settings change',
+        sourceLabel: 'CtC ownership model + appreciation scenarios + expense projections',
+        rationale: 'Balances cumulative costs and projected appreciation so ownership timing decisions stay explicit.',
+      }}
+      rail={<HomeToolsRail propertyId={propertyId} context="break-even" currentToolId="break-even" />}
+    >
 
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -297,6 +289,6 @@ export default function BreakEvenClient() {
           ) : null}
         </div>
       </div>
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }
