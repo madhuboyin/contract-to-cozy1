@@ -18,8 +18,6 @@ import {
   ActionPriorityRow,
   CompactEntityRow,
   MobilePageContainer,
-  MobilePageIntro,
-  ResultHeroCard,
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
@@ -48,6 +46,7 @@ import { getGuidanceItemVisual } from '@/components/guidance/guidanceItemVisual'
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import GuidedJourneyTemplate from './components/GuidedJourneyTemplate';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -639,7 +638,6 @@ export default function GuidanceOverviewClient() {
   });
 
   // ---- Derived ----
-  const immediateCount = issueFilteredActions.filter((a) => a.priorityGroup === 'IMMEDIATE').length;
   const focusLabel =
     selectedAssetOption?.assetName ??
     (selectedServiceKey
@@ -665,6 +663,12 @@ export default function GuidanceOverviewClient() {
       : SUGGESTED_ISSUE_TYPES_ITEM;
   }, [scopeCategory, selectedServiceKey, selectedAssetOption, selectedAssetName]);
   const [customIssue, setCustomIssue] = React.useState('');
+  const [showAllIssueTypes, setShowAllIssueTypes] = React.useState(false);
+  const [showAllJourneySteps, setShowAllJourneySteps] = React.useState(false);
+
+  React.useEffect(() => {
+    setShowAllIssueTypes(false);
+  }, [selectedInventoryItemId, selectedHomeAssetId, selectedServiceKey, selectedAssetName, scopeCategory]);
 
   // ---- Phase 6c: pinned journey mode ----
   const pinnedAction = React.useMemo(
@@ -681,6 +685,37 @@ export default function GuidanceOverviewClient() {
     (s) => s.status === 'IN_PROGRESS' || s.status === 'PENDING'
   );
   const activeHasScopedMatch = isInPinnedMode ? Boolean(activePrimaryAction) : hasScopedMatch;
+  const activeStep = activeStepIndex >= 0 ? activeJourneySteps[activeStepIndex] : null;
+  const safeStepIndex = Math.max(activeStepIndex, 0);
+  const visibleIssueTypes = showAllIssueTypes ? suggestedIssueTypes : suggestedIssueTypes.slice(0, 5);
+  const shouldShowIssueTypeToggle = suggestedIssueTypes.length > 5;
+  const journeyPreviewCount = Math.min(
+    activeJourneySteps.length,
+    Math.max(2, safeStepIndex + 2)
+  );
+  const visibleJourneySteps = showAllJourneySteps
+    ? activeJourneySteps
+    : activeJourneySteps.slice(0, journeyPreviewCount);
+  const confidenceValue = activePrimaryAction?.confidenceScore ?? activePrimaryAction?.journey.confidenceScore ?? null;
+  const confidenceLabel = activePrimaryAction?.confidenceLabel ?? activePrimaryAction?.journey.confidenceLabel ?? null;
+  const sourceLabel = activePrimaryAction?.journey.primarySignal?.sourceToolKey
+    ? formatEnumLabel(activePrimaryAction.journey.primarySignal.sourceToolKey)
+    : 'Guidance signals';
+  const skipConsequence = activePrimaryAction?.explanation?.risk
+    ?? (activePrimaryAction?.costOfDelay
+      ? `Skipping now could add about ${formatCurrency(activePrimaryAction.costOfDelay)} in avoidable cost.`
+      : 'Skipping this step can reduce confidence and delay resolution.');
+  const phaseAProgressValue = scopeCategory
+    ? hasIssueSelected
+      ? '3/3 complete'
+      : hasTargetSelected
+        ? '2/3 complete'
+        : '1/3 complete'
+    : '0/3 complete';
+
+  React.useEffect(() => {
+    setShowAllJourneySteps(false);
+  }, [activePrimaryAction?.journeyId]);
 
   // ---- Render helpers ----
   // Resolve the step href via the shared helper that substitutes :propertyId, :itemId, etc.
@@ -888,72 +923,76 @@ export default function GuidanceOverviewClient() {
           </Link>
         </Button>
 
-        <MobilePageIntro
-          eyebrow="Guidance Engine"
+        <GuidedJourneyTemplate
+          phase="A"
           title="Resolve Home Issues Step by Step"
           subtitle="Choose what you need help with to launch a guided resolution path."
+          progressLabel="Context"
+          progressValue={phaseAProgressValue}
+          main={
+            <>
+              <ScenarioInputCard
+                title="What do you need guidance for?"
+                subtitle="Select a category to get started."
+              >
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={() => navigateToScopeCategory('ITEM')}
+                    className="flex flex-col items-start gap-2 rounded-xl border-2 border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-left hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5 transition-colors"
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100">
+                      <Box className="h-5 w-5 text-sky-700" />
+                    </div>
+                    <p className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                      Get guidance for a home item
+                    </p>
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      HVAC, water heater, appliances, roof, and other home assets
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => navigateToScopeCategory('SERVICE')}
+                    className="flex flex-col items-start gap-2 rounded-xl border-2 border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-left hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5 transition-colors"
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100">
+                      <Sparkles className="h-5 w-5 text-emerald-700" />
+                    </div>
+                    <p className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                      Find a service
+                    </p>
+                    <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                      Warranty, insurance, inspection, cleaning, and other home services
+                    </p>
+                  </button>
+                </div>
+              </ScenarioInputCard>
+
+              <ScenarioInputCard
+                title="How Guidance Engine Works"
+                subtitle="A deterministic path from issue detection to resolution."
+              >
+                <div className="space-y-2">
+                  <CompactEntityRow
+                    title="1. Choose a scope"
+                    subtitle="Pick a home item or service category to focus on."
+                    leading={<ShieldCheck className="h-4 w-4 text-emerald-600" />}
+                  />
+                  <CompactEntityRow
+                    title="2. Describe the issue"
+                    subtitle="Tell us what's wrong — we route you to the right tools."
+                    leading={<Wrench className="h-4 w-4 text-sky-600" />}
+                  />
+                  <CompactEntityRow
+                    title="3. Follow guided steps"
+                    subtitle="Coverage, repair vs replace, pricing, negotiation, and booking."
+                    leading={<CircleAlert className="h-4 w-4 text-amber-600" />}
+                  />
+                </div>
+              </ScenarioInputCard>
+            </>
+          }
         />
-
-        {/* 4.1: Scope Category Selector */}
-        <ScenarioInputCard
-          title="What do you need guidance for?"
-          subtitle="Select a category to get started."
-        >
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <button
-              onClick={() => navigateToScopeCategory('ITEM')}
-              className="flex flex-col items-start gap-2 rounded-xl border-2 border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-left hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5 transition-colors"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100">
-                <Box className="h-5 w-5 text-sky-700" />
-              </div>
-              <p className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-                Get guidance for a home item
-              </p>
-              <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                HVAC, water heater, appliances, roof, and other home assets
-              </p>
-            </button>
-
-            <button
-              onClick={() => navigateToScopeCategory('SERVICE')}
-              className="flex flex-col items-start gap-2 rounded-xl border-2 border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-left hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5 transition-colors"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100">
-                <Sparkles className="h-5 w-5 text-emerald-700" />
-              </div>
-              <p className="text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-                Find a service
-              </p>
-              <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-                Warranty, insurance, inspection, cleaning, and other home services
-              </p>
-            </button>
-          </div>
-        </ScenarioInputCard>
-
-        <ScenarioInputCard
-          title="How Guidance Engine Works"
-          subtitle="A deterministic path from issue detection to resolution."
-        >
-          <div className="space-y-2">
-            <CompactEntityRow
-              title="1. Choose a scope"
-              subtitle="Pick a home item or service category to focus on."
-              leading={<ShieldCheck className="h-4 w-4 text-emerald-600" />}
-            />
-            <CompactEntityRow
-              title="2. Describe the issue"
-              subtitle="Tell us what's wrong — we route you to the right tools."
-              leading={<Wrench className="h-4 w-4 text-sky-600" />}
-            />
-            <CompactEntityRow
-              title="3. Follow guided steps"
-              subtitle="Coverage, repair vs replace, pricing, negotiation, and booking."
-              leading={<CircleAlert className="h-4 w-4 text-amber-600" />}
-            />
-          </div>
-        </ScenarioInputCard>
       </MobilePageContainer>
     );
   }
@@ -971,146 +1010,149 @@ export default function GuidanceOverviewClient() {
           </Link>
         </Button>
 
-        <MobilePageIntro
-          eyebrow="Guidance Engine · Home Item"
+        <GuidedJourneyTemplate
+          phase="A"
           title="Which item needs attention?"
           subtitle="Pick from your inventory to start the guided resolution path."
-        />
-
-        <ScenarioInputCard title="Select a home item" subtitle="All items from your inventory are shown below.">
-          {/* FRD-FR-01: Category filter tabs — only render tabs whose category has ≥1 item */}
-          {allAssetScopeOptions.length > 0 && (() => {
-            const presentCategories = new Set(allAssetScopeOptions.map((o) => o.category));
-            const visibleTabs = INVENTORY_CATEGORY_TABS.filter(
-              (t) => t.key === 'ALL' || presentCategories.has(t.key)
-            );
-            if (visibleTabs.length <= 2) return null; // only "All" + 1 category → no tabs needed
-            return (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {visibleTabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => {
-                      setSelectedCategory(tab.key);
-                      setAssetSearch('');
-                    }}
-                    className={[
-                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                      selectedCategory === tab.key
-                        ? 'border-[hsl(var(--mobile-brand-strong))] bg-[hsl(var(--mobile-brand-strong))] text-white'
-                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))] hover:border-[hsl(var(--mobile-brand-strong))]/60 hover:text-[hsl(var(--mobile-text-primary))]',
-                    ].join(' ')}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            );
-          })()}
-          <input
-            type="text"
-            placeholder={selectedCategory === 'ALL' ? 'Search home items...' : `Search ${INVENTORY_CATEGORY_TABS.find(t => t.key === selectedCategory)?.label ?? 'items'}...`}
-            value={assetSearch}
-            onChange={(e) => setAssetSearch(e.target.value)}
-            className="mb-3 w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm placeholder:text-[hsl(var(--mobile-text-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
-          />
-
-          {inventoryQuery.isLoading ? (
-            // Skeleton rows while inventory loads
-            <div className="space-y-2">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3.5">
-                  <span className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-slate-100" />
-                  <div className="flex-1 space-y-1.5">
-                    <span className="block h-4 w-32 animate-pulse rounded bg-slate-100" />
-                    <span className="block h-3 w-20 animate-pulse rounded bg-slate-100" />
-                  </div>
-                  <span className="h-4 w-4 animate-pulse rounded bg-slate-100" />
-                </div>
-              ))}
-            </div>
-          ) : filteredAssetOptions.length === 0 ? (
-            <div className="space-y-2">
-              <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                {assetSearch
-                  ? 'No items match your search.'
-                  : selectedCategory !== 'ALL'
-                  ? `No ${INVENTORY_CATEGORY_TABS.find(t => t.key === selectedCategory)?.label ?? 'items'} found in your inventory.`
-                  : 'No home items found. Add items to your inventory to get guidance.'}
-              </p>
-              {!assetSearch && selectedCategory === 'ALL' && (
-                <ActionPriorityRow
-                  primaryAction={
-                    <Button asChild className="min-h-[42px] w-full">
-                      <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open Inventory</Link>
-                    </Button>
-                  }
-                />
-              )}
-              {!assetSearch && selectedCategory !== 'ALL' && (
-                <button
-                  onClick={() => setSelectedCategory('ALL')}
-                  className="text-sm text-[hsl(var(--mobile-brand-strong))] underline-offset-2 hover:underline"
-                >
-                  Show all categories
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {filteredAssetOptions.map((option) => {
-                const isSelected = selectedDrawerOption?.key === option.key;
-                const { icon: Icon, bg, color, selectedBg, selectedColor } = getGuidanceItemVisual({
-                  name: option.assetName,
-                  category: option.category,
-                });
-                return (
-                  <button
-                    key={option.key}
-                    onClick={() => setSelectedDrawerOption(option)}
-                    className={cn(
-                      'group w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3.5',
-                      'transition-all active:scale-[0.99]',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1',
-                      isSelected
-                        ? 'border-sky-200 bg-sky-50 shadow-sm'
-                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm'
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
-                        isSelected
-                          ? cn(selectedBg, selectedColor)
-                          : cn(bg, color)
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className={cn(
-                        'truncate text-sm font-semibold',
-                        isSelected ? 'text-sky-900' : 'text-slate-900'
-                      )}>
-                        {option.assetName}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {formatEnumLabel(option.category)}
-                        {option.outOfPocketCost > 0
-                          ? ` · ~${formatCurrency(option.outOfPocketCost)}`
-                          : ''}
-                      </p>
-                    </div>
-                    <ChevronRight className={cn(
-                      'h-4 w-4 shrink-0 transition-colors',
-                      isSelected ? 'text-sky-500' : 'text-slate-400 group-hover:text-slate-600'
-                    )} />
-                  </button>
+          progressLabel="Context"
+          progressValue={phaseAProgressValue}
+          main={
+            <ScenarioInputCard title="Select a home item" subtitle="All items from your inventory are shown below.">
+              {/* FRD-FR-01: Category filter tabs — only render tabs whose category has ≥1 item */}
+              {allAssetScopeOptions.length > 0 && (() => {
+                const presentCategories = new Set(allAssetScopeOptions.map((o) => o.category));
+                const visibleTabs = INVENTORY_CATEGORY_TABS.filter(
+                  (t) => t.key === 'ALL' || presentCategories.has(t.key)
                 );
-              })}
-            </div>
-          )}
-        </ScenarioInputCard>
+                if (visibleTabs.length <= 2) return null; // only "All" + 1 category → no tabs needed
+                return (
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {visibleTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => {
+                          setSelectedCategory(tab.key);
+                          setAssetSearch('');
+                        }}
+                        className={[
+                          'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                          selectedCategory === tab.key
+                            ? 'border-[hsl(var(--mobile-brand-strong))] bg-[hsl(var(--mobile-brand-strong))] text-white'
+                            : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-secondary))] hover:border-[hsl(var(--mobile-brand-strong))]/60 hover:text-[hsl(var(--mobile-text-primary))]',
+                        ].join(' ')}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+              <input
+                type="text"
+                placeholder={selectedCategory === 'ALL' ? 'Search home items...' : `Search ${INVENTORY_CATEGORY_TABS.find(t => t.key === selectedCategory)?.label ?? 'items'}...`}
+                value={assetSearch}
+                onChange={(e) => setAssetSearch(e.target.value)}
+                className="mb-3 w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm placeholder:text-[hsl(var(--mobile-text-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
+              />
+
+              {inventoryQuery.isLoading ? (
+                // Skeleton rows while inventory loads
+                <div className="space-y-2">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3.5">
+                      <span className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-slate-100" />
+                      <div className="flex-1 space-y-1.5">
+                        <span className="block h-4 w-32 animate-pulse rounded bg-slate-100" />
+                        <span className="block h-3 w-20 animate-pulse rounded bg-slate-100" />
+                      </div>
+                      <span className="h-4 w-4 animate-pulse rounded bg-slate-100" />
+                    </div>
+                  ))}
+                </div>
+              ) : filteredAssetOptions.length === 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                    {assetSearch
+                      ? 'No items match your search.'
+                      : selectedCategory !== 'ALL'
+                      ? `No ${INVENTORY_CATEGORY_TABS.find(t => t.key === selectedCategory)?.label ?? 'items'} found in your inventory.`
+                      : 'No home items found. Add items to your inventory to get guidance.'}
+                  </p>
+                  {!assetSearch && selectedCategory === 'ALL' && (
+                    <ActionPriorityRow
+                      primaryAction={
+                        <Button asChild className="min-h-[42px] w-full">
+                          <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open Inventory</Link>
+                        </Button>
+                      }
+                    />
+                  )}
+                  {!assetSearch && selectedCategory !== 'ALL' && (
+                    <button
+                      onClick={() => setSelectedCategory('ALL')}
+                      className="text-sm text-[hsl(var(--mobile-brand-strong))] underline-offset-2 hover:underline"
+                    >
+                      Show all categories
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {filteredAssetOptions.map((option) => {
+                    const isSelected = selectedDrawerOption?.key === option.key;
+                    const { icon: Icon, bg, color, selectedBg, selectedColor } = getGuidanceItemVisual({
+                      name: option.assetName,
+                      category: option.category,
+                    });
+                    return (
+                      <button
+                        key={option.key}
+                        onClick={() => setSelectedDrawerOption(option)}
+                        className={cn(
+                          'group w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3.5',
+                          'transition-all active:scale-[0.99]',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1',
+                          isSelected
+                            ? 'border-sky-200 bg-sky-50 shadow-sm'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm'
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+                            isSelected
+                              ? cn(selectedBg, selectedColor)
+                              : cn(bg, color)
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className={cn(
+                            'truncate text-sm font-semibold',
+                            isSelected ? 'text-sky-900' : 'text-slate-900'
+                          )}>
+                            {option.assetName}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {formatEnumLabel(option.category)}
+                            {option.outOfPocketCost > 0
+                              ? ` · ~${formatCurrency(option.outOfPocketCost)}`
+                              : ''}
+                          </p>
+                        </div>
+                        <ChevronRight className={cn(
+                          'h-4 w-4 shrink-0 transition-colors',
+                          isSelected ? 'text-sky-500' : 'text-slate-400 group-hover:text-slate-600'
+                        )} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </ScenarioInputCard>
+          }
+        />
 
         {/* Item detail drawer — opens when a row is tapped */}
         <GuidanceInventoryDrawer
@@ -1141,31 +1183,34 @@ export default function GuidanceOverviewClient() {
           </Link>
         </Button>
 
-        <MobilePageIntro
-          eyebrow="Guidance Engine · Service"
+        <GuidedJourneyTemplate
+          phase="A"
           title="Which service do you need?"
           subtitle="Select a service category to start the guided path."
-        />
-
-        <ScenarioInputCard title="Select a service" subtitle="Choose from the available service categories.">
-          <div className="space-y-3">
-            {SERVICE_CATEGORIES.map((svc) => (
-              <div key={svc.key} className="space-y-2">
-                <CompactEntityRow title={svc.label} subtitle={svc.description} />
-                <ActionPriorityRow
-                  primaryAction={
-                    <button
-                      onClick={() => navigateToService(svc.key)}
-                      className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-                    >
-                      Get guidance: {svc.label}
-                    </button>
-                  }
-                />
+          progressLabel="Context"
+          progressValue={phaseAProgressValue}
+          main={
+            <ScenarioInputCard title="Select a service" subtitle="Choose from the available service categories.">
+              <div className="space-y-3">
+                {SERVICE_CATEGORIES.map((svc) => (
+                  <div key={svc.key} className="space-y-2">
+                    <CompactEntityRow title={svc.label} subtitle={svc.description} />
+                    <ActionPriorityRow
+                      primaryAction={
+                        <button
+                          onClick={() => navigateToService(svc.key)}
+                          className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                        >
+                          Get guidance: {svc.label}
+                        </button>
+                      }
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </ScenarioInputCard>
+            </ScenarioInputCard>
+          }
+        />
       </MobilePageContainer>
     );
   }
@@ -1189,49 +1234,63 @@ export default function GuidanceOverviewClient() {
           {scopeCategory === 'SERVICE' ? 'Change service' : 'Change item'}
         </button>
 
-        <MobilePageIntro
-          eyebrow={`Guidance Engine · ${scopeCategory === 'SERVICE' ? 'Service' : 'Home Item'}`}
+        <GuidedJourneyTemplate
+          phase="A"
           title={`What's the issue with ${targetLabel ?? 'this item'}?`}
-          subtitle="Select the issue that best describes the problem, or enter your own."
+          subtitle="Select the issue that best describes the problem, then execute the journey."
+          progressLabel="Context"
+          progressValue={phaseAProgressValue}
+          main={
+            <ScenarioInputCard
+              title="Select the issue"
+              subtitle="We will route you to the best resolution steps."
+            >
+              <div className="space-y-2">
+                {visibleIssueTypes.map((issue) => (
+                  <button
+                    key={issue.key}
+                    onClick={() => navigateToIssue(issue.key)}
+                    className="flex w-full items-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 text-left text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5 transition-colors"
+                  >
+                    {issue.label}
+                  </button>
+                ))}
+                {shouldShowIssueTypeToggle ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllIssueTypes((prev) => !prev)}
+                    className="w-full rounded-xl border border-dashed border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
+                  >
+                    {showAllIssueTypes
+                      ? 'Show fewer issue options'
+                      : `Show ${suggestedIssueTypes.length - visibleIssueTypes.length} more issue options`}
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-medium text-[hsl(var(--mobile-text-muted))]">
+                  Or describe it yourself
+                </p>
+                <input
+                  type="text"
+                  placeholder={scopeCategory === 'SERVICE' ? 'e.g. need urgent scheduling, looking for best price...' : 'e.g. making loud noises, keeps tripping breaker...'}
+                  value={customIssue}
+                  onChange={(e) => setCustomIssue(e.target.value)}
+                  className="w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm placeholder:text-[hsl(var(--mobile-text-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
+                />
+                {customIssue.trim() && (
+                  <Button
+                    className="min-h-[42px] w-full"
+                    onClick={() => navigateToIssue(customIssue.trim())}
+                  >
+                    Continue with: {customIssue.trim()}
+                  </Button>
+                )}
+              </div>
+            </ScenarioInputCard>
+          }
         />
-
-        <ScenarioInputCard
-          title="Select the issue"
-          subtitle="We will route you to the best resolution steps."
-        >
-          <div className="space-y-2">
-            {suggestedIssueTypes.map((issue) => (
-              <button
-                key={issue.key}
-                onClick={() => navigateToIssue(issue.key)}
-                className="flex w-full items-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 text-left text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5 transition-colors"
-              >
-                {issue.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <p className="text-xs font-medium text-[hsl(var(--mobile-text-muted))]">
-              Or describe it yourself
-            </p>
-            <input
-              type="text"
-              placeholder={scopeCategory === 'SERVICE' ? 'e.g. need urgent scheduling, looking for best price...' : 'e.g. making loud noises, keeps tripping breaker...'}
-              value={customIssue}
-              onChange={(e) => setCustomIssue(e.target.value)}
-              className="w-full rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2 text-sm placeholder:text-[hsl(var(--mobile-text-muted))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--mobile-brand-strong))]/30"
-            />
-            {customIssue.trim() && (
-              <Button
-                className="min-h-[42px] w-full"
-                onClick={() => navigateToIssue(customIssue.trim())}
-              >
-                Continue with: {customIssue.trim()}
-              </Button>
-            )}
-          </div>
-        </ScenarioInputCard>
       </MobilePageContainer>
     );
   }
@@ -1253,6 +1312,47 @@ export default function GuidanceOverviewClient() {
     (isInPinnedMode ? (activePrimaryAction?.journey.issueType ?? '') : '') ??
     '';
 
+  const phaseBProgressValue =
+    activeJourneySteps.length > 0
+      ? `${Math.max(safeStepIndex, 0) + 1}/${activeJourneySteps.length}`
+      : activeHasScopedMatch
+        ? 'Journey active'
+        : 'Ready to start';
+  const stickyPrimaryAction = !activeHasScopedMatch ? (
+    <Button
+      className="min-h-[44px] w-full"
+      onClick={() => startJourneyMutation.mutate()}
+      disabled={startJourneyMutation.isPending}
+    >
+      {startJourneyMutation.isPending ? 'Creating journey…' : 'Start guided journey'}
+    </Button>
+  ) : activeStep ? (
+    renderStepCta(activeStep, true)
+  ) : null;
+
+  const trustPanel = (
+    <ScenarioInputCard title="Step Trust Panel" subtitle="Why this step is recommended now.">
+      <div className="space-y-3">
+        <CompactEntityRow
+          title="Why this step"
+          subtitle={
+            activePrimaryAction?.explanation?.why
+              ?? activePrimaryAction?.subtitle
+              ?? 'This step removes execution risk and keeps the journey moving.'
+          }
+        />
+        <CompactEntityRow
+          title="Source & confidence"
+          subtitle={`${sourceLabel}${confidenceLabel ? ` · ${confidenceLabel}` : ''}${confidenceValue ? ` (${Math.round(confidenceValue)}%)` : ''}`}
+        />
+        <CompactEntityRow
+          title="If you skip now"
+          subtitle={skipConsequence}
+        />
+      </div>
+    </ScenarioInputCard>
+  );
+
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
@@ -1262,273 +1362,291 @@ export default function GuidanceOverviewClient() {
         </Link>
       </Button>
 
-      <MobilePageIntro
-        eyebrow="Guidance Engine"
+      <GuidedJourneyTemplate
+        phase="B"
         title={`Resolving: ${startLabel}`}
         subtitle={issueLabelDisplay ? `Issue: ${issueLabelDisplay}` : 'Follow the guided steps below to resolve this issue end to end.'}
-      />
-
-      {/* Scope context bar with override controls */}
-      <ScenarioInputCard
-        title={`${startLabel} · ${issueLabelDisplay}`}
-        subtitle="Your guided resolution path is active."
-        actions={
-          <div className="flex gap-2">
-            {/* 4.5: Change asset control */}
-            <Button
-              variant="ghost"
-              className="min-h-[36px] flex-1 text-xs"
-              onClick={changeAsset}
-            >
-              Change {scopeCategory === 'SERVICE' ? 'service' : 'item'}
-            </Button>
-            {/* 4.5: Different issue control */}
-            <Button
-              variant="ghost"
-              className="min-h-[36px] flex-1 text-xs"
-              onClick={differentIssue}
-            >
-              Different issue
-            </Button>
-          </div>
-        }
-      >
-        <p className="text-xs text-[hsl(var(--mobile-text-muted))]">
-          {scopeCategory === 'SERVICE' ? 'Service guidance' : 'Item guidance'} ·{' '}
-          {activeHasScopedMatch ? 'Active journey found' : 'Ready to start'}
-        </p>
-      </ScenarioInputCard>
-
-      {/* Journey load states */}
-      {guidance.isLoading || (isInPinnedMode && pinnedJourneyDetail.isLoading) ? (
-        <ScenarioInputCard title="Loading guidance" subtitle="Fetching your active journeys.">
-          <p className="text-sm text-slate-600">Please wait while we prepare your next best actions.</p>
-        </ScenarioInputCard>
-      ) : guidance.isError ? (
-        <ScenarioInputCard title="Guidance unavailable" subtitle="Could not load journeys right now.">
-          <p className="text-sm text-rose-700">Try refreshing the page or contact support.</p>
-        </ScenarioInputCard>
-      ) : !activeHasScopedMatch ? (
-        // 4.3: No journey → start button
-        <ScenarioInputCard
-          title={`Start guided journey for ${startLabel}`}
-          subtitle={`Issue: ${issueLabelDisplay}`}
-          badge={<StatusChip tone="elevated">Ready to start</StatusChip>}
-        >
-          {startJourneyMutation.isSuccess ? (
-            <p className="text-sm text-emerald-700">
-              Journey created. Loading your steps…
-            </p>
-          ) : startJourneyMutation.isPending ? (
-            <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-              Creating your guided journey…
-            </p>
-          ) : (
-            <>
-              <p className="mb-3 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                No existing guidance journey was found for this item and issue. We will create a personalised step-by-step plan for you now.
-              </p>
-              {startJourneyMutation.isError && (
-                <p className="mb-2 text-sm text-rose-700">
-                  Something went wrong. Please try again.
-                </p>
-              )}
-              <Button
-                className="min-h-[44px] w-full"
-                onClick={() => startJourneyMutation.mutate()}
-              >
-                Start guided journey
-              </Button>
-            </>
-          )}
-        </ScenarioInputCard>
-      ) : (
-        <>
-          {/* Primary action card with steps from the single journey (4.4) */}
-          {activePrimaryAction && (
+        progressLabel="Journey progress"
+        progressValue={phaseBProgressValue}
+        stickyAction={stickyPrimaryAction}
+        stickyHelpText={activeHasScopedMatch ? 'Stay on the current step to keep confidence high.' : 'Start this journey to get confidence-backed next steps.'}
+        trustPanel={trustPanel}
+        main={
+          <>
+            {/* Scope context bar with override controls */}
             <ScenarioInputCard
-              title={`${focusLabel ?? resolveAssetLabel(activePrimaryAction)}`}
-              subtitle={resolvePrimarySubtitle(activePrimaryAction)}
-              badge={
-                <StatusChip tone={resolvePriorityTone(activePrimaryAction)}>
-                  {activePrimaryAction.priorityGroup.toLowerCase()}
-                </StatusChip>
+              title={`${startLabel} · ${issueLabelDisplay}`}
+              subtitle="Your guided resolution path is active."
+              actions={
+                <div className="flex gap-2">
+                  {/* 4.5: Change asset control */}
+                  <Button
+                    variant="ghost"
+                    className="min-h-[36px] flex-1 text-xs"
+                    onClick={changeAsset}
+                  >
+                    Change {scopeCategory === 'SERVICE' ? 'service' : 'item'}
+                  </Button>
+                  {/* 4.5: Different issue control */}
+                  <Button
+                    variant="ghost"
+                    className="min-h-[36px] flex-1 text-xs"
+                    onClick={differentIssue}
+                  >
+                    Different issue
+                  </Button>
+                </div>
               }
             >
-              {/* 4.5: Not relevant control */}
-              <div className="flex justify-end">
-                <button
-                  onClick={() =>
-                    dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId })
-                  }
-                  disabled={dismissMutation.isPending}
-                  className="text-xs text-[hsl(var(--mobile-text-muted))] hover:text-rose-600 disabled:opacity-50"
-                >
-                  Not relevant
-                </button>
-              </div>
-
-              {/* Progress strip */}
-              {activeJourneySteps.length > 0 && (
-                <div className="mb-2">
-                  <GuidanceJourneyStrip steps={activeJourneySteps} />
-                  <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
-                    Step {Math.max(activeStepIndex, 0) + 1} of {activeJourneySteps.length}
-                  </p>
-                </div>
-              )}
-
-              {/* Why now */}
-              <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
-                <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                  Why now
-                </p>
-                <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                  {activePrimaryAction.explanation?.why ??
-                    activePrimaryAction.subtitle ??
-                    'Following this journey now reduces cost and execution risk.'}
-                </p>
-                {activePrimaryAction.costOfDelay ? (
-                  <p className="mb-0 text-sm font-semibold text-amber-700">
-                    Potential delay cost: ~{formatCurrency(activePrimaryAction.costOfDelay)}
-                  </p>
-                ) : null}
-              </div>
-
-              {/* Active step CTA */}
-              {activeStepIndex >= 0 && activeJourneySteps[activeStepIndex] && (
-                <ActionPriorityRow
-                  primaryAction={renderStepCta(activeJourneySteps[activeStepIndex], true)}
-                />
-              )}
-
-              {/* 4.5: Skip button for active step */}
-              {activePrimaryAction.currentStep?.id && (
-                <Button
-                  variant="ghost"
-                  className="mt-1 min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
-                  disabled={skipStepMutation.isPending}
-                  onClick={() => {
-                    if (activePrimaryAction.currentStep?.id) {
-                      skipStepMutation.mutate({ stepId: activePrimaryAction.currentStep.id });
-                    }
-                  }}
-                >
-                  Skip this step
-                </Button>
-              )}
-            </ScenarioInputCard>
-          )}
-
-          {/* 4.4: Journey Steps — ordered steps of the single primary journey */}
-          <ScenarioInputCard
-            title="Journey Steps"
-            subtitle="All steps for this guided resolution path, in order."
-          >
-            {activeJourneySteps.length === 0 ? (
-              <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                Steps are being prepared for this journey.
+              <p className="text-xs text-[hsl(var(--mobile-text-muted))]">
+                {scopeCategory === 'SERVICE' ? 'Service guidance' : 'Item guidance'} ·{' '}
+                {activeHasScopedMatch ? 'Active journey found' : 'Ready to start'}
               </p>
-            ) : (
-              <div className="space-y-3">
-                {activeJourneySteps.map((step, idx) => {
-                  const isActiveStep = idx === activeStepIndex;
-                  const isFutureStep =
-                    activeStepIndex >= 0 ? idx > activeStepIndex : step.status === 'PENDING';
-                  const isCompletedStep = step.status === 'COMPLETED' || step.status === 'SKIPPED';
+            </ScenarioInputCard>
 
-                  return (
-                    <div
-                      key={step.id}
-                      className={
-                        isFutureStep && !isActiveStep
-                          ? 'opacity-50'
-                          : ''
-                      }
-                    >
-                      <CompactEntityRow
-                        title={`Step ${step.stepOrder}: ${step.label}`}
-                        subtitle={step.description ?? undefined}
-                        meta={isCompletedStep ? 'Completed' : isActiveStep ? 'Current step' : 'Upcoming'}
-                        status={
-                          <StatusChip tone={stepTone(step)}>
-                            {step.status.toLowerCase().replace('_', ' ')}
-                          </StatusChip>
-                        }
-                      />
-                      {isActiveStep && (
-                        <>
-                          <ActionPriorityRow
-                            primaryAction={renderStepCta(step, true)}
-                          />
-                          {/* 4.5: Skip per step in list */}
-                          <Button
-                            variant="ghost"
-                            className="min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
-                            disabled={skipStepMutation.isPending}
-                            onClick={() => skipStepMutation.mutate({ stepId: step.id })}
-                          >
-                            Skip this step
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </ScenarioInputCard>
-        </>
-      )}
-
-      {/* Fallback tools when no journey exists for ITEM scope */}
-      {!activeHasScopedMatch && scopeCategory === 'ITEM' && selectedAssetOption && (
-        <ScenarioInputCard
-          title="Explore related tools"
-          subtitle="While your journey is being set up, you can use these tools directly."
-        >
-          <div className="space-y-2">
-            {selectedAssetOption.inventoryItemId && (
-              <ActionPriorityRow
-                primaryAction={
-                  <Link
-                    href={appendScopeParams(
-                      `/dashboard/properties/${propertyId}/inventory/items/${selectedAssetOption.inventoryItemId}/replace-repair`,
-                      selectedAssetOption
+            {/* Journey load states */}
+            {guidance.isLoading || (isInPinnedMode && pinnedJourneyDetail.isLoading) ? (
+              <ScenarioInputCard title="Loading guidance" subtitle="Fetching your active journeys.">
+                <p className="text-sm text-slate-600">Please wait while we prepare your next best actions.</p>
+              </ScenarioInputCard>
+            ) : guidance.isError ? (
+              <ScenarioInputCard title="Guidance unavailable" subtitle="Could not load journeys right now.">
+                <p className="text-sm text-rose-700">Try refreshing the page or contact support.</p>
+              </ScenarioInputCard>
+            ) : !activeHasScopedMatch ? (
+              // 4.3: No journey → start button
+              <ScenarioInputCard
+                title={`Start guided journey for ${startLabel}`}
+                subtitle={`Issue: ${issueLabelDisplay}`}
+                badge={<StatusChip tone="elevated">Ready to start</StatusChip>}
+              >
+                {startJourneyMutation.isSuccess ? (
+                  <p className="text-sm text-emerald-700">
+                    Journey created. Loading your steps…
+                  </p>
+                ) : startJourneyMutation.isPending ? (
+                  <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                    Creating your guided journey…
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-3 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                      No existing guidance journey was found for this item and issue. We will create a personalised step-by-step plan for you now.
+                    </p>
+                    {startJourneyMutation.isError && (
+                      <p className="mb-2 text-sm text-rose-700">
+                        Something went wrong. Please try again.
+                      </p>
                     )}
-                    className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                    <Button
+                      className="min-h-[44px] w-full"
+                      onClick={() => startJourneyMutation.mutate()}
+                    >
+                      Start guided journey
+                    </Button>
+                  </>
+                )}
+              </ScenarioInputCard>
+            ) : (
+              <>
+                {/* Primary action card with steps from the single journey (4.4) */}
+                {activePrimaryAction && (
+                  <ScenarioInputCard
+                    title={`${focusLabel ?? resolveAssetLabel(activePrimaryAction)}`}
+                    subtitle={resolvePrimarySubtitle(activePrimaryAction)}
+                    badge={
+                      <StatusChip tone={resolvePriorityTone(activePrimaryAction)}>
+                        {activePrimaryAction.priorityGroup.toLowerCase()}
+                      </StatusChip>
+                    }
                   >
-                    Repair vs Replace Analysis
-                  </Link>
-                }
-              />
-            )}
-            <ActionPriorityRow
-              primaryAction={
-                <Link
-                  href={appendScopeParams(
-                    `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,
-                    selectedAssetOption
+                    {/* 4.5: Not relevant control */}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() =>
+                          dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId })
+                        }
+                        disabled={dismissMutation.isPending}
+                        className="text-xs text-[hsl(var(--mobile-text-muted))] hover:text-rose-600 disabled:opacity-50"
+                      >
+                        Not relevant
+                      </button>
+                    </div>
+
+                    {/* Progress strip */}
+                    {activeJourneySteps.length > 0 && (
+                      <div className="mb-2">
+                        <GuidanceJourneyStrip steps={activeJourneySteps} />
+                        <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
+                          Step {Math.max(activeStepIndex, 0) + 1} of {activeJourneySteps.length}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Why now */}
+                    <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
+                      <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+                        Why now
+                      </p>
+                      <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                        {activePrimaryAction.explanation?.why ??
+                          activePrimaryAction.subtitle ??
+                          'Following this journey now reduces cost and execution risk.'}
+                      </p>
+                      {activePrimaryAction.costOfDelay ? (
+                        <p className="mb-0 text-sm font-semibold text-amber-700">
+                          Potential delay cost: ~{formatCurrency(activePrimaryAction.costOfDelay)}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {/* 4.5: Skip button for active step */}
+                    {activePrimaryAction.currentStep?.id && (
+                      <Button
+                        variant="ghost"
+                        className="mt-1 min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
+                        disabled={skipStepMutation.isPending}
+                        onClick={() => {
+                          if (activePrimaryAction.currentStep?.id) {
+                            skipStepMutation.mutate({ stepId: activePrimaryAction.currentStep.id });
+                          }
+                        }}
+                      >
+                        Skip this step
+                      </Button>
+                    )}
+                  </ScenarioInputCard>
+                )}
+
+                {/* 4.4: Journey Steps — ordered steps of the single primary journey */}
+                <ScenarioInputCard
+                  title="Journey Steps"
+                  subtitle={showAllJourneySteps ? 'Full journey path.' : 'Current + next step focus.'}
+                >
+                  {activeJourneySteps.length === 0 ? (
+                    <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                      Steps are being prepared for this journey.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {visibleJourneySteps.map((step, idx) => {
+                        const isActiveStep = idx === activeStepIndex;
+                        const isFutureStep =
+                          activeStepIndex >= 0 ? idx > activeStepIndex : step.status === 'PENDING';
+                        const isCompletedStep = step.status === 'COMPLETED' || step.status === 'SKIPPED';
+
+                        return (
+                          <div
+                            key={step.id}
+                            className={
+                              isFutureStep && !isActiveStep
+                                ? 'opacity-50'
+                                : ''
+                            }
+                          >
+                            <CompactEntityRow
+                              title={`Step ${step.stepOrder}: ${step.label}`}
+                              subtitle={step.description ?? undefined}
+                              meta={isCompletedStep ? 'Completed' : isActiveStep ? 'Current step' : 'Upcoming'}
+                              status={
+                                <StatusChip tone={stepTone(step)}>
+                                  {step.status.toLowerCase().replace('_', ' ')}
+                                </StatusChip>
+                              }
+                            />
+                            {isActiveStep && (
+                              <>
+                                <ActionPriorityRow
+                                  primaryAction={renderStepCta(step, true)}
+                                />
+                                {/* 4.5: Skip per step in list */}
+                                <Button
+                                  variant="ghost"
+                                  className="min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
+                                  disabled={skipStepMutation.isPending}
+                                  onClick={() => skipStepMutation.mutate({ stepId: step.id })}
+                                >
+                                  Skip this step
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {activeJourneySteps.length > visibleJourneySteps.length ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllJourneySteps(true)}
+                          className="w-full rounded-xl border border-dashed border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
+                        >
+                          Show full journey ({activeJourneySteps.length} steps)
+                        </button>
+                      ) : showAllJourneySteps && activeJourneySteps.length > 2 ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllJourneySteps(false)}
+                          className="w-full rounded-xl border border-dashed border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
+                        >
+                          Show focused view
+                        </button>
+                      ) : null}
+                    </div>
                   )}
-                  className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-                >
-                  Check Coverage
-                </Link>
-              }
-            />
-            <ActionPriorityRow
-              primaryAction={
-                <Link
-                  href={buildProvidersHref(propertyId, selectedAssetOption)}
-                  className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-                >
-                  Find Providers
-                </Link>
-              }
-            />
-          </div>
-        </ScenarioInputCard>
-      )}
+                </ScenarioInputCard>
+              </>
+            )}
+
+            {/* Fallback tools when no journey exists for ITEM scope */}
+            {!activeHasScopedMatch && scopeCategory === 'ITEM' && selectedAssetOption && (
+              <ScenarioInputCard
+                title="Explore related tools"
+                subtitle="While your journey is being set up, you can use these tools directly."
+              >
+                <div className="space-y-2">
+                  {selectedAssetOption.inventoryItemId && (
+                    <ActionPriorityRow
+                      primaryAction={
+                        <Link
+                          href={appendScopeParams(
+                            `/dashboard/properties/${propertyId}/inventory/items/${selectedAssetOption.inventoryItemId}/replace-repair`,
+                            selectedAssetOption
+                          )}
+                          className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                        >
+                          Repair vs Replace Analysis
+                        </Link>
+                      }
+                    />
+                  )}
+                  <ActionPriorityRow
+                    primaryAction={
+                      <Link
+                        href={appendScopeParams(
+                          `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,
+                          selectedAssetOption
+                        )}
+                        className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                      >
+                        Check Coverage
+                      </Link>
+                    }
+                  />
+                  <ActionPriorityRow
+                    primaryAction={
+                      <Link
+                        href={buildProvidersHref(propertyId, selectedAssetOption)}
+                        className="inline-flex min-h-[42px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+                      >
+                        Find Providers
+                      </Link>
+                    }
+                  />
+                </div>
+              </ScenarioInputCard>
+            )}
+          </>
+        }
+      />
     </MobilePageContainer>
   );
 }
