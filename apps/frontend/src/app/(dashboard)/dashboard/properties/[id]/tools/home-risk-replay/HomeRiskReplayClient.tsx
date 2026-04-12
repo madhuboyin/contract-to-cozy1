@@ -825,7 +825,7 @@ export default function HomeRiskReplayClient() {
         <div className="lg:col-span-2">
           <TrustStrip
             confidenceLabel={currentReplay ? `${currentReplay.totalEvents} matched events in selected window` : 'Confidence improves after first replay run'}
-            freshnessLabel={currentReplay?.completedAt ? `Latest run ${formatReplayDate(currentReplay.completedAt)}` : 'Run replay to refresh'}
+            freshnessLabel={activeRunSummary?.createdAt ? `Latest run ${formatReplayDate(activeRunSummary.createdAt)}` : 'Run replay to refresh'}
             sourceLabel="Historical weather/risk events + property location + recorded home details"
             rationale="Replay focuses on explainable event chains so homeowners can understand why risk posture changed."
           />
