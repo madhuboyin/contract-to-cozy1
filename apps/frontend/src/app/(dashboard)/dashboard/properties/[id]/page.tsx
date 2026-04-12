@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { Property, PropertyDashboardBootstrap } from "@/types"; // Base Property type
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,6 +61,7 @@ import { buildServicePriceRadarHref } from '@/lib/routes/servicePriceRadar';
 import { SmartContextToolsSection } from './components/SmartContextToolsSection';
 import PlantAdvisorDashboardCard from './components/PlantAdvisorDashboardCard';
 import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner';
+import PropertyHubTemplate from './components/PropertyHubTemplate';
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -1059,35 +1060,38 @@ const NARRATIVE_NUDGE_CONFIG: Record<
   },
 };
 
+const PROPERTY_HUB_TABS = [
+  'overview',
+  'maintenance',
+  'incidents',
+  'risk-protection',
+  'financial-efficiency',
+] as const;
+
+type PropertyHubTab = (typeof PROPERTY_HUB_TABS)[number];
+
+function resolvePropertyHubTab(rawValue: string | null): PropertyHubTab {
+  if (rawValue && PROPERTY_HUB_TABS.includes(rawValue as PropertyHubTab)) {
+    return rawValue as PropertyHubTab;
+  }
+  return 'overview';
+}
+
 export default function PropertyDetailPage() {
   const params = useParams();
   const propertyId = Array.isArray(params.id) ? params.id[0] : (params as any).id;
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get('tab');
+  const initialTab = resolvePropertyHubTab(searchParams.get('tab'));
+  const [activeTab, setActiveTab] = useState<PropertyHubTab>(initialTab);
   const [nudgeFieldKey, setNudgeFieldKey] = useState<string | null>(null);
   const [nudgeFieldValue, setNudgeFieldValue] = useState('');
   const [isSavingNudge, setIsSavingNudge] = useState(false);
   const askCozyDockVisible = !nudgeFieldKey;
   const tabTriggerClassName =
     "flex min-h-[40px] items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-slate-600 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-none";
-
-  const defaultTab =
-    initialTab &&
-      [
-        'overview',
-        'maintenance',
-        'incidents',
-        'risk-protection',
-        'financial-efficiency', 
-        'cost-growth',
-        'documents',
-        'reports',
-        'claims',
-      ].includes(initialTab)
-      ? initialTab
-      : 'overview';
 
   const { data: bootstrap, isLoading } = useQuery({
     queryKey: ["property-bootstrap", propertyId],
@@ -1114,6 +1118,28 @@ export default function PropertyDetailPage() {
     () => (nudgeFieldKey ? NARRATIVE_NUDGE_CONFIG[nudgeFieldKey] : null),
     [nudgeFieldKey]
   );
+
+  useEffect(() => {
+    const nextTab = resolvePropertyHubTab(searchParams.get('tab'));
+    if (nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeTab, searchParams]);
+
+  const handleTabChange = (nextTabValue: string) => {
+    const nextTab = resolvePropertyHubTab(nextTabValue);
+    setActiveTab(nextTab);
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (nextTab === 'overview') {
+      nextParams.delete('tab');
+    } else {
+      nextParams.set('tab', nextTab);
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
 
   useEffect(() => {
     if (!nudgeFieldKey || !property) return;
@@ -1200,7 +1226,29 @@ export default function PropertyDetailPage() {
     );
   }
 
-  const propertyHubSubtitle = [property.city, property.state].filter(Boolean).join(", ");
+  const propertyHubTitle = property.name || property.address || "My Home";
+  const propertyHubSubtitle = [
+    property.address,
+    [property.city, property.state].filter(Boolean).join(", "),
+    property.zipCode,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+  const propertyTypeLabel = formatEnumLabel(property.propertyType, "Home");
+  const onboardingIncomplete = Boolean(onboardingStatus && onboardingStatus.status !== "COMPLETED");
+  const criticalInsightCount =
+    scoredProperty.healthScore?.insights?.filter((insight) =>
+      HIGH_PRIORITY_STATUSES.includes(insight.status)
+    ).length ?? 0;
+  const propertyHubMeta = [
+    property.isPrimary ? "Primary home" : propertyTypeLabel,
+    property.yearBuilt ? `Built ${property.yearBuilt}` : null,
+    property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : null,
+  ].filter(Boolean) as string[];
+  const tabPanelClassName = askCozyDockVisible
+    ? "mt-4 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0"
+    : "mt-4";
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-6 lg:px-8">
       {FEATURE_FLAGS.PROPERTY_NARRATIVE_ENGINE && narrativeRun?.status === "ACTIVE" && (
@@ -1233,152 +1281,198 @@ export default function PropertyDetailPage() {
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back
         </Button>
-        <MobilePageIntro
-          title="My Property"
-          subtitle={propertyHubSubtitle || "Property hub"}
-          action={
-            <Link href={`/dashboard/properties/${property.id}/edit`}>
-              <Button size="sm" variant="outline" className="min-h-[40px] gap-1.5 border-slate-300">
-                <Edit className="h-4 w-4" />
-                Edit
-              </Button>
-            </Link>
-          }
-        />
       </div>
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full" id="home-snapshot">
+        <PropertyHubTemplate
+          title={propertyHubTitle}
+          context={propertyHubSubtitle || "Property operations cockpit"}
+          statusLabel={onboardingIncomplete ? "Setup in progress" : "Operational"}
+          meta={propertyHubMeta}
+          primaryAction={
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+              <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+                Next Best Action
+              </p>
+              <p className="mt-1 mb-0 text-sm text-slate-700">
+                {onboardingIncomplete
+                  ? "Complete setup to unlock accurate recommendations and risk guidance."
+                  : criticalInsightCount > 0
+                    ? `${criticalInsightCount} priority maintenance signal${criticalInsightCount === 1 ? "" : "s"} needs action.`
+                    : "Open your status board for the daily operational snapshot."}
+              </p>
+              <div className="mt-3">
+                {onboardingIncomplete ? (
+                  <Button asChild className="min-h-[44px] w-full sm:w-auto">
+                    <Link href={`/dashboard/properties/${property.id}/onboarding`}>
+                      Continue Setup
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : criticalInsightCount > 0 ? (
+                  <Button
+                    type="button"
+                    onClick={() => handleTabChange("maintenance")}
+                    className="min-h-[44px] w-full sm:w-auto"
+                  >
+                    Review Maintenance Priorities
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button asChild className="min-h-[44px] w-full sm:w-auto">
+                    <Link href={`/dashboard/properties/${property.id}/status-board`}>
+                      Open Status Board
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </div>
+          }
+          supportingAction={
+            <Button variant="outline" className="min-h-[44px] w-full justify-start gap-2" asChild>
+              <Link href={`/dashboard/home-tools?propertyId=${property.id}`}>
+                <Wrench className="h-4 w-4" />
+                Open Home Tools
+              </Link>
+            </Button>
+          }
+          utilityAction={
+            <Button
+              variant="outline"
+              className="min-h-[44px] w-full justify-start gap-2"
+              type="button"
+              onClick={openCozyChat}
+            >
+              <Sparkles className="h-4 w-4" />
+              Ask Cozy
+            </Button>
+          }
+          tabs={
+            <MobileFilterSurface className="border-slate-200/80 bg-white/95 p-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.5)] md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+              <div className="md:hidden px-1">
+                <p className="text-xs uppercase tracking-[0.09em] text-slate-500">Core Sections</p>
+              </div>
+              <div className="relative">
+                <div className="absolute left-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-r from-background to-transparent pointer-events-none md:hidden" />
+                <div className="absolute right-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none md:hidden" />
 
-      {/* Exploratory context */}
+                <div className="overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
+                  <TabsList className="inline-flex w-max [&>*]:snap-start rounded-full border border-slate-200 bg-slate-50/80 p-1 md:border-transparent md:bg-transparent">
+                    <TabsTrigger value="overview" className={tabTriggerClassName}>
+                      <Home className="h-4 w-4 shrink-0" />
+                      <span className="hidden sm:inline">Overview</span>
+                      <span className="sm:hidden">Info</span>
+                    </TabsTrigger>
+
+                    <TabsTrigger value="maintenance" className={tabTriggerClassName}>
+                      <Zap className="h-4 w-4 shrink-0" />
+                      <span className="hidden sm:inline">Maintenance Plan</span>
+                      <span className="sm:hidden">Maint.</span>
+                    </TabsTrigger>
+
+                    <TabsTrigger value="incidents" className={tabTriggerClassName}>
+                      <ShieldAlert className="h-4 w-4 shrink-0" />
+                      <span className="hidden sm:inline">Incidents</span>
+                      <span className="sm:hidden">Alerts</span>
+                    </TabsTrigger>
+
+                    <TabsTrigger value="risk-protection" className={tabTriggerClassName}>
+                      <Shield className="h-4 w-4 shrink-0" />
+                      <span className="hidden sm:inline">Risk & Protection</span>
+                      <span className="sm:hidden">Risk</span>
+                    </TabsTrigger>
+
+                    <TabsTrigger value="financial-efficiency" className={tabTriggerClassName}>
+                      <DollarSign className="h-4 w-4 shrink-0" />
+                      <span className="hidden sm:inline">Financial Efficiency</span>
+                      <span className="sm:hidden">Finance</span>
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+              </div>
+            </MobileFilterSurface>
+          }
+          secondaryNav={
+            <MobileFilterSurface className="border-slate-200/80 bg-white p-3 shadow-sm">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.09em] text-slate-500">
+                More Sections
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/dashboard/properties/${property.id}/status-board`}
+                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
+                >
+                  <History className="h-3.5 w-3.5" />
+                  Status Board
+                </Link>
+                <Link
+                  href={`/dashboard/properties/${property.id}/reports`}
+                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  Reports
+                </Link>
+                <Link
+                  href={`/dashboard/properties/${property.id}/claims`}
+                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
+                >
+                  <ClipboardCheck className="h-3.5 w-3.5" />
+                  Claims
+                </Link>
+                <Link
+                  href={`/dashboard/properties/${property.id}/edit`}
+                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Documents & Edit
+                </Link>
+              </div>
+            </MobileFilterSurface>
+          }
+        >
+          <GuidanceResumeBanner propertyId={property.id} />
+
+          {onboardingStatus && onboardingStatus.status !== "COMPLETED" ? (
+            <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
+          ) : null}
+
+          <TabsContent value="overview" className={tabPanelClassName}>
+            <PropertyOverview property={property} />
+          </TabsContent>
+
+          <TabsContent value="maintenance" className={tabPanelClassName}>
+            <MaintenancePlanTab property={scoredProperty} />
+          </TabsContent>
+
+          <TabsContent value="incidents" className={tabPanelClassName}>
+            <IncidentsClient />
+          </TabsContent>
+
+          <TabsContent value="risk-protection" className={tabPanelClassName}>
+            <RiskProtectionTab propertyId={property.id} />
+          </TabsContent>
+
+          <TabsContent value="financial-efficiency" className={tabPanelClassName}>
+            <FinancialEfficiencyTab propertyId={property.id} />
+          </TabsContent>
+        </PropertyHubTemplate>
+      </Tabs>
+
       <section aria-label="Exploratory context" className="space-y-3.5 sm:space-y-4">
         <SmartContextToolsSection propertyId={property.id} />
       </section>
 
-      {/* Property identity card — mobile only */}
-      <PropertyHeroCard property={property} />
-
       <SellingPrepBanner propertyId={property.id} />
-
-      <GuidanceResumeBanner propertyId={property.id} />
-
-      {onboardingStatus && onboardingStatus.status !== "COMPLETED" && (
-        <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
-      )}
-
-      <Tabs defaultValue={defaultTab} className="w-full" id="home-snapshot">
-        <MobileFilterSurface className="border-slate-200/80 bg-white/95 p-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.5)] md:border-0 md:bg-transparent md:p-0 md:shadow-none">
-          <div className="md:hidden px-1">
-            <p className="text-xs uppercase tracking-[0.09em] text-slate-500">Sections</p>
-          </div>
-          <div className="relative">
-          {/* Left fade indicator (mobile only) */}
-          <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none md:hidden" />
-          {/* Right fade indicator (mobile only) */}
-          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none md:hidden" />
-
-          <div className="overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
-            <TabsList className="inline-flex w-max [&>*]:snap-start rounded-full border border-slate-200 bg-slate-50/80 p-1 md:border-transparent md:bg-transparent">
-              <TabsTrigger value="overview" className={tabTriggerClassName}>
-                <Home className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Overview</span>
-                <span className="sm:hidden">Info</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="maintenance" className={tabTriggerClassName}>
-                <Zap className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Maintenance Plan</span>
-                <span className="sm:hidden">Maint.</span>
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="home-tools"
-                className={tabTriggerClassName}
-                onClick={() => router.push(`/dashboard/home-tools?propertyId=${property.id}`)}
-              >
-                <Wrench className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Home Tools</span>
-                <span className="sm:hidden">Tools</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="incidents" className={tabTriggerClassName}>
-                <ShieldAlert className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Incidents</span>
-                <span className="sm:hidden">Alerts</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="risk-protection" className={tabTriggerClassName}>
-                <Shield className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Risk & Protection</span>
-                <span className="sm:hidden">Risk</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="financial-efficiency" className={tabTriggerClassName}>
-                <DollarSign className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Financial Efficiency</span>
-                <span className="sm:hidden">Finance</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="documents" className={tabTriggerClassName}>
-                <FileText className="h-4 w-4 shrink-0" />
-                Docs
-              </TabsTrigger>
-
-              <TabsTrigger value="reports" className={tabTriggerClassName}>
-                <FileDown className="h-4 w-4 shrink-0" />
-                Reports
-              </TabsTrigger>
-
-              <TabsTrigger value="claims" className={tabTriggerClassName}>
-                <ClipboardCheck className="h-4 w-4 shrink-0" />
-                Claims
-              </TabsTrigger>
-
-            </TabsList>
-          </div>
-          </div>
-        </MobileFilterSurface>
-
-        <TabsContent value="overview" className="mt-4">
-          <PropertyOverview property={property} />
-        </TabsContent>
-
-        <TabsContent value="maintenance" className="mt-4">
-          <MaintenancePlanTab property={scoredProperty} />
-        </TabsContent>
-
-        <TabsContent value="incidents" className="mt-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-0">
-          <IncidentsClient />
-        </TabsContent>
-
-        <TabsContent value="risk-protection" className="mt-4">
-          <RiskProtectionTab propertyId={property.id} />
-        </TabsContent>
-
-        <TabsContent value="financial-efficiency" className="mt-4">
-          <FinancialEfficiencyTab propertyId={property.id} />
-        </TabsContent>
-
-        <TabsContent value="documents" className="mt-4">
-          <DocumentsTab propertyId={property.id} />
-        </TabsContent>
-
-        <TabsContent value="reports" className="mt-4">
-          <ReportsTab propertyId={property.id} />
-        </TabsContent>
-
-        <TabsContent value="claims" className="mt-4">
-          <ClaimsTab propertyId={property.id} />
-        </TabsContent>
-        
-      </Tabs>
 
       {askCozyDockVisible && (
         <div
           data-chat-collision-zone="true"
-          className="fixed inset-x-4 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 md:hidden"
+          className="fixed inset-x-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 md:hidden"
         >
           <button
             type="button"
             onClick={openCozyChat}
-            className="flex w-full items-center justify-between rounded-2xl border border-white/15 bg-[radial-gradient(circle_at_20%_0%,rgba(20,184,166,0.22),transparent_45%),linear-gradient(120deg,#0f172a,#111827)] px-4 py-3 text-left text-white shadow-[0_22px_48px_-30px_rgba(15,23,42,0.95)]"
+            className="mx-auto flex w-full max-w-3xl items-center justify-between rounded-2xl border border-white/15 bg-[radial-gradient(circle_at_20%_0%,rgba(20,184,166,0.22),transparent_45%),linear-gradient(120deg,#0f172a,#111827)] px-4 py-3 text-left text-white shadow-[0_22px_48px_-30px_rgba(15,23,42,0.95)]"
             aria-label="Ask Cozy about this property"
           >
             <span className="inline-flex items-center gap-2.5">
@@ -1393,7 +1487,7 @@ export default function PropertyDetailPage() {
       )}
 
       <div className="md:hidden">
-        <BottomSafeAreaReserve size="floatingAction" />
+        <BottomSafeAreaReserve size={askCozyDockVisible ? "floatingAction" : "chatAware"} />
       </div>
 
       <Sheet open={Boolean(nudgeFieldKey)} onOpenChange={(open) => !open && setNudgeFieldKey(null)}>
