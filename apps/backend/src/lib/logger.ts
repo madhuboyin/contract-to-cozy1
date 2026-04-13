@@ -12,6 +12,39 @@ import pino from 'pino';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+function getTransport() {
+  if (isDev) {
+    return {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:HH:MM:ss',
+        ignore: 'pid,hostname,service,env',
+      },
+    };
+  }
+
+  return {
+    target: 'pino-loki',
+    options: {
+      host: process.env.LOKI_HOST || 'http://loki-gateway.monitoring.svc.cluster.local',
+      basicAuth: {
+        username: process.env.LOKI_USERNAME || '',
+        password: process.env.LOKI_PASSWORD || '',
+      },
+      headers: {
+        'X-Scope-OrgID': 'production',
+      },
+      labels: {
+        app: 'backend',
+        env: process.env.NODE_ENV || 'production',
+      },
+      batching: true,
+      interval: 5,
+    },
+  };
+}
+
 export const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
   base: {
@@ -36,18 +69,7 @@ export const logger = pino({
     ],
     censor: '[REDACTED]',
   },
-  ...(isDev
-    ? {
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'SYS:HH:MM:ss',
-            ignore: 'pid,hostname,service,env',
-          },
-        },
-      }
-    : {}),
+  transport: getTransport(),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

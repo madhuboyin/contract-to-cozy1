@@ -50,6 +50,21 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: JWT_SECRET
+            - name: LOKI_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOKI_HOST
+            - name: LOKI_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: loki-basic-auth
+                  key: username
+            - name: LOKI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: loki-basic-auth
+                  key: password
             - name: REDIS_HOST
               valueFrom:
                 configMapKeyRef:

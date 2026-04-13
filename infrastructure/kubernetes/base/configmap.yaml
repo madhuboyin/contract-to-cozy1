@@ -23,6 +23,9 @@ data:
   DB_POOL_MIN: "2"
   DB_POOL_MAX: "10"
   
+  # Loki (pino-loki direct push)
+  LOKI_HOST: "http://loki-gateway.monitoring.svc.cluster.local"
+
   # Redis Configuration
   REDIS_HOST: "redis.production.svc.cluster.local"
   REDIS_PORT: "6379"
