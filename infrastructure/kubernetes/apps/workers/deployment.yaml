@@ -37,6 +37,16 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: DATABASE_URL
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REDIS_HOST
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: REDIS_PASSWORD
             - name: TICKETMASTER_MAX_PAGES
               valueFrom:
                 configMapKeyRef:

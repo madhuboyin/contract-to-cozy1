@@ -35,6 +35,14 @@ spec:
             - redis-server
             - --appendonly
             - "yes"
+            - --requirepass
+            - $(REDIS_PASSWORD)
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: REDIS_PASSWORD
           ports:
             - containerPort: 6379
           resources:
@@ -51,6 +59,8 @@ spec:
             exec:
               command:
                 - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
                 - ping
             initialDelaySeconds: 30
             periodSeconds: 10
@@ -58,6 +68,8 @@ spec:
             exec:
               command:
                 - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
                 - ping
             initialDelaySeconds: 5
             periodSeconds: 5

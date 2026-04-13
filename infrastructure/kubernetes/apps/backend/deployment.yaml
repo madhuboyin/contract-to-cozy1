@@ -55,6 +55,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: REDIS_HOST
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: REDIS_PASSWORD
             - name: GEMINI_CHAT_ENABLED
               valueFrom:
                 configMapKeyRef:
