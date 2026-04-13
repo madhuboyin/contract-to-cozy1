@@ -295,7 +295,7 @@ function SetupStep({ step, icon: Icon, title, description, href, ctaLabel }: Set
 // --- Main Page Component ---
 export default function FinancialEfficiencyPage() {
     const params = useParams();
-    const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+    const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
     const router = useRouter();
     const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
     // 1. Fetch Property Details (to get name/address for header)

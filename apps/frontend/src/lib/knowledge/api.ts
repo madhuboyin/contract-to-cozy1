@@ -12,7 +12,7 @@ async function getKnowledgeApiBase(): Promise<string> {
     return process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
   }
 
-  const requestHeaders = headers();
+  const requestHeaders = await headers();
   const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host');
 
   if (host) {

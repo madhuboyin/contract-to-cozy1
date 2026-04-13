@@ -438,7 +438,7 @@ export default function EditPropertyPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const params = useParams();
-  const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
   
   const hasResetForm = React.useRef(false);
   const propertyPhotoInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -466,6 +466,9 @@ export default function EditPropertyPage() {
   const { data: property, isLoading: isLoadingProperty } = useQuery({
     queryKey: ["property", propertyId],
     queryFn: async () => {
+      if (!propertyId) {
+        throw new Error("Property ID is required.");
+      }
       const response = await api.getProperty(propertyId);
       if (response.success && response.data) return response.data;
       throw new Error(response.message || "Failed to fetch property.");
@@ -589,6 +592,10 @@ export default function EditPropertyPage() {
   // 3. Setup Mutation
   const updateMutation = useMutation({
     mutationFn: async (data: PropertyFormValues) => {
+      if (!propertyId) {
+        throw new Error("Property ID is required.");
+      }
+
       let coverPhotoDocumentId: string | null | undefined = undefined;
 
       if (propertyPhotoFile) {

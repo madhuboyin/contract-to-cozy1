@@ -59,7 +59,7 @@ interface ReadinessReport {
 
 export default function SellerPrepPage() {
   const params = useParams();
-  const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
   const [showIntakeForm, setShowIntakeForm] = useState(false);
   const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
 

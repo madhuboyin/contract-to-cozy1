@@ -831,7 +831,7 @@ export default function RiskAssessmentPage() {
     const params = useParams();
     const router = useRouter();
     const queryClient = useQueryClient(); // 🔑 NEW: For invalidating queries
-    const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
+    const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
     const { user } = useAuth(); 
 
     // Mock Premium Check (REPLACE with actual logic)

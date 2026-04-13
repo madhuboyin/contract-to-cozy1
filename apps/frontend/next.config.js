@@ -3,9 +3,6 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     remotePatterns: [
       // http://localhost is only needed during local development and CI.
