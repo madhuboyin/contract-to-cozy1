@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { ReactNode } from 'react';
+import { CTC_INTERACTION_RULES_V1 } from '@/lib/design-system/tokenGovernance';
 
 interface ProofItem {
   label: string;
@@ -48,7 +49,7 @@ export default function MarketingHeroTemplate({
           <div className="mt-7">
             <Link
               href={ctaHref}
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-16px_rgba(13,148,136,0.75)] transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              className={`inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-16px_rgba(13,148,136,0.75)] transition hover:bg-brand-700 ${CTC_INTERACTION_RULES_V1.focusRing}`}
             >
               {ctaLabel}
               <ArrowRight className="h-4 w-4" />

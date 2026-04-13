@@ -10,6 +10,7 @@ import {
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import TrustStrip from './TrustStrip';
+import { CTC_INTERACTION_RULES_V1 } from '@/lib/design-system/tokenGovernance';
 
 interface ToolWorkspaceTemplateProps {
   backHref: string;
@@ -40,8 +41,8 @@ export default function ToolWorkspaceTemplate({
   children,
 }: ToolWorkspaceTemplateProps) {
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+    <MobilePageContainer className="space-y-4 lg:max-w-7xl lg:px-8 lg:pb-10">
+      <Button variant="ghost" className={`${CTC_INTERACTION_RULES_V1.tapTarget} w-fit px-0 text-muted-foreground`} asChild>
         <Link href={backHref}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           {backLabel}

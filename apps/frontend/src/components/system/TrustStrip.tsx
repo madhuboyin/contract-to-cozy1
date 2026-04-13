@@ -1,0 +1,55 @@
+'use client';
+
+import { ReactNode } from 'react';
+import { ShieldCheck } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { CTC_TEMPLATE_SURFACES_V1 } from '@/lib/design-system/tokenGovernance';
+
+export interface TrustStripProps {
+  confidenceLabel: string;
+  freshnessLabel: string;
+  sourceLabel: string;
+  rationale?: string | null;
+  className?: string;
+  trailing?: ReactNode;
+  title?: string;
+}
+
+export default function TrustStrip({
+  confidenceLabel,
+  freshnessLabel,
+  sourceLabel,
+  rationale,
+  className,
+  trailing,
+  title = 'Trust Signals',
+}: TrustStripProps) {
+  return (
+    <section className={cn(CTC_TEMPLATE_SURFACES_V1.trustCard, 'p-3', className)}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4 text-emerald-700" />
+          <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-800">
+            {title}
+          </p>
+        </span>
+        {trailing}
+      </div>
+      <div className="grid grid-cols-1 gap-2 text-xs text-slate-700 sm:grid-cols-3">
+        <p className={cn(CTC_TEMPLATE_SURFACES_V1.insetTile, 'mb-0')}>
+          <span className="font-semibold text-slate-900">Confidence:</span> {confidenceLabel}
+        </p>
+        <p className={cn(CTC_TEMPLATE_SURFACES_V1.insetTile, 'mb-0')}>
+          <span className="font-semibold text-slate-900">Freshness:</span> {freshnessLabel}
+        </p>
+        <p className={cn(CTC_TEMPLATE_SURFACES_V1.insetTile, 'mb-0')}>
+          <span className="font-semibold text-slate-900">Source:</span> {sourceLabel}
+        </p>
+      </div>
+      {rationale ? (
+        <p className="mt-2 mb-0 text-xs text-emerald-800/90">Why this recommendation: {rationale}</p>
+      ) : null}
+    </section>
+  );
+}
+

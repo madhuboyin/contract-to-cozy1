@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
+import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
 
 interface PropertyHubTemplateProps {
   title: string;
@@ -8,6 +9,7 @@ interface PropertyHubTemplateProps {
   statusLabel?: string | null;
   meta?: string[];
   primaryAction: ReactNode;
+  priorityAction?: PriorityActionHeroProps;
   supportingAction?: ReactNode;
   utilityAction?: ReactNode;
   tabs: ReactNode;
@@ -21,6 +23,7 @@ export default function PropertyHubTemplate({
   statusLabel,
   meta = [],
   primaryAction,
+  priorityAction,
   supportingAction,
   utilityAction,
   tabs,
@@ -60,13 +63,33 @@ export default function PropertyHubTemplate({
           </div>
         ) : null}
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <div className="sm:col-span-2">{primaryAction}</div>
-          <div className="space-y-2">
-            {supportingAction ? supportingAction : null}
-            {utilityAction ? utilityAction : null}
+        {priorityAction ? (
+          <div className="mt-4 space-y-2">
+            <PriorityActionHero
+              title={priorityAction.title}
+              description={priorityAction.description}
+              primaryAction={priorityAction.primaryAction}
+              supportingAction={priorityAction.supportingAction}
+              impactLabel={priorityAction.impactLabel}
+              confidenceLabel={priorityAction.confidenceLabel}
+              eyebrow={priorityAction.eyebrow || 'Property Priority'}
+            />
+            {(supportingAction || utilityAction) ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {supportingAction ? <div>{supportingAction}</div> : <div />}
+                {utilityAction ? <div>{utilityAction}</div> : <div />}
+              </div>
+            ) : null}
           </div>
-        </div>
+        ) : (
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="sm:col-span-2">{primaryAction}</div>
+            <div className="space-y-2">
+              {supportingAction ? supportingAction : null}
+              {utilityAction ? utilityAction : null}
+            </div>
+          </div>
+        )}
       </header>
 
       {tabs}
@@ -75,4 +98,3 @@ export default function PropertyHubTemplate({
     </section>
   );
 }
-

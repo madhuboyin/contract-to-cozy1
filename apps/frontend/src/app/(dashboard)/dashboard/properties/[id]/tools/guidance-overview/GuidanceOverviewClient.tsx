@@ -47,6 +47,7 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import GuidedJourneyTemplate from './components/GuidedJourneyTemplate';
+import TrustPanel from '../../components/route-templates/TrustPanel';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1331,30 +1332,21 @@ export default function GuidanceOverviewClient() {
   ) : null;
 
   const trustPanel = (
-    <ScenarioInputCard title="Step Trust Panel" subtitle="Why this step is recommended now.">
-      <div className="space-y-3">
-        <CompactEntityRow
-          title="Why this step"
-          subtitle={
-            activePrimaryAction?.explanation?.why
-              ?? activePrimaryAction?.subtitle
-              ?? 'This step removes execution risk and keeps the journey moving.'
-          }
-        />
-        <CompactEntityRow
-          title="Source & confidence"
-          subtitle={`${sourceLabel}${confidenceLabel ? ` · ${confidenceLabel}` : ''}${confidenceValue ? ` (${Math.round(confidenceValue)}%)` : ''}`}
-        />
-        <CompactEntityRow
-          title="If you skip now"
-          subtitle={skipConsequence}
-        />
-      </div>
-    </ScenarioInputCard>
+    <TrustPanel
+      subtitle="Why this step is recommended now and what you risk by skipping."
+      whyThisStep={
+        activePrimaryAction?.explanation?.why
+          ?? activePrimaryAction?.subtitle
+          ?? 'This step removes execution risk and keeps the journey moving.'
+      }
+      sourceAndConfidence={`${sourceLabel}${confidenceLabel ? ` · ${confidenceLabel}` : ''}${confidenceValue ? ` (${Math.round(confidenceValue)}%)` : ''}`}
+      freshness="Freshness updates after each guidance sync"
+      skipConsequence={skipConsequence}
+    />
   );
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
+    <MobilePageContainer className="space-y-4 lg:max-w-6xl lg:px-8 lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
         <Link href={`/dashboard/properties/${propertyId}`}>
           <ArrowLeft className="mr-2 h-4 w-4" />

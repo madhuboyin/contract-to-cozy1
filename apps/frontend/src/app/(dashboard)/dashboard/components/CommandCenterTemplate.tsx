@@ -1,12 +1,15 @@
 'use client';
 
 import { ReactNode, useState } from 'react';
-import { ChevronDown, ShieldCheck } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
+import TrustStrip from '@/components/system/TrustStrip';
 
 interface CommandCenterTemplateProps {
   primaryAction: ReactNode;
   supportingAction?: ReactNode;
+  priorityAction?: PriorityActionHeroProps;
   confidenceLabel: string;
   freshnessLabel: string;
   sourceLabel: string;
@@ -19,6 +22,7 @@ interface CommandCenterTemplateProps {
 export default function CommandCenterTemplate({
   primaryAction,
   supportingAction,
+  priorityAction,
   confidenceLabel,
   freshnessLabel,
   sourceLabel,
@@ -32,28 +36,29 @@ export default function CommandCenterTemplate({
 
   return (
     <section className={cn('space-y-3', className)}>
-      <div>{primaryAction}</div>
-
-      <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/75 p-3">
-        <div className="mb-2 flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-emerald-700" />
-          <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-800">
-            Trust Signals
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-2 text-xs text-slate-700 sm:grid-cols-3">
-          <p className="mb-0 rounded-xl bg-white/90 px-3 py-2">
-            <span className="font-semibold text-slate-900">Confidence:</span> {confidenceLabel}
-          </p>
-          <p className="mb-0 rounded-xl bg-white/90 px-3 py-2">
-            <span className="font-semibold text-slate-900">Freshness:</span> {freshnessLabel}
-          </p>
-          <p className="mb-0 rounded-xl bg-white/90 px-3 py-2">
-            <span className="font-semibold text-slate-900">Source:</span> {sourceLabel}
-          </p>
-        </div>
-        {rationale ? <p className="mt-2 mb-0 text-xs text-emerald-800/90">Why now: {rationale}</p> : null}
+      <div>
+        {priorityAction ? (
+          <PriorityActionHero
+            title={priorityAction.title}
+            description={priorityAction.description}
+            primaryAction={priorityAction.primaryAction}
+            supportingAction={priorityAction.supportingAction}
+            impactLabel={priorityAction.impactLabel}
+            confidenceLabel={priorityAction.confidenceLabel}
+            eyebrow={priorityAction.eyebrow || 'Next Best Action'}
+          />
+        ) : (
+          primaryAction
+        )}
       </div>
+
+      <TrustStrip
+        title="Trust Signals"
+        confidenceLabel={confidenceLabel}
+        freshnessLabel={freshnessLabel}
+        sourceLabel={sourceLabel}
+        rationale={rationale}
+      />
 
       {supportingAction ? <div>{supportingAction}</div> : null}
 

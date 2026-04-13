@@ -13,6 +13,7 @@ import {
   MOBILE_LAYOUT_TOKENS,
   MOBILE_TYPE_TOKENS,
 } from './mobileDesignTokens';
+import { CTC_MOBILE_SHELL_RULES_V1 } from '@/lib/design-system/tokenGovernance';
 
 const MOBILE_INTERACTIVE_FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--mobile-brand-strong))]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white';
@@ -30,7 +31,7 @@ export function MobilePageContainer({
         'mx-auto w-full',
         MOBILE_LAYOUT_TOKENS.containerMaxWidth,
         MOBILE_LAYOUT_TOKENS.containerPaddingX,
-        'pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-8',
+        CTC_MOBILE_SHELL_RULES_V1.pageBottomReserve,
         className
       )}
     >
@@ -1061,9 +1062,9 @@ export function MobileKpiTile({
 }
 
 const bottomSafeAreaReserveVariants = {
-  compact: 'h-[calc(5.5rem+env(safe-area-inset-bottom))]',
-  chatAware: 'h-[calc(8rem+env(safe-area-inset-bottom))]',
-  floatingAction: 'h-[calc(10rem+env(safe-area-inset-bottom))]',
+  compact: CTC_MOBILE_SHELL_RULES_V1.compactReserve,
+  chatAware: CTC_MOBILE_SHELL_RULES_V1.chatAwareReserve,
+  floatingAction: CTC_MOBILE_SHELL_RULES_V1.floatingActionReserve,
 } as const;
 
 export function BottomSafeAreaReserve({
@@ -1082,6 +1083,50 @@ export function BottomSafeAreaGuard({
   className?: string;
 }) {
   return <BottomSafeAreaReserve size="chatAware" className={className} />;
+}
+
+export function MobileStickyActionBar({
+  action,
+  label,
+  helpText,
+  reserveSize = 'floatingAction',
+  className,
+}: {
+  action: React.ReactNode;
+  label?: string;
+  helpText?: string;
+  reserveSize?: keyof typeof bottomSafeAreaReserveVariants;
+  className?: string;
+}) {
+  return (
+    <>
+      <div
+        data-chat-collision-zone="true"
+        className={cn(
+          'fixed inset-x-4 z-30 lg:hidden',
+          CTC_MOBILE_SHELL_RULES_V1.floatingActionBottomOffset,
+          className
+        )}
+      >
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.65)]">
+          {(label || helpText) ? (
+            <div className="mb-2">
+              {label ? (
+                <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  {label}
+                </p>
+              ) : null}
+              {helpText ? <p className="mt-1 mb-0 text-xs text-slate-600">{helpText}</p> : null}
+            </div>
+          ) : null}
+          {action}
+        </div>
+      </div>
+      <div className="lg:hidden">
+        <BottomSafeAreaReserve size={reserveSize} />
+      </div>
+    </>
+  );
 }
 
 export function MobileHorizontalScroller({

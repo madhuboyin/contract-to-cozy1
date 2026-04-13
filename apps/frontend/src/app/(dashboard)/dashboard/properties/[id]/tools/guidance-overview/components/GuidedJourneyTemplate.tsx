@@ -2,7 +2,7 @@
 
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { BottomSafeAreaReserve } from '@/components/mobile/dashboard/MobilePrimitives';
+import { MobileStickyActionBar } from '@/components/mobile/dashboard/MobilePrimitives';
 
 interface GuidedJourneyTemplateProps {
   phase: 'A' | 'B';
@@ -62,28 +62,12 @@ export function GuidedJourneyTemplate({
       </section>
 
       {hasStickyAction ? (
-        <>
-          <div data-chat-collision-zone="true" className="fixed inset-x-4 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 lg:hidden">
-            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.65)]">
-              {(progressLabel || stickyHelpText) ? (
-                <div className="mb-2">
-                  {progressLabel && progressValue ? (
-                    <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                      {progressLabel}: {progressValue}
-                    </p>
-                  ) : null}
-                  {stickyHelpText ? (
-                    <p className="mt-1 mb-0 text-xs text-slate-600">{stickyHelpText}</p>
-                  ) : null}
-                </div>
-              ) : null}
-              {stickyAction}
-            </div>
-          </div>
-          <div className="lg:hidden">
-            <BottomSafeAreaReserve size="floatingAction" />
-          </div>
-        </>
+        <MobileStickyActionBar
+          action={stickyAction}
+          label={progressLabel && progressValue ? `${progressLabel}: ${progressValue}` : undefined}
+          helpText={stickyHelpText}
+          reserveSize="floatingAction"
+        />
       ) : null}
     </>
   );
