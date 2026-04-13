@@ -1,0 +1,6 @@
+{
+  "allowlist": [
+    "src/app/(dashboard)/dashboard/properties/[id]/tools/negotiation-shield/NegotiationShieldToolClient.tsx|import:@/components/ui/card"
+  ]
+}
+

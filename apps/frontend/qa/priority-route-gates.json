@@ -1,0 +1,106 @@
+{
+  "routes": [
+    {
+      "route": "/",
+      "files": [
+        "src/components/landing/Hero.tsx",
+        "src/components/landing/MarketingHeroTemplate.tsx"
+      ],
+      "checks": {
+        "hierarchy": { "required": true, "any": ["MarketingHeroTemplate", "ctaLabel", "ctaHref"] },
+        "trust": { "required": true, "any": ["proofItems", "Trust signals", "ShieldCheck"] },
+        "mobile": { "required": true, "any": ["md:hidden", "min-h-[44px]", "sm:"] },
+        "consistency": { "required": true, "any": ["MarketingHeroTemplate", "CTC_INTERACTION_RULES_V1"] }
+      }
+    },
+    {
+      "route": "/signup",
+      "files": [
+        "src/app/(auth)/signup/page.tsx",
+        "src/components/auth/AuthTemplate.tsx"
+      ],
+      "checks": {
+        "hierarchy": { "required": true, "any": ["AuthTemplate", "type=\"submit\"", "Create your homeowner account"] },
+        "trust": { "required": true, "any": ["Encrypted account", "Private and secure", "Trust"] },
+        "mobile": { "required": true, "any": ["sm:grid-cols-2", "min-h-[44px]", "Mobile-first workflow"] },
+        "consistency": { "required": true, "any": ["AuthTemplate", "CTC_TEMPLATE_SURFACES_V1"] }
+      }
+    },
+    {
+      "route": "/dashboard",
+      "files": [
+        "src/app/(dashboard)/dashboard/page.tsx",
+        "src/app/(dashboard)/dashboard/components/CommandCenterTemplate.tsx"
+      ],
+      "checks": {
+        "hierarchy": { "required": true, "any": ["CommandCenterTemplate", "primaryAction", "Next Best Action"] },
+        "trust": { "required": true, "any": ["confidenceLabel", "freshnessLabel", "sourceLabel"] },
+        "mobile": { "required": true, "any": ["isMobileViewport", "MobileDashboardHome", "MobileHomeBuyerDashboard"] },
+        "consistency": { "required": true, "any": ["CommandCenterTemplate", "TrustStrip"] }
+      }
+    },
+    {
+      "route": "/dashboard/properties",
+      "files": [
+        "src/app/(dashboard)/dashboard/properties/page.tsx"
+      ],
+      "checks": {
+        "hierarchy": { "required": true, "any": ["PortfolioListTemplate", "primaryAction", "Add Property"] },
+        "trust": { "required": false, "any": ["TrustStrip", "confidenceLabel", "freshnessLabel"] },
+        "mobile": { "required": true, "any": ["MobileCard", "BottomSafeAreaReserve", "min-h-[44px]"] },
+        "consistency": { "required": true, "any": ["PortfolioListTemplate", "MobilePrimitives"] }
+      }
+    },
+    {
+      "route": "/dashboard/properties/[id]",
+      "files": [
+        "src/app/(dashboard)/dashboard/properties/[id]/page.tsx",
+        "src/app/(dashboard)/dashboard/properties/[id]/components/PropertyHubTemplate.tsx"
+      ],
+      "checks": {
+        "hierarchy": { "required": true, "any": ["PropertyHubTemplate", "primaryAction", "Property Hub"] },
+        "trust": { "required": false, "any": ["TrustStrip", "confidence", "freshness"] },
+        "mobile": { "required": true, "any": ["MobilePageIntro", "MobileCard", "md:hidden"] },
+        "consistency": { "required": true, "any": ["PropertyHubTemplate", "PriorityActionHero"] }
+      }
+    },
+    {
+      "route": "/dashboard/properties/[id]/home-score",
+      "files": [
+        "src/app/(dashboard)/dashboard/properties/[id]/home-score/page.tsx"
+      ],
+      "checks": {
+        "hierarchy": { "required": true, "any": ["Decision Mode", "Top Action", "primaryAction"] },
+        "trust": { "required": true, "any": ["confidence", "source", "freshness"] },
+        "mobile": { "required": true, "any": ["md:", "lg:", "sm:"] },
+        "consistency": { "required": true, "any": ["DashboardShell", "Card", "Badge"] }
+      }
+    },
+    {
+      "route": "/dashboard/properties/[id]/status-board",
+      "files": [
+        "src/app/(dashboard)/dashboard/properties/[id]/status-board/StatusBoardClient.tsx"
+      ],
+      "checks": {
+        "hierarchy": { "required": true, "any": ["primaryAction", "StatusBoardClient", "Track item condition"] },
+        "trust": { "required": true, "any": ["TrustStrip", "confidenceLabel", "freshnessLabel", "sourceLabel"] },
+        "mobile": { "required": true, "any": ["MobileToolWorkspace", "MobilePageIntro", "MobileFilterStack"] },
+        "consistency": { "required": true, "any": ["TrustStrip", "MobilePrimitives", "TableToMobileCards"] }
+      }
+    },
+    {
+      "route": "/dashboard/properties/[id]/tools/guidance-overview",
+      "files": [
+        "src/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/GuidanceOverviewClient.tsx",
+        "src/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/components/GuidedJourneyTemplate.tsx"
+      ],
+      "checks": {
+        "hierarchy": { "required": true, "any": ["GuidedJourneyTemplate", "Journey progress", "Start guided journey"] },
+        "trust": { "required": true, "any": ["TrustPanel", "sourceAndConfidence", "skipConsequence"] },
+        "mobile": { "required": true, "any": ["MobileStickyActionBar", "MobilePageContainer", "min-h-[44px]"] },
+        "consistency": { "required": true, "any": ["GuidedJourneyTemplate", "TrustPanel", "route-templates"] }
+      }
+    }
+  ]
+}
+

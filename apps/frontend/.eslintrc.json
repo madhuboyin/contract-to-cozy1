@@ -1,3 +1,40 @@
 {
-  "extends": ["next/core-web-vitals"]
+  "extends": ["next/core-web-vitals"],
+  "overrides": [
+    {
+      "files": [
+        "src/components/system/**/*.tsx",
+        "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/**/*.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@/components/ui/card",
+                "message": "Use governed route templates/system primitives instead of raw Card primitives in shared UI foundations."
+              },
+              {
+                "name": "@/components/ui/table",
+                "message": "Use governed table-to-mobile patterns instead of raw Table primitives in shared UI foundations."
+              },
+              {
+                "name": "@/components/ui/dialog",
+                "message": "Use system modal/drawer patterns instead of raw dialog primitives in shared UI foundations."
+              },
+              {
+                "name": "@/components/ui/sheet",
+                "message": "Use system modal/drawer patterns instead of raw sheet primitives in shared UI foundations."
+              },
+              {
+                "name": "@/components/ui/tabs",
+                "message": "Use governed navigation/template tabs instead of raw tabs primitives in shared UI foundations."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

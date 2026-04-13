@@ -1,0 +1,26 @@
+{
+  "files": [
+    "src/app/globals.css",
+    "src/components/auth/AuthTemplate.tsx",
+    "src/components/landing/Hero.tsx",
+    "src/components/landing/MarketingHeroTemplate.tsx",
+    "src/components/mobile/dashboard/MobilePrimitives.tsx",
+    "src/lib/design-system/tokenGovernance.ts",
+    "src/components/system/PriorityActionHero.tsx",
+    "src/components/system/RouteStateCard.tsx",
+    "src/components/system/TrustPanel.tsx",
+    "src/components/system/TrustStrip.tsx",
+    "src/app/(dashboard)/dashboard/components/CommandCenterTemplate.tsx",
+    "src/app/(dashboard)/dashboard/components/DashboardRouteState.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/components/PropertyHubTemplate.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/ToolWorkspaceTemplate.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/CompareTemplate.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/DetailTemplate.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/TrustStrip.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/TrustPanel.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/ReportTemplate.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/PriorityActionPattern.tsx",
+    "src/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/components/GuidedJourneyTemplate.tsx"
+  ]
+}
+

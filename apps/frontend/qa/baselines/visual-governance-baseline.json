@@ -1,0 +1,86 @@
+{
+  "src/app/globals.css": {
+    "hash": "e9c3040f4a149305077e5256c838053e6168c5ca77bacd351c027933ac5f2c8d",
+    "signatureLength": 27
+  },
+  "src/components/auth/AuthTemplate.tsx": {
+    "hash": "3d4acfc5a0d533547f4c7fa60f3864cfc0d9407d01b3a94dfd981fe45ea752f0",
+    "signatureLength": 1610
+  },
+  "src/components/landing/Hero.tsx": {
+    "hash": "f81aa699819dc4a3412735642cf743999ec0ed2938c821825721c65912a82150",
+    "signatureLength": 855
+  },
+  "src/components/landing/MarketingHeroTemplate.tsx": {
+    "hash": "0e1000a93029264bbba61ddfa1c08ee18818017c09fc9d089b628bc5821c3637",
+    "signatureLength": 1559
+  },
+  "src/components/mobile/dashboard/MobilePrimitives.tsx": {
+    "hash": "4395979306cbfe3a47914ca147596d52d369d33d4b029ebff77da75c0488886d",
+    "signatureLength": 5572
+  },
+  "src/lib/design-system/tokenGovernance.ts": {
+    "hash": "624efe08cfd94c7d0d1cbb4586644d097807e77cf3a10cef877e7d320b71cb7c",
+    "signatureLength": 1055
+  },
+  "src/components/system/PriorityActionHero.tsx": {
+    "hash": "83d9c13f7454c1e04ed7b86c786deafc6e5712633c2e65bd92371c50157842b3",
+    "signatureLength": 572
+  },
+  "src/components/system/RouteStateCard.tsx": {
+    "hash": "69b15fbfd2ebd118de6f08c705e685ba9d7162bff5f626a71d7d476a857bd0e2",
+    "signatureLength": 443
+  },
+  "src/components/system/TrustPanel.tsx": {
+    "hash": "6485525a3c150e30b1355f37c49dd718a2a37d67bda566a6925a8375eb3fdef9",
+    "signatureLength": 312
+  },
+  "src/components/system/TrustStrip.tsx": {
+    "hash": "559aebb2d53dd80540017b11b05f466e0331e0c6b9da0de96d18748adce56610",
+    "signatureLength": 303
+  },
+  "src/app/(dashboard)/dashboard/components/CommandCenterTemplate.tsx": {
+    "hash": "89b7b778f03cc22dfe4f4ef4c0308bfdf1179e29e76c8bef037c77f33dd0f4ab",
+    "signatureLength": 305
+  },
+  "src/app/(dashboard)/dashboard/components/DashboardRouteState.tsx": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "signatureLength": 0
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/components/PropertyHubTemplate.tsx": {
+    "hash": "f95cca0a7aa064fc66d4fd3c2c77967259f2b50879a0c9bab67e4e35d3a52632",
+    "signatureLength": 653
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/ToolWorkspaceTemplate.tsx": {
+    "hash": "b983d236e41a866a458d43b13e31a98937459f4713ecb52f93c929bb1484da84",
+    "signatureLength": 178
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/CompareTemplate.tsx": {
+    "hash": "8330cba9bd96287ddd981e3380130e21dafc098dbaf58ff94578cd141fdb8333",
+    "signatureLength": 134
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/DetailTemplate.tsx": {
+    "hash": "e52b6bb9a30f7a2e9a62688763af7b288dd3347835cd955d17793b1ef45c284d",
+    "signatureLength": 273
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/TrustStrip.tsx": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "signatureLength": 0
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/TrustPanel.tsx": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "signatureLength": 0
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/ReportTemplate.tsx": {
+    "hash": "a077c53bfe4990c97a0d7b3278d6ed352aa98ba83514b095489117bc8485291d",
+    "signatureLength": 354
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/PriorityActionPattern.tsx": {
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "signatureLength": 0
+  },
+  "src/app/(dashboard)/dashboard/properties/[id]/tools/guidance-overview/components/GuidedJourneyTemplate.tsx": {
+    "hash": "7856b428d9db647148fa5eab63e65d59294c0ce5fc7016c07f43b1e8b380fa05",
+    "signatureLength": 520
+  }
+}
