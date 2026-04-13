@@ -1,0 +1,985 @@
+{
+  "version": "v1",
+  "program": "CtC UI Excellence",
+  "track": "Track 1 (Weeks 1-4)",
+  "updatedAt": "2026-04-12",
+  "rows": [
+    {
+      "id": "RTE-P0-001",
+      "route": "/",
+      "routeName": "Marketing Landing",
+      "routeFamily": "Landing",
+      "surfaceType": "Public",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Growth Funnel",
+        "designOwner": "Design Lead - Product Experience",
+        "engineeringOwner": "EM - Frontend Platform"
+      },
+      "scores": {
+        "overall": 7.1,
+        "visual": 7.3,
+        "ux": 7.0,
+        "trust": 7.0,
+        "mobile": 7.1,
+        "buyerReadiness": 7.2
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P0",
+        "impact": "High",
+        "effort": "M",
+        "roiScore": 86,
+        "sprintTarget": "Sprint 1"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Marketing Hero v1",
+        "targetTemplateFamily": "Marketing Hero v1",
+        "templateComplianceScore": 7.2,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["CONVERSION_TRUST_LEAK", "CTA_WEAK", "BUYER_PERCEPTION_RISK"]
+      },
+      "findings": {
+        "topProblems": [
+          "Proof sequencing still inconsistent deeper in page stack.",
+          "Some legacy sections still read as feature-heavy before outcomes."
+        ],
+        "whyItMatters": "Top-of-funnel quality directly affects conversion and buyer diligence confidence.",
+        "recommendedQuickWins": [
+          "Enforce one CTA hierarchy per section.",
+          "Add source-qualified copy to all quantified claims."
+        ],
+        "recommendedStructuralFixes": [
+          "Migrate remaining legacy section blocks to marketing template primitives."
+        ],
+        "trustFixes": [
+          "Standardize trust claim formatting and source notation."
+        ],
+        "mobileFixes": [
+          "Cap above-the-fold content depth to headline + CTA + proof row."
+        ]
+      },
+      "execution": {
+        "status": "In QA",
+        "dependencies": ["Marketing copy QA pass"],
+        "blockers": [],
+        "dateAudited": "2026-04-12",
+        "lastUpdated": "2026-04-12",
+        "releaseVersion": "2026.04-track1"
+      },
+      "validation": {
+        "beforeScore": 6.0,
+        "afterScore": 7.1,
+        "screenshotsUpdated": true,
+        "qaPassed": false,
+        "regressionSafe": true
+      }
+    },
+    {
+      "id": "RTE-P0-002",
+      "route": "/signup",
+      "routeName": "Signup",
+      "routeFamily": "Auth",
+      "surfaceType": "Auth",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Growth Funnel",
+        "designOwner": "Design Lead - Product Experience",
+        "engineeringOwner": "EM - Frontend Platform"
+      },
+      "scores": {
+        "overall": 7.2,
+        "visual": 7.3,
+        "ux": 7.1,
+        "trust": 7.2,
+        "mobile": 7.0,
+        "buyerReadiness": 7.1
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P0",
+        "impact": "High",
+        "effort": "M",
+        "roiScore": 88,
+        "sprintTarget": "Sprint 1"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Auth Template v1",
+        "targetTemplateFamily": "Auth Template v1",
+        "templateComplianceScore": 7.6,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["CONVERSION_TRUST_LEAK", "FORM_FATIGUE", "TAP_TARGET_TOO_SMALL"]
+      },
+      "findings": {
+        "topProblems": [
+          "Segment explanation still light for first-time users.",
+          "Error/help copy consistency can be tighter across auth routes."
+        ],
+        "whyItMatters": "Signup quality drives activation and first trust impression.",
+        "recommendedQuickWins": [
+          "Add explicit segment rationale examples.",
+          "Normalize inline validation copy tone."
+        ],
+        "recommendedStructuralFixes": [
+          "Extend Auth Template to all auth routes with shared field trust hints."
+        ],
+        "trustFixes": [
+          "Add data usage explanation link adjacent to submit CTA."
+        ],
+        "mobileFixes": [
+          "Persist scroll-to-error for small screens."
+        ]
+      },
+      "execution": {
+        "status": "In QA",
+        "dependencies": ["Auth copy normalization checklist"],
+        "blockers": [],
+        "dateAudited": "2026-04-12",
+        "lastUpdated": "2026-04-12",
+        "releaseVersion": "2026.04-track1"
+      },
+      "validation": {
+        "beforeScore": 5.6,
+        "afterScore": 7.2,
+        "screenshotsUpdated": true,
+        "qaPassed": false,
+        "regressionSafe": true
+      }
+    },
+    {
+      "id": "RTE-P0-003",
+      "route": "/dashboard",
+      "routeName": "Command Center Dashboard",
+      "routeFamily": "Dashboard",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Core Dashboard",
+        "designOwner": "Design Lead - Product Experience",
+        "engineeringOwner": "EM - Homeowner Routes"
+      },
+      "scores": {
+        "overall": 7.0,
+        "visual": 7.0,
+        "ux": 7.1,
+        "trust": 7.0,
+        "mobile": 6.9,
+        "buyerReadiness": 7.0
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P0",
+        "impact": "High",
+        "effort": "L",
+        "roiScore": 90,
+        "sprintTarget": "Sprint 2"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Command Center Template v1",
+        "targetTemplateFamily": "Command Center Template v1",
+        "templateComplianceScore": 7.1,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["PRIMARY_ACTION_AMBIGUOUS", "CARD_OVERLOAD", "STATE_QUALITY_WEAK"]
+      },
+      "findings": {
+        "topProblems": [
+          "Some secondary modules still over-index first viewport on specific segments.",
+          "Fallback content labeling still inconsistent on edge cases."
+        ],
+        "whyItMatters": "Dashboard clarity determines daily engagement and perceived intelligence quality.",
+        "recommendedQuickWins": [
+          "Enforce one primary + one supporting action across all segment variants."
+        ],
+        "recommendedStructuralFixes": [
+          "Finish module slot governance and severity-based ordering engine."
+        ],
+        "trustFixes": [
+          "Expose freshness/source in all hero permutations."
+        ],
+        "mobileFixes": [
+          "Reduce first viewport module count on mobile homeowner segment."
+        ]
+      },
+      "execution": {
+        "status": "In QA",
+        "dependencies": ["Segment parity QA"],
+        "blockers": [],
+        "dateAudited": "2026-04-12",
+        "lastUpdated": "2026-04-12",
+        "releaseVersion": "2026.04-track1"
+      },
+      "validation": {
+        "beforeScore": 6.0,
+        "afterScore": 7.0,
+        "screenshotsUpdated": true,
+        "qaPassed": false,
+        "regressionSafe": true
+      }
+    },
+    {
+      "id": "RTE-P0-004",
+      "route": "/dashboard/properties",
+      "routeName": "Properties Portfolio",
+      "routeFamily": "Property Hub",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Property Experience",
+        "designOwner": "Design Lead - Mobile Systems",
+        "engineeringOwner": "EM - Homeowner Routes"
+      },
+      "scores": {
+        "overall": 7.0,
+        "visual": 7.0,
+        "ux": 7.1,
+        "trust": 6.8,
+        "mobile": 7.2,
+        "buyerReadiness": 7.0
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Low",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P0",
+        "impact": "High",
+        "effort": "M",
+        "roiScore": 83,
+        "sprintTarget": "Sprint 5"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Portfolio List Template v1",
+        "targetTemplateFamily": "Portfolio List Template v1",
+        "templateComplianceScore": 7.0,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["TEMPLATE_DRIFT", "MOBILE_OVERLAY_COLLISION", "TRUST_GAP"]
+      },
+      "findings": {
+        "topProblems": [
+          "Desktop/mobile style parity still has minor drift.",
+          "Property context confidence/freshness metadata not always visible."
+        ],
+        "whyItMatters": "Portfolio context is entry point for downstream decision routes.",
+        "recommendedQuickWins": [
+          "Add consistent property data freshness metadata row."
+        ],
+        "recommendedStructuralFixes": [
+          "Converge homeowner/provider portfolio list variants on one shell."
+        ],
+        "trustFixes": [
+          "Show completeness and last updated at card level."
+        ],
+        "mobileFixes": [
+          "Retain single fixed bottom layer behavior globally."
+        ]
+      },
+      "execution": {
+        "status": "In QA",
+        "dependencies": ["Property metadata API freshness field"],
+        "blockers": [],
+        "dateAudited": "2026-04-12",
+        "lastUpdated": "2026-04-12",
+        "releaseVersion": "2026.04-track1"
+      },
+      "validation": {
+        "beforeScore": 6.6,
+        "afterScore": 7.0,
+        "screenshotsUpdated": true,
+        "qaPassed": false,
+        "regressionSafe": true
+      }
+    },
+    {
+      "id": "RTE-P0-005",
+      "route": "/dashboard/properties/[id]",
+      "routeName": "Property Hub",
+      "routeFamily": "Property Hub",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Property Experience",
+        "designOwner": "Design Lead - Product Experience",
+        "engineeringOwner": "EM - Homeowner Routes"
+      },
+      "scores": {
+        "overall": 7.0,
+        "visual": 7.0,
+        "ux": 7.0,
+        "trust": 6.9,
+        "mobile": 7.0,
+        "buyerReadiness": 7.0
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P0",
+        "impact": "High",
+        "effort": "L",
+        "roiScore": 89,
+        "sprintTarget": "Sprint 3"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Property Hub Template v1",
+        "targetTemplateFamily": "Property Hub Template v1",
+        "templateComplianceScore": 7.1,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["TAB_BEHAVIOR_INCONSISTENT", "PRIMARY_ACTION_AMBIGUOUS", "MOBILE_OVERLAY_COLLISION"]
+      },
+      "findings": {
+        "topProblems": [
+          "Tab semantics still differ in a few linked surfaces.",
+          "Trust summary is present but not uniformly prioritized."
+        ],
+        "whyItMatters": "Property hub is homeowner operational center and buyer diligence focal point.",
+        "recommendedQuickWins": [
+          "Enforce stable primary action placement across all property states."
+        ],
+        "recommendedStructuralFixes": [
+          "Complete tab+overflow governance for every hub sub-route."
+        ],
+        "trustFixes": [
+          "Route-level trust summary should be locked in top section."
+        ],
+        "mobileFixes": [
+          "Cap top-level tab count and move overflow into explicit menu."
+        ]
+      },
+      "execution": {
+        "status": "In QA",
+        "dependencies": ["Shared tab overflow primitive rollout"],
+        "blockers": [],
+        "dateAudited": "2026-04-12",
+        "lastUpdated": "2026-04-12",
+        "releaseVersion": "2026.04-track1"
+      },
+      "validation": {
+        "beforeScore": 6.0,
+        "afterScore": 7.0,
+        "screenshotsUpdated": true,
+        "qaPassed": false,
+        "regressionSafe": true
+      }
+    },
+    {
+      "id": "RTE-P0-006",
+      "route": "/dashboard/properties/[id]/home-score",
+      "routeName": "HomeScore Report",
+      "routeFamily": "Report",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Trust UX",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": {
+        "overall": 6.9,
+        "visual": 7.2,
+        "ux": 6.6,
+        "trust": 8.0,
+        "mobile": 6.1,
+        "buyerReadiness": 7.0
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P0",
+        "impact": "High",
+        "effort": "L",
+        "roiScore": 82,
+        "sprintTarget": "Sprint 5"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Report Template v1 (partial)",
+        "targetTemplateFamily": "Report Template v1",
+        "templateComplianceScore": 6.8,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["REPORT_TOO_HEAVY", "TABLE_NOT_MOBILE_SAFE", "PRIMARY_ACTION_AMBIGUOUS"]
+      },
+      "findings": {
+        "topProblems": [
+          "Decision mode is improving but full report mode still dominates on mobile.",
+          "Legacy dense sections still require progressive disclosure cleanup."
+        ],
+        "whyItMatters": "High-trust route fails if homeowners cannot act quickly.",
+        "recommendedQuickWins": [
+          "Collapse non-critical sections by default.",
+          "Keep decision summary pinned near top."
+        ],
+        "recommendedStructuralFixes": [
+          "Finish report dual-mode architecture across all score/report routes."
+        ],
+        "trustFixes": [
+          "Retain trust depth while elevating assumptions near top action."
+        ],
+        "mobileFixes": [
+          "Replace remaining wide table patterns with stacked mobile cards."
+        ]
+      },
+      "execution": {
+        "status": "In Build",
+        "dependencies": ["Report section collapse component parity"],
+        "blockers": [],
+        "dateAudited": "2026-04-12",
+        "lastUpdated": "2026-04-12",
+        "releaseVersion": "2026.04-track1"
+      },
+      "validation": {
+        "beforeScore": 6.6,
+        "afterScore": null,
+        "screenshotsUpdated": true,
+        "qaPassed": false,
+        "regressionSafe": false
+      }
+    },
+    {
+      "id": "RTE-P0-007",
+      "route": "/dashboard/properties/[id]/status-board",
+      "routeName": "Status Board",
+      "routeFamily": "Detail",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Property Experience",
+        "designOwner": "Design Lead - Mobile Systems",
+        "engineeringOwner": "EM - Homeowner Routes"
+      },
+      "scores": {
+        "overall": 6.7,
+        "visual": 6.9,
+        "ux": 6.6,
+        "trust": 6.7,
+        "mobile": 7.1,
+        "buyerReadiness": 6.6
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P0",
+        "impact": "High",
+        "effort": "M",
+        "roiScore": 80,
+        "sprintTarget": "Sprint 6"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Detail Template v1 (partial)",
+        "targetTemplateFamily": "Detail Template v1",
+        "templateComplianceScore": 6.9,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["CARD_OVERLOAD", "EXPLAINABILITY_WEAK", "TEMPLATE_DRIFT"]
+      },
+      "findings": {
+        "topProblems": [
+          "Filter density can still overwhelm first-time users.",
+          "Recompute semantics are not yet standardized end-to-end."
+        ],
+        "whyItMatters": "Status board should reduce anxiety and drive clear action ordering.",
+        "recommendedQuickWins": [
+          "Pin a prioritized action strip and last-updated context."
+        ],
+        "recommendedStructuralFixes": [
+          "Complete dual-mode homeowner/advanced board template."
+        ],
+        "trustFixes": [
+          "Standardize recompute explainability with source/freshness deltas."
+        ],
+        "mobileFixes": [
+          "Collapse secondary filters behind progressive disclosure."
+        ]
+      },
+      "execution": {
+        "status": "Planned",
+        "dependencies": ["Dual-mode board template"],
+        "blockers": [],
+        "dateAudited": "2026-04-12",
+        "lastUpdated": "2026-04-12",
+        "releaseVersion": "2026.05-track1"
+      },
+      "validation": {
+        "beforeScore": 6.4,
+        "afterScore": null,
+        "screenshotsUpdated": false,
+        "qaPassed": false,
+        "regressionSafe": false
+      }
+    },
+    {
+      "id": "RTE-P0-008",
+      "route": "/dashboard/properties/[id]/tools/guidance-overview",
+      "routeName": "Guidance Overview",
+      "routeFamily": "Guidance",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Trust UX",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": {
+        "overall": 7.0,
+        "visual": 7.0,
+        "ux": 7.0,
+        "trust": 7.1,
+        "mobile": 7.2,
+        "buyerReadiness": 7.0
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P0",
+        "impact": "High",
+        "effort": "L",
+        "roiScore": 87,
+        "sprintTarget": "Sprint 4"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Guided Journey Template v1",
+        "targetTemplateFamily": "Guided Journey Template v1",
+        "templateComplianceScore": 7.3,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["EXPLAINABILITY_WEAK", "ACTION_OVERLOAD", "MOBILE_OVERLAY_COLLISION"]
+      },
+      "findings": {
+        "topProblems": [
+          "Some branching controls still surface early and create cognitive load.",
+          "Desktop treatment needs stronger two-pane parity in all states."
+        ],
+        "whyItMatters": "Guidance is trust-critical and completion-sensitive.",
+        "recommendedQuickWins": [
+          "Delay alternative controls until user requests them.",
+          "Lock sticky step CTA behavior by phase."
+        ],
+        "recommendedStructuralFixes": [
+          "Complete full state-map alignment to Guided Journey Template v1."
+        ],
+        "trustFixes": [
+          "Keep step-level trust panel mandatory for all recommendation steps."
+        ],
+        "mobileFixes": [
+          "Preserve one sticky action zone with chat-aware offset."
+        ]
+      },
+      "execution": {
+        "status": "In QA",
+        "dependencies": ["Guidance branch policy alignment"],
+        "blockers": [],
+        "dateAudited": "2026-04-12",
+        "lastUpdated": "2026-04-12",
+        "releaseVersion": "2026.04-track1"
+      },
+      "validation": {
+        "beforeScore": 6.3,
+        "afterScore": 7.0,
+        "screenshotsUpdated": true,
+        "qaPassed": false,
+        "regressionSafe": true
+      }
+    },
+
+    {
+      "id": "RTE-P1-009",
+      "route": "/dashboard/properties/[id]/inventory",
+      "routeName": "Inventory Hub",
+      "routeFamily": "Inventory",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Property Experience",
+        "designOwner": "Design Lead - Mobile Systems",
+        "engineeringOwner": "EM - Homeowner Routes"
+      },
+      "scores": { "overall": 6.7, "visual": 6.8, "ux": 6.8, "trust": 6.6, "mobile": 6.9, "buyerReadiness": 6.6 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "M", "roiScore": 78, "sprintTarget": "Sprint 6" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Detail Template v1 (partial)",
+        "targetTemplateFamily": "Detail Template v1",
+        "templateComplianceScore": 6.7,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["TABLE_NOT_MOBILE_SAFE", "TRUST_GAP", "STATE_QUALITY_WEAK"]
+      },
+      "findings": {
+        "topProblems": ["Inventory actions and data depth can feel dense.", "Inconsistent state messaging on loading/error states."],
+        "whyItMatters": "Inventory confidence affects multiple downstream tool recommendations.",
+        "recommendedQuickWins": ["Prioritize top missing-data actions above table content."],
+        "recommendedStructuralFixes": ["Complete table-to-mobile-card transformation pattern."],
+        "trustFixes": ["Standardize trust strip placement for recommendation blocks."],
+        "mobileFixes": ["Reduce initial filter density in first viewport."]
+      },
+      "execution": { "status": "In Build", "dependencies": ["TableToMobileCards v1 parity"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.5, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-010",
+      "route": "/dashboard/properties/[id]/inventory/coverage",
+      "routeName": "Coverage Detail",
+      "routeFamily": "Coverage",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Trust UX",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": { "overall": 6.8, "visual": 6.9, "ux": 6.8, "trust": 6.9, "mobile": 6.7, "buyerReadiness": 6.7 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "M", "roiScore": 80, "sprintTarget": "Sprint 6" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Detail Template v1",
+        "targetTemplateFamily": "Detail Template v1",
+        "templateComplianceScore": 7.0,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["EXPLAINABILITY_WEAK", "COMPARE_CONFUSING", "TRUST_GAP"]
+      },
+      "findings": {
+        "topProblems": ["Coverage rationale and action sequencing can be clearer.", "Some compare-style content lacks outcome framing."],
+        "whyItMatters": "Coverage decisions are trust/financial sensitive.",
+        "recommendedQuickWins": ["Add one-line recommendation rationale + next action summary."],
+        "recommendedStructuralFixes": ["Move compare interactions to Compare Template v1 where applicable."],
+        "trustFixes": ["Expose assumptions and source confidence at decision point."],
+        "mobileFixes": ["Simplify compare details into stacked cards."]
+      },
+      "execution": { "status": "Planned", "dependencies": ["Compare Template family migration"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.7, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-011",
+      "route": "/dashboard/properties/[id]/rooms",
+      "routeName": "Rooms Hub",
+      "routeFamily": "Rooms",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Property Experience",
+        "designOwner": "Design Lead - Mobile Systems",
+        "engineeringOwner": "EM - Homeowner Routes"
+      },
+      "scores": { "overall": 6.7, "visual": 6.8, "ux": 6.8, "trust": 6.5, "mobile": 7.0, "buyerReadiness": 6.6 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "Medium", "effort": "M", "roiScore": 74, "sprintTarget": "Sprint 7" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Detail Template v1 (partial)",
+        "targetTemplateFamily": "Detail Template v1",
+        "templateComplianceScore": 6.6,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["CARD_OVERLOAD", "MOBILE_DENSE", "TRUST_GAP"]
+      },
+      "findings": {
+        "topProblems": ["Many room cards compete for attention.", "Trust context around recommendations inconsistent by room type."],
+        "whyItMatters": "Rooms route drives maintenance and upgrade actions.",
+        "recommendedQuickWins": ["Add room-level prioritized action strip."],
+        "recommendedStructuralFixes": ["Unify room insight blocks under shared detail card contract."],
+        "trustFixes": ["Attach confidence/source consistently per room recommendation."],
+        "mobileFixes": ["Collapse low-priority room sections by default."]
+      },
+      "execution": { "status": "Planned", "dependencies": ["Rooms component consolidation"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.6, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-012",
+      "route": "/dashboard/properties/[id]/timeline",
+      "routeName": "Home Timeline",
+      "routeFamily": "Timeline",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Property Experience",
+        "designOwner": "Design Lead - Product Experience",
+        "engineeringOwner": "EM - Homeowner Routes"
+      },
+      "scores": { "overall": 6.9, "visual": 7.0, "ux": 6.8, "trust": 6.8, "mobile": 7.0, "buyerReadiness": 6.8 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Low", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "Medium", "effort": "M", "roiScore": 72, "sprintTarget": "Sprint 7" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Detail Template v1",
+        "targetTemplateFamily": "Detail Template v1",
+        "templateComplianceScore": 6.9,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["STATE_QUALITY_WEAK", "NAV_CONFUSING"]
+      },
+      "findings": {
+        "topProblems": ["Story mode vs list mode parity is uneven.", "Actionability from timeline events can be stronger."],
+        "whyItMatters": "Timeline should convert history into confidence and action.",
+        "recommendedQuickWins": ["Add clear event-to-action CTAs for high-priority events."],
+        "recommendedStructuralFixes": ["Unify event card taxonomy across timeline and status routes."],
+        "trustFixes": ["Show source provenance for event entries."],
+        "mobileFixes": ["Trim timeline card metadata density on small screens."]
+      },
+      "execution": { "status": "Planned", "dependencies": ["Event card standardization"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.8, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-013",
+      "route": "/dashboard/properties/[id]/risk-assessment",
+      "routeName": "Risk Assessment",
+      "routeFamily": "Risk",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Trust UX",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": { "overall": 6.6, "visual": 6.7, "ux": 6.5, "trust": 6.9, "mobile": 6.5, "buyerReadiness": 6.5 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "High" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "M", "roiScore": 81, "sprintTarget": "Sprint 6" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Detail Template v1 (partial)",
+        "targetTemplateFamily": "Detail Template v1",
+        "templateComplianceScore": 6.5,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["TRUST_GAP", "EXPLAINABILITY_WEAK", "TABLE_NOT_MOBILE_SAFE"]
+      },
+      "findings": {
+        "topProblems": ["Risk rationale not always tied to one clear next step.", "Desktop-heavy patterns still leak into mobile."],
+        "whyItMatters": "Risk route quality directly impacts trust and valuation perception.",
+        "recommendedQuickWins": ["Introduce priority risk/action summary block."],
+        "recommendedStructuralFixes": ["Migrate to decision-first detail template composition."],
+        "trustFixes": ["Show confidence + source + recency for every key risk callout."],
+        "mobileFixes": ["Replace wide matrices with stacked risk cards."]
+      },
+      "execution": { "status": "In Build", "dependencies": ["Risk card stack component"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.5, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-014",
+      "route": "/dashboard/properties/[id]/tools/coverage-intelligence",
+      "routeName": "Coverage Intelligence Tool",
+      "routeFamily": "Tool Workspace",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Trust UX",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": { "overall": 6.8, "visual": 6.9, "ux": 6.8, "trust": 7.0, "mobile": 6.8, "buyerReadiness": 6.7 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "M", "roiScore": 79, "sprintTarget": "Sprint 6" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Tool Workspace Template v1",
+        "targetTemplateFamily": "Tool Workspace Template v1",
+        "templateComplianceScore": 7.1,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["TRUST_GAP", "PRIMARY_ACTION_AMBIGUOUS"]
+      },
+      "findings": {
+        "topProblems": ["Action path to execution still can be more explicit.", "Some recommendation blocks exceed ideal density."],
+        "whyItMatters": "Coverage intelligence is a trust-critical decision route.",
+        "recommendedQuickWins": ["Add clearer one-step next action CTA near top."],
+        "recommendedStructuralFixes": ["Standardize compare handoff pattern into coverage options route."],
+        "trustFixes": ["Normalize trust strip copy for recommendation confidence context."],
+        "mobileFixes": ["Reduce secondary context blocks in first viewport."]
+      },
+      "execution": { "status": "In Build", "dependencies": ["Coverage compare handoff component"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.7, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-015",
+      "route": "/dashboard/properties/[id]/tools/mortgage-refinance-radar",
+      "routeName": "Refinance Radar",
+      "routeFamily": "Tool Workspace",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Product Experience",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": { "overall": 6.7, "visual": 6.8, "ux": 6.7, "trust": 6.8, "mobile": 6.6, "buyerReadiness": 6.6 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "L", "roiScore": 76, "sprintTarget": "Sprint 8" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Tool Workspace Template v1",
+        "targetTemplateFamily": "Tool Workspace Template v1",
+        "templateComplianceScore": 6.8,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["COMPARE_CONFUSING", "TRUST_GAP", "MOBILE_DENSE"]
+      },
+      "findings": {
+        "topProblems": ["Financial comparison framing can overload users.", "Mobile financial tables still too dense."],
+        "whyItMatters": "Refinance outcomes are financially sensitive and must feel clear and credible.",
+        "recommendedQuickWins": ["Elevate one recommended option with rationale summary."],
+        "recommendedStructuralFixes": ["Adopt compare template with decision context slot."],
+        "trustFixes": ["Expose assumptions and confidence tiers for projected savings."],
+        "mobileFixes": ["Use mobile card summary for top 2 scenarios only."
+        ]
+      },
+      "execution": { "status": "Planned", "dependencies": ["Compare decision context standard"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.6, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-016",
+      "route": "/dashboard/properties/[id]/tools/quote-comparison",
+      "routeName": "Quote Comparison",
+      "routeFamily": "Compare",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Trust UX",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": { "overall": 6.3, "visual": 6.4, "ux": 6.1, "trust": 6.4, "mobile": 6.5, "buyerReadiness": 6.0 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "High", "valuationRisk": "High" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "M", "roiScore": 84, "sprintTarget": "Sprint 7" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Compare Template v1 (placeholder)",
+        "targetTemplateFamily": "Compare Template v1",
+        "templateComplianceScore": 6.2,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["COMPARE_CONFUSING", "BUYER_PERCEPTION_RISK", "PRIMARY_ACTION_AMBIGUOUS"]
+      },
+      "findings": {
+        "topProblems": ["Route still reads as placeholder in parts.", "Decision framing and recommendation confidence need stronger structure."],
+        "whyItMatters": "Weak compare experiences materially hurt value perception in diligence.",
+        "recommendedQuickWins": ["Add decision context and top recommendation card at top."],
+        "recommendedStructuralFixes": ["Complete compare template migration with normalized option cards."],
+        "trustFixes": ["Show source confidence and recency on each compared option."],
+        "mobileFixes": ["Collapse option detail by default with clear expand affordances."]
+      },
+      "execution": { "status": "In Build", "dependencies": ["Compare option card primitive"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.0, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-017",
+      "route": "/dashboard/properties/[id]/tools/home-savings",
+      "routeName": "Home Savings",
+      "routeFamily": "Tool Workspace",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Product Experience",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": { "overall": 6.7, "visual": 6.8, "ux": 6.7, "trust": 6.8, "mobile": 6.7, "buyerReadiness": 6.6 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "M", "roiScore": 77, "sprintTarget": "Sprint 8" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Tool Workspace Template v1",
+        "targetTemplateFamily": "Tool Workspace Template v1",
+        "templateComplianceScore": 6.9,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["EXPLAINABILITY_WEAK", "PRIMARY_ACTION_AMBIGUOUS"]
+      },
+      "findings": {
+        "topProblems": ["Opportunity prioritization can be clearer.", "Action links are inconsistent across opportunity cards."],
+        "whyItMatters": "Savings route must convert insight to action quickly.",
+        "recommendedQuickWins": ["Pin top savings action with expected impact and confidence."],
+        "recommendedStructuralFixes": ["Normalize opportunity card actions and progression state."],
+        "trustFixes": ["Add confidence/source labels for computed savings opportunities."],
+        "mobileFixes": ["Simplify opportunity card metadata stack on mobile."]
+      },
+      "execution": { "status": "Planned", "dependencies": ["Opportunity card standardization"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.5, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-018",
+      "route": "/dashboard/properties/[id]/tools/negotiation-shield",
+      "routeName": "Negotiation Shield",
+      "routeFamily": "Compare",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Trust UX",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": { "overall": 6.8, "visual": 6.9, "ux": 6.8, "trust": 6.9, "mobile": 6.7, "buyerReadiness": 6.8 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "L", "roiScore": 75, "sprintTarget": "Sprint 8" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Compare Template v1 (partial)",
+        "targetTemplateFamily": "Compare Template v1",
+        "templateComplianceScore": 6.7,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["TEMPLATE_DRIFT", "COMPARE_CONFUSING", "TOKEN_DRIFT"]
+      },
+      "findings": {
+        "topProblems": ["Legacy raw primitives remain in route implementation.", "Compare narrative can be simplified for first-time users."],
+        "whyItMatters": "Template drift in a trust-sensitive tool drives inconsistency debt.",
+        "recommendedQuickWins": ["Migrate remaining raw card usage to governed templates."],
+        "recommendedStructuralFixes": ["Complete full compare template migration and option grouping."],
+        "trustFixes": ["Normalize signal strength/source disclosures by recommendation block."],
+        "mobileFixes": ["Reduce chip/filter density in opening viewport."]
+      },
+      "execution": { "status": "In Build", "dependencies": ["Shared primitives migration"], "blockers": ["Legacy route complexity"], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.6, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    },
+    {
+      "id": "RTE-P1-019",
+      "route": "/dashboard/properties/[id]/tools/service-price-radar",
+      "routeName": "Service Price Radar",
+      "routeFamily": "Compare",
+      "surfaceType": "App",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Trust Intelligence",
+        "designOwner": "Design Lead - Product Experience",
+        "engineeringOwner": "EM - Intelligence Tools"
+      },
+      "scores": { "overall": 6.9, "visual": 7.0, "ux": 6.9, "trust": 7.0, "mobile": 6.8, "buyerReadiness": 6.8 },
+      "riskFlags": { "trustHardFail": false, "mobileHardFail": false, "buyerHardFail": false, "conversionRisk": "Medium", "valuationRisk": "Medium" },
+      "prioritization": { "priority": "P1", "impact": "High", "effort": "M", "roiScore": 78, "sprintTarget": "Sprint 7" },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Compare Template v1 (partial)",
+        "targetTemplateFamily": "Compare Template v1",
+        "templateComplianceScore": 6.9,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": ["COMPARE_CONFUSING", "TRUST_GAP", "STATE_QUALITY_WEAK"]
+      },
+      "findings": {
+        "topProblems": ["Linked-option flow can feel complex for homeowners.", "Some states still rely on dense explanatory blocks."],
+        "whyItMatters": "High-traffic price decision route must reduce effort, not add it.",
+        "recommendedQuickWins": ["Pin top recommendation and demote secondary options."],
+        "recommendedStructuralFixes": ["Consolidate compare interactions with unified option detail pattern."],
+        "trustFixes": ["Ensure confidence/source/freshness visible for each recommendation set."],
+        "mobileFixes": ["Default to compact cards with progressive detail reveal."]
+      },
+      "execution": { "status": "In Build", "dependencies": ["Compare card normalization"], "blockers": [], "dateAudited": "2026-04-12", "lastUpdated": "2026-04-12", "releaseVersion": "2026.05-track1" },
+      "validation": { "beforeScore": 6.7, "afterScore": null, "screenshotsUpdated": false, "qaPassed": false, "regressionSafe": false }
+    }
+  ]
+}

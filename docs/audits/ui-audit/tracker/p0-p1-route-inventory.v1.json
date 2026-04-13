@@ -1,0 +1,27 @@
+{
+  "version": "v1",
+  "updatedAt": "2026-04-12",
+  "p0Routes": [
+    "/",
+    "/signup",
+    "/dashboard",
+    "/dashboard/properties",
+    "/dashboard/properties/[id]",
+    "/dashboard/properties/[id]/home-score",
+    "/dashboard/properties/[id]/status-board",
+    "/dashboard/properties/[id]/tools/guidance-overview"
+  ],
+  "p1Routes": [
+    "/dashboard/properties/[id]/inventory",
+    "/dashboard/properties/[id]/inventory/coverage",
+    "/dashboard/properties/[id]/rooms",
+    "/dashboard/properties/[id]/timeline",
+    "/dashboard/properties/[id]/risk-assessment",
+    "/dashboard/properties/[id]/tools/coverage-intelligence",
+    "/dashboard/properties/[id]/tools/mortgage-refinance-radar",
+    "/dashboard/properties/[id]/tools/quote-comparison",
+    "/dashboard/properties/[id]/tools/home-savings",
+    "/dashboard/properties/[id]/tools/negotiation-shield",
+    "/dashboard/properties/[id]/tools/service-price-radar"
+  ]
+}
