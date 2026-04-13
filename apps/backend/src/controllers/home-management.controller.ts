@@ -215,8 +215,7 @@ export const postInsurancePolicy = async (req: AuthRequest, res: Response, next:
     const homeownerProfileId = getHomeownerId(req);
     const policyData: CreateInsurancePolicyDTO = req.body;
     
-    // DEBUG 9: Log incoming request data
-    console.log('DEBUG (Controller): POST /insurance-policies received data:', policyData);
+    logger.debug({ endpoint: 'POST /insurance-policies', userId: homeownerProfileId }, 'insurance policy create');
 
     const policy = await HomeManagementService.createInsurancePolicy(homeownerProfileId, policyData);
     res.status(201).json({ success: true, data: policy });
