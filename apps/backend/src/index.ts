@@ -45,6 +45,7 @@ import orchestrationRoutes from './routes/orchestration.routes';
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
 import { authenticate, requireRole } from './middleware/auth.middleware';
+import { apiRateLimiter } from './middleware/rateLimiter.middleware';
 import { UserRole } from './types/auth.types';
 import notificationRoutes from './routes/notification.routes';
 import seasonalChecklistRoutes from './routes/seasonalChecklist.routes';
@@ -133,6 +134,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Apply global API rate limiting at the app boundary so all /api/* routes
+// are covered, including any that do not self-apply a per-route limiter.
+app.use('/api', apiRateLimiter);
 
 if (process.env.NODE_ENV === 'development') {
   app.use((req: Request, res: Response, next: NextFunction) => {
