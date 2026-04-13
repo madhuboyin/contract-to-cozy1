@@ -12,12 +12,19 @@ import {
 // NOTE: We rely on the PrismaClient type for consistency for Document 
 import { Document } from '@prisma/client'; 
 import multer from 'multer';
+import { logger } from '../lib/logger';
 
 // ============================================================================
 // FILE UPLOAD SETUP
 // ============================================================================
-// Use memory storage for simplicity and mock cloud storage integration
-export const upload = multer({ storage: multer.memoryStorage() }); 
+export const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 // ============================================================================
 
 // Utility function to get homeownerProfileId from the request (assuming Auth is implemented)
@@ -45,8 +52,7 @@ export const postExpense = async (req: AuthRequest, res: Response, next: NextFun
     const homeownerProfileId = getHomeownerId(req);
     const expenseData: CreateExpenseDTO = req.body;
     
-    // DEBUG 1: Log incoming request data
-    console.log('DEBUG (Controller): POST /expenses received data:', expenseData);
+    logger.debug({ endpoint: 'POST /expenses', userId: homeownerProfileId }, 'expense create');
 
     const expense = await HomeManagementService.createExpense(homeownerProfileId, expenseData);
     res.status(201).json({ success: true, data: expense });
@@ -114,8 +120,7 @@ export const postWarranty = async (req: AuthRequest, res: Response, next: NextFu
     const homeownerProfileId = getHomeownerId(req);
     const warrantyData: CreateWarrantyDTO = req.body;
     
-    // DEBUG 5: Log incoming request data
-    console.log('DEBUG (Controller): POST /warranties received data:', warrantyData);
+    logger.debug({ endpoint: 'POST /warranties', userId: homeownerProfileId }, 'warranty create');
 
     const warranty = await HomeManagementService.createWarranty(homeownerProfileId, warrantyData);
     res.status(201).json({ success: true, data: warranty });
