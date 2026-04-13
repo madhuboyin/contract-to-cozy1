@@ -7,6 +7,7 @@ import { getRoomScanProvider } from './provider';
 import { presignGetObject } from '../storage/presign';
 
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { logger } from '../../lib/logger';
 
 function envInt(key: string, dflt: number) {
   const n = Number(process.env[key]);
@@ -432,7 +433,7 @@ export class RoomScanService {
           const jitter = Math.floor(Math.random() * 150);
           const backoff = Math.min(8000, this.baseBackoffMs * Math.pow(2, attempt - 1)) + jitter;
 
-          console.warn('[room-scan][retry]', {
+          logger.warn('[room-scan][retry]', {
             sessionId: session.id,
             attempt,
             backoffMs: backoff,
@@ -448,7 +449,7 @@ export class RoomScanService {
       const items = normalizeItems(result?.items);
       const usage = (result as any)?.raw?.usageMetadata || null;
 
-      console.info('[room-scan][budget]', {
+      logger.info('[room-scan][budget]', {
         sessionId: session.id,
         provider: provider.name,
         model: (result as any)?.raw?.model,

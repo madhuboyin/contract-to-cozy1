@@ -2,6 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
+import { logger } from '../lib/logger';
 
 interface ClimateRisk {
   category: string;
@@ -60,7 +61,7 @@ export class ClimateRiskPredictorService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[CLIMATE-RISK] GEMINI_API_KEY not set');
+      logger.warn('[CLIMATE-RISK] GEMINI_API_KEY not set');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -204,7 +205,7 @@ Only include categories with risk level MODERATE or higher.`;
       }));
 
     } catch (error) {
-      console.error('[CLIMATE-RISK] AI analysis error:', error);
+      logger.error('[CLIMATE-RISK] AI analysis error:', error);
       return this.getBasicRisks(location);
     }
   }
@@ -341,7 +342,7 @@ Return as JSON array of strings (no markdown):
       return JSON.parse(text).slice(0, 5);
 
     } catch (error) {
-      console.error('[CLIMATE-RISK] Recommendations error:', error);
+      logger.error('[CLIMATE-RISK] Recommendations error:', error);
       return this.getBasicRecommendations(overallScore);
     }
   }

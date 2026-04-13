@@ -1,5 +1,6 @@
 import { getGuidanceModels, clampConfidenceToDecimal, clampSeverityScore, GuidanceSignalSourceInput, NormalizedGuidanceSignalInput, GuidanceDecisionStage, GuidanceExecutionReadiness, GuidanceIssueDomain, GuidanceSeverity } from './guidanceTypes';
 import { guidanceValidationService } from './guidanceValidation.service';
+import { logger } from '../../lib/logger';
 
 const ISSUE_DOMAIN_BY_FAMILY: Record<string, GuidanceIssueDomain> = {
   lifecycle_end_or_past_life: 'ASSET_LIFECYCLE',
@@ -312,7 +313,7 @@ export class GuidanceSignalResolverService {
       freshness.isStale && executionReadiness === 'READY' ? 'NEEDS_CONTEXT' : executionReadiness;
 
     if (freshness.isStale) {
-      console.info('[GUIDANCE] stale signal normalized', {
+      logger.info('[GUIDANCE] stale signal normalized', {
         propertyId: input.propertyId,
         signalIntentFamily,
         observedAt: freshness.observedAt,

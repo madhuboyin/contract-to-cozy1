@@ -5,6 +5,7 @@
 import { prisma } from '../../../lib/prisma';
 import { APIError } from '../../../middleware/error.middleware';
 import { SourceSignal, GazetteWeekWindow } from '../types/gazette.types';
+import { logger } from '../../../lib/logger';
 
 export class GazetteSignalCollectorService {
   /**
@@ -99,7 +100,7 @@ export class GazetteSignalCollectorService {
       if (result.status === 'fulfilled') {
         signals.push(...result.value);
       } else {
-        console.error(
+        logger.error(
           `[GazetteSignalCollector] Failed to collect ${sourceNames[i]} signals for property ${propertyId}:`,
           result.reason,
         );

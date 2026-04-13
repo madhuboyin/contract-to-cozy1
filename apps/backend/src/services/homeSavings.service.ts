@@ -21,6 +21,7 @@ import {
 } from './homeSavings/types';
 import { amountToAnnual, amountToMonthly, asNumber, round2, toRecord } from './homeSavings/helpers';
 import { signalService } from './signal.service';
+import { logger } from '../lib/logger';
 
 export type HomeSavingsCategoryStatus = 'NOT_SET_UP' | 'CONNECTED' | 'FOUND_SAVINGS';
 
@@ -636,7 +637,7 @@ export class HomeSavingsService {
           currency: opportunity.currency,
         });
       } catch (signalError) {
-        console.warn('Savings realization signal publish failed:', signalError);
+        logger.warn('Savings realization signal publish failed:', signalError);
       }
     }
 

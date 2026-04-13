@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { weatherService } from '../services/weather.service';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -99,7 +100,7 @@ router.get('/check/:propertyId', authenticate, async (req: AuthRequest, res: Res
       },
     });
   } catch (error: any) {
-    console.error('[WEATHER] /check/:propertyId error:', error);
+    logger.error('[WEATHER] /check/:propertyId error:', error);
     return res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch weather signals',

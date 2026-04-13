@@ -14,6 +14,7 @@ import { GazetteEditorialService } from '../editorial/GazetteEditorialService';
 import { NotificationService } from '../../../services/notification.service';
 import { analyticsEmitter } from '../../../services/analytics/emitter';
 import { AnalyticsModule, AnalyticsFeature, AnalyticsSource, ProductAnalyticsEventType } from '../../../services/analytics/taxonomy';
+import { logger } from '../../../lib/logger';
 
 type GazetteGenerationStage =
   | 'SIGNAL_COLLECTION'
@@ -67,13 +68,13 @@ export class GazetteGenerationJobRunnerService {
           where: { id: edition.id },
           data: { status: 'DRAFT' as any },
         });
-        console.log(`[GazetteJobRunner] Edition ${editionId} reset from FAILED → DRAFT for retry`);
+        logger.info(`[GazetteJobRunner] Edition ${editionId} reset from FAILED → DRAFT for retry`);
       }
 
       // 5. Pre-run: mark stale candidates as EXPIRED so they don't pollute ranking
       const expiredCount = await GazetteCandidateFactoryService.markExpiredCandidates(propertyId);
       if (expiredCount > 0) {
-        console.log(`[GazetteJobRunner] Marked ${expiredCount} stale candidate(s) EXPIRED for property ${propertyId}`);
+        logger.info(`[GazetteJobRunner] Marked ${expiredCount} stale candidate(s) EXPIRED for property ${propertyId}`);
       }
 
       // ── STAGE: SIGNAL_COLLECTION ──────────────────────────────────────────
@@ -207,7 +208,7 @@ export class GazetteGenerationJobRunnerService {
       const invalidCount = stories.length - validStories.length;
 
       if (invalidCount > 0) {
-        console.warn(
+        logger.warn(
           `[GazetteJobRunner] ${invalidCount} story(ies) failed validation and will be excluded ` +
           `for edition ${editionId}. Valid: ${validStories.length}`,
         );
@@ -255,12 +256,12 @@ export class GazetteGenerationJobRunnerService {
           editionId!,
           finalEdition,
         ).catch((err) => {
-          console.warn('[GazetteJobRunner] Post-publish hooks failed (non-fatal):', err?.message);
+          logger.warn('[GazetteJobRunner] Post-publish hooks failed (non-fatal):', err?.message);
         });
       }
 
       const durationMs = Date.now() - startTime;
-      console.log(
+      logger.info(
         `[GazetteJobRunner] Edition ${editionId} → ${finalEdition.status} ` +
         `(qualified=${qualifiedCount}, selected=${stories.length}, durationMs=${durationMs})`,
       );
@@ -284,7 +285,7 @@ export class GazetteGenerationJobRunnerService {
             data: { status: 'FAILED' as any },
           });
         } catch (updateErr) {
-          console.error('[GazetteJobRunner] Failed to mark edition as FAILED:', updateErr);
+          logger.error('[GazetteJobRunner] Failed to mark edition as FAILED:', updateErr);
         }
       }
 

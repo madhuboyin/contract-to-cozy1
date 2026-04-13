@@ -9,6 +9,7 @@ import {
   SaveNegotiationShieldInputPayload,
 } from '../services/negotiationShield.types';
 import { NegotiationShieldService } from '../services/negotiationShield.service';
+import { logger } from '../lib/logger';
 
 const service = new NegotiationShieldService();
 
@@ -205,7 +206,7 @@ export async function analyzeNegotiationShieldCase(
         },
       });
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] negotiation shield hook failed:', guidanceError);
+      logger.warn('[GUIDANCE] negotiation shield hook failed:', guidanceError);
     }
 
     res.status(201).json({ success: true, data: detail });

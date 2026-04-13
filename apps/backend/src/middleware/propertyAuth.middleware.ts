@@ -2,6 +2,7 @@
 import { Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { CustomRequest } from '../types';
+import { logger } from '../lib/logger';
 
 export const propertyAuthMiddleware = async (
   req: CustomRequest,
@@ -35,7 +36,7 @@ export const propertyAuthMiddleware = async (
     req.property = property as any;
     return next();
   } catch (error) {
-    console.error('Property Auth Error:', error);
+    logger.error('Property Auth Error:', error);
     return res
       .status(500)
       .json({ message: 'Internal server error during property authorization check.' });

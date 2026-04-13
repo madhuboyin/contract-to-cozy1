@@ -2,6 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
+import { logger } from '../lib/logger';
 
 interface TaxBillData {
   parcelId?: string;
@@ -110,7 +111,7 @@ export class TaxAppealService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[TAX-APPEAL] GEMINI_API_KEY not set');
+      logger.warn('[TAX-APPEAL] GEMINI_API_KEY not set');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -427,7 +428,7 @@ Keep it concise (300-400 words). Use professional, respectful tone.`;
       return response.text;
 
     } catch (error) {
-      console.error('[TAX-APPEAL] Letter generation error:', error);
+      logger.error('[TAX-APPEAL] Letter generation error:', error);
       return this.generateBasicAppealLetter(property, taxBillData, estimatedMarketValue, comparables);
     }
   }

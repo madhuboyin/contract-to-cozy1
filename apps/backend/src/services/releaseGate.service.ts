@@ -5,6 +5,7 @@
 
 import { prisma } from '../lib/prisma';
 import { TOOL_FLAGS, cohortFromPct, RolloutCohort } from '../config/featureFlags';
+import { logger } from '../lib/logger';
 
 // ============================================================================
 // INTERFACES
@@ -94,7 +95,7 @@ export async function checkGate(toolKey: string): Promise<GateCheckResult> {
     }
   } catch (err) {
     issues.push('Failed to query incident data');
-    console.error(`[ReleaseGate] Error checking gate for ${toolKey}:`, err);
+    logger.error(`[ReleaseGate] Error checking gate for ${toolKey}:`, err);
   }
 
   return {

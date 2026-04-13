@@ -6,6 +6,7 @@ import {
   UpdateMatchStatusInput,
 } from '../services/hiddenAssets/types';
 import {
+import { logger } from '../lib/logger';
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
   PropertyHiddenAssetMatchStatus,
@@ -40,7 +41,7 @@ export async function getHiddenAssetsForProperty(req: CustomRequest, res: Respon
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    console.error('[HiddenAssets] getHiddenAssetsForProperty error:', error);
+    logger.error('[HiddenAssets] getHiddenAssetsForProperty error:', error);
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to fetch hidden asset matches.',
@@ -69,7 +70,7 @@ export async function refreshHiddenAssetsForProperty(req: CustomRequest, res: Re
       msg === 'SCAN_IN_PROGRESS'
         ? 'A scan is already in progress for this property. Please wait a moment and try again.'
         : msg || 'Failed to run hidden asset scan.';
-    console.error('[HiddenAssets] refreshHiddenAssetsForProperty error:', error);
+    logger.error('[HiddenAssets] refreshHiddenAssetsForProperty error:', error);
     return res.status(status).json({ success: false, message: clientMessage });
   }
 }
@@ -89,7 +90,7 @@ export async function getHiddenAssetProgramDetail(req: CustomRequest, res: Respo
     const isNotFound = error?.message === 'Program not found.';
     const isAuth = error?.message === 'Authentication required.';
     const status = isNotFound ? 404 : isAuth ? 401 : 500;
-    console.error('[HiddenAssets] getHiddenAssetProgramDetail error:', error);
+    logger.error('[HiddenAssets] getHiddenAssetProgramDetail error:', error);
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to fetch program detail.',
@@ -113,7 +114,7 @@ export async function updateHiddenAssetMatchStatus(req: CustomRequest, res: Resp
     const isNotFound = error?.message === 'Match not found or access denied.';
     const isAuth = error?.message === 'Authentication required.';
     const status = isNotFound ? 404 : isAuth ? 401 : 500;
-    console.error('[HiddenAssets] updateHiddenAssetMatchStatus error:', error);
+    logger.error('[HiddenAssets] updateHiddenAssetMatchStatus error:', error);
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to update match status.',

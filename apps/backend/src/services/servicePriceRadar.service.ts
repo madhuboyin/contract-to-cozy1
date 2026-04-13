@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { ServicePriceRadarEngine } from './servicePriceRadar.engine';
 import {
+import { logger } from '../lib/logger';
   BenchmarkMatch,
   LinkedEntityContext,
   PropertyContext,
@@ -751,7 +752,7 @@ async function findBestBenchmark(
 
     return { matched: true, benchmark: best };
   } catch (error) {
-    console.warn('Service Price Radar benchmark lookup skipped:', error);
+    logger.warn('Service Price Radar benchmark lookup skipped:', error);
     return { matched: false, benchmark: null };
   }
 }

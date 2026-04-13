@@ -8,6 +8,7 @@ import { GazetteEditorialPromptBuilder } from './GazetteEditorialPromptBuilder';
 import { GazetteEditorialValidator } from './GazetteEditorialValidator';
 import { GazetteEditorialFallbackBuilder } from './GazetteEditorialFallbackBuilder';
 import {
+import { logger } from '../../../lib/logger';
   EditionEditorialInput,
   EditionEditorialOutput,
   RawAIEditionEditorial,
@@ -38,13 +39,13 @@ export class GazetteSummaryGenerator {
     try {
       rawText = await this._callWithTimeout(prompt, systemInstruction);
     } catch (err) {
-      console.warn(`[GazetteSummaryGenerator] AI call failed for edition ${input.editionId}:`, (err as Error).message);
+      logger.warn(`[GazetteSummaryGenerator] AI call failed for edition ${input.editionId}:`, (err as Error).message);
       return GazetteEditorialFallbackBuilder.buildEditionFallback(input, 'FAILED');
     }
 
     const parsed = parseJsonFromText(rawText);
     if (!parsed || typeof parsed !== 'object') {
-      console.warn(`[GazetteSummaryGenerator] Could not parse JSON for edition ${input.editionId}`);
+      logger.warn(`[GazetteSummaryGenerator] Could not parse JSON for edition ${input.editionId}`);
       return GazetteEditorialFallbackBuilder.buildEditionFallback(input, 'FALLBACK_USED');
     }
 
@@ -52,7 +53,7 @@ export class GazetteSummaryGenerator {
     const validationResult = GazetteEditorialValidator.validateEditionOutput(raw);
 
     if (!validationResult.valid) {
-      console.warn(
+      logger.warn(
         `[GazetteSummaryGenerator] Validation failed for edition ${input.editionId}:`,
         validationResult.issues.join('; '),
       );

@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { incrementStreak, StreakUpdateResult } from './gamification.service';
 import { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory.util';
+import { logger } from '../lib/logger';
 
 type RuleGroupKey = 'HVAC' | 'WATER_HEATER' | 'ROOF';
 
@@ -612,7 +613,7 @@ export async function updateForecastStatus(
 
   if (status === PredictionStatus.COMPLETED) {
     generateForecast(propertyId).catch((err) => {
-      console.error('[MAINTENANCE_PREDICTION] Forecast revalidation failed:', err);
+      logger.error('[MAINTENANCE_PREDICTION] Forecast revalidation failed:', err);
     });
   }
 

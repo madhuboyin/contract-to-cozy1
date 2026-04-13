@@ -6,6 +6,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { movingConciergeService } from '../services/movingConcierge.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -78,7 +79,7 @@ router.post('/generate-plan', authenticate, async (req: AuthRequest, res: Respon
       });
     }
 
-    console.log('[MOVING-CONCIERGE] Generating moving plan for property:', propertyId);
+    logger.info('[MOVING-CONCIERGE] Generating moving plan for property:', propertyId);
 
     const plan = await movingConciergeService.generateMovingPlan(
       propertyId,
@@ -103,7 +104,7 @@ router.post('/generate-plan', authenticate, async (req: AuthRequest, res: Respon
     });
 
   } catch (error: any) {
-    console.error('[MOVING-CONCIERGE] Error:', error);
+    logger.error('[MOVING-CONCIERGE] Error:', error);
     
     // Special handling for user type error
     if (error.message.includes('only available for home buyers')) {
@@ -149,7 +150,7 @@ router.post('/save-plan', authenticate, async (req: AuthRequest, res: Response) 
     });
 
   } catch (error: any) {
-    console.error('[MOVING-CONCIERGE] Save error:', error);
+    logger.error('[MOVING-CONCIERGE] Save error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to save moving plan'
@@ -179,7 +180,7 @@ router.get('/get-plan/:propertyId', authenticate, propertyAuthMiddleware, async 
     });
 
   } catch (error: any) {
-    console.error('[MOVING-CONCIERGE] Get plan error:', error);
+    logger.error('[MOVING-CONCIERGE] Get plan error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to get moving plan'
@@ -220,7 +221,7 @@ router.post('/update-tasks', authenticate, async (req: AuthRequest, res: Respons
     });
 
   } catch (error: any) {
-    console.error('[MOVING-CONCIERGE] Update tasks error:', error);
+    logger.error('[MOVING-CONCIERGE] Update tasks error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to update completed tasks'
@@ -250,7 +251,7 @@ router.delete('/delete-plan/:propertyId', authenticate, propertyAuthMiddleware, 
     });
 
   } catch (error: any) {
-    console.error('[MOVING-CONCIERGE] Delete error:', error);
+    logger.error('[MOVING-CONCIERGE] Delete error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete moving plan'

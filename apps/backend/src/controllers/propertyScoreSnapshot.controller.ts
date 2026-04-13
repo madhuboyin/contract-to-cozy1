@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { getPropertyScoreSnapshotSummary } from '../services/propertyScoreSnapshot.service';
+import { logger } from '../lib/logger';
 
 export async function getPropertyScoreSnapshots(req: CustomRequest, res: Response) {
   try {
@@ -15,7 +16,7 @@ export async function getPropertyScoreSnapshots(req: CustomRequest, res: Respons
     const summary = await getPropertyScoreSnapshotSummary(propertyId, userId, weeks);
     return res.json({ success: true, data: summary });
   } catch (error: any) {
-    console.error('Error fetching property score snapshots:', error);
+    logger.error('Error fetching property score snapshots:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch property score snapshots.',

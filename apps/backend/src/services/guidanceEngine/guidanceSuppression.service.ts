@@ -1,3 +1,4 @@
+import { logger } from '../../lib/logger';
 type EnrichedGuidanceAction = {
   journey: any;
   signal: any | null;
@@ -302,7 +303,7 @@ export class GuidanceSuppressionService {
       for (const item of suppressedSignals) {
         summary[item.reason] = (summary[item.reason] ?? 0) + 1;
       }
-      console.info('[GUIDANCE] suppression applied', summary);
+      logger.info('[GUIDANCE] suppression applied', summary);
     }
 
     return {

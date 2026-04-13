@@ -1,6 +1,7 @@
 // apps/backend/src/services/homeEvents/homeEvents.autogen.ts
 import { prisma } from '../../lib/prisma';
 import {
+import { logger } from '../../lib/logger';
   formatMajorApplianceType,
   inferMajorApplianceType,
   PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
@@ -422,7 +423,7 @@ export class HomeEventsAutoGen {
         documentId: args.documentId,
         });
     } catch (e) {
-        console.error('[HOME_EVENTS_AUTOGEN] promoteDocumentEventToSemantic failed:', e);
+        logger.error('[HOME_EVENTS_AUTOGEN] promoteDocumentEventToSemantic failed:', e);
     }
   
     return evt;

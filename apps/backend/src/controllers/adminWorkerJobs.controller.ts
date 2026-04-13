@@ -2,13 +2,14 @@
 
 import { Request, Response } from 'express';
 import { listWorkerJobs, triggerJob } from '../services/adminWorkerJobs.service';
+import { logger } from '../lib/logger';
 
 export async function getWorkerJobsHandler(req: Request, res: Response): Promise<void> {
   try {
     const jobs = await listWorkerJobs();
     res.json({ success: true, data: jobs });
   } catch (err: any) {
-    console.error('[ADMIN-JOBS] Failed to list worker jobs:', err.message);
+    logger.error('[ADMIN-JOBS] Failed to list worker jobs:', err.message);
     res.status(500).json({ success: false, error: { message: 'Failed to load worker jobs' } });
   }
 }

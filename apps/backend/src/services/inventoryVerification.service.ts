@@ -6,6 +6,7 @@ import { applianceOracleService } from './applianceOracle.service';
 import { refreshEstimatedMaintenancePremium } from './valueIntelligence.service';
 import { incrementStreak, StreakUpdateResult } from './gamification.service';
 import { generateForecast } from './maintenancePrediction.service';
+import { logger } from '../lib/logger';
 
 const APPLIANCE_LIFESPAN_DATA: Record<string, { avgLife: number; category: string }> = {
   'HVAC': { avgLife: 15, category: 'HVAC' },
@@ -170,18 +171,18 @@ export async function markItemVerified(
 
   // Fire-and-forget lifespan recalculation
   applianceOracleService.recalculateLifespan(itemId).catch((err) => {
-    console.error('[VERIFICATION] Lifespan recalculation failed (non-blocking):', err);
+    logger.error('[VERIFICATION] Lifespan recalculation failed (non-blocking):', err);
   });
 
   const streak = await incrementStreak(propertyId);
 
   generateForecast(propertyId).catch((err) => {
-    console.error('[VERIFICATION] Maintenance forecast generation failed (non-blocking):', err);
+    logger.error('[VERIFICATION] Maintenance forecast generation failed (non-blocking):', err);
   });
 
   if (HIGH_VALUE_CATEGORIES.includes(updated.category as string)) {
     refreshEstimatedMaintenancePremium(propertyId).catch((err) => {
-      console.error('[VERIFICATION] Maintenance premium refresh failed (non-blocking):', err);
+      logger.error('[VERIFICATION] Maintenance premium refresh failed (non-blocking):', err);
     });
   }
 

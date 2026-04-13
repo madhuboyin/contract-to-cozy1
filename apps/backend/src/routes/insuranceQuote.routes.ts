@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { CustomRequest } from '../types';
+import { logger } from '../lib/logger';
 
 export const insuranceQuoteRouter = Router();
 
@@ -79,7 +80,7 @@ insuranceQuoteRouter.post(
 
       return res.json({ success: true, data: { quoteRequest: created } });
     } catch (err: any) {
-      console.error('[INSURANCE_QUOTE] create failed', err);
+      logger.error('[INSURANCE_QUOTE] create failed', err);
       return res.status(500).json({ success: false, message: err.message || 'Failed to create quote request' });
     }
   }

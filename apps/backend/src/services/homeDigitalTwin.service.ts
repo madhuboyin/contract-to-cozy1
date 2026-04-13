@@ -13,6 +13,7 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { HomeDigitalTwinBuilderService } from './homeDigitalTwinBuilder.service';
 import { HomeDigitalTwinQualityService } from './homeDigitalTwinQuality.service';
 import { maybeMarkPropertyActivated } from './property.service';
+import { logger } from '../lib/logger';
 
 const builder = new HomeDigitalTwinBuilderService();
 const quality = new HomeDigitalTwinQualityService();
@@ -203,7 +204,7 @@ export class HomeDigitalTwinService {
     });
 
     try {
-      console.log(`[HomeDigitalTwin] init — building components for property=${propertyId} twin=${twin.id}`);
+      logger.info(`[HomeDigitalTwin] init — building components for property=${propertyId} twin=${twin.id}`);
 
       // Build components from existing property data
       await builder.buildComponents(propertyId, twin.id);
@@ -250,7 +251,7 @@ export class HomeDigitalTwinService {
           errorMessage: err instanceof Error ? err.message : 'Unknown error',
         },
       });
-      console.error(`[HomeDigitalTwin] init failed for property=${propertyId}`, err);
+      logger.error(`[HomeDigitalTwin] init failed for property=${propertyId}`, err);
       throw err;
     }
 
@@ -259,7 +260,7 @@ export class HomeDigitalTwinService {
       include: TWIN_INCLUDE,
     });
 
-    console.log(`[HomeDigitalTwin] init complete — property=${propertyId} status=ACTIVE`);
+    logger.info(`[HomeDigitalTwin] init complete — property=${propertyId} status=ACTIVE`);
     return serializeTwin(updated);
   }
 
@@ -288,7 +289,7 @@ export class HomeDigitalTwinService {
     });
 
     try {
-      console.log(`[HomeDigitalTwin] refresh — property=${propertyId} twin=${existing.id}`);
+      logger.info(`[HomeDigitalTwin] refresh — property=${propertyId} twin=${existing.id}`);
       await builder.buildComponents(propertyId, existing.id);
       await quality.evaluate(existing.id, propertyId);
 
@@ -314,7 +315,7 @@ export class HomeDigitalTwinService {
           errorMessage: err instanceof Error ? err.message : 'Unknown error',
         },
       });
-      console.error(`[HomeDigitalTwin] refresh failed for property=${propertyId}`, err);
+      logger.error(`[HomeDigitalTwin] refresh failed for property=${propertyId}`, err);
       throw err;
     }
 
@@ -323,7 +324,7 @@ export class HomeDigitalTwinService {
       include: TWIN_INCLUDE,
     });
 
-    console.log(`[HomeDigitalTwin] refresh complete — property=${propertyId}`);
+    logger.info(`[HomeDigitalTwin] refresh complete — property=${propertyId}`);
     return serializeTwin(updated);
   }
 }

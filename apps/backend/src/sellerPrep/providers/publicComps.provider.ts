@@ -1,6 +1,7 @@
 // apps/backend/src/sellerPrep/providers/publicComps.provider.ts
 import { CompsProvider } from './comps.provider';
 import { ComparableHome, ComparableResponse } from '../types/comps.types';
+import { logger } from '../../lib/logger';
 
 const SUPPORTED_REGIONS = ['NY', 'NJ', 'CA', 'TX', 'FL'];
 
@@ -13,7 +14,7 @@ async function fetchPublicSalesDataset(input: {
   // TODO: Implement actual public records API integration
   // For now, return empty array as placeholder
   // This would integrate with city/county open data APIs or MLS public records
-  console.log(`[PublicCompsProvider] Fetching sales data for ${input.city}, ${input.state}`);
+  logger.info(`[PublicCompsProvider] Fetching sales data for ${input.city}, ${input.state}`);
   
   // Placeholder: In production, this would:
   // 1. Query city/county open data APIs (e.g., NYC Open Data, county assessor records)

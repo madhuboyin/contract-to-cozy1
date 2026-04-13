@@ -2,6 +2,7 @@
 
 import { SignalType } from '@prisma/client';
 import { assertSafeUrl } from '../utils/ssrfGuard';
+import { logger } from '../lib/logger';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -73,14 +74,14 @@ export class WeatherService {
   async getLocalForecastMeta(zipCode: string): Promise<ForecastMeta> {
     const zip = String(zipCode ?? '').trim();
     if (!zip) {
-      console.warn('[WEATHER] getLocalForecastMeta called with empty zipCode');
+      logger.warn('[WEATHER] getLocalForecastMeta called with empty zipCode');
       return { signals: [], cityName: null };
     }
 
     // 1. Cache check
     const cached = this.getFromCache(zip);
     if (cached) {
-      console.log(`[WEATHER] Cache hit for zip=${zip}: [${cached.signals.join(', ')}]`);
+      logger.info(`[WEATHER] Cache hit for zip=${zip}: [${cached.signals.join(', ')}]`);
       return { signals: cached.signals, cityName: cached.cityName };
     }
 
@@ -88,7 +89,7 @@ export class WeatherService {
     try {
       const apiKey = process.env.OPENWEATHER_API_KEY;
       if (!apiKey) {
-        console.error('[WEATHER] OPENWEATHER_API_KEY is not set — returning empty signals');
+        logger.error('[WEATHER] OPENWEATHER_API_KEY is not set — returning empty signals');
         return { signals: [], cityName: null };
       }
 
@@ -107,7 +108,7 @@ export class WeatherService {
         const res = await fetch(requestUrl, { signal: ctrl.signal });
         if (!res.ok) {
           const body = await res.text().catch(() => '');
-          console.error(`[WEATHER] OWM returned ${res.status} for zip=${zip}: ${body}`);
+          logger.error(`[WEATHER] OWM returned ${res.status} for zip=${zip}: ${body}`);
           return { signals: [], cityName: null };
         }
         data = (await res.json()) as OWMForecastResponse;
@@ -118,7 +119,7 @@ export class WeatherService {
       // 3. Map to internal signals + extract city name
       const signals = this.mapResponseToSignals(data);
       const cityName = data?.city?.name ?? null;
-      console.log(
+      logger.info(
         `[WEATHER] Fetched signals for zip=${zip} city=${cityName ?? 'unknown'}: [${signals.join(', ')}]`
       );
 
@@ -128,9 +129,9 @@ export class WeatherService {
       return { signals, cityName };
     } catch (error: any) {
       if (error?.name === 'AbortError') {
-        console.error(`[WEATHER] Fetch timed out for zip=${zip}`);
+        logger.error(`[WEATHER] Fetch timed out for zip=${zip}`);
       } else {
-        console.error(`[WEATHER] Fetch failed for zip=${zip}:`, error?.message ?? error);
+        logger.error(`[WEATHER] Fetch failed for zip=${zip}:`, error?.message ?? error);
       }
       return { signals: [], cityName: null };
     }

@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 type SharedDataLogLevel = 'INFO' | 'WARN' | 'ERROR';
 
 type SharedDataLogInput = {
@@ -49,13 +50,13 @@ export function logSharedDataEvent(input: SharedDataLogInput): void {
 
   const encoded = JSON.stringify(payload);
   if ((input.level ?? 'INFO') === 'ERROR') {
-    console.error('[SHARED-DATA]', encoded);
+    logger.error('[SHARED-DATA]', encoded);
     return;
   }
   if ((input.level ?? 'INFO') === 'WARN') {
-    console.warn('[SHARED-DATA]', encoded);
+    logger.warn('[SHARED-DATA]', encoded);
     return;
   }
-  console.info('[SHARED-DATA]', encoded);
+  logger.info('[SHARED-DATA]', encoded);
 }
 

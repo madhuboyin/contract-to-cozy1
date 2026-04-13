@@ -8,6 +8,7 @@ import { GazetteEditorialPromptBuilder } from './GazetteEditorialPromptBuilder';
 import { GazetteEditorialValidator } from './GazetteEditorialValidator';
 import { GazetteEditorialFallbackBuilder } from './GazetteEditorialFallbackBuilder';
 import {
+import { logger } from '../../../lib/logger';
   StoryEditorialInput,
   StoryEditorialOutput,
   RawAIStoryEditorial,
@@ -38,13 +39,13 @@ export class GazetteHeadlineGenerator {
     try {
       rawText = await this._callWithTimeout(prompt, systemInstruction);
     } catch (err) {
-      console.warn(`[GazetteHeadlineGenerator] AI call failed for story ${input.storyId}:`, (err as Error).message);
+      logger.warn(`[GazetteHeadlineGenerator] AI call failed for story ${input.storyId}:`, (err as Error).message);
       return GazetteEditorialFallbackBuilder.buildStoryFallback(input, 'FAILED');
     }
 
     const parsed = parseJsonFromText(rawText);
     if (!parsed || typeof parsed !== 'object') {
-      console.warn(`[GazetteHeadlineGenerator] Could not parse JSON for story ${input.storyId}`);
+      logger.warn(`[GazetteHeadlineGenerator] Could not parse JSON for story ${input.storyId}`);
       return GazetteEditorialFallbackBuilder.buildStoryFallback(input, 'FALLBACK_USED');
     }
 
@@ -55,7 +56,7 @@ export class GazetteHeadlineGenerator {
     });
 
     if (!validationResult.valid) {
-      console.warn(
+      logger.warn(
         `[GazetteHeadlineGenerator] Validation failed for story ${input.storyId}:`,
         validationResult.issues.join('; '),
       );

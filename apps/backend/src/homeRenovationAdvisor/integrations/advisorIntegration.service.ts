@@ -20,6 +20,7 @@ import { HomeDigitalTwinScenarioService } from '../../services/homeDigitalTwinSc
 import { PropertyMaintenanceTaskService } from '../../services/PropertyMaintenanceTask.service';
 import type { EvaluationOutput } from '../types/homeRenovationAdvisor.types';
 import type { SessionWithIncludes } from '../repository/advisorSession.repository';
+import { logger } from '../../lib/logger';
 
 const scenarioService = new HomeDigitalTwinScenarioService();
 
@@ -48,12 +49,12 @@ export async function runPostEvaluationIntegrations(
       // We store the homeEvent ID as a reference string only (no FK on session for HomeEvent).
       // The session's linkedTimelineItemId FK points to HomeCapitalTimelineItem if linked.
       // For now we log the event ID to console for traceability.
-      console.log(
+      logger.info(
         `[RenovationAdvisor] Home timeline event logged: eventId=${event.id} sessionId=${session.id}`,
       );
     }
   } catch (err) {
-    console.error('[RenovationAdvisor] Home timeline integration failed:', err);
+    logger.error('[RenovationAdvisor] Home timeline integration failed:', err);
   }
 
   // 2. Digital Twin Scenario
@@ -63,14 +64,14 @@ export async function runPostEvaluationIntegrations(
       linkedIds.linkedDigitalTwinScenarioId = scenarioId;
     }
   } catch (err) {
-    console.error('[RenovationAdvisor] Digital twin integration failed:', err);
+    logger.error('[RenovationAdvisor] Digital twin integration failed:', err);
   }
 
   // 3. Compliance Task (only for high-risk permit/licensing situations)
   try {
     await integrateComplianceTask(session, output);
   } catch (err) {
-    console.error('[RenovationAdvisor] Compliance task integration failed:', err);
+    logger.error('[RenovationAdvisor] Compliance task integration failed:', err);
   }
 
   // 4. Persist linked IDs back to the session (if any were populated)
@@ -78,7 +79,7 @@ export async function runPostEvaluationIntegrations(
     try {
       await persistLinkedEntityIds(session.id, linkedIds);
     } catch (err) {
-      console.error('[RenovationAdvisor] Failed to persist linked entity IDs:', err);
+      logger.error('[RenovationAdvisor] Failed to persist linked entity IDs:', err);
     }
   }
 }

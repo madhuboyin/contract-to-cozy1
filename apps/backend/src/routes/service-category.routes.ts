@@ -6,6 +6,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -55,13 +56,13 @@ router.get(
   authenticate,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      console.log('[SERVICE-CATEGORIES] Request received');
+      logger.info('[SERVICE-CATEGORIES] Request received');
       
       const userId = req.user?.userId;
-      console.log('[SERVICE-CATEGORIES] User ID:', userId);
+      logger.info('[SERVICE-CATEGORIES] User ID:', userId);
 
       if (!userId) {
-        console.log('[SERVICE-CATEGORIES] No user ID found');
+        logger.info('[SERVICE-CATEGORIES] No user ID found');
         return res.status(401).json({
           success: false,
           message: 'Authentication required',
@@ -69,19 +70,19 @@ router.get(
       }
 
       // Get user's segment
-      console.log('[SERVICE-CATEGORIES] Fetching homeowner profile...');
+      logger.info('[SERVICE-CATEGORIES] Fetching homeowner profile...');
       const homeownerProfile = await prisma.homeownerProfile.findUnique({
         where: { userId },
         select: { segment: true },
       });
-      console.log('[SERVICE-CATEGORIES] Profile:', homeownerProfile);
+      logger.info('[SERVICE-CATEGORIES] Profile:', homeownerProfile);
 
       const segment = homeownerProfile?.segment || 'EXISTING_OWNER';
       const isHomeBuyer = segment === 'HOME_BUYER';
-      console.log('[SERVICE-CATEGORIES] Segment:', segment, 'isHomeBuyer:', isHomeBuyer);
+      logger.info('[SERVICE-CATEGORIES] Segment:', segment, 'isHomeBuyer:', isHomeBuyer);
 
       // Fetch categories based on segment
-      console.log('[SERVICE-CATEGORIES] Fetching categories...');
+      logger.info('[SERVICE-CATEGORIES] Fetching categories...');
       const categories = await prisma.serviceCategoryConfig.findMany({
         where: {
           isActive: true,
@@ -92,7 +93,7 @@ router.get(
         orderBy: { sortOrder: 'asc' },
       });
       
-      console.log('[SERVICE-CATEGORIES] Found categories:', categories.length);
+      logger.info('[SERVICE-CATEGORIES] Found categories:', categories.length);
 
       res.status(200).json({
         success: true,
@@ -107,7 +108,7 @@ router.get(
         },
       });
     } catch (error) {
-      console.error('[SERVICE-CATEGORIES] Error:', error);
+      logger.error('[SERVICE-CATEGORIES] Error:', error);
       // Send detailed error in development
       if (process.env.NODE_ENV === 'development') {
         return res.status(500).json({
@@ -157,21 +158,21 @@ router.get(
   authenticate,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      console.log('[SERVICE-CATEGORIES-ALL] Request received');
+      logger.info('[SERVICE-CATEGORIES-ALL] Request received');
       
       const categories = await prisma.serviceCategoryConfig.findMany({
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
       });
 
-      console.log('[SERVICE-CATEGORIES-ALL] Found categories:', categories.length);
+      logger.info('[SERVICE-CATEGORIES-ALL] Found categories:', categories.length);
 
       res.status(200).json({
         success: true,
         data: { categories },
       });
     } catch (error) {
-      console.error('[SERVICE-CATEGORIES-ALL] Error:', error);
+      logger.error('[SERVICE-CATEGORIES-ALL] Error:', error);
       if (process.env.NODE_ENV === 'development') {
         return res.status(500).json({
           success: false,

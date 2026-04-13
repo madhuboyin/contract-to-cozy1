@@ -9,6 +9,7 @@ import { AuthRequest } from '../types/auth.types';
 import { inspectionAnalysisService } from '../services/inspectionAnalysis.service';
 import { prisma } from '../config/database';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -95,7 +96,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
       });
     }
 
-    console.log(`[INSPECTION] Analyzing report for property ${propertyId}`);
+    logger.info(`[INSPECTION] Analyzing report for property ${propertyId}`);
 
     // Start analysis (this is async but we return immediately)
     const reportId = await inspectionAnalysisService.analyzeInspectionReport(
@@ -138,7 +139,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
         });
       }
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] inspection report hook failed:', guidanceError);
+      logger.warn('[GUIDANCE] inspection report hook failed:', guidanceError);
     }
 
     res.json({
@@ -150,7 +151,7 @@ router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequ
     });
 
   } catch (error: any) {
-    console.error('[INSPECTION] Upload error:', error);
+    logger.error('[INSPECTION] Upload error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to analyze inspection report'
@@ -191,7 +192,7 @@ router.get('/:reportId', authenticate, async (req: AuthRequest, res: Response) =
     });
 
   } catch (error: any) {
-    console.error('[INSPECTION] Get report error:', error);
+    logger.error('[INSPECTION] Get report error:', error);
     res.status(error.message === 'Report not found' ? 404 : 500).json({
       success: false,
       message: error.message
@@ -230,7 +231,7 @@ router.get('/property/:propertyId', authenticate, propertyAuthMiddleware, async 
     });
 
   } catch (error: any) {
-    console.error('[INSPECTION] Get property reports error:', error);
+    logger.error('[INSPECTION] Get property reports error:', error);
     res.status(500).json({
       success: false,
       message: error.message
@@ -269,7 +270,7 @@ router.get('/:reportId/maintenance-calendar', authenticate, async (req: AuthRequ
     });
 
   } catch (error: any) {
-    console.error('[INSPECTION] Generate calendar error:', error);
+    logger.error('[INSPECTION] Generate calendar error:', error);
     res.status(500).json({
       success: false,
       message: error.message

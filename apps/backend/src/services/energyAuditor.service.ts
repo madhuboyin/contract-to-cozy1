@@ -2,6 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
+import { logger } from '../lib/logger';
 
 interface EnergyInputData {
   averageMonthlyKWh: number;
@@ -146,7 +147,7 @@ export class EnergyAuditorService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[ENERGY-AUDITOR] GEMINI_API_KEY not set');
+      logger.warn('[ENERGY-AUDITOR] GEMINI_API_KEY not set');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -351,7 +352,7 @@ If you cannot extract the data, return null.`;
           failedCount += 1;
         }
       } catch (error) {
-        console.error('[ENERGY-AUDITOR] Bill extraction error:', error);
+        logger.error('[ENERGY-AUDITOR] Bill extraction error:', error);
         failedCount += 1;
       }
     }
@@ -540,7 +541,7 @@ Difficulty: EASY, MODERATE, PROFESSIONAL`;
       })).slice(0, 8);
 
     } catch (error) {
-      console.error('[ENERGY-AUDITOR] AI recommendations error:', error);
+      logger.error('[ENERGY-AUDITOR] AI recommendations error:', error);
       return this.getBasicRecommendations(inputData, annualKWh, rate);
     }
   }

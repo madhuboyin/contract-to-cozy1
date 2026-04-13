@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { dailyHomePulseService } from '../services/dailyHomePulse.service';
+import { logger } from '../lib/logger';
 
 export async function getDailySnapshot(req: CustomRequest, res: Response) {
   try {
@@ -14,7 +15,7 @@ export async function getDailySnapshot(req: CustomRequest, res: Response) {
     const snapshot = await dailyHomePulseService.getOrCreateTodaySnapshot(propertyId, userId);
     return res.json({ success: true, data: { snapshot } });
   } catch (error: any) {
-    console.error('Error fetching daily snapshot:', error);
+    logger.error('Error fetching daily snapshot:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch daily snapshot.',
@@ -34,7 +35,7 @@ export async function checkinDailySnapshot(req: CustomRequest, res: Response) {
     const data = await dailyHomePulseService.recordCheckin(propertyId, userId);
     return res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error recording daily snapshot check-in:', error);
+    logger.error('Error recording daily snapshot check-in:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to record check-in.',
@@ -55,7 +56,7 @@ export async function completeDailyMicroAction(req: CustomRequest, res: Response
     const data = await dailyHomePulseService.completeMicroAction(propertyId, actionId, userId);
     return res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error completing micro action:', error);
+    logger.error('Error completing micro action:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to complete micro action.',
@@ -76,7 +77,7 @@ export async function dismissDailyMicroAction(req: CustomRequest, res: Response)
     const data = await dailyHomePulseService.dismissMicroAction(propertyId, actionId, userId);
     return res.json({ success: true, data });
   } catch (error: any) {
-    console.error('Error dismissing micro action:', error);
+    logger.error('Error dismissing micro action:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to dismiss micro action.',

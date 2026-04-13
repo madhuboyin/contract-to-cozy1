@@ -6,6 +6,7 @@
 import { prisma } from '../lib/prisma';
 import { buildUnifiedEventEnvelope } from './eventSignalProjection.service';
 import { signalService } from './signal.service';
+import { logger } from '../lib/logger';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -651,7 +652,7 @@ export async function runMatchingForEvent(
 
       matched++;
     } catch (err) {
-      console.error('[RadarMatcher] Failed to upsert match for property', property.id, err);
+      logger.error('[RadarMatcher] Failed to upsert match for property', property.id, err);
       skipped++;
     }
   }

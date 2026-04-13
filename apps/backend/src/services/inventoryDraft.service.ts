@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { applianceOracleService } from './applianceOracle.service';
+import { logger } from '../lib/logger';
 
 export class InventoryDraftService {
   async createDraftFromOcr(args: {
@@ -98,7 +99,7 @@ export class InventoryDraftService {
 
     // Fire-and-forget lifespan recalculation for OCR-verified item
     applianceOracleService.recalculateLifespan(item.id).catch((err) => {
-      console.error('[OCR_CONFIRM] Lifespan recalculation failed (non-blocking):', err);
+      logger.error('[OCR_CONFIRM] Lifespan recalculation failed (non-blocking):', err);
     });
 
     await prisma.inventoryDraftItem.update({

@@ -2,6 +2,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { IncidentSeverity, IncidentSourceType, IncidentStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -68,7 +69,7 @@ export class EmergencyTroubleshooterService {
     propertyContext?: string,
     context?: ChatContext,
   ): Promise<EmergencyResponse> {
-    console.log(`[EMERGENCY-CHAT] Processing ${messages.length} messages | Property Context: ${!!propertyContext}`);
+    logger.info(`[EMERGENCY-CHAT] Processing ${messages.length} messages | Property Context: ${!!propertyContext}`);
     
     if (!messages || messages.length === 0) {
       throw new Error('At least one message is required');
@@ -103,13 +104,13 @@ export class EmergencyTroubleshooterService {
 
       const text = response.text;
       if (!text) {
-        console.error(`[EMERGENCY-ERROR] Gemini returned empty response`);
+        logger.error(`[EMERGENCY-ERROR] Gemini returned empty response`);
         throw new Error('AI service returned an empty response');
       }
 
       const parsed = this.parseStructuredResponse(text);
 
-      console.log(`[EMERGENCY-RESPONSE] Severity: ${parsed.severity} | Resolution: ${parsed.resolution}`);
+      logger.info(`[EMERGENCY-RESPONSE] Severity: ${parsed.severity} | Resolution: ${parsed.resolution}`);
 
       await this.logIncidentIfPossible(messages, parsed, context);
 
@@ -122,7 +123,7 @@ export class EmergencyTroubleshooterService {
         confidence: parsed.confidence,
       };
     } catch (error) {
-      console.error(`[EMERGENCY-FATAL] Failed to call Gemini API`, error);
+      logger.error(`[EMERGENCY-FATAL] Failed to call Gemini API`, error);
       throw new Error('Failed to get emergency response');
     }
   }
@@ -228,7 +229,7 @@ export class EmergencyTroubleshooterService {
         },
       });
     } catch (error) {
-      console.error('[EMERGENCY-INCIDENT-LOG] Failed to persist incident log', error);
+      logger.error('[EMERGENCY-INCIDENT-LOG] Failed to persist incident log', error);
     }
   }
 }

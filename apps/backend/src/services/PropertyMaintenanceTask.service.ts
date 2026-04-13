@@ -1,5 +1,6 @@
 // apps/backend/src/services/PropertyMaintenanceTask.service.ts
 import {
+import { logger } from '../lib/logger';
     PropertyMaintenanceTask,
     MaintenanceTaskStatus,
     MaintenanceTaskSource,
@@ -209,7 +210,7 @@ import {
       });
 
       if (existing) {
-        console.log('✅ Task already exists (deduped):', {
+        logger.info('✅ Task already exists (deduped):', {
           actionKey,
           taskId: existing.id,
         });
@@ -240,7 +241,7 @@ import {
           },
         });
 
-        console.log('✅ Created PropertyMaintenanceTask with actionKey:', {
+        logger.info('✅ Created PropertyMaintenanceTask with actionKey:', {
           actionKey,
           taskId: task.id,
           title: task.title,
@@ -313,7 +314,7 @@ import {
         validServiceCategory = category as ServiceCategory;
       } catch (error) {
         // Log but don't fail - just set to null
-        console.warn(
+        logger.warn(
           `[SEASONAL] Invalid serviceCategory "${category}" for item ${seasonalItemId}, setting to null:`,
           error
         );
@@ -322,7 +323,7 @@ import {
     }
 
     // 🔧 FIX: Add detailed logging before create
-    console.log('[SEASONAL] Creating PropertyMaintenanceTask:', {
+    logger.info('[SEASONAL] Creating PropertyMaintenanceTask:', {
       propertyId,
       title: seasonalItem.title,
       status: 'PENDING',
@@ -350,7 +351,7 @@ import {
         },
       });
 
-      console.log('[SEASONAL] Successfully created PropertyMaintenanceTask:', task.id);
+      logger.info('[SEASONAL] Successfully created PropertyMaintenanceTask:', task.id);
 
       // Update seasonal item to mark as added
       await prisma.seasonalChecklistItem.update({
@@ -364,7 +365,7 @@ import {
       return task;
     } catch (error) {
       // 🔧 FIX: Better error logging
-      console.error('[SEASONAL] Failed to create PropertyMaintenanceTask:', {
+      logger.error('[SEASONAL] Failed to create PropertyMaintenanceTask:', {
         error,
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
         seasonalItemId,
@@ -501,7 +502,7 @@ import {
         });
 
         if (!seasonalItem) {
-          console.warn(`⚠️ Seasonal item ${task.seasonalChecklistItemId} not found`);
+          logger.warn(`⚠️ Seasonal item ${task.seasonalChecklistItemId} not found`);
         } else if (!wasCompleted && isNowCompleted) {
           // Completing
           await prisma.seasonalChecklistItem.update({
@@ -513,7 +514,7 @@ import {
             where: { id: seasonalItem.seasonalChecklistId },
             data: { tasksCompleted: { increment: 1 } },
           });
-          console.log(`✅ Synced seasonal completion: checklist ${seasonalItem.seasonalChecklistId} tasks_completed++`);
+          logger.info(`✅ Synced seasonal completion: checklist ${seasonalItem.seasonalChecklistId} tasks_completed++`);
 
         } else if (wasCompleted && !isNowCompleted) {
           // Uncompleting
@@ -532,7 +533,7 @@ import {
               where: { id: seasonalItem.seasonalChecklistId },
               data: { tasksCompleted: { decrement: 1 } },
             });
-            console.log(`🔄 Synced seasonal uncomplete: checklist ${seasonalItem.seasonalChecklistId} tasks_completed--`);
+            logger.info(`🔄 Synced seasonal uncomplete: checklist ${seasonalItem.seasonalChecklistId} tasks_completed--`);
           }
         }
       }
@@ -544,7 +545,7 @@ import {
             sourceId: updatedTask.id,
           });
         } catch (signalError) {
-          console.warn('Maintenance adherence signal publish failed (task status update):', signalError);
+          logger.warn('Maintenance adherence signal publish failed (task status update):', signalError);
         }
       }
     

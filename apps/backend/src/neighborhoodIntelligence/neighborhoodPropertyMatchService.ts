@@ -9,6 +9,7 @@ import { NEIGHBORHOOD_IMPACT_RULES } from './impactRules';
 import { haversineDistanceMiles, isValidLatLng } from './geoUtils';
 import { NeighborhoodImpactEngine } from './neighborhoodImpactEngine';
 import { PropertyContext } from './types';
+import { logger } from '../lib/logger';
 
 const impactEngine = new NeighborhoodImpactEngine();
 
@@ -23,12 +24,12 @@ export class NeighborhoodPropertyMatchService {
     });
 
     if (!event) {
-      console.warn(`[NeighborhoodIntelligence] matchProperties called for unknown event ${eventId}`);
+      logger.warn(`[NeighborhoodIntelligence] matchProperties called for unknown event ${eventId}`);
       return { matched: 0 };
     }
 
     if (!isValidLatLng(event.latitude, event.longitude)) {
-      console.warn(`[NeighborhoodIntelligence] Event ${eventId} has invalid coordinates — skipping match`);
+      logger.warn(`[NeighborhoodIntelligence] Event ${eventId} has invalid coordinates — skipping match`);
       return { matched: 0 };
     }
 
@@ -147,12 +148,12 @@ export class NeighborhoodPropertyMatchService {
       }
 
       matched++;
-      console.log(
+      logger.info(
         `[NeighborhoodIntelligence] Matched property=${property.id} to event=${eventId} score=${generated.impactScore} linkId=${linkId}`,
       );
     }
 
-    console.log(
+    logger.info(
       `[NeighborhoodIntelligence] matchPropertiesForEvent complete — eventId=${eventId} matched=${matched}`,
     );
 

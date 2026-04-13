@@ -8,6 +8,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service'; 
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types'; 
 import { FinancialCalculationResult } from '../utils/FinancialCalculator.util';
+import { logger } from '../lib/logger';
 
 
 // Define expected structure for the public-facing report summary
@@ -34,7 +35,7 @@ export class FinancialReportService {
      * @returns The saved FinancialEfficiencyReport object.
      */
     public async calculateAndSaveFES(propertyId: string): Promise<FinancialEfficiencyReport> {
-        console.log(`Starting FES calculation for property: ${propertyId}`);
+        logger.info(`Starting FES calculation for property: ${propertyId}`);
         
         // 1. Fetch property with all financial data
         const property = await prisma.property.findUnique({
@@ -108,7 +109,7 @@ export class FinancialReportService {
             }
         });
     
-        console.log(`FES report saved for ${propertyId}. Score: ${report.financialEfficiencyScore}, Exposure: ${financialExposureTotal.toFixed(2)}`);
+        logger.info(`FES report saved for ${propertyId}. Score: ${report.financialEfficiencyScore}, Exposure: ${financialExposureTotal.toFixed(2)}`);
         return report;
     }
     
@@ -158,7 +159,7 @@ export class FinancialReportService {
             const jobData = { propertyId, jobType: jobName };
             // Queue the job via the JobQueueService
             if (!jobStatus) {
-                console.log(`[FES-SERVICE] Report missing. Queuing initial job: ${jobId}`);
+                logger.info(`[FES-SERVICE] Report missing. Queuing initial job: ${jobId}`);
                 await this.jobQueueService.addJob(jobName, jobData, { jobId });
             }
             
@@ -230,7 +231,7 @@ export class FinancialReportService {
             // Queue a job if missing and not currently active/waiting (checked above)
             if (!jobStatus) {
                 const jobData = { propertyId, jobType: jobName };
-                console.log(`[FES-SERVICE] Detailed report missing. Queuing initial job: ${jobId}`);
+                logger.info(`[FES-SERVICE] Detailed report missing. Queuing initial job: ${jobId}`);
                 await this.jobQueueService.addJob(jobName, jobData, { jobId });
             }
             return 'QUEUED';
@@ -256,6 +257,6 @@ export class FinancialReportService {
         
         const jobData = { propertyId, jobType: jobName };
         await this.jobQueueService.addJob(jobName, jobData, { jobId });
-        console.log(`[FES-SERVICE] Manually queued FES recalculation for ${propertyId} with job ID: ${jobId}`);
+        logger.info(`[FES-SERVICE] Manually queued FES recalculation for ${propertyId} with job ID: ${jobId}`);
     }
 }

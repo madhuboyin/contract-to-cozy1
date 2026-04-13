@@ -3,6 +3,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 //const pdfParse = require('pdf-parse');
 //import * as pdfParseModule from 'pdf-parse';
 //const pdfParse = (pdfParseModule as any).default || pdfParseModule;
@@ -61,7 +62,7 @@ export class InspectionAnalysisService {
     fileName: string,
     propertyData: any
   ): Promise<string> {
-    console.log(`[INSPECTION] Starting analysis for property ${propertyId}`);
+    logger.info(`[INSPECTION] Starting analysis for property ${propertyId}`);
 
     // Extract text from PDF
     const pdfText = await this.extractTextFromPDF(pdfBuffer);
@@ -70,7 +71,7 @@ export class InspectionAnalysisService {
       throw new Error('Failed to extract text from PDF or PDF is too short');
     }
 
-    console.log(`[INSPECTION] Extracted ${pdfText.length} characters from PDF`);
+    logger.info(`[INSPECTION] Extracted ${pdfText.length} characters from PDF`);
 
     // Create inspection report record
     const report = await prisma.inspectionReport.create({
@@ -82,7 +83,7 @@ export class InspectionAnalysisService {
       },
     });
 
-    console.log(`[INSPECTION] Created report ${report.id}`);
+    logger.info(`[INSPECTION] Created report ${report.id}`);
 
     try {
       // Analyze with AI
@@ -114,7 +115,7 @@ export class InspectionAnalysisService {
         data: issuesData,
       });
 
-      console.log(`[INSPECTION] Created ${issuesData.length} issues`);
+      logger.info(`[INSPECTION] Created ${issuesData.length} issues`);
 
       // Count issues by severity
       const criticalCount = analysis.issues.filter(i => i.severity === 'CRITICAL').length;
@@ -146,11 +147,11 @@ export class InspectionAnalysisService {
         },
       });
 
-      console.log(`[INSPECTION] Analysis completed successfully`);
+      logger.info(`[INSPECTION] Analysis completed successfully`);
       return report.id;
 
     } catch (error: any) {
-      console.error('[INSPECTION] Analysis failed:', error);
+      logger.error('[INSPECTION] Analysis failed:', error);
       
       // Update report with error
       await prisma.inspectionReport.update({
@@ -170,7 +171,7 @@ export class InspectionAnalysisService {
    */
   private async extractTextFromPDF(buffer: Buffer): Promise<string> {
     try {
-      console.log('[DEBUG] Buffer size:', buffer.length);
+      logger.info('[DEBUG] Buffer size:', buffer.length);
       
       // Direct require to avoid TypeScript issues
       const pdfParse = require('pdf-parse');
@@ -178,10 +179,10 @@ export class InspectionAnalysisService {
       // Call pdf-parse directly
       const data = await pdfParse(buffer);
       
-      console.log('[INSPECTION] PDF parsed successfully');
-      console.log('[INSPECTION] Pages:', data.numpages);
-      console.log('[INSPECTION] Text length:', data.text.length);
-      console.log('[INSPECTION] First 500 chars:', data.text.substring(0, 500));
+      logger.info('[INSPECTION] PDF parsed successfully');
+      logger.info('[INSPECTION] Pages:', data.numpages);
+      logger.info('[INSPECTION] Text length:', data.text.length);
+      logger.info('[INSPECTION] First 500 chars:', data.text.substring(0, 500));
       
       if (!data.text || data.text.trim().length < 100) {
         throw new Error('Extracted text is too short or empty');
@@ -189,9 +190,9 @@ export class InspectionAnalysisService {
       
       return data.text;
     } catch (error: any) {
-      console.error('[INSPECTION] PDF parsing error:', error);
-      console.error('[INSPECTION] Error message:', error.message);
-      console.error('[INSPECTION] Error stack:', error.stack);
+      logger.error('[INSPECTION] PDF parsing error:', error);
+      logger.error('[INSPECTION] Error message:', error.message);
+      logger.error('[INSPECTION] Error stack:', error.stack);
       throw new Error(`Failed to parse PDF file: ${error.message}`);
     }
   }

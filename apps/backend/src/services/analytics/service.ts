@@ -19,6 +19,7 @@ import {
   TrackToolUsedInput,
 } from './schemas';
 import {
+import { logger } from '../../lib/logger';
   AnalyticsModule,
   AnalyticsFeature,
 } from './taxonomy';
@@ -55,12 +56,12 @@ function sanitizeMetadata(
   try {
     const s = JSON.stringify(raw);
     if (s.length > 8192) {
-      console.error('[Analytics] metadataJson exceeds 8 KB — dropped for event normalization');
+      logger.error('[Analytics] metadataJson exceeds 8 KB — dropped for event normalization');
       return null;
     }
     return JSON.parse(s) as Record<string, unknown>;
   } catch {
-    console.error('[Analytics] metadataJson is not serializable — dropped');
+    logger.error('[Analytics] metadataJson is not serializable — dropped');
     return null;
   }
 }

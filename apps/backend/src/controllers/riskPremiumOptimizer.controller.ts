@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
+import { logger } from '../lib/logger';
   RiskPremiumOptimizerOverrides,
   RiskPremiumOptimizerService,
   UpdateRiskMitigationPlanItemInput,
@@ -20,7 +21,7 @@ export async function getRiskPremiumOptimizer(req: CustomRequest, res: Response)
     const result = await service.getLatest(propertyId, userId);
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    console.error('Error fetching risk-premium optimization:', error);
+    logger.error('Error fetching risk-premium optimization:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch risk-premium optimization.',
@@ -43,7 +44,7 @@ export async function runRiskPremiumOptimizer(req: CustomRequest, res: Response)
     const analysis = await service.run(propertyId, userId, overrides, { assumptionSetId });
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
-    console.error('Error running risk-premium optimization:', error);
+    logger.error('Error running risk-premium optimization:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to run risk-premium optimization.',
@@ -65,7 +66,7 @@ export async function updateRiskPremiumPlanItem(req: CustomRequest, res: Respons
     const result = await service.updatePlanItem(propertyId, planItemId, userId, payload);
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    console.error('Error updating risk mitigation plan item:', error);
+    logger.error('Error updating risk mitigation plan item:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to update mitigation plan item.',

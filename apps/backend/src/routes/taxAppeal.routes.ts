@@ -6,6 +6,7 @@ import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { taxAppealService } from '../services/taxAppeal.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ router.post('/extract-bill', authenticate, upload.single('taxBill'), async (req:
       });
     }
 
-    console.log('[TAX-APPEAL] Extracting tax bill data');
+    logger.info('[TAX-APPEAL] Extracting tax bill data');
 
     const billData = await taxAppealService.extractTaxBillData(req.file);
 
@@ -67,7 +68,7 @@ router.post('/extract-bill', authenticate, upload.single('taxBill'), async (req:
     });
 
   } catch (error: any) {
-    console.error('[TAX-APPEAL] Extract error:', error);
+    logger.error('[TAX-APPEAL] Extract error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to extract tax bill data'
@@ -123,7 +124,7 @@ router.post('/analyze', authenticate, async (req: AuthRequest, res: Response) =>
       });
     }
 
-    console.log('[TAX-APPEAL] Analyzing appeal opportunity for property:', propertyId);
+    logger.info('[TAX-APPEAL] Analyzing appeal opportunity for property:', propertyId);
 
     const report = await taxAppealService.analyzeAppealOpportunity(
       propertyId,
@@ -143,7 +144,7 @@ router.post('/analyze', authenticate, async (req: AuthRequest, res: Response) =>
     });
 
   } catch (error: any) {
-    console.error('[TAX-APPEAL] Analysis error:', error);
+    logger.error('[TAX-APPEAL] Analysis error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to analyze appeal opportunity'

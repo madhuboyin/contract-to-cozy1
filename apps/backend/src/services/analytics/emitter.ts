@@ -15,6 +15,7 @@
 import { ProductAnalyticsEventType } from '@prisma/client';
 import { ProductAnalyticsService } from './service';
 import {
+import { logger } from '../../lib/logger';
   TrackEventInput,
   TrackFeatureOpenedInput,
   TrackDecisionGuidedInput,
@@ -97,7 +98,7 @@ function shouldEmitViewEvent(
 
 function safeTrack(label: string, promise: Promise<unknown>): void {
   promise.catch((err) => {
-    console.error(`[Analytics] Failed to track event (${label}):`, err?.message ?? err);
+    logger.error(`[Analytics] Failed to track event (${label}):`, err?.message ?? err);
   });
 }
 

@@ -8,6 +8,7 @@ import { APIError } from '../middleware/error.middleware';
 import { NormalizedNeighborhoodEventInput } from './types';
 import { isValidLatLng } from './geoUtils';
 import { NEIGHBORHOOD_IMPACT_RULES } from './impactRules';
+import { logger } from '../lib/logger';
 
 // Minimum title length to be considered meaningful
 const MIN_TITLE_LENGTH = 5;
@@ -41,7 +42,7 @@ export class NeighborhoodEventIngestionService {
     const existing = await this.findExistingEvent(input);
 
     if (existing) {
-      console.log(
+      logger.info(
         `[NeighborhoodIntelligence] Event deduped — id=${existing.id} source=${input.sourceName ?? 'unknown'} externalId=${input.externalSourceId ?? 'none'}`,
       );
 
@@ -81,7 +82,7 @@ export class NeighborhoodEventIngestionService {
       },
     });
 
-    console.log(
+    logger.info(
       `[NeighborhoodIntelligence] Event ingested — id=${event.id} type=${event.eventType} title="${event.title}"`,
     );
 
@@ -145,7 +146,7 @@ export class NeighborhoodEventIngestionService {
         },
       });
       if (found) {
-        console.log(
+        logger.info(
           `[NeighborhoodIntelligence] Dedup strategy-1 matched: id=${found.id} title="${found.title}"`,
         );
         return found;
@@ -171,7 +172,7 @@ export class NeighborhoodEventIngestionService {
     });
 
     if (candidate) {
-      console.log(
+      logger.info(
         `[NeighborhoodIntelligence] Dedup strategy-2 matched: id=${candidate.id} title="${candidate.title}"`,
       );
     }

@@ -9,6 +9,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { RISK_ASSET_CONFIG, SystemRiskConfig } from "../config/risk-constants";
+import { logger } from '../lib/logger';
 
 // --- INTERFACES & TYPES (Mirroring Prisma Models for strict typing) ---
 
@@ -174,7 +175,7 @@ export const filterRelevantAssets = (
 
       default:
         shouldInclude = false;
-        console.warn(`[RISK-UTIL:FILTER] Unknown asset type: ${config.systemType} - skipping`);
+        logger.warn(`[RISK-UTIL:FILTER] Unknown asset type: ${config.systemType} - skipping`);
     }
 
     if (shouldInclude) {

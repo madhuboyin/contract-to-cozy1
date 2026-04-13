@@ -39,6 +39,7 @@ import {
 
 // PHASE 2.3 INTEGRATION
 import { createTaskFromActionCenter } from './orchestrationIntegration.service';
+import { logger } from '../lib/logger';
 
 
 type DerivedFrom = {
@@ -1263,7 +1264,7 @@ export async function createTaskFromOrchestration(
   source: 'HOME_BUYER' | 'EXISTING_OWNER' | 'LEGACY';
   deduped: boolean;
 }> {
-  console.log('🔄 Creating task from orchestrated action:', {
+  logger.info('🔄 Creating task from orchestrated action:', {
     userId,
     actionKey: action.actionKey,
     source: action.source,
@@ -1304,7 +1305,7 @@ export async function createTaskFromOrchestration(
     actionKey: action.actionKey,
   });
 
-  console.log('✅ Task created from orchestration:', {
+  logger.info('✅ Task created from orchestration:', {
     taskId: result.taskId,
     source: result.source,
     deduped: result.deduped,
@@ -1775,7 +1776,7 @@ async function mapChecklistItemToAction(params: {
 
   const storedKey = item?.actionKey;
 
-  console.log('🔍 CHECKLIST ACTION KEY DECISION:', {
+  logger.info('🔍 CHECKLIST ACTION KEY DECISION:', {
     itemId: item?.id,
     title: item?.title,
     storedKey: storedKey,
@@ -1870,7 +1871,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
 
   const riskDetails: any[] = (riskReport as any)?.details ?? [];
 
-  console.log('🔍 RISK REPORT DATA:', {
+  logger.info('🔍 RISK REPORT DATA:', {
     reportExists: !!riskReport,
     detailsCount: riskDetails.length,
     details: riskDetails.map((d, i) => ({
@@ -1900,7 +1901,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     })
     .catch(() => []);
 
-  console.log('🔍 RAW CHECKLIST ITEMS FROM DB:', JSON.stringify(checklistItems.map(item => ({
+  logger.info('🔍 RAW CHECKLIST ITEMS FROM DB:', JSON.stringify(checklistItems.map(item => ({
     id: item.id,
     title: item.title,
     actionKey: item.actionKey,
@@ -1911,7 +1912,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
   const candidateRiskActions: OrchestratedAction[] = Array.isArray(riskDetails)
   ? (await Promise.all(
       riskDetails.map((d: any, idx: number) => {
-        console.log(`🔍 Processing risk item ${idx}:`, {
+        logger.info(`🔍 Processing risk item ${idx}:`, {
           assetName: d?.assetName,
           systemType: d?.systemType,
           willMap: !!d,
@@ -1931,7 +1932,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     )).filter(Boolean) as OrchestratedAction[]
   : [];
 
-  console.log('🔍 RISK ACTIONS CREATED:', candidateRiskActions.length);
+  logger.info('🔍 RISK ACTIONS CREATED:', candidateRiskActions.length);
 
   const candidateChecklistActions: OrchestratedAction[] = (await Promise.all(
     checklistItems.map((i: any) =>
@@ -2072,7 +2073,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
           actionKey: action.actionKey,
         });
 
-      console.log('🔍 RESOLVED SUPPRESSION SOURCE FOR RISK:', {
+      logger.info('🔍 RESOLVED SUPPRESSION SOURCE FOR RISK:', {
         actionKey: action.actionKey,
         foundSourceType: source?.type || 'NONE',
         checklistItemId: source?.type === 'CHECKLIST_ITEM' ? source.checklistItem.id : null,
@@ -2125,7 +2126,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       const all = [...actions, ...suppressedActions, ...snoozedActions];
       await persistDecisionTraces({ propertyId, actions: all, algoVersion: 'v1' });
     } catch (e) {
-      console.warn('[ORCHESTRATION] decision trace persistence failed:', e);
+      logger.warn('[ORCHESTRATION] decision trace persistence failed:', e);
     }
 
   let sharedContext: OrchestrationSharedContext | null = null;
@@ -2283,7 +2284,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         : null,
     });
   } catch (error) {
-    console.warn('[ORCHESTRATION] shared context enrichment failed:', error);
+    logger.warn('[ORCHESTRATION] shared context enrichment failed:', error);
   }
 
   return {

@@ -13,6 +13,7 @@ import {
 } from '../types/provider.types';
 
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * Calculate distance between two coordinates using Haversine formula
@@ -91,7 +92,7 @@ export class ProviderService {
       // This solves the deep linking bug for new categories like INSPECTION.
       // If we did not find the category in the allowed list, we will log a warning
       // but proceed to execute the search, trusting the frontend query.
-      console.warn(`[ProviderService] Requested category ${query.category} not found in allowed categories for segment ${userSegment}. Proceeding with search.`);
+      logger.warn(`[ProviderService] Requested category ${query.category} not found in allowed categories for segment ${userSegment}. Proceeding with search.`);
     }
     // --- FIX END ---
 
@@ -173,7 +174,7 @@ export class ProviderService {
         searchLat = address.latitude;
         searchLon = address.longitude;
       } else {
-        console.info(
+        logger.info(
           `[ProviderService] No geocoded coordinate found for zipCode=${query.zipCode}. Returning category-filtered providers without distance filter.`
         );
       }

@@ -9,6 +9,7 @@ import {
 } from '../services/recalls.service';
 import { RecallResolutionType } from '@prisma/client';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 function isNotFoundError(err: any) {
   const msg = String(err?.message || '').toLowerCase();
@@ -54,13 +55,13 @@ export async function confirmMatch(req: Request, res: Response) {
         },
       });
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] recall confirm hook failed:', guidanceError);
+      logger.warn('[GUIDANCE] recall confirm hook failed:', guidanceError);
     }
 
     return res.json(row);
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
-    console.error('confirmMatch error:', err);
+    logger.error('confirmMatch error:', err);
     return res.status(500).json({ message: 'Failed to confirm recall match' });
   }
 }
@@ -93,13 +94,13 @@ export async function dismissMatch(req: Request, res: Response) {
         },
       });
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] recall dismiss hook failed:', guidanceError);
+      logger.warn('[GUIDANCE] recall dismiss hook failed:', guidanceError);
     }
 
     return res.json(row);
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
-    console.error('dismissMatch error:', err);
+    logger.error('dismissMatch error:', err);
     return res.status(500).json({ message: 'Failed to dismiss recall match' });
   }
 }
@@ -147,13 +148,13 @@ export async function resolveMatch(req: Request, res: Response) {
         },
       });
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] recall resolve hook failed:', guidanceError);
+      logger.warn('[GUIDANCE] recall resolve hook failed:', guidanceError);
     }
 
     return res.json(row);
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
-    console.error('resolveMatch error:', err);
+    logger.error('resolveMatch error:', err);
     return res.status(500).json({ message: 'Failed to resolve recall match' });
   }
 }

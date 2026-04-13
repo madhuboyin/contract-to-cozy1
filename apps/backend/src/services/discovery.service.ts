@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { calculateProtectionGap } from './insuranceAuditor.service';
 import { evaluateStreakExpiry, PropertyStreakState } from './gamification.service';
 import { weatherService } from './weather.service';
+import { logger } from '../lib/logger';
 export { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory.util';
 
 const WATER_HEATER_HINTS = ['water heater', 'hot water'];
@@ -93,19 +94,19 @@ function isExcluded(id: string, excludedIds: Set<string>) {
 }
 
 function logSnoozed(propertyId: string, nudgeId: string, nudgeType: DiscoveryNudge['type']) {
-  console.info(
+  logger.info(
     `[DISCOVERY] Snoozed nudge skipped: propertyId=${propertyId} id=${nudgeId} type=${nudgeType}`
   );
 }
 
 function logServed(propertyId: string, nudge: DiscoveryNudge) {
-  console.info(
+  logger.info(
     `[DISCOVERY] Nudge served: propertyId=${propertyId} id=${nudge.id} type=${nudge.type}`
   );
 }
 
 function logNone(propertyId: string) {
-  console.info(`[DISCOVERY] No nudge available: propertyId=${propertyId}`);
+  logger.info(`[DISCOVERY] No nudge available: propertyId=${propertyId}`);
 }
 
 function assetNudgeId(itemId: string) {
@@ -231,7 +232,7 @@ async function getResilienceNudge(
   // is actually forecast. Falls back gracefully if weather fetch fails.
   const zipCode = property.zipCode?.trim();
   if (!zipCode) {
-    console.info(
+    logger.info(
       `[DISCOVERY] Resilience nudge suppressed — missing zip code for propertyId=${propertyId}`
     );
     return null;
@@ -242,7 +243,7 @@ async function getResilienceNudge(
     .getLocalForecastMeta(zipCode)
     .catch(() => ({ signals: [] as SignalType[], cityName: null }));
   if (!meta.signals.includes(SignalType.WEATHER_FORECAST_HEAVY_RAIN)) {
-    console.info(
+    logger.info(
       `[DISCOVERY] Resilience nudge suppressed — no WEATHER_FORECAST_HEAVY_RAIN for zip=${zipCode}`
     );
     return null;

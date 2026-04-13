@@ -3,6 +3,7 @@
 
 import { GazetteStoryCandidate, GazetteSelectionTrace } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
+import { logger } from '../../../lib/logger';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -243,7 +244,7 @@ export class GazetteRankingEngineService {
     const dupeIds = new Set(dupeResults.map((d) => d.id));
 
     if (dupeResults.length > 0) {
-      console.log(
+      logger.info(
         `[GazetteRanking] Filtered ${dupeResults.length} near-duplicate headline(s) for edition ${editionId}`,
       );
     }

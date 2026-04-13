@@ -13,6 +13,7 @@ import { HomeEventsAutoGen } from './homeEvents/homeEvents.autogen';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from './coverageAnalysis.service';
 import { markRiskPremiumOptimizerStale } from './riskPremiumOptimizer.service';
 import { markDoNothingRunsStale } from './doNothingSimulator.service';
+import { logger } from '../lib/logger';
 
 // Helper interface for safe Decimal conversion (the object must have a toNumber method)
 interface DecimalLike {
@@ -53,7 +54,7 @@ const mapRawExpenseToExpense = (rawExpense: any): Expense => {
         amount = safeToNumber(expenseWithNumber.amount) ?? 0;
         if (amount === null) throw new Error("Conversion resulted in null.");
     } catch (e) {
-        console.error(`FATAL MAPPING ERROR (Expense ID ${rawExpense.id}): Failed to convert 'amount'. Raw value was:`, expenseWithNumber.amount);
+        logger.error(`FATAL MAPPING ERROR (Expense ID ${rawExpense.id}): Failed to convert 'amount'. Raw value was:`, expenseWithNumber.amount);
         throw new Error(`Expense conversion failed for ID ${rawExpense.id} on 'amount' field.`);
     }
 
@@ -83,7 +84,7 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
         // High-granularity check for 'cost'
         cost = safeToNumber(warrantyWithNumber.cost);
     } catch (e) {
-        console.error(`FATAL MAPPING ERROR (Warranty ID ${rawWarranty.id}): Failed to convert 'cost'. Raw value was:`, warrantyWithNumber.cost);
+        logger.error(`FATAL MAPPING ERROR (Warranty ID ${rawWarranty.id}): Failed to convert 'cost'. Raw value was:`, warrantyWithNumber.cost);
         throw new Error(`Warranty conversion failed for ID ${rawWarranty.id} on 'cost' field.`);
     }
 
@@ -118,7 +119,7 @@ const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
         premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
         if (premiumAmount === null) throw new Error("Conversion resulted in null.");
     } catch (e) {
-        console.error(`FATAL MAPPING ERROR (Policy ID ${rawPolicy.id}): Failed to convert 'premiumAmount'. Raw value was:`, policyWithNumber.premiumAmount);
+        logger.error(`FATAL MAPPING ERROR (Policy ID ${rawPolicy.id}): Failed to convert 'premiumAmount'. Raw value was:`, policyWithNumber.premiumAmount);
         throw new Error(`Policy conversion failed for ID ${rawPolicy.id} on 'premiumAmount' field.`);
     }
 
@@ -150,7 +151,7 @@ export async function createExpense(
   homeownerProfileId: string, 
   data: CreateExpenseDTO
 ): Promise<Expense> {
-  console.log('DEBUG (POST /expenses): Input Data Received:', data);
+  logger.info('DEBUG (POST /expenses): Input Data Received:', data);
 
   try {
     const rawExpense = await prisma.expense.create({
@@ -181,13 +182,13 @@ export async function createExpense(
         });
       } catch (e) {
         // Never break expense creation if timeline autogen fails
-        console.error('[HOME_EVENTS_AUTOGEN] Failed onExpenseCreated:', e);
+        logger.error('[HOME_EVENTS_AUTOGEN] Failed onExpenseCreated:', e);
       }
     }
 
     return mapRawExpenseToExpense(rawExpense);
   } catch (error) {
-    console.error('FATAL ERROR (POST /expenses): Prisma operation failed.', error); 
+    logger.error('FATAL ERROR (POST /expenses): Prisma operation failed.', error); 
     throw error;
   }
 }
@@ -239,7 +240,7 @@ export async function updateExpense(
         currency: null,
       });
     } catch (e) {
-      console.error('[HOME_EVENTS_AUTOGEN] Failed onExpenseUpdated:', e);
+      logger.error('[HOME_EVENTS_AUTOGEN] Failed onExpenseUpdated:', e);
     }
   }
 
@@ -297,7 +298,7 @@ export async function createWarranty(
 
     return mapRawWarrantyToWarranty(rawWarranty);
   } catch (error) {
-    console.error('Error creating warranty:', error);
+    logger.error('Error creating warranty:', error);
     throw error;
   }
 }
@@ -337,10 +338,10 @@ export async function updateWarranty(
   // 🔑 ADD THIS SECTION - Trigger risk report regeneration
   if (rawUpdatedWarranty.propertyId) {
     try {
-      console.log(`[WARRANTY-SERVICE] Triggering risk update for property ${rawUpdatedWarranty.propertyId}`);
+      logger.info(`[WARRANTY-SERVICE] Triggering risk update for property ${rawUpdatedWarranty.propertyId}`);
       await JobQueueService.enqueuePropertyIntelligenceJobs(rawUpdatedWarranty.propertyId);
     } catch (error) {
-      console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
+      logger.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
     }
     await markCoverageAnalysisStale(rawUpdatedWarranty.propertyId);
     await markItemCoverageAnalysesStale(rawUpdatedWarranty.propertyId);
@@ -375,10 +376,10 @@ export async function deleteWarranty(
   // 🔑 ADD THIS SECTION - Trigger risk report regeneration after deletion
   if (propertyId) {
     try {
-      console.log(`[WARRANTY-SERVICE] Triggering risk update for property ${propertyId} after deletion`);
+      logger.info(`[WARRANTY-SERVICE] Triggering risk update for property ${propertyId} after deletion`);
       await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
     } catch (error) {
-      console.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
+      logger.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
     }
     await markCoverageAnalysisStale(propertyId);
     await markItemCoverageAnalysesStale(propertyId);
@@ -502,7 +503,7 @@ export async function createInsurancePolicy(
 
     return mapRawPolicyToInsurancePolicy(rawPolicy);
   } catch (error) {
-    console.error('FATAL ERROR (POST /insurance-policies): Prisma operation failed.', error); 
+    logger.error('FATAL ERROR (POST /insurance-policies): Prisma operation failed.', error); 
     throw error;
   }
 }
@@ -640,7 +641,7 @@ export async function createDocument(
         policyId: (rawDocument as any).insurancePolicyId ?? data.policyId ?? null,
       });
     } catch (e) {
-      console.error('[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (home-management):', e);
+      logger.error('[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (home-management):', e);
     }
   }
 

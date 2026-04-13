@@ -10,6 +10,7 @@ import { guidanceSuppressionService } from './guidanceSuppression.service';
 import { guidanceCopyService } from './guidanceCopy.service';
 import { guidanceValidationService } from './guidanceValidation.service';
 import {
+import { logger } from '../../lib/logger';
   clampConfidenceToDecimal,
   GuidanceEvidenceSourceType,
   GuidanceEvidenceStatus,
@@ -270,7 +271,7 @@ export class GuidanceJourneyService {
         if (systemLink?.linkedEntityId) homeAssetId = systemLink.linkedEntityId;
       }
     } catch (error) {
-      console.warn('[GUIDANCE] failed to infer scope from source entity', {
+      logger.warn('[GUIDANCE] failed to infer scope from source entity', {
         propertyId: input.propertyId,
         sourceEntityType,
         sourceEntityId,
@@ -411,7 +412,7 @@ export class GuidanceJourneyService {
     } catch (error: any) {
       const code = typeof error?.code === 'string' ? error.code : '';
       if (code === 'P2021' || code === 'P2022') {
-        console.warn('[GUIDANCE] GuidanceStepEvidence table/column missing; skipping evidence write', {
+        logger.warn('[GUIDANCE] GuidanceStepEvidence table/column missing; skipping evidence write', {
           propertyId: args.input.propertyId,
           journeyId: args.journey.id,
           stepId: args.step.id,
@@ -561,7 +562,7 @@ export class GuidanceJourneyService {
     });
 
     if (validation.issues.length > 0) {
-      console.info('[GUIDANCE] validation adjusted action', {
+      logger.info('[GUIDANCE] validation adjusted action', {
         journeyId: journey.id,
         signalId: signal?.id ?? null,
         issueCodes: validation.issues.map((item) => item.code),

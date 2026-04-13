@@ -4,6 +4,7 @@ import { TrashScheduleResponse, TrashSchedule } from '../types/community.types';
 import { getCityOpenDataSources } from './citySources.provider';
 import { GoogleGenerativeAI } from '@google/generative-ai'; // ✅ FIXED: Changed from require to import
 import { assertSafeUrl } from '../../utils/ssrfGuard';
+import { logger } from '../../lib/logger';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -40,7 +41,7 @@ export async function parseTrashScheduleWithAI(
       const response = await fetch(sourceUrl);
       htmlContent = await response.text();
     } catch (error) {
-      console.error(`Failed to fetch ${sourceUrl}:`, error);
+      logger.error(`Failed to fetch ${sourceUrl}:`, error);
       return {
         city,
         state,
@@ -93,8 +94,8 @@ Important:
         parsed = JSON.parse(responseText);
       }
     } catch (error) {
-      console.error('Failed to parse AI response:', error);
-      console.error('Response:', responseText);
+      logger.error('Failed to parse AI response:', error);
+      logger.error('Response:', responseText);
       parsed = { schedules: [] };
     }
 
@@ -106,7 +107,7 @@ Important:
       source: sourceUrl,
     };
   } catch (error) {
-    console.error(`Error parsing trash schedule for ${city}, ${state}:`, error);
+    logger.error(`Error parsing trash schedule for ${city}, ${state}:`, error);
     return {
       city,
       state,

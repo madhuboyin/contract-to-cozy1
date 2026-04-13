@@ -16,6 +16,7 @@ import { Response, NextFunction } from 'express';
 import { ChecklistService } from '../services/checklist.service';
 import { AuthRequest } from '../types/auth.types';
 import { ChecklistItemStatus } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 /**
  * Gets the user's checklist.
@@ -284,7 +285,7 @@ const handleCreateChecklistItem = async (
       actionKey,
     });
     
-    console.log('✅ Checklist item created/found:', {
+    logger.info('✅ Checklist item created/found:', {
       itemId: result.item.id,
       actionKey: result.item.actionKey,
       propertyId: result.item.propertyId,

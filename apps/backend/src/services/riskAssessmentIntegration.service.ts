@@ -15,6 +15,7 @@
 import { ServiceCategory } from '@prisma/client';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * Creates maintenance tasks from risk assessment report.
@@ -60,7 +61,7 @@ export async function createTasksFromRiskAssessment(
 
   // 2. Skip HOME_BUYER segment (they don't need risk-based maintenance)
   if (property.homeownerProfile.segment === 'HOME_BUYER') {
-    console.log(`⏭️  Skipping risk task creation for HOME_BUYER property: ${propertyId}`);
+    logger.info(`⏭️  Skipping risk task creation for HOME_BUYER property: ${propertyId}`);
     return {
       created: 0,
       skipped: recommendations.length,
@@ -104,9 +105,9 @@ export async function createTasksFromRiskAssessment(
 
       tasks.push(result.task);
 
-      console.log(`✅ Created/found risk task: ${rec.title} (deduped: ${result.deduped})`);
+      logger.info(`✅ Created/found risk task: ${rec.title} (deduped: ${result.deduped})`);
     } catch (error) {
-      console.error(`❌ Failed to create risk task for ${rec.assetType}:`, error);
+      logger.error(`❌ Failed to create risk task for ${rec.assetType}:`, error);
       skipped++;
     }
   }
@@ -248,7 +249,7 @@ function mapAssetTypeToServiceCategory(assetType: string): ServiceCategory | und
  *      recommendations
  *    );
  * 
- *    console.log(`✅ Risk assessment tasks: ${taskResult.created} created, ${taskResult.skipped} skipped`);
+ *    logger.info(`✅ Risk assessment tasks: ${taskResult.created} created, ${taskResult.skipped} skipped`);
  *    ```
  * 
  * 5. TEST

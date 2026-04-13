@@ -8,6 +8,7 @@ import {
   ORACLE_RECOMMENDATION_PROMPT_TEMPLATE 
 } from '../config/ai-constants';
 import { listPropertyAppliancesAsHomeAssets } from './propertyApplianceInventory.service';
+import { logger } from '../lib/logger';
 
 interface ApplianceFailurePrediction {
   applianceName: string;
@@ -98,7 +99,7 @@ export class ApplianceOracleService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[APPLIANCE-ORACLE] GEMINI_API_KEY not set - recommendations will be basic');
+      logger.warn('[APPLIANCE-ORACLE] GEMINI_API_KEY not set - recommendations will be basic');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -346,7 +347,7 @@ export class ApplianceOracleService {
         budget,
       );
     } catch (error) {
-      console.error('[APPLIANCE-ORACLE] AI recommendation error:', error);
+      logger.error('[APPLIANCE-ORACLE] AI recommendation error:', error);
       return this.getBasicRecommendations(applianceName, budget);
     }
   }
@@ -445,7 +446,7 @@ export class ApplianceOracleService {
       });
 
       if (!item) {
-        console.error(`[LIFESPAN] Item ${itemId} not found — skipping recalculation`);
+        logger.error(`[LIFESPAN] Item ${itemId} not found — skipping recalculation`);
         return;
       }
 
@@ -494,9 +495,9 @@ export class ApplianceOracleService {
       }
 
       if (usedPrecision) {
-        console.log(`[LIFESPAN] Precision calculation for item ${itemId} — adjusted life: ${adjustedLife}yr`);
+        logger.info(`[LIFESPAN] Precision calculation for item ${itemId} — adjusted life: ${adjustedLife}yr`);
       } else {
-        console.log(`[LIFESPAN] Category default calculation for item ${itemId} — base life: ${adjustedLife}yr`);
+        logger.info(`[LIFESPAN] Category default calculation for item ${itemId} — base life: ${adjustedLife}yr`);
       }
 
       // Determine base date: purchasedOn → homeAsset.installedAt → installedOn
@@ -505,7 +506,7 @@ export class ApplianceOracleService {
         || item.installedOn;
 
       if (!baseDate) {
-        console.log(`[LIFESPAN] No base date for item ${itemId} — cannot compute expiry`);
+        logger.info(`[LIFESPAN] No base date for item ${itemId} — cannot compute expiry`);
         return;
       }
 
@@ -517,9 +518,9 @@ export class ApplianceOracleService {
         data: { expectedExpiryDate },
       });
 
-      console.log(`[LIFESPAN] Updated expectedExpiryDate for item ${itemId} → ${expectedExpiryDate.toISOString()}`);
+      logger.info(`[LIFESPAN] Updated expectedExpiryDate for item ${itemId} → ${expectedExpiryDate.toISOString()}`);
     } catch (err) {
-      console.error(`[LIFESPAN] Recalculation failed for item ${itemId}:`, err);
+      logger.error(`[LIFESPAN] Recalculation failed for item ${itemId}:`, err);
     }
   }
 

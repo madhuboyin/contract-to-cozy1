@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { sharedDataBackfillService } from '../services/sharedDataBackfill.service';
 import { signalService } from '../services/signal.service';
+import { logger } from '../lib/logger';
 
 function parseScope(req: Request): { propertyId?: string; limit?: number; startAfterPropertyId?: string } {
   const propertyId = typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined;
@@ -32,7 +33,7 @@ export async function runSharedDataBackfillHandler(req: Request, res: Response):
 
     res.json({ success: true, data: summary });
   } catch (error: any) {
-    console.error('[ADMIN-SHARED-DATA] Failed to run backfill:', error);
+    logger.error('[ADMIN-SHARED-DATA] Failed to run backfill:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -47,7 +48,7 @@ export async function getSharedDataReadinessHandler(req: Request, res: Response)
     const report = await sharedDataBackfillService.getReadinessReport(parseScope(req));
     res.json({ success: true, data: report });
   } catch (error: any) {
-    console.error('[ADMIN-SHARED-DATA] Failed to build readiness report:', error);
+    logger.error('[ADMIN-SHARED-DATA] Failed to build readiness report:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -62,7 +63,7 @@ export async function getSharedDataConsistencyHandler(req: Request, res: Respons
     const report = await sharedDataBackfillService.getConsistencyReport(parseScope(req));
     res.json({ success: true, data: report });
   } catch (error: any) {
-    console.error('[ADMIN-SHARED-DATA] Failed to build consistency report:', error);
+    logger.error('[ADMIN-SHARED-DATA] Failed to build consistency report:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -88,7 +89,7 @@ export async function getSharedSignalHealthHandler(req: Request, res: Response):
 
     res.json({ success: true, data: health });
   } catch (error: any) {
-    console.error('[ADMIN-SHARED-DATA] Failed to build signal health report:', error);
+    logger.error('[ADMIN-SHARED-DATA] Failed to build signal health report:', error);
     res.status(500).json({
       success: false,
       error: {
@@ -103,7 +104,7 @@ export async function getSharedDataDiagnosticsHandler(req: Request, res: Respons
     const diagnostics = await sharedDataBackfillService.getOperationalDiagnostics(parseScope(req));
     res.json({ success: true, data: diagnostics });
   } catch (error: any) {
-    console.error('[ADMIN-SHARED-DATA] Failed to build operational diagnostics report:', error);
+    logger.error('[ADMIN-SHARED-DATA] Failed to build operational diagnostics report:', error);
     res.status(500).json({
       success: false,
       error: {

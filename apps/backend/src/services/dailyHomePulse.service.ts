@@ -15,6 +15,7 @@ import { prisma } from '../lib/prisma';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { calculateHealthScore } from '../utils/propertyScore.util';
 import { getOwnerLocalUpdates } from '../localUpdates/localUpdates.service';
+import { logger } from '../lib/logger';
 
 type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
 type InsightSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -910,7 +911,7 @@ export class DailyHomePulseService {
       try {
         return calculateHealthScore(property as never, documentCount, activeBookings as never).totalScore;
       } catch (error) {
-        console.warn('[DailyHomePulse] Health score calculation failed, defaulting to 0.', error);
+        logger.warn('[DailyHomePulse] Health score calculation failed, defaulting to 0.', error);
         return 0;
       }
     })();

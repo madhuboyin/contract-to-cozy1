@@ -8,6 +8,7 @@ declare const google: {
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
+import { logger } from '../lib/logger';
 
 interface AppreciationDataPoint {
   date: string;
@@ -68,7 +69,7 @@ export class PropertyAppreciationService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[APPRECIATION] GEMINI_API_KEY not set');
+      logger.warn('[APPRECIATION] GEMINI_API_KEY not set');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -134,19 +135,19 @@ export class PropertyAppreciationService {
         // Step 1: Perform targeted Google Search for median home value (best proxy for comps)
         const zipCode = property.zipCode || property.state; // Fallback to state if zip not available
         const searchQuery = `median home value ${property.city}, ${property.state} zip code ${zipCode} Zillow Redfin`;
-        console.log('[APPRECIATION-SEARCH] Attempting Google search...');
-        console.log('[APPRECIATION-SEARCH] Query:', searchQuery);
+        logger.info('[APPRECIATION-SEARCH] Attempting Google search...');
+        logger.info('[APPRECIATION-SEARCH] Query:', searchQuery);
 
         const searchResults = await google.search({ 
             queries: [searchQuery] 
         });
-        console.log('[APPRECIATION-SEARCH] Search successful!');
-        console.log('[APPRECIATION-SEARCH] Results length:', searchResults.result?.length || 0);
-        console.log('[APPRECIATION-SEARCH] First 200 chars:', searchResults.result?.substring(0, 200));
+        logger.info('[APPRECIATION-SEARCH] Search successful!');
+        logger.info('[APPRECIATION-SEARCH] Results length:', searchResults.result?.length || 0);
+        logger.info('[APPRECIATION-SEARCH] First 200 chars:', searchResults.result?.substring(0, 200));
         
         localMarketContext = searchResults.result;
     } catch (error) {
-        console.error('[APPRECIATION] Google Search error:', error);
+        logger.error('[APPRECIATION] Google Search error:', error);
         // Fail gracefully: if search fails, localMarketContext remains empty string, and AI uses fallback logic.
     }
 
@@ -264,20 +265,20 @@ Consider:
 
       // === CRITICAL FIX: Aggressively extract the number ===
       const rawResponse = response.text.trim();
-      console.log('[APPRECIATION-DEBUG] Raw AI response:', rawResponse);
+      logger.info('[APPRECIATION-DEBUG] Raw AI response:', rawResponse);
       
       let estimatedValue: number = NaN;
       
       // 1. Strip ALL non-digit characters from the response, leaving a single string of digits.
       // This is the ultimate brute-force method to get the number.
       const digitsOnly = rawResponse.replace(/[^0-9]/g, '');
-      console.log('[APPRECIATION-DEBUG] Digits only:', digitsOnly);
+      logger.info('[APPRECIATION-DEBUG] Digits only:', digitsOnly);
       
       // 2. Ensure the remaining string is a valid price (e.g., has 5+ digits) and then parse it.
       if (digitsOnly.length >= 5) {
         estimatedValue = parseInt(digitsOnly, 10);
-        console.log('[APPRECIATION-DEBUG] Parsed value:', estimatedValue);
-        console.log('[APPRECIATION-DEBUG] Bounds check:', {
+        logger.info('[APPRECIATION-DEBUG] Parsed value:', estimatedValue);
+        logger.info('[APPRECIATION-DEBUG] Bounds check:', {
             value: estimatedValue,
             min: purchasePrice * 0.5,
             max: purchasePrice * 3,
@@ -288,14 +289,14 @@ Consider:
       
       if (isNaN(estimatedValue) || estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3) {
         // Fallback if AI gives unreasonable value or is unparsable (i.e., NaN)
-        console.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Falling back to regional rate (${Math.round(fallbackValue)}).`);
+        logger.warn(`[APPRECIATION] AI estimate unparsable (NaN) or out of bounds. Estimated: ${estimatedValue}. Falling back to regional rate (${Math.round(fallbackValue)}).`);
         return fallbackValue;
       }
       
       return estimatedValue;
 
     } catch (error) {
-      console.error('[APPRECIATION] AI estimation error, forcing fallback:', error);
+      logger.error('[APPRECIATION] AI estimation error, forcing fallback:', error);
       return fallbackValue;
     }
   }
@@ -395,7 +396,7 @@ Focus on:
       return JSON.parse(text).slice(0, 4);
 
     } catch (error) {
-      console.error('[APPRECIATION] AI insights error:', error);
+      logger.error('[APPRECIATION] AI insights error:', error);
       return this.getBasicInsights(purchasePrice, currentValue, annualRate, regionalRate);
     }
   }

@@ -12,6 +12,7 @@ import {
 } from './majorAppliance.util';
 import { PreferenceProfileService } from './preferenceProfile.service';
 import {
+import { logger } from '../lib/logger';
   getPropertyScoreSnapshotSummary,
   PropertyScoreSnapshotSummaryDTO,
 } from './propertyScoreSnapshot.service';
@@ -3078,12 +3079,12 @@ export class HomeScoreReportService {
           preferenceProfile?.id ?? null
         );
       } catch (error) {
-        console.error('Failed to persist HomeScore snapshot after build:', error);
+        logger.error('Failed to persist HomeScore snapshot after build:', error);
       }
       return result.report;
     } catch (error) {
       if (persisted) {
-        console.error('Failed to recompute stale HomeScore snapshot; falling back to persisted snapshot:', error);
+        logger.error('Failed to recompute stale HomeScore snapshot; falling back to persisted snapshot:', error);
         return persisted;
       }
       throw error;
@@ -3207,7 +3208,7 @@ export class HomeScoreReportService {
         preferenceProfile?.id ?? null
       );
     } catch (error) {
-      console.error('Failed to persist HomeScore snapshot after refresh:', error);
+      logger.error('Failed to persist HomeScore snapshot after refresh:', error);
     }
     return result.report;
   }

@@ -1,6 +1,7 @@
 // apps/backend/src/community/providers/rss.provider.ts
 
 import { assertSafeUrl } from '../../utils/ssrfGuard';
+import { logger } from '../../lib/logger';
 
 export interface RssItem {
   title: string;
@@ -60,7 +61,7 @@ export async function fetchRssItems(feedUrl: string, limit = 20): Promise<RssIte
 
     return items;
   } catch (error) {
-    console.error(`RSS feed failed for ${feedUrl}:`, error);
+    logger.error(`RSS feed failed for ${feedUrl}:`, error);
     // ✅ Return empty array instead of crashing
     return [];
   }

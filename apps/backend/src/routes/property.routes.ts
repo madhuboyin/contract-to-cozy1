@@ -6,6 +6,7 @@ import * as propertyController from '../controllers/property.controller';
 // CRITICAL FIX: Import the comprehensive schemas (with all new fields) from validators.ts
 import { createPropertySchema, updatePropertySchema } from '../utils/validators'; 
 import { AuthRequest } from '../types/auth.types'; 
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -382,7 +383,7 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
       },
     });
 
-    console.log(`[SEASONAL API] Found checklist for property ${propertyId}:`, checklist ? 'Yes' : 'No');
+    logger.info(`[SEASONAL API] Found checklist for property ${propertyId}:`, checklist ? 'Yes' : 'No');
 
     return res.json({
       success: true,
@@ -391,7 +392,7 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
       },
     });
   } catch (error) {
-    console.error('[SEASONAL API] Error fetching seasonal checklist:', error);
+    logger.error('[SEASONAL API] Error fetching seasonal checklist:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch seasonal checklist',

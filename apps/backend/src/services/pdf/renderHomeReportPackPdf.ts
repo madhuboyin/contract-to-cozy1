@@ -1,6 +1,7 @@
 // apps/backend/src/services/pdf/renderHomeReportPackPdf.ts
 import { chromium } from 'playwright';
 import { buildHomeReportPackHtml } from './templates/homeReportPackHtml';
+import { logger } from '../../lib/logger';
 
 type RenderOptions = {
   generatedAtIso?: string;
@@ -25,19 +26,19 @@ export async function renderHomeReportPackPdf(
     ? process.env.CHROMIUM_PATH
     : chromium.executablePath();
   
-  console.log('NODE_ENV', process.env.NODE_ENV);
-  console.log('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
-  console.log('PLAYWRIGHT_BROWSERS_PATH', process.env.PLAYWRIGHT_BROWSERS_PATH);
-  console.log('executablePath', executablePath);
-  console.log('chromium.executablePath()', chromium.executablePath());
+  logger.info('NODE_ENV', process.env.NODE_ENV);
+  logger.info('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
+  logger.info('PLAYWRIGHT_BROWSERS_PATH', process.env.PLAYWRIGHT_BROWSERS_PATH);
+  logger.info('executablePath', executablePath);
+  logger.info('chromium.executablePath()', chromium.executablePath());
   
   const browser = await chromium.launch({
     executablePath,
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
   
-    console.log('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
-    console.log('args', ['--no-sandbox', '--disable-dev-shm-usage']);
+    logger.info('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
+    logger.info('args', ['--no-sandbox', '--disable-dev-shm-usage']);
   try {
     const page = await browser.newPage();
 

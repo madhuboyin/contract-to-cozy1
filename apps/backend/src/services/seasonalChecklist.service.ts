@@ -2,6 +2,7 @@
 import { ClimateRegion, Season, Property } from '@prisma/client';
 import { ClimateZoneService } from './climateZone.service';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 export class SeasonalChecklistService {
   /**
@@ -40,13 +41,13 @@ export class SeasonalChecklistService {
       throw new Error('Property not found');
     }
     if (property.homeownerProfile?.segment !== 'EXISTING_OWNER') {
-      console.log(`Skipping seasonal checklist - not an existing owner (property: ${propertyId})`);
+      logger.info(`Skipping seasonal checklist - not an existing owner (property: ${propertyId})`);
       return null;
     }
     const climateSettings = await ClimateZoneService.getOrCreateClimateSettings(propertyId);
 
     if (!climateSettings.autoGenerateChecklists) {
-      console.log(`Auto-generation disabled for property ${propertyId}`);
+      logger.info(`Auto-generation disabled for property ${propertyId}`);
       return null;
     }
 
@@ -431,7 +432,7 @@ export class SeasonalChecklistService {
         const checklistItem = await this.addTaskToChecklist(item.id);
         addedTasks.push(checklistItem);
       } catch (error) {
-        console.error(`Failed to add task ${item.id}:`, error);
+        logger.error(`Failed to add task ${item.id}:`, error);
       }
     }
 
@@ -497,7 +498,7 @@ export class SeasonalChecklistService {
 
     // Only allow uncompleting if it was previously completed
     if (seasonalItem.status !== 'COMPLETED') {
-      console.log(`⚠️ Seasonal item ${seasonalItemId} is not completed (status: ${seasonalItem.status}), skipping uncomplete`);
+      logger.info(`⚠️ Seasonal item ${seasonalItemId} is not completed (status: ${seasonalItem.status}), skipping uncomplete`);
       return seasonalItem;
     }
 
@@ -529,7 +530,7 @@ export class SeasonalChecklistService {
       });
     }
 
-    console.log(`🔄 Uncompleted seasonal task: ${seasonalItem.title}`);
+    logger.info(`🔄 Uncompleted seasonal task: ${seasonalItem.title}`);
     
     return updated;
   }

@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { extractLabelFieldsFromImage } from '../services/inventoryOcr.service';
 import { InventoryDraftService } from '../services/inventoryDraft.service';
+import { logger } from '../lib/logger';
 
 const draftSvc = new InventoryDraftService();
 
@@ -118,7 +119,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     });
   }
 
-  console.log('[inventoryOcr] upload', {
+  logger.info('[inventoryOcr] upload', {
     mimetype: file.mimetype,
     size: file.size,
     hasBuffer: !!file.buffer?.length,
@@ -129,11 +130,11 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   const serialNumber = fields.find((f) => f.key === 'serialNumber')?.value ?? null;
   const upc = fields.find((f) => f.key === 'upc')?.value ?? null;
   const sku = fields.find((f) => f.key === 'sku')?.value ?? null;
-  console.log('manufacturer', manufacturer);
-  console.log('modelNumber', modelNumber);
-  console.log('serialNumber', serialNumber);
-  console.log('upc', upc);
-  console.log('sku', sku);
+  logger.info('manufacturer', manufacturer);
+  logger.info('modelNumber', modelNumber);
+  logger.info('serialNumber', serialNumber);
+  logger.info('upc', upc);
+  logger.info('sku', sku);
 
   
   // 4) Create draft tied to session
@@ -149,7 +150,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     confidenceJson: ocr.confidenceByField,
   });
   
-  console.log('draft', draft);
+  logger.info('draft', draft);
   return res.json({
     sessionId: session.id,
     draftId: draft.id,

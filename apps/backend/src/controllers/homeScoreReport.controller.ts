@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
+import { logger } from '../lib/logger';
   HomeScoreCorrectionInput,
   HomeScoreEventInput,
   HomeScoreReportService,
@@ -26,7 +27,7 @@ export async function getHomeScoreReport(req: CustomRequest, res: Response) {
     const report = await service.getReport(propertyId, userId, weeks);
     return res.json({ success: true, data: { report } });
   } catch (error: any) {
-    console.error('Error fetching home score report:', error);
+    logger.error('Error fetching home score report:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch home score report.',
@@ -46,7 +47,7 @@ export async function refreshHomeScoreReport(req: CustomRequest, res: Response) 
     const report = await service.refresh(propertyId, userId, weeks);
     return res.json({ success: true, data: { report } });
   } catch (error: any) {
-    console.error('Error refreshing home score report:', error);
+    logger.error('Error refreshing home score report:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to refresh home score report.',
@@ -66,7 +67,7 @@ export async function getHomeScoreHistory(req: CustomRequest, res: Response) {
     const history = await service.getHistory(propertyId, userId, weeks);
     return res.json({ success: true, data: { history } });
   } catch (error: any) {
-    console.error('Error fetching home score history:', error);
+    logger.error('Error fetching home score history:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch home score history.',
@@ -86,7 +87,7 @@ export async function getHomeScoreFactors(req: CustomRequest, res: Response) {
     const factors = await service.getFactors(propertyId, userId, weeks);
     return res.json({ success: true, data: { factors } });
   } catch (error: any) {
-    console.error('Error fetching home score factors:', error);
+    logger.error('Error fetching home score factors:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch home score factors.',
@@ -106,7 +107,7 @@ export async function getHomeScoreCorrections(req: CustomRequest, res: Response)
     const corrections = await service.getCorrections(propertyId, userId, limit);
     return res.json({ success: true, data: { corrections } });
   } catch (error: any) {
-    console.error('Error fetching home score corrections:', error);
+    logger.error('Error fetching home score corrections:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch home score corrections.',
@@ -126,7 +127,7 @@ export async function submitHomeScoreCorrection(req: CustomRequest, res: Respons
     const result = await service.submitCorrection(propertyId, userId, payload);
     return res.status(201).json({ success: true, data: result });
   } catch (error: any) {
-    console.error('Error submitting home score correction:', error);
+    logger.error('Error submitting home score correction:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to submit home score correction.',
@@ -146,7 +147,7 @@ export async function trackHomeScoreEvent(req: CustomRequest, res: Response) {
     const result = await service.trackEvent(propertyId, userId, payload);
     return res.status(201).json({ success: true, data: result });
   } catch (error: any) {
-    console.error('Error tracking home score event:', error);
+    logger.error('Error tracking home score event:', error);
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to track home score event.',

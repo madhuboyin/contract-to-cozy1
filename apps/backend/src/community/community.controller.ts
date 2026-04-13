@@ -2,6 +2,7 @@
 
 import { Request, Response } from 'express';
 import { CommunityService } from './community.service';
+import { logger } from '../lib/logger';
 
 function normalizeCityState(req: Request) {
   const city = String(req.query.city ?? '').trim();
@@ -74,7 +75,7 @@ export class CommunityController {
       const schedule = await this.service.getTrashSchedule({ city, state, propertyId });
       return res.json({ success: true, data: schedule });
     } catch (error: any) {
-      console.error('Error fetching trash schedule:', error);
+      logger.error('Error fetching trash schedule:', error);
       return res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || 'Failed to fetch trash schedule',

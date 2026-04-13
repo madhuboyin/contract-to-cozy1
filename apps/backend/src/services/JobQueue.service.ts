@@ -12,6 +12,7 @@ import {
 import RiskAssessmentService from './RiskAssessment.service';
 import { FinancialReportService } from './FinancialReport.service';
 import { HiddenAssetService } from './hiddenAssets.service';
+import { logger } from '../lib/logger';
 
 // -----------------------------------------------------------------------------
 // Shared Redis Connection Configuration
@@ -84,7 +85,7 @@ export class JobQueueService {
   public async enqueuePropertyIntelligenceJobs(
     propertyId: string
   ): Promise<void> {
-    console.log(
+    logger.info(
       `[QUEUE-MANAGER] Enqueueing intelligence jobs for property ${propertyId}`
     );
 
@@ -129,7 +130,7 @@ export class JobQueueService {
       }
     );
 
-    console.log(
+    logger.info(
       `[QUEUE-MANAGER] Risk + FES + HiddenAssets jobs enqueued for property ${propertyId}`
     );
   }
@@ -157,10 +158,10 @@ export class JobQueueService {
           break;
 
         default:
-          console.warn(`[WORKER] Unknown job type: ${jobType}`);
+          logger.warn(`[WORKER] Unknown job type: ${jobType}`);
       }
     } catch (err: any) {
-      console.error(
+      logger.error(
         `[WORKER] Job failed [${jobType}] for property ${propertyId}`,
         err.message
       );
@@ -179,19 +180,19 @@ export class JobQueueService {
     );
 
     worker.on('completed', (job) => {
-      console.log(
+      logger.info(
         `[WORKER] Job completed: ${job.id} (${job.data.jobType})`
       );
     });
 
     worker.on('failed', (job, err) => {
-      console.error(
+      logger.error(
         `[WORKER] Job failed: ${job?.id} (${job?.data.jobType})`,
         err.message
       );
     });
 
-    console.log(
+    logger.info(
       `[WORKER] Property Intelligence Worker started`
     );
 

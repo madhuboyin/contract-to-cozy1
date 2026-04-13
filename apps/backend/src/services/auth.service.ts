@@ -22,6 +22,7 @@ import {
 } from '../types/auth.types';
 
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 export class AuthService {
   /**
@@ -66,7 +67,7 @@ export class AuthService {
             segment: segment, // Use the variable
           },
         });
-        console.log(`✅ Created homeowner profile for user ${user.id}`);
+        logger.info(`✅ Created homeowner profile for user ${user.id}`);
       } else if (user.role === 'PROVIDER') {
         // ... (existing provider profile logic)
         await prisma.providerProfile.create({
@@ -83,11 +84,11 @@ export class AuthService {
             stripeOnboarded: false,
           },
         });
-        console.log(`✅ Created provider profile for user ${user.id}`);
+        logger.info(`✅ Created provider profile for user ${user.id}`);
       }
     } catch (profileError) {
       // If profile creation fails, delete the user and throw error
-      console.error('Failed to create profile:', profileError);
+      logger.error('Failed to create profile:', profileError);
       await prisma.user.delete({ where: { id: user.id } });
       throw new APIError(
         'Failed to create user profile. Please try again.',

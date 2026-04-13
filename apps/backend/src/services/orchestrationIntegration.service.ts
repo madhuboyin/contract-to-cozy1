@@ -15,6 +15,7 @@ import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { ChecklistService } from './checklist.service';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * Routes Action Center task creation to the appropriate service
@@ -59,7 +60,7 @@ export async function createTaskFromActionCenter(data: {
     // HOME_BUYER: Action Center tasks aren't typically used
     // Most HOME_BUYER tasks are the 8 default tasks
     // But if Action Center generates something, we can create a custom task
-    console.log('⚠️  HOME_BUYER Action Center task - Creating custom task');
+    logger.info('⚠️  HOME_BUYER Action Center task - Creating custom task');
     
     const task = await HomeBuyerTaskService.createTask(data.userId, {
       title: data.title,
@@ -77,7 +78,7 @@ export async function createTaskFromActionCenter(data: {
 
   if (segment === 'EXISTING_OWNER') {
     // EXISTING_OWNER: Use PropertyMaintenanceTaskService (idempotent)
-    console.log('✅ EXISTING_OWNER Action Center task - Creating maintenance task');
+    logger.info('✅ EXISTING_OWNER Action Center task - Creating maintenance task');
 
     // Convert priority string to MaintenanceTaskPriority
     const priorityMap: Record<string, any> = {
@@ -118,7 +119,7 @@ export async function createTaskFromActionCenter(data: {
   }
 
   // 3. Fallback to legacy ChecklistService (deprecated)
-  console.log('⚠️  Using LEGACY ChecklistService - should migrate to new services');
+  logger.info('⚠️  Using LEGACY ChecklistService - should migrate to new services');
   
   const result = await ChecklistService.createDirectChecklistItem(data.userId, {
     title: data.title,
@@ -175,7 +176,7 @@ export async function getActionsForProperty(
     try {
       homeBuyerTasks = await HomeBuyerTaskService.getTasks(userId);
     } catch (error) {
-      console.error('Error fetching HomeBuyerTasks:', error);
+      logger.error('Error fetching HomeBuyerTasks:', error);
     }
   }
 
@@ -188,7 +189,7 @@ export async function getActionsForProperty(
         { includeCompleted: false }
       );
     } catch (error) {
-      console.error('Error fetching PropertyMaintenanceTasks:', error);
+      logger.error('Error fetching PropertyMaintenanceTasks:', error);
     }
   }
 
@@ -197,7 +198,7 @@ export async function getActionsForProperty(
     const checklist = await ChecklistService.getOrCreateChecklist(userId);
     legacyChecklistItems = checklist?.items || [];
   } catch (error) {
-    console.error('Error fetching legacy checklist items:', error);
+    logger.error('Error fetching legacy checklist items:', error);
   }
 
   return {

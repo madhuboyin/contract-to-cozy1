@@ -58,7 +58,7 @@ export const postExpense = async (req: AuthRequest, res: Response, next: NextFun
     res.status(201).json({ success: true, data: expense });
   } catch (error) {
     // DEBUG 2: Log the error being passed to Express's error handler
-    console.error('DEBUG (Controller): Error caught in postExpense:', error);
+    logger.error('DEBUG (Controller): Error caught in postExpense:', error);
     next(error);
   }
 };
@@ -69,7 +69,7 @@ export const getExpenses = async (req: AuthRequest, res: Response, next: NextFun
     const { propertyId } = req.query; // Optional filter
 
     // DEBUG 3: Log API call initiation
-    console.log(`DEBUG (Controller): GET /expenses for user ${homeownerProfileId}`);
+    logger.info(`DEBUG (Controller): GET /expenses for user ${homeownerProfileId}`);
 
     const expenses = await HomeManagementService.listExpenses(
       homeownerProfileId, 
@@ -78,7 +78,7 @@ export const getExpenses = async (req: AuthRequest, res: Response, next: NextFun
     res.status(200).json({ success: true, data: { expenses } });
   } catch (error) {
     // DEBUG 4: Log the error being passed to Express's error handler
-    console.error('DEBUG (Controller): Error caught in getExpenses:', error);
+    logger.error('DEBUG (Controller): Error caught in getExpenses:', error);
     next(error);
   }
 };
@@ -126,7 +126,7 @@ export const postWarranty = async (req: AuthRequest, res: Response, next: NextFu
     res.status(201).json({ success: true, data: warranty });
   } catch (error) {
     // DEBUG 6: Log the error being passed to Express's error handler
-    console.error('DEBUG (Controller): Error caught in postWarranty:', error);
+    logger.error('DEBUG (Controller): Error caught in postWarranty:', error);
     next(error);
   }
 };
@@ -136,13 +136,13 @@ export const getWarranties = async (req: AuthRequest, res: Response, next: NextF
     const homeownerProfileId = getHomeownerId(req);
     
     // DEBUG 7: Log API call initiation
-    console.log(`DEBUG (Controller): GET /warranties for user ${homeownerProfileId}`);
+    logger.info(`DEBUG (Controller): GET /warranties for user ${homeownerProfileId}`);
 
     const warranties = await HomeManagementService.listWarranties(homeownerProfileId);
     res.status(200).json({ success: true, data: { warranties } });
   } catch (error) {
     // DEBUG 8: Log the error being passed to Express's error handler
-    console.error('DEBUG (Controller): Error caught in getWarranties:', error);
+    logger.error('DEBUG (Controller): Error caught in getWarranties:', error);
     next(error);
   }
 };
@@ -221,7 +221,7 @@ export const postInsurancePolicy = async (req: AuthRequest, res: Response, next:
     res.status(201).json({ success: true, data: policy });
   } catch (error) {
     // DEBUG 10: Log the error being passed to Express's error handler
-    console.error('DEBUG (Controller): Error caught in postInsurancePolicy:', error);
+    logger.error('DEBUG (Controller): Error caught in postInsurancePolicy:', error);
     next(error);
   }
 };
@@ -231,13 +231,13 @@ export const getInsurancePolicies = async (req: AuthRequest, res: Response, next
     const homeownerProfileId = getHomeownerId(req);
     
     // DEBUG 11: Log API call initiation
-    console.log(`DEBUG (Controller): GET /insurance-policies for user ${homeownerProfileId}`);
+    logger.info(`DEBUG (Controller): GET /insurance-policies for user ${homeownerProfileId}`);
 
     const policies = await HomeManagementService.listInsurancePolicies(homeownerProfileId);
     res.status(200).json({ success: true, data: { policies } });
   } catch (error) {
     // DEBUG 12: Log the error being passed to Express's error handler
-    console.error('DEBUG (Controller): Error caught in getInsurancePolicies:', error);
+    logger.error('DEBUG (Controller): Error caught in getInsurancePolicies:', error);
     next(error);
   }
 };

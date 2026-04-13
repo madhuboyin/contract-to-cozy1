@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { TrueCostOwnershipService } from '../services/trueCostOwnership.service';
 import { CustomRequest } from '../types';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 const svc = new TrueCostOwnershipService();
 
@@ -67,7 +68,7 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
       },
     });
   } catch (guidanceError) {
-    console.warn('[GUIDANCE] true-cost hook failed:', guidanceError);
+    logger.warn('[GUIDANCE] true-cost hook failed:', guidanceError);
   }
 
   return res.json({

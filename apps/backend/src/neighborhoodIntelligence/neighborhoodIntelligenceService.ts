@@ -6,6 +6,7 @@
 import { NeighborhoodEventIngestionService } from './neighborhoodEventIngestionService';
 import { NeighborhoodPropertyMatchService } from './neighborhoodPropertyMatchService';
 import { NormalizedNeighborhoodEventInput } from './types';
+import { logger } from '../lib/logger';
 
 const ingestionService = new NeighborhoodEventIngestionService();
 const matchService = new NeighborhoodPropertyMatchService();
@@ -25,7 +26,7 @@ export class NeighborhoodIntelligenceService {
     const { eventId, created } = await ingestionService.upsertNormalizedEvent(input);
     const { matched } = await matchService.matchPropertiesForEvent(eventId);
 
-    console.log(
+    logger.info(
       `[NeighborhoodIntelligence] ingestAndProcess complete — eventId=${eventId} created=${created} matchedProperties=${matched}`,
     );
 
@@ -39,7 +40,7 @@ export class NeighborhoodIntelligenceService {
   async recomputeEventMatches(eventId: string): Promise<{ matchedProperties: number }> {
     const { matched } = await matchService.matchPropertiesForEvent(eventId);
 
-    console.log(
+    logger.info(
       `[NeighborhoodIntelligence] recomputeEventMatches complete — eventId=${eventId} matched=${matched}`,
     );
 
@@ -53,7 +54,7 @@ export class NeighborhoodIntelligenceService {
   async recomputePropertyNeighborhoodRadar(propertyId: string): Promise<{ processed: number }> {
     const result = await matchService.recomputePropertyNeighborhoodRadar(propertyId);
 
-    console.log(
+    logger.info(
       `[NeighborhoodIntelligence] recomputePropertyRadar complete — propertyId=${propertyId} processed=${result.processed}`,
     );
 

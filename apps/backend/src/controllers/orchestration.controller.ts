@@ -24,6 +24,7 @@ import { prisma } from '../lib/prisma';
 import { createCompletion } from '../services/orchestrationCompletion.service';
 import { PropertyMaintenanceTaskService } from '../services/PropertyMaintenanceTask.service';
 import { completionCreateSchema } from '../validators/orchestrationCompletion.validator';
+import { logger } from '../lib/logger';
 
 /**
  * GET /api/orchestration/:propertyId/summary
@@ -89,10 +90,10 @@ export async function markOrchestrationActionCompleted(
 
     if (maintenanceTask && maintenanceTask.status !== 'COMPLETED' && userId) {
       await PropertyMaintenanceTaskService.updateTaskStatus(userId, maintenanceTask.id, 'COMPLETED');
-      console.log(`[ORCHESTRATION] Synced completion to maintenance task ${maintenanceTask.id}`);
+      logger.info(`[ORCHESTRATION] Synced completion to maintenance task ${maintenanceTask.id}`);
     }
   } catch (syncError: any) {
-    console.warn('[ORCHESTRATION] Failed to sync completion to maintenance task:', syncError?.message);
+    logger.warn('[ORCHESTRATION] Failed to sync completion to maintenance task:', syncError?.message);
   }
 
   return res.json({
@@ -150,10 +151,10 @@ export async function undoOrchestrationAction(
 
     if (maintenanceTask && maintenanceTask.status === 'COMPLETED' && userId) {
       await PropertyMaintenanceTaskService.updateTaskStatus(userId, maintenanceTask.id, 'IN_PROGRESS');
-      console.log(`[ORCHESTRATION] Reverted maintenance task ${maintenanceTask.id} to IN_PROGRESS`);
+      logger.info(`[ORCHESTRATION] Reverted maintenance task ${maintenanceTask.id} to IN_PROGRESS`);
     }
   } catch (syncError: any) {
-    console.warn('[ORCHESTRATION] Failed to revert maintenance task:', syncError?.message);
+    logger.warn('[ORCHESTRATION] Failed to revert maintenance task:', syncError?.message);
   }
 
   return res.json({ success: true });
@@ -202,7 +203,7 @@ export async function getOrchestrationSummaryHandler(
     // -----------------------------
     // 4. Error Handling
     // -----------------------------
-    console.error('[ORCHESTRATION_CONTROLLER] Failed to build summary:', {
+    logger.error('[ORCHESTRATION_CONTROLLER] Failed to build summary:', {
       propertyId: req.params?.propertyId,
       error: error?.message || error,
     });
@@ -234,7 +235,7 @@ export async function getOrchestrationDecisionDiagnosticsHandler(
       data: diagnostics,
     });
   } catch (error: any) {
-    console.error('[ORCHESTRATION_CONTROLLER] Failed to load decision diagnostics:', {
+    logger.error('[ORCHESTRATION_CONTROLLER] Failed to load decision diagnostics:', {
       propertyId: req.params?.propertyId,
       error: error?.message || error,
     });
@@ -365,7 +366,7 @@ export async function getOrchestrationDecisionTraceHandler(req: Request, res: Re
 
     return res.json({ success: true, data: trace });
   } catch (e: any) {
-    console.error('[ORCHESTRATION] trace fetch failed:', e?.message || e);
+    logger.error('[ORCHESTRATION] trace fetch failed:', e?.message || e);
     return res.status(500).json({ success: false, message: 'Failed to load decision trace' });
   }
 }

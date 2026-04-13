@@ -106,6 +106,7 @@ import gazetteRoutes from './modules/gazette/gazette.routes';
 import gazetteInternalRoutes from './modules/gazette/gazetteInternal.routes';
 import sharedDataRoutes from './routes/sharedData.routes';
 import releaseGateRoutes from './routes/releaseGate.routes';
+import { logger } from './lib/logger';
 dotenv.config();
 
 const app = express();
@@ -141,7 +142,7 @@ app.use('/api', apiRateLimiter);
 
 if (process.env.NODE_ENV === 'development') {
   app.use((req: Request, res: Response, next: NextFunction) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    logger.info(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
   });
 }
@@ -462,40 +463,40 @@ app.use(errorHandler);
 // =============================================================================
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 API URL: http://localhost:${PORT}`);
-  console.log(`✅ Health check: http://localhost:${PORT}/api/health`);
-  console.log(`📚 API Docs: http://localhost:${PORT}/api/docs`);
-  console.log(`\n📋 Available routes:`);
-  console.log(`   - POST /api/auth/register`);
-  console.log(`   - POST /api/auth/login`);
-  console.log(`   - GET  /api/auth/me`);
-  console.log(`   - POST /api/auth/logout`);
-  console.log(`   - GET  /api/providers/search`);
-  console.log(`   - GET  /api/bookings`);
-  console.log(`   - GET  /api/properties`);
-  console.log(`   - GET  /api/users/profile`);
-  console.log(`   - PUT  /api/users/profile`);
-  console.log(`   - GET  /api/checklist`);
-  console.log(`   - PUT  /api/checklist/items/:itemId`);
-  console.log(`   - GET  /api/service-categories`);
-  console.log(`   - GET  /api/service-categories/all`);
-  console.log(`   - GET  /api/risk/property/:propertyId/report`);
-  console.log(`   - POST /api/risk/calculate/:propertyId`);
-  console.log(`   - GET  /api/community/alerts`);
-  console.log(`   - GET  /api/community/trash`);
-  console.log(`   - GET  /api/v1/community/events`);
-  console.log(`   - GET  /api/inventory`);
-  console.log(`   - GET  /api/room-insights`);
-  console.log(`   - GET  /api/knowledge/articles`);
-  console.log(`   - PATCH  /api/room-insights/rooms/:roomId/profile`);
-  console.log(`   - GET  /api/room-insights/rooms/:roomId/checklist-items`);
-  console.log(`   - POST /api/room-insights/rooms/:roomId/checklist-items`);
-  console.log(`   - PATCH /api/room-insights/rooms/:roomId/checklist-items/:itemId`);
-  console.log(`   - DELETE /api/room-insights/rooms/:roomId/checklist-items/:itemId`);
-  console.log(`   - GET  /api/room-insights/rooms/:roomId/timeline`);
-  console.log(`   - GET  /api/home-events`);
+  logger.info(`🚀 Server running on port ${PORT}`);
+  logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`🔗 API URL: http://localhost:${PORT}`);
+  logger.info(`✅ Health check: http://localhost:${PORT}/api/health`);
+  logger.info(`📚 API Docs: http://localhost:${PORT}/api/docs`);
+  logger.info(`\n📋 Available routes:`);
+  logger.info(`   - POST /api/auth/register`);
+  logger.info(`   - POST /api/auth/login`);
+  logger.info(`   - GET  /api/auth/me`);
+  logger.info(`   - POST /api/auth/logout`);
+  logger.info(`   - GET  /api/providers/search`);
+  logger.info(`   - GET  /api/bookings`);
+  logger.info(`   - GET  /api/properties`);
+  logger.info(`   - GET  /api/users/profile`);
+  logger.info(`   - PUT  /api/users/profile`);
+  logger.info(`   - GET  /api/checklist`);
+  logger.info(`   - PUT  /api/checklist/items/:itemId`);
+  logger.info(`   - GET  /api/service-categories`);
+  logger.info(`   - GET  /api/service-categories/all`);
+  logger.info(`   - GET  /api/risk/property/:propertyId/report`);
+  logger.info(`   - POST /api/risk/calculate/:propertyId`);
+  logger.info(`   - GET  /api/community/alerts`);
+  logger.info(`   - GET  /api/community/trash`);
+  logger.info(`   - GET  /api/v1/community/events`);
+  logger.info(`   - GET  /api/inventory`);
+  logger.info(`   - GET  /api/room-insights`);
+  logger.info(`   - GET  /api/knowledge/articles`);
+  logger.info(`   - PATCH  /api/room-insights/rooms/:roomId/profile`);
+  logger.info(`   - GET  /api/room-insights/rooms/:roomId/checklist-items`);
+  logger.info(`   - POST /api/room-insights/rooms/:roomId/checklist-items`);
+  logger.info(`   - PATCH /api/room-insights/rooms/:roomId/checklist-items/:itemId`);
+  logger.info(`   - DELETE /api/room-insights/rooms/:roomId/checklist-items/:itemId`);
+  logger.info(`   - GET  /api/room-insights/rooms/:roomId/timeline`);
+  logger.info(`   - GET  /api/home-events`);
 });
 
 export default app;

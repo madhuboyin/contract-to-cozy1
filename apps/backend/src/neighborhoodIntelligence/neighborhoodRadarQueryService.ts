@@ -19,6 +19,7 @@ import {
   OverallEffect,
 } from './types';
 import {
+import { logger } from '../lib/logger';
   computeEventConfidence,
   computeFreshnessScore,
   computeCompositeRank,
@@ -210,7 +211,7 @@ export class NeighborhoodRadarQueryService {
       confidenceBand: card.confidenceBand,
     });
 
-    console.log(
+    logger.info(
       `[NeighborhoodRadar] getEventDetail — property=${propertyId} event=${eventId}` +
       ` confidence=${card.confidence} band=${card.confidenceBand}` +
       ` freshness=${card.freshnessScore} stale=${card.isStale}` +

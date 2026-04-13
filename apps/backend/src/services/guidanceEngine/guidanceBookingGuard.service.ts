@@ -5,6 +5,7 @@ import {
   getGuidanceModels,
 } from './guidanceTypes';
 import { guidanceCopyService } from './guidanceCopy.service';
+import { logger } from '../../lib/logger';
 
 function pickExecutionStepsForTarget(targetAction: GuidanceExecutionGuardRequest['targetAction'], steps: any[]) {
   if (targetAction === 'BOOKING') {
@@ -160,7 +161,7 @@ export class GuidanceBookingGuardService {
     const safeNextStep = dedupedMissing[0] ?? null;
     const blockedReason = Array.from(new Set(reasons))[0] ?? (safeNextStep ? `Complete ${safeNextStep.stepLabel} first.` : null);
     if (blocked) {
-      console.info('[GUIDANCE] execution blocked', {
+      logger.info('[GUIDANCE] execution blocked', {
         propertyId: request.propertyId,
         targetAction: request.targetAction,
         journeyCount: journeys.length,

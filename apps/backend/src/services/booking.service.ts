@@ -30,6 +30,7 @@ import { mapInventoryToServiceCategory } from '../utils/inventoryServiceCategory
 import { priceFinalizationService } from './priceFinalization.service';
 // Phase 5 (TR-03): fire-and-forget guidance step advancement on service completion
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 export class BookingService {
   /**
@@ -299,7 +300,7 @@ export class BookingService {
         });
         linkedPriceFinalizationForBooking = true;
       } catch (error) {
-        console.warn('[BOOKING] failed to link price finalization to booking', {
+        logger.warn('[BOOKING] failed to link price finalization to booking', {
           bookingId: booking.id,
           priceFinalizationId: linkedPriceFinalizationId,
           error,
@@ -361,11 +362,11 @@ export class BookingService {
     // Trigger re-calculation of Health Score / Risk Report immediately.
     // This ensures the "IMMEDIATE ACTION" count drops to 0 instantly after booking.
     try {
-        console.log(`[BOOKING-SERVICE] Triggering risk update for property ${input.propertyId}`);
+        logger.info(`[BOOKING-SERVICE] Triggering risk update for property ${input.propertyId}`);
         await JobQueueService.enqueuePropertyIntelligenceJobs(input.propertyId);
     } catch (error) {
         // Non-blocking error logging. We don't want to fail the booking if the queue is down.
-        console.error(`[BOOKING-SERVICE] Failed to enqueue risk update job:`, error);
+        logger.error(`[BOOKING-SERVICE] Failed to enqueue risk update job:`, error);
     }
     // --- PHASE 3 IMPLEMENTATION END ---
 
@@ -461,8 +462,8 @@ export class BookingService {
             formattedBookings.push(this.formatBookingResponse(booking));
         } catch (error) {
             // Log the error for later investigation but prevent crash
-            // The console.error will appear in the server logs, alerting DevOps/Engineering
-            console.error(`CRITICAL: Failed to format booking ID ${booking.id}. Skipping record.`, error);
+            // The logger.error will appear in the server logs, alerting DevOps/Engineering
+            logger.error(`CRITICAL: Failed to format booking ID ${booking.id}. Skipping record.`, error);
         }
     }
     // FIX END
@@ -797,7 +798,7 @@ export class BookingService {
       try {
         await incrementStreak(booking.propertyId);
       } catch (error) {
-        console.error('[BOOKING] Failed to increment streak from predictive completion:', error);
+        logger.error('[BOOKING] Failed to increment streak from predictive completion:', error);
       }
 
       await this.awardPredictiveMaintenanceBadgeIfEligible(
@@ -836,7 +837,7 @@ export class BookingService {
           },
         })
         .catch((err) =>
-          console.warn('[BOOKING] guidance step advance on service completion failed:', err)
+          logger.warn('[BOOKING] guidance step advance on service completion failed:', err)
         );
     }
 
@@ -1051,7 +1052,7 @@ export class BookingService {
         },
       });
     } catch (error) {
-      console.error('[BOOKING] Failed to award predictive maintenance badge:', error);
+      logger.error('[BOOKING] Failed to award predictive maintenance badge:', error);
     }
   }
 

@@ -4,6 +4,7 @@ import { APIError } from '../middleware/error.middleware';
 import { ServicePriceRadarService } from '../services/servicePriceRadar.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import {
+import { logger } from '../lib/logger';
   CreateServicePriceRadarBody,
   listServicePriceRadarQuerySchema,
   TrackServicePriceRadarEventBody,
@@ -90,7 +91,7 @@ export async function createServicePriceRadarCheck(
         },
       });
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] service price radar hook failed:', guidanceError);
+      logger.warn('[GUIDANCE] service price radar hook failed:', guidanceError);
     }
 
     return res.status(201).json({ success: true, data: result });

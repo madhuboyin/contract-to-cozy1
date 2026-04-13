@@ -17,6 +17,7 @@ import {
 } from './assumptionSet.service';
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 import { signalService } from './signal.service';
+import { logger } from '../lib/logger';
 
 type Impact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -1954,7 +1955,7 @@ export class CoverageIntelligenceService {
     try {
       await this.publishCoverageGapSignal(analysis);
     } catch (error) {
-      console.warn('Coverage gap signal publish failed:', error);
+      logger.warn('Coverage gap signal publish failed:', error);
     }
 
     return mapAnalysisToDto(analysis);

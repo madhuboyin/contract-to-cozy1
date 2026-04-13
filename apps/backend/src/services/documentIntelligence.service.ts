@@ -3,6 +3,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../lib/prisma';
 import { Prisma, WarrantyCategory } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 export interface DocumentInsights {
   documentType: 'WARRANTY' | 'RECEIPT' | 'MANUAL' | 'INSPECTION' | 'INVOICE' | 'INSURANCE' | 'UNKNOWN';
@@ -100,7 +101,7 @@ export class DocumentIntelligenceService {
       if (!text) {
         throw new Error('AI service returned an empty response');
       }
-      console.log('[DOC-INTELLIGENCE] Raw AI response:', text);
+      logger.info('[DOC-INTELLIGENCE] Raw AI response:', text);
 
       // Clean response (remove markdown code blocks if present)
       const cleanedText = text
@@ -120,7 +121,7 @@ export class DocumentIntelligenceService {
 
       return insights;
     } catch (error: any) {
-      console.error('[DOC-INTELLIGENCE] Analysis error:', error);
+      logger.error('[DOC-INTELLIGENCE] Analysis error:', error);
       
       // Return fallback response
       return {
@@ -143,7 +144,7 @@ export class DocumentIntelligenceService {
       const { extractedData } = insights;
 
       if ((insights.confidence ?? 0) < DocumentIntelligenceService.AUTO_WARRANTY_MIN_CONFIDENCE) {
-        console.log(
+        logger.info(
           `[DOC-INTELLIGENCE] Confidence ${(insights.confidence ?? 0).toFixed(2)} below threshold ` +
             `${DocumentIntelligenceService.AUTO_WARRANTY_MIN_CONFIDENCE.toFixed(2)}, skipping auto-create`
         );
@@ -152,7 +153,7 @@ export class DocumentIntelligenceService {
 
       // Only create if we have minimum required data
       if (!extractedData.warrantyExpiration) {
-        console.log('[DOC-INTELLIGENCE] No warranty expiration found, skipping auto-create');
+        logger.info('[DOC-INTELLIGENCE] No warranty expiration found, skipping auto-create');
         return null;
       }
 
@@ -174,7 +175,7 @@ export class DocumentIntelligenceService {
       });
 
       if (existingWarranty) {
-        console.log('[DOC-INTELLIGENCE] Warranty already exists, skipping creation');
+        logger.info('[DOC-INTELLIGENCE] Warranty already exists, skipping creation');
         return null;
       }
 
@@ -196,10 +197,10 @@ export class DocumentIntelligenceService {
         }
       });
 
-      console.log('[DOC-INTELLIGENCE] Auto-created warranty:', warranty.id);
+      logger.info('[DOC-INTELLIGENCE] Auto-created warranty:', warranty.id);
       return warranty;
     } catch (error: any) {
-      console.error('[DOC-INTELLIGENCE] Warranty creation error:', error);
+      logger.error('[DOC-INTELLIGENCE] Warranty creation error:', error);
       return null;
     }
   }

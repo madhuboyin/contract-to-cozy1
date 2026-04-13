@@ -6,6 +6,7 @@ import { CreatePropertyInput, UpdatePropertyInput } from '../utils/validators';
 import { computeSetupStatus } from '../services/propertyOnboarding.service';
 import { getOrCreateActiveNarrativeRun } from '../services/narrativeRun.service';
 import { NeighborhoodIntelligenceService } from '../neighborhoodIntelligence/neighborhoodIntelligenceService';
+import { logger } from '../lib/logger';
 
 const neighborhoodService = new NeighborhoodIntelligenceService();
 
@@ -22,7 +23,7 @@ export const listProperties = async (req: AuthRequest, res: Response) => {
       data: { properties },
     });
   } catch (error) {
-    console.error('Error listing properties:', error);
+    logger.error('Error listing properties:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve properties',
@@ -43,7 +44,7 @@ export const createProperty = async (req: AuthRequest, res: Response) => {
 
     // Fire-and-forget: bootstrap neighborhood radar for the new property.
     void neighborhoodService.recomputePropertyNeighborhoodRadar(property.id).catch((err) => {
-      console.error(`[NeighborhoodRadar] Bootstrap failed for property ${property.id}:`, err);
+      logger.error(`[NeighborhoodRadar] Bootstrap failed for property ${property.id}:`, err);
     });
 
     res.status(201).json({
@@ -52,7 +53,7 @@ export const createProperty = async (req: AuthRequest, res: Response) => {
       message: 'Property created successfully',
     });
   } catch (error: any) {
-    console.error('Error creating property:', error);
+    logger.error('Error creating property:', error);
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to create property',
@@ -83,7 +84,7 @@ export const getProperty = async (req: AuthRequest, res: Response) => {
       data: property,
     });
   } catch (error) {
-    console.error('Error getting property:', error);
+    logger.error('Error getting property:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve property',
@@ -123,7 +124,7 @@ export const getPropertyDashboardBootstrap = async (req: AuthRequest, res: Respo
       },
     });
   } catch (error) {
-    console.error('Error getting property bootstrap:', error);
+    logger.error('Error getting property bootstrap:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve property bootstrap',
@@ -141,7 +142,7 @@ export const updateProperty = async (req: AuthRequest, res: Response) => {
     // CRITICAL FIX: Explicitly cast req.body to the complete UpdatePropertyInput type
     const updateData = req.body as UpdatePropertyInput; 
     // DEBUG LOG 1: Log incoming payload from frontend
-    console.log(`[DEBUG - Controller] Received Update Payload for Property ${id}:`, updateData);
+    logger.info(`[DEBUG - Controller] Received Update Payload for Property ${id}:`, updateData);
 
     // Pass the comprehensive payload, allowing the service to save all fields
     const property = await propertyService.updateProperty(id, userId, updateData);
@@ -152,7 +153,7 @@ export const updateProperty = async (req: AuthRequest, res: Response) => {
       message: 'Property updated successfully',
     });
   } catch (error: any) {
-    console.error('Error updating property:', error);
+    logger.error('Error updating property:', error);
     
     if (error.message === 'Property not found') {
       return res.status(404).json({
@@ -183,7 +184,7 @@ export const deleteProperty = async (req: AuthRequest, res: Response) => {
       message: 'Property deleted successfully',
     });
   } catch (error: any) {
-    console.error('Error deleting property:', error);
+    logger.error('Error deleting property:', error);
     
     if (error.message === 'Property not found') {
       return res.status(404).json({

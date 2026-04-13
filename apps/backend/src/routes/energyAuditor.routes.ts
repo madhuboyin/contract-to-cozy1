@@ -6,6 +6,7 @@ import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { energyAuditorService } from '../services/energyAuditor.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -114,8 +115,8 @@ router.post('/audit', authenticate, upload.array('bills', 3), async (req: AuthRe
       hasSolarPanels: hasSolarPanels === 'true',
     };
 
-    console.log('[ENERGY-AUDITOR] Generating audit for property:', propertyId);
-    console.log('[ENERGY-AUDITOR] Bills uploaded:', req.files?.length || 0);
+    logger.info('[ENERGY-AUDITOR] Generating audit for property:', propertyId);
+    logger.info('[ENERGY-AUDITOR] Bills uploaded:', req.files?.length || 0);
 
     const report = await energyAuditorService.generateEnergyAudit(
       propertyId,
@@ -130,7 +131,7 @@ router.post('/audit', authenticate, upload.array('bills', 3), async (req: AuthRe
     });
 
   } catch (error: any) {
-    console.error('[ENERGY-AUDITOR] Error:', error);
+    logger.error('[ENERGY-AUDITOR] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate energy audit'

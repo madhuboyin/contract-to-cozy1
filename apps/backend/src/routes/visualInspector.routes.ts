@@ -6,6 +6,7 @@ import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { visualInspectorService } from '../services/visualInspector.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -95,7 +96,7 @@ router.post('/analyze', authenticate, upload.array('images', 20), async (req: Au
       roomType: parsedRoomTypes[index] || 'Other',
     }));
 
-    console.log(`[VISUAL-INSPECTOR] Analyzing ${images.length} images for property:`, propertyId);
+    logger.info(`[VISUAL-INSPECTOR] Analyzing ${images.length} images for property:`, propertyId);
 
     const report = await visualInspectorService.analyzePropertyImages(
       propertyId,
@@ -109,7 +110,7 @@ router.post('/analyze', authenticate, upload.array('images', 20), async (req: Au
     });
 
   } catch (error: any) {
-    console.error('[VISUAL-INSPECTOR] Error:', error);
+    logger.error('[VISUAL-INSPECTOR] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to analyze property images'

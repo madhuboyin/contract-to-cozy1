@@ -62,6 +62,7 @@ import {
 } from '../controllers/inventoryOcr.controller';
 import { ocrRateLimiter } from '../middleware/ocrRateLimiter.middleware';
 import { requirePremiumForOcr } from '../middleware/premiumOcrGate.middleware';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -305,7 +306,7 @@ router.get(
       );
       return res.send(csv);
     } catch (err: any) {
-      console.error('[INVENTORY] export failed:', err);
+      logger.error('[INVENTORY] export failed:', err);
       return res.status(500).json({ success: false, message: err.message || 'Export failed' });
     }
   }
@@ -371,7 +372,7 @@ router.get(
         },
       });
     } catch (err: any) {
-      console.error('[INVENTORY] coverage-summary failed', err);
+      logger.error('[INVENTORY] coverage-summary failed', err);
       return res.status(500).json({ success: false, message: err.message || 'Failed to load coverage summary' });
     }
   }
@@ -397,7 +398,7 @@ router.get(
 
       return res.json({ success: true, data: { counts, gaps } });
     } catch (err: any) {
-      console.error('[INVENTORY] coverage-gaps failed', err);
+      logger.error('[INVENTORY] coverage-gaps failed', err);
       return res.status(500).json({ success: false, message: err.message || 'Failed to compute coverage gaps' });
     }
   }
@@ -524,7 +525,7 @@ async function barcodeLookupHandler(req: CustomRequest, res: Response) {
 
     return res.json({ success: true, data });
   } catch (err: any) {
-    console.error('[INVENTORY] barcode lookup failed:', err);
+    logger.error('[INVENTORY] barcode lookup failed:', err);
 
     return res.status(502).json({
       success: false,

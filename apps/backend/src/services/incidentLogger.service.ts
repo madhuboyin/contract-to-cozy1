@@ -1,12 +1,13 @@
 // apps/backend/src/services/incidentLogger.service.ts
 //
 // Centralized safety/privacy incident logger for Phase 4 runbook infrastructure.
-// All methods are fire-and-forget — errors are swallowed and logged to console.error only.
+// All methods are fire-and-forget — errors are swallowed and logged to logger.error only.
 //
 // Builds on the same prisma.incident model used by emergencyTroubleshooter.service.ts
 
 import { prisma } from '../lib/prisma';
 import { IncidentSeverity, IncidentSourceType, IncidentStatus } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 // ============================================================================
 // EVENT INTERFACES
@@ -108,7 +109,7 @@ export const incidentLogger = {
         },
       })
       .catch((err: unknown) => {
-        console.error('[IncidentLogger] Failed to log safety incident:', err);
+        logger.error('[IncidentLogger] Failed to log safety incident:', err);
       });
   },
 
@@ -136,7 +137,7 @@ export const incidentLogger = {
         },
       })
       .catch((err: unknown) => {
-        console.error('[IncidentLogger] Failed to log privacy incident:', err);
+        logger.error('[IncidentLogger] Failed to log privacy incident:', err);
       });
   },
 
@@ -167,7 +168,7 @@ export const incidentLogger = {
         },
       })
       .catch((err: unknown) => {
-        console.error('[IncidentLogger] Failed to log tool error incident:', err);
+        logger.error('[IncidentLogger] Failed to log tool error incident:', err);
       });
   },
 };

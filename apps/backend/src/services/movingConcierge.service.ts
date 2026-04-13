@@ -2,6 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
+import { logger } from '../lib/logger';
 
 interface MovingPlanInput {
   closingDate: string;
@@ -167,7 +168,7 @@ export class MovingConciergeService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[MOVING-CONCIERGE] GEMINI_API_KEY not set');
+      logger.warn('[MOVING-CONCIERGE] GEMINI_API_KEY not set');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -331,7 +332,7 @@ Include 5-8 tasks per period. Focus on practical, actionable items.`;
       return processedTimeline;
 
     } catch (error) {
-      console.error('[MOVING-CONCIERGE] Timeline generation error:', error);
+      logger.error('[MOVING-CONCIERGE] Timeline generation error:', error);
       return this.getBasicTimeline(input, daysUntilMove);
     }
   }
@@ -902,7 +903,7 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
       return JSON.parse(text).slice(0, 6);
 
     } catch (error) {
-      console.error('[MOVING-CONCIERGE] Recommendations error:', error);
+      logger.error('[MOVING-CONCIERGE] Recommendations error:', error);
       return this.getBasicRecommendations(input, daysUntilMove);
     }
   }

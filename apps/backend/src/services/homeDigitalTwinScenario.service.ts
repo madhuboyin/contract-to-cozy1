@@ -21,6 +21,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { logger } from '../lib/logger';
 
 // ============================================================================
 // TYPES
@@ -687,7 +688,7 @@ export class HomeDigitalTwinScenarioService {
       include: { impacts: true },
     });
 
-    console.log(
+    logger.info(
       `[HomeDigitalTwin] scenario created — id=${scenario.id} type=${input.scenarioType} property=${propertyId}`,
     );
 
@@ -788,7 +789,7 @@ export class HomeDigitalTwinScenarioService {
       });
     });
 
-    console.log(
+    logger.info(
       `[HomeDigitalTwin] scenario computed — id=${scenarioId} type=${scenario.scenarioType} impacts=${impactSpecs.length}`,
     );
 

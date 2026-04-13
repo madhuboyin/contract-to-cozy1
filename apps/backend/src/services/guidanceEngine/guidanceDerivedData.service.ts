@@ -1,5 +1,6 @@
 import { getGuidanceModels } from './guidanceTypes';
 import { guidanceValidationService } from './guidanceValidation.service';
+import { logger } from '../../lib/logger';
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -282,7 +283,7 @@ export class GuidanceDerivedDataService {
     });
 
     if (toolFreshness.isStale) {
-      console.info('[GUIDANCE] stale derived data merged', {
+      logger.info('[GUIDANCE] stale derived data merged', {
         propertyId: params.propertyId,
         journeyId: params.journeyId,
         stepKey: params.stepKey,

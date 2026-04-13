@@ -2,6 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
+import { logger } from '../lib/logger';
 
 type RecommendationCategory = 'ACCESSIBILITY' | 'AGING_IN_PLACE' | 'FAMILY' | 'RESALE' | 'ENERGY' | 'SAFETY';
 type RecommendationPriority = 'IMMEDIATE' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -133,7 +134,7 @@ export class HomeModificationAdvisorService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[HOME-MODIFICATION] GEMINI_API_KEY not set');
+      logger.warn('[HOME-MODIFICATION] GEMINI_API_KEY not set');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -264,7 +265,7 @@ Include diverse recommendations across categories.`;
       return this.normalizeRecommendationsFromAI(recommendations).slice(0, 8);
 
     } catch (error) {
-      console.error('[HOME-MODIFICATION] AI error:', error);
+      logger.error('[HOME-MODIFICATION] AI error:', error);
       return this.getBasicRecommendations(userNeeds, propertyAge);
     }
   }

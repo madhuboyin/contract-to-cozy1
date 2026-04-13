@@ -5,6 +5,7 @@ import { FinancialReportService } from '../services/FinancialReport.service';
 import { prisma } from '../lib/prisma';
 import JobQueueService from '../services/JobQueue.service';
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types';
+import { logger } from '../lib/logger';
 
 const financialReportService = new FinancialReportService();
 
@@ -41,7 +42,7 @@ export const getPrimaryFESSummary = async (req: Request, res: Response) => {
     // FIX: Return summary directly (not wrapped, as frontend expects it this way for summary)
     return res.status(200).json(summary);
   } catch (error: any) {
-    console.error('Error fetching FES summary:', error);
+    logger.error('Error fetching FES summary:', error);
     return res.status(500).send({ 
       success: false,
       message: error.message || 'Failed to fetch financial efficiency summary.' 
@@ -74,7 +75,7 @@ export const getDetailedFESReport = async (req: Request, res: Response) => {
       data: report
     });
   } catch (error: any) {
-    console.error('Error fetching detailed FES report:', error);
+    logger.error('Error fetching detailed FES report:', error);
     return res.status(500).send({ success: false, message: error.message });
   }
 };
@@ -101,7 +102,7 @@ export const recalculateFES = async (req: Request, res: Response) => {
         status: 'QUEUED'
     });
   } catch (error: any) {
-    console.error(`Error queuing FES recalculation for ${propertyId}:`, error);
+    logger.error(`Error queuing FES recalculation for ${propertyId}:`, error);
     return res.status(500).send({ message: error.message || 'Failed to queue financial efficiency recalculation.' });
   }
 };

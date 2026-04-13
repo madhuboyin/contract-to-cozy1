@@ -7,6 +7,7 @@ import * as dotenv from 'dotenv';
 import { getPropertyContextForAI, PropertyAIGuidance } from './property.service'; 
 // [NEW IMPORT] Import AI constants
 import { 
+import { logger } from '../lib/logger';
   LLM_MODEL_CONFIG, 
   GEMINI_BASE_INSTRUCTION, 
   GEMINI_CONTEXT_INSTRUCTION_TEMPLATE 
@@ -311,7 +312,7 @@ class GeminiService {
     });
 
     chatSessions.set(sessionId, chat);
-    console.log(`New chat session created for: ${sessionId}. Personalized: ${!!propertyContext}`);
+    logger.info(`New chat session created for: ${sessionId}. Personalized: ${!!propertyContext}`);
     return chat;
   }
 
@@ -332,7 +333,7 @@ class GeminiService {
         const property = await getPropertyContextForAI(propertyId, userId);
 
         if (!property) {
-            console.warn(`User ${userId} attempted to access missing or unauthorized property ${propertyId} for chat context.`);
+            logger.warn(`User ${userId} attempted to access missing or unauthorized property ${propertyId} for chat context.`);
             throw new Error("Property data does not exist or access is unauthorized.");
         }
 
@@ -354,7 +355,7 @@ class GeminiService {
 
       return response.text;
     } catch (error) {
-      console.error("Gemini API call error:", error);
+      logger.error("Gemini API call error:", error);
       throw new Error("Failed to get response from AI service.");
     }
   }

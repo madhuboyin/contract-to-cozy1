@@ -11,6 +11,7 @@ import { guidanceDerivedDataService } from './guidanceDerivedData.service';
 import { guidanceValidationService } from './guidanceValidation.service';
 import { getStepSkipPolicy } from './guidanceTemplateRegistry';
 import { runJourneyCompletionHooks } from './guidanceCompletionHooks.service';
+import { logger } from '../../lib/logger';
 
 const VALID_STEP_TRANSITIONS: Record<GuidanceStepStatus, GuidanceStepStatus[]> = {
   PENDING: ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'],
@@ -501,7 +502,7 @@ export class GuidanceStepResolverService {
       // step transition response returned to the user.
       if (nextStatus === 'COMPLETED' && journey.status !== 'COMPLETED') {
         runJourneyCompletionHooks(params.journeyId).catch((err: unknown) => {
-          console.error('[guidance] runJourneyCompletionHooks failed:', err);
+          logger.error('[guidance] runJourneyCompletionHooks failed:', err);
         });
       }
     }

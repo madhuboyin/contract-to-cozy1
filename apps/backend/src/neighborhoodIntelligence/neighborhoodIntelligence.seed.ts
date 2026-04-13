@@ -6,6 +6,7 @@
 
 import { NeighborhoodIntelligenceService } from './neighborhoodIntelligenceService';
 import { NormalizedNeighborhoodEventInput } from './types';
+import { logger } from '../lib/logger';
 
 const SAMPLE_EVENTS: NormalizedNeighborhoodEventInput[] = [
   {
@@ -91,20 +92,20 @@ const SAMPLE_EVENTS: NormalizedNeighborhoodEventInput[] = [
 export async function seedNeighborhoodEvents(): Promise<void> {
   const service = new NeighborhoodIntelligenceService();
 
-  console.log('[NeighborhoodIntelligence] Seeding sample events...');
+  logger.info('[NeighborhoodIntelligence] Seeding sample events...');
 
   for (const event of SAMPLE_EVENTS) {
     try {
       const result = await service.ingestAndProcessEvent(event);
-      console.log(
+      logger.info(
         `[NeighborhoodIntelligence] Seeded: ${event.title} — eventId=${result.eventId} created=${result.created} matched=${result.matchedProperties}`,
       );
     } catch (err: any) {
-      console.error(`[NeighborhoodIntelligence] Failed to seed: ${event.title} — ${err.message}`);
+      logger.error(`[NeighborhoodIntelligence] Failed to seed: ${event.title} — ${err.message}`);
     }
   }
 
-  console.log('[NeighborhoodIntelligence] Seed complete.');
+  logger.info('[NeighborhoodIntelligence] Seed complete.');
 }
 
 // Allow running directly
@@ -112,7 +113,7 @@ if (require.main === module) {
   seedNeighborhoodEvents()
     .then(() => process.exit(0))
     .catch((err) => {
-      console.error(err);
+      logger.error(err);
       process.exit(1);
     });
 }

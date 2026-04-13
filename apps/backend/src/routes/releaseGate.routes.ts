@@ -8,6 +8,7 @@ import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { getReleaseSummary, checkGate } from '../services/releaseGate.service';
 import { AuthRequest } from '../types/auth.types';
 import { UserRole } from '../types/auth.types';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.get(
         data: summary,
       });
     } catch (err) {
-      console.error('[ReleaseGate] GET / error:', err);
+      logger.error('[ReleaseGate] GET / error:', err);
       res.status(500).json({
         success: false,
         error: {
@@ -58,7 +59,7 @@ router.get(
         data: result,
       });
     } catch (err) {
-      console.error('[ReleaseGate] GET /:toolKey error:', err);
+      logger.error('[ReleaseGate] GET /:toolKey error:', err);
       res.status(500).json({
         success: false,
         error: {

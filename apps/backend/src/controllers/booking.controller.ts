@@ -18,6 +18,7 @@ import { ZodError } from 'zod';
 import { AuthRequest } from '../types/auth.types';
 import { guidanceBookingGuardService } from '../services/guidanceEngine/guidanceBookingGuard.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 export class BookingController {
   /**
@@ -113,7 +114,7 @@ export class BookingController {
             },
           });
         } catch (guidanceError) {
-          console.warn('[GUIDANCE] booking completion hook failed:', guidanceError);
+          logger.warn('[GUIDANCE] booking completion hook failed:', guidanceError);
         }
       }
 

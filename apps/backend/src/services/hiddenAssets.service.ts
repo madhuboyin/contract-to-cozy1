@@ -16,6 +16,7 @@ import {
   getFreshnessNote,
 } from './hiddenAssets/ruleEngine';
 import {
+import { logger } from '../lib/logger';
   HiddenAssetMatchDTO,
   HiddenAssetMatchFilters,
   HiddenAssetMatchListDTO,
@@ -513,7 +514,7 @@ async function executePropertyScan(
     });
 
     const durationMs = Date.now() - startedAt;
-    console.log(
+    logger.info(
       `[HiddenAssets] Scan complete for property ${propertyId}: ` +
         `evaluated=${candidatePrograms.length} matched=${matchedResults.length} ` +
         `expired=${matchesExpired} inactivated=${matchesInactivated} duration=${durationMs}ms`,
@@ -538,7 +539,7 @@ async function executePropertyScan(
         notes: err instanceof Error ? err.message : String(err),
       },
     });
-    console.error(`[HiddenAssets] Scan failed for property ${propertyId}:`, err);
+    logger.error(`[HiddenAssets] Scan failed for property ${propertyId}:`, err);
     throw err;
   }
 }

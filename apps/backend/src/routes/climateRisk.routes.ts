@@ -6,6 +6,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { climateRiskPredictorService } from '../services/climateRiskPredictor.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/analyze/:propertyId', authenticate, propertyAuthMiddleware, async (
     const userId = req.user!.userId;
     const { propertyId } = req.params;
 
-    console.log('[CLIMATE-RISK] Generating report for property:', propertyId);
+    logger.info('[CLIMATE-RISK] Generating report for property:', propertyId);
 
     const report = await climateRiskPredictorService.generateClimateReport(propertyId, userId);
 
@@ -42,7 +43,7 @@ router.get('/analyze/:propertyId', authenticate, propertyAuthMiddleware, async (
     });
 
   } catch (error: any) {
-    console.error('[CLIMATE-RISK] Error:', error);
+    logger.error('[CLIMATE-RISK] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate climate risk report'

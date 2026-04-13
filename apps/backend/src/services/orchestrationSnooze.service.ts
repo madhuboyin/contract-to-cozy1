@@ -2,6 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { signalService } from './signal.service';
+import { logger } from '../lib/logger';
 
 export type ActiveSnooze = {
   id: string;
@@ -83,7 +84,7 @@ export async function snoozeAction(params: {
       sourceId: actionKey,
     });
   } catch (signalError) {
-    console.warn('Maintenance adherence signal publish failed (snooze):', signalError);
+    logger.warn('Maintenance adherence signal publish failed (snooze):', signalError);
   }
 
   return { success: true };
@@ -113,7 +114,7 @@ export async function unsnoozeAction(
       sourceId: actionKey,
     });
   } catch (signalError) {
-    console.warn('Maintenance adherence signal publish failed (unsnooze):', signalError);
+    logger.warn('Maintenance adherence signal publish failed (unsnooze):', signalError);
   }
 
   return { success: true };

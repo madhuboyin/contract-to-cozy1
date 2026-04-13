@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../lib/prisma';
 // [NEW IMPORT] Import AI and business logic constants
 import { 
+import { logger } from '../lib/logger';
   LLM_MODEL_CONFIG, 
   BUDGET_RECOMMENDATION_PROMPT_TEMPLATE,
   MONTHLY_BASE_COSTS, 
@@ -48,7 +49,7 @@ export class BudgetForecasterService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[BUDGET-FORECASTER] GEMINI_API_KEY not set');
+      logger.warn('[BUDGET-FORECASTER] GEMINI_API_KEY not set');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -224,7 +225,7 @@ export class BudgetForecasterService {
       const recommendations = JSON.parse(cleanedText);
       return recommendations.slice(0, 5);
     } catch (error) {
-      console.error('[BUDGET-FORECASTER] AI error:', error);
+      logger.error('[BUDGET-FORECASTER] AI error:', error);
       return this.getBasicRecommendations(totalAnnual, propertyAge);
     }
   }

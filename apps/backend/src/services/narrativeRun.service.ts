@@ -10,6 +10,7 @@ import {
 import { buildNarrativePlan } from './narrativeRules.service';
 import { composeNarrativePayload } from './narrativeComposer.service';
 import { getOrCreateOnboarding } from './propertyOnboarding.service';
+import { logger } from '../lib/logger';
 
 export type NarrativeRunAction =
   | 'VIEWED'
@@ -117,7 +118,7 @@ async function logNarrativeEvent(args: {
       },
     });
   } catch (error) {
-    console.error('[NARRATIVE] Failed to write narrative audit log', {
+    logger.error('[NARRATIVE] Failed to write narrative audit log', {
       event: args.eventName,
       runId: args.run.id,
       error,

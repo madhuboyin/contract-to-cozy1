@@ -1,5 +1,6 @@
 // apps/backend/src/community/providers/nycOpenData.provider.ts
 import { assertSafeUrl } from '../../utils/ssrfGuard';
+import { logger } from '../../lib/logger';
 
 export interface NycAlertItem {
   title: string;
@@ -16,7 +17,7 @@ export async function fetchNycEmergencyNotifications(opts: {
   appToken?: string;
 }): Promise<NycAlertItem[]> {
   try {
-    console.log('🔍 Fetching NYC alerts, limit:', opts.limit);
+    logger.info('🔍 Fetching NYC alerts, limit:', opts.limit);
     
     const url = new URL(BASE);
     url.searchParams.set('$limit', String(Math.min(opts.limit, 50)));
@@ -29,7 +30,7 @@ export async function fetchNycEmergencyNotifications(opts: {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    console.log('📡 Fetching from:', url.toString());
+    logger.info('📡 Fetching from:', url.toString());
     
     const requestUrl = url.toString();
     await assertSafeUrl(requestUrl);
@@ -41,16 +42,16 @@ export async function fetchNycEmergencyNotifications(opts: {
     
     clearTimeout(timeoutId);
 
-    console.log('✅ NYC API response status:', resp.status);
+    logger.info('✅ NYC API response status:', resp.status);
 
     if (!resp.ok) {
       const errorText = await resp.text();
-      console.error('❌ NYC API error response:', errorText);
+      logger.error('❌ NYC API error response:', errorText);
       throw new Error(`NYC API returned ${resp.status}`);
     }
 
     const data = (await resp.json()) as any[];
-    console.log(`📊 Received ${data.length} alerts from NYC API`);
+    logger.info(`📊 Received ${data.length} alerts from NYC API`);
 
     const mapped = data.map((row) => ({
       // ✅ FIX: Use date_and_time field
@@ -60,12 +61,12 @@ export async function fetchNycEmergencyNotifications(opts: {
       publishedAt: row?.date_and_time ? new Date(row.date_and_time).toISOString() : null,
     }));
 
-    console.log(`✅ Returning ${mapped.length} mapped alerts`);
+    logger.info(`✅ Returning ${mapped.length} mapped alerts`);
     return mapped;
     
   } catch (error) {
-    console.error('❌ NYC Open Data API failed:', error);
-    console.error('Error details:', error instanceof Error ? error.message : error);
+    logger.error('❌ NYC Open Data API failed:', error);
+    logger.error('Error details:', error instanceof Error ? error.message : error);
     return [];
   }
 }

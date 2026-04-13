@@ -2,6 +2,7 @@
 import type { Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import type { CustomRequest } from '../types';
+import { logger } from '../lib/logger';
 
 /**
  * Ensures :matchId belongs to :propertyId.
@@ -34,7 +35,7 @@ export async function recallMatchAuthMiddleware(
 
     return next();
   } catch (e) {
-    console.error('recallMatchAuthMiddleware error:', e);
+    logger.error('recallMatchAuthMiddleware error:', e);
     return res.status(500).json({ message: 'Failed to authorize recall match' });
   }
 }

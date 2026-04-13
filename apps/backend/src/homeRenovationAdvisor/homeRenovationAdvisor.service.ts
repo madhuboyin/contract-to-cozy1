@@ -225,7 +225,7 @@ export class HomeRenovationAdvisorService {
 
       // Run post-evaluation integrations (fire-and-forget — never throws)
       void runPostEvaluationIntegrations(updatedSession, output).catch((err) => {
-        console.error('[RenovationAdvisor] Post-evaluation integration error:', err);
+        logger.error('[RenovationAdvisor] Post-evaluation integration error:', err);
       });
 
       // Emit analytics
@@ -501,6 +501,7 @@ async function updateSessionStatus(
 // ============================================================================
 
 import { PermitEvaluationResult, TaxImpactEvaluationResult, LicensingEvaluationResult } from './types/homeRenovationAdvisor.types';
+import { logger } from '../lib/logger';
 
 function mapStoredPermitToResult(p: NonNullable<NonNullable<Awaited<ReturnType<typeof getSessionById>>>['permitOutput']>): PermitEvaluationResult {
   return {

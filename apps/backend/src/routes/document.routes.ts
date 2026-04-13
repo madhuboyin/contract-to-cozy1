@@ -166,7 +166,7 @@ router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpl
           createdAt: document.createdAt,
         });
       } catch (e) {
-        console.error('[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (documents/analyze):', e);
+        logger.error('[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (documents/analyze):', e);
       }
     }
 
@@ -191,7 +191,7 @@ router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpl
     });
 
   } catch (error: any) {
-    console.error('[DOCUMENT-AI] Error:', error);
+    logger.error('[DOCUMENT-AI] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to analyze document'
@@ -242,7 +242,7 @@ router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
     });
 
   } catch (error: any) {
-    console.error('[DOCUMENTS] Error:', error);
+    logger.error('[DOCUMENTS] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to retrieve documents'
@@ -290,7 +290,7 @@ router.get('/warranties', authenticate, async (req: CustomRequest, res: Response
 
     return res.json({ success: true, data: { warranties } });
   } catch (err: any) {
-    console.error('[DOCUMENTS] list warranties failed:', err);
+    logger.error('[DOCUMENTS] list warranties failed:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Failed to list warranties' });
   }
 });
@@ -332,7 +332,7 @@ router.get('/insurance-policies', authenticate, async (req: CustomRequest, res: 
 
     return res.json({ success: true, data: { policies } });
   } catch (err: any) {
-    console.error('[DOCUMENTS] list insurance policies failed:', err);
+    logger.error('[DOCUMENTS] list insurance policies failed:', err);
     return res.status(500).json({ success: false, message: err?.message || 'Failed to list insurance policies' });
   }
 });
@@ -562,7 +562,7 @@ router.get(
         },
       });
     } catch (error: any) {
-      console.error('[DOCUMENTS] asset-suggestions failed:', error);
+      logger.error('[DOCUMENTS] asset-suggestions failed:', error);
       return res.status(500).json({
         success: false,
         message: error.message || 'Failed to get asset suggestions',
@@ -631,7 +631,7 @@ router.delete('/:id', authenticate, async (req: CustomRequest, res: Response) =>
     });
 
   } catch (error: any) {
-    console.error('[DOCUMENTS] Error deleting document:', error);
+    logger.error('[DOCUMENTS] Error deleting document:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete document'

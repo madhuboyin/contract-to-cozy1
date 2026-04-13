@@ -4,6 +4,7 @@ import { APIError } from '../middleware/error.middleware';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { priceFinalizationService } from '../services/priceFinalization.service';
 import {
+import { logger } from '../lib/logger';
   CreatePriceFinalizationBody,
   FinalizePriceFinalizationBody,
   priceFinalizationListQuerySchema,
@@ -183,7 +184,7 @@ export async function finalizePriceFinalization(
         },
       });
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] price finalization hook failed:', guidanceError);
+      logger.warn('[GUIDANCE] price finalization hook failed:', guidanceError);
     }
 
     res.status(200).json({ success: true, data: { finalization: detail } });

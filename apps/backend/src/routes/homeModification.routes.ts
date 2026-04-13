@@ -5,6 +5,7 @@ import { Response } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { homeModificationAdvisorService } from '../services/homeModificationAdvisor.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -45,7 +46,7 @@ router.post('/recommend', authenticate, async (req: AuthRequest, res: Response) 
       });
     }
 
-    console.log('[HOME-MODIFICATION] Generating recommendations for:', propertyId);
+    logger.info('[HOME-MODIFICATION] Generating recommendations for:', propertyId);
 
     const report = await homeModificationAdvisorService.generateModificationReport(
       propertyId,
@@ -59,7 +60,7 @@ router.post('/recommend', authenticate, async (req: AuthRequest, res: Response) 
     });
 
   } catch (error: any) {
-    console.error('[HOME-MODIFICATION] Error:', error);
+    logger.error('[HOME-MODIFICATION] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate recommendations'

@@ -6,6 +6,7 @@ import { AuthRequest } from '../types/auth.types';
 import { emergencyService } from '../services/emergencyTroubleshooter.service';
 import { getPropertyContextForAI } from '../services/property.service';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -54,11 +55,11 @@ router.post('/chat', authenticate, apiRateLimiter, async (req: AuthRequest, res:
     const { messages, propertyId } = req.body;
     const userId = req.user!.userId;
     
-    console.log(`[REQUEST] /api/emergency/chat by user: ${userId} | Messages: ${messages?.length || 0} | Property: ${propertyId || 'N/A'}`);
+    logger.info(`[REQUEST] /api/emergency/chat by user: ${userId} | Messages: ${messages?.length || 0} | Property: ${propertyId || 'N/A'}`);
     
     // Validate messages
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      console.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid messages array`);
+      logger.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid messages array`);
       return res.status(400).json({
         success: false,
         message: 'Messages array is required and must not be empty'
@@ -68,14 +69,14 @@ router.post('/chat', authenticate, apiRateLimiter, async (req: AuthRequest, res:
     // Validate message format
     for (const msg of messages) {
       if (!msg.role || !msg.content || typeof msg.content !== 'string') {
-        console.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid message format`);
+        logger.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid message format`);
         return res.status(400).json({
           success: false,
           message: 'Each message must have role and content'
         });
       }
       if (msg.role !== 'user' && msg.role !== 'assistant') {
-        console.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid role: ${msg.role}`);
+        logger.error(`[REQUEST-ERROR] /api/emergency/chat | Invalid role: ${msg.role}`);
         return res.status(400).json({
           success: false,
           message: 'Message role must be either "user" or "assistant"'
@@ -97,7 +98,7 @@ router.post('/chat', authenticate, apiRateLimiter, async (req: AuthRequest, res:
       propertyId: propertyId ? String(propertyId) : undefined,
     });
     
-    console.log(`[RESPONSE] /api/emergency/chat successful | Severity: ${result.severity} | Resolution: ${result.resolution || 'N/A'}`);
+    logger.info(`[RESPONSE] /api/emergency/chat successful | Severity: ${result.severity} | Resolution: ${result.resolution || 'N/A'}`);
     
     res.json({
       success: true,
@@ -105,7 +106,7 @@ router.post('/chat', authenticate, apiRateLimiter, async (req: AuthRequest, res:
     });
   } catch (error: any) {
     const userId = (req as AuthRequest).user?.userId || 'N/A';
-    console.error(`[ERROR] /api/emergency/chat failed for user: ${userId}`, error);
+    logger.error(`[ERROR] /api/emergency/chat failed for user: ${userId}`, error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to process emergency chat'

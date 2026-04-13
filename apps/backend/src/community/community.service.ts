@@ -22,6 +22,7 @@ import {
   getTrashSourcesForCity,
 } from './providers/citySources.onTheFly';
 import { parseTrashScheduleWithAI } from './providers/trashSchedule.provider';
+import { logger } from '../lib/logger';
 
 type CacheEntry<T> = { expiresAt: number; value: T };
 
@@ -117,7 +118,7 @@ export class CommunityService {
       return resp;
     } catch (error) {
       // ✅ Return empty data for unsupported cities instead of crashing
-      console.log(`Trash feeds not available for ${city}, ${state}`);
+      logger.info(`Trash feeds not available for ${city}, ${state}`);
       const emptyResp: OnTheFlyResponse = {
         city,
         state,
@@ -189,7 +190,7 @@ export class CommunityService {
       return resp;
     } catch (error) {
       // ✅ Return empty data for unsupported cities instead of crashing
-      console.log(`Alerts not available for ${city}, ${state}`);
+      logger.info(`Alerts not available for ${city}, ${state}`);
       const emptyResp: OnTheFlyResponse = {
         city,
         state,

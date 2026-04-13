@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { CompletionCreateInput, CompletionResponse } from './orchestration.service';
 import { signalService } from './signal.service';
+import { logger } from '../lib/logger';
 
 export async function createCompletion(params: {
   propertyId: string;
@@ -52,7 +53,7 @@ export async function createCompletion(params: {
       sourceId: completion.id,
     });
   } catch (signalError) {
-    console.warn('Maintenance adherence signal publish failed (completion create):', signalError);
+    logger.warn('Maintenance adherence signal publish failed (completion create):', signalError);
   }
 
   return mapCompletionToResponse(completion);
@@ -137,7 +138,7 @@ export async function updateCompletion(
       sourceId: updated.id,
     });
   } catch (signalError) {
-    console.warn('Maintenance adherence signal publish failed (completion update):', signalError);
+    logger.warn('Maintenance adherence signal publish failed (completion update):', signalError);
   }
 
   return mapCompletionToResponse(updated);

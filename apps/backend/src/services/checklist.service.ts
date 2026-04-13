@@ -43,6 +43,7 @@ import {
   TaskPriority,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 // Helper functions for renewal task generation
 const syncRenewalTasks = async (userId: string, checklistId: string) => {
@@ -70,7 +71,7 @@ export class ChecklistService {
    *             or PropertyMaintenanceTaskService for EXISTING_OWNER segment.
    */
   static async getOrCreateChecklist(userId: string): Promise<Checklist & { items: ChecklistItem[] } | null> {
-    console.warn('⚠️  DEPRECATED: ChecklistService.getOrCreateChecklist() - Use HomeBuyerTaskService or PropertyMaintenanceTaskService');
+    logger.warn('⚠️  DEPRECATED: ChecklistService.getOrCreateChecklist() - Use HomeBuyerTaskService or PropertyMaintenanceTaskService');
     
     let checklist = await prisma.checklist.findFirst({
       where: {
@@ -96,7 +97,7 @@ export class ChecklistService {
         try {
             await syncRenewalTasks(userId, checklist.id);
         } catch (syncError) {
-            console.error('WARNING: Failed to synchronize renewal tasks.', syncError);
+            logger.error('WARNING: Failed to synchronize renewal tasks.', syncError);
         }
 
         const finalChecklist = await prisma.checklist.findFirst({
@@ -122,7 +123,7 @@ export class ChecklistService {
    * @deprecated Use segment-specific services
    */
   static async createChecklist(userId: string): Promise<Checklist & { items: ChecklistItem[] } | null> {
-    console.warn('⚠️  DEPRECATED: ChecklistService.createChecklist()');
+    logger.warn('⚠️  DEPRECATED: ChecklistService.createChecklist()');
     
     const homeownerProfile = await prisma.homeownerProfile.findUnique({
       where: { userId },
@@ -178,7 +179,7 @@ export class ChecklistService {
     itemId: string,
     status: ChecklistItemStatus
   ): Promise<ChecklistItem> {
-    console.warn('⚠️  DEPRECATED: ChecklistService.updateChecklistItemStatus()');
+    logger.warn('⚠️  DEPRECATED: ChecklistService.updateChecklistItemStatus()');
     
     const item = await prisma.checklistItem.findFirst({
       where: {
@@ -230,7 +231,7 @@ export class ChecklistService {
       serviceCategory?: string | null;
     }
   ): Promise<ChecklistItem> {
-    console.warn('⚠️  DEPRECATED: ChecklistService.updateChecklistItemConfig()');
+    logger.warn('⚠️  DEPRECATED: ChecklistService.updateChecklistItemConfig()');
     
     const item = await prisma.checklistItem.findFirst({
       where: {
@@ -284,7 +285,7 @@ export class ChecklistService {
       actionKey: string;
     }
   ): Promise<{ item: ChecklistItem; deduped: boolean }> {
-    console.warn('⚠️  DEPRECATED: ChecklistService.createDirectChecklistItem() - Use PropertyMaintenanceTaskService.createFromActionCenter()');
+    logger.warn('⚠️  DEPRECATED: ChecklistService.createDirectChecklistItem() - Use PropertyMaintenanceTaskService.createFromActionCenter()');
 
     if (!itemData.actionKey) {
       throw new Error('actionKey is required for Action Center checklist items');
@@ -346,7 +347,7 @@ export class ChecklistService {
    * @deprecated Use segment-specific services
    */
   static async deleteChecklistItem(userId: string, itemId: string): Promise<void> {
-    console.warn('⚠️  DEPRECATED: ChecklistService.deleteChecklistItem()');
+    logger.warn('⚠️  DEPRECATED: ChecklistService.deleteChecklistItem()');
     
     const item = await prisma.checklistItem.findFirst({
       where: {
@@ -377,7 +378,7 @@ export class ChecklistService {
     templateIds: string[],
     propertyId?: string
   ): Promise<{ count: number }> {
-    console.warn('⚠️  DEPRECATED: ChecklistService.addMaintenanceItemsToChecklist() - Use PropertyMaintenanceTaskService.createFromTemplates()');
+    logger.warn('⚠️  DEPRECATED: ChecklistService.addMaintenanceItemsToChecklist() - Use PropertyMaintenanceTaskService.createFromTemplates()');
     
     const checklist = await this.getOrCreateChecklist(userId);
     if (!checklist) {
@@ -443,7 +444,7 @@ export class ChecklistService {
     userId: string,
     tasks: any[]
   ): Promise<{ count: number }> {
-    console.warn('⚠️  DEPRECATED: ChecklistService.createCustomMaintenanceItems() - Use PropertyMaintenanceTaskService.createUserTask()');
+    logger.warn('⚠️  DEPRECATED: ChecklistService.createCustomMaintenanceItems() - Use PropertyMaintenanceTaskService.createUserTask()');
     
     const checklist = await this.getOrCreateChecklist(userId);
     if (!checklist) {

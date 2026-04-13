@@ -23,6 +23,7 @@ import { logIncidentEvent } from './incident.events';
 import { evaluateIncident } from './incident.evaluator';
 import { orchestrateIncident } from './incident.orchestrator';
 import { guidanceJourneyService } from '../guidanceEngine/guidanceJourney.service';
+import { logger } from '../../lib/logger';
 
 function computeStatusTimestamps(nextStatus: IncidentStatus) {
   const now = new Date();
@@ -406,7 +407,7 @@ export class IncidentService {
       try {
         await bridgeIncidentToGuidance(hydrated);
       } catch (guidanceError) {
-        console.warn('[GUIDANCE] incident bridge hook failed:', guidanceError);
+        logger.warn('[GUIDANCE] incident bridge hook failed:', guidanceError);
       }
     }
 
@@ -494,7 +495,7 @@ export class IncidentService {
       try {
         await archiveIncidentGuidance(id);
       } catch (guidanceError) {
-        console.warn('[GUIDANCE] incident archive hook failed:', guidanceError);
+        logger.warn('[GUIDANCE] incident archive hook failed:', guidanceError);
       }
     }
 
@@ -600,7 +601,7 @@ static async acknowledge(incidentId: string, userId: string, input: AcknowledgeI
     try {
       await archiveIncidentGuidance(incidentId);
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] incident suppression archive hook failed:', guidanceError);
+      logger.warn('[GUIDANCE] incident suppression archive hook failed:', guidanceError);
     }
   }
 

@@ -2,6 +2,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../config/database';
+import { logger } from '../lib/logger';
 
 interface DetectedIssue {
   title: string;
@@ -65,7 +66,7 @@ export class VisualInspectorService {
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('[VISUAL-INSPECTOR] GEMINI_API_KEY not set');
+      logger.warn('[VISUAL-INSPECTOR] GEMINI_API_KEY not set');
     }
     this.ai = apiKey ? new GoogleGenAI({ apiKey }) : null as any;
   }
@@ -90,7 +91,7 @@ export class VisualInspectorService {
       throw new Error('AI service not configured');
     }
 
-    console.log(`[VISUAL-INSPECTOR] Analyzing ${images.length} images for property ${propertyId}`);
+    logger.info(`[VISUAL-INSPECTOR] Analyzing ${images.length} images for property ${propertyId}`);
 
     // Analyze each image
     const imageAnalyses: ImageAnalysis[] = [];
@@ -102,7 +103,7 @@ export class VisualInspectorService {
         const analysis = await this.analyzeImage(file, roomType, i);
         imageAnalyses.push(analysis);
       } catch (error) {
-        console.error(`[VISUAL-INSPECTOR] Error analyzing image ${i}:`, error);
+        logger.error(`[VISUAL-INSPECTOR] Error analyzing image ${i}:`, error);
         // Continue with other images
       }
     }

@@ -4,6 +4,7 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { HomeEventRadarService } from '../services/homeEventRadar.service';
 import { APIError } from '../middleware/error.middleware';
+import { logger } from '../lib/logger';
 
 const service = new HomeEventRadarService();
 
@@ -31,7 +32,7 @@ export async function upsertRadarEvent(req: CustomRequest, res: Response, next: 
     // Trigger matching asynchronously (do not await to keep response fast)
     // Errors in matching are non-fatal for the upsert response.
     service.triggerMatching(eventId, null).catch((err) => {
-      console.error('[HomeEventRadar] Background matching failed for event', eventId, err);
+      logger.error('[HomeEventRadar] Background matching failed for event', eventId, err);
     });
 
     res.status(isNew ? 201 : 200).json({

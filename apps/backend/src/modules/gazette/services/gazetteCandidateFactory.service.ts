@@ -5,6 +5,7 @@ import { createHash } from 'crypto';
 import { GazetteStoryCandidate } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { SourceSignal } from '../types/gazette.types';
+import { logger } from '../../../lib/logger';
 
 const DEFAULT_EXPIRY_DAYS = 14;
 const HIGH_URGENCY_EXPIRY_DAYS = 7;
@@ -30,7 +31,7 @@ export class GazetteCandidateFactoryService {
           !signal.primaryDeepLink ||
           !signal.primaryDeepLink.startsWith('/dashboard/')
         ) {
-          console.warn(
+          logger.warn(
             `[GazetteCandidateFactory] Signal for ${signal.entityType}:${signal.entityId} skipped — invalid primaryDeepLink`,
           );
           continue;
@@ -41,7 +42,7 @@ export class GazetteCandidateFactoryService {
           !signal.supportingFacts ||
           Object.keys(signal.supportingFacts).length < MIN_SUPPORTING_FACTS_KEYS
         ) {
-          console.warn(
+          logger.warn(
             `[GazetteCandidateFactory] Signal for ${signal.entityType}:${signal.entityId} skipped — missing supportingFacts`,
           );
           continue;
@@ -127,7 +128,7 @@ export class GazetteCandidateFactoryService {
           results.push({ candidate: created, isNew: true });
         }
       } catch (err) {
-        console.error(
+        logger.error(
           `[GazetteCandidateFactory] Failed to process signal for ${signal.entityType}:${signal.entityId}:`,
           err,
         );

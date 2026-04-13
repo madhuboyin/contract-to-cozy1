@@ -6,6 +6,7 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware'; 
 import { aiOracleRateLimiter } from '../middleware/rateLimiter.middleware'; // <-- NEW IMPORT
 import { CustomRequest } from '../types'; // <-- MODIFIED IMPORT: Use extended CustomRequest type
 import { applianceOracleService } from '../services/applianceOracle.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -38,7 +39,7 @@ router.get(
       const userId = req.user!.userId;
       const { propertyId } = req.params;
 
-      console.log('[ORACLE] Generating prediction report for property:', propertyId);
+      logger.info('[ORACLE] Generating prediction report for property:', propertyId);
 
       const report = await applianceOracleService.generateOracleReport(propertyId, userId);
 
@@ -48,7 +49,7 @@ router.get(
       });
 
     } catch (error: any) {
-      console.error('[ORACLE] Error generating report:', error);
+      logger.error('[ORACLE] Error generating report:', error);
       res.status(500).json({
         success: false,
         message: error.message || 'Failed to generate oracle report'
@@ -73,7 +74,7 @@ router.get('/summary', authenticate, async (req: CustomRequest, res: Response) =
   try {
     const userId = req.user!.userId;
 
-    console.log('[ORACLE] Generating summary for user:', userId);
+    logger.info('[ORACLE] Generating summary for user:', userId);
 
     // This would aggregate across all properties
     // For now, return a simple response
@@ -85,7 +86,7 @@ router.get('/summary', authenticate, async (req: CustomRequest, res: Response) =
     });
 
   } catch (error: any) {
-    console.error('[ORACLE] Error generating summary:', error);
+    logger.error('[ORACLE] Error generating summary:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate summary'

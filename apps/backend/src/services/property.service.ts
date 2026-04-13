@@ -18,6 +18,7 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { generateHabitsForProperty } from './homeHabitCoach/habitGenerationEngine';
 
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 interface HomeAssetInput {
   id?: string; // Optional: Used for client-side tracking, ignored by service but kept for consistency
@@ -293,7 +294,7 @@ async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredPr
         // UPDATED CALL: Pass full booking objects instead of just category strings
         healthScore = calculateHealthScore(property, documentCount, bookingsForScore);
     } catch (error) {
-        console.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
+        logger.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
         // Fallback to a zero score and default insights to prevent server crash
         healthScore = { 
             totalScore: 0, 
@@ -498,7 +499,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
 
   // Fire-and-forget: seed initial habits for the new property
   generateHabitsForProperty(property.id).catch((err) =>
-    console.error('[HABIT-GEN] Initial generation failed for new property:', err),
+    logger.error('[HABIT-GEN] Initial generation failed for new property:', err),
   );
 
   // NEW STEP: Handle assets AFTER property creation
@@ -1236,7 +1237,7 @@ export async function maybeMarkPropertyActivated(
       },
     });
 
-    console.log(`[Property] marked ACTIVATED — propertyId=${propertyId}`);
+    logger.info(`[Property] marked ACTIVATED — propertyId=${propertyId}`);
 
     // Emit analytics event — fire-and-forget, will not throw
     analyticsEmitter.propertyActivated({
@@ -1246,6 +1247,6 @@ export async function maybeMarkPropertyActivated(
     });
   } catch (err) {
     // Non-fatal: activation marking should never break the caller's workflow
-    console.error(`[Property] maybeMarkPropertyActivated failed — propertyId=${propertyId}:`, err instanceof Error ? err.message : err);
+    logger.error(`[Property] maybeMarkPropertyActivated failed — propertyId=${propertyId}:`, err instanceof Error ? err.message : err);
   }
 }

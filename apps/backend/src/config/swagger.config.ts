@@ -2,6 +2,7 @@
 
 import swaggerJsdoc from 'swagger-jsdoc';
 import path from 'path';
+import { logger } from '../lib/logger';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -198,6 +199,6 @@ const options: swaggerJsdoc.Options = {
 export const swaggerSpec = swaggerJsdoc(options);
 
 // Debug output
-console.log('📚 Swagger config loaded from:', __dirname);
-console.log('📚 Scanning paths:', options.apis);
-console.log('📚 Found endpoints:', Object.keys((swaggerSpec as any).paths || {}).length);
+logger.info('📚 Swagger config loaded from:', __dirname);
+logger.info('📚 Scanning paths:', options.apis);
+logger.info('📚 Found endpoints:', Object.keys((swaggerSpec as any).paths || {}).length);

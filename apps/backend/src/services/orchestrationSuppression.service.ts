@@ -2,6 +2,7 @@
 
 import { prisma } from '../lib/prisma';
 import { ChecklistItemStatus } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 export type SuppressionSource =
   | {
@@ -94,7 +95,7 @@ export class OrchestrationSuppressionService {
     });
 
     if (maintenanceTask) {
-      console.log('✅ Found suppression via PropertyMaintenanceTask:', {
+      logger.info('✅ Found suppression via PropertyMaintenanceTask:', {
         actionKey,
         taskId: maintenanceTask.id,
         title: maintenanceTask.title,
@@ -124,7 +125,7 @@ export class OrchestrationSuppressionService {
     });
 
     if (checklistItem) {
-      console.log('⚠️  Found suppression via LEGACY ChecklistItem:', {
+      logger.info('⚠️  Found suppression via LEGACY ChecklistItem:', {
         actionKey,
         itemId: checklistItem.id,
         title: checklistItem.title,

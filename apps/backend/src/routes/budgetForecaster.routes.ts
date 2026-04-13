@@ -6,6 +6,7 @@ import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware'; 
 import { CustomRequest } from '../types'; // <-- MODIFIED IMPORT: Use CustomRequest which is the extended type
 import { aiOracleRateLimiter } from '../middleware/rateLimiter.middleware'; // <-- NEW IMPORT
 import { budgetForecasterService } from '../services/budgetForecaster.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -39,7 +40,7 @@ router.get(
       const userId = req.user!.userId; 
       const { propertyId } = req.params;
 
-      console.log('[BUDGET-FORECASTER] Generating forecast for property:', propertyId);
+      logger.info('[BUDGET-FORECASTER] Generating forecast for property:', propertyId);
 
       const forecast = await budgetForecasterService.generateBudgetForecast(propertyId, userId);
 
@@ -49,7 +50,7 @@ router.get(
       });
 
     } catch (error: any) {
-      console.error('[BUDGET-FORECASTER] Error:', error);
+      logger.error('[BUDGET-FORECASTER] Error:', error);
       res.status(500).json({
         success: false,
         message: error.message || 'Failed to generate forecast'

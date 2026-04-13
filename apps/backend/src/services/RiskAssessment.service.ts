@@ -18,6 +18,7 @@ import JobQueueService, { propertyIntelligenceQueue } from './JobQueue.service';
 import { PropertyIntelligenceJobType, PropertyIntelligenceJobPayload } from '../config/risk-job-types';
 // PHASE 2.4 INTEGRATION
 import { createTasksFromRiskAssessment } from './riskAssessmentIntegration.service';
+import { logger } from '../lib/logger';
 
 interface PropertyWithRelations extends Property {
   warranties: Warranty[];
@@ -191,7 +192,7 @@ class RiskAssessmentService {
         isBasicDataMissing = !property.propertySize || !property.yearBuilt; 
 
         if (isBasicDataMissing) {
-             console.warn(`[RISK-CALC] Skipping full calculation for ${propertyId}: Basic property data missing.`);
+             logger.warn(`[RISK-CALC] Skipping full calculation for ${propertyId}: Basic property data missing.`);
              
              reportData = {
                 riskScore: 0,
@@ -217,11 +218,11 @@ class RiskAssessmentService {
         const assetRisks: AssetRiskDetail[] = [];
         
         if (isBasicDataMissing) {
-          console.warn(`[RISK-CALC] Basic property data missing for ${propertyId}. Running inventory-only assessment.`);
+          logger.warn(`[RISK-CALC] Basic property data missing for ${propertyId}. Running inventory-only assessment.`);
         } else {
-          console.log(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
+          logger.info(`[RISK-SERVICE] Filtering assets for property ${propertyId}...`);
           const relevantConfigs = filterRelevantAssets(property as PropertyWithRelations, RISK_ASSET_CONFIG);
-          console.log(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
+          logger.info(`[RISK-SERVICE] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
         
           for (const config of relevantConfigs) {
             const homeAssetId = this.resolveHomeAssetIdForSystemType(property as PropertyWithRelations, config.systemType);
@@ -246,16 +247,16 @@ class RiskAssessmentService {
           );
           if (invRisks.length > 0) {
             assetRisks.push(...invRisks);
-            console.log(`[RISK-SERVICE] Added ${invRisks.length} MAJOR_APPLIANCE inventory risks`);
+            logger.info(`[RISK-SERVICE] Added ${invRisks.length} MAJOR_APPLIANCE inventory risks`);
           }
         } catch (e) {
-          console.warn('[RISK-SERVICE] Failed to build inventory major appliance risks', e);
+          logger.warn('[RISK-SERVICE] Failed to build inventory major appliance risks', e);
         }
 
         // Property-level resilience impact: sump-pump backup reduces basement flood risk.
         assetRisks.push(this.buildBasementFloodRisk(property as PropertyWithRelations));
         
-        console.log(`[RISK-SERVICE] Calculated risk for ${assetRisks.length} assets`);
+        logger.info(`[RISK-SERVICE] Calculated risk for ${assetRisks.length} assets`);
         
         const calculatedResult = calculateTotalRiskScore(property as PropertyWithRelations, assetRisks);
         
@@ -265,7 +266,7 @@ class RiskAssessmentService {
         };        
 
     } catch (error: any) {
-        console.error(`RISK CALCULATION FAILED for property ${propertyId}:`, error);
+        logger.error(`RISK CALCULATION FAILED for property ${propertyId}:`, error);
         finalError = error;
         
         reportData = {
@@ -337,7 +338,7 @@ class RiskAssessmentService {
           }));
 
         if (recommendations.length > 0) {
-          console.log(`[RISK-SERVICE] Creating ${recommendations.length} maintenance tasks for HIGH/CRITICAL risks...`);
+          logger.info(`[RISK-SERVICE] Creating ${recommendations.length} maintenance tasks for HIGH/CRITICAL risks...`);
           
           const taskResult = await createTasksFromRiskAssessment(
             propertyId,
@@ -345,14 +346,14 @@ class RiskAssessmentService {
             recommendations
           );
 
-          console.log(`✅ Risk assessment tasks: ${taskResult.created} created, ${taskResult.skipped} skipped`);
+          logger.info(`✅ Risk assessment tasks: ${taskResult.created} created, ${taskResult.skipped} skipped`);
         } else {
-          console.log(`[RISK-SERVICE] No HIGH/CRITICAL risks found - no maintenance tasks created`);
+          logger.info(`[RISK-SERVICE] No HIGH/CRITICAL risks found - no maintenance tasks created`);
         }
       }
     } catch (taskError) {
       // Don't fail the risk calculation if task creation fails
-      console.error('[RISK-SERVICE] Failed to create maintenance tasks:', taskError);
+      logger.error('[RISK-SERVICE] Failed to create maintenance tasks:', taskError);
     }
 
     return updatedReport;
@@ -370,7 +371,7 @@ class RiskAssessmentService {
       'base64'
     );
 
-    console.log(`[PDF] Generated mock PDF buffer for property ${propertyId}.`);
+    logger.info(`[PDF] Generated mock PDF buffer for property ${propertyId}.`);
 
     return mockPdfContent;
   }
