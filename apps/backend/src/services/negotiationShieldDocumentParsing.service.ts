@@ -6,6 +6,7 @@ import {
   NegotiationShieldScenarioType,
 } from './negotiationShield.types';
 import { presignGetObject } from './storage/presign';
+import { assertSafeUrl } from '../utils/ssrfGuard';
 
 const NEGOTIATION_SHIELD_PARSER_VERSION = 'negotiation-shield-parser-v1';
 
@@ -83,6 +84,7 @@ function parseDataUrl(fileUrl: string): { buffer: Buffer; mimeType: string | nul
 }
 
 async function fetchRemoteBuffer(url: string) {
+  await assertSafeUrl(url);
   const response = await fetch(url);
   if (!response.ok) {
     throw new APIError(

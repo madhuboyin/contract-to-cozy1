@@ -1,5 +1,7 @@
 // apps/backend/src/community/providers/rss.provider.ts
 
+import { assertSafeUrl } from '../../utils/ssrfGuard';
+
 export interface RssItem {
   title: string;
   link: string;
@@ -20,11 +22,12 @@ function pickTag(block: string, tag: string): string | null {
 
 export async function fetchRssItems(feedUrl: string, limit = 20): Promise<RssItem[]> {
   try {
-    // ✅ ADD TIMEOUT: 10 seconds
+    await assertSafeUrl(feedUrl);
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const resp = await fetch(feedUrl, { 
+    const resp = await fetch(feedUrl, {
       headers: { 'User-Agent': 'contracttocozy/1.0' },
       signal: controller.signal
     });
