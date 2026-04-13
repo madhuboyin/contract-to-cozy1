@@ -500,7 +500,7 @@ export class GuidanceStepResolverService {
       // Fire-and-forget with a caught error so a hook failure never blocks the
       // step transition response returned to the user.
       if (nextStatus === 'COMPLETED' && journey.status !== 'COMPLETED') {
-        runJourneyCompletionHooks(params.journeyId).catch((err) => {
+        runJourneyCompletionHooks(params.journeyId).catch((err: unknown) => {
           console.error('[guidance] runJourneyCompletionHooks failed:', err);
         });
       }

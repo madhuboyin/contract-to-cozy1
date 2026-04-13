@@ -3,6 +3,10 @@
 # ============================================================================
 FROM node:20-bullseye-slim AS builder
 WORKDIR /app
+ENV npm_config_fetch_retries=5 \
+    npm_config_fetch_retry_mintimeout=20000 \
+    npm_config_fetch_retry_maxtimeout=120000 \
+    npm_config_fetch_timeout=120000
 
 # Build deps (openssl for prisma)
 RUN apt-get update && apt-get install -y --no-install-recommends openssl \
@@ -15,12 +19,28 @@ COPY apps/backend/prisma ./apps/backend/prisma
 
 # Install backend deps + generate prisma client
 WORKDIR /app/apps/backend
-RUN npm ci
+RUN for attempt in 1 2 3; do \
+      npm ci --no-audit --no-fund && break; \
+      if [ "$attempt" -eq 3 ]; then \
+        echo "npm ci failed after ${attempt} attempts"; \
+        exit 1; \
+      fi; \
+      echo "npm ci failed (attempt ${attempt}), retrying in $((attempt * 10))s..."; \
+      sleep $((attempt * 10)); \
+    done
 RUN npx prisma generate
 
 # Install worker deps (dev deps included so TS build works)
 WORKDIR /app/apps/workers
-RUN npm ci
+RUN for attempt in 1 2 3; do \
+      npm ci --no-audit --no-fund && break; \
+      if [ "$attempt" -eq 3 ]; then \
+        echo "npm ci failed after ${attempt} attempts"; \
+        exit 1; \
+      fi; \
+      echo "npm ci failed (attempt ${attempt}), retrying in $((attempt * 10))s..."; \
+      sleep $((attempt * 10)); \
+    done
 
 # Copy shared backend source files into worker source tree
 RUN mkdir -p src/shared/backend/utils \
@@ -57,6 +77,7 @@ COPY apps/backend/src/services/eventSignalProjection.service.ts src/shared/backe
 COPY apps/backend/src/services/sharedDataObservability.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/coverageGap.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/signal.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/signalPriorityBoost.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/assumptionSet.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/preferenceProfile.service.ts src/shared/backend/services/
 COPY apps/backend/src/services/financialAssumption.service.ts src/shared/backend/services/
@@ -129,6 +150,7 @@ COPY apps/backend/src/config/ai-constants.ts src/shared/backend/config/
 # neighborhoodChangeNotification jobs and by incident.service.ts
 COPY apps/backend/src/services/guidanceEngine/guidanceTypes.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceTemplateRegistry.ts src/shared/backend/services/guidanceEngine/
+COPY apps/backend/src/services/guidanceEngine/guidanceCompletionHooks.service.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceSignalResolver.service.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceStepResolver.service.ts src/shared/backend/services/guidanceEngine/
 COPY apps/backend/src/services/guidanceEngine/guidanceDerivedData.service.ts src/shared/backend/services/guidanceEngine/
