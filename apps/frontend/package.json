@@ -11,6 +11,7 @@
     "qa:shared-primitives": "node scripts/check-shared-primitives.mjs",
     "qa:visual-drift": "node scripts/check-visual-drift.mjs",
     "qa:visual-drift:update": "node scripts/check-visual-drift.mjs --write-baseline",
+    "audit:track3:pass": "node scripts/ui-audit/run-track3-pass.mjs",
     "qa:gates": "npm run qa:priority-routes && npm run qa:shared-primitives && npm run qa:visual-drift && npm run test:visual-contract",
     "test": "jest",
     "test:visual-contract": "jest src/__tests__/priority-route-visual-contract.test.ts",

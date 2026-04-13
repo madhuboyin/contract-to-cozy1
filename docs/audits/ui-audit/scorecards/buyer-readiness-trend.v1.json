@@ -1,0 +1,72 @@
+{
+  "generatedAt": "2026-04-13T00:00:00-04:00",
+  "summary": {
+    "trackedRoutes": 124,
+    "appRoutesDiscovered": 124,
+    "coveragePct": 100,
+    "averages": {
+      "overall": 6.77,
+      "visual": 6.78,
+      "ux": 6.78,
+      "trust": 6.77,
+      "mobile": 6.76,
+      "buyerReadiness": 6.77
+    },
+    "valuationRisk": {
+      "Medium": 34,
+      "High": 11,
+      "Low": 79
+    },
+    "priority": {
+      "P0": 8,
+      "P1": 11,
+      "P2": 98,
+      "P3": 7
+    },
+    "status": {
+      "In QA": 16,
+      "Planned": 10,
+      "In Build": 98
+    }
+  },
+  "trend": [
+    {
+      "label": "Baseline (Pre-Track 1)",
+      "buyerReadiness": 6.26
+    },
+    {
+      "label": "Post Track 2 (P0/P1)",
+      "buyerReadiness": 6.89
+    },
+    {
+      "label": "Track 3 Full Rescore",
+      "buyerReadiness": 6.77
+    }
+  ],
+  "valuationClosures": [
+    {
+      "route": "/dashboard/properties/[id]/risk-assessment",
+      "fromRisk": "High",
+      "toRisk": "Medium",
+      "currentStatus": "In QA"
+    },
+    {
+      "route": "/dashboard/properties/[id]/tools/quote-comparison",
+      "fromRisk": "High",
+      "toRisk": "Medium",
+      "currentStatus": "In QA"
+    },
+    {
+      "route": "/providers/join",
+      "fromRisk": "High",
+      "toRisk": "Medium",
+      "currentStatus": "In QA"
+    },
+    {
+      "route": "/providers/login",
+      "fromRisk": "High",
+      "toRisk": "Medium",
+      "currentStatus": "In QA"
+    }
+  ]
+}
