@@ -139,9 +139,10 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
 // MIDDLEWARE
 // =============================================================================
 
-app.use(helmet({
-  contentSecurityPolicy: false, // Allow Swagger UI inline scripts
-}));
+// Helmet with full defaults (CSP enabled) for all API routes.
+// Swagger UI requires unsafe-inline scripts, so CSP is disabled only on /api/docs.
+app.use(helmet());
+app.use('/api/docs', helmet({ contentSecurityPolicy: false }));
 app.use(cors({
   origin: [
     'http://localhost:3000',

@@ -25,6 +25,7 @@ import {
 } from '../../inventory/inventoryApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
+import confetti from 'canvas-confetti';
 
 interface HomeHealthNudgeProps {
   propertyId: string | undefined;
@@ -35,9 +36,6 @@ const INSURANCE_PROTECTION_GAP_QUERY_KEY = 'insurance-protection-gap';
 const HOME_EQUITY_QUERY_KEY = 'home-equity-summary';
 const PROPERTY_QUERY_KEY = 'property';
 const PROPERTIES_QUERY_KEY = 'properties';
-const CONFETTI_SCRIPT_ID = 'ctc-canvas-confetti';
-const CONFETTI_CDN_SRC =
-  'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js';
 const SUPPORTED_NUDGE_TYPES = new Set(['ASSET', 'RESILIENCE', 'UTILITY', 'INSURANCE', 'EQUITY']);
 
 export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
@@ -83,38 +81,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
   }, [propertyId, queryClient]);
 
   const triggerMilestoneCelebration = useCallback(async (multiplier: number) => {
-    async function getConfettiFn() {
-      if (typeof window === 'undefined') return null;
-      const existing = (window as any).confetti;
-      if (typeof existing === 'function') return existing;
-
-      await new Promise<void>((resolve, reject) => {
-        const existingScript = document.getElementById(CONFETTI_SCRIPT_ID) as HTMLScriptElement | null;
-        if (existingScript) {
-          existingScript.addEventListener('load', () => resolve(), { once: true });
-          existingScript.addEventListener(
-            'error',
-            () => reject(new Error('Failed to load confetti script')),
-            { once: true }
-          );
-          return;
-        }
-
-        const script = document.createElement('script');
-        script.id = CONFETTI_SCRIPT_ID;
-        script.src = CONFETTI_CDN_SRC;
-        script.async = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('Failed to load confetti script'));
-        document.head.appendChild(script);
-      });
-
-      return typeof (window as any).confetti === 'function' ? (window as any).confetti : null;
-    }
-
     try {
-      const confetti = await getConfettiFn();
-      if (!confetti) throw new Error('Confetti function unavailable');
       confetti({
         particleCount: 180,
         spread: 100,
