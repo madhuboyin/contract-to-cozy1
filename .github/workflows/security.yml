@@ -67,9 +67,7 @@ jobs:
           # Scan the entire git history of this branch
           base: ""
           head: HEAD
-          extra_args: >
-            --only-verified
-            --config .trufflehog.yml
+          extra_args: --only-verified
 
   audit-frontend:
     name: Audit frontend
