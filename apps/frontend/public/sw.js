@@ -9,6 +9,15 @@ const PRECACHE_URLS = [
   '/manifest.json'
 ];
 
+function isApiRequest(request) {
+  try {
+    const url = new URL(request.url);
+    return url.origin === self.location.origin && url.pathname.startsWith('/api/');
+  } catch (_) {
+    return request.url.includes('/api/');
+  }
+}
+
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing service worker...');
@@ -35,6 +44,16 @@ self.addEventListener('activate', (event) => {
               console.log('[SW] Deleting old cache:', name);
               return caches.delete(name);
             })
+        );
+      })
+      .then(() => caches.open(CACHE_NAME))
+      .then(async (cache) => {
+        // Defense-in-depth: remove any legacy cached API responses.
+        const requests = await cache.keys();
+        await Promise.all(
+          requests
+            .filter((request) => isApiRequest(request))
+            .map((request) => cache.delete(request))
         );
       })
       .then(() => self.clients.claim())
@@ -68,7 +87,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Handle API requests - network-only, never cache authenticated/sensitive responses
-  if (event.request.url.includes('/api/')) {
+  if (isApiRequest(event.request)) {
     event.respondWith(fetch(event.request));
     return;
   }
