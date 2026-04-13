@@ -64,6 +64,36 @@ export default function QuoteComparisonPlaceholderClient() {
         sourceLabel: 'Service Price Radar + Negotiation Shield case context',
         rationale: 'Comparison sequence keeps decision-making and negotiation steps in a single structured flow.',
       }}
+      priorityAction={{
+        title: 'Move accepted quote context into final pricing',
+        description: 'Use Price Finalization as the primary decision step so booking inherits the final number, vendor, and terms.',
+        impactLabel: 'Cleaner handoff into booking',
+        confidenceLabel: 'Confidence improves after Service Price Radar + Negotiation Shield review',
+        primaryAction: (
+          <Link
+            href={`/dashboard/properties/${propertyId}/tools/price-finalization${contextQuery}`}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold text-white hover:bg-black/90"
+          >
+            Continue to Price Finalization
+          </Link>
+        ),
+        supportingAction: (
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Link
+              href={`/dashboard/properties/${propertyId}/tools/service-price-radar${contextQuery}`}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+            >
+              Open Service Price Radar
+            </Link>
+            <Link
+              href={`/dashboard/properties/${propertyId}/tools/negotiation-shield${contextQuery}`}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+            >
+              Open Negotiation Shield
+            </Link>
+          </div>
+        ),
+      }}
       summary={
         <ScenarioInputCard
           title="What you can do in this placeholder"
@@ -85,12 +115,9 @@ export default function QuoteComparisonPlaceholderClient() {
       compareContent={
         <ActionPriorityRow
           primaryAction={
-            <Link
-              href={`/dashboard/properties/${propertyId}/tools/price-finalization${contextQuery}`}
-              className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm text-white hover:bg-black/90"
-            >
-              Continue to Price Finalization
-            </Link>
+            <p className="mb-0 w-full rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-center text-sm text-slate-700">
+              Primary action is pinned above. Use alternate workspaces below as needed.
+            </p>
           }
           secondaryActions={
             <div className="flex w-full flex-wrap gap-2">

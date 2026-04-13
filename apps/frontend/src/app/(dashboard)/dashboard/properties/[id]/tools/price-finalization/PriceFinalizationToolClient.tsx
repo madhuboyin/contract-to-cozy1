@@ -371,6 +371,31 @@ export default function PriceFinalizationToolClient() {
         sourceLabel: 'Quote context + selected vendor terms + guidance continuity metadata',
         rationale: 'Finalized pricing is used to reduce re-entry and keep booking decisions aligned with accepted terms.',
       }}
+      priorityAction={{
+        title: finalizedDetail ? 'Finalized record ready for booking handoff' : 'Finalize accepted price before booking',
+        description: finalizedDetail
+          ? 'Primary handoff is complete. You can continue to booking with contract terms prefilled.'
+          : 'Lock the accepted amount and terms so downstream booking and negotiation steps stay aligned.',
+        impactLabel: finalizedDetail ? 'Booking-ready context' : 'Avoids downstream re-entry',
+        confidenceLabel: finalizedDetail ? 'High for finalized records' : 'Medium while drafting',
+        primaryAction: bookingHref ? (
+          <Link
+            href={bookingHref}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-4 text-sm font-semibold text-white hover:bg-black/90"
+          >
+            Continue to Provider Booking
+          </Link>
+        ) : (
+          <Button className="w-full sm:w-auto" onClick={handleFinalize} disabled={saving || finalizing || loading}>
+            {finalizing ? 'Finalizing...' : 'Finalize price'}
+          </Button>
+        ),
+        supportingAction: (
+          <Button variant="outline" className="w-full sm:w-auto" onClick={handleSaveDraft} disabled={saving || finalizing || loading}>
+            {saving ? 'Saving draft...' : 'Save draft'}
+          </Button>
+        ),
+      }}
       summary={
         <ResultHeroCard
           eyebrow="Workspace"

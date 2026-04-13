@@ -30,9 +30,7 @@ import {
   type RefinanceScenarioTerm,
 } from './mortgageRefinanceRadarApi';
 import { Button } from '@/components/ui/button';
-import {
-  MobileActionRow,
-} from '@/components/mobile/dashboard/MobilePrimitives';
+import RouteStateCard from '@/components/system/RouteStateCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -893,48 +891,44 @@ export default function MortgageRefinanceRadarClient() {
         sourceLabel: 'Mortgage profile + market rate snapshots + CtC refinance model',
         rationale: 'Opportunity scoring weighs rate gap, break-even horizon, and closing-cost assumptions together.',
       }}
-      rail={(
-        <div className="space-y-3">
-          <HomeToolsRail
-            propertyId={propertyId}
-            context="mortgage-refinance-radar"
-            currentToolId="mortgage-refinance-radar"
-          />
-          <MobileActionRow className="justify-end">
-            <button
-              onClick={handleEvaluate}
-              disabled={evaluating || loading}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-slate-300/70 bg-white/85 px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white disabled:opacity-50 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200 dark:hover:bg-slate-900"
-            >
-              <RefreshCw className={`h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
-              Re-evaluate
-            </button>
-          </MobileActionRow>
-        </div>
-      )}
+      priorityAction={{
+        title: available?.radarState === 'OPEN' ? 'Re-evaluate refinance opportunity now' : 'Run a fresh refinance check',
+        description: available?.radarState === 'OPEN'
+          ? 'Confirm this opportunity with up-to-date rates before committing to lender outreach.'
+          : 'Re-run the model to verify if market movement changed your refinance window.',
+        impactLabel: available?.radarState === 'OPEN' ? 'Can unlock monthly savings' : 'Keeps opportunity timing current',
+        confidenceLabel: available?.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} fit` : 'Confidence pending latest evaluation',
+        primaryAction: (
+          <Button
+            onClick={handleEvaluate}
+            disabled={evaluating || loading}
+            className="w-full sm:w-auto"
+          >
+            <RefreshCw className={`mr-1.5 h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
+            {evaluating ? 'Evaluating…' : 'Re-evaluate radar'}
+          </Button>
+        ),
+      }}
+      rail={<HomeToolsRail propertyId={propertyId} context="mortgage-refinance-radar" currentToolId="mortgage-refinance-radar" />}
     >
 
       {/* Loading */}
       {loading && !data && (
-        <div className="flex h-48 items-center justify-center rounded-2xl border border-white/70 bg-white/65 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
-          <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-slate-900 dark:border-slate-100" />
-        </div>
+        <RouteStateCard
+          state="loading"
+          title="Loading refinance radar"
+          description="Gathering mortgage profile and market-rate signals."
+        />
       )}
 
       {/* Error */}
       {error && (
-        <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-4 backdrop-blur">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
-          <div>
-            <p className="text-sm font-medium text-red-800">{error}</p>
-            <button
-              onClick={() => load()}
-              className="mt-2 text-sm font-medium text-red-600 hover:text-red-800"
-            >
-              Try again
-            </button>
-          </div>
-        </div>
+        <RouteStateCard
+          state="error"
+          title="Radar check failed"
+          description={error}
+          action={<Button onClick={() => load()}>Try again</Button>}
+        />
       )}
 
       {/* Unavailable */}

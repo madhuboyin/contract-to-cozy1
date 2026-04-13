@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
 import {
   MobileFilterSurface,
   MobilePageContainer,
@@ -24,6 +25,7 @@ interface ToolWorkspaceTemplateProps {
     sourceLabel: string;
     rationale?: string | null;
   };
+  priorityAction?: PriorityActionHeroProps;
   rail?: ReactNode;
   introAction?: ReactNode;
   children: ReactNode;
@@ -36,6 +38,7 @@ export default function ToolWorkspaceTemplate({
   title,
   subtitle,
   trust,
+  priorityAction,
   rail,
   introAction,
   children,
@@ -62,6 +65,18 @@ export default function ToolWorkspaceTemplate({
           freshnessLabel={trust.freshnessLabel}
           sourceLabel={trust.sourceLabel}
           rationale={trust.rationale}
+        />
+      ) : null}
+
+      {priorityAction ? (
+        <PriorityActionHero
+          title={priorityAction.title}
+          description={priorityAction.description}
+          primaryAction={priorityAction.primaryAction}
+          supportingAction={priorityAction.supportingAction}
+          impactLabel={priorityAction.impactLabel}
+          confidenceLabel={priorityAction.confidenceLabel}
+          eyebrow={priorityAction.eyebrow || 'Next Best Action'}
         />
       ) : null}
 

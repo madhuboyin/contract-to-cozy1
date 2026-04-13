@@ -13,7 +13,6 @@ import {
   CompactEntityRow,
   ActionPriorityRow,
   StatusChip,
-  EmptyStateCard,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import HomeToolsRail from '../../components/HomeToolsRail';
@@ -81,6 +80,31 @@ export default function CoverageOptionsClient() {
   const gaps = data?.gaps ?? [];
   const counts = data?.counts ?? {};
   const totalGaps = counts.total ?? 0;
+  const topGap = gaps[0] ?? null;
+  const routeState = loading
+    ? {
+        kind: 'loading' as const,
+        title: 'Loading coverage gaps',
+        description: 'Fetching the latest coverage status across your inventory items.',
+      }
+    : err
+      ? {
+          kind: 'error' as const,
+          title: 'Coverage data unavailable',
+          description: err,
+          secondaryAction: (
+            <Button variant="outline" asChild>
+              <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open inventory</Link>
+            </Button>
+          ),
+        }
+      : gaps.length === 0
+        ? {
+            kind: 'success' as const,
+            title: 'No coverage gaps found',
+            description: 'All tracked items currently have coverage. No policy comparisons are needed right now.',
+          }
+        : undefined;
 
   React.useEffect(() => {
     if (!propertyId || !guidanceJourneyId || proofCompleted) return;
@@ -125,6 +149,34 @@ export default function CoverageOptionsClient() {
         sourceLabel: 'Inventory coverage gaps + linked warranty/insurance metadata',
         rationale: 'Recommendations prioritize no-coverage items first, then partial or expired protection.',
       }}
+      priorityAction={{
+        title: topGap ? `Close coverage gap: ${topGap.itemName}` : 'Coverage looks healthy',
+        description: topGap
+          ? 'Start with the highest-priority uncovered item, then continue through remaining gaps.'
+          : 'No immediate gap action is required. Continue periodic coverage checks to stay protected.',
+        impactLabel: topGap ? `${formatEnumLabel(topGap.gapType) || 'Gap'} priority` : 'Protected baseline',
+        confidenceLabel: 'Confidence improves as item-level coverage records stay current',
+        primaryAction: topGap ? (
+          <Link
+            href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/coverage`}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold text-white hover:bg-black/90"
+          >
+            Resolve top gap
+          </Link>
+        ) : (
+          <Button variant="outline" asChild className="w-full sm:w-auto">
+            <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open inventory overview</Link>
+          </Button>
+        ),
+        supportingAction: topGap ? (
+          <Button variant="outline" asChild className="w-full sm:w-auto">
+            <Link href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/replace-repair`}>
+              Review repair/replace context
+            </Link>
+          </Button>
+        ) : undefined,
+      }}
+      routeState={routeState}
       summary={
         <GuidanceInlinePanel
           propertyId={propertyId}
@@ -136,66 +188,53 @@ export default function CoverageOptionsClient() {
         />
       }
       compareContent={
-        loading ? (
-          <ScenarioInputCard title="Loading" subtitle="Loading coverage gaps..." badge={<StatusChip tone="info">Please wait</StatusChip>}>
-            <p className="text-sm text-slate-600">Fetching coverage data for your property.</p>
-          </ScenarioInputCard>
-        ) : err ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>
-        ) : gaps.length === 0 ? (
-          <EmptyStateCard
-            title="No coverage gaps found"
-            description="All tracked items currently have coverage. No policy comparisons are needed at this time."
+        <>
+          <ResultHeroCard
+            title="Open Coverage Gaps"
+            value={totalGaps}
+            status={<StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>{totalGaps > 0 ? 'Review options' : 'Covered'}</StatusChip>}
+            summary={`${counts.NO_COVERAGE ?? 0} uncovered · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} partially covered`}
           />
-        ) : (
-          <>
-            <ResultHeroCard
-              title="Open Coverage Gaps"
-              value={totalGaps}
-              status={<StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>{totalGaps > 0 ? 'Review options' : 'Covered'}</StatusChip>}
-              summary={`${counts.NO_COVERAGE ?? 0} uncovered · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} partially covered`}
-            />
 
-            <ScenarioInputCard
-              title="Gap Breakdown"
-              subtitle="Review each gap and select the best coverage option to close it."
-            >
-              <div className="space-y-3">
-                {gaps.map((gap: any) => {
-                  const gapLabel = formatEnumLabel(gap.gapType) || 'Coverage Gap';
-                  return (
-                    <div key={gap.inventoryItemId} className="space-y-2.5 rounded-xl border border-black/10 p-2.5">
-                      <CompactEntityRow
-                        title={gap.itemName}
-                        subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
-                        meta={gap.roomName ? `${gap.roomName} · ${gapLabel}` : gapLabel}
-                        status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gapLabel}</StatusChip>}
-                      />
-                      <ActionPriorityRow
-                        primaryAction={
-                          <Link
-                            href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/coverage`}
-                            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm text-white hover:bg-black/90"
-                          >
-                            Get coverage
-                          </Link>
-                        }
-                        secondaryActions={
-                          <Link
-                            href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/replace-repair`}
-                            className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
-                          >
-                            Repair/Replace
-                          </Link>
-                        }
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </ScenarioInputCard>
-          </>
-        )
+          <ScenarioInputCard
+            title="Gap Breakdown"
+            subtitle="Review each gap and select the best coverage option to close it."
+          >
+            <div className="space-y-3">
+              {gaps.map((gap: any) => {
+                const gapLabel = formatEnumLabel(gap.gapType) || 'Coverage Gap';
+                return (
+                  <div key={gap.inventoryItemId} className="space-y-2.5 rounded-xl border border-black/10 p-2.5">
+                    <CompactEntityRow
+                      title={gap.itemName}
+                      subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
+                      meta={gap.roomName ? `${gap.roomName} · ${gapLabel}` : gapLabel}
+                      status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gapLabel}</StatusChip>}
+                    />
+                    <ActionPriorityRow
+                      primaryAction={
+                        <Link
+                          href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/coverage`}
+                          className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm text-white hover:bg-black/90"
+                        >
+                          Get coverage
+                        </Link>
+                      }
+                      secondaryActions={
+                        <Link
+                          href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/replace-repair`}
+                          className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
+                        >
+                          Repair/Replace
+                        </Link>
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </ScenarioInputCard>
+        </>
       }
       footer={
         <ScenarioInputCard

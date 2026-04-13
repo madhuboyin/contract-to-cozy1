@@ -3,7 +3,9 @@
 import { ReactNode, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { MobileStickyActionBar } from '@/components/mobile/dashboard/MobilePrimitives';
 import { cn } from '@/lib/utils';
+import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
 import ToolWorkspaceTemplate from './ToolWorkspaceTemplate';
 
 interface ReportTemplateProps {
@@ -18,10 +20,13 @@ interface ReportTemplateProps {
     rationale?: string | null;
   };
   rail?: ReactNode;
+  priorityAction?: PriorityActionHeroProps;
   decisionMode: ReactNode;
   reportContent: ReactNode;
   reportSummary?: ReactNode;
   defaultReportExpanded?: boolean;
+  stickyAction?: ReactNode;
+  stickyHelpText?: string;
 }
 
 export default function ReportTemplate({
@@ -31,10 +36,13 @@ export default function ReportTemplate({
   subtitle,
   trust,
   rail,
+  priorityAction,
   decisionMode,
   reportContent,
   reportSummary,
   defaultReportExpanded = false,
+  stickyAction,
+  stickyHelpText,
 }: ReportTemplateProps) {
   const [reportExpanded, setReportExpanded] = useState(defaultReportExpanded);
 
@@ -48,10 +56,24 @@ export default function ReportTemplate({
       rail={rail}
       trust={trust}
     >
-      <section className="space-y-4">
+      <section className={cn('space-y-4', stickyAction ? 'pb-[calc(9rem+env(safe-area-inset-bottom))]' : '')}>
         <article className="rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.09em] text-brand-700">Decision Mode</p>
-          {decisionMode}
+          {priorityAction ? (
+            <PriorityActionHero
+              title={priorityAction.title}
+              description={priorityAction.description}
+              primaryAction={priorityAction.primaryAction}
+              supportingAction={priorityAction.supportingAction}
+              impactLabel={priorityAction.impactLabel}
+              confidenceLabel={priorityAction.confidenceLabel}
+              eyebrow={priorityAction.eyebrow || 'Decision Mode'}
+            />
+          ) : (
+            <>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.09em] text-brand-700">Decision Mode</p>
+              {decisionMode}
+            </>
+          )}
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -79,7 +101,13 @@ export default function ReportTemplate({
           {reportExpanded ? <div className="mt-4">{reportContent}</div> : null}
         </article>
       </section>
+      {stickyAction ? (
+        <MobileStickyActionBar
+          action={stickyAction}
+          helpText={stickyHelpText}
+          reserveSize="floatingAction"
+        />
+      ) : null}
     </ToolWorkspaceTemplate>
   );
 }
-

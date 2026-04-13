@@ -56,8 +56,8 @@
     "signatureLength": 178
   },
   "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/CompareTemplate.tsx": {
-    "hash": "8330cba9bd96287ddd981e3380130e21dafc098dbaf58ff94578cd141fdb8333",
-    "signatureLength": 134
+    "hash": "dc02e10f18d4d26a9b5e56166c057c60726f00fe3193a19db024f320bcda65cd",
+    "signatureLength": 206
   },
   "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/DetailTemplate.tsx": {
     "hash": "e52b6bb9a30f7a2e9a62688763af7b288dd3347835cd955d17793b1ef45c284d",
@@ -72,8 +72,8 @@
     "signatureLength": 0
   },
   "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/ReportTemplate.tsx": {
-    "hash": "a077c53bfe4990c97a0d7b3278d6ed352aa98ba83514b095489117bc8485291d",
-    "signatureLength": 354
+    "hash": "eb8d60d9a0fe9581d7e7ac170ac2cb74341f5919e775f56628e89a215baec47f",
+    "signatureLength": 398
   },
   "src/app/(dashboard)/dashboard/properties/[id]/components/route-templates/PriorityActionPattern.tsx": {
     "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
