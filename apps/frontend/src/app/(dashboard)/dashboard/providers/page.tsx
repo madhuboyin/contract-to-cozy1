@@ -26,13 +26,12 @@ import {
   MobileFilterStack,
   MobileKpiStrip,
   MobileKpiTile,
-  MobilePageIntro,
   MobileSection,
   MobileSectionHeader,
-  MobileToolWorkspace,
   ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
@@ -496,15 +495,82 @@ export default function ProvidersPage() {
 
   if (loading) {
     return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
-      </div>
+      <ProviderShellTemplate
+        title="Provider Search"
+        subtitle="Find trusted local professionals by service and location."
+        eyebrow="Provider Marketplace"
+        primaryAction={{
+          title: 'Find a trusted provider for your next step.',
+          description: 'Use service and location filters to narrow options before booking.',
+          primaryAction: (
+            <button
+              type="button"
+              disabled
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-slate-300 px-4 py-2 text-sm font-semibold text-slate-600"
+            >
+              Preparing search workspace...
+            </button>
+          ),
+          confidenceLabel: 'Loading account and property context',
+        }}
+        routeState={{
+          state: 'loading',
+          title: 'Loading provider marketplace',
+          description: 'Preparing provider filters and homeowner context.',
+        }}
+        hideContentWhenState
+      >
+        <></>
+      </ProviderShellTemplate>
     );
   }
 
+  const runSearch = () => {
+    handleFilterChange({
+      zipCode: filters.zipCode,
+      category: filters.category === 'ALL' ? undefined : filters.category,
+    });
+  };
+
   return (
-    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
-      intro={<MobilePageIntro title="Provider Search" subtitle="Find trusted local professionals by service and location." />}
+    <ProviderShellTemplate
+      title="Provider Search"
+      subtitle="Find trusted local professionals by service and location."
+      eyebrow="Provider Marketplace"
+      primaryAction={{
+        title: providers.length > 0 ? 'Compare best-fit providers before booking.' : 'Start with one clear provider search.',
+        description:
+          providers.length > 0
+            ? 'Review profile quality, reviews, and service fit so your booking decision is confident and fast.'
+            : 'Use service category and ZIP to generate a focused, trustworthy shortlist.',
+        primaryAction: (
+          <button
+            type="button"
+            onClick={runSearch}
+            disabled={dataLoading}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+          >
+            {dataLoading ? 'Searching providers...' : 'Run provider search'}
+          </button>
+        ),
+        supportingAction: (
+          <button
+            type="button"
+            onClick={() => handleFilterChange({ zipCode: '', category: undefined })}
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Reset filters
+          </button>
+        ),
+        impactLabel: providers.length > 0 ? `${providers.length} matched providers` : 'Search required',
+        confidenceLabel: targetPropertyId ? 'Property context applied' : 'General marketplace search',
+      }}
+      trust={{
+        confidenceLabel: 'Match quality combines category fit, location radius, and provider profile quality signals.',
+        freshnessLabel: dataLoading ? 'Updating matches now' : 'Results refresh after every search run',
+        sourceLabel: 'Provider profiles, service categories, booking history, and property ZIP context.',
+        rationale: 'Transparent ranking and fit signals reduce homeowner anxiety before booking.',
+      }}
       summary={
         <MobileKpiStrip className="sm:grid-cols-3">
           <MobileKpiTile
@@ -617,6 +683,6 @@ export default function ProvidersPage() {
       )}
 
       <BottomSafeAreaReserve size="chatAware" />
-    </MobileToolWorkspace>
+    </ProviderShellTemplate>
   );
 }

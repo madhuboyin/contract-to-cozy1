@@ -1,32 +1,73 @@
-// apps/frontend/src/app/providers/login/page.tsx
-// Provider login page - redirects providers to their dashboard after login
-
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Eye, EyeOff, KeyRound, Mail } from 'lucide-react';
+import LoginSuccessTransition from '@/components/auth/LoginSuccessTransition';
+import ProviderAuthTemplate from '@/components/providers/ProviderAuthTemplate';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { isValidEmail } from '@/lib/utils';
-// FIX 1: Import APIError for robust error handling
-import { APIError } from '@/types/index'; 
-import LoginSuccessTransition from '@/components/auth/LoginSuccessTransition';
-import { UserRole } from '@/types';
+import { APIError, UserRole } from '@/types';
+
+type FieldName = 'email' | 'password';
+type FieldErrors = Partial<Record<FieldName, string>>;
+
+function resolveRoleFromToken(): UserRole | null {
+  try {
+    const token = localStorage.getItem('accessToken');
+    if (!token) return null;
+
+    const payloadSegment = token.split('.')[1];
+    if (!payloadSegment) return null;
+
+    const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
+        .join('')
+    );
+
+    const decoded = JSON.parse(jsonPayload) as { role?: UserRole };
+    return decoded.role || null;
+  } catch {
+    return null;
+  }
+}
+
+function destinationForRole(role: UserRole): string {
+  if (role === 'PROVIDER') return '/providers/dashboard';
+  if (role === 'ADMIN') return '/dashboard/knowledge-admin';
+  return '/dashboard';
+}
 
 export default function ProviderLoginPage() {
   const router = useRouter();
   const { login, user } = useAuth();
+
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionRole, setTransitionRole] = useState<UserRole>('PROVIDER');
+  const [transitionName, setTransitionName] = useState('');
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiError, setApiError] = useState('');
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [transitionRole, setTransitionRole] = useState<UserRole>('PROVIDER');
-  const [transitionName, setTransitionName] = useState<string>('');
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (user && !isTransitioning) {
+      router.replace(destinationForRole(user.role));
+    }
+  }, [user, router, isTransitioning]);
 
   useEffect(() => {
     return () => {
@@ -36,218 +77,157 @@ export default function ProviderLoginPage() {
     };
   }, []);
 
-  const validate = () => {
-    const newErrors: Record<string, string> = {};
+  const setField = (field: FieldName, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    setFormError('');
+  };
 
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
+  const validate = (): FieldErrors => {
+    const nextErrors: FieldErrors = {};
+
+    if (!formData.email.trim()) {
+      nextErrors.email = 'Email is required.';
     } else if (!isValidEmail(formData.email)) {
-      newErrors.email = 'Invalid email format';
+      nextErrors.email = 'Enter a valid email address.';
     }
 
     if (!formData.password) {
-      newErrors.password = 'Password is required';
+      nextErrors.password = 'Password is required.';
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return nextErrors;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setApiError('');
 
-    if (!validate()) return;
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      return;
+    }
 
-    setIsLoading(true);
+    try {
+      setLoading(true);
+      const result = await login({ email: formData.email, password: formData.password });
 
-    const result = await login(formData);
+      if (result && result.success) {
+        const resolvedRole = result.user?.role || user?.role || resolveRoleFromToken() || 'PROVIDER';
 
-    // FIX 2: Check for null AND result.success to proceed safely
-    if (result && result.success) {
-      // Wait for user state to update
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // Get user role
-      const token = localStorage.getItem('accessToken');
-      let userRole = user?.role;
-      
-      if (!userRole && token) {
-        try {
-          const base64Url = token.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(
-            atob(base64)
-              .split('')
-              .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-              .join('')
-          );
-          const decoded = JSON.parse(jsonPayload);
-          userRole = decoded.role;
-        } catch (error) {
-          console.error('Error decoding token:', error);
-        }
+        setTransitionRole(resolvedRole);
+        setTransitionName(result.user?.firstName || user?.firstName || '');
+        setIsTransitioning(true);
+
+        redirectTimerRef.current = setTimeout(() => {
+          router.replace(destinationForRole(resolvedRole));
+        }, 1100);
+        return;
       }
 
-      // Redirect based on role
-      let destination = '/dashboard';
-      if (userRole === 'PROVIDER') {
-        destination = '/providers/dashboard';
-      } else if (userRole === 'ADMIN') {
-        destination = '/dashboard/knowledge-admin';
-      }
-
-      setTransitionRole((userRole as UserRole) || 'PROVIDER');
-      setTransitionName(result.user?.firstName || '');
-      setIsTransitioning(true);
-
-      redirectTimerRef.current = setTimeout(() => {
-        router.replace(destination);
-      }, 1100);
-    } else {
-      // FIX 3: Safely handle error or null result
-      const errorResponse = result as (APIError | null);
-      const errorMessage = errorResponse?.error?.message || 
-                           errorResponse?.message || 
-                           'Login failed. Please check your credentials.';
-
-      setApiError(errorMessage);
-      setIsLoading(false);
+      const errorResponse = result as APIError | null;
+      setFormError(
+        errorResponse?.error?.message ||
+          errorResponse?.message ||
+          'Sign in failed. Check your credentials and try again.'
+      );
+    } catch (err: any) {
+      setFormError(err?.message || 'Sign in failed. Check your credentials and try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Clear error for this field
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
-  };
+  if (user) return null;
 
   if (isTransitioning) {
     return <LoginSuccessTransition role={transitionRole} firstName={transitionName} />;
   }
 
+  const inputErrorClass = (field: FieldName) =>
+    fieldErrors[field] ? 'border-rose-300 focus-visible:ring-rose-400' : 'border-slate-300';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <Link href="/" className="flex justify-center">
-            <span className="text-3xl font-bold text-blue-600">Contract to Cozy</span>
+    <ProviderAuthTemplate
+      activeRoute="login"
+      title="Provider sign in"
+      subtitle="Access your booking queue, availability controls, and profile operations in one workspace."
+      footer={
+        <p className="text-center text-xs text-slate-500">
+          Need a homeowner account instead?{' '}
+          <Link href="/login" className="font-medium text-brand-700 hover:text-brand-900">
+            Homeowner sign in
           </Link>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Provider Sign In
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Access your provider dashboard
-          </p>
+          .
+        </p>
+      }
+    >
+      {formError ? (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {formError}
+        </div>
+      ) : null}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Label htmlFor="email">Email</Label>
+          <div className="relative mt-1.5">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={formData.email}
+              onChange={(e) => setField('email', e.target.value)}
+              className={`pl-9 ${inputErrorClass('email')}`}
+              placeholder="provider@company.com"
+              aria-invalid={Boolean(fieldErrors.email)}
+            />
+          </div>
+          {fieldErrors.email ? <p className="mt-1.5 text-xs text-rose-700">{fieldErrors.email}</p> : null}
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {apiError && (
-            <div className="rounded-md bg-red-50 border border-red-200 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">{apiError}</h3>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={formData.email}
-                onChange={handleChange}
-                className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                  errors.email ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                placeholder="provider@example.com"
-              />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={formData.password}
-                onChange={handleChange}
-                className={`mt-1 appearance-none relative block w-full px-3 py-2 border ${
-                  errors.password ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                placeholder="••••••••"
-              />
-              {errors.password && (
-                <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                Remember me
-              </label>
-            </div>
-
-            <div className="text-sm">
-              <Link href="/reset-password" className="font-medium text-blue-600 hover:text-blue-500">
-                Forgot password?
-              </Link>
-            </div>
-          </div>
-
-          <div>
+        <div>
+          <Label htmlFor="password">Password</Label>
+          <div className="relative mt-1.5">
+            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={formData.password}
+              onChange={(e) => setField('password', e.target.value)}
+              className={`pl-9 pr-11 ${inputErrorClass('password')}`}
+              placeholder="Enter your password"
+              aria-invalid={Boolean(fieldErrors.password)}
+            />
             <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute right-1.5 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
+          {fieldErrors.password ? <p className="mt-1.5 text-xs text-rose-700">{fieldErrors.password}</p> : null}
+        </div>
 
-          <div className="text-center space-y-2">
-            <p className="text-sm text-gray-600">
-              Not a provider yet?{' '}
-              <Link href="/providers/join" className="font-medium text-blue-600 hover:text-blue-500">
-                Join as a provider
-              </Link>
-            </p>
-            <p className="text-sm text-gray-600">
-              Are you a homeowner?{' '}
-              <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
-                Homeowner sign in
-              </Link>
-            </p>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex items-center justify-between">
+          <Link href="/reset-password" className="text-xs font-medium text-brand-700 hover:text-brand-900">
+            Forgot password?
+          </Link>
+          <Link href="/providers/join" className="text-xs font-medium text-slate-600 hover:text-slate-900">
+            Need a provider account?
+          </Link>
+        </div>
+
+        <Button type="submit" disabled={loading} className="min-h-[46px] w-full text-sm sm:text-base">
+          {loading ? 'Signing in...' : 'Sign in to provider workspace'}
+        </Button>
+      </form>
+    </ProviderAuthTemplate>
   );
 }

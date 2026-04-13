@@ -5,16 +5,13 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import {
-  ActionPriorityRow,
   BottomSafeAreaReserve,
   MobileCard,
   MobileFilterSurface,
   MobileKpiStrip,
   MobileKpiTile,
-  MobilePageIntro,
-  MobileToolWorkspace,
-  StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
 
 interface BusinessInfo {
   businessName: string;
@@ -155,57 +152,60 @@ export default function ProviderProfilePage() {
   };
 
   return (
-    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
-      intro={
-        <MobilePageIntro
-          title="Profile Settings"
-          subtitle="Manage your public provider profile and account preferences."
-        />
-      }
+    <ProviderShellTemplate
+      title="Profile Settings"
+      subtitle="Manage your public provider profile and account preferences."
+      eyebrow="Provider Profile"
+      primaryAction={{
+        title: isEditing ? 'Save profile updates before leaving this screen.' : 'Keep your provider profile current.',
+        description:
+          'Homeowners trust providers with complete contact, license, and service-area details before booking.',
+        primaryAction: isEditing ? (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
+          >
+            {isSaving ? 'Saving...' : 'Save changes'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsEditing(true)}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+          >
+            Edit profile
+          </button>
+        ),
+        supportingAction: isEditing ? (
+          <button
+            type="button"
+            onClick={() => setIsEditing(false)}
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Cancel edits
+          </button>
+        ) : (
+          <span className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600">
+            Read-only mode
+          </span>
+        ),
+        impactLabel: isEditing ? 'Draft changes open' : 'Public trust profile',
+        confidenceLabel: `${serviceAreas.length} service area${serviceAreas.length === 1 ? '' : 's'} configured`,
+      }}
+      trust={{
+        confidenceLabel: 'Profile confidence improves with complete contact info, coverage area, and credential records.',
+        freshnessLabel: isEditing ? 'Unsaved edits in progress' : 'Profile matches saved account details',
+        sourceLabel: 'Provider profile fields, credential uploads, and service-area settings.',
+        rationale: 'Complete and current profile details reduce homeowner hesitation during selection.',
+      }}
       summary={
-        <>
-          <MobileKpiStrip className="sm:grid-cols-3">
-            <MobileKpiTile label="Years" value={businessInfo.yearsInBusiness} hint="In business" />
-            <MobileKpiTile label="Radius" value={`${businessInfo.serviceRadius} mi`} hint="Service range" />
-            <MobileKpiTile label="Areas" value={serviceAreas.length} hint="Coverage cities" tone={serviceAreas.length > 0 ? 'positive' : 'neutral'} />
-          </MobileKpiStrip>
-
-          <ActionPriorityRow
-            primaryAction={
-              isEditing ? (
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="inline-flex min-h-[42px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
-                >
-                  {isSaving ? 'Saving...' : 'Save changes'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="inline-flex min-h-[42px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white hover:bg-brand-primary/90"
-                >
-                  Edit profile
-                </button>
-              )
-            }
-            secondaryActions={
-              isEditing ? (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-              ) : (
-                <StatusChip tone="info">Read-only mode</StatusChip>
-              )
-            }
-          />
-        </>
+        <MobileKpiStrip className="sm:grid-cols-3">
+          <MobileKpiTile label="Years" value={businessInfo.yearsInBusiness} hint="In business" />
+          <MobileKpiTile label="Radius" value={`${businessInfo.serviceRadius} mi`} hint="Service range" />
+          <MobileKpiTile label="Areas" value={serviceAreas.length} hint="Coverage cities" tone={serviceAreas.length > 0 ? 'positive' : 'neutral'} />
+        </MobileKpiStrip>
       }
       filters={
         <MobileFilterSurface className="space-y-2.5">
@@ -522,6 +522,6 @@ export default function ProviderProfilePage() {
       ) : null}
 
       <BottomSafeAreaReserve size="chatAware" />
-    </MobileToolWorkspace>
+    </ProviderShellTemplate>
   );
 }

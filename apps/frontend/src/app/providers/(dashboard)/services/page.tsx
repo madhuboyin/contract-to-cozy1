@@ -9,11 +9,10 @@ import {
   MobileCard,
   MobileKpiStrip,
   MobileKpiTile,
-  MobilePageIntro,
-  MobileToolWorkspace,
   ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
 
 interface Service {
   id: string;
@@ -294,22 +293,43 @@ export default function ProviderServicesPage() {
 
   return (
     <>
-      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
-        intro={
-          <MobilePageIntro
-            title="Services"
-            subtitle="Manage service catalog, pricing, and availability."
-            action={
-              <button
-                type="button"
-                onClick={() => setShowAddModal(true)}
-                className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
-              >
-                + Add service
-              </button>
-            }
-          />
+      <ProviderShellTemplate
+        title="Services"
+        subtitle="Manage your service catalog, pricing clarity, and active availability."
+        eyebrow="Provider Catalog"
+        introAction={
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+          >
+            + Add service
+          </button>
         }
+        primaryAction={{
+          title: services.length > 0 ? 'Keep your top service pricing current.' : 'Create your first service listing.',
+          description:
+            services.length > 0
+              ? 'Updated pricing and service scope reduce homeowner confusion and improve booking conversion.'
+              : 'A complete service listing is required before homeowners can confidently book your business.',
+          primaryAction: (
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+            >
+              {services.length > 0 ? 'Add another service' : 'Add first service'}
+            </button>
+          ),
+          impactLabel: services.length > 0 ? 'High trust impact' : 'Critical setup step',
+          confidenceLabel: `${counts.active}/${services.length || 1} services active`,
+        }}
+        trust={{
+          confidenceLabel: 'Catalog quality is scored from service detail completeness, pricing clarity, and active status.',
+          freshnessLabel: 'Trust signals refresh each time service details, pricing, or status changes.',
+          sourceLabel: 'Provider service records, pricing metadata, and activity timestamps.',
+          rationale: 'Clear service definitions and current pricing reduce homeowner decision friction.',
+        }}
         summary={
           <MobileKpiStrip className="sm:grid-cols-3">
             <MobileKpiTile label="Active" value={counts.active} hint="Visible to homeowners" tone={counts.active > 0 ? 'positive' : 'neutral'} />
@@ -317,6 +337,16 @@ export default function ProviderServicesPage() {
             <MobileKpiTile label="Handyman" value={counts.handyman} hint="Handyman services" />
           </MobileKpiStrip>
         }
+        routeState={
+          loading
+            ? {
+                state: 'loading',
+                title: 'Loading service catalog',
+                description: 'Fetching your provider services and pricing records.',
+              }
+            : null
+        }
+        hideContentWhenState={loading}
       >
         {success ? (
           <MobileCard variant="compact" className="border-emerald-200 bg-emerald-50 text-emerald-800">
@@ -330,12 +360,7 @@ export default function ProviderServicesPage() {
           </MobileCard>
         ) : null}
 
-        {loading ? (
-          <MobileCard variant="compact" className="py-10 text-center">
-            <div className="mx-auto h-9 w-9 animate-spin rounded-full border-b-2 border-brand-primary" />
-            <p className="mt-3 text-sm text-muted-foreground">Loading services...</p>
-          </MobileCard>
-        ) : services.length === 0 ? (
+        {services.length === 0 ? (
           <EmptyStateCard
             title="No services added yet"
             description="Add your first service to start receiving homeowner booking requests."
@@ -420,7 +445,7 @@ export default function ProviderServicesPage() {
         )}
 
         <BottomSafeAreaReserve size="chatAware" />
-      </MobileToolWorkspace>
+      </ProviderShellTemplate>
 
       {(showAddModal || showEditModal) ? (
         <div className="fixed inset-0 z-50 overflow-y-auto">

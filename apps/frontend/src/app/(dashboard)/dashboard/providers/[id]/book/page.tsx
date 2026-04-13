@@ -16,13 +16,12 @@ import { getPriceFinalization } from '@/lib/api/priceFinalizationApi';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
-  MobilePageIntro,
-  MobileToolWorkspace,
   ReadOnlySummaryBlock,
   ResultHeroCard,
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
@@ -333,28 +332,63 @@ export default function BookProviderPage() {
 
   if (loading) {
     return (
-      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10" intro={<MobilePageIntro title="Book a Service" subtitle="Loading booking form..." />}>
-        <div className="animate-pulse space-y-4 rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4">
-          <div className="h-8 w-1/3 rounded bg-gray-200" />
-          <div className="h-40 rounded bg-gray-200" />
-        </div>
-      </MobileToolWorkspace>
+      <ProviderShellTemplate
+        title="Book a Service"
+        subtitle="Loading booking workspace and service details."
+        eyebrow="Provider Booking"
+        primaryAction={{
+          title: 'Preparing booking form',
+          description: 'Loading provider services, property options, and context for your request.',
+          primaryAction: (
+            <button
+              type="button"
+              disabled
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-slate-300 px-4 py-2 text-sm font-semibold text-slate-600"
+            >
+              Loading booking form...
+            </button>
+          ),
+        }}
+        routeState={{
+          state: 'loading',
+          title: 'Loading booking data',
+          description: 'Fetching provider services and property context.',
+        }}
+        hideContentWhenState
+      >
+        <></>
+      </ProviderShellTemplate>
     );
   }
 
   if (!provider) {
     return (
-      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10" intro={<MobilePageIntro title="Book a Service" subtitle="Provider not found." />}>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
-          <p className="text-sm text-rose-700">Provider not found</p>
-          <button
-            onClick={() => router.back()}
-            className="mt-3 inline-flex min-h-[40px] items-center rounded-lg border border-rose-200 bg-white px-3 text-sm font-medium text-rose-700"
-          >
-            Go back
-          </button>
-        </div>
-      </MobileToolWorkspace>
+      <ProviderShellTemplate
+        title="Book a Service"
+        subtitle="Provider details are unavailable."
+        eyebrow="Provider Booking"
+        primaryAction={{
+          title: 'Provider data unavailable for booking.',
+          description: 'Return to provider profile and choose another pro or retry shortly.',
+          primaryAction: (
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+            >
+              Go back
+            </button>
+          ),
+        }}
+        routeState={{
+          state: 'error',
+          title: 'Provider not found',
+          description: 'This provider could not be loaded for booking.',
+        }}
+        hideContentWhenState
+      >
+        <></>
+      </ProviderShellTemplate>
     );
   }
 
@@ -367,26 +401,49 @@ export default function BookProviderPage() {
   const selectedService = services.find((service) => service.id === selectedServiceId);
   const descriptionLength = description.trim().length;
   const showDescriptionError = (descriptionTouched || hasAttemptedSubmit) && descriptionLength < 10;
+  const scrollToSubmit = () => {
+    const submitAnchor = document.getElementById('provider-booking-submit');
+    submitAnchor?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   return (
-    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
-      intro={
-        <div className="space-y-3">
+    <ProviderShellTemplate
+      title="Book a Service"
+      subtitle="Choose a service, property, schedule, and request details."
+      eyebrow="Provider Booking"
+      primaryAction={{
+        title: isExecutionBlocked ? 'Complete prerequisite steps before booking.' : 'Finish details and create this booking.',
+        description: isExecutionBlocked
+          ? blockedReason || 'Required guidance steps are incomplete for this property.'
+          : 'Complete service, schedule, and request details, then submit from the sticky action footer.',
+        primaryAction: (
           <button
-            onClick={() => router.back()}
-            className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
+            type="button"
+            onClick={scrollToSubmit}
+            disabled={isExecutionBlocked}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
           >
-            <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back
+            {isExecutionBlocked ? 'Booking blocked' : 'Review submit section'}
           </button>
-          <MobilePageIntro
-            title="Book a Service"
-            subtitle="Choose a service, property, schedule, and request details."
-          />
-        </div>
-      }
+        ),
+        supportingAction: (
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Back to provider profile
+          </button>
+        ),
+        impactLabel: selectedService ? 'Booking-ready setup' : 'Service selection required',
+        confidenceLabel: selectedPropertyId ? 'Property context selected' : 'Property selection required',
+      }}
+      trust={{
+        confidenceLabel: 'Booking confidence reflects service fit, provider availability, and required guidance completion.',
+        freshnessLabel: 'Context updates when provider, pricing, or property data changes.',
+        sourceLabel: 'Provider services, selected property details, guidance guardrails, and booking timeline fields.',
+        rationale: 'Showing booking prerequisites and context early prevents failed submissions and surprise delays.',
+      }}
       summary={
         <ResultHeroCard
           eyebrow="Booking Setup"
@@ -406,6 +463,16 @@ export default function BookProviderPage() {
         />
       }
     >
+      <button
+        onClick={() => router.back()}
+        className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
+      >
+        <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        Back
+      </button>
+
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3">
           <p className="text-sm text-rose-800">{error}</p>
@@ -589,6 +656,7 @@ export default function BookProviderPage() {
         </ScenarioInputCard>
 
         <div
+          id="provider-booking-submit"
           data-chat-collision-zone="true"
           className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 -mx-1 rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white/95 p-2 backdrop-blur supports-[backdrop-filter]:bg-white/85"
         >
@@ -627,6 +695,6 @@ export default function BookProviderPage() {
         </div>
       </form>
       <BottomSafeAreaReserve size="floatingAction" />
-    </MobileToolWorkspace>
+    </ProviderShellTemplate>
   );
 }

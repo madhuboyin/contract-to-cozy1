@@ -1,18 +1,29 @@
-// apps/frontend/src/app/providers/join/page.tsx
-// Provider registration with password visibility toggles
-
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Check } from 'lucide-react';
+import { Check, Eye, EyeOff, KeyRound, Mail, Phone, User } from 'lucide-react';
+import ProviderAuthTemplate from '@/components/providers/ProviderAuthTemplate';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth/AuthContext';
-// FIX 1: Import APIError for robust error handling
-import { APIError } from '@/types/index'; 
-import { resolveIconByConcept } from '@/lib/icons';
+import { APIError } from '@/types';
 
-const serviceOptions = [
+type JoinField =
+  | 'firstName'
+  | 'lastName'
+  | 'email'
+  | 'password'
+  | 'confirmPassword'
+  | 'businessName'
+  | 'phone'
+  | 'serviceCategories';
+
+type JoinErrors = Partial<Record<JoinField, string>>;
+
+const SERVICE_OPTIONS = [
   { value: 'HOME_INSPECTION', label: 'Home Inspection' },
   { value: 'PEST_INSPECTION', label: 'Pest Inspection' },
   { value: 'RADON_TESTING', label: 'Radon Testing' },
@@ -25,448 +36,369 @@ const serviceOptions = [
   { value: 'PAINTING', label: 'Painting' },
   { value: 'DRYWALL_REPAIR', label: 'Drywall Repair' },
   { value: 'APPLIANCE_INSTALLATION', label: 'Appliance Installation' },
-];
+] as const;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ProviderJoinPage() {
   const router = useRouter();
   const { register } = useAuth();
-  const [currentStep, setCurrentStep] = useState(1);
+
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [errors, setErrors] = useState<JoinErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState({
-    // Step 1: Account Info
     email: '',
     password: '',
     confirmPassword: '',
     firstName: '',
     lastName: '',
-    // Step 2: Business Info
     businessName: '',
     phone: '',
     serviceCategories: [] as string[],
   });
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const BrandIcon = resolveIconByConcept('property');
-  const RegistrationIcon = resolveIconByConcept('maintenance');
-
-  const validateStep1 = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    if (!formData.email.trim()) newErrors.email = 'Email is required';
-    if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
-    if (!formData.password) newErrors.password = 'Password is required';
-    if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters';
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const setField = (field: JoinField, value: string | string[]) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+    setFormError('');
   };
 
-  const validateStep2 = () => {
-    const newErrors: Record<string, string> = {};
+  const validateStepOne = (): JoinErrors => {
+    const nextErrors: JoinErrors = {};
 
-    if (!formData.businessName.trim()) newErrors.businessName = 'Business name is required';
-    if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
-    if (formData.serviceCategories.length === 0) {
-      newErrors.serviceCategories = 'Select at least one service';
+    if (!formData.firstName.trim()) nextErrors.firstName = 'First name is required.';
+    if (!formData.lastName.trim()) nextErrors.lastName = 'Last name is required.';
+    if (!formData.email.trim()) nextErrors.email = 'Email is required.';
+    if (formData.email && !EMAIL_RE.test(formData.email)) nextErrors.email = 'Enter a valid email address.';
+    if (!formData.password) nextErrors.password = 'Password is required.';
+    if (formData.password && formData.password.length < 8) nextErrors.password = 'Use at least 8 characters.';
+    if (!formData.confirmPassword) nextErrors.confirmPassword = 'Please confirm your password.';
+    if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
+      nextErrors.confirmPassword = 'Passwords do not match.';
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return nextErrors;
+  };
+
+  const validateStepTwo = (): JoinErrors => {
+    const nextErrors: JoinErrors = {};
+
+    if (!formData.businessName.trim()) nextErrors.businessName = 'Business name is required.';
+    if (!formData.phone.trim()) nextErrors.phone = 'Phone number is required.';
+    if (formData.serviceCategories.length === 0) {
+      nextErrors.serviceCategories = 'Select at least one service category.';
+    }
+
+    return nextErrors;
   };
 
   const handleNextStep = () => {
-    if (validateStep1()) {
-      setCurrentStep(2);
-      setErrors({});
+    const stepErrors = validateStepOne();
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(stepErrors);
+      return;
     }
-  };
 
-  const handlePreviousStep = () => {
-    setCurrentStep(1);
     setErrors({});
+    setCurrentStep(2);
   };
 
-  const handleServiceToggle = (service: string) => {
-    setFormData(prev => ({
-      ...prev,
-      serviceCategories: prev.serviceCategories.includes(service)
-        ? prev.serviceCategories.filter(s => s !== service)
-        : [...prev.serviceCategories, service]
-    }));
+  const toggleServiceCategory = (serviceKey: string) => {
+    setField(
+      'serviceCategories',
+      formData.serviceCategories.includes(serviceKey)
+        ? formData.serviceCategories.filter((service) => service !== serviceKey)
+        : [...formData.serviceCategories, serviceKey]
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
 
-    if (!validateStep2()) {
+    const stepErrors = validateStepTwo();
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(stepErrors);
       return;
     }
 
     try {
       setLoading(true);
+      setFormError('');
+
       const result = await register({
         email: formData.email,
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: 'PROVIDER',
-        // Note: 'segment' is made optional in RegisterInput via a previous fix,
-        // so it is correctly omitted here for 'PROVIDER' registration.
       });
 
-      // FIX 2a: Add null check to result before accessing properties
       if (result && result.success) {
         router.push('/providers/dashboard');
-      } else {
-        // FIX 2b: Handle null case and safely access error message
-        const errorResponse = result as (APIError | null);
-        const errorMessage = errorResponse?.error?.message || 
-                             errorResponse?.message || 
-                             'Failed to create provider account';
-
-        setError(errorMessage);
+        return;
       }
+
+      const errorResponse = result as APIError | null;
+      setFormError(
+        errorResponse?.error?.message || errorResponse?.message || 'Unable to create provider account. Please try again.'
+      );
     } catch (err: any) {
-      setError(err.message || 'Failed to create provider account');
+      setFormError(err?.message || 'Unable to create provider account. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const inputErrorClass = (field: JoinField) =>
+    errors[field] ? 'border-rose-300 focus-visible:ring-rose-400' : 'border-slate-300';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
-      {/* Navigation Header */}
-      <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-              <BrandIcon className="h-6 w-6 text-brand-primary" />
-              <span className="text-lg font-semibold text-gray-900">Contract to Cozy</span>
-            </Link>
-
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/login"
-                className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/signup"
-                className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
-              >
-                Homeowner Sign Up
-              </Link>
-            </div>
+    <ProviderAuthTemplate
+      activeRoute="join"
+      title="Join as a provider"
+      subtitle="Set up your provider account so homeowners can quickly understand your fit and availability."
+      footer={
+        <p className="text-center text-xs text-slate-500">
+          Already have a provider account?{' '}
+          <Link href="/providers/login" className="font-medium text-brand-700 hover:text-brand-900">
+            Sign in
+          </Link>
+          .
+        </p>
+      }
+    >
+      <div className="mb-5 rounded-xl border border-brand-100 bg-brand-50/55 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                currentStep >= 1 ? 'bg-brand-700 text-white' : 'bg-slate-200 text-slate-600'
+              }`}
+            >
+              {currentStep > 1 ? <Check className="h-3.5 w-3.5" /> : '1'}
+            </span>
+            <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-slate-700">Account setup</p>
           </div>
-        </div>
-      </nav>
 
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl w-full">
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            {/* Header */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium mb-4">
-                <RegistrationIcon className="mr-1.5 h-3.5 w-3.5" />
-                Provider Registration
-              </div>
-              <h2 className="text-3xl font-bold text-gray-900">Join as a Provider</h2>
-              <p className="mt-2 text-sm text-gray-600">
-                Connect with homeowners and grow your business
-              </p>
-            </div>
+          <div className="h-px flex-1 bg-brand-200" />
 
-            {/* Progress Steps */}
-            <div className="mb-8">
-              <div className="flex items-center justify-center">
-                <div className={`flex items-center ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'
-                  }`}>
-                    {currentStep > 1 ? <Check className="h-4 w-4" /> : '1'}
-                  </div>
-                  <span className="ml-2 text-sm font-medium">Account</span>
-                </div>
-                <div className={`w-16 h-1 mx-4 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-                <div className={`flex items-center ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'
-                  }`}>
-                    2
-                  </div>
-                  <span className="ml-2 text-sm font-medium">Business</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-
-            {/* Step 1: Account Information */}
-            {currentStep === 1 && (
-              <form onSubmit={(e) => { e.preventDefault(); handleNextStep(); }} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                      First Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="firstName"
-                      name="firstName"
-                      type="text"
-                      required
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.firstName ? 'border-red-300' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                      placeholder="John"
-                    />
-                    {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
-                  </div>
-
-                  <div>
-                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                      Last Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="lastName"
-                      name="lastName"
-                      type="text"
-                      required
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.lastName ? 'border-red-300' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                      placeholder="Doe"
-                    />
-                    {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>}
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className={`w-full px-4 py-2.5 border ${
-                      errors.email ? 'border-red-300' : 'border-gray-300'
-                    } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                    placeholder="you@example.com"
-                  />
-                  {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
-                </div>
-
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                    Password <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className={`w-full px-4 py-2.5 pr-12 border ${
-                        errors.password ? 'border-red-300' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                      placeholder="••••••••"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                  {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
-                  <p className="mt-1 text-xs text-gray-500">At least 8 characters</p>
-                </div>
-
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm Password <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      required
-                      value={formData.confirmPassword}
-                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                      className={`w-full px-4 py-2.5 pr-12 border ${
-                        errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                      placeholder="••••••••"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showConfirmPassword ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                  {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
-                >
-                  Continue to Business Info
-                </button>
-              </form>
-            )}
-
-            {/* Step 2: Business Information */}
-            {currentStep === 2 && (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 mb-1">
-                    Business Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="businessName"
-                    name="businessName"
-                    type="text"
-                    required
-                    value={formData.businessName}
-                    onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                    className={`w-full px-4 py-2.5 border ${
-                      errors.businessName ? 'border-red-300' : 'border-gray-300'
-                    } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                    placeholder="Your Company Name"
-                  />
-                  {errors.businessName && <p className="mt-1 text-sm text-red-600">{errors.businessName}</p>}
-                </div>
-
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Number <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    required
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className={`w-full px-4 py-2.5 border ${
-                      errors.phone ? 'border-red-300' : 'border-gray-300'
-                    } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                    placeholder="(555) 123-4567"
-                  />
-                  {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Services Offered <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto p-4 border border-gray-300 rounded-lg">
-                    {serviceOptions.map((service) => (
-                      <label
-                        key={service.value}
-                        className="flex items-center space-x-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData.serviceCategories.includes(service.value)}
-                          onChange={() => handleServiceToggle(service.value)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700">{service.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {errors.serviceCategories && <p className="mt-1 text-sm text-red-600">{errors.serviceCategories}</p>}
-                </div>
-
-                <div className="flex space-x-4">
-                  <button
-                    type="button"
-                    onClick={handlePreviousStep}
-                    className="flex-1 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-                  >
-                    {loading ? 'Creating Account...' : 'Complete Registration'}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Footer */}
-            <div className="mt-6 text-center space-y-2">
-              <p className="text-sm text-gray-600">
-                Already have an account?{' '}
-                <Link href="/login" className="font-medium text-blue-600 hover:text-blue-700">
-                  Sign in
-                </Link>
-              </p>
-              <p className="text-sm text-gray-600">
-                Are you a homeowner?{' '}
-                <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-700">
-                  Sign up here
-                </Link>
-              </p>
-            </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                currentStep === 2 ? 'bg-brand-700 text-white' : 'bg-slate-200 text-slate-600'
+              }`}
+            >
+              2
+            </span>
+            <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-slate-700">Business profile</p>
           </div>
         </div>
       </div>
-    </div>
+
+      {formError ? (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {formError}
+        </div>
+      ) : null}
+
+      {currentStep === 1 ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleNextStep();
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="firstName">First name</Label>
+              <div className="relative mt-1.5">
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  id="firstName"
+                  autoComplete="given-name"
+                  value={formData.firstName}
+                  onChange={(e) => setField('firstName', e.target.value)}
+                  className={`pl-9 ${inputErrorClass('firstName')}`}
+                  placeholder="Jamie"
+                />
+              </div>
+              {errors.firstName ? <p className="mt-1.5 text-xs text-rose-700">{errors.firstName}</p> : null}
+            </div>
+
+            <div>
+              <Label htmlFor="lastName">Last name</Label>
+              <div className="relative mt-1.5">
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  id="lastName"
+                  autoComplete="family-name"
+                  value={formData.lastName}
+                  onChange={(e) => setField('lastName', e.target.value)}
+                  className={`pl-9 ${inputErrorClass('lastName')}`}
+                  placeholder="Doe"
+                />
+              </div>
+              {errors.lastName ? <p className="mt-1.5 text-xs text-rose-700">{errors.lastName}</p> : null}
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="email">Work email</Label>
+            <div className="relative mt-1.5">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={formData.email}
+                onChange={(e) => setField('email', e.target.value)}
+                className={`pl-9 ${inputErrorClass('email')}`}
+                placeholder="team@yourbusiness.com"
+              />
+            </div>
+            {errors.email ? <p className="mt-1.5 text-xs text-rose-700">{errors.email}</p> : null}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <div className="relative mt-1.5">
+                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={formData.password}
+                  onChange={(e) => setField('password', e.target.value)}
+                  className={`pl-9 pr-11 ${inputErrorClass('password')}`}
+                  placeholder="At least 8 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-1.5 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {errors.password ? (
+                <p className="mt-1.5 text-xs text-rose-700">{errors.password}</p>
+              ) : (
+                <p className="mt-1.5 text-xs text-slate-500">Use 8+ characters.</p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="confirmPassword">Confirm password</Label>
+              <div className="relative mt-1.5">
+                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setField('confirmPassword', e.target.value)}
+                  className={`pl-9 pr-11 ${inputErrorClass('confirmPassword')}`}
+                  placeholder="Re-enter password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute right-1.5 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {errors.confirmPassword ? <p className="mt-1.5 text-xs text-rose-700">{errors.confirmPassword}</p> : null}
+            </div>
+          </div>
+
+          <Button type="submit" className="min-h-[46px] w-full text-sm sm:text-base">
+            Continue to business profile
+          </Button>
+        </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="businessName">Business name</Label>
+            <Input
+              id="businessName"
+              value={formData.businessName}
+              onChange={(e) => setField('businessName', e.target.value)}
+              className={`mt-1.5 ${inputErrorClass('businessName')}`}
+              placeholder="Summit Home Services"
+            />
+            {errors.businessName ? <p className="mt-1.5 text-xs text-rose-700">{errors.businessName}</p> : null}
+          </div>
+
+          <div>
+            <Label htmlFor="phone">Business phone</Label>
+            <div className="relative mt-1.5">
+              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setField('phone', e.target.value)}
+                className={`pl-9 ${inputErrorClass('phone')}`}
+                placeholder="(555) 123-4567"
+              />
+            </div>
+            {errors.phone ? <p className="mt-1.5 text-xs text-rose-700">{errors.phone}</p> : null}
+          </div>
+
+          <div>
+            <Label>Service categories</Label>
+            <p className="mt-1 text-xs text-slate-500">Select every service you actively offer.</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {SERVICE_OPTIONS.map((service) => {
+                const selected = formData.serviceCategories.includes(service.value);
+                return (
+                  <button
+                    key={service.value}
+                    type="button"
+                    onClick={() => toggleServiceCategory(service.value)}
+                    className={`inline-flex min-h-[40px] items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
+                      selected
+                        ? 'border-brand-500 bg-brand-50 text-brand-900'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    <span>{service.label}</span>
+                    {selected ? <Check className="h-4 w-4" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+            {errors.serviceCategories ? <p className="mt-1.5 text-xs text-rose-700">{errors.serviceCategories}</p> : null}
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-[44px]"
+              onClick={() => {
+                setCurrentStep(1);
+                setErrors({});
+              }}
+            >
+              Back
+            </Button>
+            <Button type="submit" disabled={loading} className="min-h-[44px]">
+              {loading ? 'Creating account...' : 'Create provider account'}
+            </Button>
+          </div>
+        </form>
+      )}
+    </ProviderAuthTemplate>
   );
 }

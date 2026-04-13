@@ -7,23 +7,20 @@ import Link from 'next/link';
 import { api } from '@/lib/api/client';
 import { Provider, Service, User } from '@/types';
 import { Star, Phone, Mail, MapPin, ExternalLink, Calendar, Heart, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import {
-  ActionPriorityRow,
   BottomSafeAreaReserve,
   CompactEntityRow,
-  MobilePageIntro,
-  MobileToolWorkspace,
   ReadOnlySummaryBlock,
   ResultHeroCard,
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
@@ -200,26 +197,63 @@ export default function ProviderDetailPage() {
 
   if (loading || favoritesQuery.isLoading) {
     return (
-      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10" intro={<MobilePageIntro title="Provider Profile" subtitle="Loading provider..." />}>
-        <div className="flex items-center justify-center rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
-          <p className="ml-3 text-sm text-[hsl(var(--mobile-text-secondary))]">Loading provider...</p>
-        </div>
-      </MobileToolWorkspace>
+      <ProviderShellTemplate
+        title="Provider Profile"
+        subtitle="Loading provider details and service fit."
+        eyebrow="Provider Match"
+        primaryAction={{
+          title: 'Preparing provider profile details.',
+          description: 'Loading trusted booking context and provider data.',
+          primaryAction: (
+            <button
+              type="button"
+              disabled
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-slate-300 px-4 py-2 text-sm font-semibold text-slate-600"
+            >
+              Loading profile...
+            </button>
+          ),
+        }}
+        routeState={{
+          state: 'loading',
+          title: 'Loading provider profile',
+          description: 'Fetching provider details, reviews, and available services.',
+        }}
+        hideContentWhenState
+      >
+        <></>
+      </ProviderShellTemplate>
     );
   }
 
   if (error || !provider) {
     return (
-      <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10" intro={<MobilePageIntro title="Provider Profile" subtitle="Unable to load provider." />}>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
-          <p className="text-sm font-medium text-rose-700">Provider data could not be loaded.</p>
-          <p className="mt-1 text-xs text-rose-600">{error || 'Please try again.'}</p>
-          <Button onClick={() => router.back()} variant="outline" className="mt-3">
-            Go back
-          </Button>
-        </div>
-      </MobileToolWorkspace>
+      <ProviderShellTemplate
+        title="Provider Profile"
+        subtitle="Unable to load provider details right now."
+        eyebrow="Provider Match"
+        primaryAction={{
+          title: 'Provider details are currently unavailable.',
+          description: 'Return to search and try another provider or retry this profile.',
+          primaryAction: (
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+            >
+              Back to provider search
+            </button>
+          ),
+        }}
+        routeState={{
+          state: 'error',
+          title: 'Provider profile could not be loaded',
+          description: error || 'Please retry in a moment.',
+        }}
+        hideContentWhenState
+      >
+        <></>
+      </ProviderShellTemplate>
     );
   }
 
@@ -256,21 +290,66 @@ export default function ProviderDetailPage() {
     .map((cat) => formatEnumLabel(cat));
 
   return (
-    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
-      intro={
-        <div className="space-y-3">
+    <ProviderShellTemplate
+      title="Provider Profile"
+      subtitle="Review provider details, services, and fit before booking."
+      eyebrow="Provider Match"
+      primaryAction={{
+        title: isExecutionBlocked ? 'Booking blocked until required steps are complete.' : 'Ready to book this provider?',
+        description: isExecutionBlocked
+          ? blockedReason || 'Complete prerequisite guidance steps before booking.'
+          : 'Confirm service fit, then move directly into booking with property context preserved.',
+        primaryAction: isExecutionBlocked ? (
           <button
-            onClick={() => router.back()}
-            className="min-h-[44px] text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
+            type="button"
+            disabled
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600"
           >
-            ← Back
+            <Calendar className="h-4 w-4" />
+            Book now (blocked)
           </button>
-          <MobilePageIntro
-            title="Provider Profile"
-            subtitle="Review provider details, services, and fit before booking."
-          />
-        </div>
-      }
+        ) : (
+          <Link
+            href={bookingUrl}
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-primary/90"
+          >
+            <Calendar className="h-4 w-4" />
+            Book now
+          </Link>
+        ),
+        supportingAction: favoritesQuery.isError ? (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            Favorite unavailable
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleFavoriteToggle}
+            disabled={isToggling}
+            className={cn(
+              'inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-all disabled:opacity-70',
+              isFavorited
+                ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]'
+            )}
+          >
+            {isToggling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Heart className={cn('h-4 w-4', isFavorited && 'fill-current')} />
+            )}
+            {isFavorited ? 'Saved to My Pros' : 'Save to My Pros'}
+          </button>
+        ),
+        impactLabel: isExecutionBlocked ? 'Blocked by guidance prerequisites' : 'Booking-ready profile',
+        confidenceLabel: `Rating ${ratingValue} • ${provider.totalReviews} reviews`,
+      }}
+      trust={{
+        confidenceLabel: 'Provider fit confidence blends rating quality, completed jobs, service coverage, and context match.',
+        freshnessLabel: 'Profile trust data refreshes when ratings, services, and booking telemetry update.',
+        sourceLabel: 'Provider profile records, homeowner reviews, completed-job history, and booking guard context.',
+        rationale: 'Visible trust signals reduce uncertainty and help homeowners book confidently.',
+      }}
       summary={
         <ResultHeroCard
           eyebrow="Service Pro"
@@ -283,59 +362,16 @@ export default function ProviderDetailPage() {
             `Serves ${provider.serviceRadius} miles`,
             ...categoryHighlights,
           ]}
-          actions={
-            <ActionPriorityRow
-              primaryAction={
-                isExecutionBlocked ? (
-                  <button
-                    type="button"
-                    disabled
-                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600"
-                  >
-                    <Calendar className="h-4 w-4" />
-                    Book now (blocked)
-                  </button>
-                ) : (
-                  <Link
-                    href={bookingUrl}
-                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white"
-                  >
-                    <Calendar className="h-4 w-4" />
-                    Book now
-                  </Link>
-                )
-              }
-              secondaryActions={
-                favoritesQuery.isError ? (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                    Favorite unavailable
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleFavoriteToggle}
-                    disabled={isToggling}
-                    className={cn(
-                      'inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-all disabled:opacity-70',
-                      isFavorited
-                        ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                        : 'border-[hsl(var(--mobile-border-subtle))] bg-white text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]'
-                    )}
-                  >
-                    {isToggling ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Heart className={cn('h-4 w-4', isFavorited && 'fill-current')} />
-                    )}
-                    {isFavorited ? 'Saved to My Pros' : 'Save to My Pros'}
-                  </button>
-                )
-              }
-            />
-          }
         />
       }
     >
+      <button
+        onClick={() => router.back()}
+        className="min-h-[44px] text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
+      >
+        ← Back
+      </button>
+
       {isExecutionBlocked ? (
         <GuidanceWarningBanner
           title="Booking is blocked until prerequisite steps are complete"
@@ -457,6 +493,6 @@ export default function ProviderDetailPage() {
         </div>
       </ScenarioInputCard>
       <BottomSafeAreaReserve size="chatAware" />
-    </MobileToolWorkspace>
+    </ProviderShellTemplate>
   );
 }

@@ -9,14 +9,10 @@ import {
   BottomSafeAreaReserve,
   EmptyStateCard,
   MobileCard,
-  MobileFilterSurface,
-  MobileKpiStrip,
-  MobileKpiTile,
-  MobilePageIntro,
-  MobileToolWorkspace,
   ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ProviderBookingQueueTemplate from '@/components/providers/ProviderBookingQueueTemplate';
 import { useToast } from '@/components/ui/use-toast';
 
 type BookingStatus = 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
@@ -149,37 +145,46 @@ export default function ProviderBookingsPage() {
   };
 
   return (
-    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
-      intro={<MobilePageIntro title="Bookings" subtitle="Manage incoming requests and scheduled jobs." />}
-      summary={
-        <MobileKpiStrip className="sm:grid-cols-3">
-          <MobileKpiTile label="Pending" value={counts.pending} hint="Needs response" tone={counts.pending > 0 ? 'warning' : 'neutral'} />
-          <MobileKpiTile label="Confirmed" value={counts.confirmed} hint="Upcoming jobs" tone={counts.confirmed > 0 ? 'positive' : 'neutral'} />
-          <MobileKpiTile label="History" value={counts.completed} hint="Closed jobs" />
-        </MobileKpiStrip>
-      }
-      filters={
-        <MobileFilterSurface className="space-y-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">Queue</p>
-          <div className="inline-flex w-full gap-1 rounded-xl bg-slate-100 p-1">
-            {TAB_META.map((tab) => {
-              const active = tab.key === activeTab;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`min-h-[36px] flex-1 rounded-lg px-2.5 text-xs font-semibold transition-colors ${
-                    active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </MobileFilterSurface>
-      }
+    <ProviderBookingQueueTemplate
+      activeTab={activeTab}
+      tabs={TAB_META.map((tab) => ({ key: tab.key, label: tab.label }))}
+      onTabChange={(nextTab) => setActiveTab(nextTab as (typeof TAB_META)[number]['key'])}
+      pendingCount={counts.pending}
+      confirmedCount={counts.confirmed}
+      historyCount={counts.completed}
+      primaryAction={{
+        eyebrow: 'Next Best Action',
+        title: counts.pending > 0 ? `Respond to ${counts.pending} pending request${counts.pending > 1 ? 's' : ''}` : 'Keep your queue response-ready',
+        description:
+          counts.pending > 0
+            ? 'Fast acceptance or decline decisions improve homeowner trust and increase conversion.'
+            : 'No pending requests right now. Confirm upcoming jobs and keep history accurate for trust.',
+        primaryAction: (
+          <button
+            type="button"
+            onClick={() => setActiveTab(counts.pending > 0 ? 'pending' : 'confirmed')}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+          >
+            {counts.pending > 0 ? 'Open pending queue' : 'Review confirmed jobs'}
+          </button>
+        ),
+        supportingAction: (
+          <Link
+            href="/providers/calendar"
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Update availability
+          </Link>
+        ),
+        impactLabel: counts.pending > 0 ? 'High conversion impact' : 'Queue healthy',
+        confidenceLabel: 'Confidence: based on live queue status and response-time patterns',
+      }}
+      trust={{
+        confidenceLabel: 'Queue priority uses booking urgency, homeowner timing windows, and your current availability.',
+        freshnessLabel: 'Bookings refresh after every homeowner request, acceptance, cancellation, or completion event.',
+        sourceLabel: 'Booking requests, provider availability settings, and service scheduling records.',
+        rationale: 'A transparent queue helps providers move quickly while giving homeowners clear expectations.',
+      }}
     >
       {filteredBookings.length === 0 ? (
         <EmptyStateCard
@@ -275,6 +280,6 @@ export default function ProviderBookingsPage() {
       )}
 
       <BottomSafeAreaReserve size="chatAware" />
-    </MobileToolWorkspace>
+    </ProviderBookingQueueTemplate>
   );
 }

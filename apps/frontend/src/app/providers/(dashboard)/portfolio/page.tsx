@@ -8,10 +8,9 @@ import {
   MobileCard,
   MobileKpiStrip,
   MobileKpiTile,
-  MobilePageIntro,
-  MobileToolWorkspace,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
 
 interface PortfolioItem {
   id: string;
@@ -43,18 +42,33 @@ export default function ProviderPortfolioPage() {
   ]);
 
   return (
-    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
-      intro={
-        <MobilePageIntro
-          title="Portfolio"
-          subtitle="Showcase recent work so homeowners can trust your quality before booking."
-          action={
-            <button className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90">
-              + Add photos
-            </button>
-          }
-        />
+    <ProviderShellTemplate
+      title="Portfolio"
+      subtitle="Showcase recent work so homeowners can trust quality before booking."
+      eyebrow="Provider Portfolio"
+      introAction={
+        <button className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90">
+          + Add photos
+        </button>
       }
+      primaryAction={{
+        title: portfolioItems.length > 0 ? 'Keep your best projects visible and current.' : 'Publish your first portfolio project.',
+        description:
+          'Recent visuals and concise descriptions make provider quality easier to evaluate and improve booking confidence.',
+        primaryAction: (
+          <button className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90">
+            {portfolioItems.length > 0 ? 'Add portfolio photos' : 'Upload first project'}
+          </button>
+        ),
+        impactLabel: portfolioItems.length > 0 ? 'Trust multiplier' : 'Critical social proof',
+        confidenceLabel: `${portfolioItems.length} project${portfolioItems.length === 1 ? '' : 's'} published`,
+      }}
+      trust={{
+        confidenceLabel: 'Portfolio trust increases with recent projects, clear captions, and category coverage.',
+        freshnessLabel: portfolioItems.length > 0 ? 'Portfolio is active this quarter' : 'No recent portfolio activity',
+        sourceLabel: 'Uploaded provider project media and service category tagging.',
+        rationale: 'Visual proof helps homeowners quickly validate workmanship and reduce booking uncertainty.',
+      }}
       summary={
         <MobileKpiStrip className="sm:grid-cols-3">
           <MobileKpiTile label="Photos" value={portfolioItems.length} hint="Visible projects" />
@@ -104,6 +118,6 @@ export default function ProviderPortfolioPage() {
       </MobileCard>
 
       <BottomSafeAreaReserve size="chatAware" />
-    </MobileToolWorkspace>
+    </ProviderShellTemplate>
   );
 }

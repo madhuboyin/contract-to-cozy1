@@ -8,13 +8,12 @@ import { cn } from '@/lib/utils';
 import {
   BottomSafeAreaReserve,
   MobileCard,
-  MobilePageIntro,
   MobileSection,
   MobileSectionHeader,
-  MobileToolWorkspace,
   ResultHeroCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
 
 type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 
@@ -24,6 +23,7 @@ const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function ProviderCalendarPage() {
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [workingHours, setWorkingHours] = useState<Record<DayKey, { enabled: boolean; start: string; end: string }>>({
     monday: { enabled: true, start: '09:00', end: '17:00' },
     tuesday: { enabled: true, start: '09:00', end: '17:00' },
@@ -55,10 +55,36 @@ export default function ProviderCalendarPage() {
   }, [viewMonth]);
 
   const enabledDays = DAY_KEYS.filter((day) => workingHours[day].enabled).length;
+  const handleSaveHours = () => {
+    setLastSavedAt(new Date().toISOString());
+  };
 
   return (
-    <MobileToolWorkspace className="lg:max-w-7xl lg:px-8 lg:pb-10"
-      intro={<MobilePageIntro title="Calendar & Availability" subtitle="Keep your schedule clear and bookable on mobile." />}
+    <ProviderShellTemplate
+      title="Calendar & Availability"
+      subtitle="Keep your schedule clear and bookable with visible availability signals."
+      eyebrow="Provider Availability"
+      primaryAction={{
+        title: 'Keep your next 7 days bookable.',
+        description: 'Save working hours early to prevent missed requests and reduce homeowner uncertainty.',
+        primaryAction: (
+          <button
+            type="button"
+            onClick={handleSaveHours}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+          >
+            Save working hours
+          </button>
+        ),
+        impactLabel: enabledDays >= 5 ? 'Healthy availability' : 'Availability risk',
+        confidenceLabel: lastSavedAt ? `Last saved ${format(new Date(lastSavedAt), 'MMM d, h:mm a')}` : 'Not saved this session',
+      }}
+      trust={{
+        confidenceLabel: 'Availability confidence is based on active working days and upcoming booking overlap.',
+        freshnessLabel: lastSavedAt ? `Updated ${format(new Date(lastSavedAt), 'MMM d, h:mm a')}` : 'Update after saving working hours',
+        sourceLabel: 'Provider working-hour settings and confirmed booking schedule records.',
+        rationale: 'Clear availability helps homeowners pick realistic time slots and reduces cancellations.',
+      }}
       summary={
         <ResultHeroCard
           eyebrow="Availability"
@@ -229,6 +255,7 @@ export default function ProviderCalendarPage() {
 
           <button
             type="button"
+            onClick={handleSaveHours}
             className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90"
           >
             Save working hours
@@ -257,6 +284,6 @@ export default function ProviderCalendarPage() {
       </MobileSection>
 
       <BottomSafeAreaReserve size="chatAware" />
-    </MobileToolWorkspace>
+    </ProviderShellTemplate>
   );
 }

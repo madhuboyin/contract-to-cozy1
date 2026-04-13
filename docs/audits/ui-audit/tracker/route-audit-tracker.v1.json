@@ -1581,19 +1581,19 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
+        "overall": 7.1,
+        "visual": 7.1,
+        "ux": 7.2,
+        "trust": 7.1,
+        "mobile": 7.2,
+        "buyerReadiness": 7.1
       },
       "riskFlags": {
         "trustHardFail": false,
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "Medium",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -1603,9 +1603,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Shell Template v1",
+        "targetTemplateFamily": "Provider Shell Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -1615,15 +1615,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -1640,12 +1640,12 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 6.9,
-        "screenshotsUpdated": true,
+        "afterScore": 7.2,
+        "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
       }
@@ -1663,19 +1663,19 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
+        "overall": 7.1,
+        "visual": 7.1,
+        "ux": 7.2,
+        "trust": 7.1,
+        "mobile": 7.2,
+        "buyerReadiness": 7.1
       },
       "riskFlags": {
         "trustHardFail": false,
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "Medium",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -1685,9 +1685,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Shell Template v1",
+        "targetTemplateFamily": "Provider Shell Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -1697,15 +1697,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -1722,12 +1722,12 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 6.9,
-        "screenshotsUpdated": true,
+        "afterScore": 7.2,
+        "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
       }
@@ -1745,11 +1745,11 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
+        "overall": 7.1,
+        "visual": 7,
+        "ux": 7.2,
+        "trust": 7,
+        "mobile": 7.1,
         "buyerReadiness": 7
       },
       "riskFlags": {
@@ -1767,9 +1767,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Shell Template v1",
+        "targetTemplateFamily": "Provider Shell Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -1779,15 +1779,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -1804,12 +1804,12 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 6.9,
-        "screenshotsUpdated": true,
+        "afterScore": 7.1,
+        "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
       }
@@ -2319,19 +2319,19 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
+        "overall": 7.2,
+        "visual": 7.1,
+        "ux": 7.3,
+        "trust": 7.1,
+        "mobile": 7.2,
+        "buyerReadiness": 7.1
       },
       "riskFlags": {
         "trustHardFail": false,
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "Medium",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -2341,9 +2341,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Booking Queue Template v1",
+        "targetTemplateFamily": "Provider Booking Queue Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2353,179 +2353,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
-        ],
-        "trustFixes": [
-          "Add confidence/source/freshness framing where recommendations or derived signals are shown."
-        ],
-        "mobileFixes": [
-          "Reduce first-viewport density and enforce one clear primary action path."
-        ]
-      },
-      "execution": {
-        "status": "In Build",
-        "dependencies": [
-          "Track 3 template-family rollout"
-        ],
-        "blockers": [],
-        "dateAudited": "2026-04-13",
-        "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
-      },
-      "validation": {
-        "beforeScore": 6.4,
-        "afterScore": null,
-        "screenshotsUpdated": false,
-        "qaPassed": false,
-        "regressionSafe": false
-      }
-    },
-    {
-      "id": "RTE-P2-089",
-      "route": "/providers/calendar",
-      "routeName": "Calendar",
-      "routeFamily": "Provider",
-      "surfaceType": "Provider",
-      "deviceScope": "Both",
-      "owners": {
-        "productOwner": "PO - Provider Marketplace",
-        "designOwner": "Design Lead - Operations UX",
-        "engineeringOwner": "EM - Marketplace Surfaces"
-      },
-      "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
-      },
-      "riskFlags": {
-        "trustHardFail": false,
-        "mobileHardFail": false,
-        "buyerHardFail": false,
-        "conversionRisk": "Medium",
-        "valuationRisk": "High"
-      },
-      "prioritization": {
-        "priority": "P2",
-        "impact": "High",
-        "effort": "M",
-        "roiScore": 74,
-        "sprintTarget": "Sprint 9"
-      },
-      "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
-        "sharedFixCandidate": true,
-        "repeatedIssueTags": [
-          "BUYER_PERCEPTION_RISK",
-          "TRUST_GAP",
-          "MOBILE_DENSE"
-        ]
-      },
-      "findings": {
-        "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
-        ],
-        "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
-        "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
-        ],
-        "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
-        ],
-        "trustFixes": [
-          "Add confidence/source/freshness framing where recommendations or derived signals are shown."
-        ],
-        "mobileFixes": [
-          "Reduce first-viewport density and enforce one clear primary action path."
-        ]
-      },
-      "execution": {
-        "status": "In Build",
-        "dependencies": [
-          "Track 3 template-family rollout"
-        ],
-        "blockers": [],
-        "dateAudited": "2026-04-13",
-        "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
-      },
-      "validation": {
-        "beforeScore": 6.4,
-        "afterScore": null,
-        "screenshotsUpdated": false,
-        "qaPassed": false,
-        "regressionSafe": false
-      }
-    },
-    {
-      "id": "RTE-P2-090",
-      "route": "/providers/dashboard",
-      "routeName": "Dashboard",
-      "routeFamily": "Provider",
-      "surfaceType": "Provider",
-      "deviceScope": "Both",
-      "owners": {
-        "productOwner": "PO - Provider Marketplace",
-        "designOwner": "Design Lead - Operations UX",
-        "engineeringOwner": "EM - Marketplace Surfaces"
-      },
-      "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
-      },
-      "riskFlags": {
-        "trustHardFail": false,
-        "mobileHardFail": false,
-        "buyerHardFail": false,
-        "conversionRisk": "Medium",
-        "valuationRisk": "High"
-      },
-      "prioritization": {
-        "priority": "P2",
-        "impact": "High",
-        "effort": "M",
-        "roiScore": 74,
-        "sprintTarget": "Sprint 9"
-      },
-      "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
-        "sharedFixCandidate": true,
-        "repeatedIssueTags": [
-          "BUYER_PERCEPTION_RISK",
-          "TRUST_GAP",
-          "MOBILE_DENSE"
-        ]
-      },
-      "findings": {
-        "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
-        ],
-        "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
-        "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
-        ],
-        "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -2542,12 +2378,176 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 6.9,
-        "screenshotsUpdated": true,
+        "afterScore": 7.2,
+        "screenshotsUpdated": false,
+        "qaPassed": false,
+        "regressionSafe": true
+      }
+    },
+    {
+      "id": "RTE-P2-089",
+      "route": "/providers/calendar",
+      "routeName": "Calendar",
+      "routeFamily": "Provider",
+      "surfaceType": "Provider",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Provider Marketplace",
+        "designOwner": "Design Lead - Operations UX",
+        "engineeringOwner": "EM - Marketplace Surfaces"
+      },
+      "scores": {
+        "overall": 7.1,
+        "visual": 7.1,
+        "ux": 7.1,
+        "trust": 7.1,
+        "mobile": 7.2,
+        "buyerReadiness": 7.1
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P2",
+        "impact": "High",
+        "effort": "M",
+        "roiScore": 74,
+        "sprintTarget": "Sprint 9"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Provider Shell Template v1",
+        "targetTemplateFamily": "Provider Shell Template v1",
+        "templateComplianceScore": 7.4,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": [
+          "BUYER_PERCEPTION_RISK",
+          "TRUST_GAP",
+          "MOBILE_DENSE"
+        ]
+      },
+      "findings": {
+        "topProblems": [
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
+        ],
+        "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
+        "recommendedQuickWins": [
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
+        ],
+        "recommendedStructuralFixes": [
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
+        ],
+        "trustFixes": [
+          "Add confidence/source/freshness framing where recommendations or derived signals are shown."
+        ],
+        "mobileFixes": [
+          "Reduce first-viewport density and enforce one clear primary action path."
+        ]
+      },
+      "execution": {
+        "status": "In QA",
+        "dependencies": [
+          "Track 3 template-family rollout"
+        ],
+        "blockers": [],
+        "dateAudited": "2026-04-13",
+        "lastUpdated": "2026-04-13",
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+      },
+      "validation": {
+        "beforeScore": 6.4,
+        "afterScore": 7.1,
+        "screenshotsUpdated": false,
+        "qaPassed": false,
+        "regressionSafe": true
+      }
+    },
+    {
+      "id": "RTE-P2-090",
+      "route": "/providers/dashboard",
+      "routeName": "Dashboard",
+      "routeFamily": "Provider",
+      "surfaceType": "Provider",
+      "deviceScope": "Both",
+      "owners": {
+        "productOwner": "PO - Provider Marketplace",
+        "designOwner": "Design Lead - Operations UX",
+        "engineeringOwner": "EM - Marketplace Surfaces"
+      },
+      "scores": {
+        "overall": 7.2,
+        "visual": 7.2,
+        "ux": 7.3,
+        "trust": 7.1,
+        "mobile": 7.2,
+        "buyerReadiness": 7.2
+      },
+      "riskFlags": {
+        "trustHardFail": false,
+        "mobileHardFail": false,
+        "buyerHardFail": false,
+        "conversionRisk": "Medium",
+        "valuationRisk": "Medium"
+      },
+      "prioritization": {
+        "priority": "P2",
+        "impact": "High",
+        "effort": "M",
+        "roiScore": 74,
+        "sprintTarget": "Sprint 9"
+      },
+      "systemIntelligence": {
+        "currentTemplateFamily": "Provider Shell Template v1",
+        "targetTemplateFamily": "Provider Shell Template v1",
+        "templateComplianceScore": 7.4,
+        "sharedFixCandidate": true,
+        "repeatedIssueTags": [
+          "BUYER_PERCEPTION_RISK",
+          "TRUST_GAP",
+          "MOBILE_DENSE"
+        ]
+      },
+      "findings": {
+        "topProblems": [
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
+        ],
+        "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
+        "recommendedQuickWins": [
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
+        ],
+        "recommendedStructuralFixes": [
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
+        ],
+        "trustFixes": [
+          "Add confidence/source/freshness framing where recommendations or derived signals are shown."
+        ],
+        "mobileFixes": [
+          "Reduce first-viewport density and enforce one clear primary action path."
+        ]
+      },
+      "execution": {
+        "status": "In QA",
+        "dependencies": [
+          "Track 3 template-family rollout"
+        ],
+        "blockers": [],
+        "dateAudited": "2026-04-13",
+        "lastUpdated": "2026-04-13",
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+      },
+      "validation": {
+        "beforeScore": 6.4,
+        "afterScore": 7.3,
+        "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
       }
@@ -2565,12 +2565,12 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
+        "overall": 7.2,
+        "visual": 7.3,
+        "ux": 7.2,
+        "trust": 7.2,
+        "mobile": 7.1,
+        "buyerReadiness": 7.2
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -2587,9 +2587,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Auth Template v1",
+        "targetTemplateFamily": "Provider Auth Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2599,15 +2599,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -2624,12 +2624,12 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 6.9,
-        "screenshotsUpdated": true,
+        "afterScore": 7.2,
+        "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
       }
@@ -2647,12 +2647,12 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
+        "overall": 7.2,
+        "visual": 7.3,
+        "ux": 7.2,
+        "trust": 7.2,
+        "mobile": 7.1,
+        "buyerReadiness": 7.2
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -2669,9 +2669,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Auth Template v1",
+        "targetTemplateFamily": "Provider Auth Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2681,15 +2681,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -2706,12 +2706,12 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 6.9,
-        "screenshotsUpdated": true,
+        "afterScore": 7.2,
+        "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
       }
@@ -2729,19 +2729,19 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
+        "overall": 7.1,
+        "visual": 7.1,
+        "ux": 7.1,
+        "trust": 7,
+        "mobile": 7.1,
+        "buyerReadiness": 7.1
       },
       "riskFlags": {
         "trustHardFail": false,
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "Medium",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -2751,9 +2751,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Shell Template v1",
+        "targetTemplateFamily": "Provider Shell Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2763,15 +2763,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -2781,21 +2781,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": null,
+        "afterScore": 7.1,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -2811,19 +2811,19 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
+        "overall": 7.1,
+        "visual": 7.1,
+        "ux": 7.1,
+        "trust": 7.1,
+        "mobile": 7.1,
+        "buyerReadiness": 7.1
       },
       "riskFlags": {
         "trustHardFail": false,
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "Medium",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -2833,9 +2833,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Shell Template v1",
+        "targetTemplateFamily": "Provider Shell Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2845,15 +2845,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -2863,21 +2863,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": null,
+        "afterScore": 7.1,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -2893,19 +2893,19 @@
         "engineeringOwner": "EM - Marketplace Surfaces"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 6.9,
-        "ux": 7,
-        "trust": 6.9,
-        "mobile": 6.9,
-        "buyerReadiness": 7
+        "overall": 7.1,
+        "visual": 7.1,
+        "ux": 7.2,
+        "trust": 7.1,
+        "mobile": 7.2,
+        "buyerReadiness": 7.1
       },
       "riskFlags": {
         "trustHardFail": false,
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "Medium",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -2915,9 +2915,9 @@
         "sprintTarget": "Sprint 9"
       },
       "systemIntelligence": {
-        "currentTemplateFamily": "Provider Shell v1",
-        "targetTemplateFamily": "Provider Shell v2",
-        "templateComplianceScore": 6.8,
+        "currentTemplateFamily": "Provider Shell Template v1",
+        "targetTemplateFamily": "Provider Shell Template v1",
+        "templateComplianceScore": 7.4,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2927,15 +2927,15 @@
       },
       "findings": {
         "topProblems": [
-          "Secondary-route consistency still trails core P0/P1 experiences.",
-          "Template adoption and trust-state quality are not yet fully normalized."
+          "Legacy template drift reduced; remaining risk is final polish and state parity QA.",
+          "Trust/state pattern is implemented but needs screenshot-based regression confirmation across breakpoints."
         ],
         "whyItMatters": "Inconsistent secondary and admin/provider routes lower confidence in product maturity during diligence and day-to-day usage.",
         "recommendedQuickWins": [
-          "Adopt route-family template wrappers and shared loading/error/empty states."
+          "Complete QA screenshot baseline update for provider-family routes and validate sticky/fixed-layer behavior."
         ],
         "recommendedStructuralFixes": [
-          "Complete route-family migration and remove legacy ad-hoc primitives from this surface."
+          "Finish Provider Shell v1 adoption on any residual provider-adjacent subroutes not yet migrated."
         ],
         "trustFixes": [
           "Add confidence/source/freshness framing where recommendations or derived signals are shown."
@@ -2945,21 +2945,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": null,
+        "afterScore": 7.2,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
