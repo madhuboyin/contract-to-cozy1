@@ -70,7 +70,6 @@ jobs:
           extra_args: >
             --only-verified
             --config .trufflehog.yml
-            --no-update
 
   audit-frontend:
     name: Audit frontend
