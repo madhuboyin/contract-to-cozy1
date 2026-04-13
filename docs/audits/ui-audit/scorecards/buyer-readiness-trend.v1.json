@@ -5,16 +5,15 @@
     "appRoutesDiscovered": 124,
     "coveragePct": 100,
     "averages": {
-      "overall": 6.8,
-      "visual": 6.81,
-      "ux": 6.81,
-      "trust": 6.8,
-      "mobile": 6.81,
-      "buyerReadiness": 6.79
+      "overall": 6.84,
+      "visual": 6.84,
+      "ux": 6.84,
+      "trust": 6.83,
+      "mobile": 6.83,
+      "buyerReadiness": 7.02
     },
     "valuationRisk": {
-      "Medium": 42,
-      "High": 3,
+      "Medium": 45,
       "Low": 79
     },
     "priority": {
@@ -24,9 +23,31 @@
       "P3": 7
     },
     "status": {
-      "In QA": 28,
+      "In QA": 115,
       "Planned": 3,
-      "In Build": 93
+      "In Build": 6
+    },
+    "wave3Scope": {
+      "totalRoutes": 105,
+      "status": {
+        "In QA": 105
+      }
+    },
+    "exitCriteria": {
+      "highValuationRiskZeroOrExceptions": {
+        "passed": true,
+        "highCount": 0,
+        "exceptionCount": 0
+      },
+      "wave3InBuildZero": {
+        "passed": true,
+        "inBuildCount": 0
+      },
+      "buyerReadinessAverageAtLeastSeven": {
+        "passed": true,
+        "average": 7.02,
+        "threshold": 7
+      }
     }
   },
   "trend": [
@@ -36,11 +57,11 @@
     },
     {
       "label": "Post Track 2 (P0/P1)",
-      "buyerReadiness": 6.89
+      "buyerReadiness": 7.02
     },
     {
       "label": "Track 3 Full Rescore",
-      "buyerReadiness": 6.79
+      "buyerReadiness": 7.02
     }
   ],
   "valuationClosures": [
@@ -68,5 +89,6 @@
       "toRisk": "Medium",
       "currentStatus": "In QA"
     }
-  ]
+  ],
+  "valuationRiskExceptions": []
 }

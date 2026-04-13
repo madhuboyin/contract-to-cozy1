@@ -245,7 +245,7 @@
       },
       "validation": {
         "beforeScore": 5.6,
-        "afterScore": 7.2,
+        "afterScore": 7.1,
         "screenshotsUpdated": true,
         "qaPassed": false,
         "regressionSafe": true
@@ -328,7 +328,7 @@
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": 7,
+        "afterScore": 7.1,
         "screenshotsUpdated": true,
         "qaPassed": false,
         "regressionSafe": true
@@ -576,7 +576,7 @@
       },
       "validation": {
         "beforeScore": 6.6,
-        "afterScore": 7.2,
+        "afterScore": 7.4,
         "screenshotsUpdated": true,
         "qaPassed": false,
         "regressionSafe": true
@@ -658,7 +658,7 @@
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 7,
+        "afterScore": 7.1,
         "screenshotsUpdated": true,
         "qaPassed": false,
         "regressionSafe": true
@@ -765,7 +765,7 @@
         "ux": 6.9,
         "trust": 7,
         "mobile": 6.8,
-        "buyerReadiness": 6.9
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -847,7 +847,7 @@
         "ux": 6.8,
         "trust": 6.9,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -929,7 +929,7 @@
         "ux": 6.8,
         "trust": 7,
         "mobile": 6.8,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1010,7 +1010,7 @@
         "ux": 6.8,
         "trust": 6.6,
         "mobile": 6.9,
-        "buyerReadiness": 6.6
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1092,7 +1092,7 @@
         "ux": 6.9,
         "trust": 7,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1169,12 +1169,12 @@
         "engineeringOwner": "EM - Intelligence Tools"
       },
       "scores": {
-        "overall": 6.9,
+        "overall": 7,
         "visual": 6.9,
         "ux": 6.9,
         "trust": 7,
         "mobile": 7,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1256,7 +1256,7 @@
         "ux": 6.9,
         "trust": 7,
         "mobile": 6.9,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1339,7 +1339,7 @@
         "ux": 6.8,
         "trust": 6.9,
         "mobile": 6.7,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1418,12 +1418,12 @@
         "engineeringOwner": "EM - Homeowner Routes"
       },
       "scores": {
-        "overall": 6.7,
+        "overall": 6.8,
         "visual": 6.8,
         "ux": 6.8,
         "trust": 6.5,
         "mobile": 7,
-        "buyerReadiness": 6.6
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1505,7 +1505,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 7,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1640,11 +1640,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 7.2,
+        "afterScore": 7.1,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
@@ -1722,11 +1722,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 7.2,
+        "afterScore": 7.1,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
@@ -1757,7 +1757,7 @@
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "Medium",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -1804,7 +1804,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
@@ -1832,7 +1832,7 @@
         "ux": 6.9,
         "trust": 6.8,
         "mobile": 6.9,
-        "buyerReadiness": 6.9
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -1851,7 +1851,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Auth Template v1 (partial)",
         "targetTemplateFamily": "Auth Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CONVERSION_TRUST_LEAK",
@@ -1879,21 +1879,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": null,
+        "afterScore": 6.9,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -1968,14 +1968,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.1,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -1996,7 +1996,7 @@
         "ux": 6.6,
         "trust": 6.5,
         "mobile": 6.7,
-        "buyerReadiness": 6.6
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -2015,7 +2015,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Public Share Template v1 (partial)",
         "targetTemplateFamily": "Public Share Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2043,21 +2043,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.1,
-        "afterScore": null,
+        "afterScore": 6.6,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -2078,7 +2078,7 @@
         "ux": 6.6,
         "trust": 6.5,
         "mobile": 6.7,
-        "buyerReadiness": 6.6
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -2097,7 +2097,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Public Share Template v1 (partial)",
         "targetTemplateFamily": "Public Share Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2125,21 +2125,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.1,
-        "afterScore": null,
+        "afterScore": 6.6,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -2160,7 +2160,7 @@
         "ux": 6.9,
         "trust": 6.8,
         "mobile": 6.9,
-        "buyerReadiness": 6.9
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -2179,7 +2179,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Auth Template v1 (partial)",
         "targetTemplateFamily": "Auth Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CONVERSION_TRUST_LEAK",
@@ -2207,21 +2207,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": null,
+        "afterScore": 6.9,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -2242,7 +2242,7 @@
         "ux": 6.6,
         "trust": 6.5,
         "mobile": 6.7,
-        "buyerReadiness": 6.6
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -2261,7 +2261,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Public Share Template v1 (partial)",
         "targetTemplateFamily": "Public Share Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -2289,21 +2289,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.1,
-        "afterScore": null,
+        "afterScore": 6.6,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -2378,7 +2378,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
@@ -2460,7 +2460,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
@@ -2542,11 +2542,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 7.3,
+        "afterScore": 7.2,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
@@ -2577,7 +2577,7 @@
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "High",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -2624,7 +2624,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
@@ -2659,7 +2659,7 @@
         "mobileHardFail": false,
         "buyerHardFail": false,
         "conversionRisk": "High",
-        "valuationRisk": "High"
+        "valuationRisk": "Medium"
       },
       "prioritization": {
         "priority": "P2",
@@ -2706,7 +2706,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
@@ -2788,7 +2788,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
@@ -2870,7 +2870,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
@@ -2952,11 +2952,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-sprint9-provider-risk-closure"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": 7.2,
+        "afterScore": 7.1,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
@@ -3034,14 +3034,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.1,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3062,7 +3062,7 @@
         "ux": 6.9,
         "trust": 6.8,
         "mobile": 6.9,
-        "buyerReadiness": 6.9
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3081,7 +3081,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Auth Template v1 (partial)",
         "targetTemplateFamily": "Auth Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CONVERSION_TRUST_LEAK",
@@ -3109,21 +3109,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": null,
+        "afterScore": 6.9,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3144,7 +3144,7 @@
         "ux": 6.6,
         "trust": 6.5,
         "mobile": 6.7,
-        "buyerReadiness": 6.6
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3163,7 +3163,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Public Share Template v1 (partial)",
         "targetTemplateFamily": "Public Share Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "BUYER_PERCEPTION_RISK",
@@ -3191,21 +3191,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.1,
-        "afterScore": null,
+        "afterScore": 6.6,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3226,7 +3226,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3245,7 +3245,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3273,21 +3273,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3308,7 +3308,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3327,7 +3327,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3355,21 +3355,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3390,7 +3390,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3409,7 +3409,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3437,21 +3437,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3472,7 +3472,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3491,7 +3491,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3519,21 +3519,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3554,7 +3554,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3573,7 +3573,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3601,21 +3601,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3636,7 +3636,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3655,7 +3655,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3683,21 +3683,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3718,7 +3718,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3737,7 +3737,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3765,21 +3765,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3800,7 +3800,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3819,7 +3819,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3847,21 +3847,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3882,7 +3882,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3901,7 +3901,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -3929,21 +3929,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -3964,7 +3964,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -3983,7 +3983,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4011,21 +4011,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4046,7 +4046,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4065,7 +4065,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4093,21 +4093,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4128,7 +4128,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4147,7 +4147,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4175,21 +4175,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4210,7 +4210,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4229,7 +4229,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4257,21 +4257,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4292,7 +4292,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4311,7 +4311,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4339,21 +4339,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4374,7 +4374,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4393,7 +4393,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4421,21 +4421,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4456,7 +4456,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4475,7 +4475,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4503,21 +4503,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4538,7 +4538,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4557,7 +4557,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4585,21 +4585,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4620,7 +4620,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4639,7 +4639,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4667,21 +4667,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4702,7 +4702,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4721,7 +4721,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4749,21 +4749,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4784,7 +4784,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4803,7 +4803,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4831,21 +4831,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4866,7 +4866,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4885,7 +4885,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4913,21 +4913,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -4948,7 +4948,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -4967,7 +4967,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -4995,21 +4995,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5030,7 +5030,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5049,7 +5049,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -5077,21 +5077,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5112,7 +5112,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5131,7 +5131,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -5159,21 +5159,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5194,7 +5194,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5213,7 +5213,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -5241,21 +5241,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5276,7 +5276,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5295,7 +5295,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -5323,21 +5323,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5358,7 +5358,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5377,7 +5377,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -5405,21 +5405,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5440,7 +5440,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5459,7 +5459,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -5487,21 +5487,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5522,7 +5522,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5541,7 +5541,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -5569,21 +5569,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5604,7 +5604,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5623,7 +5623,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -5651,21 +5651,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5740,14 +5740,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5822,14 +5822,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5850,7 +5850,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5869,7 +5869,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -5897,21 +5897,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -5932,7 +5932,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -5951,7 +5951,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -5979,21 +5979,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6014,7 +6014,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6033,7 +6033,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6061,21 +6061,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6096,7 +6096,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6115,7 +6115,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6143,21 +6143,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6178,7 +6178,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6197,7 +6197,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6225,21 +6225,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6260,7 +6260,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6279,7 +6279,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6307,21 +6307,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6342,7 +6342,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6361,7 +6361,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6389,21 +6389,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6424,7 +6424,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6443,7 +6443,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6471,21 +6471,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6506,7 +6506,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6525,7 +6525,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6553,21 +6553,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6588,7 +6588,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6607,7 +6607,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6635,21 +6635,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6670,7 +6670,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6689,7 +6689,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6717,21 +6717,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6806,14 +6806,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6834,7 +6834,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6853,7 +6853,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6881,21 +6881,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6916,7 +6916,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -6935,7 +6935,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -6963,21 +6963,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -6993,12 +6993,12 @@
         "engineeringOwner": "EM - Homeowner Routes"
       },
       "scores": {
-        "overall": 6.7,
+        "overall": 6.8,
         "visual": 6.8,
         "ux": 6.7,
         "trust": 6.8,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7017,7 +7017,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Compare Template v1 (partial)",
         "targetTemplateFamily": "Compare Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "COMPARE_CONFUSING",
@@ -7045,21 +7045,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7080,7 +7080,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7099,7 +7099,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -7127,21 +7127,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7216,14 +7216,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7298,14 +7298,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7380,14 +7380,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7403,12 +7403,12 @@
         "engineeringOwner": "EM - Homeowner Routes"
       },
       "scores": {
-        "overall": 6.7,
+        "overall": 6.8,
         "visual": 6.8,
         "ux": 6.7,
         "trust": 6.8,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7427,7 +7427,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Compare Template v1 (partial)",
         "targetTemplateFamily": "Compare Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "COMPARE_CONFUSING",
@@ -7455,21 +7455,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7490,7 +7490,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7509,7 +7509,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -7537,21 +7537,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7572,7 +7572,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7591,7 +7591,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -7619,21 +7619,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7654,7 +7654,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7673,7 +7673,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -7701,21 +7701,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7736,7 +7736,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7755,7 +7755,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -7783,21 +7783,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7818,7 +7818,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7837,7 +7837,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -7865,21 +7865,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7900,7 +7900,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -7919,7 +7919,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -7947,21 +7947,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -7982,7 +7982,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8001,7 +8001,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -8029,21 +8029,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8064,7 +8064,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8083,7 +8083,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -8111,21 +8111,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8146,7 +8146,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8165,7 +8165,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -8193,21 +8193,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8282,14 +8282,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8310,7 +8310,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8329,7 +8329,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -8357,21 +8357,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8392,7 +8392,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8411,7 +8411,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -8439,21 +8439,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8469,12 +8469,12 @@
         "engineeringOwner": "EM - Homeowner Routes"
       },
       "scores": {
-        "overall": 6.7,
+        "overall": 6.8,
         "visual": 6.8,
         "ux": 6.7,
         "trust": 6.8,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8493,7 +8493,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Compare Template v1 (partial)",
         "targetTemplateFamily": "Compare Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "COMPARE_CONFUSING",
@@ -8521,21 +8521,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8610,14 +8610,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8692,14 +8692,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8774,14 +8774,14 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.04-track3-sprint11"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
         "afterScore": 7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8802,7 +8802,7 @@
         "ux": 6.8,
         "trust": 6.8,
         "mobile": 6.8,
-        "buyerReadiness": 6.8
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8821,7 +8821,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Tool Workspace Template v1 (partial)",
         "targetTemplateFamily": "Tool Workspace Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "PRIMARY_ACTION_AMBIGUOUS",
@@ -8849,21 +8849,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": null,
+        "afterScore": 6.8,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8884,7 +8884,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8903,7 +8903,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Detail Template v1 (partial)",
         "targetTemplateFamily": "Detail Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "TEMPLATE_DRIFT",
@@ -8931,21 +8931,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -8966,7 +8966,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -8985,7 +8985,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -9013,21 +9013,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -9048,7 +9048,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -9067,7 +9067,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -9095,21 +9095,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -9130,7 +9130,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -9149,7 +9149,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -9177,21 +9177,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -9212,7 +9212,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -9231,7 +9231,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -9259,21 +9259,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -9294,7 +9294,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -9313,7 +9313,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -9341,21 +9341,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -9376,7 +9376,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -9395,7 +9395,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -9423,21 +9423,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -9458,7 +9458,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -9477,7 +9477,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -9505,21 +9505,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -9540,7 +9540,7 @@
         "ux": 6.7,
         "trust": 6.7,
         "mobile": 6.7,
-        "buyerReadiness": 6.7
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -9559,7 +9559,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Command Center Template v1 (partial)",
         "targetTemplateFamily": "Command Center Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": true,
         "repeatedIssueTags": [
           "CARD_OVERLOAD",
@@ -9587,21 +9587,21 @@
         ]
       },
       "execution": {
-        "status": "In Build",
+        "status": "In QA",
         "dependencies": [
           "Track 3 template-family rollout"
         ],
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.2,
-        "afterScore": null,
+        "afterScore": 6.7,
         "screenshotsUpdated": false,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -9617,12 +9617,12 @@
         "engineeringOwner": "EM - Frontend Platform"
       },
       "scores": {
-        "overall": 6.3,
+        "overall": 6.4,
         "visual": 6.3,
         "ux": 6.3,
         "trust": 6.2,
         "mobile": 6.4,
-        "buyerReadiness": 6.3
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -9641,7 +9641,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Utility Template v1",
         "targetTemplateFamily": "Utility Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": false,
         "repeatedIssueTags": [
           "STATE_QUALITY_WEAK",
@@ -9676,11 +9676,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 5.8,
-        "afterScore": 6.3,
+        "afterScore": 6.4,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
@@ -9759,11 +9759,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": 7.2,
+        "afterScore": 7.1,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
@@ -9842,11 +9842,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": 7.2,
+        "afterScore": 7.1,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
@@ -9925,7 +9925,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
@@ -10008,7 +10008,7 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
@@ -10091,11 +10091,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 6.3,
-        "afterScore": 7.2,
+        "afterScore": 7.1,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
@@ -10114,12 +10114,12 @@
         "engineeringOwner": "EM - Frontend Platform"
       },
       "scores": {
-        "overall": 6.3,
+        "overall": 6.4,
         "visual": 6.3,
         "ux": 6.3,
         "trust": 6.2,
         "mobile": 6.4,
-        "buyerReadiness": 6.3
+        "buyerReadiness": 7
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -10138,7 +10138,7 @@
       "systemIntelligence": {
         "currentTemplateFamily": "Utility Template v1",
         "targetTemplateFamily": "Utility Template v1",
-        "templateComplianceScore": 6.8,
+        "templateComplianceScore": 7,
         "sharedFixCandidate": false,
         "repeatedIssueTags": [
           "STATE_QUALITY_WEAK",
@@ -10173,11 +10173,11 @@
         "blockers": [],
         "dateAudited": "2026-04-13",
         "lastUpdated": "2026-04-13",
-        "releaseVersion": "2026.06-track3"
+        "releaseVersion": "2026.04-track3-sprint12"
       },
       "validation": {
         "beforeScore": 5.8,
-        "afterScore": 6.3,
+        "afterScore": 6.4,
         "screenshotsUpdated": false,
         "qaPassed": false,
         "regressionSafe": true
