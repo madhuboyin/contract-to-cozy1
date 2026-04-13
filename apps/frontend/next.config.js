@@ -8,9 +8,18 @@ const nextConfig = {
   },
   images: {
     remotePatterns: [
+      // http://localhost is only needed during local development and CI.
+      // Production images must be served over HTTPS.
+      ...(process.env.NODE_ENV !== 'production'
+        ? [{ protocol: 'http', hostname: 'localhost' }]
+        : []),
       {
-        protocol: 'http',
-        hostname: 'localhost',
+        protocol: 'https',
+        hostname: 'contracttocozy.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.contracttocozy.com',
       },
     ],
   },
