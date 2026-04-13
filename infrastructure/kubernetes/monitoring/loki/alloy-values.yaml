@@ -1,9 +1,6 @@
 alloy:
   mode: daemonset
 
-  mounts:
-    varlog: true
-
   extraEnv:
     - name: LOKI_USERNAME
       valueFrom:
@@ -32,20 +29,6 @@ alloy:
             password = env("LOKI_PASSWORD")
           }
         }
-      }
-
-      // --------------------------------------------------
-      // Kubernetes pod discovery (REQUIRED role)
-      // --------------------------------------------------
-      loki.source.kubernetes "production" {
-        role = "pod"
-
-        // ONLY keep production namespace
-        expressions = [
-          "namespace == \"production\"",
-        ]
-
-        forward_to = [loki.write.loki.receiver]
       }
 
       // --------------------------------------------------
