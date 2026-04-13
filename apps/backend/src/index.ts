@@ -113,27 +113,6 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
-const SWAGGER_USER = process.env.SWAGGER_USER || 'admin';
-const SWAGGER_PASSWORD = process.env.SWAGGER_PASSWORD;
-
-// Apply Basic Auth to the docs route if a password is provided
-if (SWAGGER_PASSWORD) {
-  app.use('/api/docs', basicAuth({
-    users: { [SWAGGER_USER]: SWAGGER_PASSWORD },
-    challenge: true, // This triggers the browser login popup
-    realm: 'Contract to Cozy API Documentation'
-  }));
-}
-
-// 3. Mount Swagger UI (Keep your existing config)
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
-  swaggerOptions: {
-    url: '/api/docs/swagger.json',
-    persistAuthorization: true, // This keeps the JWT token saved even after refresh
-  },
-  customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: 'Contract to Cozy API Documentation',
-}));
 
 // =============================================================================
 // MIDDLEWARE
@@ -166,27 +145,37 @@ if (process.env.NODE_ENV === 'development') {
 // SWAGGER/OPENAPI DOCUMENTATION
 // =============================================================================
 
-// OpenAPI JSON spec endpoint (MUST come BEFORE Swagger UI)
+const SWAGGER_USER = process.env.SWAGGER_USER || 'admin';
+const SWAGGER_PASSWORD = process.env.SWAGGER_PASSWORD;
+
+// In production the password is mandatory — fail fast at startup rather than
+// silently exposing the full API spec to the public internet.
+if (process.env.NODE_ENV === 'production' && !SWAGGER_PASSWORD) {
+  throw new Error('SWAGGER_PASSWORD environment variable must be set in production');
+}
+
+// Gate BOTH the Swagger UI (/api/docs) AND the raw JSON spec
+// (/api/docs/swagger.json) behind Basic Auth.
+// Express prefix-matching means app.use('/api/docs', ...) intercepts every
+// request whose path starts with /api/docs — including /api/docs/swagger.json.
+if (SWAGGER_PASSWORD) {
+  app.use('/api/docs', basicAuth({
+    users: { [SWAGGER_USER]: SWAGGER_PASSWORD },
+    challenge: true,
+    realm: 'Contract to Cozy API Documentation',
+  }));
+}
+
+// OpenAPI JSON spec endpoint — registered AFTER the auth gate above
 app.get('/api/docs/swagger.json', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
 
-// Protect Swagger UI in production (optional)
-if (process.env.NODE_ENV === 'production' && process.env.SWAGGER_PASSWORD) {
-  app.use('/api/docs', basicAuth({
-    users: { 
-      'admin': process.env.SWAGGER_PASSWORD 
-    },
-    challenge: true,
-    realm: 'Contract to Cozy API Documentation'
-  }));
-}
-
-// Mount Swagger UI
+// Swagger UI — single mount, no duplication
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
   swaggerOptions: {
-    url: '/api/docs/swagger.json',  // Fetch spec from this URL
+    url: '/api/docs/swagger.json',
     persistAuthorization: true,
   },
   customCss: '.swagger-ui .topbar { display: none }',
