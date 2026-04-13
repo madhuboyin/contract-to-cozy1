@@ -30,6 +30,9 @@ jobs:
       # --ignore-scripts prevents malicious postinstall hooks from running in CI
       - run: npm ci --ignore-scripts
 
+      # Enforce SSRF guard usage for backend fetch() call sites
+      - run: npm run lint:ssrf
+
       # Fails the job on any high or critical severity vulnerability
       - run: npm audit --audit-level=high
 

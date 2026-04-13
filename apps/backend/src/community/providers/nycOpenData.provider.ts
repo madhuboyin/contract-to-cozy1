@@ -1,4 +1,5 @@
 // apps/backend/src/community/providers/nycOpenData.provider.ts
+import { assertSafeUrl } from '../../utils/ssrfGuard';
 
 export interface NycAlertItem {
   title: string;
@@ -30,7 +31,10 @@ export async function fetchNycEmergencyNotifications(opts: {
 
     console.log('📡 Fetching from:', url.toString());
     
-    const resp = await fetch(url.toString(), { 
+    const requestUrl = url.toString();
+    await assertSafeUrl(requestUrl);
+
+    const resp = await fetch(requestUrl, { 
       headers,
       signal: controller.signal 
     });

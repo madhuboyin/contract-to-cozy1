@@ -1,5 +1,6 @@
 // apps/backend/src/services/appreciationIndex.service.ts
 import { TTLCache } from './cache/ttlCache';
+import { assertSafeUrl } from '../utils/ssrfGuard';
 
 /**
  * Phase-3: Real appreciation comps using FHFA HPI (repeat-sale index).
@@ -94,6 +95,7 @@ function parseCsvLines(csv: string): string[][] {
 }
 
 async function fetchText(url: string): Promise<string> {
+  await assertSafeUrl(url);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`FHFA fetch failed: ${res.status} ${res.statusText}`);
   return await res.text();

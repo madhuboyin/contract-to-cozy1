@@ -3,6 +3,7 @@
 import { TrashScheduleResponse, TrashSchedule } from '../types/community.types';
 import { getCityOpenDataSources } from './citySources.provider';
 import { GoogleGenerativeAI } from '@google/generative-ai'; // ✅ FIXED: Changed from require to import
+import { assertSafeUrl } from '../../utils/ssrfGuard';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -35,6 +36,7 @@ export async function parseTrashScheduleWithAI(
     let htmlContent = '';
 
     try {
+      await assertSafeUrl(sourceUrl);
       const response = await fetch(sourceUrl);
       htmlContent = await response.text();
     } catch (error) {

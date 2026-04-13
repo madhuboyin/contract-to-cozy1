@@ -13,6 +13,7 @@ import {
   inferMajorApplianceType,
   PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
 } from './majorAppliance.util';
+import { assertSafeUrl } from '../utils/ssrfGuard';
 
 function normalize(v: any) {
   return String(v ?? '').trim().toLowerCase();
@@ -55,6 +56,7 @@ async function fetchJsonWithTimeout(url: string, timeoutMs = 8000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
+    await assertSafeUrl(url);
     const res = await fetch(url, { signal: ctrl.signal });
     const text = await res.text();
     // UPCitemdb returns JSON; keep error body if not

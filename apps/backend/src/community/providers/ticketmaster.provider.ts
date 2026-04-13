@@ -2,6 +2,7 @@
 
 import { CommunityEvent } from '../types/community.types';
 import { categorizeEvent } from '../utils/categorizeEvent';
+import { assertSafeUrl } from '../../utils/ssrfGuard';
 
 const TM_BASE = 'https://app.ticketmaster.com/discovery/v2/events.json';
 
@@ -63,7 +64,9 @@ export async function fetchTicketmasterEvents(params: {
 
     if (params.keyword) url.searchParams.set('keyword', params.keyword);
 
-    const resp = await fetch(url.toString());
+    const requestUrl = url.toString();
+    await assertSafeUrl(requestUrl);
+    const resp = await fetch(requestUrl);
 
     if (resp.status === 429) {
       await sleep(1200);

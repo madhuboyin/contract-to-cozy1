@@ -1,6 +1,7 @@
 // apps/backend/src/services/weather.service.ts
 
 import { SignalType } from '@prisma/client';
+import { assertSafeUrl } from '../utils/ssrfGuard';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -101,7 +102,9 @@ export class WeatherService {
 
       let data: OWMForecastResponse;
       try {
-        const res = await fetch(url.toString(), { signal: ctrl.signal });
+        const requestUrl = url.toString();
+        await assertSafeUrl(requestUrl);
+        const res = await fetch(requestUrl, { signal: ctrl.signal });
         if (!res.ok) {
           const body = await res.text().catch(() => '');
           console.error(`[WEATHER] OWM returned ${res.status} for zip=${zip}: ${body}`);

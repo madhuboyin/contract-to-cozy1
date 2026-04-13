@@ -1,4 +1,5 @@
 // apps/backend/src/services/tax/schoolInsights.provider.ts
+import { assertSafeUrl } from '../../utils/ssrfGuard';
 
 export type SchoolInsightsConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
 
@@ -33,6 +34,7 @@ async function fetchJsonWithTimeout(
   const t = setTimeout(() => ac.abort(), timeoutMs);
 
   try {
+    await assertSafeUrl(url);
     const r = await fetch(url, { signal: ac.signal });
     let json: any = null;
     try {
