@@ -443,31 +443,6 @@ app.use((req: Request, res: Response) => {
   res.status(404).json({
     error: 'Not Found',
     message: `Route ${req.method} ${req.path} not found`,
-    availableRoutes: [
-      'GET /api/health',
-      'GET /api/ready',
-      'POST /api/auth/register',
-      'POST /api/auth/login',
-      'GET /api/auth/me',
-      'POST /api/auth/logout',
-      'GET /api/providers/search',
-      'GET /api/bookings',
-      'GET /api/properties',
-      'GET /api/users/profile',
-      'PUT /api/users/profile',
-      'GET /api/checklist',
-      'PUT /api/checklist/items/:itemId',
-      'GET /api/service-categories',
-      'GET /api/service-categories/all',
-      'GET /api/oracle/predict/:propertyId',
-      'GET /api/oracle/summary',
-      'GET /api/community/alerts',
-      'GET /api/community/trash',
-      'GET /api/v1/community/events',
-      'GET /api/inventory',
-      'GET /api/home-events',
-      'GET /api/knowledge/articles',
-    ],
   });
 });
 
