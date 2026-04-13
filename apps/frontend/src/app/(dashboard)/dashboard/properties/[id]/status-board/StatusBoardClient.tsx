@@ -86,6 +86,8 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
+import PriorityActionHero from "@/components/system/PriorityActionHero";
+import RouteStateCard from "@/components/system/RouteStateCard";
 import TrustStrip from "../components/route-templates/TrustStrip";
 
 // ---------------------------------------------------------------------------
@@ -130,6 +132,12 @@ const RECOMMENDATION_COLORS: Record<StatusBoardRecommendation, string> = {
   REPAIR: "bg-gradient-to-r from-amber-50 to-yellow-100 text-amber-800 border-amber-300 dark:from-amber-950/40 dark:to-yellow-950/30 dark:text-amber-300 dark:border-amber-800",
   REPLACE_SOON:
     "bg-gradient-to-r from-rose-50 via-red-50 to-orange-100 text-red-800 border-red-300 dark:from-rose-950/40 dark:via-red-950/40 dark:to-orange-950/30 dark:text-red-300 dark:border-red-800",
+};
+
+const RECOMMENDATION_PRIORITY: Record<StatusBoardRecommendation, number> = {
+  REPLACE_SOON: 3,
+  REPAIR: 2,
+  OK: 1,
 };
 
 const WARRANTY_COLORS: Record<WarrantyBadge, string> = {
@@ -356,7 +364,7 @@ export default function StatusBoardClient() {
     [search, groupBy, conditionFilter, categoryFilter, pinnedOnly, includeHidden, page]
   );
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["status-board", propertyId, queryParams],
     queryFn: () => getStatusBoard(propertyId, queryParams),
     staleTime: 5 * 60 * 1000,
@@ -448,6 +456,71 @@ export default function StatusBoardClient() {
   const items = data?.items ?? [];
   const pagination = data?.pagination;
   const groups = data?.groups;
+  const missingInstallDateItem = useMemo(
+    () => items.find((item) => item.needsInstallDateForPrediction) ?? null,
+    [items]
+  );
+  const priorityActionItem = useMemo(() => {
+    const urgentItems = items
+      .filter((item) => item.condition === "ACTION_NEEDED" && !item.needsInstallDateForPrediction)
+      .sort((a, b) => {
+        const recommendationDelta =
+          RECOMMENDATION_PRIORITY[b.recommendation] - RECOMMENDATION_PRIORITY[a.recommendation];
+        if (recommendationDelta !== 0) return recommendationDelta;
+        if (a.isPinned !== b.isPinned) return Number(b.isPinned) - Number(a.isPinned);
+        return (b.ageYears ?? 0) - (a.ageYears ?? 0);
+      });
+    return urgentItems[0] ?? null;
+  }, [items]);
+  const pendingInstallDateCount = useMemo(
+    () => items.filter((item) => item.needsInstallDateForPrediction).length,
+    [items]
+  );
+  const priorityActionTitle = priorityActionItem
+    ? `${formatDisplayName(priorityActionItem.displayName)} needs attention`
+    : pendingInstallDateCount > 0
+      ? "Add missing install dates to improve confidence"
+      : "No urgent status actions detected";
+  const priorityActionDescription = priorityActionItem
+    ? "Focus this item first to reduce near-term risk and keep cascading replacement costs contained."
+    : pendingInstallDateCount > 0
+      ? `${pendingInstallDateCount} item${pendingInstallDateCount === 1 ? "" : "s"} still need install dates for stronger lifecycle predictions.`
+      : "Everything is currently in a stable window. Review monitor items for preventative upkeep.";
+  const priorityImpactLabel = priorityActionItem
+    ? `${RECOMMENDATION_LABELS[priorityActionItem.recommendation]} · ${CONDITION_LABELS[priorityActionItem.condition]}`
+    : pendingInstallDateCount > 0
+      ? `${pendingInstallDateCount} forecast gap${pendingInstallDateCount === 1 ? "" : "s"}`
+      : "Stable status profile";
+  const priorityActionCtaLabel = priorityActionItem
+    ? `Review ${formatDisplayName(priorityActionItem.displayName)}`
+    : missingInstallDateItem
+      ? `Add install date for ${formatDisplayName(missingInstallDateItem.displayName)}`
+      : summary?.actionNeeded
+        ? `Review ${summary.actionNeeded} action-needed items`
+        : "Review monitor items";
+
+  const handlePriorityAction = useCallback(() => {
+    if (priorityActionItem) {
+      setConditionFilter("ACTION_NEEDED");
+      setGroupBy("none");
+      setPage(1);
+      setExpandedId(priorityActionItem.id);
+      return;
+    }
+
+    if (missingInstallDateItem) {
+      setConditionFilter("all");
+      setGroupBy("none");
+      setSearch(formatDisplayName(missingInstallDateItem.displayName));
+      setPage(1);
+      setExpandedId(missingInstallDateItem.id);
+      return;
+    }
+
+    setConditionFilter("MONITOR");
+    setGroupBy("none");
+    setPage(1);
+  }, [missingInstallDateItem, priorityActionItem]);
 
   // Render grouped or flat
   const renderItems = (itemList: StatusBoardItemDTO[]) =>
@@ -1342,18 +1415,51 @@ export default function StatusBoardClient() {
             />
           }
         >
+          {summary ? (
+            <ActionPriorityRow
+              primaryAction={
+                <Button className="w-full" onClick={handlePriorityAction}>
+                  {priorityActionCtaLabel}
+                </Button>
+              }
+              secondaryActions={
+                <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                  Refresh list
+                </Button>
+              }
+            />
+          ) : null}
           {isLoading ? (
-            <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
-              Loading status board...
-            </div>
+            <RouteStateCard
+              state="loading"
+              title="Loading status board"
+              description="Bringing in the latest item conditions and maintenance signals."
+              className="rounded-2xl border-[hsl(var(--mobile-border-subtle))] px-4 py-6"
+            />
           ) : error ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-              Failed to load status board
-            </div>
+            <RouteStateCard
+              state="error"
+              title="We couldn't load this board"
+              description="Try refreshing to reload your latest item health signals."
+              action={
+                <Button onClick={() => void refetch()}>
+                  Retry
+                </Button>
+              }
+              className="rounded-2xl px-4 py-6"
+            />
           ) : items.length === 0 ? (
-            <div className="rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-white p-4 text-sm text-[hsl(var(--mobile-text-secondary))]">
-              No items found. Add inventory items or home systems to see them here.
-            </div>
+            <RouteStateCard
+              state="empty"
+              title="No tracked items yet"
+              description="Add inventory items or home systems to unlock condition tracking and recommendations."
+              action={
+                <Button asChild>
+                  <Link href={`/dashboard/properties/${propertyId}/inventory`}>Add inventory items</Link>
+                </Button>
+              }
+              className="rounded-2xl px-4 py-6"
+            />
           ) : groups && groupBy !== "none" ? (
             <div className="space-y-4">
               {Object.entries(groups).map(([groupName, groupItems]) => (
@@ -1431,20 +1537,30 @@ export default function StatusBoardClient() {
           </div>
         ) : null}
 
-        <div className={`p-3 sm:p-4 ${GLASS_PANEL_CLASS}`}>
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 border-slate-200/80 bg-white/70 text-slate-600 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
-              disabled={recomputeMutation.isPending}
-              onClick={() => recomputeMutation.mutate()}
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", recomputeMutation.isPending && "animate-spin")} />
-              {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
-            </Button>
-          </div>
-        </div>
+        {summary ? (
+          <PriorityActionHero
+            title={priorityActionTitle}
+            description={priorityActionDescription}
+            impactLabel={priorityImpactLabel}
+            confidenceLabel={`${summary.total} items evaluated`}
+            primaryAction={(
+              <Button className="w-full sm:w-auto" onClick={handlePriorityAction}>
+                {priorityActionCtaLabel}
+              </Button>
+            )}
+            supportingAction={(
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                disabled={recomputeMutation.isPending}
+                onClick={() => recomputeMutation.mutate()}
+              >
+                <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", recomputeMutation.isPending && "animate-spin")} />
+                {recomputeMutation.isPending ? "Recomputing..." : "Recompute board"}
+              </Button>
+            )}
+          />
+        ) : null}
 
         {/* Summary strip */}
         {summary && (
@@ -1695,13 +1811,32 @@ export default function StatusBoardClient() {
 
       {/* Table */}
       {isLoading ? (
-        <div className={`mt-4 py-12 text-center text-muted-foreground ${GLASS_PANEL_CLASS}`}>Loading status board...</div>
+        <RouteStateCard
+          state="loading"
+          title="Loading status board"
+          description="Bringing in current condition and recommendation signals."
+          className={`mt-4 ${GLASS_PANEL_CLASS}`}
+        />
       ) : error ? (
-        <div className={`mt-4 py-12 text-center text-red-500 ${GLASS_PANEL_CLASS}`}>Failed to load status board</div>
+        <RouteStateCard
+          state="error"
+          title="Status board unavailable"
+          description="Refresh to retry loading this property's latest board."
+          action={<Button onClick={() => void refetch()}>Retry</Button>}
+          className={`mt-4 ${GLASS_PANEL_CLASS}`}
+        />
       ) : items.length === 0 ? (
-        <div className={`mt-4 py-12 text-center text-muted-foreground ${GLASS_PANEL_CLASS}`}>
-          No items found. Add inventory items or home systems to see them here.
-        </div>
+        <RouteStateCard
+          state="empty"
+          title="No tracked items yet"
+          description="Add inventory items or home systems first, then the board can rank what needs attention."
+          action={
+            <Button asChild>
+              <Link href={`/dashboard/properties/${propertyId}/inventory`}>Add inventory items</Link>
+            </Button>
+          }
+          className={`mt-4 ${GLASS_PANEL_CLASS}`}
+        />
       ) : groups && groupBy !== "none" ? (
         // Grouped view
         <div className="mt-4 space-y-4">

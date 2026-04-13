@@ -399,12 +399,12 @@
         "engineeringOwner": "EM - Intelligence Tools"
       },
       "scores": {
-        "overall": 6.9,
-        "visual": 7.2,
-        "ux": 6.6,
-        "trust": 8.0,
-        "mobile": 6.1,
-        "buyerReadiness": 7.0
+        "overall": 7.2,
+        "visual": 7.3,
+        "ux": 7.1,
+        "trust": 8.1,
+        "mobile": 6.9,
+        "buyerReadiness": 7.1
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -448,19 +448,19 @@
         ]
       },
       "execution": {
-        "status": "In Build",
-        "dependencies": ["Report section collapse component parity"],
+        "status": "In QA",
+        "dependencies": ["Report section screenshot + responsive QA pass"],
         "blockers": [],
         "dateAudited": "2026-04-12",
-        "lastUpdated": "2026-04-12",
+        "lastUpdated": "2026-04-13",
         "releaseVersion": "2026.04-track1"
       },
       "validation": {
         "beforeScore": 6.6,
-        "afterScore": null,
+        "afterScore": 7.2,
         "screenshotsUpdated": true,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {
@@ -476,12 +476,12 @@
         "engineeringOwner": "EM - Homeowner Routes"
       },
       "scores": {
-        "overall": 6.7,
-        "visual": 6.9,
-        "ux": 6.6,
-        "trust": 6.7,
-        "mobile": 7.1,
-        "buyerReadiness": 6.6
+        "overall": 7.0,
+        "visual": 7.1,
+        "ux": 7.0,
+        "trust": 7.0,
+        "mobile": 7.2,
+        "buyerReadiness": 7.0
       },
       "riskFlags": {
         "trustHardFail": false,
@@ -524,19 +524,19 @@
         ]
       },
       "execution": {
-        "status": "Planned",
-        "dependencies": ["Dual-mode board template"],
+        "status": "In QA",
+        "dependencies": ["Desktop/mobile state-flow QA + screenshot refresh"],
         "blockers": [],
         "dateAudited": "2026-04-12",
-        "lastUpdated": "2026-04-12",
+        "lastUpdated": "2026-04-13",
         "releaseVersion": "2026.05-track1"
       },
       "validation": {
         "beforeScore": 6.4,
-        "afterScore": null,
-        "screenshotsUpdated": false,
+        "afterScore": 7.0,
+        "screenshotsUpdated": true,
         "qaPassed": false,
-        "regressionSafe": false
+        "regressionSafe": true
       }
     },
     {

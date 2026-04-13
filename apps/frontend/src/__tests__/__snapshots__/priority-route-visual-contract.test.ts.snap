@@ -216,9 +216,12 @@ exports[`priority route visual contracts matches baseline snapshots for governed
     ],
     "fixedLayerCount": 0,
     "route": "/dashboard/properties/[id]/home-score",
-    "signature": "6bd82c752654f50c77a6095c1c38ef8e0e219614923f174a77f3d4aeb5b0c233",
-    "templates": [],
-    "visualLiteralCount": 246,
+    "signature": "ded41e5602549c1aa25d8c70c66fbd5acf0b7327e5a357cf799a102bba7a33a2",
+    "templates": [
+      "PriorityActionHero",
+      "TrustStrip",
+    ],
+    "visualLiteralCount": 237,
     "visualLiteralPreview": [
       "absolute inset-0 flex flex-col items-center justify-center",
       "absolute top-6 bottom-[-1.65rem] w-px bg-slate-200",
@@ -254,11 +257,12 @@ exports[`priority route visual contracts matches baseline snapshots for governed
     ],
     "fixedLayerCount": 0,
     "route": "/dashboard/properties/[id]/status-board",
-    "signature": "75cba18092ff627698c525a7acefad6c92d465d4b6b054ea0d3f5db260374b1d",
+    "signature": "259d233803b7bb31563422fb604e8af3c4b6c0d8c3c6108379b832f687364558",
     "templates": [
+      "PriorityActionHero",
       "TrustStrip",
     ],
-    "visualLiteralCount": 164,
+    "visualLiteralCount": 159,
     "visualLiteralPreview": [
       "absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground",
       "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",

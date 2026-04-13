@@ -29,6 +29,9 @@ import {
 } from "lucide-react";
 
 import { DashboardShell } from "@/components/DashboardShell";
+import PriorityActionHero from "@/components/system/PriorityActionHero";
+import RouteStateCard from "@/components/system/RouteStateCard";
+import TrustStrip from "@/components/system/TrustStrip";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -905,9 +908,12 @@ export default function HomeScoreReportPage() {
   if (!propertyId || propertyQuery.isLoading || reportQuery.isLoading) {
     return (
       <DashboardShell>
-        <div className="h-64 rounded-xl border border-slate-200 bg-white flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
-        </div>
+        <RouteStateCard
+          state="loading"
+          title="Loading HomeScore report"
+          description="Gathering your latest score, risk exposure, and trust signals."
+          className="min-h-[256px]"
+        />
       </DashboardShell>
     );
   }
@@ -915,20 +921,17 @@ export default function HomeScoreReportPage() {
   if (!report) {
     return (
       <DashboardShell>
-        <Card className="border-rose-200 bg-rose-50">
-          <CardHeader>
-            <CardTitle className="text-rose-700">Unable to load HomeScore report</CardTitle>
-            <CardDescription className="text-rose-600">
-              We could not generate the report for this property right now.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-2">
-            <Button onClick={() => reportQuery.refetch()}>Try again</Button>
+        <RouteStateCard
+          state="error"
+          title="Unable to load HomeScore report"
+          description="We couldn't generate this report right now. Try again or go back to the property hub."
+          action={<Button onClick={() => reportQuery.refetch()}>Try again</Button>}
+          secondaryAction={
             <Button variant="outline" onClick={() => router.back()}>
               Back
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       </DashboardShell>
     );
   }
@@ -1111,22 +1114,36 @@ export default function HomeScoreReportPage() {
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-[linear-gradient(150deg,#ffffff,#f8fafc)] p-4 shadow-sm md:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-                Decision Mode
-              </p>
-              <h1 className="mb-0 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-                What to do next for this home
-              </h1>
-              <p className="mt-1 mb-0 text-sm text-slate-600">
-                One clear risk, one clear action, and confidence-backed impact before diving into full report detail.
-              </p>
-            </div>
-            <Badge variant="outline" className={confidenceBadgeClass(meta?.confidenceLevel || report.confidence)}>
-              Confidence: {decisionConfidenceLabel}
-            </Badge>
-          </div>
+          <PriorityActionHero
+            title={decisionActionTitle}
+            description="Start with one action that has the clearest risk-reduction and score-lift potential, then use the full report for proof."
+            impactLabel={decisionImpactLabel}
+            confidenceLabel={`Confidence: ${decisionConfidenceLabel}`}
+            primaryAction={
+              decisionActionHref ? (
+                <Button asChild className="w-full sm:w-auto">
+                  <Link
+                    href={decisionActionHref}
+                    onClick={() =>
+                      trackEvent("IMPROVEMENT_ACTION_CLICKED", "decision-mode", { actionId: topAction?.id || topRiskDriver?.id })
+                    }
+                  >
+                    Start top action
+                  </Link>
+                </Button>
+              ) : (
+                <Button className="w-full sm:w-auto" onClick={() => setShowFullReport(true)}>
+                  Review full report
+                </Button>
+              )
+            }
+            supportingAction={
+              <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowFullReport((prev) => !prev)}>
+                {showFullReport ? "Hide full report" : "Open full report"}
+              </Button>
+            }
+            eyebrow="Decision Mode"
+          />
 
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 p-3">
@@ -1152,23 +1169,13 @@ export default function HomeScoreReportPage() {
               <span className="font-semibold text-slate-900">Source mix:</span> {decisionSourceLabel}
             </p>
           </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {decisionActionHref ? (
-              <Button asChild>
-                <Link
-                  href={decisionActionHref}
-                  onClick={() =>
-                    trackEvent("IMPROVEMENT_ACTION_CLICKED", "decision-mode", { actionId: topAction?.id || topRiskDriver?.id })
-                  }
-                >
-                  Start top action
-                </Link>
-              </Button>
-            ) : null}
-            <Button variant="outline" onClick={() => setShowFullReport((prev) => !prev)}>
-              {showFullReport ? "Hide full report" : "Open full report"}
-            </Button>
+          <div className="mt-3">
+            <TrustStrip
+              confidenceLabel={`Decision confidence ${decisionConfidenceLabel}. ${verificationSummary}`}
+              freshnessLabel={`Report freshness: ${decisionFreshnessLabel}`}
+              sourceLabel={`Source mix: ${decisionSourceLabel}`}
+              rationale="The top action blends verified records, homeowner-submitted details, and model inference to surface the clearest next move."
+            />
           </div>
         </section>
 
