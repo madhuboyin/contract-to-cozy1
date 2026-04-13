@@ -7,7 +7,6 @@
 
 import React, { useState, useCallback } from 'react';
 import {
-  AlertTriangle,
   CheckCircle2,
   Clock,
   Cpu,
@@ -17,12 +16,11 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { DashboardShell } from '@/components/DashboardShell';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useWorkerJobs, useTriggerWorkerJob } from '@/hooks/useAdminWorkerJobs';
 import type { WorkerJobDetail, JobCategory, RecentRun } from '@/lib/api/adminWorkerJobs';
-import { AdminAccessState, AdminConsoleShell } from '@/components/ops/AdminConsoleShell';
+import { AdminAccessState, AdminConsoleShell, AdminRouteState, useAdminOnlineStatus } from '@/components/ops/AdminConsoleShell';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -398,6 +396,7 @@ function PageSkeleton() {
 export default function WorkerJobsPage() {
   const { user, loading } = useAuth();
   const { toast } = useToast();
+  const isOnline = useAdminOnlineStatus();
   const isAdmin = !loading && user?.role === 'ADMIN';
 
   const jobsQ = useWorkerJobs(isAdmin);
@@ -418,11 +417,13 @@ export default function WorkerJobsPage() {
 
   if (loading) {
     return (
-      <DashboardShell className="py-10">
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-        </div>
-      </DashboardShell>
+      <AdminConsoleShell title="Worker Jobs" subtitle="Loading queue health and operations controls.">
+        <AdminRouteState
+          state="loading"
+          title="Loading worker operations"
+          description="Fetching queue status and recent run telemetry."
+        />
+      </AdminConsoleShell>
     );
   }
 
@@ -438,6 +439,18 @@ export default function WorkerJobsPage() {
         title="Admin access required"
         description="This page is restricted to platform administrators."
       />
+    );
+  }
+
+  if (!isOnline) {
+    return (
+      <AdminConsoleShell title="Worker Jobs" subtitle="Monitor queue health, failures, and manual reruns.">
+        <AdminRouteState
+          state="offline"
+          title="You're offline"
+          description="Reconnect to monitor jobs and trigger queue actions."
+        />
+      </AdminConsoleShell>
     );
   }
 
@@ -525,18 +538,33 @@ export default function WorkerJobsPage() {
     >
 
       {/* Error */}
-      {jobsQ.isError && (
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] text-rose-700">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          Failed to load worker jobs. Check that the backend is running and Redis is connected.
-        </div>
-      )}
+      {jobsQ.isError ? (
+        <AdminRouteState
+          state="error"
+          title="Failed to load worker jobs"
+          description="Check backend and Redis connectivity, then retry."
+          action={
+            <Button variant="outline" size="sm" className="rounded-full" onClick={handleRefresh}>
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
 
       {/* Loading */}
-      {jobsQ.isLoading && <PageSkeleton />}
+      {jobsQ.isLoading ? <PageSkeleton /> : null}
+
+      {/* Empty */}
+      {!jobsQ.isLoading && !jobsQ.isError && jobs.length === 0 ? (
+        <AdminRouteState
+          state="empty"
+          title="No worker jobs available"
+          description="No registered worker jobs were returned for this environment."
+        />
+      ) : null}
 
       {/* Content */}
-      {!jobsQ.isLoading && jobs.length > 0 && (
+      {!jobsQ.isLoading && !jobsQ.isError && jobs.length > 0 && (
         <div className="space-y-7">
           {CATEGORY_ORDER.filter((cat) => byCategory[cat]?.length > 0).map((cat) => (
             <CategorySection
@@ -552,7 +580,7 @@ export default function WorkerJobsPage() {
       )}
 
       {/* Footer note */}
-      {!jobsQ.isLoading && jobs.length > 0 && (
+      {!jobsQ.isLoading && !jobsQ.isError && jobs.length > 0 && (
         <p className="mt-8 text-[10px] text-slate-400 text-center">
           Cron jobs run on schedule via node-cron. Queue stats and run history available for BullMQ-backed jobs only. Run Job available for recall jobs only.
         </p>

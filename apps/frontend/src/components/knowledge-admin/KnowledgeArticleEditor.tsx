@@ -17,7 +17,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { DashboardShell } from '@/components/DashboardShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -56,6 +55,7 @@ import {
   slugifyKnowledgeTitle,
   transformKnowledgeArticleForm,
 } from '@/lib/knowledge/editor';
+import { AdminAccessState, AdminConsoleShell, AdminRouteState, useAdminOnlineStatus } from '@/components/ops/AdminConsoleShell';
 
 type KnowledgeArticleEditorProps = {
   articleId?: string;
@@ -88,25 +88,6 @@ function getNumberInputValue(value: unknown): number | '' {
   return '';
 }
 
-function AdminAccessState({ title, description }: { title: string; description: string }) {
-  return (
-    <DashboardShell className="py-10">
-      <Card className="rounded-[28px] border-slate-200 bg-white shadow-sm">
-        <CardContent className="space-y-3 py-12 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-            <AlertCircle className="h-5 w-5" />
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
-          <p className="mx-auto max-w-xl text-sm leading-6 text-slate-600">{description}</p>
-          <Button asChild variant="outline" className="rounded-full">
-            <Link href="/dashboard">Return to dashboard</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    </DashboardShell>
-  );
-}
-
 function SectionSummaryBadge({ label }: { label: string }) {
   return (
     <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
@@ -119,6 +100,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, loading } = useAuth();
+  const isOnline = useAdminOnlineStatus();
   const isEditMode = Boolean(articleId);
   const [slugTouched, setSlugTouched] = React.useState(isEditMode);
 
@@ -277,14 +259,18 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
 
   if (loading) {
     return (
-      <DashboardShell className="py-10">
-        <Card className="rounded-[28px] border-slate-200 bg-white shadow-sm">
-          <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Checking editor permissions...
-          </CardContent>
-        </Card>
-      </DashboardShell>
+      <AdminConsoleShell
+        title={isEditMode ? 'Edit Knowledge Article' : 'Create Knowledge Article'}
+        subtitle="Loading editor permissions and content metadata."
+        backHref="/dashboard/knowledge-admin"
+        backLabel="Back to article list"
+      >
+        <AdminRouteState
+          state="loading"
+          title="Checking editor permissions"
+          description="Validating admin role and loading editor context."
+        />
+      </AdminConsoleShell>
     );
   }
 
@@ -306,43 +292,93 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
     );
   }
 
+  if (!isOnline) {
+    return (
+      <AdminConsoleShell
+        title={isEditMode ? 'Edit Knowledge Article' : 'Create Knowledge Article'}
+        subtitle="Knowledge Hub editorial workspace"
+        backHref="/dashboard/knowledge-admin"
+        backLabel="Back to article list"
+      >
+        <AdminRouteState
+          state="offline"
+          title="You're offline"
+          description="Reconnect to create or edit Knowledge Hub articles."
+        />
+      </AdminConsoleShell>
+    );
+  }
+
   if (optionsQuery.isLoading || (articleId && articleQuery.isLoading)) {
     return (
-      <DashboardShell className="py-10">
-        <Card className="rounded-[28px] border-slate-200 bg-white shadow-sm">
-          <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Loading Knowledge Hub editor...
-          </CardContent>
-        </Card>
-      </DashboardShell>
+      <AdminConsoleShell
+        title={isEditMode ? 'Edit Knowledge Article' : 'Create Knowledge Article'}
+        subtitle="Knowledge Hub editorial workspace"
+        backHref="/dashboard/knowledge-admin"
+        backLabel="Back to article list"
+      >
+        <AdminRouteState
+          state="loading"
+          title="Loading Knowledge Hub editor"
+          description="Fetching categories, tags, tools, and article content."
+        />
+      </AdminConsoleShell>
     );
   }
 
   if (optionsQuery.isError) {
     return (
-      <AdminAccessState
-        title="Editor options unavailable"
-        description={getErrorMessage(optionsQuery.error)}
-      />
+      <AdminConsoleShell
+        title={isEditMode ? 'Edit Knowledge Article' : 'Create Knowledge Article'}
+        subtitle="Knowledge Hub editorial workspace"
+        backHref="/dashboard/knowledge-admin"
+        backLabel="Back to article list"
+      >
+        <AdminRouteState
+          state="error"
+          title="Editor options unavailable"
+          description={getErrorMessage(optionsQuery.error)}
+        />
+      </AdminConsoleShell>
     );
   }
 
   if (articleId && articleQuery.isError) {
     return (
-      <AdminAccessState
-        title="Article unavailable"
-        description={getErrorMessage(articleQuery.error)}
-      />
+      <AdminConsoleShell
+        title="Edit Knowledge Article"
+        subtitle="Knowledge Hub editorial workspace"
+        backHref="/dashboard/knowledge-admin"
+        backLabel="Back to article list"
+      >
+        <AdminRouteState
+          state="error"
+          title="Article unavailable"
+          description={getErrorMessage(articleQuery.error)}
+        />
+      </AdminConsoleShell>
     );
   }
 
   if (articleId && !articleQuery.data) {
     return (
-      <AdminAccessState
-        title="Article not found"
-        description="This Knowledge Hub article could not be found. It may have been deleted or the ID may be incorrect."
-      />
+      <AdminConsoleShell
+        title="Edit Knowledge Article"
+        subtitle="Knowledge Hub editorial workspace"
+        backHref="/dashboard/knowledge-admin"
+        backLabel="Back to article list"
+      >
+        <AdminRouteState
+          state="empty"
+          title="Article not found"
+          description="This Knowledge Hub article could not be found. It may have been deleted or the ID may be incorrect."
+          action={
+            <Button asChild variant="outline" className="rounded-full">
+              <Link href="/dashboard/knowledge-admin">Back to article list</Link>
+            </Button>
+          }
+        />
+      </AdminConsoleShell>
     );
   }
 
@@ -350,8 +386,37 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
   const currentArticle = articleQuery.data as KnowledgeEditorArticle | undefined;
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_30%,#f8fafc_100%)]">
-      <DashboardShell className="space-y-8 py-8 md:py-10">
+    <AdminConsoleShell
+      title={isEditMode ? 'Edit Knowledge Article' : 'Create Knowledge Article'}
+      subtitle="Manage article metadata, taxonomy, sections, linked tools, and CTA modules."
+      backHref="/dashboard/knowledge-admin"
+      backLabel="Back to article list"
+      actions={
+        <Button
+          onClick={form.handleSubmit((values) => saveMutation.mutate(values))}
+          disabled={saveMutation.isPending}
+          className="rounded-full"
+        >
+          {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+          {isEditMode ? 'Save article' : 'Create article'}
+        </Button>
+      }
+      chips={
+        <>
+          <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-900">
+            Knowledge Admin
+          </Badge>
+          {currentArticle?.status ? (
+            <Badge
+              variant="outline"
+              className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
+            >
+              {currentArticle.status.replace(/_/g, ' ')}
+            </Badge>
+          ) : null}
+        </>
+      }
+    >
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-2">
@@ -395,14 +460,6 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
                   </Link>
                 </Button>
               ) : null}
-              <Button
-                onClick={form.handleSubmit((values) => saveMutation.mutate(values))}
-                disabled={saveMutation.isPending}
-                className="rounded-full"
-              >
-                {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {isEditMode ? 'Save article' : 'Create article'}
-              </Button>
             </div>
           </div>
 
@@ -1403,7 +1460,6 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
             </aside>
           </form>
         </Form>
-      </DashboardShell>
-    </div>
+    </AdminConsoleShell>
   );
 }

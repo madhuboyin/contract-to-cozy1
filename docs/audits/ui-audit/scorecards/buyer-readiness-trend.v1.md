@@ -5,12 +5,12 @@
 
 ## Current Averages
 
-- Overall: 6.79
+- Overall: 6.8
 - Visual: 6.81
-- UX: 6.8
-- Trust: 6.79
-- Mobile: 6.78
-- Buyer Readiness: 6.78
+- UX: 6.81
+- Trust: 6.8
+- Mobile: 6.81
+- Buyer Readiness: 6.79
 
 ## Buyer-Readiness Trend
 
@@ -18,7 +18,7 @@
 | --- | ---: |
 | Baseline (Pre-Track 1) | 6.26 |
 | Post Track 2 (P0/P1) | 6.89 |
-| Track 3 Full Rescore | 6.78 |
+| Track 3 Full Rescore | 6.79 |
 
 ## Valuation Risk Distribution
 
@@ -38,8 +38,8 @@
 ## Execution Mix
 
 - In Build: 93
-- In QA: 21
-- Planned: 10
+- In QA: 28
+- Planned: 3
 
 ## Priority Coverage
 

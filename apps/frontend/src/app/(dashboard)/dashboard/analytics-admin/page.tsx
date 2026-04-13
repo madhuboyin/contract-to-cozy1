@@ -6,7 +6,6 @@
 // Mirrors the knowledge-admin page pattern for role guard, layout and styling.
 
 import React, { useState, useCallback } from 'react';
-import Link from 'next/link';
 import {
   Activity,
   BarChart2,
@@ -15,7 +14,6 @@ import {
   Home,
   Info,
   Layers,
-  Loader2,
   RefreshCw,
   Sparkles,
   TrendingUp,
@@ -23,7 +21,6 @@ import {
   Zap,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { DashboardShell } from '@/components/DashboardShell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -50,6 +47,7 @@ import {
   TableSkeleton,
 } from '@/components/admin-analytics/AdminAnalyticsSkeleton';
 import type { AdminAnalyticsFilters } from '@/lib/api/adminAnalytics';
+import { AdminAccessState, AdminConsoleShell, AdminRouteState, useAdminOnlineStatus } from '@/components/ops/AdminConsoleShell';
 
 // ============================================================================
 // HELPERS
@@ -85,26 +83,6 @@ function daysAgo(n: number) {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toISOString().slice(0, 10);
-}
-
-// ============================================================================
-// ACCESS STATE (same as knowledge-admin)
-// ============================================================================
-
-function AccessState({ title, description }: { title: string; description: string }) {
-  return (
-    <DashboardShell className="py-10">
-      <Card className="rounded-[28px] border-slate-200 bg-white shadow-sm">
-        <CardContent className="space-y-3 py-12 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
-          <p className="mx-auto max-w-xl text-sm leading-6 text-slate-600">{description}</p>
-          <Button asChild variant="outline" className="rounded-full">
-            <Link href="/dashboard">Return to dashboard</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    </DashboardShell>
-  );
 }
 
 // ============================================================================
@@ -1071,6 +1049,7 @@ const DEFAULT_FILTERS: AdminAnalyticsFilters = {
 
 export default function AnalyticsAdminPage() {
   const { user, loading } = useAuth();
+  const isOnline = useAdminOnlineStatus();
   const [filters, setFilters] = useState<AdminAnalyticsFilters>(DEFAULT_FILTERS);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
@@ -1092,20 +1071,19 @@ export default function AnalyticsAdminPage() {
   // ── Auth guards ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <DashboardShell className="py-10">
-        <Card className="rounded-[28px] border-slate-200 bg-white shadow-sm">
-          <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Checking admin access…
-          </CardContent>
-        </Card>
-      </DashboardShell>
+      <AdminConsoleShell title="Admin Analytics" subtitle="Loading admin analytics access and datasets.">
+        <AdminRouteState
+          state="loading"
+          title="Checking admin access"
+          description="Validating authentication and permissions for analytics console."
+        />
+      </AdminConsoleShell>
     );
   }
 
   if (!user) {
     return (
-      <AccessState
+      <AdminAccessState
         title="Sign in required"
         description="This internal analytics view requires authentication."
       />
@@ -1114,36 +1092,66 @@ export default function AnalyticsAdminPage() {
 
   if (user.role !== 'ADMIN') {
     return (
-      <AccessState
+      <AdminAccessState
         title="Admin access required"
         description="Only CtC admins can view the product analytics dashboard."
       />
     );
   }
 
+  if (!isOnline) {
+    return (
+      <AdminConsoleShell title="Admin Analytics" subtitle="Monitor activation, engagement, adoption, and value delivery.">
+        <AdminRouteState
+          state="offline"
+          title="You're offline"
+          description="Analytics queries require a live connection. Reconnect and refresh."
+        />
+      </AdminConsoleShell>
+    );
+  }
+
   // ── Page ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_30%,#f8fafc_100%)]">
-      <DashboardShell className="space-y-6 py-8 md:py-10">
+    <AdminConsoleShell
+      title="Admin Analytics"
+      subtitle="Monitor activation, engagement, adoption, and value delivery across Contract-to-Cozy."
+      actions={
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 rounded px-3 text-xs"
+          onClick={handleRefresh}
+        >
+          <RefreshCw className="mr-1.5 h-3 w-3" />
+          Refresh all
+        </Button>
+      }
+      chips={
+        <>
+          <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-900">
+            Platform Analytics
+          </Badge>
+          <Badge
+            variant="outline"
+            className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
+          >
+            Internal
+          </Badge>
+          {lastFetched ? (
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+              Refreshed {lastFetched.toLocaleTimeString()}
+            </span>
+          ) : null}
+        </>
+      }
+    >
 
         {/* ── Header ── */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-900">
-              Platform Analytics
-            </Badge>
-            <Badge
-              variant="outline"
-              className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
-            >
-              Internal
-            </Badge>
-          </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
-            Admin Analytics
-          </h1>
-          <p className="max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-            Monitor activation, engagement, adoption, and value delivery across Contract-to-Cozy.
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Operational View</p>
+          <p className="max-w-3xl text-sm leading-6 text-slate-600">
+            Dense metrics for activation, engagement, adoption, and value delivery, with refresh controls for rapid ops review.
           </p>
         </div>
 
@@ -1154,7 +1162,16 @@ export default function AnalyticsAdminPage() {
         {overviewQ.isLoading ? (
           <OverviewCardsSkeleton />
         ) : overviewQ.isError ? (
-          <ErrorBanner message="Unable to load overview metrics." />
+          <AdminRouteState
+            state="error"
+            title="Overview metrics unavailable"
+            description="Unable to load overview analytics right now. Refresh and retry."
+            action={
+              <Button variant="outline" size="sm" className="rounded-full" onClick={handleRefresh}>
+                Retry overview
+              </Button>
+            }
+          />
         ) : overviewQ.data ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             <OverviewCard
@@ -1183,7 +1200,13 @@ export default function AnalyticsAdminPage() {
               sub={`+${num(overviewQ.data.activation.newActivationsInPeriod)} new activations`}
             />
           </div>
-        ) : null}
+        ) : (
+          <AdminRouteState
+            state="empty"
+            title="No overview data in this window"
+            description="Adjust date range or module filter to load analytics data."
+          />
+        )}
 
         {/* ── Trends ── */}
         <TrendsSection filters={filters} enabled={isAdmin} key={`trends-${refreshKey}`} />
@@ -1240,7 +1263,6 @@ export default function AnalyticsAdminPage() {
             Queries run live · Admin activity excluded from engagement counts · View events deduplicated (1hr window) · WAH trend line is an estimate
           </p>
         </div>
-      </DashboardShell>
-    </div>
+    </AdminConsoleShell>
   );
 }

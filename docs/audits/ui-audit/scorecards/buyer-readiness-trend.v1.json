@@ -5,12 +5,12 @@
     "appRoutesDiscovered": 124,
     "coveragePct": 100,
     "averages": {
-      "overall": 6.79,
+      "overall": 6.8,
       "visual": 6.81,
-      "ux": 6.8,
-      "trust": 6.79,
-      "mobile": 6.78,
-      "buyerReadiness": 6.78
+      "ux": 6.81,
+      "trust": 6.8,
+      "mobile": 6.81,
+      "buyerReadiness": 6.79
     },
     "valuationRisk": {
       "Medium": 42,
@@ -24,8 +24,8 @@
       "P3": 7
     },
     "status": {
-      "In QA": 21,
-      "Planned": 10,
+      "In QA": 28,
+      "Planned": 3,
       "In Build": 93
     }
   },
@@ -40,7 +40,7 @@
     },
     {
       "label": "Track 3 Full Rescore",
-      "buyerReadiness": 6.78
+      "buyerReadiness": 6.79
     }
   ],
   "valuationClosures": [

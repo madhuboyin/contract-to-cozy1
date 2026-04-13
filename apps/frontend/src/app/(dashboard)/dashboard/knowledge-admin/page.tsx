@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, BookOpenText, Loader2, Plus } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { DashboardShell } from '@/components/DashboardShell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { getKnowledgeAdminArticles } from '@/lib/knowledge/adminApi';
-import { AdminAccessState, AdminConsoleShell } from '@/components/ops/AdminConsoleShell';
+import { AdminAccessState, AdminConsoleShell, AdminRouteState, useAdminOnlineStatus } from '@/components/ops/AdminConsoleShell';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
@@ -28,6 +27,7 @@ function formatDateTime(value?: string | null) {
 
 export default function KnowledgeAdminPage() {
   const { user, loading } = useAuth();
+  const isOnline = useAdminOnlineStatus();
   const articlesQuery = useQuery({
     queryKey: ['knowledge-admin-articles'],
     queryFn: getKnowledgeAdminArticles,
@@ -37,14 +37,13 @@ export default function KnowledgeAdminPage() {
 
   if (loading) {
     return (
-      <DashboardShell className="py-10">
-        <Card className="rounded-[28px] border-slate-200 bg-white shadow-sm">
-          <CardContent className="flex items-center justify-center gap-3 py-16 text-slate-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Checking admin access...
-          </CardContent>
-        </Card>
-      </DashboardShell>
+      <AdminConsoleShell title="Knowledge Hub Editor" subtitle="Loading editor access and article records.">
+        <AdminRouteState
+          state="loading"
+          title="Checking admin access"
+          description="Verifying authentication and role permissions for Knowledge Hub operations."
+        />
+      </AdminConsoleShell>
     );
   }
 
@@ -54,6 +53,18 @@ export default function KnowledgeAdminPage() {
 
   if (user.role !== 'ADMIN') {
     return <AdminAccessState title="Admin access required" description="Only CtC admins can manage Knowledge Hub articles." />;
+  }
+
+  if (!isOnline) {
+    return (
+      <AdminConsoleShell title="Knowledge Hub Editor" subtitle="Create, publish, and maintain homeowner knowledge articles.">
+        <AdminRouteState
+          state="offline"
+          title="You're offline"
+          description="Knowledge admin actions require a live connection. Reconnect to manage articles."
+        />
+      </AdminConsoleShell>
+    );
   }
 
   return (
@@ -96,13 +107,22 @@ export default function KnowledgeAdminPage() {
                 Loading articles...
               </div>
             ) : articlesQuery.isError ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-5 text-sm text-rose-700">
-                {articlesQuery.error instanceof Error ? articlesQuery.error.message : 'Failed to load knowledge articles.'}
-              </div>
+              <AdminRouteState
+                state="error"
+                title="Unable to load articles"
+                description={articlesQuery.error instanceof Error ? articlesQuery.error.message : 'Failed to load knowledge articles.'}
+              />
             ) : articles.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-600">
-                No Knowledge Hub articles exist yet. Create the first one to start publishing beyond the seed set.
-              </div>
+              <AdminRouteState
+                state="empty"
+                title="No Knowledge Hub articles yet"
+                description="Create the first article to start publishing beyond the seed set."
+                action={
+                  <Button asChild className="rounded-full">
+                    <Link href="/dashboard/knowledge-admin/new">Create first article</Link>
+                  </Button>
+                }
+              />
             ) : (
               <div className="overflow-x-auto">
                 <Table>
