@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { getFaro } from '@/lib/monitoring/faro';
 
 export default function AuthError({
   error,
@@ -11,7 +12,7 @@ export default function AuthError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Auth error:', error);
+    getFaro()?.api.pushError(error);
   }, [error]);
 
   return (

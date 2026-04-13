@@ -1,16 +1,22 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { DashboardShell } from '@/components/DashboardShell';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { getFaro } from '@/lib/monitoring/faro';
 
 export default function KnowledgeError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    getFaro()?.api.pushError(error);
+  }, [error]);
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_35%,#ffffff_100%)]">
       <DashboardShell className="py-12">

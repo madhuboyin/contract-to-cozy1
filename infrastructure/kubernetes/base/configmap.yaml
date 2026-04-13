@@ -14,6 +14,7 @@ data:
   
   # Frontend Configuration
   NEXT_PUBLIC_API_URL: "https://api.contracttocozy.com"
+  NEXT_PUBLIC_FARO_URL: "https://faro.contracttocozy.com/collect"
   
   # Database Configuration (non-sensitive)
   DB_HOST: "postgres.production.svc.cluster.local"

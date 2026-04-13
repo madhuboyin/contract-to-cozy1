@@ -7,9 +7,11 @@ import { QueryProvider } from '@/lib/providers/QueryProvider';
 import { NetworkStatus } from '@/components/mobile/OfflineBanner';
 import { InstallPrompt } from '@/components/mobile/InstallPrompt';
 import { registerServiceWorker } from '@/lib/pwa';
+import { initFaro } from '@/lib/monitoring/faro';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
+    initFaro();
     const cleanup = registerServiceWorker();
     return cleanup;
   }, []);

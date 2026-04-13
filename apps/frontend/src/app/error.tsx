@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { getFaro } from '@/lib/monitoring/faro';
 
 export default function GlobalError({
   error,
@@ -10,7 +11,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Unhandled error:', error);
+    getFaro()?.api.pushError(error);
   }, [error]);
 
   return (

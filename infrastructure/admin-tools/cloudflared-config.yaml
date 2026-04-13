@@ -25,6 +25,10 @@ data:
       - hostname: grafana.contracttocozy.com
         service: http://prometheus-grafana.monitoring.svc.cluster.local:80
 
+      # Faro (browser telemetry collector)
+      - hostname: faro.contracttocozy.com
+        service: http://alloy-faro.monitoring.svc.cluster.local:12347
+
       # PgAdmin (NEW)
       - hostname: pgadmin.contracttocozy.com
         service: http://pgadmin.admin-tools.svc.cluster.local:80
