@@ -1,0 +1,24 @@
+# TruffleHog configuration
+# Docs: https://github.com/trufflesecurity/trufflehog#configuration
+
+# Exclude paths that are known to contain placeholder/example credentials
+# and can never be real secrets:
+#   - *.example files  — documentation templates
+#   - docs/**          — functional specification docs
+#   - *.md files       — markdown docs and guides
+#   - generate-*.sh    — scaffold scripts with hardcoded placeholders
+#   - **/secrets.yaml.template — k8s secret templates with CHANGE_ME sentinels
+#   - docker-compose.yml — local dev passwords (devpassword, etc.)
+exclude_paths:
+  - apps/backend/.env.example
+  - docker-compose.yml
+  - MIGRATION_GUIDE.md
+  - generate-minimal-apps.sh
+  - generate-docker-files.sh
+  - generate-k8s-configs.sh
+  - infrastructure/kubernetes/base/secrets.yaml.template
+  - infrastructure/kubernetes/prisma-migrate-job.yaml
+  - infrastructure/kubernetes/prisma-migrate-job-fixed.yaml
+  - apps/backend/migrate-job.yaml
+  - apps/backend/utilities/migration-job.yaml
+  - docs/

@@ -52,6 +52,26 @@ jobs:
 
       - run: npm audit --audit-level=high
 
+  secret-scan:
+    name: Secret scan (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history required so TruffleHog can scan every commit
+          fetch-depth: 0
+
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          # Scan the entire git history of this branch
+          base: ""
+          head: HEAD
+          extra_args: >
+            --only-verified
+            --config .trufflehog.yml
+            --no-update
+
   audit-frontend:
     name: Audit frontend
     runs-on: ubuntu-latest
