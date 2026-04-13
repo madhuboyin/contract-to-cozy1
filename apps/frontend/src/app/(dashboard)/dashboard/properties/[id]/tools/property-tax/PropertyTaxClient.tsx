@@ -2,18 +2,12 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 
 import { getPropertyTaxEstimate, PropertyTaxEstimateDTO } from './taxApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
@@ -215,23 +209,40 @@ export default function PropertyTaxClient() {
   };
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Property Tax Intelligence"
-        subtitle="Review tax estimates, trend projection, and key drivers behind changes."
-       className="lg:hidden"/>
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" />
-      </MobileFilterSurface>
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home Tool"
+      title="Property Tax Intelligence"
+      subtitle="Review tax estimates, trend projection, and key drivers behind changes."
+      rail={<HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" />}
+      trust={{
+        confidenceLabel: estimate?.current?.confidence ?? 'Estimated confidence',
+        freshnessLabel: estimate?.meta?.generatedAt ? 'Updated with latest tax model run' : 'Run estimate to refresh',
+        sourceLabel: 'Property value assumptions + local rate estimates + historical trend projection',
+        rationale: 'Surfaces annual tax direction and major contributors so planning decisions stay proactive.',
+      }}
+      priorityAction={{
+        title: 'Validate your assessed value assumptions',
+        description: 'Apply assessed value and local rate overrides to reduce uncertainty before acting on projected taxes.',
+        impactLabel: `${trendYears}-year projection`,
+        confidenceLabel: estimate?.current?.confidence ?? 'Medium',
+        primaryAction: (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              const nextYears = trendYears === 5 ? 10 : 5;
+              setTrendYears(nextYears);
+              void getAndSet(nextYears);
+            }}
+          >
+            Switch to {trendYears === 5 ? '10-year' : '5-year'} projection
+          </Button>
+        ),
+      }}
+    >
 
       {/* Controls */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
@@ -427,6 +438,6 @@ export default function PropertyTaxClient() {
           <div className="pt-2 text-slate-500 dark:text-slate-300">Generated: {estimate?.meta?.generatedAt || '—'}</div>
         </div>
       </div>
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

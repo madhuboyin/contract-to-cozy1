@@ -1,39 +1,38 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
 import { Button } from '@/components/ui/button';
 import ToolExplainerSection, { openToolExplainer } from '@/components/tool-explainer/ToolExplainerSection';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
+import CompareTemplate from '../../components/route-templates/CompareTemplate';
 
 export default function RiskPremiumOptimizerToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Risk-to-Premium Optimizer"
-        subtitle="Lower premium pressure without increasing risk."
-        action={
+    <CompareTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      title="Risk-to-Premium Optimizer"
+      subtitle="Lower premium pressure without increasing risk."
+      rail={<HomeToolsRail propertyId={propertyId} />}
+      trust={{
+        confidenceLabel: 'Medium confidence, improves with current property and premium records',
+        freshnessLabel: 'Updates whenever premium drivers or property context changes',
+        sourceLabel: 'Property profile + risk signals + modeled premium pressure factors',
+        rationale: 'Optimizer prioritizes explainable actions that preserve protection while reducing premium pressure.',
+      }}
+      priorityAction={{
+        title: 'Review your highest premium pressure lever',
+        description: 'Start with one mitigation lever, then compare premium impact before applying changes.',
+        impactLabel: 'Potential premium relief',
+        confidenceLabel: 'Medium',
+        primaryAction: (
           <Button
             variant="outline"
-            className="min-h-[44px] lg:hidden"
+            className="min-h-[44px] w-full sm:w-auto"
             onClick={() =>
               openToolExplainer({
                 id: 'how-it-works',
@@ -43,16 +42,10 @@ export default function RiskPremiumOptimizerToolClient() {
           >
             Learn how it works
           </Button>
-        }
-      />
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} />
-      </MobileFilterSurface>
-
-      <ToolExplainerSection toolKey="riskToPremiumOptimizer" id="how-it-works" />
-
-      <RiskPremiumOptimizerPanel propertyId={propertyId} />
-    </MobilePageContainer>
+        ),
+      }}
+      summary={<ToolExplainerSection toolKey="riskToPremiumOptimizer" id="how-it-works" />}
+      compareContent={<RiskPremiumOptimizerPanel propertyId={propertyId} />}
+    />
   );
 }

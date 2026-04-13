@@ -2,20 +2,14 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 
 import MultiLineChart from './MultiLineChart';
 import { getInsuranceTrend, InsuranceCostTrendDTO } from './insuranceTrendApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -112,23 +106,40 @@ export default function InsuranceTrendClient() {
       : 'border-rose-200/70 bg-gradient-to-br from-rose-50/85 via-white/75 to-amber-50/65 text-rose-800';
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Educational Estimate"
-        title="Insurance Cost Trend Analyzer"
-        subtitle="Directional heuristic only — not decision-grade for major financial planning."
-       className="lg:hidden"/>
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} context="insurance-trend" currentToolId="insurance-trend" />
-      </MobileFilterSurface>
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Educational Estimate"
+      title="Insurance Cost Trend Analyzer"
+      subtitle="Directional heuristic only — not decision-grade for major financial planning."
+      rail={<HomeToolsRail propertyId={propertyId} context="insurance-trend" currentToolId="insurance-trend" />}
+      trust={{
+        confidenceLabel: data?.meta?.confidence ?? 'Estimated confidence',
+        freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest premium trend run' : 'Run analysis to refresh',
+        sourceLabel: 'Property premium history + state average trend data',
+        rationale: 'Shows whether your premium trajectory is tracking above or below state-level pressure.',
+      }}
+      priorityAction={{
+        title: 'Validate premium drift before acting',
+        description: 'Use both horizon views, then decide whether to gather quotes or adjust coverage posture.',
+        impactLabel: `${trendYears}-year premium trend`,
+        confidenceLabel: data?.meta?.confidence ?? 'Medium',
+        primaryAction: (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              const nextYears = trendYears === 5 ? 10 : 5;
+              setTrendYears(nextYears);
+              void getAndSet(nextYears);
+            }}
+          >
+            Switch to {trendYears === 5 ? '10-year' : '5-year'} view
+          </Button>
+        ),
+      }}
+    >
 
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -302,6 +313,6 @@ export default function InsuranceTrendClient() {
         guidanceJourneyId={guidanceJourneyId}
         actionLabel="Mark premium trend reviewed"
       />
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

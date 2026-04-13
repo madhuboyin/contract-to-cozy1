@@ -22,9 +22,9 @@ import {
   MobileCard,
   MobileFilterSurface,
   MobilePageContainer,
-  MobilePageIntro,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import DetailTemplate from '../components/route-templates/DetailTemplate';
 
 function fmt(dt?: string | null) {
   if (!dt) return '—';
@@ -199,11 +199,16 @@ export default function ReportsClient() {
         </Link>
       </Button>
 
-      <MobilePageIntro
-        eyebrow="Reports"
+      <DetailTemplate
         title="Home Reports"
         subtitle="Generate printable PDFs for insurance, claims, resale, estate planning, and lender/HOA requests."
-      />
+        trust={{
+          confidenceLabel: hasActive ? 'Generation in progress' : 'High once report status is READY',
+          freshnessLabel: loading ? 'Refreshing report queue' : 'Live from report export jobs',
+          sourceLabel: 'Report export jobs + storage links + share token status',
+          rationale: 'Keeps one verifiable report ledger for download and controlled external sharing.',
+        }}
+      >
 
       <MobileFilterSurface>
         <MobileActionRow>
@@ -329,6 +334,7 @@ export default function ReportsClient() {
       <p className="text-xs text-gray-500">
         Notes: Downloads use short-lived presigned URLs. Share links can be revoked and may expire automatically.
       </p>
+      </DetailTemplate>
     </MobilePageContainer>
   );
 }

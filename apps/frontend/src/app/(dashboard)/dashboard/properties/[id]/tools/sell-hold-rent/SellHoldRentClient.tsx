@@ -4,15 +4,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import MultiLineChart from '../cost-growth/MultiLineChart';
 import { Button } from '@/components/ui/button';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
+import CompareTemplate from '../../components/route-templates/CompareTemplate';
 
 import ComparisonBars from './ComparisonBars';
 import {
@@ -163,24 +158,49 @@ export default function SellHoldRentClient() {
   }, [data]);
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Sell vs Hold vs Rent"
-        subtitle="Compare outcomes using appreciation, ownership costs, and rental income assumptions."
-       className="lg:hidden"/>
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} context="sell-hold-rent" currentToolId="sell-hold-rent" />
-      </MobileFilterSurface>
-
+    <CompareTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      title="Sell vs Hold vs Rent"
+      subtitle="Compare outcomes using appreciation, ownership costs, and rental income assumptions."
+      rail={<HomeToolsRail propertyId={propertyId} context="sell-hold-rent" currentToolId="sell-hold-rent" />}
+      trust={{
+        confidenceLabel: data?.meta?.confidence
+          ? `Model confidence: ${data.meta.confidence}`
+          : 'Confidence improves as finance snapshot and assumptions are completed',
+        freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest simulation run' : 'Run the simulator to refresh',
+        sourceLabel: 'Property valuation signals + ownership costs + rental assumptions + debt snapshot',
+        rationale: 'Compares three explainable scenarios over matching horizons so homeowners can choose with clearer trade-offs.',
+      }}
+      priorityAction={{
+        title: winner ? `Current best projected path: ${winnerLabel}` : 'Run comparison to identify your best path',
+        description: winner
+          ? `${winnerLabel} currently leads over ${years} years with a projected net outcome of ${money(winnerNet)}.`
+          : 'Review assumptions, run the model, then decide with confidence.',
+        impactLabel: `${years}-year projection`,
+        confidenceLabel: data?.meta?.confidence ?? 'Medium',
+        primaryAction: (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              const nextYears = years === 5 ? 10 : 5;
+              setYears(nextYears);
+              void loadSimulator(nextYears);
+            }}
+          >
+            Compare {years === 5 ? '10-year' : '5-year'} outcome
+          </Button>
+        ),
+      }}
+      summary={
+        <p className="text-sm text-slate-600">
+          Use the assumptions panel to tune the model before committing to a sell, hold, or rent decision.
+        </p>
+      }
+      compareContent={
+        <>
       <div className="rounded-2xl border border-white/70 bg-white/65 p-3 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-slate-500 dark:text-slate-300">
@@ -588,7 +608,9 @@ export default function SellHoldRentClient() {
           </div>
         </div>
       </div>
-    </MobilePageContainer>
+      </>
+      }
+    />
   );
 }
 

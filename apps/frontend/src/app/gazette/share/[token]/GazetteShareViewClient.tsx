@@ -10,13 +10,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  AlertTriangle,
   Calendar,
   ChevronRight,
   ExternalLink,
   FileText,
-  XCircle,
 } from 'lucide-react';
+import RouteStateCard from '@/components/system/RouteStateCard';
+import { Button } from '@/components/ui/button';
 
 // ---------------------------------------------------------------------------
 // Types (share-safe subset of the edition DTOs)
@@ -140,8 +140,12 @@ export default function GazetteShareViewClient() {
   // --- Loading ---
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-slate-900" />
+      <div className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-6 py-10">
+        <RouteStateCard
+          state="loading"
+          title="Loading shared edition"
+          description="Fetching the latest share-safe Gazette stories."
+        />
       </div>
     );
   }
@@ -150,33 +154,28 @@ export default function GazetteShareViewClient() {
   if (errorCode || !edition) {
     const isRevoked = errorCode === 'REVOKED';
     const isExpired = errorMessage?.toLowerCase().includes('expired');
+    const title = isRevoked ? 'Link revoked' : isExpired ? 'Link expired' : 'Edition not available';
+    const description = isRevoked
+      ? 'The owner has revoked access to this shared edition.'
+      : isExpired
+      ? 'This share link has expired.'
+      : errorMessage ?? 'This share link is invalid or no longer available.';
 
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-6">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          {isRevoked || isExpired ? (
-            <XCircle className="mx-auto mb-4 h-12 w-12 text-slate-300" />
-          ) : (
-            <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-amber-400" />
+      <div className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-6 py-10">
+        <RouteStateCard
+          state={isRevoked || isExpired ? 'offline' : 'error'}
+          title={title}
+          description={description}
+          action={(
+            <Button asChild variant="outline">
+              <Link href="/">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Visit Contract to Cozy
+              </Link>
+            </Button>
           )}
-          <h1 className="mb-2 text-lg font-semibold text-slate-900">
-            {isRevoked ? 'Link revoked' : isExpired ? 'Link expired' : 'Edition not available'}
-          </h1>
-          <p className="mb-6 text-sm text-slate-500">
-            {isRevoked
-              ? 'The owner has revoked access to this shared edition.'
-              : isExpired
-              ? 'This share link has expired.'
-              : errorMessage ?? 'This share link is invalid or no longer available.'}
-          </p>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-slate-900"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Visit Contract to Cozy
-          </Link>
-        </div>
+        />
       </div>
     );
   }

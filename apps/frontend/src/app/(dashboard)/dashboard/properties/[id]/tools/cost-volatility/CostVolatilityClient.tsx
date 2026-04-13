@@ -2,17 +2,11 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
-import {
-  MobileFilterSurface,
-  MobilePageContainer,
-  MobilePageIntro,
-} from '@/components/mobile/dashboard/MobilePrimitives';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 import { getCostVolatility, type CostVolatilityDTO } from './costVolatilityApi';
 import MiniLineChartPct from './MiniLineChartPct';
@@ -129,23 +123,40 @@ export default function CostVolatilityClient() {
   }, [recentEvents]);
 
   return (
-    <MobilePageContainer className="space-y-5 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
-      <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-        <Link href={`/dashboard/properties/${propertyId}`}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to property
-        </Link>
-      </Button>
-
-      <MobilePageIntro
-        eyebrow="Home Tool"
-        title="Cost Volatility Index"
-        subtitle="Measure how unpredictable your ownership costs are year to year."
-       className="lg:hidden"/>
-
-      <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-        <HomeToolsRail propertyId={propertyId} context="cost-volatility" currentToolId="cost-volatility" />
-      </MobileFilterSurface>
+    <ToolWorkspaceTemplate
+      backHref={`/dashboard/properties/${propertyId}`}
+      backLabel="Back to property"
+      eyebrow="Home Tool"
+      title="Cost Volatility Index"
+      subtitle="Measure how unpredictable your ownership costs are year to year."
+      rail={<HomeToolsRail propertyId={propertyId} context="cost-volatility" currentToolId="cost-volatility" />}
+      trust={{
+        confidenceLabel: data?.meta?.confidence ?? 'Estimated confidence',
+        freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest volatility run' : 'Run scan to refresh',
+        sourceLabel: 'Cost history + event markers + exposure-weighted risk factors',
+        rationale: 'Flags when cost swings become unpredictable so homeowners can build buffers sooner.',
+      }}
+      priorityAction={{
+        title: 'Prepare for your highest volatility source',
+        description: 'Review where volatility is highest and set a budget buffer before the next spike window.',
+        impactLabel: data?.index?.band ?? 'Volatility risk',
+        confidenceLabel: data?.meta?.confidence ?? 'Medium',
+        primaryAction: (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              const nextYears = years === 5 ? 10 : 5;
+              setYears(nextYears);
+              void load(nextYears);
+            }}
+          >
+            Switch to {years === 5 ? '10-year' : '5-year'} window
+          </Button>
+        ),
+      }}
+    >
 
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
@@ -385,6 +396,6 @@ export default function CostVolatilityClient() {
           ))}
         </div>
       </div>
-    </MobilePageContainer>
+    </ToolWorkspaceTemplate>
   );
 }

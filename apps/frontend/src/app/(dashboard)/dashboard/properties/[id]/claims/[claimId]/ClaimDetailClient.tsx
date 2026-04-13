@@ -25,9 +25,9 @@ import {
   MobileCard,
   MobileFilterSurface,
   MobilePageContainer,
-  MobilePageIntro,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import DetailTemplate from '../../components/route-templates/DetailTemplate';
 
 export default function ClaimDetailClient() {
   const params = useParams<{ id: string; claimId: string }>();
@@ -135,11 +135,18 @@ export default function ClaimDetailClient() {
         </Link>
       </Button>
 
-      <MobilePageIntro
-        eyebrow="Claim"
+      <DetailTemplate
         title={claim.title}
         subtitle={[claim.type, claim.providerName, claim.claimNumber ? `#${claim.claimNumber}` : null].filter(Boolean).join(' • ')}
-      />
+        trust={{
+          confidenceLabel: insights?.recommendation?.confidence != null
+            ? `${Math.round(insights.recommendation.confidence * 100)}% recommendation confidence`
+            : 'Confidence increases with complete checklist and timeline updates',
+          freshnessLabel: loading ? 'Refreshing claim detail' : 'Live from claim and timeline updates',
+          sourceLabel: 'Claim record + checklist progress + claim insights model',
+          rationale: 'Shows next-best claim actions and blocker risk before settlement timelines slip.',
+        }}
+      >
 
       <MobileFilterSurface>
         <div className="flex flex-wrap items-center gap-2">
@@ -343,6 +350,7 @@ export default function ClaimDetailClient() {
           </MobileCard>
         ) : null}
       </div>
+      </DetailTemplate>
     </MobilePageContainer>
   );
 }

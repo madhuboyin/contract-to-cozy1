@@ -17,9 +17,9 @@ import {
   MobileKpiStrip,
   MobileKpiTile,
   MobilePageContainer,
-  MobilePageIntro,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import DetailTemplate from '../components/route-templates/DetailTemplate';
 
 export default function ClaimsClient() {
   const params = useParams<{ id: string }>();
@@ -71,18 +71,23 @@ export default function ClaimsClient() {
         </Link>
       </Button>
 
-      <MobilePageIntro
-        eyebrow="Claims"
+      <DetailTemplate
         title="Claims"
         subtitle="Track claim checklists, documents, and status updates."
-        action={
+        trust={{
+          confidenceLabel: 'High once claim timeline updates are kept current',
+          freshnessLabel: loading ? 'Refreshing claim ledger' : 'Live from claim records',
+          sourceLabel: 'Claim records + checklist progress + provider updates',
+          rationale: 'Keeps every claim in one operational queue so follow-ups are not missed.',
+        }}
+        controls={
           <Button className="min-h-[44px] gap-1.5" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New claim</span>
             <span className="sm:hidden">New</span>
           </Button>
         }
-      />
+      >
 
       <MobileFilterSurface>
         <MobileActionRow>
@@ -163,6 +168,7 @@ export default function ClaimsClient() {
           </Link>
         ))}
       </div>
+      </DetailTemplate>
 
       <ClaimCreateModal
         open={createOpen}

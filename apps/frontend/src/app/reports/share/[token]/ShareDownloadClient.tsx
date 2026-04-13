@@ -2,6 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import RouteStateCard from '@/components/system/RouteStateCard';
+import { Button } from '@/components/ui/button';
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -48,21 +51,28 @@ export default function ShareDownloadClient() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-lg p-6">
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-base font-semibold">Unable to open report</div>
-          <div className="mt-2 text-sm text-gray-600">{error}</div>
-        </div>
+      <div className="mx-auto max-w-2xl p-6">
+        <RouteStateCard
+          state="error"
+          title="Unable to open report"
+          description={error}
+          action={(
+            <Button asChild variant="outline">
+              <Link href="/">Go to Contract to Cozy</Link>
+            </Button>
+          )}
+        />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-lg p-6">
-      <div className="rounded-xl border bg-white p-4">
-        <div className="text-base font-semibold">Opening report…</div>
-        <div className="mt-2 text-sm text-gray-600">If the download doesn’t start, refresh this page.</div>
-      </div>
+    <div className="mx-auto max-w-2xl p-6">
+      <RouteStateCard
+        state="loading"
+        title="Opening report..."
+        description="If the download does not start automatically, refresh this page."
+      />
     </div>
   );
 }

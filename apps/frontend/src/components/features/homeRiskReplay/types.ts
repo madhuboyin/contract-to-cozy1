@@ -95,6 +95,8 @@ export interface HomeRiskReplayImpactSummary {
 export interface HomeRiskReplayDetail {
   id: string;
   propertyId: string;
+  createdAt?: string | null;
+  completedAt?: string | null;
   windowType: HomeRiskReplayWindowType;
   windowStart: string | null;
   windowEnd: string | null;
@@ -129,4 +131,3 @@ export interface HomeRiskReplayRunSummary {
   moderateImpactEvents: number;
   summaryText: string | null;
 }
-
