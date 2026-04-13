@@ -67,41 +67,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle API requests - network first
+  // Handle API requests - network-only, never cache authenticated/sensitive responses
   if (event.request.url.includes('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // Clone and cache successful responses
-          if (response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME)
-              .then((cache) => cache.put(event.request, responseClone));
-          }
-          return response;
-        })
-        .catch(() => {
-          // Return cached response if available
-          return caches.match(event.request)
-            .then((response) => {
-              if (response) {
-                console.log('[SW] Serving from cache:', event.request.url);
-                return response;
-              }
-              // Return offline response for failed API calls
-              return new Response(
-                JSON.stringify({ 
-                  success: false, 
-                  error: 'You are offline. Please try again when connected.' 
-                }),
-                { 
-                  headers: { 'Content-Type': 'application/json' },
-                  status: 503
-                }
-              );
-            });
-        })
-    );
+    event.respondWith(fetch(event.request));
     return;
   }
 
