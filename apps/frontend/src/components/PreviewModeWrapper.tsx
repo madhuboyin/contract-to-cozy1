@@ -8,29 +8,27 @@ export default function PreviewModeWrapper({ children }: { children: React.React
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for preview mode cookie
-    const hasPreviewCookie = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('preview_mode='))
-      ?.split('=')[1] === 'true';
-
-    // Check for preview query parameter
     const urlParams = new URLSearchParams(window.location.search);
-    const hasPreviewParam = urlParams.get('preview') === 'true';
-
-    // Check for admin key in URL
     const adminKey = urlParams.get('key');
-    const PREVIEW_KEY = process.env.NEXT_PUBLIC_PREVIEW_KEY || 'contract2cozy2025';
-    const hasValidKey = adminKey === PREVIEW_KEY;
 
-    // If URL has valid key, set the cookie
-    if (hasValidKey || hasPreviewParam) {
-      document.cookie = `preview_mode=true; path=/; max-age=31536000`;
-      setIsPreviewMode(true);
-    } else {
-      setIsPreviewMode(hasPreviewCookie);
+    if (adminKey) {
+      // Validate the URL key server-side so it is never compared in the browser.
+      fetch('/api/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: adminKey }),
+      }).then((res) => {
+        setIsPreviewMode(res.ok);
+        setIsLoading(false);
+      });
+      return;
     }
 
+    const hasPreviewCookie = document.cookie
+      .split('; ')
+      .some(row => row.startsWith('preview_mode=true'));
+
+    setIsPreviewMode(hasPreviewCookie);
     setIsLoading(false);
   }, []);
 

@@ -11,13 +11,16 @@ export default function ComingSoon() {
   const router = useRouter();
   const BrandIcon = resolveIconByConcept('property');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const PREVIEW_KEY = process.env.NEXT_PUBLIC_PREVIEW_KEY || 'contract2cozy2025';
-    
-    if (key === PREVIEW_KEY) {
-      document.cookie = `preview_mode=true; path=/; max-age=31536000`;
+
+    const res = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+
+    if (res.ok) {
       router.refresh();
     } else {
       setError('Invalid access key');
