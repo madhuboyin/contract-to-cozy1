@@ -16,6 +16,7 @@ import {
   MaintenanceTaskFilters,
   MaintenanceTaskStatus,
 } from '@/types';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 interface PropertyMaintenanceListProps {
   propertyId: string;
@@ -30,6 +31,7 @@ export function PropertyMaintenanceList({
 }: PropertyMaintenanceListProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   // State
   const [filters, setFilters] = useState<MaintenanceTaskFilters>({
@@ -165,10 +167,14 @@ export function PropertyMaintenanceList({
     });
   };
 
-  const handleDelete = (task: PropertyMaintenanceTask) => {
-    if (window.confirm(`Are you sure you want to delete "${task.title}"?`)) {
-      deleteMutation.mutate(task.id);
-    }
+  const handleDelete = async (task: PropertyMaintenanceTask) => {
+    const confirmed = await requestConfirmation({
+      title: 'Delete this maintenance task?',
+      description: `"${task.title}" will be permanently removed from this property.`,
+      confirmLabel: 'Delete task',
+    });
+    if (!confirmed) return;
+    deleteMutation.mutate(task.id);
   };
 
   const handleFiltersChange = (newFilters: MaintenanceTaskFilters) => {
@@ -309,6 +315,7 @@ export function PropertyMaintenanceList({
           )}
         </div>
       </div>
+      {confirmationDialog}
     </div>
   );
 }

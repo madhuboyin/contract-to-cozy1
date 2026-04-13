@@ -23,6 +23,7 @@ import {
   ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 // Helper for Expense Category mapping (for display)
 const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
@@ -175,6 +176,7 @@ export default function ExpensesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | undefined>(undefined);
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
   const { toast } = useToast();
 
   // CRITICAL FIX: Wrap in useCallback and ensure it handles the full fetch cycle
@@ -240,7 +242,12 @@ export default function ExpensesPage() {
   };
 
   const handleDelete = async (expenseId: string) => {
-    if (!window.confirm("Are you sure you want to delete this expense record? This cannot be undone.")) {
+    const confirmed = await requestConfirmation({
+      title: 'Delete this expense record?',
+      description: 'This action cannot be undone.',
+      confirmLabel: 'Delete expense',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -508,6 +515,7 @@ export default function ExpensesPage() {
           </Card>
         </>
       )}
+      {confirmationDialog}
     </div>
   );
 }

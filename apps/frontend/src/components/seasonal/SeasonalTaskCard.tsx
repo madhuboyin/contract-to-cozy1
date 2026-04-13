@@ -16,6 +16,7 @@ import {
   getPriorityBadgeClass,
   formatCostRange,
 } from '@/lib/utils/seasonHelpers';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 // Add to imports at top of file
 import Link from 'next/link';
@@ -36,6 +37,7 @@ export function SeasonalTaskCard({
   const [showDetails, setShowDetails] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   // PHASE 4.2: Use Phase 3 API method
   const addToMaintenanceMutation = useMutation({
@@ -117,10 +119,14 @@ export function SeasonalTaskCard({
     addToMaintenanceMutation.mutate();
   };
 
-  const handleRemoveFromMaintenance = () => {
-    if (window.confirm(`Remove "${item.title}" from your maintenance schedule?`)) {
-      removeFromMaintenanceMutation.mutate();
-    }
+  const handleRemoveFromMaintenance = async () => {
+    const confirmed = await requestConfirmation({
+      title: 'Remove from maintenance schedule?',
+      description: `This removes "${item.title}" from your active maintenance list.`,
+      confirmLabel: 'Remove task',
+    });
+    if (!confirmed) return;
+    removeFromMaintenanceMutation.mutate();
   };
 
   const handleDismiss = () => {
@@ -335,6 +341,7 @@ export function SeasonalTaskCard({
           </div>
         </div>
       </CardContent>
+      {confirmationDialog}
     </Card>
   );
 }

@@ -25,6 +25,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import DetailTemplate from '../components/route-templates/DetailTemplate';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 function fmt(dt?: string | null) {
   if (!dt) return '—';
@@ -76,6 +77,7 @@ export default function ReportsClient() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   const pollRef = useRef<number | null>(null);
 
@@ -155,7 +157,11 @@ export default function ReportsClient() {
 
   async function onDelete(exportId: string) {
     setError(null);
-    const ok = window.confirm('Delete this report? This will remove the PDF and revoke any share links.');
+    const ok = await requestConfirmation({
+      title: 'Delete this report?',
+      description: 'This will remove the PDF and revoke any share links.',
+      confirmLabel: 'Delete report',
+    });
     if (!ok) return;
 
     try {
@@ -335,6 +341,7 @@ export default function ReportsClient() {
         Notes: Downloads use short-lived presigned URLs. Share links can be revoked and may expire automatically.
       </p>
       </DetailTemplate>
+      {confirmationDialog}
     </MobilePageContainer>
   );
 }

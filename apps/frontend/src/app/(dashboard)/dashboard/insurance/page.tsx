@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import OnboardingReturnBanner from '@/components/onboarding/OnboardingReturnBanner';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 import {
   CoverageModalHeader,
   COVERAGE_MODAL_CONTENT_CLASS,
@@ -590,6 +591,7 @@ export default function InsurancePage() {
   const [expandedPolicyIds, setExpandedPolicyIds] = useState<Record<string, boolean>>({});
 
   const { toast } = useToast();
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
   
   // NEW: Navigation Hooks
   const router = useRouter();
@@ -687,7 +689,12 @@ export default function InsurancePage() {
   };
 
   const handleDelete = async (policyId: string) => {
-    if (!window.confirm("Are you sure you want to delete this insurance policy? This cannot be undone.")) {
+    const confirmed = await requestConfirmation({
+      title: 'Delete this insurance policy?',
+      description: 'This action cannot be undone.',
+      confirmLabel: 'Delete policy',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -1182,6 +1189,7 @@ export default function InsurancePage() {
           )}
         </DialogContent>
       </Dialog>
+      {confirmationDialog}
     </div>
   );
 }

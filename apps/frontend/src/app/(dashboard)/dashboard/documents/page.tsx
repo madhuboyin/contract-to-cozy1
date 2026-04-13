@@ -27,6 +27,7 @@ import {
   ReadOnlySummaryBlock,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
@@ -519,6 +520,7 @@ export default function DocumentsPage() {
   const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
   const propertyIdFromUrl = searchParams.get('propertyId');
   const activePropertyId = propertyIdFromUrl || dashboardSelectedPropertyId || undefined;
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   const fetchDependencies = useCallback(async () => {
     setIsLoading(true);
@@ -551,7 +553,12 @@ export default function DocumentsPage() {
   }, [fetchDependencies]);
 
   const handleDelete = async (documentId: string) => {
-    if (!window.confirm("Are you sure you want to delete this document?")) return;
+    const confirmed = await requestConfirmation({
+      title: 'Delete this document?',
+      description: 'This removes the uploaded file from your vault.',
+      confirmLabel: 'Delete document',
+    });
+    if (!confirmed) return;
     
     try {
       await api.deleteDocument(documentId);
@@ -888,6 +895,7 @@ export default function DocumentsPage() {
           </Tabs>
         </DialogContent>
       </Dialog>
+      {confirmationDialog}
     </div>
   );
 }

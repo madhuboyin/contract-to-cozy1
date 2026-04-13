@@ -7,6 +7,7 @@ import RecallStatusBadge from '@/app/(dashboard)/dashboard/components/recalls/Re
 import ResolveRecallModal from '@/app/(dashboard)/dashboard/components/recalls/ResolveRecallModal';
 import humanizeActionType, { titleCase } from '@/lib/utils/humanize';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 import {
   listInventoryItemRecalls,
   confirmRecallMatch,
@@ -22,6 +23,7 @@ export default function InventoryItemRecallPanel(props: {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<RecallMatchDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   const [resolveFor, setResolveFor] = useState<string | null>(null);
 
@@ -73,7 +75,12 @@ export default function InventoryItemRecallPanel(props: {
   }
 
   async function onDismiss(id: string) {
-    if (!confirm('Are you sure you want to dismiss this alert?')) return;
+    const confirmed = await requestConfirmation({
+      title: 'Dismiss this recall alert?',
+      description: 'You can still revisit recall history later.',
+      confirmLabel: 'Dismiss alert',
+    });
+    if (!confirmed) return;
     try {
       await dismissRecallMatch(props.propertyId, id);
       await refresh();
@@ -228,6 +235,7 @@ export default function InventoryItemRecallPanel(props: {
           setResolveFor(null);
         }}
       />
+      {confirmationDialog}
     </div>
   );
 }

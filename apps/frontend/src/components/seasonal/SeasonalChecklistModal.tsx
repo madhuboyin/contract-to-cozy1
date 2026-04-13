@@ -7,6 +7,7 @@ import { useSeasonalChecklistDetails, useDismissChecklist, useAddAllCriticalTask
 import { SeasonalTaskCard } from './SeasonalTaskCard';
 import { getSeasonName, getSeasonIcon, getClimateRegionName } from '@/lib/utils/seasonHelpers';
 import { DiyDifficultyBadge } from './DiyDifficultyBadge';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 interface SeasonalChecklistModalProps {
   checklistId: string;
@@ -16,6 +17,7 @@ interface SeasonalChecklistModalProps {
 export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalChecklistModalProps) {
   const [activeTab, setActiveTab] = useState<'critical' | 'recommended' | 'optional'>('critical');
   const [dismissing, setDismissing] = useState(false);
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   const { data, isLoading, error } = useSeasonalChecklistDetails(checklistId);
   const dismissChecklistMutation = useDismissChecklist();
@@ -45,7 +47,12 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
   const optionalCount = tasks.optional.length;
 
   const handleDismissChecklist = async () => {
-    if (!confirm('Are you sure you want to dismiss this seasonal checklist?')) {
+    const confirmed = await requestConfirmation({
+      title: 'Dismiss this seasonal checklist?',
+      description: 'Dismissed checklists are hidden from your active seasonal workspace.',
+      confirmLabel: 'Dismiss checklist',
+    });
+    if (!confirmed) {
       return;
     }
     setDismissing(true);
@@ -238,6 +245,7 @@ export function SeasonalChecklistModal({ checklistId, onClose }: SeasonalCheckli
           </div>
         </div>
       </div>
+      {confirmationDialog}
     </div>
   );
 }

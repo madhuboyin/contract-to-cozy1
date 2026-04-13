@@ -23,6 +23,7 @@ import {
   HomeBuyerTask, 
   HomeBuyerTaskStatus,
 } from '@/types';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 interface HomeBuyerChecklistProps {
   onCreateTask?: () => void;
@@ -78,6 +79,7 @@ export function HomeBuyerChecklist({
 }: HomeBuyerChecklistProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   // Fetch checklist with 8 default tasks
   const {
@@ -182,10 +184,14 @@ export function HomeBuyerChecklist({
     updateStatusMutation.mutate({ taskId, status });
   };
 
-  const handleDelete = (task: HomeBuyerTask) => {
-    if (window.confirm(`Delete "${task.title}"?`)) {
-      deleteMutation.mutate(task.id);
-    }
+  const handleDelete = async (task: HomeBuyerTask) => {
+    const confirmed = await requestConfirmation({
+      title: 'Delete this task?',
+      description: `"${task.title}" will be permanently removed from your checklist.`,
+      confirmLabel: 'Delete task',
+    });
+    if (!confirmed) return;
+    deleteMutation.mutate(task.id);
   };
 
   const isDefaultTask = (title: string) => {
@@ -494,6 +500,7 @@ export function HomeBuyerChecklist({
           </CardContent>
         </Card>
       )}
+      {confirmationDialog}
     </div>
   );
 }

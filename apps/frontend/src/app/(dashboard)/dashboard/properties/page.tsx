@@ -13,19 +13,12 @@ import {
   MobileCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import PortfolioListTemplate from './components/PortfolioListTemplate';
+import ConfirmDestructiveActionDialog from '@/components/system/ConfirmDestructiveActionDialog';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   SINGLE_FAMILY: 'Single Family',
@@ -547,33 +540,23 @@ export default function PropertiesPage() {
       </div>
       </PortfolioListTemplate>
 
-      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete property?</DialogTitle>
-            <DialogDescription>
-              This removes <span className="font-semibold text-slate-900">{deleteTarget?.name || 'this property'}</span> from your portfolio.
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteTarget(null)}
-              disabled={Boolean(deleting)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => void handleDeleteConfirm()}
-              disabled={!deleteTarget || Boolean(deleting)}
-            >
-              {deleting ? 'Deleting…' : 'Delete property'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDestructiveActionDialog
+        open={Boolean(deleteTarget)}
+        title="Delete property?"
+        description={
+          <>
+            This removes <span className="font-semibold text-slate-900">{deleteTarget?.name || 'this property'}</span>{' '}
+            from your portfolio. This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete property"
+        confirming={Boolean(deleting)}
+        confirmDisabled={!deleteTarget}
+        onConfirm={() => void handleDeleteConfirm()}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      />
 
       {askCozyDockVisible && (
         <div

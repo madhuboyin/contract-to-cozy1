@@ -5,11 +5,7 @@ import Image from 'next/image';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { ReactNode } from 'react';
 import { CTC_INTERACTION_RULES_V1 } from '@/lib/design-system/tokenGovernance';
-
-interface ProofItem {
-  label: string;
-  detail: string;
-}
+import ProofRow, { ProofRowItem } from '@/components/system/ProofRow';
 
 interface MarketingHeroTemplateProps {
   eyebrow?: string;
@@ -17,7 +13,7 @@ interface MarketingHeroTemplateProps {
   subtitle: string;
   ctaLabel: string;
   ctaHref: string;
-  proofItems: ProofItem[];
+  proofItems: ProofRowItem[];
   screenshotSrc?: string;
   screenshotAlt?: string;
 }
@@ -56,14 +52,7 @@ export default function MarketingHeroTemplate({
             </Link>
           </div>
 
-          <div className="mt-6 grid gap-2.5 sm:grid-cols-3">
-            {proofItems.slice(0, 3).map((item) => (
-              <article key={item.label} className="rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-sm">
-                <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{item.label}</p>
-                <p className="mt-1 mb-0 text-sm text-slate-700">{item.detail}</p>
-              </article>
-            ))}
-          </div>
+          <ProofRow items={proofItems} className="mt-6" />
         </div>
 
         <div className="relative">

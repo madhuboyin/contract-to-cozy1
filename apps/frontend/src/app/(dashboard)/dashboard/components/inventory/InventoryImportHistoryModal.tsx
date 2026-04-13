@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { api } from '@/lib/api/client';
+import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
 type Batch = {
   id: string;
@@ -25,6 +26,7 @@ export default function InventoryImportHistoryModal(props: {
   const [err, setErr] = React.useState<string | null>(null);
   const [batches, setBatches] = React.useState<Batch[]>([]);
   const [rollingId, setRollingId] = React.useState<string | null>(null);
+  const { requestConfirmation, confirmationDialog } = useConfirmDestructiveAction();
 
   async function load() {
     setLoading(true);
@@ -49,9 +51,11 @@ export default function InventoryImportHistoryModal(props: {
   if (!props.open) return null;
 
   async function rollback(batchId: string) {
-    const ok = confirm(
-      'Rollback will remove items created by this batch (documents will be detached). Continue?'
-    );
+    const ok = await requestConfirmation({
+      title: 'Rollback this import batch?',
+      description: 'This removes items created by the batch and detaches related documents.',
+      confirmLabel: 'Rollback batch',
+    });
     if (!ok) return;
 
     setRollingId(batchId);
@@ -133,6 +137,7 @@ export default function InventoryImportHistoryModal(props: {
           </div>
         )}
       </div>
+      {confirmationDialog}
     </div>
   );
 }
