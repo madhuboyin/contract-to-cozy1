@@ -46,7 +46,7 @@ export default function ClaimDocuments({ claim }: { claim: ClaimDTO }) {
       {docs.map((d) => {
         const title = getDisplayTitle(d);
         const created = formatDate(d.createdAt);
-        const docUrl = d.document?.fileUrl || null;
+        const docUrl = d.document?.fileSignedUrl || d.document?.fileUrl || null;
 
         const chip = d.claimDocumentType ?? 'OTHER';
         const mime = d.document?.mimeType || null;

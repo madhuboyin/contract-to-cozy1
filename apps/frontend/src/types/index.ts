@@ -790,7 +790,10 @@ export type ExpenseCategory =
 export interface Document {
   id: string;
   name: string;
-  fileUrl: string;
+  /** S3 key — not a usable URL. Use fileSignedUrl for display/download. */
+  fileUrl?: string;
+  /** Presigned S3 URL (1-hour expiry) returned by the API for display/download. */
+  fileSignedUrl?: string | null;
   type: DocumentType; // Updated type to use the new DocumentType enum
   description: string | null;
   fileSize: number;

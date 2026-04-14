@@ -54,6 +54,21 @@ const nextConfig = {
 
           // Suppress DNS prefetch to avoid leaking navigation intent
           { key: 'X-DNS-Prefetch-Control', value: 'off' },
+
+          // Isolate this browsing context from cross-origin windows/popups,
+          // preventing Spectre-style cross-window attacks.
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+
+          // Require cross-origin resources embedded in this page to opt-in to
+          // being loaded ('credentialless' is used instead of 'require-corp'
+          // because S3 presigned URLs for property images are cross-origin and
+          // do not carry CORP headers; 'credentialless' gives the same Spectre
+          // protection without blocking those resources).
+          { key: 'Cross-Origin-Embedder-Policy', value: 'credentialless' },
+
+          // Prevent this origin's resources from being loaded cross-origin
+          // without explicit opt-in.
+          { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
         ],
       },
     ];

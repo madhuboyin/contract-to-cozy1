@@ -117,8 +117,8 @@ export default function ClaimTimeline({
           {events.map((ev: ClaimTimelineEventDTO & any) => {
             // If your DTO includes nested claimDocument->document->fileUrl, we’ll render it.
             const fileUrl =
+              ev?.claimDocument?.document?.fileSignedUrl ||
               ev?.claimDocument?.document?.fileUrl ||
-              ev?.claimDocument?.document?.presignedUrl || // if you ever add it
               null;
 
             const docLabel =

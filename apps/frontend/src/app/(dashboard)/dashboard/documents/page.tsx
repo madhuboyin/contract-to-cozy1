@@ -778,7 +778,7 @@ export default function DocumentsPage() {
                   <ActionPriorityRow
                     primaryAction={
                       <Button asChild className="w-full min-h-[40px]">
-                        <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                        <a href={doc.fileSignedUrl ?? undefined} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="w-4 h-4 mr-2" />
                           Open Document
                         </a>
@@ -838,7 +838,7 @@ export default function DocumentsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700" asChild>
-                           <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
+                           <a href={doc.fileSignedUrl ?? undefined} target="_blank" rel="noopener noreferrer">
                               <ExternalLink className="w-4 h-4" />
                            </a>
                         </Button>

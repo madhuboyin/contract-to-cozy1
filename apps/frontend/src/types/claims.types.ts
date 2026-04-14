@@ -259,6 +259,7 @@ export type CreateClaimInput = {
       name?: string | null;
       mimeType?: string | null;
       fileUrl?: string | null;
+      fileSignedUrl?: string | null;
     } | null;
   }
   

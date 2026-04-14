@@ -111,6 +111,7 @@ export type NegotiationShieldDocument = {
   mimeType: string | null;
   fileSizeBytes: number | null;
   fileUrl: string | null;
+  fileSignedUrl?: string | null;
   storageKey: string | null;
   uploadedAt: string;
 };

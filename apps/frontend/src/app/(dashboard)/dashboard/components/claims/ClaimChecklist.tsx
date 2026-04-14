@@ -326,7 +326,7 @@ export default function ClaimChecklist({
                 <div className="text-xs font-semibold text-gray-700">Documents</div>
                 <div className="mt-2 space-y-1">
                   {docs.map((d: any) => {
-                    const url = d.document?.fileUrl;
+                    const url = d.document?.fileSignedUrl || d.document?.fileUrl;
                     const label = d.title || d.document?.name || 'Document';
                     return (
                       <div key={d.id} className="flex items-center justify-between gap-2">

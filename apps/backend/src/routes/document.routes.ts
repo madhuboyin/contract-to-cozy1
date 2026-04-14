@@ -194,7 +194,12 @@ router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpl
 
     const bucket = process.env.S3_BUCKET;
     const fileSignedUrl = bucket
-      ? await presignGetObject({ bucket, key: document.fileUrl, expiresInSeconds: 3600 })
+      ? await presignGetObject({
+          bucket,
+          key: document.fileUrl,
+          expiresInSeconds: 3600,
+          downloadFilename: document.name,
+        })
       : null;
 
     res.json({
@@ -255,7 +260,12 @@ router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
       documents.map(async (doc) => {
         const isS3Key = bucket && doc.fileUrl && !doc.fileUrl.startsWith('data:');
         const fileSignedUrl = isS3Key
-          ? await presignGetObject({ bucket, key: doc.fileUrl, expiresInSeconds: 3600 })
+          ? await presignGetObject({
+              bucket,
+              key: doc.fileUrl,
+              expiresInSeconds: 3600,
+              downloadFilename: doc.name,
+            })
           : null;
         return { ...doc, fileUrl: undefined, fileSignedUrl };
       })
