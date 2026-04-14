@@ -135,8 +135,8 @@ app.use(cors({
   ],
   credentials: true,
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Apply global API rate limiting at the app boundary so all /api/* routes
 // are covered, including any that do not self-apply a per-route limiter.
@@ -432,7 +432,6 @@ app.use('/api', propertyScoreSnapshotRoutes);
 app.use('/api', dailyHomePulseRoutes);
 app.use('/api', homeScoreReportRoutes);
 app.use('/api', homeSavingsRoutes);
-//app.use(express.json({ limit: '10mb' })); // Ensure this is present
 app.use('/api', trueCostOwnershipRoutes);
 app.use('/api', homeCapitalTimelineRoutes);
 app.use('/api', negotiationShieldRoutes);
@@ -461,7 +460,6 @@ app.use('/api', gazetteInternalRoutes);
 app.use('/api/weather', weatherRoutes);
 app.use('/api/admin/release-gates', authenticate, requireRole(UserRole.ADMIN), releaseGateRoutes);
 
-//app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
