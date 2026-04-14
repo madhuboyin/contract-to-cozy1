@@ -22,7 +22,10 @@ export function initFaro(): void {
     },
     instrumentations: [
       ...getWebInstrumentations({
-        captureConsole: false,
+        // Capture console.error and console.warn in the browser → Loki.
+        // Suppress debug/log to avoid flooding Loki with verbose output.
+        captureConsole: true,
+        captureConsoleDisabledLevels: ['debug', 'trace', 'log', 'info'],
       }),
     ],
   });
