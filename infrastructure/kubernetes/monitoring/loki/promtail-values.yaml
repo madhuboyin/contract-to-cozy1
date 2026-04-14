@@ -19,6 +19,13 @@ scrape_configs:
   - job_name: production/api-logs
     pipeline_stages:
       - cri: {}
+      # Merge multi-line stack traces from third-party libraries into one entry.
+      # A new log entry starts on any line that is NOT a stack trace continuation
+      # (i.e. does not start with whitespace followed by "at " or "...").
+      - multiline:
+          firstline: '^(?![ \t]+at[ \t]|[ \t]+\.{3}[ \t]\d)'
+          max_wait_time: 3s
+          max_lines: 128
     kubernetes_sd_configs:
       - role: pod
     relabel_configs:
@@ -76,6 +83,10 @@ scrape_configs:
   - job_name: kubernetes-pods
     pipeline_stages:
       - cri: {}
+      - multiline:
+          firstline: '^(?![ \t]+at[ \t]|[ \t]+\.{3}[ \t]\d)'
+          max_wait_time: 3s
+          max_lines: 128
     kubernetes_sd_configs:
       - role: pod
     relabel_configs:
