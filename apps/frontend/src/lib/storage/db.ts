@@ -146,11 +146,18 @@ export async function queueOfflineRequest(
   headers?: Record<string, string>
 ) {
   const db = await getDB();
+
+  // Strip Authorization header before persisting to IndexedDB.
+  // Tokens must never be written to IndexedDB: it is not encrypted and is
+  // accessible to any script running in this origin. A fresh token is attached
+  // by the sync worker when the queued request is replayed online.
+  const { Authorization, authorization, ...safeHeaders } = headers ?? {};
+
   await db.add('offline-queue', {
     url,
     method,
     body,
-    headers,
+    headers: safeHeaders,
     timestamp: Date.now(),
     retryCount: 0,
   });

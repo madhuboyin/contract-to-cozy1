@@ -3,6 +3,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import basicAuth from 'express-basic-auth';
@@ -46,6 +47,7 @@ import orchestrationRoutes from './routes/orchestration.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { authenticate, requireRole } from './middleware/auth.middleware';
 import { apiRateLimiter } from './middleware/rateLimiter.middleware';
+import { csrfProtection, getCsrfToken } from './middleware/csrf.middleware';
 import { UserRole } from './types/auth.types';
 import notificationRoutes from './routes/notification.routes';
 import seasonalChecklistRoutes from './routes/seasonalChecklist.routes';
@@ -137,6 +139,13 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// cookie-parser must run before csrfProtection so req.cookies is populated.
+app.use(cookieParser());
+
+// CSRF protection — guards mutating requests that arrive via cookie-based auth.
+// Requests using Authorization: Bearer <token> are skipped (see csrf.middleware.ts).
+app.use('/api', csrfProtection);
 
 // Apply global API rate limiting at the app boundary so all /api/* routes
 // are covered, including any that do not self-apply a per-route limiter.
@@ -374,6 +383,11 @@ app.get('/', (req: Request, res: Response) => {
 // =============================================================================
 // API ROUTES
 // =============================================================================
+
+// CSRF token endpoint — returns a fresh token and sets the csrf cookie.
+// Frontend calls GET /api/csrf-token once on load; passes the returned token
+// as x-csrf-token on all subsequent mutating (non-Bearer) requests.
+app.get('/api/csrf-token', getCsrfToken);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/providers', providerRoutes);
