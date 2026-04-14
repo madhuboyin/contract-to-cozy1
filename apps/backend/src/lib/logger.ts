@@ -38,7 +38,7 @@ function getTransport() {
   }
 
   return {
-    target: 'pino-loki',
+    target: require.resolve('pino-loki'),
     options: {
       host: process.env.LOKI_HOST || 'http://loki-gateway.monitoring.svc.cluster.local',
       basicAuth: {
