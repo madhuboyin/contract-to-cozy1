@@ -1,5 +1,6 @@
 import { fetchTicketmasterEvents } from './ticketmaster.provider';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * Cron-safe ingestion:
@@ -9,7 +10,7 @@ import { prisma } from '../lib/prisma';
  * - Marks stale events inactive
  */
 export async function fetchCommunityEventsCron() {
-  console.log(`[${new Date().toISOString()}] [COMMUNITY] Ingestion started`);
+  logger.info(`[${new Date().toISOString()}] [COMMUNITY] Ingestion started`);
 
   try {
     const enabledCities = await prisma.cityFeatureFlag.findMany({
@@ -17,7 +18,7 @@ export async function fetchCommunityEventsCron() {
     });
 
     if (enabledCities.length === 0) {
-      console.log('[COMMUNITY] No enabled cities. Skipping.');
+      logger.info('[COMMUNITY] No enabled cities. Skipping.');
       return;
     }
 
@@ -25,7 +26,7 @@ export async function fetchCommunityEventsCron() {
     const radius = Number(process.env.EVENTS_RADIUS_MILES ?? 15);
 
     for (const c of enabledCities) {
-      console.log(
+      logger.info(
         `[COMMUNITY] Fetching Ticketmaster events for ${c.city}, ${c.state} radius=${radius}mi`
       );
 
@@ -89,10 +90,10 @@ export async function fetchCommunityEventsCron() {
       data: { isActive: false }
     });
 
-    console.log(
+    logger.info(
       `[COMMUNITY] ✅ Ingestion completed. upserted=${totalUpserted} stale_inactivated=${stale.count}`
     );
   } catch (err) {
-    console.error('[COMMUNITY] ❌ Ingestion failed:', err);
+    logger.error('[COMMUNITY] ❌ Ingestion failed:', err);
   }
 }

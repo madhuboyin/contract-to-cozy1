@@ -18,6 +18,7 @@
 
 import fetch from 'node-fetch';
 import { MortgageRateService } from '../../../backend/src/refinanceRadar/engine/mortgageRate.service';
+import { logger } from '../lib/logger';
 
 // ─── FRED API config ──────────────────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
   // ── Attempt 1: FRED API ──────────────────────────────────────────────────
   if (fredApiKey) {
     try {
-      console.log('[MORTGAGE-RATE-INGEST] Fetching from FRED API...');
+      logger.info('[MORTGAGE-RATE-INGEST] Fetching from FRED API...');
 
       const [result30, result15] = await Promise.all([
         fetchFredSeries(FRED_30YR_SERIES, fredApiKey),
@@ -110,9 +111,9 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
       ]);
 
       if (!result30) {
-        console.warn(`[MORTGAGE-RATE-INGEST] FRED returned no data for ${FRED_30YR_SERIES}`);
+        logger.warn(`[MORTGAGE-RATE-INGEST] FRED returned no data for ${FRED_30YR_SERIES}`);
       } else if (!result15) {
-        console.warn(`[MORTGAGE-RATE-INGEST] FRED returned no data for ${FRED_15YR_SERIES}`);
+        logger.warn(`[MORTGAGE-RATE-INGEST] FRED returned no data for ${FRED_15YR_SERIES}`);
       } else {
         const { snapshot, created } = await mortgageRateService.ingestSnapshot({
           date: result30.date,   // both series report same survey date
@@ -127,7 +128,7 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
           },
         });
 
-        console.log(
+        logger.info(
           `[MORTGAGE-RATE-INGEST] FRED ✓ — date=${snapshot.date} ` +
           `30yr=${snapshot.rate30yr}% 15yr=${snapshot.rate15yr}% ` +
           `${created ? '(new)' : '(already existed)'}`,
@@ -144,13 +145,13 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
         };
       }
     } catch (err) {
-      console.warn(
+      logger.warn(
         '[MORTGAGE-RATE-INGEST] FRED API fetch failed:',
         err instanceof Error ? err.message : err,
       );
     }
   } else {
-    console.warn('[MORTGAGE-RATE-INGEST] FRED_API_KEY not set — skipping FRED fetch.');
+    logger.warn('[MORTGAGE-RATE-INGEST] FRED_API_KEY not set — skipping FRED fetch.');
   }
 
   // ── Attempt 2: Manual env var fallback ───────────────────────────────────
@@ -170,7 +171,7 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
       metadataJson: { fetchedAt: new Date().toISOString() },
     });
 
-    console.log(
+    logger.info(
       `[MORTGAGE-RATE-INGEST] Manual fallback ✓ — date=${snapshot.date} ` +
       `30yr=${snapshot.rate30yr}% 15yr=${snapshot.rate15yr}% ` +
       `${created ? '(new)' : '(already existed)'}`,
@@ -192,7 +193,7 @@ export async function ingestMortgageRatesJob(): Promise<MortgageRateIngestResult
     ? 'Set FRED_API_KEY (free at fred.stlouisfed.org) or MORTGAGE_RATE_30YR_FALLBACK + MORTGAGE_RATE_15YR_FALLBACK.'
     : 'FRED API fetch failed. Set MORTGAGE_RATE_30YR_FALLBACK + MORTGAGE_RATE_15YR_FALLBACK as a fallback.';
 
-  console.warn(`[MORTGAGE-RATE-INGEST] No rate data ingested. ${reason}`);
+  logger.warn(`[MORTGAGE-RATE-INGEST] No rate data ingested. ${reason}`);
 
   return {
     success: false,

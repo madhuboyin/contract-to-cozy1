@@ -1,4 +1,5 @@
 import { ExternalCommunityEvent } from './communityEvents.types';
+import { logger } from '../lib/logger';
 
 const EVENTBRITE_BASE_URL = 'https://www.eventbriteapi.com/v3';
 
@@ -42,7 +43,7 @@ export async function fetchEventbriteEvents(
 
     // Rate-limit handling
     if (resp.status === 429) {
-      console.warn('[COMMUNITY] Eventbrite rate limited, backing off...');
+      logger.warn('[COMMUNITY] Eventbrite rate limited, backing off...');
       await sleep(1500);
       continue;
     }

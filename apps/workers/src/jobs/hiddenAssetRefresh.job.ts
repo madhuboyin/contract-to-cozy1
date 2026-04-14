@@ -5,11 +5,12 @@
 
 import { prisma } from '../lib/prisma';
 import { HiddenAssetService } from '../../../backend/src/services/hiddenAssets.service';
+import { logger } from '../lib/logger';
 
 const hiddenAssetService = new HiddenAssetService();
 
 export async function runHiddenAssetRefreshJob(): Promise<void> {
-  console.log(`[HIDDEN-ASSETS] Starting batch refresh at ${new Date().toISOString()}`);
+  logger.info(`[HIDDEN-ASSETS] Starting batch refresh at ${new Date().toISOString()}`);
 
   const properties = await prisma.property.findMany({
     select: { id: true },
@@ -24,11 +25,11 @@ export async function runHiddenAssetRefreshJob(): Promise<void> {
       successCount++;
     } catch (error) {
       failureCount++;
-      console.error(`[HIDDEN-ASSETS] Scan failed for property ${property.id}:`, error);
+      logger.error(`[HIDDEN-ASSETS] Scan failed for property ${property.id}:`, error);
     }
   }
 
-  console.log(
+  logger.info(
     `[HIDDEN-ASSETS] Batch refresh complete. ` +
       `Success: ${successCount}, Failed: ${failureCount}, Total: ${properties.length}`,
   );

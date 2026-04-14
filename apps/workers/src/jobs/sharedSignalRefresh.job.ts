@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { signalService } from '../../../backend/src/services/signal.service';
+import { logger } from '../lib/logger';
 
 export type SharedSignalRefreshJobSummary = {
   processedProperties: number;
@@ -34,11 +35,11 @@ export async function runSharedSignalRefreshJob(): Promise<SharedSignalRefreshJo
       interactionCount += refreshed.interactionCount;
     } catch (error) {
       erroredProperties += 1;
-      console.error(`[shared-signal-refresh] Failed for property ${property.id}:`, error);
+      logger.error(`[shared-signal-refresh] Failed for property ${property.id}:`, error);
     }
   }
 
-  console.log(
+  logger.info(
     `[shared-signal-refresh] processed=${processedProperties} errors=${erroredProperties} ` +
       `refreshedSignals=${refreshedSignalCount} skippedSignals=${skippedSignalCount} interactions=${interactionCount}`,
   );

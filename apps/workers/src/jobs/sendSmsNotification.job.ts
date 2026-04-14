@@ -1,5 +1,6 @@
+import { logger } from '../lib/logger';
 export async function sendSmsNotificationJob(notificationDeliveryId: string) {
-    console.log(
+    logger.info(
       `[SMS] Sending SMS notification for delivery ${notificationDeliveryId}`
     );
   

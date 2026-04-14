@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
 import { buildDigestHtml, escapeHtml } from '../email/buildDigestHtml';
+import { logger } from '../lib/logger';
 
 const MAX_NOTIFICATIONS_PER_EMAIL = 10;
 
@@ -171,7 +172,7 @@ Manage notifications in your dashboard.
       },
     });
 
-    console.error('[EMAIL-WORKER] Batch email delivery failed', err);
+    logger.error('[EMAIL-WORKER] Batch email delivery failed', err);
   }
 }
 
@@ -194,14 +195,14 @@ export async function runDailyEmailDigest() {
     ...new Set(users.map((u) => u.notification.userId)),
   ];
 
-  console.log(`[DIGEST] Users with pending notifications: ${userIds.length}`);
+  logger.info(`[DIGEST] Users with pending notifications: ${userIds.length}`);
 
   // 2️⃣ Send one email per user
   for (const userId of userIds) {
     try {
       await sendUserDigest(userId);
     } catch (err) {
-      console.error(`[DIGEST] Failed for user=${userId}`, err);
+      logger.error(`[DIGEST] Failed for user=${userId}`, err);
     }
   }
 }
@@ -249,7 +250,7 @@ async function sendUserDigest(userId: string) {
     },
   });
 
-  console.log(
+  logger.info(
     `[DIGEST] Sent ${notifications.length} notifications to ${user.email}`
   );
 }

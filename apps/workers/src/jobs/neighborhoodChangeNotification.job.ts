@@ -15,6 +15,7 @@
 
 import { prisma } from '../lib/prisma';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 const NOTIFICATION_THRESHOLD = 60;
 // 25 hours: catch up on links created since yesterday's run plus 1h jitter
@@ -42,7 +43,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 export async function neighborhoodChangeNotificationJob(): Promise<void> {
   const since = new Date(Date.now() - LOOKBACK_MS);
 
-  console.log(
+  logger.info(
     `[NEIGHBORHOOD-NOTIFY] Scanning for high-impact events linked since ${since.toISOString()}...`,
   );
 
@@ -82,11 +83,11 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
   });
 
   if (newLinks.length === 0) {
-    console.log('[NEIGHBORHOOD-NOTIFY] No new high-impact events to notify about.');
+    logger.info('[NEIGHBORHOOD-NOTIFY] No new high-impact events to notify about.');
     return;
   }
 
-  console.log(`[NEIGHBORHOOD-NOTIFY] Found ${newLinks.length} new high-impact link(s) to process.`);
+  logger.info(`[NEIGHBORHOOD-NOTIFY] Found ${newLinks.length} new high-impact link(s) to process.`);
 
   let notified = 0;
   let skipped = 0;
@@ -118,7 +119,7 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
       );
 
       if (freshnessScore < FRESHNESS_THRESHOLD) {
-        console.log(
+        logger.info(
           `[NEIGHBORHOOD-NOTIFY] Suppressed (stale event): link=${linkId} property=${propertyId}` +
           ` freshnessScore=${freshnessScore.toFixed(2)}`,
         );
@@ -214,12 +215,12 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
           },
         });
       } catch (guidanceError) {
-        console.warn('[GUIDANCE] neighborhood change signal ingest failed:', guidanceError);
+        logger.warn('[GUIDANCE] neighborhood change signal ingest failed:', guidanceError);
       }
 
       notified++;
     } catch (err: any) {
-      console.error(
+      logger.error(
         `[NEIGHBORHOOD-NOTIFY] Failed for link ${linkId} (property=${propertyId}):`,
         err?.message ?? err,
       );
@@ -227,7 +228,7 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
     }
   }
 
-  console.log(
+  logger.info(
     `[NEIGHBORHOOD-NOTIFY] Done. notified=${notified} skipped=${skipped} failed=${failed}`,
   );
 }

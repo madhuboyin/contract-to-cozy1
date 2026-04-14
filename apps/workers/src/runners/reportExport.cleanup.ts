@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { deleteObject } from '../storage/deleteObject';
+import { logger } from '../lib/logger';
 
 const CLEAN_INTERVAL_MS = Number(process.env.REPORT_EXPORT_CLEAN_MS || 60_000);
 
@@ -37,11 +38,11 @@ export async function runReportExportCleanup() {
             data: { reportId: exp.id, type: 'EXPIRED' },
           });
         } catch (e) {
-          console.error('[cleanup] failed for export', exp.id, e);
+          logger.error('[cleanup] failed for export', exp.id, e);
         }
       }
     } catch (e) {
-      console.error('[reportExportCleanup] error:', e);
+      logger.error('[reportExportCleanup] error:', e);
     }
 
     await new Promise((r) => setTimeout(r, CLEAN_INTERVAL_MS));

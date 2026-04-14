@@ -1,5 +1,6 @@
 // apps/workers/src/jobs/cleanupInventoryDrafts.job.ts
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * Deletes Inventory OCR drafts that were never confirmed and are older than TTL.
@@ -11,7 +12,7 @@ export async function cleanupInventoryDraftsJob() {
   const ttlDays = Number(process.env.INVENTORY_DRAFT_TTL_DAYS || 7);
 
   if (!Number.isFinite(ttlDays) || ttlDays <= 0) {
-    console.warn(
+    logger.warn(
       `[INVENTORY-DRAFT-CLEANUP] Invalid INVENTORY_DRAFT_TTL_DAYS="${process.env.INVENTORY_DRAFT_TTL_DAYS}". Using default 7.`
     );
   }
@@ -26,7 +27,7 @@ export async function cleanupInventoryDraftsJob() {
     },
   });
 
-  console.log(
+  logger.info(
     `[INVENTORY-DRAFT-CLEANUP] Deleted ${result.count} DRAFT inventoryDraftItem rows older than ${effectiveTtlDays}d (cutoff=${cutoff.toISOString()})`
   );
 

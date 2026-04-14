@@ -1,4 +1,5 @@
 import { sharedDataBackfillService } from '../../../backend/src/services/sharedDataBackfill.service';
+import { logger } from '../lib/logger';
 
 type SharedDataBackfillJobResult = {
   processedProperties: number;
@@ -16,7 +17,7 @@ export async function runSharedDataBackfillJob(): Promise<SharedDataBackfillJobR
     limit,
   });
 
-  console.log(
+  logger.info(
     `[shared-data-backfill] complete total=${summary.totalPropertiesConsidered} ` +
       `processed=${summary.processedProperties} skipped=${summary.skippedProperties} errored=${summary.erroredProperties}`,
   );

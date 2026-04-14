@@ -1,6 +1,7 @@
 import { Queue } from 'bullmq';
 import { prisma } from '../lib/prisma';
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 const QUEUE_NAME = 'email-notification-queue';
 const JOB_NAME = 'SEND_EMAIL_NOTIFICATION';
@@ -70,7 +71,7 @@ export function startHighPriorityEmailEnqueuePoller(opts?: {
       )
     );
 
-    console.log(`[EMAIL-HIGH] enqueued ${ids.length} high-priority deliveries`);
+    logger.info(`[EMAIL-HIGH] enqueued ${ids.length} high-priority deliveries`);
   };
 
   const loop = async () => {
@@ -78,7 +79,7 @@ export function startHighPriorityEmailEnqueuePoller(opts?: {
       try {
         await tick();
       } catch (e: any) {
-        console.error('[EMAIL-HIGH] poller error', e?.message || e);
+        logger.error('[EMAIL-HIGH] poller error', e?.message || e);
       }
       await sleep(intervalMs);
     }
@@ -86,7 +87,7 @@ export function startHighPriorityEmailEnqueuePoller(opts?: {
 
   void loop();
 
-  console.log(`[EMAIL-HIGH] enqueue poller started intervalMs=${intervalMs} batchSize=${batchSize}`);
+  logger.info(`[EMAIL-HIGH] enqueue poller started intervalMs=${intervalMs} batchSize=${batchSize}`);
 
   return async () => {
     stopped = true;

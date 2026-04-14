@@ -4,6 +4,7 @@
 import { prisma } from '../lib/prisma';
 import { sendEmail } from '../email/email.service';
 import { escapeHtml } from '../email/buildDigestHtml';
+import { logger } from '../lib/logger';
 
 // Type for checklist item with relations
 type ChecklistItemWithTemplate = {
@@ -26,7 +27,7 @@ type ChecklistItemWithTemplate = {
  * - Better error handling
  */
 export async function sendSeasonalNotifications() {
-  console.log('[SEASONAL-NOTIFY] Starting notification job...');
+  logger.info('[SEASONAL-NOTIFY] Starting notification job...');
 
   try {
     // OPTIMIZED: Single query with proper joins
@@ -55,7 +56,7 @@ export async function sendSeasonalNotifications() {
       },
     });
 
-    console.log(`[SEASONAL-NOTIFY] Found ${checklistsToNotify.length} checklists to potentially notify`);
+    logger.info(`[SEASONAL-NOTIFY] Found ${checklistsToNotify.length} checklists to potentially notify`);
 
     // Filter by notification settings (still need separate query for climate settings)
     const filtered = [];
@@ -70,14 +71,14 @@ export async function sendSeasonalNotifications() {
           filtered.push(checklist);
         }
       } catch (error) {
-        console.error(
+        logger.error(
           `[SEASONAL-NOTIFY] Error checking settings for property ${checklist.propertyId}:`,
           error
         );
       }
     }
 
-    console.log(`[SEASONAL-NOTIFY] ${filtered.length} checklists with notifications enabled`);
+    logger.info(`[SEASONAL-NOTIFY] ${filtered.length} checklists with notifications enabled`);
 
     // BATCH PROCESSING: Send emails in batches with rate limiting
     const BATCH_SIZE = 25;
@@ -89,7 +90,7 @@ export async function sendSeasonalNotifications() {
     for (let i = 0; i < filtered.length; i += BATCH_SIZE) {
       const batch = filtered.slice(i, i + BATCH_SIZE);
       
-      console.log(
+      logger.info(
         `[SEASONAL-NOTIFY] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(filtered.length / BATCH_SIZE)} ` +
         `(${batch.length} checklists)`
       );
@@ -103,12 +104,12 @@ export async function sendSeasonalNotifications() {
       results.forEach((result, idx) => {
         if (result.status === 'fulfilled') {
           sent++;
-          console.log(
+          logger.info(
             `[SEASONAL-NOTIFY] ✅ Sent notification for checklist ${batch[idx].id}`
           );
         } else {
           errors++;
-          console.error(
+          logger.error(
             `[SEASONAL-NOTIFY] ❌ Failed to send for checklist ${batch[idx].id}:`,
             result.reason
           );
@@ -117,16 +118,16 @@ export async function sendSeasonalNotifications() {
 
       // Delay between batches (except for last batch)
       if (i + BATCH_SIZE < filtered.length) {
-        console.log(`[SEASONAL-NOTIFY] Waiting ${BATCH_DELAY_MS}ms before next batch...`);
+        logger.info(`[SEASONAL-NOTIFY] Waiting ${BATCH_DELAY_MS}ms before next batch...`);
         await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
       }
     }
 
-    console.log(
+    logger.info(
       `[SEASONAL-NOTIFY] Job complete. Sent: ${sent}, Errors: ${errors}, Total: ${filtered.length}`
     );
   } catch (error) {
-    console.error('[SEASONAL-NOTIFY] Fatal error in notification job:', error);
+    logger.error('[SEASONAL-NOTIFY] Fatal error in notification job:', error);
     throw error;
   }
 }

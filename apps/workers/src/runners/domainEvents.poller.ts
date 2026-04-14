@@ -1,4 +1,5 @@
 import { processDomainEventsJob } from '../jobs/processDomainEvents.job';
+import { logger } from '../lib/logger';
 
 type StartOpts = {
   intervalMs?: number; // default 30s
@@ -15,10 +16,10 @@ export function startDomainEventsPoller(opts?: StartOpts) {
       const res = await processDomainEventsJob({ batchSize });
       if (res.processed > 0) {
         // keep logs minimal
-        console.log(`[domain-events] processed=${res.processed}`);
+        logger.info(`[domain-events] processed=${res.processed}`);
       }
     } catch (e: any) {
-      console.error('[domain-events] error', e?.message || e);
+      logger.error('[domain-events] error', e?.message || e);
     }
   };
 
@@ -28,7 +29,7 @@ export function startDomainEventsPoller(opts?: StartOpts) {
     void runOnce();
   }, intervalMs);
 
-  console.log(`[domain-events] poller started intervalMs=${intervalMs} batchSize=${batchSize}`);
+  logger.info(`[domain-events] poller started intervalMs=${intervalMs} batchSize=${batchSize}`);
 
   return () => clearInterval(timer);
 }

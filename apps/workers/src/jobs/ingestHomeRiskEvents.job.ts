@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { fetchDummyHomeRiskEvents } from '../homeRiskReplay/dummyHomeRiskEvent.client';
 import { normalizeDummyHomeRiskEvent } from '../homeRiskReplay/normalize';
 import type { CanonicalHomeRiskEventSignal } from '../homeRiskReplay/homeRiskReplay.types';
+import { logger } from '../lib/logger';
 
 const DEFAULT_TARGET_ZIPS = ['08536', '10019'];
 
@@ -116,7 +117,7 @@ export async function ingestHomeRiskEventsJob() {
   const properties = await loadTargetProperties();
 
   if (properties.length === 0) {
-    console.log('[HOME-RISK-INGEST] No eligible properties found. Skipping.');
+    logger.info('[HOME-RISK-INGEST] No eligible properties found. Skipping.');
     return {
       targetProperties: 0,
       rawSignals: 0,
@@ -139,6 +140,6 @@ export async function ingestHomeRiskEventsJob() {
     canonicalUpserts,
   };
 
-  console.log('[HOME-RISK-INGEST] result:', result);
+  logger.info('[HOME-RISK-INGEST] result:', result);
   return result;
 }

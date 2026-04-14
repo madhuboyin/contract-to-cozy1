@@ -1,5 +1,6 @@
 // apps/workers/src/jobs/seasonalChecklistGeneration.job.ts
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 // Define types locally since they may not be exported from Prisma client
 type Season = 'SPRING' | 'SUMMER' | 'FALL' | 'WINTER';
@@ -27,7 +28,7 @@ type SeasonalTaskTemplate = {
  * - Skip if checklist already exists for that season/year
  */
 export async function generateSeasonalChecklists() {
-  console.log('[SEASONAL] Starting checklist generation job...');
+  logger.info('[SEASONAL] Starting checklist generation job...');
   
   try {
     const today = new Date();
@@ -46,7 +47,7 @@ export async function generateSeasonalChecklists() {
       },
     });
 
-    console.log(`[SEASONAL] Found ${properties.length} EXISTING_OWNER properties to check`);
+    logger.info(`[SEASONAL] Found ${properties.length} EXISTING_OWNER properties to check`);
 
     let generated = 0;
     let skipped = 0;
@@ -77,7 +78,7 @@ export async function generateSeasonalChecklists() {
             },
           });
           
-          console.log(`[SEASONAL] Created climate settings for property ${property.id.substring(0, 8)}: ${detectedRegion}`);
+          logger.info(`[SEASONAL] Created climate settings for property ${property.id.substring(0, 8)}: ${detectedRegion}`);
         }
         
         // Skip if auto-generation is disabled
@@ -113,7 +114,7 @@ export async function generateSeasonalChecklists() {
           }
         }
 
-        console.log(
+        logger.info(
           `[SEASONAL] Property ${property.id.substring(0, 8)}: ` +
           `Current=${currentSeason}, Next=${nextSeason}, Days until=${daysUntilNextSeason}, Offset=${offsetDays}`
         );
@@ -132,7 +133,7 @@ export async function generateSeasonalChecklists() {
           });
 
           if (existingChecklist) {
-            console.log(
+            logger.info(
               `[SEASONAL] Checklist already exists for ${property.id.substring(0, 8)} ` +
               `(${nextSeason} ${targetYear})`
             );
@@ -141,7 +142,7 @@ export async function generateSeasonalChecklists() {
           }
 
           // Generate the checklist
-          console.log(
+          logger.info(
             `[SEASONAL] Generating ${nextSeason} ${targetYear} checklist for property ` +
             `${property.id.substring(0, 8)} (${daysUntilNextSeason} days until season)`
           );
@@ -166,7 +167,7 @@ export async function generateSeasonalChecklists() {
           });
 
           if (!currentSeasonChecklist) {
-            console.log(
+            logger.info(
               `[SEASONAL] No checklist for current season ${currentSeason} ${currentYear}, generating now for property ${property.id.substring(0, 8)}`
             );
 
@@ -183,7 +184,7 @@ export async function generateSeasonalChecklists() {
           }
         }
       } catch (propertyError) {
-        console.error(
+        logger.error(
           `[SEASONAL] Error processing property ${property.id}:`,
           propertyError
         );
@@ -191,11 +192,11 @@ export async function generateSeasonalChecklists() {
       }
     }
 
-    console.log(
+    logger.info(
       `[SEASONAL] Job complete. Generated: ${generated}, Skipped: ${skipped}, Errors: ${errors}`
     );
   } catch (error) {
-    console.error('[SEASONAL] Fatal error in checklist generation job:', error);
+    logger.error('[SEASONAL] Fatal error in checklist generation job:', error);
     throw error;
   }
 }
@@ -239,7 +240,7 @@ async function generateChecklistForProperty(
     },
   });
 
-  console.log(
+  logger.info(
     `[SEASONAL] Found ${templates.length} templates for ${season} in ${climateRegion} climate`
   );
 
@@ -249,7 +250,7 @@ async function generateChecklistForProperty(
     return !excludedTaskKeys.includes(template.taskKey);
   });
 
-  console.log(
+  logger.info(
     `[SEASONAL] After filtering: ${filteredTemplates.length} tasks ` +
     `(excluded ${templates.length - filteredTemplates.length})`
   );
@@ -296,7 +297,7 @@ async function generateChecklistForProperty(
     });
   }
 
-  console.log(
+  logger.info(
     `[SEASONAL] ✅ Created ${season} ${year} checklist with ${filteredTemplates.length} tasks ` +
     `for property ${propertyId.substring(0, 8)}`
   );
@@ -372,12 +373,12 @@ function detectClimateRegionFallback(zipCode: string, state: string): string {
   
   const climateRegion = stateToClimate[state];
   if (climateRegion) {
-    console.log(`[SEASONAL] Detected climate region for ${state}: ${climateRegion}`);
+    logger.info(`[SEASONAL] Detected climate region for ${state}: ${climateRegion}`);
     return climateRegion;
   }
   
   // Default to MODERATE
-  console.log(`[SEASONAL] No mapping for state ${state}, defaulting to MODERATE`);
+  logger.info(`[SEASONAL] No mapping for state ${state}, defaulting to MODERATE`);
   return 'MODERATE';
 }
 

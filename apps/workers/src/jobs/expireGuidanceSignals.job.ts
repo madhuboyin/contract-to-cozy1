@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * Sweeps ACTIVE GuidanceSignals whose expiresAt has passed and transitions
@@ -31,6 +32,6 @@ export async function expireGuidanceSignalsJob(): Promise<{ archived: number }> 
     },
   });
 
-  console.log(`[expire-guidance-signals] Archived ${expired.length} expired signal(s)`);
+  logger.info(`[expire-guidance-signals] Archived ${expired.length} expired signal(s)`);
   return { archived: expired.length };
 }

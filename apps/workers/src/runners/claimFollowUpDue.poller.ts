@@ -1,6 +1,7 @@
 // apps/workers/src/runners/claimFollowUpDue.poller.ts
 import { prisma } from '../lib/prisma';
 import { DomainEventsService } from '../../../backend/src/services/domainEvents/domainEvents.service';
+import { logger } from '../lib/logger';
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -55,7 +56,7 @@ export function startClaimFollowUpDuePoller(opts?: { intervalMs?: number; batchS
       });
     }
 
-    console.log(`[CLAIM-FOLLOWUP] emitted=${claims.length}`);
+    logger.info(`[CLAIM-FOLLOWUP] emitted=${claims.length}`);
   };
 
   const loop = async () => {
@@ -63,14 +64,14 @@ export function startClaimFollowUpDuePoller(opts?: { intervalMs?: number; batchS
       try {
         await tick();
       } catch (e: any) {
-        console.error('[CLAIM-FOLLOWUP] poller error', e?.message || e);
+        logger.error('[CLAIM-FOLLOWUP] poller error', e?.message || e);
       }
       await sleep(intervalMs);
     }
   };
 
   void loop();
-  console.log(`[CLAIM-FOLLOWUP] poller started intervalMs=${intervalMs} batchSize=${batchSize}`);
+  logger.info(`[CLAIM-FOLLOWUP] poller started intervalMs=${intervalMs} batchSize=${batchSize}`);
 
   return () => {
     stopped = true;

@@ -1,4 +1,5 @@
 import { sharedDataBackfillService } from '../../../backend/src/services/sharedDataBackfill.service';
+import { logger } from '../lib/logger';
 
 type SharedDataConsistencyAuditResult = {
   propertiesEvaluated: number;
@@ -17,7 +18,7 @@ export async function runSharedDataConsistencyAuditJob(): Promise<SharedDataCons
     sharedDataBackfillService.getReadinessReport({ limit }),
   ]);
 
-  console.log(
+  logger.info(
     `[shared-data-consistency-audit] properties=${consistency.propertiesEvaluated} issues=${consistency.issueCount} ` +
       `ready=${readiness.summary.ready} partial=${readiness.summary.partial} legacyHeavy=${readiness.summary.legacyHeavy}`,
   );

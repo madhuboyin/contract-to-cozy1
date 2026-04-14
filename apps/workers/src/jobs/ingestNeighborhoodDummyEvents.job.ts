@@ -21,6 +21,7 @@ import { NeighborhoodPropertyMatchService } from '../../../backend/src/neighborh
 import { fetchDummyNeighborhoodEvents } from '../neighborhoodIntelligence/dummyNeighborhoodEvent.client';
 import { prisma } from '../lib/prisma';
 import type { DummyNeighborhoodRawEvent } from '../neighborhoodIntelligence/neighborhoodIntelligence.types';
+import { logger } from '../lib/logger';
 
 const matchService = new NeighborhoodPropertyMatchService();
 
@@ -165,7 +166,7 @@ export async function ingestNeighborhoodDummyEventsJob(): Promise<{
   const properties = await loadTargetProperties();
 
   if (properties.length === 0) {
-    console.log('[NEIGHBORHOOD-DUMMY-INGEST] No eligible properties found. Skipping.');
+    logger.info('[NEIGHBORHOOD-DUMMY-INGEST] No eligible properties found. Skipping.');
     return { targetProperties: 0, rawEvents: 0, upserted: 0, matched: 0, failed: 0 };
   }
 
@@ -183,7 +184,7 @@ export async function ingestNeighborhoodDummyEventsJob(): Promise<{
       const result = await matchService.matchPropertiesForEvent(eventId);
       matched += result.matched;
     } catch (err: any) {
-      console.error(
+      logger.error(
         `[NEIGHBORHOOD-DUMMY-INGEST] Failed for event "${rawEvent.title}":`,
         err?.message ?? err,
       );
@@ -192,6 +193,6 @@ export async function ingestNeighborhoodDummyEventsJob(): Promise<{
   }
 
   const result = { targetProperties: properties.length, rawEvents: rawEvents.length, upserted, matched, failed };
-  console.log('[NEIGHBORHOOD-DUMMY-INGEST] result:', result);
+  logger.info('[NEIGHBORHOOD-DUMMY-INGEST] result:', result);
   return result;
 }

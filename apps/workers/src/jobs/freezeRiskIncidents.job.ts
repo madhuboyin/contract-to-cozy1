@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { IncidentStatus } from '@prisma/client';
 import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 type Geo = { lat: number; lon: number; name?: string; admin1?: string; country?: string };
 
@@ -208,7 +209,7 @@ export async function freezeRiskIncidentsJob() {
         expiresAt: new Date(Date.now() + 36 * 60 * 60 * 1000),
       });
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] freeze risk signal ingest failed:', guidanceError);
+      logger.warn('[GUIDANCE] freeze risk signal ingest failed:', guidanceError);
     }
 
     // Rate limit Open-Meteo API calls (free tier)

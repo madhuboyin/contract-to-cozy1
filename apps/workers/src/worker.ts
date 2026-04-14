@@ -47,6 +47,7 @@ import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.jo
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
+import { logger } from './lib/logger';
 
 const hiddenAssetService = new HiddenAssetService();
 
@@ -209,7 +210,7 @@ async function upsertPropertyScoreSnapshot(input: {
 }) {
   const snapshotModel = (prisma as any).propertyScoreSnapshot;
   if (!snapshotModel) {
-    console.warn('[SCORE-SNAPSHOT] Prisma client missing propertyScoreSnapshot delegate. Run prisma generate.');
+    logger.warn('[SCORE-SNAPSHOT] Prisma client missing propertyScoreSnapshot delegate. Run prisma generate.');
     return;
   }
 
@@ -429,7 +430,7 @@ async function capturePropertyScoreSnapshots(
 }
 
 async function captureWeeklyScoreSnapshotsJob() {
-  console.log(`[${new Date().toISOString()}] Running weekly property score snapshot job...`);
+  logger.info(`[${new Date().toISOString()}] Running weekly property score snapshot job...`);
   try {
     const properties = await (prisma as any).property.findMany({
       select: {
@@ -447,15 +448,15 @@ async function captureWeeklyScoreSnapshotsJob() {
         successCount += 1;
       } catch (error) {
         failureCount += 1;
-        console.error(`[SCORE-SNAPSHOT] Failed for property ${property.id}:`, error);
+        logger.error(`[SCORE-SNAPSHOT] Failed for property ${property.id}:`, error);
       }
     }
 
-    console.log(
+    logger.info(
       `[SCORE-SNAPSHOT] Weekly snapshot completed. Success: ${successCount}, Failed: ${failureCount}, Total: ${properties.length}`
     );
   } catch (error) {
-    console.error('[SCORE-SNAPSHOT] Weekly snapshot job failed:', error);
+    logger.error('[SCORE-SNAPSHOT] Weekly snapshot job failed:', error);
   }
 }
 
@@ -476,7 +477,7 @@ async function fetchPropertyDetails(propertyId: string): Promise<PropertyWithRel
     
     return property as PropertyWithRelations | null;
   } catch (error) {
-    console.error(`Failed to fetch property ${propertyId}:`, error);
+    logger.error(`Failed to fetch property ${propertyId}:`, error);
     return null;
   }
 }
@@ -485,7 +486,7 @@ async function fetchPropertyDetails(propertyId: string): Promise<PropertyWithRel
  * Send maintenance reminders (existing cron job)
  */
 async function sendMaintenanceReminders() {
-  console.log(`[${new Date().toISOString()}] Running maintenance reminder job...`);
+  logger.info(`[${new Date().toISOString()}] Running maintenance reminder job...`);
   
   try {
     const today = new Date();
@@ -513,7 +514,7 @@ async function sendMaintenanceReminders() {
       },
     });
 
-    console.log(`   Found ${upcomingTasks.length} upcoming tasks to remind about.`);
+    logger.info(`   Found ${upcomingTasks.length} upcoming tasks to remind about.`);
 
     await Promise.all(
       upcomingTasks.map(async (task) => {
@@ -539,16 +540,16 @@ async function sendMaintenanceReminders() {
 
         try {
           // Email service integration would go here
-          console.log(`   -> Sent reminder for "${task.title}" to ${user.email}`);
+          logger.info(`   -> Sent reminder for "${task.title}" to ${user.email}`);
         } catch (emailError) {
-          console.error(`Failed to send email for task ${task.id}:`, emailError);
+          logger.error(`Failed to send email for task ${task.id}:`, emailError);
         }
       })
     );
 
-    console.log('✅ All maintenance reminders sent. Job complete.');
+    logger.info('✅ All maintenance reminders sent. Job complete.');
   } catch (error) {
-    console.error('❌ Error running maintenance reminder job:', error);
+    logger.error('❌ Error running maintenance reminder job:', error);
   }
 }
 
@@ -556,7 +557,7 @@ async function sendMaintenanceReminders() {
  * Process risk assessment calculation - UPDATED WITH ASSET FILTERING
  */
 async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
-  console.log(`[${new Date().toISOString()}] Processing risk calculation for property ${jobData.propertyId}...`);
+  logger.info(`[${new Date().toISOString()}] Processing risk calculation for property ${jobData.propertyId}...`);
 
   const propertyId = jobData.propertyId;
 
@@ -564,7 +565,7 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
     const property = await fetchPropertyDetails(propertyId);
     
     if (!property) {
-      console.error(`Property ${propertyId} not found. Job failed.`);
+      logger.error(`Property ${propertyId} not found. Job failed.`);
       throw new Error("Property not found for calculation.");
     }
 
@@ -572,11 +573,11 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
     const assetRisks: AssetRiskDetail[] = [];
     
     // === FIX: Filter assets to only those that exist on the property ===
-    console.log(`[RISK-CALC] Filtering assets for property ${propertyId}...`);
-    console.log(`[RISK-CALC] Property config: heatingType=${property.heatingType}, waterHeaterType=${property.waterHeaterType}, roofType=${property.roofType}`);
+    logger.info(`[RISK-CALC] Filtering assets for property ${propertyId}...`);
+    logger.info(`[RISK-CALC] Property config: heatingType=${property.heatingType}, waterHeaterType=${property.waterHeaterType}, roofType=${property.roofType}`);
     
     const relevantConfigs = filterRelevantAssets(property as any, RISK_ASSET_CONFIG);
-    console.log(`[RISK-CALC] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
+    logger.info(`[RISK-CALC] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
     
     // Calculate risk ONLY for relevant assets
     for (const config of relevantConfigs) {
@@ -589,18 +590,18 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
 
       if (assetRisk) {
         assetRisks.push(assetRisk);
-        console.log(`[RISK-CALC-WORKER] Asset ${config.systemType} - P: ${assetRisk.probability}, OOP: ${assetRisk.outOfPocketCost}, Risk: ${assetRisk.riskDollar}`);
-        console.log(`[RISK-CALC] Calculated risk for ${config.systemType}: $${assetRisk.riskDollar}`);
+        logger.info(`[RISK-CALC-WORKER] Asset ${config.systemType} - P: ${assetRisk.probability}, OOP: ${assetRisk.outOfPocketCost}, Risk: ${assetRisk.riskDollar}`);
+        logger.info(`[RISK-CALC] Calculated risk for ${config.systemType}: $${assetRisk.riskDollar}`);
       } else {
-        console.warn(`[RISK-CALC] Skipped ${config.systemType} (no install year)`);
+        logger.warn(`[RISK-CALC] Skipped ${config.systemType} (no install year)`);
       }
     }
 
-    console.log(`[RISK-CALC] Total assets with calculated risk: ${assetRisks.length}`);
+    logger.info(`[RISK-CALC] Total assets with calculated risk: ${assetRisks.length}`);
 
     // Calculate total risk score
     const reportData = calculateTotalRiskScore(property as any, assetRisks);
-    console.log(`[RISK-CALC-WORKER] Final Score: ${reportData.riskScore}, Total Exposure: $${reportData.financialExposureTotal}`);
+    logger.info(`[RISK-CALC-WORKER] Final Score: ${reportData.riskScore}, Total Exposure: $${reportData.financialExposureTotal}`);
 
     // Save or update the report
     await (prisma as any).riskAssessmentReport.upsert({
@@ -619,16 +620,16 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
       },
     });
 
-    console.log(`✅ Risk assessment calculated and saved for property ${propertyId}.`);
-    console.log(`   Score: ${reportData.riskScore}, Exposure: $${reportData.financialExposureTotal}, Assets: ${assetRisks.length}`);
+    logger.info(`✅ Risk assessment calculated and saved for property ${propertyId}.`);
+    logger.info(`   Score: ${reportData.riskScore}, Exposure: $${reportData.financialExposureTotal}, Assets: ${assetRisks.length}`);
 
     if (property.homeownerProfileId) {
       await capturePropertyScoreSnapshots(propertyId, property.homeownerProfileId);
-      console.log(`[SCORE-SNAPSHOT] Updated weekly snapshots from risk calculation for property ${propertyId}.`);
+      logger.info(`[SCORE-SNAPSHOT] Updated weekly snapshots from risk calculation for property ${propertyId}.`);
     }
     
   } catch (error) {
-    console.error('❌ Error calculating risk assessment:', error);
+    logger.error('❌ Error calculating risk assessment:', error);
     throw error;
   }
 }
@@ -640,7 +641,7 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
  * Process FES calculation
  */
 async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
-  console.log(`[${new Date().toISOString()}] Processing FES calculation for property ${jobData.propertyId}...`);
+  logger.info(`[${new Date().toISOString()}] Processing FES calculation for property ${jobData.propertyId}...`);
   
   const propertyId = jobData.propertyId;
 
@@ -661,7 +662,7 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
     });
 
     if (!property) {
-      console.error(`Property ${propertyId} not found. Job failed.`);
+      logger.error(`Property ${propertyId} not found. Job failed.`);
       throw new Error("Property not found for FES calculation.");
     }
 
@@ -719,16 +720,16 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
       .plus(result.actualUtilityCost)
       .plus(result.actualWarrantyCost);
 
-    console.log(`✅ FES calculation completed for property ${propertyId}.`);
-    console.log(`   Score: ${result.score}, Exposure: $${totalExposure.toFixed(2)}`);
+    logger.info(`✅ FES calculation completed for property ${propertyId}.`);
+    logger.info(`   Score: ${result.score}, Exposure: $${totalExposure.toFixed(2)}`);
 
     if (property.homeownerProfileId) {
       await capturePropertyScoreSnapshots(propertyId, property.homeownerProfileId);
-      console.log(`[SCORE-SNAPSHOT] Updated weekly snapshots from FES calculation for property ${propertyId}.`);
+      logger.info(`[SCORE-SNAPSHOT] Updated weekly snapshots from FES calculation for property ${propertyId}.`);
     }
     
   } catch (error) {
-    console.error('❌ Error calculating FES:', error);
+    logger.error('❌ Error calculating FES:', error);
     throw error;
   }
 }
@@ -738,17 +739,17 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
  */
 async function processHiddenAssetScan(jobData: PropertyIntelligenceJobPayload) {
   const { propertyId } = jobData;
-  console.log(`[${new Date().toISOString()}] Processing hidden asset scan for property ${propertyId}...`);
+  logger.info(`[${new Date().toISOString()}] Processing hidden asset scan for property ${propertyId}...`);
 
   try {
     const result = await hiddenAssetService.refreshMatchesInternal(propertyId);
-    console.log(
+    logger.info(
       `✅ Hidden asset scan completed for property ${propertyId}. ` +
       `Evaluated: ${result.programsEvaluated}, Matched: ${result.matchesFound}, ` +
       `Expired: ${result.matchesExpired}, Inactivated: ${result.matchesInactivated}`
     );
   } catch (error) {
-    console.error(`❌ Error running hidden asset scan for property ${propertyId}:`, error);
+    logger.error(`❌ Error running hidden asset scan for property ${propertyId}:`, error);
     throw error;
   }
 }
@@ -785,7 +786,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'mortgage-rate-ingest':            async () => {
     const result = await ingestMortgageRatesJob();
     if (!result.success) {
-      console.warn('[mortgage-rate-ingest] No rates ingested:', result.reason);
+      logger.warn('[mortgage-rate-ingest] No rates ingested:', result.reason);
     }
   },
   'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
@@ -812,7 +813,7 @@ function scheduleCronJobs(): void {
   for (const entry of cronEntries) {
     const handler = CRON_HANDLERS[entry.key];
     if (!handler) {
-      console.warn(
+      logger.warn(
         `[REGISTRY] ⚠️  No handler for registry job "${entry.key}" — ` +
         `job will not run. Add it to CRON_HANDLERS in worker.ts`,
       );
@@ -823,37 +824,37 @@ function scheduleCronJobs(): void {
       cronExpr,
       async () => {
         try {
-          console.log(`[${entry.key}] Starting: ${entry.name}`);
+          logger.info(`[${entry.key}] Starting: ${entry.name}`);
           await handler();
-          console.log(`[${entry.key}] ✅ Completed`);
+          logger.info(`[${entry.key}] ✅ Completed`);
         } catch (err) {
-          console.error(`[${entry.key}] ❌ Failed:`, err);
+          logger.error(`[${entry.key}] ❌ Failed:`, err);
         }
       },
       { timezone: 'America/New_York' },
     );
-    console.log(`[REGISTRY] Scheduled "${entry.name}" — ${cronExpr} (${entry.schedule})`);
+    logger.info(`[REGISTRY] Scheduled "${entry.name}" — ${cronExpr} (${entry.schedule})`);
   }
 
   // Warn about handlers that have no registry entry (invisible in admin UI)
   const registeredKeys = new Set(cronEntries.map((e) => e.key));
   for (const key of Object.keys(CRON_HANDLERS)) {
     if (!registeredKeys.has(key)) {
-      console.warn(
+      logger.warn(
         `[REGISTRY] ⚠️  Handler exists for unregistered job "${key}" — ` +
         `add it to JOB_REGISTRY in workerJobRegistry.ts`,
       );
     }
   }
 
-  console.log(`[REGISTRY] ${cronEntries.length} cron jobs scheduled from registry`);
+  logger.info(`[REGISTRY] ${cronEntries.length} cron jobs scheduled from registry`);
 }
 
 /**
  * Main worker startup function
  */
 function startWorker() {
-  console.log('🚀 Worker started. Waiting for jobs...');
+  logger.info('🚀 Worker started. Waiting for jobs...');
   // =============================================================================
   // FIX: Initialize BullMQ Worker with correct queue name and job handlers
   // =============================================================================
@@ -862,7 +863,7 @@ function startWorker() {
     async (job) => {
       const { jobType, propertyId } = job.data;
       
-      console.log(`[WORKER] Processing Job [${jobType}] for Property [${propertyId}] (Job ID: ${job.id})`);
+      logger.info(`[WORKER] Processing Job [${jobType}] for Property [${propertyId}] (Job ID: ${job.id})`);
 
       try {
         // Handle different job types
@@ -880,13 +881,13 @@ function startWorker() {
             break;
 
           default:
-            console.error(`[WORKER] Unknown job type: ${jobType}`);
+            logger.error(`[WORKER] Unknown job type: ${jobType}`);
             throw new Error(`Unknown job type: ${jobType}`);
         }
         
-        console.log(`[WORKER] Successfully completed Job [${jobType}] for Property [${propertyId}]`);
+        logger.info(`[WORKER] Successfully completed Job [${jobType}] for Property [${propertyId}]`);
       } catch (error) {
-        console.error(`[WORKER] Job [${jobType}] failed for ${propertyId}:`, error);
+        logger.error(`[WORKER] Job [${jobType}] failed for ${propertyId}:`, error);
         throw error;
       }
     },
@@ -898,19 +899,19 @@ function startWorker() {
 
   // Event listeners
   propertyIntelligenceWorker.on('ready', () => {
-    console.log(`[QUEUE] Worker connected to Redis and ready to process queue: ${QUEUE_NAME}`);
+    logger.info(`[QUEUE] Worker connected to Redis and ready to process queue: ${QUEUE_NAME}`);
   });
 
   propertyIntelligenceWorker.on('completed', (job) => {
-    console.log(`[QUEUE] Job ${job.id} (${job.data.jobType}) completed successfully.`);
+    logger.info(`[QUEUE] Job ${job.id} (${job.data.jobType}) completed successfully.`);
   });
 
   propertyIntelligenceWorker.on('failed', (job, err) => {
-    console.error(`[QUEUE] Job ${job?.id} (${job?.data.jobType}) failed with error:`, err.message);
+    logger.error(`[QUEUE] Job ${job?.id} (${job?.data.jobType}) failed with error:`, err.message);
   });
 
   propertyIntelligenceWorker.on('error', (err) => {
-    console.error('[QUEUE] Worker experienced an error:', err);
+    logger.error('[QUEUE] Worker experienced an error:', err);
   });
 
   // =============================================================================
@@ -928,25 +929,25 @@ function startWorker() {
       concurrency: 5,
     }
   );
-  console.log(`[WORKER] Email Notification Worker started for queue: email-notification-queue`);
+  logger.info(`[WORKER] Email Notification Worker started for queue: email-notification-queue`);
 
   emailNotificationWorker.on('ready', () => {
-    console.log('[QUEUE] Email Notification Worker ready');
+    logger.info('[QUEUE] Email Notification Worker ready');
   });
 
   emailNotificationWorker.on('completed', (job) => {
-    console.log(`[QUEUE] Email notification job ${job.id} completed`);
+    logger.info(`[QUEUE] Email notification job ${job.id} completed`);
   });
 
   emailNotificationWorker.on('failed', (job, err) => {
-    console.error(
+    logger.error(
       `[QUEUE] Email notification job ${job?.id} failed:`,
       err.message
     );
   });
 
   emailNotificationWorker.on('error', (err) => {
-    console.error('[QUEUE] Email notification worker error:', err);
+    logger.error('[QUEUE] Email notification worker error:', err);
   });
 
   // ===============================
@@ -961,7 +962,7 @@ function startWorker() {
     },
     { connection: redisConnection }
   );
-  console.log(`[WORKER] Push Notification Worker started for queue: push-notification-queue`);
+  logger.info(`[WORKER] Push Notification Worker started for queue: push-notification-queue`);
   // ===============================
   // SMS NOTIFICATIONS
   // ===============================
@@ -974,13 +975,13 @@ function startWorker() {
     },
     { connection: redisConnection }
   );
-  console.log(`[WORKER] Property Intelligence Worker started for queue: ${QUEUE_NAME}`);
+  logger.info(`[WORKER] Property Intelligence Worker started for queue: ${QUEUE_NAME}`);
 
 }
 
 function restartAfterDelay(name: string, fn: () => Promise<void>, delayMs = 30_000) {
   fn().catch((e) => {
-    console.error(`${name} crashed, restarting in ${delayMs / 1000}s...`, e);
+    logger.error(`${name} crashed, restarting in ${delayMs / 1000}s...`, e);
     setTimeout(() => restartAfterDelay(name, fn, delayMs), delayMs);
   });
 }
@@ -1041,15 +1042,15 @@ const recallWorker = new Worker(
 );
 
 recallWorker.on('ready', () => {
-  console.log(`[RECALL-WORKER] Worker connected and ready for queue: ${RECALL_QUEUE_NAME}`);
+  logger.info(`[RECALL-WORKER] Worker connected and ready for queue: ${RECALL_QUEUE_NAME}`);
 });
 
 recallWorker.on('completed', (job) => {
-  console.log(`[RECALL-WORKER] Job ${job.id} (${job.name}) completed successfully.`);
+  logger.info(`[RECALL-WORKER] Job ${job.id} (${job.name}) completed successfully.`);
 });
 
 recallWorker.on('failed', (job, err) => {
-  console.error(`[RECALL-WORKER] Job ${job?.id} (${job?.name}) failed:`, err);
+  logger.error(`[RECALL-WORKER] Job ${job?.id} (${job?.name}) failed:`, err);
 });
 
 // Enqueue recall jobs on startup (using repeatable logic instead of manual IDs)
@@ -1076,9 +1077,9 @@ async function setupScheduledJobs() {
   );
 }
 
-setupScheduledJobs().catch(console.error);
+setupScheduledJobs().catch(logger.error);
 
-console.log(`[RECALL-WORKER] Recall Worker started for queue: ${RECALL_QUEUE_NAME}`);
+logger.info(`[RECALL-WORKER] Recall Worker started for queue: ${RECALL_QUEUE_NAME}`);
 
 // Coverage lapse + freeze risk incidents are scheduled via scheduleCronJobs() above.
 
@@ -1091,18 +1092,18 @@ const radarDummyIngestCron = process.env.RADAR_DUMMY_INGEST_CRON || '*/30 * * * 
 if (radarDummyIngestEnabled) {
   cron.schedule(radarDummyIngestCron, async () => {
     try {
-      console.log('[RADAR-DUMMY-INGEST] Running dummy radar ingest job...');
+      logger.info('[RADAR-DUMMY-INGEST] Running dummy radar ingest job...');
       await ingestRadarSignalsJob();
     } catch (err) {
-      console.error('[RADAR-DUMMY-INGEST] Job failed:', err);
+      logger.error('[RADAR-DUMMY-INGEST] Job failed:', err);
     }
   }, { timezone: 'America/New_York' });
 
-  console.log(`[RADAR-DUMMY-INGEST] Dummy radar ingest scheduled for: ${radarDummyIngestCron} America/New_York`);
+  logger.info(`[RADAR-DUMMY-INGEST] Dummy radar ingest scheduled for: ${radarDummyIngestCron} America/New_York`);
 
   if (process.env.RADAR_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
     void ingestRadarSignalsJob().catch((err) => {
-      console.error('[RADAR-DUMMY-INGEST] Startup run failed:', err);
+      logger.error('[RADAR-DUMMY-INGEST] Startup run failed:', err);
     });
   }
 }
@@ -1116,18 +1117,18 @@ const homeRiskReplayDummyIngestCron = process.env.HOME_RISK_REPLAY_DUMMY_INGEST_
 if (homeRiskReplayDummyIngestEnabled) {
   cron.schedule(homeRiskReplayDummyIngestCron, async () => {
     try {
-      console.log('[HOME-RISK-INGEST] Running dummy home risk event ingest job...');
+      logger.info('[HOME-RISK-INGEST] Running dummy home risk event ingest job...');
       await ingestHomeRiskEventsJob();
     } catch (err) {
-      console.error('[HOME-RISK-INGEST] Job failed:', err);
+      logger.error('[HOME-RISK-INGEST] Job failed:', err);
     }
   }, { timezone: 'America/New_York' });
 
-  console.log(`[HOME-RISK-INGEST] Dummy home risk ingest scheduled for: ${homeRiskReplayDummyIngestCron} America/New_York`);
+  logger.info(`[HOME-RISK-INGEST] Dummy home risk ingest scheduled for: ${homeRiskReplayDummyIngestCron} America/New_York`);
 
   if (process.env.HOME_RISK_REPLAY_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
     void ingestHomeRiskEventsJob().catch((err) => {
-      console.error('[HOME-RISK-INGEST] Startup run failed:', err);
+      logger.error('[HOME-RISK-INGEST] Startup run failed:', err);
     });
   }
 }
@@ -1147,18 +1148,18 @@ const neighborhoodDummyIngestCron = process.env.NEIGHBORHOOD_DUMMY_INGEST_CRON |
 if (neighborhoodDummyIngestEnabled) {
   cron.schedule(neighborhoodDummyIngestCron, async () => {
     try {
-      console.log('[NEIGHBORHOOD-DUMMY-INGEST] Running dummy neighborhood event ingest job...');
+      logger.info('[NEIGHBORHOOD-DUMMY-INGEST] Running dummy neighborhood event ingest job...');
       await ingestNeighborhoodDummyEventsJob();
     } catch (err) {
-      console.error('[NEIGHBORHOOD-DUMMY-INGEST] Job failed:', err);
+      logger.error('[NEIGHBORHOOD-DUMMY-INGEST] Job failed:', err);
     }
   }, { timezone: 'America/New_York' });
 
-  console.log(`[NEIGHBORHOOD-DUMMY-INGEST] Dummy neighborhood ingest scheduled for: ${neighborhoodDummyIngestCron} America/New_York`);
+  logger.info(`[NEIGHBORHOOD-DUMMY-INGEST] Dummy neighborhood ingest scheduled for: ${neighborhoodDummyIngestCron} America/New_York`);
 
   if (process.env.NEIGHBORHOOD_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
     void ingestNeighborhoodDummyEventsJob().catch((err) => {
-      console.error('[NEIGHBORHOOD-DUMMY-INGEST] Startup run failed:', err);
+      logger.error('[NEIGHBORHOOD-DUMMY-INGEST] Startup run failed:', err);
     });
   }
 }
@@ -1180,7 +1181,7 @@ const cronTriggerWorker = new Worker(
     if (!handler) {
       throw new Error(`[CRON-TRIGGER] No handler registered for job: ${job.name}`);
     }
-    console.log(`[CRON-TRIGGER] Running manually triggered job: ${job.name}`);
+    logger.info(`[CRON-TRIGGER] Running manually triggered job: ${job.name}`);
     await handler();
   },
   {
@@ -1192,11 +1193,11 @@ const cronTriggerWorker = new Worker(
 );
 
 cronTriggerWorker.on('completed', (job) => {
-  console.log(`[CRON-TRIGGER] Job ${job.id} (${job.name}) completed successfully.`);
+  logger.info(`[CRON-TRIGGER] Job ${job.id} (${job.name}) completed successfully.`);
 });
 
 cronTriggerWorker.on('failed', (job, err) => {
-  console.error(`[CRON-TRIGGER] Job ${job?.id} (${job?.name}) failed:`, err);
+  logger.error(`[CRON-TRIGGER] Job ${job?.id} (${job?.name}) failed:`, err);
 });
 
 // Start cron jobs from registry, then start BullMQ worker

@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { IncidentService } from '../../../backend/src/services/incidents/incident.service';
 import { guidanceJourneyService } from '../../../backend/src/services/guidanceEngine/guidanceJourney.service';
+import { logger } from '../lib/logger';
 
 function daysBetween(a: Date, b: Date) {
   const ms = b.getTime() - a.getTime();
@@ -94,7 +95,7 @@ export async function coverageLapseIncidentsJob() {
         },
       });
     } catch (guidanceError) {
-      console.warn('[GUIDANCE] coverage lapse signal ingest failed:', guidanceError);
+      logger.warn('[GUIDANCE] coverage lapse signal ingest failed:', guidanceError);
     }
 
     createdOrUpdated++;

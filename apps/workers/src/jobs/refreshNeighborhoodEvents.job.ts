@@ -9,6 +9,7 @@
 
 import { NeighborhoodPropertyMatchService } from '../../../backend/src/neighborhoodIntelligence/neighborhoodPropertyMatchService';
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 const matchService = new NeighborhoodPropertyMatchService();
 
@@ -22,16 +23,16 @@ function sleep(ms: number) {
 export async function refreshNeighborhoodEventsJob(): Promise<void> {
   const enabled = process.env.NEIGHBORHOOD_REFRESH_ENABLED !== 'false';
   if (!enabled) {
-    console.log('[NEIGHBORHOOD-REFRESH] Skipped — NEIGHBORHOOD_REFRESH_ENABLED=false');
+    logger.info('[NEIGHBORHOOD-REFRESH] Skipped — NEIGHBORHOOD_REFRESH_ENABLED=false');
     return;
   }
 
-  console.log('[NEIGHBORHOOD-REFRESH] Starting weekly neighborhood radar refresh...');
+  logger.info('[NEIGHBORHOOD-REFRESH] Starting weekly neighborhood radar refresh...');
 
   // Count total properties for progress logging
   const total = await (prisma as any).property.count();
   if (total === 0) {
-    console.log('[NEIGHBORHOOD-REFRESH] No properties found, nothing to do.');
+    logger.info('[NEIGHBORHOOD-REFRESH] No properties found, nothing to do.');
     return;
   }
 
@@ -52,12 +53,12 @@ export async function refreshNeighborhoodEventsJob(): Promise<void> {
     for (const property of properties) {
       try {
         const result = await matchService.recomputePropertyNeighborhoodRadar(property.id);
-        console.log(
+        logger.info(
           `[NEIGHBORHOOD-REFRESH] Property ${property.id}: processed ${result.processed} events`,
         );
         successCount++;
       } catch (err: any) {
-        console.error(
+        logger.error(
           `[NEIGHBORHOOD-REFRESH] Failed for property ${property.id}:`,
           err?.message ?? err,
         );
@@ -72,7 +73,7 @@ export async function refreshNeighborhoodEventsJob(): Promise<void> {
     }
   }
 
-  console.log(
+  logger.info(
     `[NEIGHBORHOOD-REFRESH] Completed. success=${successCount} failures=${failureCount} total=${total}`,
   );
 }

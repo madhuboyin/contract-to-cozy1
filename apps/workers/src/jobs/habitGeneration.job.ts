@@ -6,9 +6,10 @@
 
 import { prisma } from '../lib/prisma';
 import { generateHabitsForProperty } from '../../../backend/src/services/homeHabitCoach/habitGenerationEngine';
+import { logger } from '../lib/logger';
 
 export async function runHabitGenerationJob(): Promise<void> {
-  console.log(`[HABIT-GEN] Starting batch habit generation at ${new Date().toISOString()}`);
+  logger.info(`[HABIT-GEN] Starting batch habit generation at ${new Date().toISOString()}`);
 
   const properties = await prisma.property.findMany({
     select: { id: true },
@@ -25,11 +26,11 @@ export async function runHabitGenerationJob(): Promise<void> {
       totalCreated += result.created;
     } catch (error) {
       failureCount++;
-      console.error(`[HABIT-GEN] Generation failed for property ${property.id}:`, error);
+      logger.error(`[HABIT-GEN] Generation failed for property ${property.id}:`, error);
     }
   }
 
-  console.log(
+  logger.info(
     `[HABIT-GEN] Batch complete. ` +
       `Success: ${successCount}, Failed: ${failureCount}, Total: ${properties.length}, Habits created: ${totalCreated}`,
   );

@@ -12,16 +12,17 @@
 
 import { prisma } from '../lib/prisma';
 import { GazetteGenerationJobRunnerService } from '../../../backend/src/modules/gazette/services/gazetteGenerationJobRunner.service';
+import { logger } from '../lib/logger';
 
 export async function runGazetteGenerationJob(): Promise<void> {
   const startedAt = new Date().toISOString();
-  console.log(`[GAZETTE-GENERATION] Starting weekly generation at ${startedAt}`);
+  logger.info(`[GAZETTE-GENERATION] Starting weekly generation at ${startedAt}`);
 
   const properties = await prisma.property.findMany({
     select: { id: true },
   });
 
-  console.log(`[GAZETTE-GENERATION] Processing ${properties.length} properties`);
+  logger.info(`[GAZETTE-GENERATION] Processing ${properties.length} properties`);
 
   let published = 0;
   let skipped = 0;
@@ -36,7 +37,7 @@ export async function runGazetteGenerationJob(): Promise<void> {
 
       if (result.status === 'PUBLISHED') {
         published++;
-        console.log(
+        logger.info(
           `[GAZETTE-GENERATION] ✅ Published edition ${result.editionId} ` +
           `for property ${property.id} (${result.selectedCount} stories, ${result.durationMs}ms)`,
         );
@@ -47,14 +48,14 @@ export async function runGazetteGenerationJob(): Promise<void> {
       }
     } catch (error: unknown) {
       failed++;
-      console.error(
+      logger.error(
         `[GAZETTE-GENERATION] ❌ Failed for property ${property.id}:`,
         (error as Error)?.message ?? error,
       );
     }
   }
 
-  console.log(
+  logger.info(
     `[GAZETTE-GENERATION] Completed at ${new Date().toISOString()}. ` +
     `Published: ${published}, Skipped: ${skipped}, ` +
     `Already published: ${alreadyPublished}, Failed: ${failed}, ` +

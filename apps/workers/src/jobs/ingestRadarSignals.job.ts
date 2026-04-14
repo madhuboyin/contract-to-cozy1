@@ -3,6 +3,7 @@ import { fetchDummyRadarSignals } from '../radar/dummyRadar.client';
 import { normalizeDummyRadarSignal } from '../radar/normalize';
 import type { CanonicalRadarSignal } from '../radar/radar.types';
 import { runMatchingForEvent } from '../../../backend/src/services/homeEventRadarMatcher.service';
+import { logger } from '../lib/logger';
 
 const DEFAULT_TARGET_ZIPS = ['08536', '10019'];
 
@@ -143,7 +144,7 @@ export async function ingestRadarSignalsJob() {
   const properties = await loadTargetProperties();
 
   if (properties.length === 0) {
-    console.log('[RADAR-DUMMY-INGEST] No eligible properties found. Skipping.');
+    logger.info('[RADAR-DUMMY-INGEST] No eligible properties found. Skipping.');
     return {
       targetProperties: 0,
       rawSignals: 0,
@@ -177,6 +178,6 @@ export async function ingestRadarSignalsJob() {
     skipped,
   };
 
-  console.log('[RADAR-DUMMY-INGEST] result:', result);
+  logger.info('[RADAR-DUMMY-INGEST] result:', result);
   return result;
 }

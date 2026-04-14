@@ -1,4 +1,5 @@
 import { signalService } from '../../../backend/src/services/signal.service';
+import { logger } from '../lib/logger';
 
 export type SharedSignalHealthAuditSummary = {
   propertiesEvaluated: number;
@@ -20,7 +21,7 @@ export async function runSharedSignalHealthAuditJob(): Promise<SharedSignalHealt
     lookbackDays,
   });
 
-  console.log(
+  logger.info(
     `[shared-signal-health-audit] properties=${overview.propertiesEvaluated} totalSignals=${overview.totals.totalSignals} ` +
       `stale=${overview.totals.staleSignals} lowConfidence=${overview.totals.lowConfidenceSignals} interactions=${overview.totals.interactionSignals}`,
   );

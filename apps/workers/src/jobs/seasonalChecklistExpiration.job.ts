@@ -1,5 +1,6 @@
 // apps/workers/src/jobs/seasonalChecklistExpiration.job.ts
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 /**
  * Background job to mark seasonal checklists as complete/expired
@@ -13,7 +14,7 @@ import { prisma } from '../lib/prisma';
  * - Log completion rates for analytics
  */
 export async function expireSeasonalChecklists() {
-  console.log('[SEASONAL] Starting checklist expiration job...');
+  logger.info('[SEASONAL] Starting checklist expiration job...');
 
   try {
     const today = new Date();
@@ -39,7 +40,7 @@ export async function expireSeasonalChecklists() {
       },
     });
 
-    console.log(`[SEASONAL] Found ${expiredChecklists.length} expired checklists`);
+    logger.info(`[SEASONAL] Found ${expiredChecklists.length} expired checklists`);
 
     let completed = 0;
     let incomplete = 0;
@@ -66,7 +67,7 @@ export async function expireSeasonalChecklists() {
         });
 
         // Log completion stats
-        console.log(
+        logger.info(
           `[SEASONAL] Expired ${checklist.season} ${checklist.year} for property ` +
             `${checklist.propertyId.substring(0, 8)}: ${completionPercentage}% complete ` +
             `(${checklist.tasksCompleted}/${checklist.totalTasks}) → ${finalStatus}`
@@ -81,7 +82,7 @@ export async function expireSeasonalChecklists() {
         // Optional: Create analytics event for tracking
         await logSeasonalCompletionAnalytics(checklist, completionPercentage);
       } catch (checklistError) {
-        console.error(
+        logger.error(
           `[SEASONAL] Error expiring checklist ${checklist.id}:`,
           checklistError
         );
@@ -89,7 +90,7 @@ export async function expireSeasonalChecklists() {
       }
     }
 
-    console.log(
+    logger.info(
       `[SEASONAL] Expiration job complete. ` +
         `Completed: ${completed}, Incomplete: ${incomplete}, Errors: ${errors}`
     );
@@ -107,13 +108,13 @@ export async function expireSeasonalChecklists() {
       const averageCompletion =
         totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
 
-      console.log(
+      logger.info(
         `[SEASONAL] Aggregate stats: ${averageCompletion}% average completion ` +
           `(${totalCompleted}/${totalTasks} tasks)`
       );
     }
   } catch (error) {
-    console.error('[SEASONAL] Fatal error in expiration job:', error);
+    logger.error('[SEASONAL] Fatal error in expiration job:', error);
     throw error;
   }
 }
@@ -149,7 +150,7 @@ async function logSeasonalCompletionAnalytics(
       timestamp: new Date().toISOString(),
     };
 
-    console.log('[SEASONAL ANALYTICS]', JSON.stringify(analyticsEvent));
+    logger.info('[SEASONAL ANALYTICS]', JSON.stringify(analyticsEvent));
 
     // TODO: Send to analytics service
     // await analyticsService.track(analyticsEvent);
@@ -157,7 +158,7 @@ async function logSeasonalCompletionAnalytics(
     // Optional: Store in database for historical tracking
     // await prisma.seasonalAnalytics.create({ data: analyticsEvent });
   } catch (error) {
-    console.error('[SEASONAL] Error logging analytics:', error);
+    logger.error('[SEASONAL] Error logging analytics:', error);
     // Don't throw - analytics errors shouldn't break the job
   }
 }
@@ -167,7 +168,7 @@ async function logSeasonalCompletionAnalytics(
  * Run this monthly to remove very old completed checklists
  */
 export async function cleanupOldSeasonalChecklists() {
-  console.log('[SEASONAL] Starting cleanup job for old checklists...');
+  logger.info('[SEASONAL] Starting cleanup job for old checklists...');
 
   try {
     // Delete checklists older than 2 years that are completed or dismissed
@@ -186,9 +187,9 @@ export async function cleanupOldSeasonalChecklists() {
       },
     });
 
-    console.log(`[SEASONAL] Cleaned up ${result.count} old checklists`);
+    logger.info(`[SEASONAL] Cleaned up ${result.count} old checklists`);
   } catch (error) {
-    console.error('[SEASONAL] Error in cleanup job:', error);
+    logger.error('[SEASONAL] Error in cleanup job:', error);
     throw error;
   }
 }

@@ -1,5 +1,6 @@
+import { logger } from '../lib/logger';
 export async function sendPushNotificationJob(notificationDeliveryId: string) {
-    console.log(
+    logger.info(
       `[PUSH] Sending push notification for delivery ${notificationDeliveryId}`
     );
   

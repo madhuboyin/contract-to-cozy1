@@ -10,7 +10,7 @@
 
 import pino from 'pino';
 
-// Pino v10 has strict overload types that reject console.log-style
+// Pino v10 has strict overload types that reject logger.info-style
 // `logger.info('prefix:', value)` calls. This looser interface accepts
 // both the structured `(obj, msg)` form and the legacy `(msg, ...args)` form
 // so existing call sites don't need to be rewritten.

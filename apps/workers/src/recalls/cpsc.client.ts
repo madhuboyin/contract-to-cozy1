@@ -1,5 +1,6 @@
 // apps/workers/src/recalls/cpsc.client.ts
 import fetch from 'node-fetch';
+import { logger } from '../lib/logger';
 
 export type CpscRecallItem = {
   externalId: string;
@@ -32,7 +33,7 @@ export async function fetchCpscRecalls(): Promise<CpscRecallItem[]> {
   });
 
   if (!res.ok) {
-    console.error(`Attempting fetch from: ${DEFAULT_URL}`);
+    logger.error(`Attempting fetch from: ${DEFAULT_URL}`);
     throw new Error(`CPSC fetch failed ${res.status} ${res.statusText}`);
   }
 
@@ -42,7 +43,7 @@ export async function fetchCpscRecalls(): Promise<CpscRecallItem[]> {
   try {
     const json = JSON.parse(text);
     const mapped = mapJson(json);
-    console.log(
+    logger.info(
       '[CPSC-FETCH] items:',
       Array.isArray(json) ? json.length : json?.items?.length,
       'mapped:',
