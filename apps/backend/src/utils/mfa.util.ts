@@ -1,19 +1,90 @@
 // apps/backend/src/utils/mfa.util.ts
 //
 // TOTP (RFC 6238) operations and AES-256-GCM secret encryption.
-//
-// The TOTP secret is generated per-user, encrypted with AES-256-GCM using
-// MFA_ENCRYPTION_KEY before being stored in the database. This means a
-// database dump alone is insufficient to extract valid TOTP secrets.
+// Implemented with Node.js built-in `crypto` only — no external library.
 //
 // MFA_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars).
 // Generate with: openssl rand -hex 32
 
-import * as OTPAuth from 'otpauth';
-import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from 'crypto';
 
 const ALGO     = 'aes-256-gcm';
 const APP_NAME = 'ContractToCozy';
+
+// ---------------------------------------------------------------------------
+// Base32 (RFC 4648) — used to encode/decode TOTP secrets for authenticator apps
+// ---------------------------------------------------------------------------
+
+const B32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function base32Encode(buf: Buffer): string {
+  let bits  = 0;
+  let value = 0;
+  let out   = '';
+  for (let i = 0; i < buf.length; i++) {
+    value = (value << 8) | buf[i];
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      out += B32_ALPHABET[(value >>> bits) & 31];
+    }
+  }
+  if (bits > 0) out += B32_ALPHABET[(value << (5 - bits)) & 31];
+  return out;
+}
+
+function base32Decode(encoded: string): Buffer {
+  const clean = encoded.toUpperCase().replace(/=+$/, '');
+  let bits  = 0;
+  let value = 0;
+  const bytes: number[] = [];
+  for (const ch of clean) {
+    const idx = B32_ALPHABET.indexOf(ch);
+    if (idx === -1) throw new Error(`Invalid base32 character: ${ch}`);
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes.push((value >>> bits) & 0xff);
+    }
+  }
+  return Buffer.from(bytes);
+}
+
+// ---------------------------------------------------------------------------
+// TOTP core (RFC 6238 / RFC 4226)
+// ---------------------------------------------------------------------------
+
+function computeTotp(secretBuf: Buffer, counter: bigint): string {
+  // 8-byte big-endian counter
+  const ctrBuf = Buffer.alloc(8);
+  ctrBuf.writeBigInt64BE(counter);
+
+  const hmac   = createHmac('sha1', secretBuf).update(ctrBuf).digest();
+  const offset = hmac[hmac.length - 1] & 0x0f;
+
+  // Avoid sign-bit contamination: multiply the high byte instead of <<24
+  const code = (
+    ((hmac[offset]     & 0x7f) * 0x1000000) +
+    ((hmac[offset + 1] & 0xff) << 16) +
+    ((hmac[offset + 2] & 0xff) <<  8) +
+     (hmac[offset + 3] & 0xff)
+  ) % 1_000_000;
+
+  return String(code).padStart(6, '0');
+}
+
+/** Constant-time string comparison — prevents timing attacks on code checks. */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+}
 
 // ---------------------------------------------------------------------------
 // Key management
@@ -48,90 +119,75 @@ export function encryptTotpSecret(plaintext: string): string {
     cipher.update(plaintext, 'utf8'),
     cipher.final(),
   ]);
-  const authTag = cipher.getAuthTag();
 
   return [
     iv.toString('hex'),
-    authTag.toString('hex'),
+    cipher.getAuthTag().toString('hex'),
     encrypted.toString('hex'),
   ].join(':');
 }
 
 /**
  * Decrypt a previously encrypted TOTP secret.
- * Throws if the ciphertext has been tampered with (GCM auth tag mismatch).
+ * Throws if the ciphertext has been tampered with (GCM auth-tag mismatch).
  */
 export function decryptTotpSecret(stored: string): string {
   const parts = stored.split(':');
   if (parts.length !== 3) throw new Error('Invalid encrypted secret format');
 
   const [ivHex, tagHex, dataHex] = parts;
-  const key      = getEncryptionKey();
-  const iv       = Buffer.from(ivHex,  'hex');
-  const authTag  = Buffer.from(tagHex, 'hex');
-  const data     = Buffer.from(dataHex,'hex');
+  const key     = getEncryptionKey();
+  const decipher = createDecipheriv(ALGO, key, Buffer.from(ivHex, 'hex'));
+  decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
 
-  const decipher = createDecipheriv(ALGO, key, iv);
-  decipher.setAuthTag(authTag);
-
-  return decipher.update(data).toString('utf8') + decipher.final('utf8');
+  return (
+    decipher.update(Buffer.from(dataHex, 'hex')).toString('utf8') +
+    decipher.final('utf8')
+  );
 }
 
 // ---------------------------------------------------------------------------
-// TOTP operations
+// Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Generate a new random TOTP secret for a user.
- * Returns the base32-encoded secret (used in QR codes) and the encrypted
- * form ready to be stored in the database.
+ * Returns the base32-encoded secret (for QR codes), the encrypted form
+ * ready to be stored in the database, and the otpauth:// URI for the QR code.
  */
 export function generateTotpSecret(email: string): {
   base32Secret:    string;
   encryptedSecret: string;
   otpauthUri:      string;
 } {
-  const secret = new OTPAuth.Secret({ size: 20 }); // 160-bit secret (HOTP RFC recommended)
+  const secretBuf   = randomBytes(20);           // 160-bit — HOTP RFC recommendation
+  const base32Secret    = base32Encode(secretBuf);
+  const encryptedSecret = encryptTotpSecret(base32Secret);
 
-  const totp = new OTPAuth.TOTP({
-    issuer:    APP_NAME,
-    label:     email,
-    algorithm: 'SHA1',
-    digits:    6,
-    period:    30,
-    secret,
-  });
+  const label      = encodeURIComponent(`${APP_NAME}:${email}`);
+  const issuer     = encodeURIComponent(APP_NAME);
+  const otpauthUri = `otpauth://totp/${label}?secret=${base32Secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
 
-  return {
-    base32Secret:    secret.base32,
-    encryptedSecret: encryptTotpSecret(secret.base32),
-    otpauthUri:      totp.toString(),
-  };
+  return { base32Secret, encryptedSecret, otpauthUri };
 }
 
 /**
- * Verify a TOTP code against a stored encrypted secret.
- * Allows a ±1 time-step window (30 s each side) to accommodate clock drift.
- * Returns true if the code is valid, false otherwise.
+ * Verify a 6-digit TOTP code against a stored encrypted secret.
+ * Allows a ±1 time-step window (±30 s) to accommodate clock drift.
+ * Returns true if the code is valid for any step in the window.
  */
 export function verifyTotpCode(encryptedSecret: string, code: string): boolean {
-  // Reject obviously invalid input before decrypting
   if (!/^\d{6}$/.test(code)) return false;
 
   try {
-    const base32Secret = decryptTotpSecret(encryptedSecret);
+    const base32  = decryptTotpSecret(encryptedSecret);
+    const keyBuf  = base32Decode(base32);
+    const counter = BigInt(Math.floor(Date.now() / 1000 / 30));
 
-    const totp = new OTPAuth.TOTP({
-      issuer:    APP_NAME,
-      algorithm: 'SHA1',
-      digits:    6,
-      period:    30,
-      secret:    OTPAuth.Secret.fromBase32(base32Secret),
-    });
-
-    // validate returns null if invalid, or the time-step delta if valid
-    const delta = totp.validate({ token: code, window: 1 });
-    return delta !== null;
+    for (let delta = -1n; delta <= 1n; delta++) {
+      if (safeEqual(computeTotp(keyBuf, counter + delta), code)) return true;
+    }
+    return false;
   } catch {
     return false;
   }
