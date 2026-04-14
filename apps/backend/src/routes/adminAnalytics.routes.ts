@@ -5,7 +5,7 @@
 
 import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate } from '../middleware/validate.middleware';
 import {
@@ -28,7 +28,7 @@ import {
 const router = Router();
 
 router.use(apiRateLimiter);
-router.use('/admin/analytics', authenticate, requireRole(UserRole.ADMIN));
+router.use('/admin/analytics', authenticate, requireMfa, requireRole(UserRole.ADMIN));
 
 /**
  * @swagger

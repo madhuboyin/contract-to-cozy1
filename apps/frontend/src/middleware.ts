@@ -17,6 +17,11 @@ export function middleware(request: NextRequest) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
   const faroUrl = process.env.NEXT_PUBLIC_FARO_URL || '';
 
+  // Violation reports go to the backend CSP report endpoint.
+  // Using the backend URL (not a same-origin Next.js route) so the report
+  // handler runs even when the frontend itself is broken.
+  const reportUri = `${apiUrl}/api/csp-report`;
+
   // Build connect-src: always include the backend API; add Faro collector if configured
   const connectSrc = ['self', apiUrl, faroUrl ? faroUrl : '']
     .filter(Boolean)
@@ -42,6 +47,10 @@ export function middleware(request: NextRequest) {
     "form-action 'self'",
     "object-src 'none'",
     "upgrade-insecure-requests",
+    // Violation reporting — report-uri for broad browser support,
+    // report-to for the modern Reporting API (Chrome 70+, Edge 79+).
+    `report-uri ${reportUri}`,
+    "report-to csp-endpoint",
   ].join('; ');
 
   // Forward the nonce to server components via request header so layout.tsx
@@ -55,6 +64,9 @@ export function middleware(request: NextRequest) {
   });
 
   response.headers.set('Content-Security-Policy', csp);
+
+  // Reporting-Endpoints — modern Reporting API (pairs with 'report-to csp-endpoint' in CSP)
+  response.headers.set('Reporting-Endpoints', `csp-endpoint="${reportUri}"`);
 
   return response;
 }

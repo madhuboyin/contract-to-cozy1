@@ -118,6 +118,9 @@ async function _authenticate(
       status: user.status as any,
       homeownerProfile: user.homeownerProfile,
       providerProfile: user.providerProfile,
+      // MFA fields decoded from the JWT payload
+      mfaEnabled:  decoded.mfaEnabled,
+      mfaVerified: decoded.mfaVerified,
     };
 
     next();
@@ -126,7 +129,7 @@ async function _authenticate(
     res.status(401).json({
       success: false,
       error: {
-        message: error.message || 'Invalid token',
+        message: 'Invalid or expired token',
         code: 'INVALID_TOKEN',
       },
     });
@@ -242,6 +245,45 @@ export const requireEmailVerification = (
       error: {
         message: 'Email verification required',
         code: 'EMAIL_NOT_VERIFIED',
+      },
+    });
+    return;
+  }
+
+  next();
+};
+
+/**
+ * Middleware that enforces MFA for ADMIN accounts that have TOTP configured.
+ *
+ * Logic:
+ *   - Non-admin roles pass through unconditionally (MFA is admin-only for v1.0).
+ *   - Admin accounts with mfaEnabled=false pass through (setup not yet complete).
+ *   - Admin accounts with mfaEnabled=true must have mfaVerified=true in their
+ *     token — obtained by completing POST /api/auth/mfa/challenge.
+ *
+ * Must be placed AFTER authenticate in the middleware chain.
+ */
+export const requireMfa = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (!req.user) {
+    res.status(401).json({
+      success: false,
+      error: { message: 'Authentication required', code: 'AUTH_REQUIRED' },
+    });
+    return;
+  }
+
+  // Only enforce MFA for ADMIN role
+  if (req.user.role === 'ADMIN' && req.user.mfaEnabled && !req.user.mfaVerified) {
+    res.status(403).json({
+      success: false,
+      error: {
+        message: 'MFA verification required. Complete the TOTP challenge to access this resource.',
+        code: 'MFA_REQUIRED',
       },
     });
     return;

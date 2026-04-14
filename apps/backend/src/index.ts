@@ -45,9 +45,10 @@ import orchestrationRoutes from './routes/orchestration.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
-import { authenticate, requireRole } from './middleware/auth.middleware';
+import { authenticate, requireMfa, requireRole } from './middleware/auth.middleware';
 import { apiRateLimiter } from './middleware/rateLimiter.middleware';
 import { csrfProtection, getCsrfToken } from './middleware/csrf.middleware';
+import cspReportRoutes from './routes/cspReport.routes';
 import { UserRole } from './types/auth.types';
 import notificationRoutes from './routes/notification.routes';
 import seasonalChecklistRoutes from './routes/seasonalChecklist.routes';
@@ -108,6 +109,7 @@ import gazetteRoutes from './modules/gazette/gazette.routes';
 import gazetteInternalRoutes from './modules/gazette/gazetteInternal.routes';
 import sharedDataRoutes from './routes/sharedData.routes';
 import releaseGateRoutes from './routes/releaseGate.routes';
+import mfaRoutes from './routes/mfa.routes';
 import { logger } from './lib/logger';
 import { register } from './lib/metrics';
 import { metricsMiddleware } from './middleware/metrics.middleware';
@@ -142,6 +144,18 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // cookie-parser must run before csrfProtection so req.cookies is populated.
 app.use(cookieParser());
+
+// CSP violation reports — mounted BEFORE csrfProtection because browsers send
+// these as automated POSTs without an Authorization or x-csrf-token header.
+// A dedicated body-parser accepts the browser's application/csp-report MIME type.
+app.use(
+  '/api',
+  express.json({
+    type: ['application/csp-report', 'application/reports+json'],
+    limit: '4kb',
+  }),
+  cspReportRoutes
+);
 
 // CSRF protection — guards mutating requests that arrive via cookie-based auth.
 // Requests using Authorization: Bearer <token> are skipped (see csrf.middleware.ts).
@@ -390,6 +404,7 @@ app.get('/', (req: Request, res: Response) => {
 app.get('/api/csrf-token', getCsrfToken);
 
 app.use('/api/auth', authRoutes);
+app.use('/api', mfaRoutes);
 app.use('/api/providers', providerRoutes);
 app.use('/api/bookings', bookingRoutes);
 // Keep vault public and mount before any generic '/api' routers that apply auth middleware.
@@ -485,7 +500,7 @@ app.use('/api', refinanceRadarRoutes);
 app.use('/api', gazetteRoutes);
 app.use('/api', gazetteInternalRoutes);
 app.use('/api/weather', weatherRoutes);
-app.use('/api/admin/release-gates', authenticate, requireRole(UserRole.ADMIN), releaseGateRoutes);
+app.use('/api/admin/release-gates', authenticate, requireMfa, requireRole(UserRole.ADMIN), releaseGateRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

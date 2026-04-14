@@ -26,6 +26,8 @@ export interface AuthUser {
   status: UserStatus;
   homeownerProfile?: { id: string } | null;
   providerProfile?: { id: string } | null;
+  mfaEnabled?: boolean;   // decoded from JWT — whether MFA is configured
+  mfaVerified?: boolean;  // decoded from JWT — whether MFA challenge was completed
 }
 
 // Extended Express Request with user
@@ -50,6 +52,13 @@ export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   user: UserResponse;
+}
+
+// Returned instead of LoginResponse when the account has MFA enabled.
+// The client must POST mfaToken + TOTP code to /api/auth/mfa/challenge to obtain real tokens.
+export interface MfaChallengeResponse {
+  mfaRequired: true;
+  mfaToken: string;
 }
 
 // Register response

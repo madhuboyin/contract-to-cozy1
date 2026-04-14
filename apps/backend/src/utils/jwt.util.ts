@@ -7,6 +7,10 @@ export interface JWTPayload {
   userId: string;
   email: string;
   role: string;
+  /** Whether this account has TOTP-MFA configured and active. */
+  mfaEnabled?: boolean;
+  /** True only when the MFA challenge was completed in this session. */
+  mfaVerified?: boolean;
 }
 
 export interface TokenPair {
@@ -17,7 +21,8 @@ export interface TokenPair {
 interface PurposeTokenPayload extends jwt.JwtPayload {
   userId: string;
   email: string;
-  purpose: 'email_verification' | 'password_reset';
+  purpose: 'email_verification' | 'password_reset' | 'mfa_challenge';
+  role?: string;
 }
 
 // CRITICAL HELPER: Ensures we get the secret directly from the environment
@@ -35,12 +40,18 @@ const parseAuthPayload = (decoded: string | jwt.JwtPayload): JWTPayload => {
     throw new Error('Invalid token payload');
   }
 
-  const { userId, email, role } = decoded;
+  const { userId, email, role, mfaEnabled, mfaVerified } = decoded as any;
   if (typeof userId !== 'string' || typeof email !== 'string' || typeof role !== 'string') {
     throw new Error('Invalid token payload');
   }
 
-  return { userId, email, role };
+  return {
+    userId,
+    email,
+    role,
+    mfaEnabled:  typeof mfaEnabled  === 'boolean' ? mfaEnabled  : undefined,
+    mfaVerified: typeof mfaVerified === 'boolean' ? mfaVerified : undefined,
+  };
 };
 
 const verifyPurposeToken = (
@@ -168,4 +179,63 @@ export const verifyPasswordResetToken = (token: string): { userId: string; email
  */
 export const decodeToken = (token: string): jwt.JwtPayload | string | null => {
   return jwt.decode(token);
+};
+
+// ---------------------------------------------------------------------------
+// MFA helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a short-lived (5 min) MFA challenge token.
+ * Issued after a successful password check when the account has MFA enabled.
+ * Must be exchanged for real tokens via POST /api/auth/mfa/challenge.
+ */
+export const generateMfaChallengeToken = (
+  userId: string,
+  email: string,
+  role: string
+): string => {
+  return jwt.sign(
+    { userId, email, role, purpose: 'mfa_challenge' },
+    jwtConfig.mfaChallengeToken.secret,
+    { expiresIn: jwtConfig.mfaChallengeToken.expiresIn } as jwt.SignOptions
+  );
+};
+
+/**
+ * Verify an MFA challenge token and return its payload.
+ */
+export const verifyMfaChallengeToken = (
+  token: string
+): { userId: string; email: string; role: string } => {
+  try {
+    const decoded = jwt.verify(token, jwtConfig.mfaChallengeToken.secret);
+    if (typeof decoded === 'string') throw new Error('Invalid payload');
+
+    const payload = decoded as PurposeTokenPayload;
+    if (
+      payload.purpose !== 'mfa_challenge' ||
+      typeof payload.userId !== 'string' ||
+      typeof payload.email  !== 'string' ||
+      typeof payload.role   !== 'string'
+    ) {
+      throw new Error('Invalid token purpose');
+    }
+    return { userId: payload.userId, email: payload.email, role: payload.role };
+  } catch {
+    throw new Error('Invalid or expired MFA challenge token');
+  }
+};
+
+/**
+ * Generate access + refresh token pair with mfaVerified: true.
+ * Use this instead of generateTokenPair when the full MFA challenge has
+ * been completed.
+ */
+export const generateMfaVerifiedTokenPair = (payload: JWTPayload): TokenPair => {
+  const enriched = { ...payload, mfaVerified: true };
+  return {
+    accessToken:  jwt.sign(enriched, getJwtSecret(), { expiresIn: jwtConfig.accessToken.expiresIn }  as jwt.SignOptions),
+    refreshToken: jwt.sign(enriched, getJwtSecret(), { expiresIn: jwtConfig.refreshToken.expiresIn } as jwt.SignOptions),
+  };
 };

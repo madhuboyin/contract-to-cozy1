@@ -1314,6 +1314,10 @@ model User {
   emailVerified Boolean @default(false)
   phoneVerified Boolean @default(false)
 
+  // MFA (TOTP) — admin accounts only for v1.0
+  mfaEnabled Boolean @default(false)
+  mfaSecret  String? // AES-256-GCM encrypted TOTP secret; null until setup
+
   // Profile
   avatar      String?
   bio         String?

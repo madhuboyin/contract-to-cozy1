@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { UserRole } from '../types/auth.types';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import {
@@ -18,7 +18,7 @@ import {
 const router = Router();
 
 router.use(apiRateLimiter);
-router.use('/knowledge/admin', authenticate, requireRole(UserRole.ADMIN));
+router.use('/knowledge/admin', authenticate, requireMfa, requireRole(UserRole.ADMIN));
 
 router.get('/knowledge/admin/options', getKnowledgeEditorOptions);
 router.get('/knowledge/admin/articles', listKnowledgeArticlesForAdmin);

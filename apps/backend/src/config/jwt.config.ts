@@ -23,6 +23,14 @@ export const jwtConfig = {
     secret: process.env.JWT_PASSWORD_RESET_SECRET || 'your-password-reset-secret',
     expiresIn: '1h', // 1 hour
   },
+
+  // MFA challenge token — short-lived bridge between password-verified and
+  // TOTP-verified states. Issued after a successful password check when the
+  // account has MFA enabled; exchanged for real tokens via POST /api/auth/mfa/challenge.
+  mfaChallengeToken: {
+    secret: process.env.JWT_MFA_SECRET || 'your-mfa-challenge-secret',
+    expiresIn: '5m', // 5 minutes — tight window for the TOTP prompt
+  },
 };
 
 export const authConfig = {

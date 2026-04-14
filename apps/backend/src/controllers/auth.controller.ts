@@ -44,6 +44,18 @@ export class AuthController {
     const data: LoginInput = req.body;
     try {
       const result = await authService.login(data);
+
+      // MFA challenge path: return 200 with mfaRequired=true so the client can
+      // prompt for the TOTP code and POST to /api/auth/mfa/challenge.
+      if ('mfaRequired' in result) {
+        auditLog('AUTH_LOGIN_MFA_REQUIRED', null, {
+          ip: req.ip,
+          email: redactEmail(data.email),
+        });
+        res.status(200).json({ success: true, data: result });
+        return;
+      }
+
       auditLog('AUTH_LOGIN_SUCCESS', result.user.id, {
         ip: req.ip,
         email: redactEmail(data.email),

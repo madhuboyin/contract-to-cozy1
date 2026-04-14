@@ -4,6 +4,7 @@ import {
   generateTokenPair,
   generateEmailVerificationToken,
   generatePasswordResetToken,
+  generateMfaChallengeToken,
   verifyRefreshToken,
   verifyEmailVerificationToken,
   verifyPasswordResetToken,
@@ -17,6 +18,7 @@ import {
 import { APIError } from '../middleware/error.middleware';
 import {
   LoginResponse,
+  MfaChallengeResponse,
   RegisterResponse,
   RefreshTokenResponse,
 } from '../types/auth.types';
@@ -125,11 +127,11 @@ export class AuthService {
   /**
    * Login user
    */
-  async login(data: LoginInput): Promise<LoginResponse> {
-    // Find user by email AND include the profile segment
+  async login(data: LoginInput): Promise<LoginResponse | MfaChallengeResponse> {
+    // Find user by email AND include the profile segment + MFA state
     const user = await prisma.user.findUnique({
       where: { email: data.email },
-      include: { homeownerProfile: { select: { segment: true } } }, // <-- FIX 1: Includes homeownerProfile
+      include: { homeownerProfile: { select: { segment: true } } },
     });
 
     if (!user) {
@@ -153,11 +155,20 @@ export class AuthService {
       throw new APIError('Account is inactive', 403, 'ACCOUNT_INACTIVE');
     }
 
+    // MFA gate: if the user has TOTP configured, issue a short-lived challenge
+    // token instead of full access/refresh tokens. The client must POST this
+    // token + a TOTP code to /api/auth/mfa/challenge to obtain real tokens.
+    if (user.mfaEnabled) {
+      const mfaToken = generateMfaChallengeToken(user.id, user.email, user.role);
+      return { mfaRequired: true, mfaToken };
+    }
+
     // Generate access and refresh tokens
     const { accessToken, refreshToken } = generateTokenPair({
       userId: user.id,
       email: user.email,
       role: user.role,
+      mfaEnabled: false,
     });
 
     return {
@@ -171,7 +182,7 @@ export class AuthService {
         role: user.role as any,
         emailVerified: user.emailVerified,
         status: user.status as any,
-        segment: user.homeownerProfile?.segment || 'EXISTING_OWNER', // <-- FIX 2: Returns the segment
+        segment: user.homeownerProfile?.segment || 'EXISTING_OWNER',
       },
     };
   }
