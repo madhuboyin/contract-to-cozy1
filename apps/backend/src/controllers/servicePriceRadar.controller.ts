@@ -4,11 +4,11 @@ import { APIError } from '../middleware/error.middleware';
 import { ServicePriceRadarService } from '../services/servicePriceRadar.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import {
-import { logger } from '../lib/logger';
   CreateServicePriceRadarBody,
   listServicePriceRadarQuerySchema,
   TrackServicePriceRadarEventBody,
 } from '../validators/servicePriceRadar.validators';
+import { logger } from '../lib/logger';
 
 const service = new ServicePriceRadarService();
 

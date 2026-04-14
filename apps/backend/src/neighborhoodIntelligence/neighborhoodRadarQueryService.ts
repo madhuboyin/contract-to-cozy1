@@ -19,13 +19,13 @@ import {
   OverallEffect,
 } from './types';
 import {
-import { logger } from '../lib/logger';
   computeEventConfidence,
   computeFreshnessScore,
   computeCompositeRank,
   isStaleEvent,
   buildWhyThisMatters,
 } from './eventConfidence';
+import { logger } from '../lib/logger';
 
 const impactEngine = new NeighborhoodImpactEngine();
 

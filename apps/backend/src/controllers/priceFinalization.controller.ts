@@ -4,12 +4,12 @@ import { APIError } from '../middleware/error.middleware';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { priceFinalizationService } from '../services/priceFinalization.service';
 import {
-import { logger } from '../lib/logger';
   CreatePriceFinalizationBody,
   FinalizePriceFinalizationBody,
   priceFinalizationListQuerySchema,
   UpdatePriceFinalizationBody,
 } from '../validators/priceFinalization.validators';
+import { logger } from '../lib/logger';
 
 function requireUser(req: CustomRequest) {
   const userId = req.user?.userId;

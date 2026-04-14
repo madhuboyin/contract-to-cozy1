@@ -1,11 +1,11 @@
 // apps/backend/src/services/homeEvents/homeEvents.autogen.ts
 import { prisma } from '../../lib/prisma';
 import {
-import { logger } from '../../lib/logger';
   formatMajorApplianceType,
   inferMajorApplianceType,
   PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
 } from '../majorAppliance.util';
+import { logger } from '../../lib/logger';
 
 // Keep it dead simple + safe
 function enabled() {

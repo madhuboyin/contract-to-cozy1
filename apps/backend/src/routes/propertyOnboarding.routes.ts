@@ -6,13 +6,13 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { CustomRequest } from '../types';
 import {
-import { logger } from '../lib/logger';
   completeStep,
   computeSetupStatus,
   finishOnboarding,
   setCurrentStep,
   skipOnboarding,
 } from '../services/propertyOnboarding.service';
+import { logger } from '../lib/logger';
 
 const router = Router();
 

@@ -7,11 +7,11 @@ import * as dotenv from 'dotenv';
 import { getPropertyContextForAI, PropertyAIGuidance } from './property.service'; 
 // [NEW IMPORT] Import AI constants
 import { 
-import { logger } from '../lib/logger';
   LLM_MODEL_CONFIG, 
   GEMINI_BASE_INSTRUCTION, 
   GEMINI_CONTEXT_INSTRUCTION_TEMPLATE 
 } from '../config/ai-constants';
+import { logger } from '../lib/logger';
 // Load environment variables
 dotenv.config();
 

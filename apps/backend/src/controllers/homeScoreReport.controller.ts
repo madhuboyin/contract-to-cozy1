@@ -1,11 +1,11 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
-import { logger } from '../lib/logger';
   HomeScoreCorrectionInput,
   HomeScoreEventInput,
   HomeScoreReportService,
 } from '../services/homeScoreReport.service';
+import { logger } from '../lib/logger';
 
 const service = new HomeScoreReportService();
 

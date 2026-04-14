@@ -16,7 +16,6 @@ import {
   getFreshnessNote,
 } from './hiddenAssets/ruleEngine';
 import {
-import { logger } from '../lib/logger';
   HiddenAssetMatchDTO,
   HiddenAssetMatchFilters,
   HiddenAssetMatchListDTO,
@@ -28,6 +27,7 @@ import { logger } from '../lib/logger';
   RegionPair,
   UpdateMatchStatusInput,
 } from './hiddenAssets/types';
+import { logger } from '../lib/logger';
 
 // ============================================================================
 // SERIALIZERS

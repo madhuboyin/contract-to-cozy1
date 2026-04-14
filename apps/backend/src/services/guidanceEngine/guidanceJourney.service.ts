@@ -10,7 +10,6 @@ import { guidanceSuppressionService } from './guidanceSuppression.service';
 import { guidanceCopyService } from './guidanceCopy.service';
 import { guidanceValidationService } from './guidanceValidation.service';
 import {
-import { logger } from '../../lib/logger';
   clampConfidenceToDecimal,
   GuidanceEvidenceSourceType,
   GuidanceEvidenceStatus,
@@ -20,6 +19,7 @@ import { logger } from '../../lib/logger';
   UserInitiatedJourneyInput,
   getGuidanceModels,
 } from './guidanceTypes';
+import { logger } from '../../lib/logger';
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};

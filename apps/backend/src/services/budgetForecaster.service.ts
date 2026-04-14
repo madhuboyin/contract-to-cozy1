@@ -4,13 +4,13 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../lib/prisma';
 // [NEW IMPORT] Import AI and business logic constants
 import { 
-import { logger } from '../lib/logger';
   LLM_MODEL_CONFIG, 
   BUDGET_RECOMMENDATION_PROMPT_TEMPLATE,
   MONTHLY_BASE_COSTS, 
   SEASONAL_TASKS, 
   MAINTENANCE_CATEGORY_BREAKDOWN 
 } from '../config/ai-constants';
+import { logger } from '../lib/logger';
 
 interface MonthlyForecast {
   month: string;

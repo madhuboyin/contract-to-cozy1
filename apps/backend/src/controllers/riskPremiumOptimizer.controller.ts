@@ -1,11 +1,11 @@
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
-import { logger } from '../lib/logger';
   RiskPremiumOptimizerOverrides,
   RiskPremiumOptimizerService,
   UpdateRiskMitigationPlanItemInput,
 } from '../services/riskPremiumOptimizer.service';
+import { logger } from '../lib/logger';
 
 const service = new RiskPremiumOptimizerService();
 

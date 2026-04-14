@@ -10,7 +10,7 @@ import { documentIntelligenceService } from '../services/documentIntelligence.se
 import { DocumentType } from '@prisma/client';
 import { validateDocumentUpload } from '../utils/documentValidator.util'; // Assuming this was added in the previous step
 import { HomeEventsAutoGen } from '../services/homeEvents/homeEvents.autogen';
-import { auditLog } from '../lib/logger';
+import { auditLog, logger } from '../lib/logger';
 
 const router = Router();
 

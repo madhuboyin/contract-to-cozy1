@@ -6,11 +6,11 @@ import {
   UpdateMatchStatusInput,
 } from '../services/hiddenAssets/types';
 import {
-import { logger } from '../lib/logger';
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
   PropertyHiddenAssetMatchStatus,
 } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 const service = new HiddenAssetService();
 

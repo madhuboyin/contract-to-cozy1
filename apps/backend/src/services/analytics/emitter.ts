@@ -15,13 +15,13 @@
 import { ProductAnalyticsEventType } from '@prisma/client';
 import { ProductAnalyticsService } from './service';
 import {
-import { logger } from '../../lib/logger';
   TrackEventInput,
   TrackFeatureOpenedInput,
   TrackDecisionGuidedInput,
   TrackPropertyActivatedInput,
   TrackToolUsedInput,
 } from './schemas';
+import { logger } from '../../lib/logger';
 
 // ============================================================================
 // VIEW EVENT DEDUPLICATION

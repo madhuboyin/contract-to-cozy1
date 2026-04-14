@@ -1,6 +1,5 @@
 // apps/backend/src/services/PropertyMaintenanceTask.service.ts
 import {
-import { logger } from '../lib/logger';
     PropertyMaintenanceTask,
     MaintenanceTaskStatus,
     MaintenanceTaskSource,
@@ -13,6 +12,7 @@ import { logger } from '../lib/logger';
   import { prisma } from '../lib/prisma';
   import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
   import { signalService } from './signal.service';
+import { logger } from '../lib/logger';
 
   /**
    * Service for managing property maintenance tasks.

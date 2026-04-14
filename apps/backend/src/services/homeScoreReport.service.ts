@@ -12,10 +12,10 @@ import {
 } from './majorAppliance.util';
 import { PreferenceProfileService } from './preferenceProfile.service';
 import {
-import { logger } from '../lib/logger';
   getPropertyScoreSnapshotSummary,
   PropertyScoreSnapshotSummaryDTO,
 } from './propertyScoreSnapshot.service';
+import { logger } from '../lib/logger';
 
 type HomeScoreComponentKey = 'HEALTH' | 'RISK' | 'FINANCIAL';
 type HomeScoreConfidence = 'HIGH' | 'MEDIUM' | 'LOW';

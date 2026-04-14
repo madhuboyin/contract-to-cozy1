@@ -10,6 +10,19 @@
 
 import pino from 'pino';
 
+// Pino v10 has strict overload types that reject console.log-style
+// `logger.info('prefix:', value)` calls. This looser interface accepts
+// both the structured `(obj, msg)` form and the legacy `(msg, ...args)` form
+// so existing call sites don't need to be rewritten.
+export interface AppLogger {
+  info(msgOrObj: unknown, ...args: unknown[]): void;
+  warn(msgOrObj: unknown, ...args: unknown[]): void;
+  error(msgOrObj: unknown, ...args: unknown[]): void;
+  debug(msgOrObj: unknown, ...args: unknown[]): void;
+  fatal(msgOrObj: unknown, ...args: unknown[]): void;
+  child(bindings: Record<string, unknown>): AppLogger;
+}
+
 const isDev = process.env.NODE_ENV !== 'production';
 
 function getTransport() {
@@ -45,7 +58,7 @@ function getTransport() {
   };
 }
 
-export const logger = pino({
+export const logger: AppLogger = pino({
   level: process.env.LOG_LEVEL || 'info',
   base: {
     service: 'backend',

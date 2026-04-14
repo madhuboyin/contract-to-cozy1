@@ -3,7 +3,6 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { ServicePriceRadarEngine } from './servicePriceRadar.engine';
 import {
-import { logger } from '../lib/logger';
   BenchmarkMatch,
   LinkedEntityContext,
   PropertyContext,
@@ -24,6 +23,7 @@ import { logger } from '../lib/logger';
   ServiceRadarSummaryDTO,
   ServiceRadarVerdictValue,
 } from './servicePriceRadar.types';
+import { logger } from '../lib/logger';
 
 const prismaAny = prisma as any;
 const engine = new ServicePriceRadarEngine();

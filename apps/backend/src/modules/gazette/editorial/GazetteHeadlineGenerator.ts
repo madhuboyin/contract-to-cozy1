@@ -8,11 +8,11 @@ import { GazetteEditorialPromptBuilder } from './GazetteEditorialPromptBuilder';
 import { GazetteEditorialValidator } from './GazetteEditorialValidator';
 import { GazetteEditorialFallbackBuilder } from './GazetteEditorialFallbackBuilder';
 import {
-import { logger } from '../../../lib/logger';
   StoryEditorialInput,
   StoryEditorialOutput,
   RawAIStoryEditorial,
 } from './GazetteEditorialTypes';
+import { logger } from '../../../lib/logger';
 
 const EDITORIAL_MODEL = LLM_MODEL_CONFIG.DEFAULT_MODEL;
 const EDITORIAL_TEMPERATURE = 0.3;

@@ -19,10 +19,10 @@ import {
   TrackToolUsedInput,
 } from './schemas';
 import {
-import { logger } from '../../lib/logger';
   AnalyticsModule,
   AnalyticsFeature,
 } from './taxonomy';
+import { logger } from '../../lib/logger';
 
 // ============================================================================
 // HELPERS
