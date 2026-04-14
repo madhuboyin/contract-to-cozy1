@@ -11,6 +11,8 @@ import { DocumentType } from '@prisma/client';
 import { validateDocumentUpload } from '../utils/documentValidator.util'; // Assuming this was added in the previous step
 import { HomeEventsAutoGen } from '../services/homeEvents/homeEvents.autogen';
 import { auditLog, logger } from '../lib/logger';
+import { uploadDocumentBuffer, deleteDocumentObject } from '../services/storage/reportStorage';
+import { presignGetObject } from '../services/storage/presign';
 
 const router = Router();
 
@@ -136,14 +138,23 @@ router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpl
       });
     }
 
-    // Create document record
+    // Upload file to S3; keep buffer only for the AI analysis above
+    const { key } = await uploadDocumentBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      userId,
+      propertyId: propertyId || null,
+    });
+
+    // Create document record — store S3 key, not base64 content
     const document = await prisma.document.create({
       data: {
         uploadedBy: homeownerProfile.id,
         propertyId: propertyId || null,
         type: mapDocumentType(insights.documentType),
         name: file.originalname,
-        fileUrl: `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
+        fileUrl: key,
         fileSize: file.size,
         mimeType: file.mimetype,
         metadata: insights as any
@@ -181,10 +192,15 @@ router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpl
       );
     }
 
+    const bucket = process.env.S3_BUCKET;
+    const fileSignedUrl = bucket
+      ? await presignGetObject({ bucket, key: document.fileUrl, expiresInSeconds: 3600 })
+      : null;
+
     res.json({
       success: true,
       data: {
-        document,
+        document: { ...document, fileUrl: undefined, fileSignedUrl },
         insights,
         warranty
       }
@@ -234,10 +250,21 @@ router.get('/', authenticate, async (req: CustomRequest, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
 
+    const bucket = process.env.S3_BUCKET;
+    const withUrls = await Promise.all(
+      documents.map(async (doc) => {
+        const isS3Key = bucket && doc.fileUrl && !doc.fileUrl.startsWith('data:');
+        const fileSignedUrl = isS3Key
+          ? await presignGetObject({ bucket, key: doc.fileUrl, expiresInSeconds: 3600 })
+          : null;
+        return { ...doc, fileUrl: undefined, fileSignedUrl };
+      })
+    );
+
     res.json({
       success: true,
       data: {
-        documents: documents
+        documents: withUrls
       }
     });
 
@@ -619,6 +646,15 @@ router.delete('/:id', authenticate, async (req: CustomRequest, res: Response) =>
         success: false,
         message: 'Document not found'
       });
+    }
+
+    // Delete from S3 first (best-effort — don't block DB delete on S3 failure)
+    if (document.fileUrl && !document.fileUrl.startsWith('data:')) {
+      try {
+        await deleteDocumentObject(document.fileUrl);
+      } catch (s3Err) {
+        logger.error('[DOCUMENTS] S3 delete failed (continuing):', s3Err);
+      }
     }
 
     await prisma.document.delete({
