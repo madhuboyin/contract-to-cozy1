@@ -146,6 +146,7 @@ router.post(
  */
 router.post(
   '/refresh',
+  authRateLimiter,
   validateBody(refreshTokenSchema),
   authController.refreshToken.bind(authController)
 );

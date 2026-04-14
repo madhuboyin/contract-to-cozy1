@@ -303,7 +303,20 @@ app.get('/api/health/deep', async (req: Request, res: Response) => {
 // port 8080 at /metrics works without any changes.
 // The route is intentionally NOT behind apiRateLimiter — Prometheus scrapes
 // every 15 s and should never be throttled.
-app.get('/metrics', async (_req: Request, res: Response) => {
+// Auth: requires Bearer token matching METRICS_BEARER_TOKEN env var.
+const METRICS_TOKEN = process.env.METRICS_BEARER_TOKEN;
+if (process.env.NODE_ENV === 'production' && !METRICS_TOKEN) {
+  throw new Error('METRICS_BEARER_TOKEN environment variable must be set in production');
+}
+
+app.get('/metrics', async (req: Request, res: Response) => {
+  if (METRICS_TOKEN) {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${METRICS_TOKEN}`) {
+      res.status(401).set('WWW-Authenticate', 'Bearer realm="metrics"').end();
+      return;
+    }
+  }
   res.set('Content-Type', register.contentType);
   res.end(await register.metrics());
 });

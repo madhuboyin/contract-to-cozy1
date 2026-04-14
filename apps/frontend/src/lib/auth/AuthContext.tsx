@@ -36,11 +36,6 @@ const REFRESH_TOKEN_KEY = 'refreshToken';
 
 const isBrowser = typeof window !== 'undefined';
 
-// Helper to set a cookie manually on the client
-const setCookie = (name: string, value: string, days = 7) => {
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
-};
 /**
  * Fetches the current user data using the stored token.
  */
@@ -130,9 +125,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
           localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-          
-          // ADD THIS: Synchronize the cookie for the middleware
-          setCookie('accessToken', accessToken);
         }
         setUser(user);
         return { success: true, accessToken, refreshToken, user };
