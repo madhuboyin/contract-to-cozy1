@@ -120,6 +120,11 @@ spec:
                 secretKeyRef:
                   name: api-docs-auth
                   key: SWAGGER_PASSWORD
+            - name: METRICS_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: metrics-scrape-auth
+                  key: METRICS_BEARER_TOKEN
             - name: TICKETMASTER_API_KEY
               valueFrom:
                 secretKeyRef:

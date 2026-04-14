@@ -18,9 +18,13 @@ spec:
 
   # Define endpoints for each unique port found in the selected Pods
   podMetricsEndpoints:
-  - port: "8080"          # Backend API
+  - port: "8080"          # Backend API — bearer token required (METRICS_BEARER_TOKEN)
     path: /metrics
     interval: 15s
+    authorization:
+      credentials:
+        name: metrics-scrape-auth
+        key: METRICS_BEARER_TOKEN
   - port: "3000"          # Frontend (Next.js)
     path: /metrics
     interval: 15s
