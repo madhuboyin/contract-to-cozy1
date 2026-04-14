@@ -1,6 +1,7 @@
 import {
   initializeFaro,
   getWebInstrumentations,
+  LogLevel,
   type Faro,
 } from '@grafana/faro-web-sdk';
 
@@ -25,7 +26,7 @@ export function initFaro(): void {
         // Capture console.error and console.warn in the browser → Loki.
         // Suppress debug/log to avoid flooding Loki with verbose output.
         captureConsole: true,
-        captureConsoleDisabledLevels: ['debug', 'trace', 'log', 'info'],
+        captureConsoleDisabledLevels: [LogLevel.DEBUG, LogLevel.TRACE, LogLevel.LOG, LogLevel.INFO],
       }),
     ],
   });
