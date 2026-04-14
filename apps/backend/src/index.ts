@@ -107,6 +107,8 @@ import gazetteInternalRoutes from './modules/gazette/gazetteInternal.routes';
 import sharedDataRoutes from './routes/sharedData.routes';
 import releaseGateRoutes from './routes/releaseGate.routes';
 import { logger } from './lib/logger';
+import { register } from './lib/metrics';
+import { metricsMiddleware } from './middleware/metrics.middleware';
 dotenv.config();
 
 const app = express();
@@ -139,6 +141,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Apply global API rate limiting at the app boundary so all /api/* routes
 // are covered, including any that do not self-apply a per-route limiter.
 app.use('/api', apiRateLimiter);
+
+// Record HTTP request count and duration for all routes.
+app.use(metricsMiddleware);
 
 if (process.env.NODE_ENV === 'development') {
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -288,6 +293,19 @@ app.get('/api/health/deep', async (req: Request, res: Response) => {
     environment: process.env.NODE_ENV || 'development',
     checks,
   });
+});
+
+// =============================================================================
+// PROMETHEUS METRICS
+// =============================================================================
+
+// Exposed on the same port as the API so the existing PodMonitor scraping
+// port 8080 at /metrics works without any changes.
+// The route is intentionally NOT behind apiRateLimiter — Prometheus scrapes
+// every 15 s and should never be throttled.
+app.get('/metrics', async (_req: Request, res: Response) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
 });
 
 // =============================================================================

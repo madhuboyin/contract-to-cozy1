@@ -48,6 +48,7 @@ import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
 import { logger } from './lib/logger';
+import { startMetricsServer, jobsProcessedTotal, jobDurationSeconds, jobsActiveGauge } from './lib/metrics';
 
 const hiddenAssetService = new HiddenAssetService();
 
@@ -902,11 +903,25 @@ function startWorker() {
     logger.info(`[QUEUE] Worker connected to Redis and ready to process queue: ${QUEUE_NAME}`);
   });
 
+  propertyIntelligenceWorker.on('active', (job) => {
+    jobsActiveGauge.inc({ queue: QUEUE_NAME });
+    (job as unknown as Record<string, unknown>).__metricStart = process.hrtime();
+  });
+
   propertyIntelligenceWorker.on('completed', (job) => {
+    const start = (job as unknown as Record<string, unknown>).__metricStart as [number, number] | undefined;
+    if (start) {
+      const [sec, ns] = process.hrtime(start);
+      jobDurationSeconds.observe({ queue: QUEUE_NAME, job_name: job.data.jobType }, sec + ns / 1e9);
+    }
+    jobsActiveGauge.dec({ queue: QUEUE_NAME });
+    jobsProcessedTotal.inc({ queue: QUEUE_NAME, job_name: job.data.jobType, status: 'completed' });
     logger.info(`[QUEUE] Job ${job.id} (${job.data.jobType}) completed successfully.`);
   });
 
   propertyIntelligenceWorker.on('failed', (job, err) => {
+    jobsActiveGauge.dec({ queue: QUEUE_NAME });
+    jobsProcessedTotal.inc({ queue: QUEUE_NAME, job_name: job?.data?.jobType ?? 'unknown', status: 'failed' });
     logger.error(`[QUEUE] Job ${job?.id} (${job?.data.jobType}) failed with error:`, err.message);
   });
 
@@ -1192,14 +1207,29 @@ const cronTriggerWorker = new Worker(
   },
 );
 
+cronTriggerWorker.on('active', (job) => {
+  jobsActiveGauge.inc({ queue: 'cron-trigger-queue' });
+  (job as unknown as Record<string, unknown>).__metricStart = process.hrtime();
+});
+
 cronTriggerWorker.on('completed', (job) => {
+  const start = (job as unknown as Record<string, unknown>).__metricStart as [number, number] | undefined;
+  if (start) {
+    const [sec, ns] = process.hrtime(start);
+    jobDurationSeconds.observe({ queue: 'cron-trigger-queue', job_name: job.name }, sec + ns / 1e9);
+  }
+  jobsActiveGauge.dec({ queue: 'cron-trigger-queue' });
+  jobsProcessedTotal.inc({ queue: 'cron-trigger-queue', job_name: job.name, status: 'completed' });
   logger.info(`[CRON-TRIGGER] Job ${job.id} (${job.name}) completed successfully.`);
 });
 
 cronTriggerWorker.on('failed', (job, err) => {
+  jobsActiveGauge.dec({ queue: 'cron-trigger-queue' });
+  jobsProcessedTotal.inc({ queue: 'cron-trigger-queue', job_name: job?.name ?? 'unknown', status: 'failed' });
   logger.error(`[CRON-TRIGGER] Job ${job?.id} (${job?.name}) failed:`, err);
 });
 
 // Start cron jobs from registry, then start BullMQ worker
 scheduleCronJobs();
 startWorker();
+startMetricsServer();

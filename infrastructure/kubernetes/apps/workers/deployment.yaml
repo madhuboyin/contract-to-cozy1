@@ -153,6 +153,10 @@ spec:
                 secretKeyRef:
                   name: s3-reports-secret
                   key: S3_SECRET_ACCESS_KEY
+          ports:
+            - name: metrics
+              containerPort: 9091
+              protocol: TCP
           resources:
             requests:
               cpu: "250m"

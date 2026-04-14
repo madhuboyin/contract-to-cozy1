@@ -9,18 +9,21 @@ metadata:
     # CRITICAL: This label must match your Prometheus Helm release name
     release: prometheus 
 spec:
-  # 💥 Use matchExpressions for OR condition 💥
+  # Use matchExpressions for OR condition
   selector:
     matchExpressions:
     - key: app
       operator: In
-      values: ['api', 'frontend'] # Selects Pods where app is 'api' OR 'frontend'
-  
+      values: ['api', 'frontend', 'worker']
+
   # Define endpoints for each unique port found in the selected Pods
   podMetricsEndpoints:
-  - port: "8080"          # Scrape the Backend API port
-    path: /metrics      # Assuming metrics are exposed at /metrics
+  - port: "8080"          # Backend API
+    path: /metrics
     interval: 15s
-  - port: "3000"          # Scrape the Frontend port
-    path: /metrics      # Assuming metrics are exposed at /metrics
+  - port: "3000"          # Frontend (Next.js)
+    path: /metrics
+    interval: 15s
+  - port: "9091"          # Workers metrics server
+    path: /metrics
     interval: 15s
