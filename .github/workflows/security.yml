@@ -65,7 +65,10 @@ jobs:
           fetch-depth: 0
 
       - name: Run TruffleHog
-        uses: trufflesecurity/trufflehog@main
+        # Pinned to v3.94.3 — update SHA when upgrading the action version.
+        # Using a commit SHA instead of a mutable tag prevents supply-chain
+        # compromise via tag mutation.
+        uses: trufflesecurity/trufflehog@47e7b7cd74f578e1e3145d48f669f22fd1330ca6
         with:
           # Scan the entire git history of this branch
           base: ""

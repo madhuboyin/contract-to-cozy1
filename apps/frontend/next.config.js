@@ -2,6 +2,9 @@
 
 const nextConfig = {
   reactStrictMode: true,
+  // Suppress the X-Powered-By: Next.js response header — avoids advertising
+  // the framework version to attackers looking for known CVEs.
+  poweredByHeader: false,
   output: 'standalone',
   images: {
     remotePatterns: [

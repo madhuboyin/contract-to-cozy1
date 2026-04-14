@@ -284,7 +284,23 @@ app.get('/api/ready', (req: Request, res: Response) => {
   });
 });
 
-app.get('/api/health/deep', async (req: Request, res: Response) => {
+// Internal-only guard for the deep health endpoint.
+// Allows requests from loopback (127.0.0.0/8), RFC-1918 private ranges,
+// and the IPv6 loopback. Kubernetes liveness/readiness probes run from
+// within the pod or cluster network — both are covered by this allowlist.
+const INTERNAL_CIDR_RE =
+  /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|^$)/;
+
+function requireInternalNetwork(req: Request, res: Response, next: NextFunction): void {
+  const ip = (req.ip ?? '').replace(/^::ffff:/, ''); // normalise IPv4-mapped IPv6
+  if (!INTERNAL_CIDR_RE.test(ip)) {
+    res.status(403).json({ success: false, error: { message: 'Forbidden', code: 'FORBIDDEN' } });
+    return;
+  }
+  next();
+}
+
+app.get('/api/health/deep', requireInternalNetwork, async (req: Request, res: Response) => {
   const checks: Record<string, 'ok' | 'error'> = {};
   let allOk = true;
 

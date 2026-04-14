@@ -206,6 +206,13 @@ export const requireRole = (...roles: UserRole[]) => {
     }
 
     if (!roles.includes(req.user.role)) {
+      auditLog('PERMISSION_DENIED', req.user.userId, {
+        ip: req.ip,
+        path: req.path,
+        method: req.method,
+        role: req.user.role,
+        requiredRoles: roles,
+      });
       res.status(403).json({
         success: false,
         error: {

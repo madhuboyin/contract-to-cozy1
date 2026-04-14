@@ -40,12 +40,18 @@ export function middleware(request: NextRequest) {
     // a CSS-in-JS solution that supports nonces is adopted.
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self'",
-    "img-src 'self' data: blob: https:",
+    // Tightened from the broad 'https:' to explicit allowed origins.
+    // data: is needed for base64-encoded inline images; blob: for local previews.
+    "img-src 'self' data: blob: https://contracttocozy.com https://*.contracttocozy.com",
     `connect-src ${connectSrc}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
+    // PWA: service worker registration requires worker-src; web app manifest
+    // fetch requires manifest-src. Both are same-origin only.
+    "worker-src 'self'",
+    "manifest-src 'self'",
     "upgrade-insecure-requests",
     // Violation reporting — report-uri for broad browser support,
     // report-to for the modern Reporting API (Chrome 70+, Edge 79+).

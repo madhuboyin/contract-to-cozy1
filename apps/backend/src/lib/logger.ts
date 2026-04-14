@@ -110,7 +110,10 @@ export type AuditEvent =
   | 'MFA_CHALLENGE_FAILED'
   | 'MFA_CHALLENGE_SUCCESS'
   | 'MFA_DISABLE_FAILED'
-  | 'MFA_DISABLED';
+  | 'MFA_DISABLED'
+  | 'PERMISSION_DENIED'
+  | 'ADMIN_ACTION'
+  | 'PASSWORD_CHANGED';
 
 /**
  * Emit a structured security audit log line.

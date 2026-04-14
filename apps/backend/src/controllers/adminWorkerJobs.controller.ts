@@ -2,7 +2,8 @@
 
 import { Request, Response } from 'express';
 import { listWorkerJobs, triggerJob } from '../services/adminWorkerJobs.service';
-import { logger } from '../lib/logger';
+import { logger, auditLog } from '../lib/logger';
+import { AuthRequest } from '../types/auth.types';
 
 export async function getWorkerJobsHandler(req: Request, res: Response): Promise<void> {
   try {
@@ -14,10 +15,15 @@ export async function getWorkerJobsHandler(req: Request, res: Response): Promise
   }
 }
 
-export async function triggerJobHandler(req: Request, res: Response): Promise<void> {
+export async function triggerJobHandler(req: AuthRequest, res: Response): Promise<void> {
   const { jobKey } = req.params;
   try {
     const result = await triggerJob(jobKey);
+    auditLog('ADMIN_ACTION', req.user?.userId ?? null, {
+      ip: req.ip,
+      action: 'trigger_worker_job',
+      jobKey,
+    });
     res.json({ success: true, data: result });
   } catch (err: any) {
     const isClientError =

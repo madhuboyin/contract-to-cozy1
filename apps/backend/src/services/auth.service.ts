@@ -24,7 +24,7 @@ import {
 } from '../types/auth.types';
 
 import { prisma } from '../lib/prisma';
-import { logger } from '../lib/logger';
+import { logger, auditLog } from '../lib/logger';
 
 export class AuthService {
   /**
@@ -301,6 +301,8 @@ export class AuthService {
       where: { id: user.id },
       data: { passwordHash },
     });
+
+    auditLog('PASSWORD_CHANGED', user.id, { method: 'reset' });
   }
 
   /**
