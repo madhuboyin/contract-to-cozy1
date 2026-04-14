@@ -46,7 +46,7 @@ function getTransport() {
         password: process.env.LOKI_PASSWORD || '',
       },
       headers: {
-        'X-Scope-OrgID': 'production',
+        'X-Scope-OrgID': process.env.LOKI_TENANT_ID || 'fake',
       },
       labels: {
         app: 'backend',
