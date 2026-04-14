@@ -25,27 +25,9 @@ const nextConfig = {
   },
 
   async headers() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-    // Content-Security-Policy directives.
-    // NOTE: script-src includes 'unsafe-inline' because Next.js 14 App Router
-    // injects inline hydration scripts that cannot be removed without a
-    // per-request nonce. Nonce-based CSP via middleware.ts is the hardening
-    // follow-up that eliminates this exception.
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
-      "style-src 'self' 'unsafe-inline'",  // Tailwind + Radix UI inline styles
-      "font-src 'self'",                   // next/font self-hosts at build time — no external origins needed
-      "img-src 'self' data: blob: https:", // allow HTTPS images (property photos from cloud storage)
-      `connect-src 'self' ${apiUrl}`,      // API calls
-      "frame-ancestors 'none'",            // belt-and-suspenders with X-Frame-Options: DENY
-      "base-uri 'self'",                   // prevent base-tag injection
-      "form-action 'self'",                // prevent cross-origin form submission
-      "object-src 'none'",                 // no Flash/plugins
-      "upgrade-insecure-requests",
-    ].join('; ');
-
+    // NOTE: Content-Security-Policy is intentionally absent here.
+    // It is set dynamically per-request by src/middleware.ts using a
+    // cryptographic nonce, which eliminates 'unsafe-inline' from script-src.
     return [
       {
         source: '/(.*)',
@@ -72,9 +54,6 @@ const nextConfig = {
 
           // Suppress DNS prefetch to avoid leaking navigation intent
           { key: 'X-DNS-Prefetch-Control', value: 'off' },
-
-          // Content Security Policy
-          { key: 'Content-Security-Policy', value: csp },
         ],
       },
     ];

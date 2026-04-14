@@ -2,6 +2,7 @@
 
 import type { Metadata, Viewport } from 'next';
 import { Fraunces, Inter, Poppins } from 'next/font/google';
+import { headers } from 'next/headers';
 import { Providers } from './providers';
 import './globals.css';
 import 'react-circular-progressbar/dist/styles.css';
@@ -69,15 +70,19 @@ export const viewport: Viewport = {
   themeColor: '#0d9488',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Nonce is injected by middleware.ts for every document request.
+  // Pass it to any next/script <Script nonce={nonce}> tags added in the future.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable} ${poppins.variable}`}>
       <body className={inter.className}>
-        <Providers>
+        <Providers nonce={nonce}>
           {children}
         </Providers>
       </body>

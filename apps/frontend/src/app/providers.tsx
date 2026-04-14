@@ -9,7 +9,7 @@ import { InstallPrompt } from '@/components/mobile/InstallPrompt';
 import { registerServiceWorker } from '@/lib/pwa';
 import { initFaro } from '@/lib/monitoring/faro';
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, nonce }: { children: React.ReactNode; nonce?: string }) {
   useEffect(() => {
     initFaro();
     const cleanup = registerServiceWorker();

@@ -1,0 +1,75 @@
+// apps/frontend/src/middleware.ts
+//
+// Generates a per-request CSP nonce and sets a strict Content-Security-Policy
+// header. Using 'nonce-{nonce}' + 'strict-dynamic' eliminates the need for
+// 'unsafe-inline' in script-src, which is the primary XSS mitigation.
+//
+// Next.js 14 App Router automatically applies the x-nonce request header to
+// its own inline hydration scripts. Explicit <Script nonce={nonce}> is required
+// for any next/script components added in the future.
+
+import { NextRequest, NextResponse } from 'next/server';
+
+export function middleware(request: NextRequest) {
+  // Cryptographically secure nonce — unique per request
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+  const faroUrl = process.env.NEXT_PUBLIC_FARO_URL || '';
+
+  // Build connect-src: always include the backend API; add Faro collector if configured
+  const connectSrc = ['self', apiUrl, faroUrl ? faroUrl : '']
+    .filter(Boolean)
+    .map((u) => (u === 'self' ? "'self'" : u))
+    .join(' ');
+
+  const csp = [
+    "default-src 'self'",
+    // 'strict-dynamic' allows scripts transitively loaded by a nonced script,
+    // which is required for Next.js code-splitting. 'unsafe-inline' is kept as
+    // a fallback for legacy browsers that don't understand nonces — compliant
+    // browsers ignore it when a nonce is present.
+    `script-src 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline'`,
+    // Inline styles cannot be nonced (Tailwind utility classes and Radix UI
+    // inject styles at runtime). 'unsafe-inline' is unavoidable here until
+    // a CSS-in-JS solution that supports nonces is adopted.
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
+    "img-src 'self' data: blob: https:",
+    `connect-src ${connectSrc}`,
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    "upgrade-insecure-requests",
+  ].join('; ');
+
+  // Forward the nonce to server components via request header so layout.tsx
+  // can pass it to any explicit <Script nonce={nonce}> tags.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
+
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+
+  response.headers.set('Content-Security-Policy', csp);
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    // Apply to all routes except Next.js internals and static assets.
+    // The browser only enforces CSP from the document response, so skipping
+    // static chunks has no security impact and avoids unnecessary header overhead.
+    {
+      source: '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json).*)',
+      missing: [
+        { type: 'header', key: 'next-router-prefetch' },
+        { type: 'header', key: 'purpose', value: 'prefetch' },
+      ],
+    },
+  ],
+};
