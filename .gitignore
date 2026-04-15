@@ -91,4 +91,4 @@ npm-debug.log*
 .idea/
 
 # Docker
-.dockerignore
+# .dockerignore files are intentionally tracked (they control build context)

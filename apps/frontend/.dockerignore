@@ -1,0 +1,9 @@
+# Local env files override build-time ARGs — exclude them from Docker builds.
+# Production values are injected via Dockerfile ARG/ENV.
+.env.local
+.env.*.local
+
+# Development/build artifacts not needed in the image
+.next
+node_modules
+npm-debug.log*
