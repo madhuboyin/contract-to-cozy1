@@ -170,6 +170,11 @@ spec:
                 secretKeyRef:
                   name: s3-reports-secret
                   key: S3_SECRET_ACCESS_KEY
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SENTRY_DSN_BACKEND
             - name: CSRF_SECRET
               valueFrom:
                 secretKeyRef:

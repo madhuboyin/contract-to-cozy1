@@ -4,6 +4,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import multer from 'multer';
+import * as Sentry from '@sentry/node';
 import { logger } from '../lib/logger';
 /**
  * Custom error class for API errors
@@ -42,6 +43,14 @@ export const errorHandler = (
 
   let message = apiErr?.message || error.message || 'An unexpected error occurred';
   let errorCode = apiErr?.code || 'INTERNAL_ERROR';
+
+  // Capture unexpected server errors in Sentry (5xx only — 4xx are client errors,
+  // not actionable bugs, and would add noise to the Sentry issue stream).
+  if (statusCode >= 500) {
+    Sentry.captureException(error, {
+      extra: { path: req.path, method: req.method, statusCode },
+    });
+  }
 
   // Structured error log — redact fields are handled by pino's redact config
   logger.error({

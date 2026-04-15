@@ -1,4 +1,22 @@
 // apps/backend/src/index.ts
+// Sentry MUST be initialized before any other import so its OpenTelemetry
+// instrumentation can wrap Express, Prisma, and HTTP clients correctly.
+import * as Sentry from '@sentry/node';
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV ?? 'development',
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  // Never log Sentry's own debug output to production logs
+  debug: false,
+  // beforeSend: strip any accidental PII from error events
+  beforeSend(event) {
+    if (event.request?.cookies) delete event.request.cookies;
+    if (event.request?.headers?.['authorization']) {
+      event.request.headers['authorization'] = '[Filtered]';
+    }
+    return event;
+  },
+});
 
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -529,6 +547,10 @@ app.use((req: Request, res: Response) => {
 // =============================================================================
 // ERROR HANDLER (MUST BE LAST)
 // =============================================================================
+
+// Sentry error handler must come BEFORE the custom errorHandler so it can
+// capture unhandled exceptions before they are swallowed and formatted.
+Sentry.setupExpressErrorHandler(app);
 
 app.use(errorHandler);
 

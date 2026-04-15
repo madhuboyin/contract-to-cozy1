@@ -25,6 +25,7 @@
     "@google/genai": "^1.33.0",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
+    "@sentry/node": "^10.48.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.65.0",
     "cookie-parser": "^1.4.7",

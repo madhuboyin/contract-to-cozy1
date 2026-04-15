@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+const { withSentryConfig } = require('@sentry/nextjs');
 
 const nextConfig = {
   reactStrictMode: true,
@@ -78,4 +79,32 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  // Sentry organization and project — set via env vars in CI to avoid
+  // committing org details.  Both are optional: if unset, source maps are
+  // not uploaded but error capture still works.
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Suppress the Sentry CLI output during builds.
+  silent: !process.env.CI,
+
+  // Upload source maps in production builds so Sentry shows original TS lines.
+  // Requires SENTRY_AUTH_TOKEN to be set in the build environment.
+  widenClientFileUpload: true,
+
+  // Tree-shake Sentry debug code from the client bundle.
+  disableLogger: true,
+
+  // Do NOT make source maps publicly accessible on the CDN.
+  hideSourceMaps: true,
+
+  // Tunnel Sentry requests through the Next.js server to avoid ad-blockers.
+  // This sends /monitoring/* requests to Sentry instead of sentry.io directly.
+  tunnelRoute: '/monitoring',
+
+  // Automatically instrument React component names in error stack traces.
+  reactComponentAnnotation: {
+    enabled: true,
+  },
+});

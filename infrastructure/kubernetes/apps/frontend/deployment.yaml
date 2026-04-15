@@ -68,6 +68,16 @@ spec:
                 configMapKeyRef:
                   name: frontend-feature-flags
                   key: NEXT_PUBLIC_FEATURE_MILESTONE_CELEBRATIONS
+            - name: NEXT_PUBLIC_SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SENTRY_DSN_FRONTEND
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SENTRY_DSN_FRONTEND
           resources:
             requests:
               cpu: "300m"
