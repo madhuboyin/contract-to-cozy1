@@ -14,6 +14,7 @@ import { HomeEventsAutoGen } from '../services/homeEvents/homeEvents.autogen';
 import { auditLog, logger } from '../lib/logger';
 import { uploadDocumentBuffer, deleteDocumentObject } from '../services/storage/reportStorage';
 import { presignGetObject } from '../services/storage/presign';
+import { uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 
 const router = Router();
 
@@ -83,7 +84,7 @@ const upload = multer({
  *       200:
  *         description: Document analysis complete
  */
-router.post('/analyze', authenticate, upload.single('file'), validateDocumentUpload, async (req: CustomRequest, res: Response) => {
+router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), validateDocumentUpload, async (req: CustomRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const file = req.file;

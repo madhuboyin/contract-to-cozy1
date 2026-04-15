@@ -214,3 +214,29 @@ export const expensiveAiRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+const uploadWindowMs = 60 * 1000; // 1 minute
+
+/**
+ * Rate limiter for the document upload + AI analyze endpoint.
+ *
+ * Must be applied AFTER authenticate (so the key is user-based) but BEFORE
+ * multer (so rejected requests never buffer file bytes into heap memory).
+ * This bounds the worst-case concurrent heap allocation from this route:
+ * 10 req/min × 10 MB = 100 MB maximum in-flight per authenticated user.
+ */
+export const uploadRateLimiter = rateLimit({
+  windowMs: uploadWindowMs,
+  max: 10,
+  keyGenerator: rateLimitKey,
+  store: new RedisRateLimitStore(uploadWindowMs),
+  message: {
+    success: false,
+    error: {
+      message: 'Too many file uploads. Limit is 10 per minute.',
+      code: 'UPLOAD_RATE_LIMIT_EXCEEDED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
