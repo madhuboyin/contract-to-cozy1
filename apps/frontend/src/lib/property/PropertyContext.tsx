@@ -26,13 +26,14 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | undefined>(() => {
     if (typeof window === 'undefined') return undefined;
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    return stored || undefined;
+    return (stored && stored !== 'undefined') ? stored : undefined;
   });
 
   // Keep selection synced with route context when present.
   useEffect(() => {
     const propertyIdFromPath = getPropertyIdFromPathname(pathname || '');
-    const propertyIdFromQuery = searchParams.get('propertyId') || undefined;
+    const raw = searchParams.get('propertyId');
+    const propertyIdFromQuery = (raw && raw !== 'undefined') ? raw : undefined;
     const routePropertyId = propertyIdFromPath || propertyIdFromQuery;
 
     if (routePropertyId && routePropertyId !== selectedPropertyId) {

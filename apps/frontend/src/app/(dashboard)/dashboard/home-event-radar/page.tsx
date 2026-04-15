@@ -305,7 +305,8 @@ function eventCountBucket(n: number): '0' | '1' | '2_5' | '6_10' | '10_plus' {
 export default function HomeEventRadarPage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
-  const propertyId = selectedPropertyId ?? searchParams.get('propertyId') ?? undefined;
+  const rawPropertyId = selectedPropertyId ?? searchParams.get('propertyId') ?? undefined;
+  const propertyId = (rawPropertyId && rawPropertyId !== 'undefined') ? rawPropertyId : undefined;
 
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
@@ -499,7 +500,7 @@ export default function HomeEventRadarPage() {
 
       <MobileSection className="lg:space-y-4">
         <Link
-          href={`/dashboard?propertyId=${encodeURIComponent(propertyId)}`}
+          href={propertyId ? `/dashboard?propertyId=${encodeURIComponent(propertyId)}` : '/dashboard'}
           className="no-brand-style inline-flex items-center gap-2 text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]"
         >
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard
