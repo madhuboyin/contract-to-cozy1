@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { taxAppealService } from '../services/taxAppeal.service';
 import { logger } from '../lib/logger';
+import { validatePdfOrImageUpload } from '../utils/documentValidator.util';
 
 const router = Router();
 
@@ -17,12 +18,12 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB max
     files: 1, // Single tax bill
   },
-  fileFilter: (req, file, cb) => {
-    // Accept PDFs and images
-    if (file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/')) {
+  fileFilter: (_req, file, cb) => {
+    const allowed = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (allowed.has(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF and image files are allowed'));
+      cb(new Error('Only PDF, JPEG, PNG, and WEBP files are allowed'));
     }
   },
 });
@@ -49,7 +50,7 @@ const upload = multer({
  *       200:
  *         description: Tax bill data extracted
  */
-router.post('/extract-bill', authenticate, upload.single('taxBill'), async (req: AuthRequest, res: Response) => {
+router.post('/extract-bill', authenticate, upload.single('taxBill'), validatePdfOrImageUpload, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({

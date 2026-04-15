@@ -10,6 +10,7 @@ import { inspectionAnalysisService } from '../services/inspectionAnalysis.servic
 import { prisma } from '../config/database';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { validatePdfUpload } from '../utils/documentValidator.util';
 
 const router = Router();
 
@@ -62,7 +63,7 @@ const upload = multer({
  *       500:
  *         description: Analysis failed
  */
-router.post('/upload', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.post('/upload', authenticate, upload.single('file'), validatePdfUpload, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { propertyId } = req.body;

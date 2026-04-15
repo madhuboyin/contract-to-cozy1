@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { visualInspectorService } from '../services/visualInspector.service';
 import { logger } from '../lib/logger';
+import { validateImageArrayUpload } from '../utils/documentValidator.util';
 
 const router = Router();
 
@@ -17,12 +18,13 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB max per file
     files: 20, // Max 20 images
   },
-  fileFilter: (req, file, cb) => {
-    // Accept only images
-    if (file.mimetype.startsWith('image/')) {
+  fileFilter: (_req, file, cb) => {
+    // Explicit allowlist — SVG excluded (it executes JS when rendered as <img>)
+    const allowed = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (allowed.has(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'));
+      cb(new Error('Only JPEG, PNG, and WEBP image files are allowed'));
     }
   },
 });
@@ -57,7 +59,7 @@ const upload = multer({
  *       200:
  *         description: Visual inspection report generated
  */
-router.post('/analyze', authenticate, upload.array('images', 20), async (req: AuthRequest, res: Response) => {
+router.post('/analyze', authenticate, upload.array('images', 20), validateImageArrayUpload, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { propertyId, roomTypes } = req.body;

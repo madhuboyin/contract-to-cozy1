@@ -63,6 +63,11 @@ import {
 import { ocrRateLimiter } from '../middleware/ocrRateLimiter.middleware';
 import { requirePremiumForOcr } from '../middleware/premiumOcrGate.middleware';
 import { logger } from '../lib/logger';
+import {
+  validateXlsxUpload,
+  validateImageUpload,
+  validateImageArrayUpload,
+} from '../utils/documentValidator.util';
 
 const router = Router();
 
@@ -125,8 +130,10 @@ const uploadImage = multer({
     files: 1,
   },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype?.startsWith('image/')) return cb(null, true);
-    return cb(new Error('Only image uploads are allowed'));
+    // Explicit allowlist — SVG excluded (executes JS when rendered as <img>)
+    const allowed = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (allowed.has(file.mimetype)) return cb(null, true);
+    return cb(new Error('Only JPEG, PNG, and WEBP image uploads are allowed'));
   },
 });
 
@@ -137,8 +144,9 @@ const uploadRoomScanImages = multer({
     files: Number(process.env.INVENTORY_ROOM_SCAN_MAX_IMAGES || 10),
   },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype?.startsWith('image/')) return cb(null, true);
-    return cb(new Error('Only image uploads are allowed'));
+    const allowed = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (allowed.has(file.mimetype)) return cb(null, true);
+    return cb(new Error('Only JPEG, PNG, and WEBP image uploads are allowed'));
   },
 });
 
@@ -417,6 +425,7 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   uploadXlsx.single('file'),
+  validateXlsxUpload,
   importInventoryFromXlsx
 );
 // Import history
@@ -550,6 +559,7 @@ router.post(
     { name: 'image', maxCount: 1 },
     { name: 'file', maxCount: 1 },
   ]),
+  validateImageUpload,
   ocrLabelToDraft
 );
 
@@ -564,6 +574,7 @@ router.post(
   '/properties/:propertyId/inventory/rooms/:roomId/scan-ai',
   propertyAuthMiddleware,
   uploadRoomScanImages.array('images'),
+  validateImageArrayUpload,
   startRoomScan
 );
 

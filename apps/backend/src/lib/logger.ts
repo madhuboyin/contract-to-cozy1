@@ -113,7 +113,8 @@ export type AuditEvent =
   | 'MFA_DISABLED'
   | 'PERMISSION_DENIED'
   | 'ADMIN_ACTION'
-  | 'PASSWORD_CHANGED';
+  | 'PASSWORD_CHANGED'
+  | 'SUSPICIOUS_FILE_UPLOAD';
 
 /**
  * Emit a structured security audit log line.

@@ -2,8 +2,9 @@
 
 import { Router } from 'express';
 import * as HomeManagementController from '../controllers/home-management.controller';
-import { authenticate, restrictToHomeowner } from '../middleware/auth.middleware'; 
-import { upload } from '../controllers/home-management.controller'; 
+import { authenticate, restrictToHomeowner } from '../middleware/auth.middleware';
+import { upload } from '../controllers/home-management.controller';
+import { validateDocumentUpload } from '../utils/documentValidator.util';
 
 const router = Router();
 
@@ -93,7 +94,7 @@ router.route('/documents')
  *         description: Homeowner only
  */
 router.route('/documents/upload')
-    .post(upload.single('file'), HomeManagementController.postDocumentUpload); 
+    .post(upload.single('file'), validateDocumentUpload, HomeManagementController.postDocumentUpload);
 
 
 /**

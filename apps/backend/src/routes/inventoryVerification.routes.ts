@@ -17,6 +17,7 @@ import {
   extractInsuranceOcr,
   confirmInsuranceOcr,
 } from '../controllers/insuranceOcr.controller';
+import { validateImageUpload } from '../utils/documentValidator.util';
 
 const router = Router();
 const uploadImage = multer({
@@ -26,8 +27,9 @@ const uploadImage = multer({
     files: 1,
   },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype?.startsWith('image/')) return cb(null, true);
-    return cb(new Error('Only image uploads are allowed'));
+    const allowed = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (allowed.has(file.mimetype)) return cb(null, true);
+    return cb(new Error('Only JPEG, PNG, and WEBP image uploads are allowed'));
   },
 });
 
@@ -57,6 +59,7 @@ router.post(
   '/properties/:propertyId/insurance/:policyId/ocr/extract',
   propertyAuthMiddleware,
   uploadImage.single('file'),
+  validateImageUpload,
   extractInsuranceOcr
 );
 

@@ -30,11 +30,14 @@ export function middleware(request: NextRequest) {
 
   const csp = [
     "default-src 'self'",
-    // 'strict-dynamic' allows scripts transitively loaded by a nonced script,
-    // which is required for Next.js code-splitting. 'unsafe-inline' is kept as
-    // a fallback for legacy browsers that don't understand nonces — compliant
-    // browsers ignore it when a nonce is present.
-    `script-src 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline'`,
+    // 'nonce-{nonce}' allows only scripts that carry this request's nonce.
+    // 'strict-dynamic' propagates trust to scripts loaded by nonced scripts,
+    // which is required for Next.js code-splitting chunks.
+    // 'unsafe-inline' has been intentionally removed: CSP Level 2+ browsers
+    // ignore it when a valid nonce is present, so it provided no legitimate
+    // fallback. Legacy browsers that predate CSP nonces also predate
+    // 'strict-dynamic', so they receive no CSP enforcement regardless.
+    `script-src 'nonce-${nonce}' 'strict-dynamic'`,
     // Inline styles cannot be nonced (Tailwind utility classes and Radix UI
     // inject styles at runtime). 'unsafe-inline' is unavoidable here until
     // a CSS-in-JS solution that supports nonces is adopted.
