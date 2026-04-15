@@ -29,6 +29,12 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
+# Pass the correct API URL as a build arg so the production image
+# does not fall back to the localhost:8080 dev default.
+ARG NEXT_PUBLIC_API_URL=https://api.contracttocozy.com
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 RUN npm run build
 
 # Stage 3: Runner
