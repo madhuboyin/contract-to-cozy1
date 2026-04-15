@@ -170,6 +170,16 @@ spec:
                 secretKeyRef:
                   name: s3-reports-secret
                   key: S3_SECRET_ACCESS_KEY
+            - name: CSRF_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: CSRF_SECRET
+            - name: MFA_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MFA_ENCRYPTION_KEY
           resources:
             requests:
               cpu: "500m"

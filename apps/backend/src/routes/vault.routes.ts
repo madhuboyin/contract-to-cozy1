@@ -84,7 +84,7 @@ router.post('/access/:propertyId', strictRateLimiter, async (req: Request, res: 
  *           type: string
  *     responses:
  *       200:
- *         description: Returns { isConfigured: boolean }
+ *         description: "Returns { isConfigured: boolean }"
  *       401:
  *         description: Unauthorized
  *       404:

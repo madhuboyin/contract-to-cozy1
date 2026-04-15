@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { Request } from 'express';
 import { authConfig } from '../config/jwt.config';
 import { verifyAccessToken } from '../utils/jwt.util';
@@ -20,7 +20,7 @@ function rateLimitKey(req: Request): string {
       // Invalid/expired token: fall back to IP key.
     }
   }
-  return `ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+  return `ip:${ipKeyGenerator(req)}`;
 }
 
 const apiWindowMs = Number(process.env.API_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
