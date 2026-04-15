@@ -918,7 +918,7 @@ export default function DashboardPage() {
   if (riskExposureGap > 0) {
     recommendationMoves.push({
       id: 'rec-risk-gap',
-      title: `Close ${formatUsd(Math.min(riskExposureGap, 5000))} of your biggest exposure gap`,
+      title: `Close ${formatUsd(riskExposureGap)} of your biggest exposure gap`,
       detail: 'Review uncovered items and increase protected coverage where impact is highest.',
       impact: 'Direct downside protection',
       href: effectiveSelectedPropertyId
