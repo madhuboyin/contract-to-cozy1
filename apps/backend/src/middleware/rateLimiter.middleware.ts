@@ -106,12 +106,16 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const strictWindowMs = 60 * 60 * 1000; // 1 hour
+
 /**
- * Stricter rate limiter for sensitive operations
+ * Stricter rate limiter for sensitive operations (password reset, change-password, etc.)
+ * Redis-backed so the 3-per-hour limit is shared across all pods.
  */
 export const strictRateLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: strictWindowMs,
   max: 3,
+  store: new RedisRateLimitStore(strictWindowMs),
   message: {
     success: false,
     error: {
@@ -144,13 +148,66 @@ export const apiRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-export const aiOracleRateLimiter = rateLimit({ // <-- NEW EXPORT
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // Max 5 requests per hour per IP for high-cost calls
+const aiOracleWindowMs = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Rate limiter for high-cost oracle-style AI calls (appliance oracle, budget forecaster).
+ * Redis-backed so the 5-per-hour limit is shared across all pods.
+ */
+export const aiOracleRateLimiter = rateLimit({
+  windowMs: aiOracleWindowMs,
+  max: 5,
+  keyGenerator: rateLimitKey,
+  store: new RedisRateLimitStore(aiOracleWindowMs),
   message: {
     success: false,
     error: {
       message: 'Too many high-cost AI requests. Limit is 5 per hour.',
+      code: 'AI_RATE_LIMIT_EXCEEDED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const geminiWindowMs = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Rate limiter for Gemini chat — conversational AI, moderate cost.
+ * 30 messages per user per hour across all pods.
+ */
+export const geminiRateLimiter = rateLimit({
+  windowMs: geminiWindowMs,
+  max: 30,
+  keyGenerator: rateLimitKey,
+  store: new RedisRateLimitStore(geminiWindowMs),
+  message: {
+    success: false,
+    error: {
+      message: 'Too many AI chat requests. Limit is 30 per hour.',
+      code: 'AI_RATE_LIMIT_EXCEEDED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const expensiveAiWindowMs = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Rate limiter for high-cost AI endpoints that process images or generate
+ * full reports (energy auditor, visual inspector).
+ * 10 requests per user per day across all pods.
+ */
+export const expensiveAiRateLimiter = rateLimit({
+  windowMs: expensiveAiWindowMs,
+  max: 10,
+  keyGenerator: rateLimitKey,
+  store: new RedisRateLimitStore(expensiveAiWindowMs),
+  message: {
+    success: false,
+    error: {
+      message: 'Daily limit reached for AI analysis. Limit is 10 per day.',
       code: 'AI_RATE_LIMIT_EXCEEDED',
     },
   },

@@ -1,7 +1,8 @@
 // apps/backend/src/routes/gemini.routes.ts
 
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth.middleware'; // Existing middleware
+import { authenticate } from '../middleware/auth.middleware';
+import { geminiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { geminiController } from '../controllers/gemini.controller';
 
 const router = Router();
@@ -61,6 +62,6 @@ const router = Router();
  *       403:
  *         description: Property data does not exist
  */
-router.post('/chat', authenticate, geminiController.sendMessageToChat);
+router.post('/chat', authenticate, geminiRateLimiter, geminiController.sendMessageToChat);
 
 export default router;

@@ -1021,8 +1021,6 @@ export default function HomeDigitalTwinClient() {
     queryKey: ['home-digital-twin', propertyId],
     queryFn: () => getHomeDigitalTwin(propertyId),
     enabled: !!propertyId,
-    retry: 1,
-    retryDelay: 1500,
   });
 
   // ── Recommendations query ───────────────────────────────────────────────────

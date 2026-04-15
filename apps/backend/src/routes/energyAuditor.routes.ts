@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { Response } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
+import { expensiveAiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { energyAuditorService } from '../services/energyAuditor.service';
 import { logger } from '../lib/logger';
@@ -77,7 +78,7 @@ const upload = multer({
  *       200:
  *         description: Energy audit report generated
  */
-router.post('/audit', authenticate, upload.array('bills', 3), validateImageArrayUpload, async (req: AuthRequest, res: Response) => {
+router.post('/audit', authenticate, expensiveAiRateLimiter, upload.array('bills', 3), validateImageArrayUpload, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const {

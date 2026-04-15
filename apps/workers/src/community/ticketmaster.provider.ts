@@ -32,7 +32,9 @@ export async function fetchTicketmasterEvents(
   const apiKey = requireEnv('TICKETMASTER_API_KEY');
 
   const results: ExternalCommunityEvent[] = [];
+  const MAX_RETRIES = 3;
   let page = 0;
+  let retries = 0;
 
   while (page < maxPages) {
     const url = new URL(TICKETMASTER_BASE);
@@ -48,10 +50,21 @@ export async function fetchTicketmasterEvents(
     const resp = await fetch(url.toString());
 
     if (resp.status === 429) {
-      // Ticketmaster rate limiting
-      await sleep(1500);
+      retries += 1;
+      if (retries > MAX_RETRIES) {
+        // Stop fetching rather than hammering the API; return whatever we have.
+        break;
+      }
+      // Honour Retry-After if provided, otherwise use exponential backoff.
+      const retryAfterSec = parseInt(resp.headers.get('Retry-After') ?? '', 10);
+      const delayMs = isNaN(retryAfterSec)
+        ? Math.min(1000 * 2 ** retries, 30_000)
+        : retryAfterSec * 1000;
+      await sleep(delayMs);
       continue;
     }
+
+    retries = 0; // reset on a successful response
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');

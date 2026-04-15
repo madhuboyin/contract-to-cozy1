@@ -321,11 +321,10 @@ export default function FinancialEfficiencyPage() {
             return await api.getDetailedFESReport(propertyId as string);
         },
         // The result of the queryFn is either FinancialEfficiencyReport or 'QUEUED'
-        refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false), 
+        refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false),
         enabled: !!propertyId,
-        retry: 1, 
-        staleTime: 0, 
-        gcTime: 0, 
+        staleTime: 0,
+        gcTime: 0,
     });
 
     const scoreSnapshotQuery = useQuery({
@@ -339,7 +338,6 @@ export default function FinancialEfficiencyPage() {
         },
         enabled: !!propertyId,
         staleTime: 10 * 60 * 1000,
-        retry: 1,
     });
 
     // --- Data Extraction and Status Determination ---

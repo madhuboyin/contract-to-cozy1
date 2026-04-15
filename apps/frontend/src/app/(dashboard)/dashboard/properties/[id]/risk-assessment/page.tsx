@@ -992,9 +992,8 @@ export default function RiskAssessmentPage() {
             return result;
         },
         // The result of the queryFn is either RiskReportFull or 'QUEUED'
-        refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false), 
+        refetchInterval: (query) => (query.state.data === 'QUEUED' ? 5000 : false),
         enabled: !!propertyId,
-        retry: 1, // Retry once on failure
         staleTime: 0, // Always consider data stale
         gcTime: 0, // Don't cache results (renamed from cacheTime in v5+)
     });

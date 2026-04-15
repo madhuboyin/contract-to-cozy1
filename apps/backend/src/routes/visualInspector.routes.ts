@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { Response } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
+import { expensiveAiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { AuthRequest } from '../types/auth.types';
 import { visualInspectorService } from '../services/visualInspector.service';
 import { logger } from '../lib/logger';
@@ -59,7 +60,7 @@ const upload = multer({
  *       200:
  *         description: Visual inspection report generated
  */
-router.post('/analyze', authenticate, upload.array('images', 20), validateImageArrayUpload, async (req: AuthRequest, res: Response) => {
+router.post('/analyze', authenticate, expensiveAiRateLimiter, upload.array('images', 20), validateImageArrayUpload, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { propertyId, roomTypes } = req.body;
