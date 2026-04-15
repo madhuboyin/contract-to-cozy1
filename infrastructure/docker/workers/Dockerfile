@@ -100,6 +100,13 @@ COPY apps/backend/src/services/incidents/incident.scoring.ts src/shared/backend/
 COPY apps/backend/src/services/incidents/incident.events.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/services/incidents/integrations/incidentNotification.service.ts src/shared/backend/services/incidents/integrations/
 COPY apps/backend/src/services/hiddenAssets.service.ts src/shared/backend/services/
+# Risk assessment service chain (RiskAssessment.service → riskAssessmentIntegration → PropertyMaintenanceTask)
+COPY apps/backend/src/config/risk-job-types.ts src/shared/backend/config/
+COPY apps/backend/src/services/PropertyMaintenanceTask.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/riskAssessmentIntegration.service.ts src/shared/backend/services/
+COPY apps/backend/src/services/RiskAssessment.service.ts src/shared/backend/services/
+# Stub: breaks the JobQueue.service ↔ RiskAssessment.service circular import
+COPY apps/workers/stubs/job-queue-service.ts src/shared/backend/services/JobQueue.service.ts
 COPY apps/backend/src/services/hiddenAssets/ruleEngine.ts src/shared/backend/services/hiddenAssets/
 COPY apps/backend/src/services/hiddenAssets/categoryConfig.ts src/shared/backend/services/hiddenAssets/
 COPY apps/backend/src/services/hiddenAssets/types.ts src/shared/backend/services/hiddenAssets/
@@ -188,6 +195,7 @@ RUN sed -i 's/\.\.\/\.\.\/backend\/src\/utils\/riskCalculator\.util/\.\/shared\/
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/coverageLapseIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/incidents\/incident\.service/\.\/shared\/backend\/services\/incidents\/incident\.service/g' src/jobs/freezeRiskIncidents.job.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/worker.ts && \
+    sed -i 's/\.\.\/\.\.\/backend\/src\/services\/RiskAssessment\.service/\.\/shared\/backend\/services\/RiskAssessment\.service/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/backend\/src\/config\/workerJobRegistry/\.\/shared\/backend\/config\/workerJobRegistry/g' src/worker.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/services\/hiddenAssets\.service/\.\.\/shared\/backend\/services\/hiddenAssets\.service/g' src/jobs/hiddenAssetRefresh.job.ts && \
     sed -i 's/\.\.\/\.\.\/\.\.\/backend\/src\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/\.\.\/shared\/backend\/neighborhoodIntelligence\/neighborhoodPropertyMatchService/g' src/jobs/refreshNeighborhoodEvents.job.ts && \
