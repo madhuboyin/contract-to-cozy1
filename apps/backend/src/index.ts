@@ -128,7 +128,7 @@ import gazetteInternalRoutes from './modules/gazette/gazetteInternal.routes';
 import sharedDataRoutes from './routes/sharedData.routes';
 import releaseGateRoutes from './routes/releaseGate.routes';
 import mfaRoutes from './routes/mfa.routes';
-import { logger } from './lib/logger';
+import { logger, auditLog } from './lib/logger';
 import { register } from './lib/metrics';
 import { metricsMiddleware } from './middleware/metrics.middleware';
 dotenv.config();
@@ -148,13 +148,26 @@ const PORT = process.env.PORT || 8080;
 // Swagger UI requires unsafe-inline scripts, so CSP is disabled only on /api/docs.
 app.use(helmet());
 app.use('/api/docs', helmet({ contentSecurityPolicy: false }));
+// CORS: origins are driven by the ALLOWED_ORIGINS env var (comma-separated).
+// In production the variable is required; in development it falls back to
+// localhost so the dev server works without any configuration.
+const rawOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && rawOrigins.length === 0) {
+  throw new Error('FATAL: ALLOWED_ORIGINS must be set in production (comma-separated list of allowed frontend origins)');
+}
+const allowedOrigins = rawOrigins.length > 0 ? rawOrigins : ['http://localhost:3000'];
+
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://contracttocozy.com',
-    'https://www.contracttocozy.com',
-    'https://docs.contracttocozy.com'
-  ],
+  origin: (origin, callback) => {
+    // Allow same-origin requests (origin is undefined for server-to-server calls)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      auditLog('CORS_BLOCKED', null, { origin });
+      callback(new Error('Not allowed by CORS policy'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '1mb' }));

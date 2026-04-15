@@ -170,6 +170,11 @@ spec:
                 secretKeyRef:
                   name: s3-reports-secret
                   key: S3_SECRET_ACCESS_KEY
+            - name: ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: ALLOWED_ORIGINS
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:

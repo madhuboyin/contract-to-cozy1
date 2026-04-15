@@ -15,6 +15,10 @@ data:
   # Frontend Configuration
   NEXT_PUBLIC_API_URL: "https://api.contracttocozy.com"
   NEXT_PUBLIC_FARO_URL: "/api/faro/collect"
+
+  # CORS — comma-separated list of origins the backend will accept requests from.
+  # Add staging/preview domains here as needed.
+  ALLOWED_ORIGINS: "https://contracttocozy.com,https://www.contracttocozy.com,https://docs.contracttocozy.com"
   
   # Database Configuration (non-sensitive)
   DB_HOST: "postgres.production.svc.cluster.local"

@@ -114,7 +114,9 @@ export type AuditEvent =
   | 'PERMISSION_DENIED'
   | 'ADMIN_ACTION'
   | 'PASSWORD_CHANGED'
-  | 'SUSPICIOUS_FILE_UPLOAD';
+  | 'SUSPICIOUS_FILE_UPLOAD'
+  | 'MFA_ACCOUNT_LOCKED'
+  | 'CORS_BLOCKED';
 
 /**
  * Emit a structured security audit log line.

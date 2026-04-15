@@ -3,6 +3,7 @@
 // Business logic for TOTP-based MFA: setup, verification, challenge, and disable.
 
 import { prisma } from '../lib/prisma';
+import { redis } from '../lib/redis';
 import { APIError } from '../middleware/error.middleware';
 import { auditLog } from '../lib/logger';
 import {
@@ -83,13 +84,20 @@ export class MfaService {
 
   /**
    * Exchange an MFA challenge token + TOTP code for a real access/refresh token pair.
+   *
+   * Account lockout: after MFA_MAX_FAILURES consecutive wrong codes the
+   * userId is blocked for MFA_LOCKOUT_TTL_SECONDS regardless of IP address,
+   * preventing brute-force by rotating IPs.
    */
   async verifyChallenge(
     mfaToken: string,
     code: string
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    let challengePayload: { userId: string; email: string; role: string };
+    const MFA_MAX_FAILURES = 5;
+    const MFA_LOCKOUT_TTL = 900; // 15 minutes in seconds
 
+    // --- 1. Validate the short-lived MFA challenge token --------------------
+    let challengePayload: { userId: string; email: string; role: string };
     try {
       challengePayload = verifyMfaChallengeToken(mfaToken);
     } catch {
@@ -97,7 +105,21 @@ export class MfaService {
     }
 
     const { userId, email, role } = challengePayload;
+    const lockoutKey = `mfa:fail:${userId}`;
 
+    // --- 2. Check per-user lockout counter BEFORE touching the TOTP secret --
+    const failCount = parseInt((await redis.get(lockoutKey)) ?? '0', 10);
+    if (failCount >= MFA_MAX_FAILURES) {
+      const ttl = await redis.ttl(lockoutKey);
+      auditLog('MFA_ACCOUNT_LOCKED', userId, { failCount, ttlSeconds: ttl });
+      throw new APIError(
+        `Account temporarily locked after ${MFA_MAX_FAILURES} failed MFA attempts. Try again in ${Math.ceil(ttl / 60)} minutes.`,
+        429,
+        'MFA_ACCOUNT_LOCKED'
+      );
+    }
+
+    // --- 3. Load user and verify account status -----------------------------
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { mfaEnabled: true, mfaSecret: true, status: true },
@@ -111,14 +133,37 @@ export class MfaService {
       throw new APIError('Account access denied', 403, 'ACCOUNT_DENIED');
     }
 
+    // --- 4. Verify TOTP code ------------------------------------------------
     if (!verifyTotpCode(user.mfaSecret, code)) {
-      auditLog('MFA_CHALLENGE_FAILED', userId, { ip: 'n/a', reason: 'invalid_code' });
+      // Increment failure counter; set TTL only on the first failure so the
+      // window resets 15 min after the FIRST bad attempt, not the last one.
+      const newCount = await redis.incr(lockoutKey);
+      if (newCount === 1) {
+        await redis.expire(lockoutKey, MFA_LOCKOUT_TTL);
+      }
+
+      auditLog('MFA_CHALLENGE_FAILED', userId, {
+        reason: 'invalid_code',
+        failCount: newCount,
+        lockedOut: newCount >= MFA_MAX_FAILURES,
+      });
+
+      if (newCount >= MFA_MAX_FAILURES) {
+        auditLog('MFA_ACCOUNT_LOCKED', userId, { failCount: newCount });
+        throw new APIError(
+          `Account temporarily locked after ${MFA_MAX_FAILURES} failed MFA attempts. Try again in 15 minutes.`,
+          429,
+          'MFA_ACCOUNT_LOCKED'
+        );
+      }
+
       throw new APIError('Invalid TOTP code', 401, 'INVALID_MFA_CODE');
     }
 
+    // --- 5. Success — clear failure counter and issue tokens ----------------
+    await redis.del(lockoutKey);
     auditLog('MFA_CHALLENGE_SUCCESS', userId, {});
 
-    // Issue tokens with mfaVerified: true so requireMfa middleware lets them through
     const tokens = generateMfaVerifiedTokenPair({
       userId,
       email,

@@ -1,5 +1,11 @@
 version: '3.9'
 
+# ============================================================================
+# SECRETS — never hardcode values here.
+# Copy .env.local.example → .env.local, fill in values, then run:
+#   docker compose --env-file .env.local up
+# ============================================================================
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -7,7 +13,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: devpassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: contracttocozy
     ports:
       - "5432:5432"
@@ -45,13 +51,20 @@ services:
     environment:
       NODE_ENV: development
       PORT: 8080
-      DATABASE_URL: postgresql://postgres:devpassword@postgres:5432/contracttocozy
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/contracttocozy
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      JWT_SECRET: dev-jwt-secret
-      JWT_REFRESH_SECRET: dev-refresh-secret
-      SESSION_SECRET: dev-session-secret
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_MFA_SECRET: ${JWT_MFA_SECRET}
+      SESSION_SECRET: ${SESSION_SECRET}
+      CSRF_SECRET: ${CSRF_SECRET}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      METRICS_BEARER_TOKEN: ${METRICS_BEARER_TOKEN:-}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,10 +103,11 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:devpassword@postgres:5432/contracttocozy
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/contracttocozy
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
