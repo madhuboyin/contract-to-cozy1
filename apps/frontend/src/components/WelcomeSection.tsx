@@ -18,7 +18,8 @@ function formatPropertyDisplay(property: Property): string {
   const name = property.name?.trim() || property.address || 'Unnamed property';
   const contextType = getPropertyContextType(property);
   const structuralType = humanizeEnum(property.propertyType);
-  return [name, contextType, structuralType].filter(Boolean).join(' • ');
+  const dedupedContextType = contextType.toLowerCase() === name.toLowerCase() ? null : contextType;
+  return [name, dedupedContextType, structuralType].filter(Boolean).join(' • ');
 }
 
 function humanizeEnum(value: string | null | undefined): string {
