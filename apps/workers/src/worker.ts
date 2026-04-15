@@ -495,7 +495,13 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
   try {
     await RiskAssessmentService.calculateAndSaveReport(propertyId);
     logger.info(`✅ Risk assessment calculated and saved for property ${propertyId}.`);
+  } catch (error) {
+    logger.error({ err: error }, '❌ Error calculating risk assessment');
+    throw error;
+  }
 
+  // Score snapshot update is best-effort — failure here must not re-queue the job
+  try {
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: { homeownerProfileId: true },
@@ -504,9 +510,8 @@ async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
       await capturePropertyScoreSnapshots(propertyId, property.homeownerProfileId);
       logger.info(`[SCORE-SNAPSHOT] Updated weekly snapshots from risk calculation for property ${propertyId}.`);
     }
-  } catch (error) {
-    logger.error('❌ Error calculating risk assessment:', error);
-    throw error;
+  } catch (snapshotError) {
+    logger.error({ err: snapshotError }, `[SCORE-SNAPSHOT] Failed to update snapshots for property ${propertyId} — risk report was saved successfully`);
   }
 }
 
@@ -763,7 +768,7 @@ function startWorker() {
         
         logger.info(`[WORKER] Successfully completed Job [${jobType}] for Property [${propertyId}]`);
       } catch (error) {
-        logger.error(`[WORKER] Job [${jobType}] failed for ${propertyId}:`, error);
+        logger.error({ err: error }, `[WORKER] Job [${jobType}] failed for ${propertyId}`);
         throw error;
       }
     },
@@ -797,7 +802,7 @@ function startWorker() {
   propertyIntelligenceWorker.on('failed', (job, err) => {
     jobsActiveGauge.dec({ queue: QUEUE_NAME });
     jobsProcessedTotal.inc({ queue: QUEUE_NAME, job_name: job?.data?.jobType ?? 'unknown', status: 'failed' });
-    logger.error(`[QUEUE] Job ${job?.id} (${job?.data.jobType}) failed with error:`, err.message);
+    logger.error({ err }, `[QUEUE] Job ${job?.id} (${job?.data.jobType}) failed`);
   });
 
   propertyIntelligenceWorker.on('error', (err) => {
