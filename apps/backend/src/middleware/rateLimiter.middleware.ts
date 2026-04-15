@@ -88,11 +88,13 @@ const apiWindowMs = Number(process.env.API_RATE_LIMIT_WINDOW_MS || 15 * 60 * 100
 const apiMaxRequests = Number(process.env.API_RATE_LIMIT_MAX || 2000);
 
 /**
- * Rate limiter for authentication endpoints
+ * Rate limiter for authentication endpoints (/login, /register, /refresh).
+ * Backed by Redis so the limit is shared across all pods.
  */
 export const authRateLimiter = rateLimit({
   windowMs: authConfig.rateLimit.windowMs,
   max: authConfig.rateLimit.maxRequests,
+  store: new RedisRateLimitStore(authConfig.rateLimit.windowMs),
   message: {
     success: false,
     error: {

@@ -46,9 +46,11 @@ export const authConfig = {
   // Bcrypt rounds
   bcryptRounds: 10,
   
-  // Rate limiting
+  // Rate limiting — covers /login, /register, and /refresh.
+  // Keep low enough to deter brute-force but high enough that normal users
+  // (occasional wrong password + automatic token refresh) don't get locked out.
   rateLimit: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    maxRequests: 5, // 5 requests per window
+    maxRequests: 20, // 20 requests per window per IP
   },
 };
