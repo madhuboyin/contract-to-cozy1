@@ -20,7 +20,7 @@ function rateLimitKey(req: Request): string {
       // Invalid/expired token: fall back to IP key.
     }
   }
-  return `ip:${ipKeyGenerator(req)}`;
+  return `ip:${ipKeyGenerator(req.ip ?? req.socket?.remoteAddress ?? 'unknown')}`;
 }
 
 const apiWindowMs = Number(process.env.API_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
