@@ -79,7 +79,7 @@ export function startHighPriorityEmailEnqueuePoller(opts?: {
       try {
         await tick();
       } catch (e: any) {
-        logger.error('[EMAIL-HIGH] poller error', e?.message || e);
+        logger.error({ err: e }, '[EMAIL-HIGH] poller error');
       }
       await sleep(intervalMs);
     }

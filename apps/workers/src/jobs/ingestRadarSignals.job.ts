@@ -178,6 +178,6 @@ export async function ingestRadarSignalsJob() {
     skipped,
   };
 
-  logger.info('[RADAR-DUMMY-INGEST] result:', result);
+  logger.info({ data: result }, '[RADAR-DUMMY-INGEST] result');
   return result;
 }

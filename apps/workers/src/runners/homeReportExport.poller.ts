@@ -22,7 +22,7 @@ export async function runHomeReportExportPoller() {
       }
     } catch (e) {
       // keep polling even if one batch fails
-      logger.error('[homeReportExportPoller] error:', e);
+      logger.error({ err: e }, '[homeReportExportPoller] error');
     }
 
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));

@@ -127,7 +127,7 @@ export async function sendSeasonalNotifications() {
       `[SEASONAL-NOTIFY] Job complete. Sent: ${sent}, Errors: ${errors}, Total: ${filtered.length}`
     );
   } catch (error) {
-    logger.error('[SEASONAL-NOTIFY] Fatal error in notification job:', error);
+    logger.error({ err: error }, '[SEASONAL-NOTIFY] Fatal error in notification job');
     throw error;
   }
 }

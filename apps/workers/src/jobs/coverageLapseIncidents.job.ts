@@ -95,7 +95,7 @@ export async function coverageLapseIncidentsJob() {
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] coverage lapse signal ingest failed:', guidanceError);
+      logger.warn({ err: guidanceError }, '[GUIDANCE] coverage lapse signal ingest failed');
     }
 
     createdOrUpdated++;

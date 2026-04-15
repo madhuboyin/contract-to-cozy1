@@ -94,6 +94,6 @@ export async function fetchCommunityEventsCron() {
       `[COMMUNITY] ✅ Ingestion completed. upserted=${totalUpserted} stale_inactivated=${stale.count}`
     );
   } catch (err) {
-    logger.error('[COMMUNITY] ❌ Ingestion failed:', err);
+    logger.error({ err }, '[COMMUNITY] ❌ Ingestion failed');
   }
 }

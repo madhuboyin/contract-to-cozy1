@@ -19,7 +19,7 @@ export function startDomainEventsPoller(opts?: StartOpts) {
         logger.info(`[domain-events] processed=${res.processed}`);
       }
     } catch (e: any) {
-      logger.error('[domain-events] error', e?.message || e);
+      logger.error({ err: e }, '[domain-events] error');
     }
   };
 

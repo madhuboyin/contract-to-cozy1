@@ -38,11 +38,11 @@ export async function runReportExportCleanup() {
             data: { reportId: exp.id, type: 'EXPIRED' },
           });
         } catch (e) {
-          logger.error('[cleanup] failed for export', exp.id, e);
+          logger.error({ err: e, exportId: exp.id }, '[cleanup] failed for export');
         }
       }
     } catch (e) {
-      logger.error('[reportExportCleanup] error:', e);
+      logger.error({ err: e }, '[reportExportCleanup] error');
     }
 
     await new Promise((r) => setTimeout(r, CLEAN_INTERVAL_MS));

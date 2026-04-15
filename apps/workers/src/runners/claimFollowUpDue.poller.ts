@@ -64,7 +64,7 @@ export function startClaimFollowUpDuePoller(opts?: { intervalMs?: number; batchS
       try {
         await tick();
       } catch (e: any) {
-        logger.error('[CLAIM-FOLLOWUP] poller error', e?.message || e);
+        logger.error({ err: e }, '[CLAIM-FOLLOWUP] poller error');
       }
       await sleep(intervalMs);
     }

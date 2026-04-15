@@ -193,6 +193,6 @@ export async function ingestNeighborhoodDummyEventsJob(): Promise<{
   }
 
   const result = { targetProperties: properties.length, rawEvents: rawEvents.length, upserted, matched, failed };
-  logger.info('[NEIGHBORHOOD-DUMMY-INGEST] result:', result);
+  logger.info({ data: result }, '[NEIGHBORHOOD-DUMMY-INGEST] result');
   return result;
 }

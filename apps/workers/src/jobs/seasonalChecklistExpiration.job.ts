@@ -114,7 +114,7 @@ export async function expireSeasonalChecklists() {
       );
     }
   } catch (error) {
-    logger.error('[SEASONAL] Fatal error in expiration job:', error);
+    logger.error({ err: error }, '[SEASONAL] Fatal error in expiration job');
     throw error;
   }
 }
@@ -150,7 +150,7 @@ async function logSeasonalCompletionAnalytics(
       timestamp: new Date().toISOString(),
     };
 
-    logger.info('[SEASONAL ANALYTICS]', JSON.stringify(analyticsEvent));
+    logger.info({ data: analyticsEvent }, '[SEASONAL ANALYTICS]');
 
     // TODO: Send to analytics service
     // await analyticsService.track(analyticsEvent);
@@ -158,7 +158,7 @@ async function logSeasonalCompletionAnalytics(
     // Optional: Store in database for historical tracking
     // await prisma.seasonalAnalytics.create({ data: analyticsEvent });
   } catch (error) {
-    logger.error('[SEASONAL] Error logging analytics:', error);
+    logger.error({ err: error }, '[SEASONAL] Error logging analytics');
     // Don't throw - analytics errors shouldn't break the job
   }
 }
@@ -189,7 +189,7 @@ export async function cleanupOldSeasonalChecklists() {
 
     logger.info(`[SEASONAL] Cleaned up ${result.count} old checklists`);
   } catch (error) {
-    logger.error('[SEASONAL] Error in cleanup job:', error);
+    logger.error({ err: error }, '[SEASONAL] Error in cleanup job');
     throw error;
   }
 }

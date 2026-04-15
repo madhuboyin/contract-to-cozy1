@@ -140,6 +140,6 @@ export async function ingestHomeRiskEventsJob() {
     canonicalUpserts,
   };
 
-  logger.info('[HOME-RISK-INGEST] result:', result);
+  logger.info({ data: result }, '[HOME-RISK-INGEST] result');
   return result;
 }

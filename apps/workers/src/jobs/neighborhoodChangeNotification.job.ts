@@ -215,7 +215,7 @@ export async function neighborhoodChangeNotificationJob(): Promise<void> {
           },
         });
       } catch (guidanceError) {
-        logger.warn('[GUIDANCE] neighborhood change signal ingest failed:', guidanceError);
+        logger.warn({ err: guidanceError }, '[GUIDANCE] neighborhood change signal ingest failed');
       }
 
       notified++;

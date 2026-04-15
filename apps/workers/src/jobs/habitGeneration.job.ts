@@ -26,7 +26,7 @@ export async function runHabitGenerationJob(): Promise<void> {
       totalCreated += result.created;
     } catch (error) {
       failureCount++;
-      logger.error(`[HABIT-GEN] Generation failed for property ${property.id}:`, error);
+      logger.error({ err: error }, `[HABIT-GEN] Generation failed for property ${property.id}`);
     }
   }
 

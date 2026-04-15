@@ -196,7 +196,7 @@ export async function generateSeasonalChecklists() {
       `[SEASONAL] Job complete. Generated: ${generated}, Skipped: ${skipped}, Errors: ${errors}`
     );
   } catch (error) {
-    logger.error('[SEASONAL] Fatal error in checklist generation job:', error);
+    logger.error({ err: error }, '[SEASONAL] Fatal error in checklist generation job');
     throw error;
   }
 }

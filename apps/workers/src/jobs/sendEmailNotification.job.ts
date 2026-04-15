@@ -172,7 +172,7 @@ Manage notifications in your dashboard.
       },
     });
 
-    logger.error('[EMAIL-WORKER] Batch email delivery failed', err);
+    logger.error({ err }, '[EMAIL-WORKER] Batch email delivery failed');
   }
 }
 
@@ -202,7 +202,7 @@ export async function runDailyEmailDigest() {
     try {
       await sendUserDigest(userId);
     } catch (err) {
-      logger.error(`[DIGEST] Failed for user=${userId}`, err);
+      logger.error({ err }, `[DIGEST] Failed for user=${userId}`);
     }
   }
 }

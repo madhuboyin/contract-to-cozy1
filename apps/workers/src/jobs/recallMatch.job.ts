@@ -7,6 +7,6 @@ export const RECALL_MATCH_JOB = 'recall.match';
 export async function recallMatchJob() {
   const scan = await runRecallMatchingScan();
   const followups = await createFollowupsForOpenMatches();
-  logger.info('[RECALL-MATCH] scan:', scan, 'followups:', followups);
+  logger.info({ scan, followups }, '[RECALL-MATCH] result');
   return { scan, followups };
 }

@@ -25,7 +25,7 @@ export async function runHiddenAssetRefreshJob(): Promise<void> {
       successCount++;
     } catch (error) {
       failureCount++;
-      logger.error(`[HIDDEN-ASSETS] Scan failed for property ${property.id}:`, error);
+      logger.error({ err: error }, `[HIDDEN-ASSETS] Scan failed for property ${property.id}`);
     }
   }
 

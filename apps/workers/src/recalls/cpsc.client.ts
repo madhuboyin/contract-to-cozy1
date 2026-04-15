@@ -43,12 +43,7 @@ export async function fetchCpscRecalls(): Promise<CpscRecallItem[]> {
   try {
     const json = JSON.parse(text);
     const mapped = mapJson(json);
-    logger.info(
-      '[CPSC-FETCH] items:',
-      Array.isArray(json) ? json.length : json?.items?.length,
-      'mapped:',
-      mapped.length
-    );
+    logger.info({ rawItems: Array.isArray(json) ? json.length : json?.items?.length, mapped: mapped.length }, '[CPSC-FETCH] items');
     return mapped;
   } catch {
     return mapRssXml(text);

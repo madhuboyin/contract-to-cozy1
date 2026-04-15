@@ -35,7 +35,7 @@ export async function runSharedSignalRefreshJob(): Promise<SharedSignalRefreshJo
       interactionCount += refreshed.interactionCount;
     } catch (error) {
       erroredProperties += 1;
-      logger.error(`[shared-signal-refresh] Failed for property ${property.id}:`, error);
+      logger.error({ err: error }, `[shared-signal-refresh] Failed for property ${property.id}`);
     }
   }
 

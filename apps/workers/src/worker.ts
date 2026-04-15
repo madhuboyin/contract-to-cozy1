@@ -400,7 +400,7 @@ async function captureWeeklyScoreSnapshotsJob() {
         successCount += 1;
       } catch (error) {
         failureCount += 1;
-        logger.error(`[SCORE-SNAPSHOT] Failed for property ${property.id}:`, error);
+        logger.error({ err: error }, `[SCORE-SNAPSHOT] Failed for property ${property.id}`);
       }
     }
 
@@ -408,7 +408,7 @@ async function captureWeeklyScoreSnapshotsJob() {
       `[SCORE-SNAPSHOT] Weekly snapshot completed. Success: ${successCount}, Failed: ${failureCount}, Total: ${properties.length}`
     );
   } catch (error) {
-    logger.error('[SCORE-SNAPSHOT] Weekly snapshot job failed:', error);
+    logger.error({ err: error }, '[SCORE-SNAPSHOT] Weekly snapshot job failed');
   }
 }
 
@@ -472,14 +472,14 @@ async function sendMaintenanceReminders() {
           // Email service integration would go here
           logger.info(`   -> Sent reminder for "${task.title}" to ${user.email}`);
         } catch (emailError) {
-          logger.error(`Failed to send email for task ${task.id}:`, emailError);
+          logger.error({ err: emailError }, `Failed to send email for task ${task.id}`);
         }
       })
     );
 
     logger.info('✅ All maintenance reminders sent. Job complete.');
   } catch (error) {
-    logger.error('❌ Error running maintenance reminder job:', error);
+    logger.error({ err: error }, '❌ Error running maintenance reminder job');
   }
 }
 
@@ -610,7 +610,7 @@ async function processFESCalculation(jobData: PropertyIntelligenceJobPayload) {
     }
     
   } catch (error) {
-    logger.error('❌ Error calculating FES:', error);
+    logger.error({ err: error }, '❌ Error calculating FES');
     throw error;
   }
 }
@@ -630,7 +630,7 @@ async function processHiddenAssetScan(jobData: PropertyIntelligenceJobPayload) {
       `Expired: ${result.matchesExpired}, Inactivated: ${result.matchesInactivated}`
     );
   } catch (error) {
-    logger.error(`❌ Error running hidden asset scan for property ${propertyId}:`, error);
+    logger.error({ err: error }, `❌ Error running hidden asset scan for property ${propertyId}`);
     throw error;
   }
 }
@@ -667,7 +667,7 @@ const CRON_HANDLERS: Record<string, () => Promise<void>> = {
   'mortgage-rate-ingest':            async () => {
     const result = await ingestMortgageRatesJob();
     if (!result.success) {
-      logger.warn('[mortgage-rate-ingest] No rates ingested:', result.reason);
+      logger.warn({ reason: result.reason }, '[mortgage-rate-ingest] No rates ingested');
     }
   },
   'home-gazette-generation':         async () => { await runGazetteGenerationJob(); },
@@ -709,7 +709,7 @@ function scheduleCronJobs(): void {
           await handler();
           logger.info(`[${entry.key}] ✅ Completed`);
         } catch (err) {
-          logger.error(`[${entry.key}] ❌ Failed:`, err);
+          logger.error({ err }, `[${entry.key}] ❌ Failed`);
         }
       },
       { timezone: 'America/New_York' },
@@ -806,7 +806,7 @@ function startWorker() {
   });
 
   propertyIntelligenceWorker.on('error', (err) => {
-    logger.error('[QUEUE] Worker experienced an error:', err);
+    logger.error({ err }, '[QUEUE] Worker experienced an error');
   });
 
   // =============================================================================
@@ -835,14 +835,11 @@ function startWorker() {
   });
 
   emailNotificationWorker.on('failed', (job, err) => {
-    logger.error(
-      `[QUEUE] Email notification job ${job?.id} failed:`,
-      err.message
-    );
+    logger.error({ err }, `[QUEUE] Email notification job ${job?.id} failed`);
   });
 
   emailNotificationWorker.on('error', (err) => {
-    logger.error('[QUEUE] Email notification worker error:', err);
+    logger.error({ err }, '[QUEUE] Email notification worker error');
   });
 
   // ===============================
@@ -876,7 +873,7 @@ function startWorker() {
 
 function restartAfterDelay(name: string, fn: () => Promise<void>, delayMs = 30_000) {
   fn().catch((e) => {
-    logger.error(`${name} crashed, restarting in ${delayMs / 1000}s...`, e);
+    logger.error({ err: e }, `${name} crashed, restarting in ${delayMs / 1000}s`);
     setTimeout(() => restartAfterDelay(name, fn, delayMs), delayMs);
   });
 }
@@ -990,7 +987,7 @@ if (radarDummyIngestEnabled) {
       logger.info('[RADAR-DUMMY-INGEST] Running dummy radar ingest job...');
       await ingestRadarSignalsJob();
     } catch (err) {
-      logger.error('[RADAR-DUMMY-INGEST] Job failed:', err);
+      logger.error({ err }, '[RADAR-DUMMY-INGEST] Job failed');
     }
   }, { timezone: 'America/New_York' });
 
@@ -998,7 +995,7 @@ if (radarDummyIngestEnabled) {
 
   if (process.env.RADAR_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
     void ingestRadarSignalsJob().catch((err) => {
-      logger.error('[RADAR-DUMMY-INGEST] Startup run failed:', err);
+      logger.error({ err }, '[RADAR-DUMMY-INGEST] Startup run failed');
     });
   }
 }
@@ -1015,7 +1012,7 @@ if (homeRiskReplayDummyIngestEnabled) {
       logger.info('[HOME-RISK-INGEST] Running dummy home risk event ingest job...');
       await ingestHomeRiskEventsJob();
     } catch (err) {
-      logger.error('[HOME-RISK-INGEST] Job failed:', err);
+      logger.error({ err }, '[HOME-RISK-INGEST] Job failed');
     }
   }, { timezone: 'America/New_York' });
 
@@ -1023,7 +1020,7 @@ if (homeRiskReplayDummyIngestEnabled) {
 
   if (process.env.HOME_RISK_REPLAY_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
     void ingestHomeRiskEventsJob().catch((err) => {
-      logger.error('[HOME-RISK-INGEST] Startup run failed:', err);
+      logger.error({ err }, '[HOME-RISK-INGEST] Startup run failed');
     });
   }
 }
@@ -1046,7 +1043,7 @@ if (neighborhoodDummyIngestEnabled) {
       logger.info('[NEIGHBORHOOD-DUMMY-INGEST] Running dummy neighborhood event ingest job...');
       await ingestNeighborhoodDummyEventsJob();
     } catch (err) {
-      logger.error('[NEIGHBORHOOD-DUMMY-INGEST] Job failed:', err);
+      logger.error({ err }, '[NEIGHBORHOOD-DUMMY-INGEST] Job failed');
     }
   }, { timezone: 'America/New_York' });
 
@@ -1054,7 +1051,7 @@ if (neighborhoodDummyIngestEnabled) {
 
   if (process.env.NEIGHBORHOOD_DUMMY_INGEST_RUN_ON_STARTUP === 'true') {
     void ingestNeighborhoodDummyEventsJob().catch((err) => {
-      logger.error('[NEIGHBORHOOD-DUMMY-INGEST] Startup run failed:', err);
+      logger.error({ err }, '[NEIGHBORHOOD-DUMMY-INGEST] Startup run failed');
     });
   }
 }

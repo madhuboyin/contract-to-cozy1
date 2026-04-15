@@ -209,7 +209,7 @@ export async function freezeRiskIncidentsJob() {
         expiresAt: new Date(Date.now() + 36 * 60 * 60 * 1000),
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] freeze risk signal ingest failed:', guidanceError);
+      logger.warn({ err: guidanceError }, '[GUIDANCE] freeze risk signal ingest failed');
     }
 
     // Rate limit Open-Meteo API calls (free tier)
