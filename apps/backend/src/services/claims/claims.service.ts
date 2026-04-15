@@ -229,6 +229,7 @@ async function uploadFileToStorage(args: {
       Key: key,
       Body: args.buffer,
       ContentType: args.mimeType,
+      ServerSideEncryption: 'AES256',
       Metadata: {
         propertyid: args.propertyId,
         claimid: args.claimId,

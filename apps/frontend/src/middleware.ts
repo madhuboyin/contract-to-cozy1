@@ -56,6 +56,11 @@ export function middleware(request: NextRequest) {
     "worker-src 'self'",
     "manifest-src 'self'",
     "upgrade-insecure-requests",
+    // Require Trusted Types for all script sinks to prevent DOM-based XSS.
+    // React 18 createRoot is Trusted Types-compatible. If a third-party library
+    // breaks under this directive, register a narrow TrustedTypePolicy rather
+    // than relaxing the directive globally.
+    "require-trusted-types-for 'script'",
     // Violation reporting — report-uri for broad browser support,
     // report-to for the modern Reporting API (Chrome 70+, Edge 79+).
     `report-uri ${reportUri}`,

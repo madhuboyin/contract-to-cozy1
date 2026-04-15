@@ -29,6 +29,7 @@ export async function uploadPdfBuffer(args: UploadArgs): Promise<{
       Key: key,
       Body: args.buffer,
       ContentType: 'application/pdf',
+      ServerSideEncryption: 'AES256',
       Metadata: {
         checksumsha256: args.checksumSha256,
         propertyid: args.propertyId,
@@ -68,6 +69,7 @@ export async function uploadDocumentBuffer(args: DocumentUploadArgs): Promise<{
       Key: key,
       Body: args.buffer,
       ContentType: args.mimeType,
+      ServerSideEncryption: 'AES256',
       Metadata: {
         userid: args.userId,
         ...(args.propertyId ? { propertyid: args.propertyId } : {}),

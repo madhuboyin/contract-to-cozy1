@@ -196,6 +196,7 @@ export class RoomScanService {
           Key: key,
           Body: img.buf,
           ContentType: 'image/jpeg',
+          ServerSideEncryption: 'AES256',
         })
       );
 
