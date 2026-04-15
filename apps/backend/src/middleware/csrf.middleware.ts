@@ -49,12 +49,16 @@ const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   size: 64,
   getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
 
-  // Bearer-token requests are not CSRF-vulnerable — browsers never auto-send
-  // Authorization headers cross-origin, so skip the check for them.
-  // This keeps existing API clients working without changes.
+  // Skip CSRF for:
+  //   1. Bearer-token requests — browsers never auto-send Authorization headers
+  //      cross-origin, so they are not CSRF-vulnerable.
+  //   2. Auth endpoints (login, register, forgot/reset password) — these establish
+  //      a session and therefore cannot present a prior CSRF token. They are
+  //      protected by rate limiting and credential checks instead.
   skipCsrfProtection: (req) =>
-    typeof req.headers.authorization === 'string' &&
-    req.headers.authorization.startsWith('Bearer '),
+    (typeof req.headers.authorization === 'string' &&
+      req.headers.authorization.startsWith('Bearer ')) ||
+    req.path.startsWith('/auth/'),
 });
 
 /**
