@@ -1313,6 +1313,8 @@ model User {
   passwordHash  String
   emailVerified Boolean @default(false)
   phoneVerified Boolean @default(false)
+  // Incremented on every password change so pre-change tokens are rejected.
+  tokenVersion  Int     @default(0)
 
   // MFA (TOTP) — admin accounts only for v1.0
   mfaEnabled Boolean @default(false)

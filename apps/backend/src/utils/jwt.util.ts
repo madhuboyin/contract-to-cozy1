@@ -7,6 +7,9 @@ export interface JWTPayload {
   userId: string;
   email: string;
   role: string;
+  /** Snapshot of User.tokenVersion at the time of issue.
+   *  The auth middleware rejects tokens whose version is stale. */
+  tokenVersion?: number;
   /** Whether this account has TOTP-MFA configured and active. */
   mfaEnabled?: boolean;
   /** True only when the MFA challenge was completed in this session. */
@@ -40,7 +43,7 @@ const parseAuthPayload = (decoded: string | jwt.JwtPayload): JWTPayload => {
     throw new Error('Invalid token payload');
   }
 
-  const { userId, email, role, mfaEnabled, mfaVerified } = decoded as any;
+  const { userId, email, role, tokenVersion, mfaEnabled, mfaVerified } = decoded as any;
   if (typeof userId !== 'string' || typeof email !== 'string' || typeof role !== 'string') {
     throw new Error('Invalid token payload');
   }
@@ -49,8 +52,9 @@ const parseAuthPayload = (decoded: string | jwt.JwtPayload): JWTPayload => {
     userId,
     email,
     role,
-    mfaEnabled:  typeof mfaEnabled  === 'boolean' ? mfaEnabled  : undefined,
-    mfaVerified: typeof mfaVerified === 'boolean' ? mfaVerified : undefined,
+    tokenVersion: typeof tokenVersion === 'number' ? tokenVersion : undefined,
+    mfaEnabled:   typeof mfaEnabled  === 'boolean' ? mfaEnabled  : undefined,
+    mfaVerified:  typeof mfaVerified === 'boolean' ? mfaVerified : undefined,
   };
 };
 

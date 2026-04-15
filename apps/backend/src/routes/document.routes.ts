@@ -3,6 +3,7 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
+import { requireDocumentOwnership } from '../middleware/documentAuth.middleware';
 // Use the unified, extended request type
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
@@ -378,39 +379,21 @@ router.get('/insurance-policies', authenticate, async (req: CustomRequest, res: 
 router.get(
   '/:id/asset-suggestions',
   authenticate,
+  requireDocumentOwnership,
   async (req: CustomRequest, res: Response) => {
     try {
-      const userId = req.user!.userId;
       const documentId = req.params.id;
       const propertyIdQuery = (req.query.propertyId as string) || undefined;
 
-      const homeownerProfile = await prisma.homeownerProfile.findUnique({
-        where: { userId },
-        select: { id: true },
-      });
-
-      if (!homeownerProfile) {
-        return res.status(404).json({ success: false, message: 'Homeowner profile not found' });
-      }
-
-      const document = await prisma.document.findFirst({
-        where: {
-          id: documentId,
-          uploadedBy: homeownerProfile.id, // matches your existing docs pattern
-        },
-        select: {
-          id: true,
-          propertyId: true,
-          metadata: true,
-          name: true,
-          type: true,
-          createdAt: true,
-        },
-      });
-
-      if (!document) {
-        return res.status(404).json({ success: false, message: 'Document not found' });
-      }
+      // Ownership already verified by requireDocumentOwnership; use pre-fetched doc
+      const document = (req as any).ownedDocument as {
+        id: string;
+        propertyId: string | null;
+        metadata: unknown;
+        name: string;
+        type: string;
+        createdAt: Date;
+      };
 
       const effectivePropertyId = propertyIdQuery || document.propertyId || undefined;
       if (!effectivePropertyId) {
@@ -626,37 +609,12 @@ router.get(
  *       200:
  *         description: Document deleted
  */
-router.delete('/:id', authenticate, async (req: CustomRequest, res: Response) => {
+router.delete('/:id', authenticate, requireDocumentOwnership, async (req: CustomRequest, res: Response) => {
   try {
-    const userId = req.user!.userId;
     const { id } = req.params;
 
-    const homeownerProfile = await prisma.homeownerProfile.findUnique({
-      where: { userId },
-      select: { id: true }
-    });
-
-    if (!homeownerProfile) {
-      return res.status(404).json({
-        success: false,
-        message: 'Homeowner profile not found'
-      });
-    }
-
-    // Verify ownership
-    const document = await prisma.document.findFirst({
-      where: {
-        id,
-        uploadedBy: homeownerProfile.id
-      }
-    });
-
-    if (!document) {
-      return res.status(404).json({
-        success: false,
-        message: 'Document not found'
-      });
-    }
+    // Ownership already verified by requireDocumentOwnership; use pre-fetched doc
+    const document = (req as any).ownedDocument as { id: string; fileUrl: string | null };
 
     // Delete from S3 first (best-effort — don't block DB delete on S3 failure)
     if (document.fileUrl && !document.fileUrl.startsWith('data:')) {

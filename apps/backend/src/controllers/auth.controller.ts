@@ -8,6 +8,7 @@ import {
   VerifyEmailInput,
   ForgotPasswordInput,
   ResetPasswordInput,
+  ChangePasswordInput,
 } from '../utils/validators';
 import { auditLog, redactEmail } from '../lib/logger';
 
@@ -198,6 +199,26 @@ export class AuthController {
           message: 'Logged out successfully',
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Change password
+   * PUT /api/auth/change-password
+   */
+  async changePassword(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: { message: 'Not authenticated', code: 'NOT_AUTHENTICATED' } });
+        return;
+      }
+
+      const data: ChangePasswordInput = req.body;
+      await authService.changePassword(req.user.userId, data);
+
+      res.status(200).json({ success: true, data: { message: 'Password changed successfully. Please log in again.' } });
     } catch (error) {
       next(error);
     }

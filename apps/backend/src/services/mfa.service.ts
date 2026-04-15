@@ -122,7 +122,7 @@ export class MfaService {
     // --- 3. Load user and verify account status -----------------------------
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { mfaEnabled: true, mfaSecret: true, status: true },
+      select: { mfaEnabled: true, mfaSecret: true, status: true, tokenVersion: true },
     });
 
     if (!user || !user.mfaEnabled || !user.mfaSecret) {
@@ -168,6 +168,7 @@ export class MfaService {
       userId,
       email,
       role,
+      tokenVersion: user.tokenVersion,
       mfaEnabled:  true,
       mfaVerified: true,
     });

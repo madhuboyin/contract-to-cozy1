@@ -14,6 +14,7 @@ import {
   LoginInput,
   ForgotPasswordInput,
   ResetPasswordInput,
+  ChangePasswordInput,
 } from '../utils/validators';
 import { APIError } from '../middleware/error.middleware';
 import {
@@ -100,11 +101,12 @@ export class AuthService {
     }
 
     // --- AUTO-LOGIN LOGIC ---
-    // Generate access and refresh tokens
+    // Generate access and refresh tokens (tokenVersion starts at 0 for new users)
     const { accessToken, refreshToken } = generateTokenPair({
       userId: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: 0,
     });
 
     // Return the same response as the login function
@@ -133,6 +135,8 @@ export class AuthService {
       where: { email: data.email },
       include: { homeownerProfile: { select: { segment: true } } },
     });
+    // Note: Prisma includes all scalar fields on the User model by default
+    // so tokenVersion is available via user.tokenVersion below.
 
     if (!user) {
       throw new APIError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
@@ -168,6 +172,7 @@ export class AuthService {
       userId: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
       mfaEnabled: false,
     });
 
@@ -205,6 +210,7 @@ export class AuthService {
     // Get user to ensure they still exist and are active
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
+      select: { id: true, email: true, role: true, status: true, tokenVersion: true },
     });
 
     if (!user) {
@@ -215,11 +221,18 @@ export class AuthService {
       throw new APIError('Account is not active', 403, 'ACCOUNT_NOT_ACTIVE');
     }
 
+    // Reject refresh tokens issued before a password change
+    const tokenVer = payload.tokenVersion ?? 0;
+    if (tokenVer !== user.tokenVersion) {
+      throw new APIError('Session expired. Please log in again.', 401, 'TOKEN_REVOKED');
+    }
+
     // Generate new token pair
     const newTokens = generateTokenPair({
       userId: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     });
 
     return {
@@ -299,10 +312,36 @@ export class AuthService {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
     });
 
     auditLog('PASSWORD_CHANGED', user.id, { method: 'reset' });
+  }
+
+  /**
+   * Change password for an authenticated user.
+   * Increments tokenVersion so all pre-existing tokens become invalid.
+   */
+  async changePassword(userId: string, data: ChangePasswordInput): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+
+    if (!user) throw new APIError('User not found', 404, 'USER_NOT_FOUND');
+
+    const isValid = await comparePassword(data.currentPassword, user.passwordHash);
+    if (!isValid) {
+      throw new APIError('Current password is incorrect', 401, 'INVALID_CREDENTIALS');
+    }
+
+    const passwordHash = await hashPassword(data.newPassword);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
+    });
+
+    auditLog('PASSWORD_CHANGED', userId, { method: 'change' });
   }
 
   /**

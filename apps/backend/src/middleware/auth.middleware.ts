@@ -53,6 +53,7 @@ async function _authenticate(
         role: true,
         status: true,
         emailVerified: true,
+        tokenVersion: true,
         homeownerProfile: { select: { id: true } },
         providerProfile: { select: { id: true } },
       },
@@ -65,6 +66,22 @@ async function _authenticate(
         error: {
           message: 'User not found',
           code: 'USER_NOT_FOUND',
+        },
+      });
+      return;
+    }
+
+    // Reject tokens issued before a password change.
+    // decoded.tokenVersion is undefined for tokens minted before this feature
+    // was deployed — those are treated as version 0 (graceful rollout).
+    const tokenVer = decoded.tokenVersion ?? 0;
+    if (tokenVer !== user.tokenVersion) {
+      auditLog('AUTH_INVALID_TOKEN', user.id, { ip: req.ip, path: req.path, method: req.method, reason: 'token_version_mismatch' });
+      res.status(401).json({
+        success: false,
+        error: {
+          message: 'Session expired. Please log in again.',
+          code: 'TOKEN_REVOKED',
         },
       });
       return;
@@ -330,12 +347,13 @@ export const optionalAuth = async (
         role: true,
         status: true,
         emailVerified: true,
+        tokenVersion: true,
         homeownerProfile: { select: { id: true } },
         providerProfile: { select: { id: true } },
       },
     });
 
-    if (user && user.status === 'ACTIVE') {
+    if (user && user.status === 'ACTIVE' && (decoded.tokenVersion ?? 0) === user.tokenVersion) {
       req.user = {
         userId: user.id,
         email: user.email,

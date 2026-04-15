@@ -10,6 +10,7 @@ import {
   verifyEmailSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
 } from '../utils/validators';
 
 const router = Router();
@@ -347,6 +348,44 @@ router.post(
   authenticateAllowUnverified,
   strictRateLimiter,
   authController.resendVerification.bind(authController)
+);
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   put:
+ *     summary: Change password for authenticated user
+ *     description: Invalidates all existing sessions (tokenVersion increment).
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Password changed — all prior sessions invalidated
+ *       401:
+ *         description: Current password incorrect or not authenticated
+ */
+router.put(
+  '/change-password',
+  authenticate,
+  strictRateLimiter,
+  validateBody(changePasswordSchema),
+  authController.changePassword.bind(authController)
 );
 
 export default router;

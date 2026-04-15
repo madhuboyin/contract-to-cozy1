@@ -380,12 +380,16 @@ if (process.env.NODE_ENV === 'production' && !METRICS_TOKEN) {
 }
 
 app.get('/metrics', async (req: Request, res: Response) => {
-  if (METRICS_TOKEN) {
-    const authHeader = req.headers.authorization;
-    if (authHeader !== `Bearer ${METRICS_TOKEN}`) {
-      res.status(401).set('WWW-Authenticate', 'Bearer realm="metrics"').end();
-      return;
-    }
+  // Always require the token — return 503 if not configured so the endpoint
+  // is never silently open in dev/staging environments.
+  if (!METRICS_TOKEN) {
+    res.status(503).json({ error: 'Metrics endpoint not configured' });
+    return;
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader !== `Bearer ${METRICS_TOKEN}`) {
+    res.status(401).set('WWW-Authenticate', 'Bearer realm="metrics"').end();
+    return;
   }
   res.set('Content-Type', register.contentType);
   res.end(await register.metrics());
