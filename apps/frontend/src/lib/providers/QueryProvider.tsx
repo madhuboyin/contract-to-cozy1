@@ -13,6 +13,20 @@ const makeQueryClient = () => {
                 // but since we are using client-side fetching in the dashboard,
                 // we use a reasonable time.
                 staleTime: 60 * 1000, // 60 seconds
+                // Do not retry on 429 (Too Many Requests) — retrying makes the
+                // rate-limit situation worse. Retry up to 2 times for other errors.
+                retry: (failureCount, error) => {
+                    if (
+                        typeof error === 'object' &&
+                        error !== null &&
+                        'status' in error &&
+                        (error as any).status === 429
+                    ) {
+                        return false;
+                    }
+                    return failureCount < 2;
+                },
+                retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
             },
         },
     });
