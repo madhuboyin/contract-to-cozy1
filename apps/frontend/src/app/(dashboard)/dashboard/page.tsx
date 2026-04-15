@@ -994,9 +994,9 @@ export default function DashboardPage() {
       })}`
     : 'Updated today';
   const commandCenterSourceLabel = [
-    selectedProperty ? 'Property profile' : null,
-    checklistItems.length > 0 ? 'Maintenance checklist' : null,
-    data.urgentActions.length > 0 ? 'Risk and renewal signals' : 'Account activity',
+    selectedProperty ? 'Your home details' : null,
+    checklistItems.length > 0 ? 'Your maintenance history' : null,
+    data.urgentActions.length > 0 ? 'Your coverage & risk status' : 'Your recent activity',
   ]
     .filter(Boolean)
     .join(' + ');
