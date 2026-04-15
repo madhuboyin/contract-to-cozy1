@@ -114,26 +114,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 
   const login = useCallback(async (data: LoginInput): Promise<LoginResponse | null> => {
-    try {
-      const response = await api.login(data);
-      
-      if (response.success) {
-        const loginData = (response.data as any).data || response.data; 
-        const { accessToken, refreshToken, user } = loginData; 
-  
-        if (isBrowser) {
-          localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
-          localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-        }
-        setUser(user);
-        return { success: true, accessToken, refreshToken, user };
+    const response = await api.login(data);
+
+    if (response.success) {
+      const loginData = (response.data as any).data || response.data;
+      const { accessToken, refreshToken, user } = loginData;
+
+      if (isBrowser) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       }
-      return null;
-    } catch (error) {
-      console.error('Login failed:', error);
-      return null;
+      setUser(user);
+      return { success: true, accessToken, refreshToken, user };
     }
+    return null;
   }, []);
 
   const register = useCallback(async (data: RegisterInput): Promise<LoginResponse | null> => {
