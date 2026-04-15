@@ -10,7 +10,8 @@ import type { Queue } from 'bullmq';
 export const propertyIntelligenceQueue: Queue = null as unknown as Queue;
 
 const JobQueueService = {
-  addJob: async (): Promise<void> => undefined,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  addJob: async (..._args: unknown[]): Promise<void> => undefined,
 };
 
 export default JobQueueService;
