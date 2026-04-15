@@ -43,9 +43,11 @@ function buildCsp(nonce: string, apiUrl: string, faroUrl: string): string {
     "worker-src 'self'",
     "manifest-src 'self'",
     "upgrade-insecure-requests",
-    // Require Trusted Types for all script sinks to prevent DOM-based XSS.
-    // React 18 createRoot is Trusted Types-compatible.
-    "require-trusted-types-for 'script'",
+    // NOTE: require-trusted-types-for 'script' is intentionally omitted.
+    // Next.js's webpack/Turbopack runtime chunks use innerHTML and TrustedScriptURL
+    // assignments that are not Trusted Types-compatible and cannot be patched.
+    // Enabling this directive breaks the application at runtime. Revisit when
+    // Next.js ships full Trusted Types support.
     // Violation reporting — report-uri for broad browser support,
     // report-to for the modern Reporting API (Chrome 70+, Edge 79+).
     `report-uri ${reportUri}`,
