@@ -19,7 +19,26 @@ data:
   # CORS — comma-separated list of origins the backend will accept requests from.
   # Add staging/preview domains here as needed.
   ALLOWED_ORIGINS: "https://contracttocozy.com,https://www.contracttocozy.com,https://docs.contracttocozy.com"
-  
+
+  # Gemini / AI
+  GEMINI_CHAT_ENABLED: "true"
+  GEMINI_MODEL: "gemini-2.0-flash"
+
+  # Room scan
+  ROOM_SCAN_PROVIDER: "gemini"
+  ROOM_SCAN_GEMINI_DEBUG: "false"
+  INVENTORY_ROOM_SCAN_AUTOSELECT_THRESHOLD: "0.72"
+  INVENTORY_ROOM_SCAN_STORE_AI_RAW: "false"
+  INVENTORY_ROOM_SCAN_DUPLICATE_THRESHOLD: "0.92"
+
+  # Community events (workers)
+  TICKETMASTER_MAX_PAGES: "3"
+  EVENTS_RADIUS_MILES: "15"
+  EVENTS_STALE_DAYS: "2"
+
+  # Home events auto-generation
+  HOME_EVENTS_AUTOGEN: "true"
+
   # Database Configuration (non-sensitive)
   DB_HOST: "postgres.production.svc.cluster.local"
   DB_PORT: "5432"
