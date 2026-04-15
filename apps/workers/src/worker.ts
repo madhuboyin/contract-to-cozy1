@@ -9,9 +9,6 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 import { Worker, Queue } from 'bullmq';
 
-// Import shared utilities from backend - ADDED filterRelevantAssets
-import { calculateAssetRisk, calculateTotalRiskScore, filterRelevantAssets, AssetRiskDetail } from '../../backend/src/utils/riskCalculator.util';
-import { RISK_ASSET_CONFIG } from '../../backend/src/config/risk-constants';
 import { calculateFinancialEfficiency } from '../../backend/src/utils/FinancialCalculator.util';
 import { calculateHealthScore } from './utils/propertyScore.util';
 import { sendEmailNotificationJob, runDailyEmailDigest } from './jobs/sendEmailNotification.job';
@@ -47,6 +44,7 @@ import { runSharedSignalHealthAuditJob } from './jobs/sharedSignalHealthAudit.jo
 import { JOB_REGISTRY } from '../../backend/src/config/workerJobRegistry';
 import { prisma } from './lib/prisma';
 import { HiddenAssetService } from '../../backend/src/services/hiddenAssets.service';
+import RiskAssessmentService from '../../backend/src/services/RiskAssessment.service';
 import { logger } from './lib/logger';
 import { startMetricsServer, jobsProcessedTotal, jobDurationSeconds, jobsActiveGauge } from './lib/metrics';
 
@@ -81,53 +79,6 @@ const redisConnection = {
   db: parseInt(process.env.REDIS_DB || '0', 10),
   password: process.env.REDIS_PASSWORD,
 };
-
-// Type definitions
-interface Warranty {
-  id: string;
-  homeownerProfileId: string;
-  propertyId: string | null;
-  providerName: string;
-  policyNumber: string | null;
-  coverageDetails: string | null;
-  cost: number | null;
-  startDate: Date;
-  expiryDate: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface InsurancePolicy {
-  id: string;
-  homeownerProfileId: string;
-  propertyId: string | null;
-  carrierName: string;
-  policyNumber: string;
-  coverageType: string | null;
-  premiumAmount: number;
-  startDate: Date;
-  expiryDate: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface RiskAssessmentReport {
-  id: string;
-  propertyId: string;
-  riskScore: number;
-  financialExposureTotal: number;
-  details: Prisma.InputJsonValue;
-  lastCalculatedAt: Date;
-  createdAt: Date;
-}
-
-interface PropertyWithRelations extends Property {
-  warranties: Warranty[];
-  insurancePolicies: InsurancePolicy[];
-  riskReport: RiskAssessmentReport | null;
-  // Note: All property fields (heatingType, waterHeaterType, roofType, yearBuilt, etc.)
-  // are already included from the base Property type from Prisma
-}
 
 type ScoreType = 'HEALTH' | 'RISK' | 'FINANCIAL';
 
@@ -462,28 +413,6 @@ async function captureWeeklyScoreSnapshotsJob() {
 }
 
 /**
- * Fetch property details with all required relations
- */
-async function fetchPropertyDetails(propertyId: string): Promise<PropertyWithRelations | null> {
-  try {
-    // @ts-ignore - These models exist in backend schema
-    const property = await (prisma as any).property.findUnique({
-      where: { id: propertyId },
-      include: {
-        warranties: true,
-        insurancePolicies: true,
-        riskReport: true,
-      },
-    });
-    
-    return property as PropertyWithRelations | null;
-  } catch (error) {
-    logger.error(`Failed to fetch property ${propertyId}:`, error);
-    return null;
-  }
-}
-
-/**
  * Send maintenance reminders (existing cron job)
  */
 async function sendMaintenanceReminders() {
@@ -555,80 +484,26 @@ async function sendMaintenanceReminders() {
 }
 
 /**
- * Process risk assessment calculation - UPDATED WITH ASSET FILTERING
+ * Process risk assessment calculation.
+ * Delegates to RiskAssessmentService.calculateAndSaveReport which fetches
+ * the full property including homeAssets and inventoryItems.
  */
 async function processRiskCalculation(jobData: PropertyIntelligenceJobPayload) {
-  logger.info(`[${new Date().toISOString()}] Processing risk calculation for property ${jobData.propertyId}...`);
-
-  const propertyId = jobData.propertyId;
+  const { propertyId } = jobData;
+  logger.info(`[${new Date().toISOString()}] Processing risk calculation for property ${propertyId}...`);
 
   try {
-    const property = await fetchPropertyDetails(propertyId);
-    
-    if (!property) {
-      logger.error(`Property ${propertyId} not found. Job failed.`);
-      throw new Error("Property not found for calculation.");
-    }
-
-    const currentYear = new Date().getFullYear();
-    const assetRisks: AssetRiskDetail[] = [];
-    
-    // === FIX: Filter assets to only those that exist on the property ===
-    logger.info(`[RISK-CALC] Filtering assets for property ${propertyId}...`);
-    logger.info(`[RISK-CALC] Property config: heatingType=${property.heatingType}, waterHeaterType=${property.waterHeaterType}, roofType=${property.roofType}`);
-    
-    const relevantConfigs = filterRelevantAssets(property as any, RISK_ASSET_CONFIG);
-    logger.info(`[RISK-CALC] Filtered from ${RISK_ASSET_CONFIG.length} to ${relevantConfigs.length} relevant assets`);
-    
-    // Calculate risk ONLY for relevant assets
-    for (const config of relevantConfigs) {
-      const assetRisk = calculateAssetRisk(
-        config.systemType,
-        config,
-        property as any, 
-        currentYear
-      );
-
-      if (assetRisk) {
-        assetRisks.push(assetRisk);
-        logger.info(`[RISK-CALC-WORKER] Asset ${config.systemType} - P: ${assetRisk.probability}, OOP: ${assetRisk.outOfPocketCost}, Risk: ${assetRisk.riskDollar}`);
-        logger.info(`[RISK-CALC] Calculated risk for ${config.systemType}: $${assetRisk.riskDollar}`);
-      } else {
-        logger.warn(`[RISK-CALC] Skipped ${config.systemType} (no install year)`);
-      }
-    }
-
-    logger.info(`[RISK-CALC] Total assets with calculated risk: ${assetRisks.length}`);
-
-    // Calculate total risk score
-    const reportData = calculateTotalRiskScore(property as any, assetRisks);
-    logger.info(`[RISK-CALC-WORKER] Final Score: ${reportData.riskScore}, Total Exposure: $${reportData.financialExposureTotal}`);
-
-    // Save or update the report
-    await (prisma as any).riskAssessmentReport.upsert({
-      where: { propertyId: propertyId },
-      update: {
-        riskScore: reportData.riskScore,
-        financialExposureTotal: reportData.financialExposureTotal, 
-        details: reportData.details as Prisma.InputJsonValue,
-        lastCalculatedAt: reportData.lastCalculatedAt,
-      },
-      create: {
-        propertyId: propertyId,
-        riskScore: reportData.riskScore,
-        financialExposureTotal: reportData.financialExposureTotal,
-        details: reportData.details as Prisma.InputJsonValue,
-      },
-    });
-
+    await RiskAssessmentService.calculateAndSaveReport(propertyId);
     logger.info(`✅ Risk assessment calculated and saved for property ${propertyId}.`);
-    logger.info(`   Score: ${reportData.riskScore}, Exposure: $${reportData.financialExposureTotal}, Assets: ${assetRisks.length}`);
 
-    if (property.homeownerProfileId) {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { homeownerProfileId: true },
+    });
+    if (property?.homeownerProfileId) {
       await capturePropertyScoreSnapshots(propertyId, property.homeownerProfileId);
       logger.info(`[SCORE-SNAPSHOT] Updated weekly snapshots from risk calculation for property ${propertyId}.`);
     }
-    
   } catch (error) {
     logger.error('❌ Error calculating risk assessment:', error);
     throw error;
