@@ -53,6 +53,7 @@ const HEAVY_RAIN_VOLUME_MM_3H = 7.5; // mm per 3-hour block = ~60mm/day threshol
 export class WeatherService {
   /** In-process TTL cache: zipCode → cached result */
   private readonly cache = new Map<string, CacheEntry>();
+  private apiKeyMissingLogged = false;
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -89,7 +90,10 @@ export class WeatherService {
     try {
       const apiKey = process.env.OPENWEATHER_API_KEY;
       if (!apiKey) {
-        logger.error('[WEATHER] OPENWEATHER_API_KEY is not set — returning empty signals');
+        if (!this.apiKeyMissingLogged) {
+          logger.warn('[WEATHER] OPENWEATHER_API_KEY is not set — weather signals disabled');
+          this.apiKeyMissingLogged = true;
+        }
         return { signals: [], cityName: null };
       }
 
