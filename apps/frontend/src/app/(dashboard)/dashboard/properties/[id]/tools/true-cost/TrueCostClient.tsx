@@ -25,23 +25,27 @@ export default function TrueCostClient() {
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const inventoryItemId = searchParams.get('itemId');
 
+  const [years, setYears] = useState<5 | 10>(5);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TrueCostOwnershipDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const reqRef = React.useRef(0);
 
-  async function load() {
+  async function load(nextYears: 5 | 10 = years) {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
+    const reqId = ++reqRef.current;
     try {
-      const r = await getTrueCostOwnership(propertyId, {
-        guidanceJourneyId,
-        guidanceStepKey,
-        guidanceSignalIntentFamily,
-        inventoryItemId,
-      });
+      const r = await getTrueCostOwnership(
+        propertyId,
+        { guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily, inventoryItemId },
+        nextYears,
+      );
+      if (reqId !== reqRef.current) return;
       setData(r);
     } catch (e: unknown) {
+      if (reqId !== reqRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load true cost');
     } finally {
       setLoading(false);
@@ -49,7 +53,7 @@ export default function TrueCostClient() {
   }
 
   useEffect(() => {
-    load();
+    load(years);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily, inventoryItemId]);
 
@@ -59,11 +63,11 @@ export default function TrueCostClient() {
     return {
       x,
       series: [
-        { key: 'total', label: 'Total', values: h.map((r) => r.annualTotal), opacity: 0.9, strokeWidth: 2.75 },
-        { key: 'tax', label: 'Taxes', values: h.map((r) => r.annualTax), opacity: 0.55, dash: '6 5' },
-        { key: 'ins', label: 'Insurance', values: h.map((r) => r.annualInsurance), opacity: 0.55, dash: '2 4' },
-        { key: 'maint', label: 'Maintenance', values: h.map((r) => r.annualMaintenance), opacity: 0.55, dash: '10 6' },
-        { key: 'util', label: 'Utilities', values: h.map((r) => r.annualUtilities), opacity: 0.45, dash: '1 6' },
+        { key: 'total', label: 'Total', values: h.map((r) => r.annualTotal), strokeWidth: 2.75, color: '#475569' },
+        { key: 'tax', label: 'Taxes', values: h.map((r) => r.annualTax), color: '#d97706', dash: '6 5' },
+        { key: 'ins', label: 'Insurance', values: h.map((r) => r.annualInsurance), color: '#e11d48', dash: '2 4' },
+        { key: 'maint', label: 'Maintenance', values: h.map((r) => r.annualMaintenance), color: '#0284c7', dash: '10 6' },
+        { key: 'util', label: 'Utilities', values: h.map((r) => r.annualUtilities), color: '#0d9488', dash: '1 6' },
       ],
     };
   }, [data]);
@@ -98,44 +102,59 @@ export default function TrueCostClient() {
       )}
 
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">5-year projection</div>
+            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">{years}-year projection</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || '—'}</span>
             </div>
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-300">{loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}</div>
+          <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
+            {([5, 10] as const).map((y) => (
+              <button
+                key={y}
+                type="button"
+                onClick={async () => { if (years === y) return; setYears(y); await load(y); }}
+                className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
+                  years === y
+                    ? 'border border-slate-900 bg-slate-900 text-white shadow-sm dark:border-white dark:bg-white dark:text-slate-900'
+                    : 'border border-transparent text-slate-600 hover:border-slate-300/70 hover:bg-white/80 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900/60'
+                }`}
+              >
+                {y}y
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Total (5y)</div>
-            <div className="mt-1 text-[1.7rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.rollup?.total5y)}</div>
+            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Total ({years}y)</div>
+            <div className="mt-1 text-[1.7rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.rollup?.totalCost)}</div>
             <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual (now)</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualTotalNow)}</div>
           </div>
 
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Taxes (5y)</div>
-            <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.rollup?.breakdown5y?.taxes)}</div>
+            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Taxes ({years}y)</div>
+            <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.rollup?.breakdown?.taxes)}</div>
             <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual (now)</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualTaxNow)}</div>
           </div>
 
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Insurance (5y)</div>
-            <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.rollup?.breakdown5y?.insurance)}</div>
+            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Insurance ({years}y)</div>
+            <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.rollup?.breakdown?.insurance)}</div>
             <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual (now)</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualInsuranceNow)}</div>
           </div>
 
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Maintenance + Utilities (5y)</div>
+            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Maintenance + Utilities ({years}y)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">
               {money(
-                (data?.rollup?.breakdown5y?.maintenance ?? 0) +
-                  (data?.rollup?.breakdown5y?.utilities ?? 0)
+                (data?.rollup?.breakdown?.maintenance ?? 0) +
+                  (data?.rollup?.breakdown?.utilities ?? 0)
               )}
             </div>
             <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual (now)</div>
@@ -178,6 +197,30 @@ export default function TrueCostClient() {
           </div>
         </div>
       </div>
+
+      {data && (
+        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
+          {(() => {
+            const b = data.rollup?.breakdown;
+            if (!b) return null;
+            const largest = Object.entries(b).sort(([, a], [, bv]) => bv - a)[0];
+            const largestLabel = largest ? { taxes: 'property tax', insurance: 'insurance', maintenance: 'maintenance', utilities: 'utilities' }[largest[0]] ?? largest[0] : null;
+            return (
+              <div className="mt-3 space-y-2">
+                {largestLabel && (
+                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
+                    Your largest {years}-year cost is <span className="font-semibold">{largestLabel}</span> at {money(largest![1])}. Focus here first for the biggest savings opportunity.
+                  </div>
+                )}
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+                  Use the <span className="font-medium">Cost Volatility Index</span> to see how unpredictable these costs are likely to be, then build a buffer accordingly.
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <GuidanceStepCompletionCard
         propertyId={propertyId}

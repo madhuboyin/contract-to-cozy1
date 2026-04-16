@@ -7,7 +7,7 @@ type Impact = 'LOW' | 'MEDIUM' | 'HIGH';
 type Confidence = 'HIGH' | 'MEDIUM' | 'LOW';
 
 export type TrueCostOwnershipInput = {
-  years?: 5; // Phase 1 fixed to 5 (keep for extensibility)
+  years?: 5 | 10;
   homeValueNow?: number; // override
   insuranceAnnualNow?: number; // override
   maintenanceAnnualNow?: number; // override
@@ -18,7 +18,7 @@ export type TrueCostOwnershipInput = {
 export type TrueCostOwnershipDTO = {
   input: {
     propertyId: string;
-    years: 5;
+    years: 5 | 10;
     addressLabel: string;
     state: string;
     zipCode: string;
@@ -44,8 +44,8 @@ export type TrueCostOwnershipDTO = {
   }>;
 
   rollup: {
-    total5y: number;
-    breakdown5y: {
+    totalCost: number;
+    breakdown: {
       taxes: number;
       insurance: number;
       maintenance: number;
@@ -143,7 +143,7 @@ export class TrueCostOwnershipService {
     });
     if (!property) throw new Error('Property not found');
 
-    const years: 5 = 5;
+    const years: 5 | 10 = input.years ?? 5;
     const state = String(property.state || '').toUpperCase().trim();
     const zipCode = String(property.zipCode || '');
     const addressLabel = `${property.address}, ${property.city} ${property.state} ${property.zipCode}`;
@@ -289,15 +289,15 @@ export class TrueCostOwnershipService {
       };
     });
 
-    const breakdown5y = {
+    const breakdown = {
       taxes: toMoney(history.reduce((a, h) => a + h.annualTax, 0)),
       insurance: toMoney(history.reduce((a, h) => a + h.annualInsurance, 0)),
       maintenance: toMoney(history.reduce((a, h) => a + h.annualMaintenance, 0)),
       utilities: toMoney(history.reduce((a, h) => a + h.annualUtilities, 0)),
     };
 
-    const total5y = toMoney(
-      breakdown5y.taxes + breakdown5y.insurance + breakdown5y.maintenance + breakdown5y.utilities
+    const totalCost = toMoney(
+      breakdown.taxes + breakdown.insurance + breakdown.maintenance + breakdown.utilities
     );
 
     const zp = zipPrefix(zipCode);
@@ -394,7 +394,7 @@ export class TrueCostOwnershipService {
         annualTotalNow: toMoney(annualTaxNow + annualInsuranceNow + annualMaintenanceNow + annualUtilitiesNow),
       },
       history,
-      rollup: { total5y, breakdown5y },
+      rollup: { totalCost, breakdown },
       drivers,
       meta: {
         generatedAt: new Date().toISOString(),

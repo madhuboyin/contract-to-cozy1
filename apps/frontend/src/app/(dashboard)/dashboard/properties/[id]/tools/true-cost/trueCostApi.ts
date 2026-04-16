@@ -4,7 +4,7 @@ import { api } from '@/lib/api/client';
 export type TrueCostOwnershipDTO = {
   input: {
     propertyId: string;
-    years: 5;
+    years: 5 | 10;
     addressLabel: string;
     state: string;
     zipCode: string;
@@ -27,8 +27,8 @@ export type TrueCostOwnershipDTO = {
     annualTotal: number;
   }>;
   rollup: {
-    total5y: number;
-    breakdown5y: { taxes: number; insurance: number; maintenance: number; utilities: number };
+    totalCost: number;
+    breakdown: { taxes: number; insurance: number; maintenance: number; utilities: number };
   };
   drivers: Array<{ factor: string; impact: 'LOW' | 'MEDIUM' | 'HIGH'; explanation: string }>;
   meta: { generatedAt: string; dataSources: string[]; notes: string[]; confidence: 'HIGH'|'MEDIUM'|'LOW' };
@@ -41,11 +41,13 @@ export type GuidanceToolContext = {
   inventoryItemId?: string | null;
 };
 
-export async function getTrueCostOwnership(propertyId: string, guidanceContext?: GuidanceToolContext) {
-  // NOTE: api.get() returns { data: APISuccess<T>["data"] }
-  // Your controller returns { success, data: { trueCostOwnership: dto } }
-  // So res.data is { trueCostOwnership: dto }
+export async function getTrueCostOwnership(
+  propertyId: string,
+  guidanceContext?: GuidanceToolContext,
+  years: 5 | 10 = 5,
+) {
   const query = new URLSearchParams();
+  query.set('years', String(years));
   if (guidanceContext?.guidanceJourneyId) {
     query.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
   }

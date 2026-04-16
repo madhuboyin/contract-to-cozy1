@@ -22,7 +22,8 @@ function readQueryString(value: unknown): string | null {
 export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
   const propertyId = req.params.propertyId;
 
-  // Phase 1: years fixed to 5. Allow overrides via query (optional).
+  const rawYears = req.query.years ? Number(req.query.years) : undefined;
+  const years: 5 | 10 = rawYears === 10 ? 10 : 5;
   const homeValueNow = req.query.homeValueNow ? Number(req.query.homeValueNow) : undefined;
   const insuranceAnnualNow = req.query.insuranceAnnualNow ? Number(req.query.insuranceAnnualNow) : undefined;
   const maintenanceAnnualNow = req.query.maintenanceAnnualNow ? Number(req.query.maintenanceAnnualNow) : undefined;
@@ -30,7 +31,7 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
   const inflationRate = req.query.inflationRate ? Number(req.query.inflationRate) : undefined;
 
   const dto = await svc.estimate(propertyId, {
-    years: 5,
+    years,
     homeValueNow,
     insuranceAnnualNow,
     maintenanceAnnualNow,
@@ -59,11 +60,12 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
         proofType: 'cost_estimate',
         proofId: `${propertyId}:${dto.meta.generatedAt}`,
         annualTotalNow: dto.current.annualTotalNow,
-        total5y: dto.rollup.total5y,
-        taxes5y: dto.rollup.breakdown5y.taxes,
-        insurance5y: dto.rollup.breakdown5y.insurance,
-        maintenance5y: dto.rollup.breakdown5y.maintenance,
-        utilities5y: dto.rollup.breakdown5y.utilities,
+        totalCost: dto.rollup.totalCost,
+        years: dto.input.years,
+        taxesTotal: dto.rollup.breakdown.taxes,
+        insuranceTotal: dto.rollup.breakdown.insurance,
+        maintenanceTotal: dto.rollup.breakdown.maintenance,
+        utilitiesTotal: dto.rollup.breakdown.utilities,
         confidence: dto.meta.confidence,
       },
     });

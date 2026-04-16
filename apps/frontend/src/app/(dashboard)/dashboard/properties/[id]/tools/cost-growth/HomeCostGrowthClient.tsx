@@ -311,6 +311,33 @@ export default function HomeCostGrowthClient() {
           <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">{(data?.meta?.dataSources || []).join(' · ')}</div>
         </div>
       </div>
+
+      {data && (
+        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
+          <div className="mt-3 space-y-2">
+            {(data.rollup?.totalNet ?? 0) < 0 ? (
+              <>
+                <div className="rounded-xl border border-rose-200/70 bg-rose-50/80 p-3 text-xs text-rose-800 dark:border-rose-800/50 dark:bg-rose-950/40 dark:text-rose-300">
+                  Your costs are outpacing appreciation over this period. Review the largest expense category and consider whether refinancing or reducing discretionary costs would improve the trend.
+                </div>
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+                  Check the <span className="font-medium">Break-Even Ownership Year</span> tool to see how many years it takes for appreciation to overtake cumulative costs.
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  Appreciation is currently outpacing ownership costs — a positive net trend. Continue monitoring annually, especially if insurance or tax rates shift.
+                </div>
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+                  Use the <span className="font-medium">True Cost of Ownership</span> tool to see a full {trendYears}-year expense breakdown including utilities.
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </ToolWorkspaceTemplate>
   );
 }

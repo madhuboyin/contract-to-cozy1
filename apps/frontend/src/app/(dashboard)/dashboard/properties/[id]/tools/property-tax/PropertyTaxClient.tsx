@@ -154,7 +154,9 @@ export default function PropertyTaxClient() {
     setError(null);
   
     const av = assessedValue ? Number(assessedValue) : undefined;
-    const tr = taxRate ? Number(taxRate) : undefined;
+    // User enters percent (e.g. 1.85); API expects decimal (e.g. 0.0185)
+    const trPct = taxRate ? Number(taxRate) : undefined;
+    const tr = trPct !== undefined && Number.isFinite(trPct) ? trPct / 100 : undefined;
     const reqId = ++reqRef.current;
     try {
       const r = await getPropertyTaxEstimate(propertyId, {
@@ -267,11 +269,11 @@ export default function PropertyTaxClient() {
           </label>
 
           <label className="text-sm">
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-300">Tax rate (decimal)</div>
+            <div className="mb-1 text-xs text-slate-500 dark:text-slate-300">Tax rate (%)</div>
             <input
               value={taxRate}
               onChange={(e) => setTaxRate(e.target.value)}
-              placeholder="e.g. 0.0185"
+              placeholder="e.g. 1.85"
               inputMode="decimal"
               className={`min-h-[44px] w-full rounded-xl border bg-white/85 px-3 py-2.5 text-sm text-slate-800 shadow-sm backdrop-blur outline-none transition-colors focus:ring-2 dark:bg-slate-900/55 dark:text-slate-100 sm:min-h-0 sm:py-2 ${taxRate && !Number.isFinite(Number(taxRate)) ? 'border-red-300 focus:ring-red-200 dark:border-red-700/70 dark:focus:ring-red-800/60' : 'border-slate-300/70 focus:border-slate-400 focus:ring-slate-200 dark:border-slate-700/70 dark:focus:border-slate-500 dark:focus:ring-slate-700'}`}
             />

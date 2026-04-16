@@ -105,6 +105,19 @@ export default function BreakEvenClient() {
     return { x, series, breakEvenIdx: beIdx, eventIdxs: events };
   }, [data]);
 
+  const sensitivitySummary = useMemo(() => {
+    if (!data?.sensitivity) return null;
+    const s = data.sensitivity;
+    const reached = [
+      s.optimistic?.breakEvenYearIndex ? `optimistic (Year ${s.optimistic.breakEvenYearIndex})` : null,
+      s.base?.breakEvenYearIndex ? `base (Year ${s.base.breakEvenYearIndex})` : null,
+      s.conservative?.breakEvenYearIndex ? `conservative (Year ${s.conservative.breakEvenYearIndex})` : null,
+    ].filter(Boolean);
+    if (reached.length === 0) return 'None of the scenarios reach break-even within this horizon.';
+    if (reached.length === 3) return 'All three scenarios reach break-even within this horizon.';
+    return `Break-even reached under the ${reached.join(' and ')} scenario${reached.length > 1 ? 's' : ''}.`;
+  }, [data]);
+
   const statusTone =
     data?.breakEven.status === 'PROJECTED' || data?.breakEven.status === 'ALREADY_BREAKEVEN'
       ? 'border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 via-white/75 to-teal-50/70 text-emerald-800'
@@ -193,9 +206,11 @@ export default function BreakEvenClient() {
                   : 'Not reached'}
               </div>
 
-              <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-                Base and conservative scenarios do not reach break-even within this horizon.
-              </div>
+              {sensitivitySummary && (
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+                  {sensitivitySummary}
+                </div>
+              )}
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="rounded-full border border-slate-300/70 bg-white/85 px-2.5 py-1 text-xs text-slate-700 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200">

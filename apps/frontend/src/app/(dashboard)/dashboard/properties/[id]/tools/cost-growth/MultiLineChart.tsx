@@ -9,6 +9,7 @@ type Series = {
   strokeWidth?: number;
   opacity?: number;
   dash?: string;
+  color?: string; // explicit stroke color; falls back to currentColor
 };
 
 function fmtMoneyShort(v: number) {
@@ -44,6 +45,7 @@ export default function MultiLineChart(props: {
         strokeWidth: s.strokeWidth ?? 2.5,
         opacity: s.opacity ?? 0.75,
         dash: s.dash,
+        color: s.color,
       };
     });
     return { xLabels, series };
@@ -158,9 +160,9 @@ export default function MultiLineChart(props: {
               key={s.key}
               d={s.values.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i)} ${yFor(v)}`).join(' ')}
               fill="none"
-              stroke="currentColor"
+              stroke={s.color ?? 'currentColor'}
               strokeWidth={s.strokeWidth}
-              strokeOpacity={s.opacity}
+              strokeOpacity={s.color ? 1 : s.opacity}
               strokeDasharray={dashFor(s, idx)}
             />
           ))}
@@ -212,8 +214,8 @@ export default function MultiLineChart(props: {
                 y1="5"
                 x2="25"
                 y2="5"
-                stroke="currentColor"
-                strokeOpacity={s.opacity ?? 0.75}
+                stroke={s.color ?? 'currentColor'}
+                strokeOpacity={s.color ? 1 : (s.opacity ?? 0.75)}
                 strokeWidth={s.strokeWidth ?? 2.5}
                 strokeDasharray={dashFor(s, idx)}
                 strokeLinecap="round"

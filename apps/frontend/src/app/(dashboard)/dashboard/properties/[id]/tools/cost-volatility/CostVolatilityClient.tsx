@@ -224,6 +224,12 @@ export default function CostVolatilityClient() {
               )}
             </div>
 
+            <div className="mt-2 flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
+              <span>0 = very stable</span>
+              <span className="flex-1 mx-1 border-t border-dotted border-slate-300 dark:border-slate-600" />
+              <span>100 = highly unpredictable</span>
+            </div>
+
             {!!data?.index?.dominantDriver && (
               <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
                 Primary driver: <span className="font-medium text-slate-700 dark:text-slate-200">{data.index.dominantDriver}</span>
@@ -396,6 +402,32 @@ export default function CostVolatilityClient() {
           ))}
         </div>
       </div>
+
+      {data && (
+        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
+          <div className="mt-3 space-y-2">
+            {data.index?.band === 'HIGH' && (
+              <div className="rounded-xl border border-red-200/70 bg-red-50/80 p-3 text-xs text-red-800 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300">
+                High volatility detected. Build a cash buffer of at least 3–6 months of your largest unpredictable cost ({data.index.dominantDriver ?? 'insurance or tax'}) before the next renewal window.
+              </div>
+            )}
+            {data.index?.band === 'MEDIUM' && (
+              <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
+                Moderate unpredictability. A 1–3 month buffer for your primary cost driver ({data.index.dominantDriver ?? 'insurance or tax'}) will help absorb unexpected spikes.
+              </div>
+            )}
+            {data.index?.band === 'LOW' && (
+              <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+                Your costs are relatively stable. Review annually — volatility can shift quickly after insurance repricing or a tax reassessment.
+              </div>
+            )}
+            <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+              Cross-reference with the <span className="font-medium">True Cost of Ownership</span> tool to see the absolute dollar amounts behind the volatility scores.
+            </div>
+          </div>
+        </div>
+      )}
     </ToolWorkspaceTemplate>
   );
 }
