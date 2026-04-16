@@ -190,6 +190,11 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: MFA_ENCRYPTION_KEY
+            - name: OPENWEATHER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: OPENWEATHER_API_KEY
           resources:
             requests:
               cpu: "500m"
