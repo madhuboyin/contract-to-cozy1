@@ -280,11 +280,8 @@ async function capturePropertyScoreSnapshots(
           propertyId: true,
           providerId: true,
           scheduledDate: true,
-          notes: true,
-          price: true,
           createdAt: true,
           updatedAt: true,
-          title: true,
         },
       }),
       (prisma as any).inventoryItem.findMany({
