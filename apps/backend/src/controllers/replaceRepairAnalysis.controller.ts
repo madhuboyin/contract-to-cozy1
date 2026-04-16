@@ -19,7 +19,7 @@ export async function getReplaceRepairAnalysis(req: CustomRequest, res: Response
     const result = await service.getLatestForItem(propertyId, itemId, userId);
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error fetching replace/repair analysis:', error);
+    logger.error({ err: error }, 'Error fetching replace/repair analysis');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch replace/repair analysis.',
@@ -76,12 +76,12 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] replace/repair analysis hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] replace/repair analysis hook failed');
     }
 
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
-    logger.error('Error running replace/repair analysis:', error);
+    logger.error({ err: error }, 'Error running replace/repair analysis');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to run replace/repair analysis.',

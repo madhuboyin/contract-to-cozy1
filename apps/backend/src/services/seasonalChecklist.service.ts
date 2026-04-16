@@ -432,7 +432,7 @@ export class SeasonalChecklistService {
         const checklistItem = await this.addTaskToChecklist(item.id);
         addedTasks.push(checklistItem);
       } catch (error) {
-        logger.error(`Failed to add task ${item.id}:`, error);
+        logger.error({ err: error }, `Failed to add task ${item.id}`);
       }
     }
 

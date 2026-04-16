@@ -225,7 +225,7 @@ export class BudgetForecasterService {
       const recommendations = JSON.parse(cleanedText);
       return recommendations.slice(0, 5);
     } catch (error) {
-      logger.error('[BUDGET-FORECASTER] AI error:', error);
+      logger.error({ err: error }, '[BUDGET-FORECASTER] AI error');
       return this.getBasicRecommendations(totalAnnual, propertyAge);
     }
   }

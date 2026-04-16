@@ -91,7 +91,7 @@ export async function createServicePriceRadarCheck(
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] service price radar hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] service price radar hook failed');
     }
 
     return res.status(201).json({ success: true, data: result });

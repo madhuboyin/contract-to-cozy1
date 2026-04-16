@@ -32,7 +32,7 @@ export async function upsertRadarEvent(req: CustomRequest, res: Response, next: 
     // Trigger matching asynchronously (do not await to keep response fast)
     // Errors in matching are non-fatal for the upsert response.
     service.triggerMatching(eventId, null).catch((err) => {
-      logger.error('[HomeEventRadar] Background matching failed for event', eventId, err);
+      logger.error({ eventId, err }, '[HomeEventRadar] Background matching failed for event');
     });
 
     res.status(isNew ? 201 : 200).json({

@@ -41,7 +41,7 @@ export async function parseTrashScheduleWithAI(
       const response = await fetch(sourceUrl);
       htmlContent = await response.text();
     } catch (error) {
-      logger.error(`Failed to fetch ${sourceUrl}:`, error);
+      logger.error({ err: error }, `Failed to fetch ${sourceUrl}`);
       return {
         city,
         state,
@@ -94,8 +94,8 @@ Important:
         parsed = JSON.parse(responseText);
       }
     } catch (error) {
-      logger.error('Failed to parse AI response:', error);
-      logger.error('Response:', responseText);
+      logger.error({ err: error }, 'Failed to parse AI response');
+      logger.error({ response: responseText }, 'AI response text');
       parsed = { schedules: [] };
     }
 
@@ -107,7 +107,7 @@ Important:
       source: sourceUrl,
     };
   } catch (error) {
-    logger.error(`Error parsing trash schedule for ${city}, ${state}:`, error);
+    logger.error({ err: error }, `Error parsing trash schedule for ${city}, ${state}`);
     return {
       city,
       state,

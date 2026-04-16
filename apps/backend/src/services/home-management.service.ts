@@ -54,7 +54,7 @@ const mapRawExpenseToExpense = (rawExpense: any): Expense => {
         amount = safeToNumber(expenseWithNumber.amount) ?? 0;
         if (amount === null) throw new Error("Conversion resulted in null.");
     } catch (e) {
-        logger.error(`FATAL MAPPING ERROR (Expense ID ${rawExpense.id}): Failed to convert 'amount'. Raw value was:`, expenseWithNumber.amount);
+        logger.error({ rawAmount: expenseWithNumber.amount }, `FATAL MAPPING ERROR (Expense ID ${rawExpense.id}): Failed to convert 'amount'`);
         throw new Error(`Expense conversion failed for ID ${rawExpense.id} on 'amount' field.`);
     }
 
@@ -84,7 +84,7 @@ const mapRawWarrantyToWarranty = (rawWarranty: any): Warranty => {
         // High-granularity check for 'cost'
         cost = safeToNumber(warrantyWithNumber.cost);
     } catch (e) {
-        logger.error(`FATAL MAPPING ERROR (Warranty ID ${rawWarranty.id}): Failed to convert 'cost'. Raw value was:`, warrantyWithNumber.cost);
+        logger.error({ rawCost: warrantyWithNumber.cost }, `FATAL MAPPING ERROR (Warranty ID ${rawWarranty.id}): Failed to convert 'cost'`);
         throw new Error(`Warranty conversion failed for ID ${rawWarranty.id} on 'cost' field.`);
     }
 
@@ -119,7 +119,7 @@ const mapRawPolicyToInsurancePolicy = (rawPolicy: any): InsurancePolicy => {
         premiumAmount = safeToNumber(policyWithNumber.premiumAmount) ?? 0;
         if (premiumAmount === null) throw new Error("Conversion resulted in null.");
     } catch (e) {
-        logger.error(`FATAL MAPPING ERROR (Policy ID ${rawPolicy.id}): Failed to convert 'premiumAmount'. Raw value was:`, policyWithNumber.premiumAmount);
+        logger.error({ rawPremiumAmount: policyWithNumber.premiumAmount }, `FATAL MAPPING ERROR (Policy ID ${rawPolicy.id}): Failed to convert 'premiumAmount'`);
         throw new Error(`Policy conversion failed for ID ${rawPolicy.id} on 'premiumAmount' field.`);
     }
 
@@ -151,7 +151,7 @@ export async function createExpense(
   homeownerProfileId: string, 
   data: CreateExpenseDTO
 ): Promise<Expense> {
-  logger.info('DEBUG (POST /expenses): Input Data Received:', data);
+  logger.info({ data }, 'DEBUG (POST /expenses): Input Data Received');
 
   try {
     const rawExpense = await prisma.expense.create({
@@ -182,13 +182,13 @@ export async function createExpense(
         });
       } catch (e) {
         // Never break expense creation if timeline autogen fails
-        logger.error('[HOME_EVENTS_AUTOGEN] Failed onExpenseCreated:', e);
+        logger.error({ err: e }, '[HOME_EVENTS_AUTOGEN] Failed onExpenseCreated');
       }
     }
 
     return mapRawExpenseToExpense(rawExpense);
   } catch (error) {
-    logger.error('FATAL ERROR (POST /expenses): Prisma operation failed.', error); 
+    logger.error({ err: error }, 'FATAL ERROR (POST /expenses): Prisma operation failed.');
     throw error;
   }
 }
@@ -240,7 +240,7 @@ export async function updateExpense(
         currency: null,
       });
     } catch (e) {
-      logger.error('[HOME_EVENTS_AUTOGEN] Failed onExpenseUpdated:', e);
+      logger.error({ err: e }, '[HOME_EVENTS_AUTOGEN] Failed onExpenseUpdated');
     }
   }
 
@@ -298,7 +298,7 @@ export async function createWarranty(
 
     return mapRawWarrantyToWarranty(rawWarranty);
   } catch (error) {
-    logger.error('Error creating warranty:', error);
+    logger.error({ err: error }, 'Error creating warranty');
     throw error;
   }
 }
@@ -341,7 +341,7 @@ export async function updateWarranty(
       logger.info(`[WARRANTY-SERVICE] Triggering risk update for property ${rawUpdatedWarranty.propertyId}`);
       await JobQueueService.enqueuePropertyIntelligenceJobs(rawUpdatedWarranty.propertyId);
     } catch (error) {
-      logger.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
+      logger.error({ err: error }, `[WARRANTY-SERVICE] Failed to enqueue risk update job`);
     }
     await markCoverageAnalysisStale(rawUpdatedWarranty.propertyId);
     await markItemCoverageAnalysesStale(rawUpdatedWarranty.propertyId);
@@ -379,7 +379,7 @@ export async function deleteWarranty(
       logger.info(`[WARRANTY-SERVICE] Triggering risk update for property ${propertyId} after deletion`);
       await JobQueueService.enqueuePropertyIntelligenceJobs(propertyId);
     } catch (error) {
-      logger.error(`[WARRANTY-SERVICE] Failed to enqueue risk update job:`, error);
+      logger.error({ err: error }, `[WARRANTY-SERVICE] Failed to enqueue risk update job`);
     }
     await markCoverageAnalysisStale(propertyId);
     await markItemCoverageAnalysesStale(propertyId);
@@ -503,7 +503,7 @@ export async function createInsurancePolicy(
 
     return mapRawPolicyToInsurancePolicy(rawPolicy);
   } catch (error) {
-    logger.error('FATAL ERROR (POST /insurance-policies): Prisma operation failed.', error); 
+    logger.error({ err: error }, 'FATAL ERROR (POST /insurance-policies): Prisma operation failed.');
     throw error;
   }
 }
@@ -641,7 +641,7 @@ export async function createDocument(
         policyId: (rawDocument as any).insurancePolicyId ?? data.policyId ?? null,
       });
     } catch (e) {
-      logger.error('[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (home-management):', e);
+      logger.error({ err: e }, '[HOME_EVENTS_AUTOGEN] Failed onDocumentUploaded (home-management)');
     }
   }
 

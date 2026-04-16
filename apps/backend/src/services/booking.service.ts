@@ -300,11 +300,11 @@ export class BookingService {
         });
         linkedPriceFinalizationForBooking = true;
       } catch (error) {
-        logger.warn('[BOOKING] failed to link price finalization to booking', {
+        logger.warn({
           bookingId: booking.id,
           priceFinalizationId: linkedPriceFinalizationId,
           error,
-        });
+        }, '[BOOKING] failed to link price finalization to booking');
       }
     }
     
@@ -366,7 +366,7 @@ export class BookingService {
         await JobQueueService.enqueuePropertyIntelligenceJobs(input.propertyId);
     } catch (error) {
         // Non-blocking error logging. We don't want to fail the booking if the queue is down.
-        logger.error(`[BOOKING-SERVICE] Failed to enqueue risk update job:`, error);
+        logger.error({ err: error }, `[BOOKING-SERVICE] Failed to enqueue risk update job`);
     }
     // --- PHASE 3 IMPLEMENTATION END ---
 
@@ -463,7 +463,7 @@ export class BookingService {
         } catch (error) {
             // Log the error for later investigation but prevent crash
             // The logger.error will appear in the server logs, alerting DevOps/Engineering
-            logger.error(`CRITICAL: Failed to format booking ID ${booking.id}. Skipping record.`, error);
+            logger.error({ err: error }, `CRITICAL: Failed to format booking ID ${booking.id}. Skipping record`);
         }
     }
     // FIX END
@@ -798,7 +798,7 @@ export class BookingService {
       try {
         await incrementStreak(booking.propertyId);
       } catch (error) {
-        logger.error('[BOOKING] Failed to increment streak from predictive completion:', error);
+        logger.error({ err: error }, '[BOOKING] Failed to increment streak from predictive completion');
       }
 
       await this.awardPredictiveMaintenanceBadgeIfEligible(
@@ -837,7 +837,7 @@ export class BookingService {
           },
         })
         .catch((err) =>
-          logger.warn('[BOOKING] guidance step advance on service completion failed:', err)
+          logger.warn({ err }, '[BOOKING] guidance step advance on service completion failed'))
         );
     }
 
@@ -1052,7 +1052,7 @@ export class BookingService {
         },
       });
     } catch (error) {
-      logger.error('[BOOKING] Failed to award predictive maintenance badge:', error);
+      logger.error({ err: error }, '[BOOKING] Failed to award predictive maintenance badge');
     }
   }
 

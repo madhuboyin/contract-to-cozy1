@@ -265,7 +265,7 @@ Include diverse recommendations across categories.`;
       return this.normalizeRecommendationsFromAI(recommendations).slice(0, 8);
 
     } catch (error) {
-      logger.error('[HOME-MODIFICATION] AI error:', error);
+      logger.error({ err: error }, '[HOME-MODIFICATION] AI error');
       return this.getBasicRecommendations(userNeeds, propertyAge);
     }
   }

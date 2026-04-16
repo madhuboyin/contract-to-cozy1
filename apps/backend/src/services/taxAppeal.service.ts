@@ -428,7 +428,7 @@ Keep it concise (300-400 words). Use professional, respectful tone.`;
       return response.text;
 
     } catch (error) {
-      logger.error('[TAX-APPEAL] Letter generation error:', error);
+      logger.error({ err: error }, '[TAX-APPEAL] Letter generation error');
       return this.generateBasicAppealLetter(property, taxBillData, estimatedMarketValue, comparables);
     }
   }

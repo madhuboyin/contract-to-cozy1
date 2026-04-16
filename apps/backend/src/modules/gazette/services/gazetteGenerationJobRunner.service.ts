@@ -256,7 +256,7 @@ export class GazetteGenerationJobRunnerService {
           editionId!,
           finalEdition,
         ).catch((err) => {
-          logger.warn('[GazetteJobRunner] Post-publish hooks failed (non-fatal):', err?.message);
+          logger.warn({ err: err }, '[GazetteJobRunner] Post-publish hooks failed (non-fatal)');
         });
       }
 
@@ -285,7 +285,7 @@ export class GazetteGenerationJobRunnerService {
             data: { status: 'FAILED' as any },
           });
         } catch (updateErr) {
-          logger.error('[GazetteJobRunner] Failed to mark edition as FAILED:', updateErr);
+          logger.error({ updateErr }, '[GazetteJobRunner] Failed to mark edition as FAILED');
         }
       }
 

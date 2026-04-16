@@ -68,7 +68,7 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
       },
     });
   } catch (guidanceError) {
-    logger.warn('[GUIDANCE] true-cost hook failed:', guidanceError);
+    logger.warn({ guidanceError }, '[GUIDANCE] true-cost hook failed');
   }
 
   return res.json({

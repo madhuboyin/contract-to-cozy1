@@ -911,7 +911,7 @@ export class DailyHomePulseService {
       try {
         return calculateHealthScore(property as never, documentCount, activeBookings as never).totalScore;
       } catch (error) {
-        logger.warn('[DailyHomePulse] Health score calculation failed, defaulting to 0.', error);
+        logger.warn({ err: error }, '[DailyHomePulse] Health score calculation failed, defaulting to 0.');
         return 0;
       }
     })();

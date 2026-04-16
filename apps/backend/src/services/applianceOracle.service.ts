@@ -347,7 +347,7 @@ export class ApplianceOracleService {
         budget,
       );
     } catch (error) {
-      logger.error('[APPLIANCE-ORACLE] AI recommendation error:', error);
+      logger.error({ err: error }, '[APPLIANCE-ORACLE] AI recommendation error');
       return this.getBasicRecommendations(applianceName, budget);
     }
   }
@@ -520,7 +520,7 @@ export class ApplianceOracleService {
 
       logger.info(`[LIFESPAN] Updated expectedExpiryDate for item ${itemId} → ${expectedExpiryDate.toISOString()}`);
     } catch (err) {
-      logger.error(`[LIFESPAN] Recalculation failed for item ${itemId}:`, err);
+      logger.error({ err }, `[LIFESPAN] Recalculation failed for item ${itemId}`);
     }
   }
 

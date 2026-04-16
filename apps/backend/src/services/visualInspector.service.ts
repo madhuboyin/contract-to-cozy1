@@ -103,7 +103,7 @@ export class VisualInspectorService {
         const analysis = await this.analyzeImage(file, roomType, i);
         imageAnalyses.push(analysis);
       } catch (error) {
-        logger.error(`[VISUAL-INSPECTOR] Error analyzing image ${i}:`, error);
+        logger.error({ err: error }, `[VISUAL-INSPECTOR] Error analyzing image ${i}`);
         // Continue with other images
       }
     }

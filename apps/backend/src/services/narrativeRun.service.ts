@@ -118,11 +118,11 @@ async function logNarrativeEvent(args: {
       },
     });
   } catch (error) {
-    logger.error('[NARRATIVE] Failed to write narrative audit log', {
+    logger.error({
       event: args.eventName,
       runId: args.run.id,
       error,
-    });
+    }, '[NARRATIVE] Failed to write narrative audit log');
   }
 }
 

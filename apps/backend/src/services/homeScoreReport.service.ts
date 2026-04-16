@@ -3079,12 +3079,12 @@ export class HomeScoreReportService {
           preferenceProfile?.id ?? null
         );
       } catch (error) {
-        logger.error('Failed to persist HomeScore snapshot after build:', error);
+        logger.error({ err: error }, 'Failed to persist HomeScore snapshot after build');
       }
       return result.report;
     } catch (error) {
       if (persisted) {
-        logger.error('Failed to recompute stale HomeScore snapshot; falling back to persisted snapshot:', error);
+        logger.error({ err: error }, 'Failed to recompute stale HomeScore snapshot; falling back to persisted snapshot');
         return persisted;
       }
       throw error;
@@ -3208,7 +3208,7 @@ export class HomeScoreReportService {
         preferenceProfile?.id ?? null
       );
     } catch (error) {
-      logger.error('Failed to persist HomeScore snapshot after refresh:', error);
+      logger.error({ err: error }, 'Failed to persist HomeScore snapshot after refresh');
     }
     return result.report;
   }

@@ -225,7 +225,7 @@ export class HomeRenovationAdvisorService {
 
       // Run post-evaluation integrations (fire-and-forget — never throws)
       void runPostEvaluationIntegrations(updatedSession, output).catch((err) => {
-        logger.error('[RenovationAdvisor] Post-evaluation integration error:', err);
+        logger.error({ err }, '[RenovationAdvisor] Post-evaluation integration error');
       });
 
       // Emit analytics

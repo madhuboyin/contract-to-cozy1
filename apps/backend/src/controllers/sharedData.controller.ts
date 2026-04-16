@@ -35,7 +35,7 @@ export async function getPreferenceProfile(req: CustomRequest, res: Response) {
     });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error reading preference profile:', error);
+    logger.error({ err: error }, 'Error reading preference profile');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to read preference profile.',
@@ -59,7 +59,7 @@ export async function upsertPreferenceProfile(req: CustomRequest, res: Response)
     });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error upserting preference profile:', error);
+    logger.error({ err: error }, 'Error upserting preference profile');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to upsert preference profile.',
@@ -89,7 +89,7 @@ export async function createAssumptionSet(req: CustomRequest, res: Response) {
     });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error creating assumption set:', error);
+    logger.error({ err: error }, 'Error creating assumption set');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to create assumption set.',
@@ -118,7 +118,7 @@ export async function listAssumptionSets(req: CustomRequest, res: Response) {
     });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error listing assumption sets:', error);
+    logger.error({ err: error }, 'Error listing assumption sets');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to list assumption sets.',
@@ -151,7 +151,7 @@ export async function getAssumptionSet(req: CustomRequest, res: Response) {
     });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error reading assumption set:', error);
+    logger.error({ err: error }, 'Error reading assumption set');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to read assumption set.',
@@ -189,7 +189,7 @@ export async function listPropertySignals(req: CustomRequest, res: Response) {
     });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error listing shared signals:', error);
+    logger.error({ err: error }, 'Error listing shared signals');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to list shared signals.',

@@ -39,7 +39,7 @@ router.get(
       const userId = req.user!.userId;
       const { propertyId } = req.params;
 
-      logger.info('[ORACLE] Generating prediction report for property:', propertyId);
+      logger.info({ propertyId }, '[ORACLE] Generating prediction report for property');
 
       const report = await applianceOracleService.generateOracleReport(propertyId, userId);
 
@@ -49,7 +49,7 @@ router.get(
       });
 
     } catch (error: any) {
-      logger.error('[ORACLE] Error generating report:', error);
+      logger.error({ err: error }, '[ORACLE] Error generating report');
       res.status(500).json({
         success: false,
         message: error.message || 'Failed to generate oracle report'
@@ -74,7 +74,7 @@ router.get('/summary', authenticate, async (req: CustomRequest, res: Response) =
   try {
     const userId = req.user!.userId;
 
-    logger.info('[ORACLE] Generating summary for user:', userId);
+    logger.info({ userId }, '[ORACLE] Generating summary for user');
 
     // This would aggregate across all properties
     // For now, return a simple response
@@ -86,7 +86,7 @@ router.get('/summary', authenticate, async (req: CustomRequest, res: Response) =
     });
 
   } catch (error: any) {
-    logger.error('[ORACLE] Error generating summary:', error);
+    logger.error({ err: error }, '[ORACLE] Error generating summary');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate summary'

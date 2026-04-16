@@ -114,7 +114,7 @@ export class BookingController {
             },
           });
         } catch (guidanceError) {
-          logger.warn('[GUIDANCE] booking completion hook failed:', guidanceError);
+          logger.warn({ guidanceError }, '[GUIDANCE] booking completion hook failed');
         }
       }
 

@@ -16,7 +16,7 @@ export async function getPropertyScoreSnapshots(req: CustomRequest, res: Respons
     const summary = await getPropertyScoreSnapshotSummary(propertyId, userId, weeks);
     return res.json({ success: true, data: summary });
   } catch (error: any) {
-    logger.error('Error fetching property score snapshots:', error);
+    logger.error({ err: error }, 'Error fetching property score snapshots');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch property score snapshots.',

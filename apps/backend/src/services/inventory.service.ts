@@ -410,7 +410,7 @@ export class InventoryService {
         sku: created.sku ?? null,
       });
     } catch (e: any) {
-      logger.error('[HOME_EVENTS_AUTOGEN] onInventoryItemCreated failed:', e);
+      logger.error({ err: e }, '[HOME_EVENTS_AUTOGEN] onInventoryItemCreated failed');
     }
   
     return created;
@@ -530,14 +530,14 @@ export class InventoryService {
     // Recalculate lifespan if relevant fields changed on a verified item
     if (existing.isVerified && ('technicalSpecs' in patch || 'installedOn' in patch || 'purchasedOn' in patch)) {
       applianceOracleService.recalculateLifespan(itemId).catch((err) => {
-        logger.error('[INVENTORY_UPDATE] Lifespan recalculation failed (non-blocking):', err);
+        logger.error({ err }, '[INVENTORY_UPDATE] Lifespan recalculation failed (non-blocking)');
       });
     }
 
     const becameVerified = existing.isVerified === false && updateData.isVerified === true;
     if (becameVerified) {
       generateForecast(propertyId).catch((err) => {
-        logger.error('[INVENTORY_UPDATE] Maintenance forecast generation failed (non-blocking):', err);
+        logger.error({ err }, '[INVENTORY_UPDATE] Maintenance forecast generation failed (non-blocking)');
       });
     }
 

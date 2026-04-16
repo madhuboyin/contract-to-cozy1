@@ -206,7 +206,7 @@ export async function analyzeNegotiationShieldCase(
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] negotiation shield hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] negotiation shield hook failed');
     }
 
     res.status(201).json({ success: true, data: detail });

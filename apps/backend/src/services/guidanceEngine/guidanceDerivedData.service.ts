@@ -283,7 +283,7 @@ export class GuidanceDerivedDataService {
     });
 
     if (toolFreshness.isStale) {
-      logger.info('[GUIDANCE] stale derived data merged', {
+      logger.info({
         propertyId: params.propertyId,
         journeyId: params.journeyId,
         stepKey: params.stepKey,
@@ -291,7 +291,7 @@ export class GuidanceDerivedDataService {
         observedAt: toolFreshness.observedAt,
         ageDays: toolFreshness.ageDays,
         maxAgeDays: toolFreshness.maxAgeDays,
-      });
+      }, '[GUIDANCE] stale derived data merged');
     }
 
     return nextSnapshot;

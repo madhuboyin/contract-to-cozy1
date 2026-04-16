@@ -539,7 +539,7 @@ async function executePropertyScan(
         notes: err instanceof Error ? err.message : String(err),
       },
     });
-    logger.error(`[HiddenAssets] Scan failed for property ${propertyId}:`, err);
+    logger.error({ err }, `[HiddenAssets] Scan failed for property ${propertyId}`);
     throw err;
   }
 }

@@ -93,7 +93,7 @@ export async function markOrchestrationActionCompleted(
       logger.info(`[ORCHESTRATION] Synced completion to maintenance task ${maintenanceTask.id}`);
     }
   } catch (syncError: any) {
-    logger.warn('[ORCHESTRATION] Failed to sync completion to maintenance task:', syncError?.message);
+    logger.warn({ err: syncError }, '[ORCHESTRATION] Failed to sync completion to maintenance task');
   }
 
   return res.json({
@@ -154,7 +154,7 @@ export async function undoOrchestrationAction(
       logger.info(`[ORCHESTRATION] Reverted maintenance task ${maintenanceTask.id} to IN_PROGRESS`);
     }
   } catch (syncError: any) {
-    logger.warn('[ORCHESTRATION] Failed to revert maintenance task:', syncError?.message);
+    logger.warn({ err: syncError }, '[ORCHESTRATION] Failed to revert maintenance task');
   }
 
   return res.json({ success: true });
@@ -203,10 +203,10 @@ export async function getOrchestrationSummaryHandler(
     // -----------------------------
     // 4. Error Handling
     // -----------------------------
-    logger.error('[ORCHESTRATION_CONTROLLER] Failed to build summary:', {
+    logger.error({
       propertyId: req.params?.propertyId,
       error: error?.message || error,
-    });
+    }, '[ORCHESTRATION_CONTROLLER] Failed to build summary');
 
     return res.status(500).json({
       success: false,
@@ -235,10 +235,10 @@ export async function getOrchestrationDecisionDiagnosticsHandler(
       data: diagnostics,
     });
   } catch (error: any) {
-    logger.error('[ORCHESTRATION_CONTROLLER] Failed to load decision diagnostics:', {
+    logger.error({
       propertyId: req.params?.propertyId,
       error: error?.message || error,
-    });
+    }, '[ORCHESTRATION_CONTROLLER] Failed to load decision diagnostics');
 
     return res.status(500).json({
       success: false,
@@ -366,7 +366,7 @@ export async function getOrchestrationDecisionTraceHandler(req: Request, res: Re
 
     return res.json({ success: true, data: trace });
   } catch (e: any) {
-    logger.error('[ORCHESTRATION] trace fetch failed:', e?.message || e);
+    logger.error({ err: e }, '[ORCHESTRATION] trace fetch failed');
     return res.status(500).json({ success: false, message: 'Failed to load decision trace' });
   }
 }

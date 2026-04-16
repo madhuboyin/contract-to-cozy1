@@ -752,7 +752,7 @@ async function findBestBenchmark(
 
     return { matched: true, benchmark: best };
   } catch (error) {
-    logger.warn('Service Price Radar benchmark lookup skipped:', error);
+    logger.warn({ err: error }, 'Service Price Radar benchmark lookup skipped');
     return { matched: false, benchmark: null };
   }
 }

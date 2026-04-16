@@ -10,7 +10,7 @@ export async function getWorkerJobsHandler(req: Request, res: Response): Promise
     const jobs = await listWorkerJobs();
     res.json({ success: true, data: jobs });
   } catch (err: any) {
-    logger.error('[ADMIN-JOBS] Failed to list worker jobs:', err.message);
+    logger.error({ err: err }, '[ADMIN-JOBS] Failed to list worker jobs');
     res.status(500).json({ success: false, error: { message: 'Failed to load worker jobs' } });
   }
 }

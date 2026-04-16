@@ -131,7 +131,7 @@ export class WeatherService {
       if (error?.name === 'AbortError') {
         logger.error(`[WEATHER] Fetch timed out for zip=${zip}`);
       } else {
-        logger.error(`[WEATHER] Fetch failed for zip=${zip}:`, error?.message ?? error);
+        logger.error({ err: error }, `[WEATHER] Fetch failed for zip=${zip}`);
       }
       return { signals: [], cityName: null };
     }

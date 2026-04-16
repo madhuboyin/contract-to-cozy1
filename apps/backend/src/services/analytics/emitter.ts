@@ -98,7 +98,7 @@ function shouldEmitViewEvent(
 
 function safeTrack(label: string, promise: Promise<unknown>): void {
   promise.catch((err) => {
-    logger.error(`[Analytics] Failed to track event (${label}):`, err?.message ?? err);
+    logger.error({ err }, `[Analytics] Failed to track event (${label})`);
   });
 }
 

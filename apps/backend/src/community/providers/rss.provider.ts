@@ -99,7 +99,7 @@ export async function fetchRssItems(feedUrl: string, limit = 20): Promise<RssIte
 
     return items;
   } catch (error) {
-    logger.error(`RSS feed failed for ${feedUrl}:`, error);
+    logger.error({ err: error }, `RSS feed failed for ${feedUrl}`);
     return [];
   }
 }

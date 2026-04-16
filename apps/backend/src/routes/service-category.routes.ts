@@ -59,7 +59,7 @@ router.get(
       logger.info('[SERVICE-CATEGORIES] Request received');
       
       const userId = req.user?.userId;
-      logger.info('[SERVICE-CATEGORIES] User ID:', userId);
+      logger.info({ userId }, '[SERVICE-CATEGORIES] User ID');
 
       if (!userId) {
         logger.info('[SERVICE-CATEGORIES] No user ID found');
@@ -75,11 +75,11 @@ router.get(
         where: { userId },
         select: { segment: true },
       });
-      logger.info('[SERVICE-CATEGORIES] Profile:', homeownerProfile);
+      logger.info({ homeownerProfile }, '[SERVICE-CATEGORIES] Profile');
 
       const segment = homeownerProfile?.segment || 'EXISTING_OWNER';
       const isHomeBuyer = segment === 'HOME_BUYER';
-      logger.info('[SERVICE-CATEGORIES] Segment:', segment, 'isHomeBuyer:', isHomeBuyer);
+      logger.info({ segment, isHomeBuyer }, '[SERVICE-CATEGORIES] Segment');
 
       // Fetch categories based on segment
       logger.info('[SERVICE-CATEGORIES] Fetching categories...');
@@ -93,7 +93,7 @@ router.get(
         orderBy: { sortOrder: 'asc' },
       });
       
-      logger.info('[SERVICE-CATEGORIES] Found categories:', categories.length);
+      logger.info({ count: categories.length }, '[SERVICE-CATEGORIES] Found categories');
 
       res.status(200).json({
         success: true,
@@ -108,7 +108,7 @@ router.get(
         },
       });
     } catch (error) {
-      logger.error('[SERVICE-CATEGORIES] Error:', error);
+      logger.error({ err: error }, '[SERVICE-CATEGORIES] Error');
       // Send detailed error in development
       if (process.env.NODE_ENV === 'development') {
         return res.status(500).json({
@@ -165,14 +165,14 @@ router.get(
         orderBy: { sortOrder: 'asc' },
       });
 
-      logger.info('[SERVICE-CATEGORIES-ALL] Found categories:', categories.length);
+      logger.info({ count: categories.length }, '[SERVICE-CATEGORIES-ALL] Found categories');
 
       res.status(200).json({
         success: true,
         data: { categories },
       });
     } catch (error) {
-      logger.error('[SERVICE-CATEGORIES-ALL] Error:', error);
+      logger.error({ err: error }, '[SERVICE-CATEGORIES-ALL] Error');
       if (process.env.NODE_ENV === 'development') {
         return res.status(500).json({
           success: false,

@@ -101,7 +101,7 @@ export class DocumentIntelligenceService {
       if (!text) {
         throw new Error('AI service returned an empty response');
       }
-      logger.info('[DOC-INTELLIGENCE] Raw AI response:', text);
+      logger.info({ text }, '[DOC-INTELLIGENCE] Raw AI response');
 
       // Clean response (remove markdown code blocks if present)
       const cleanedText = text
@@ -121,7 +121,7 @@ export class DocumentIntelligenceService {
 
       return insights;
     } catch (error: any) {
-      logger.error('[DOC-INTELLIGENCE] Analysis error:', error);
+      logger.error({ err: error }, '[DOC-INTELLIGENCE] Analysis error');
       
       // Return fallback response
       return {
@@ -197,10 +197,10 @@ export class DocumentIntelligenceService {
         }
       });
 
-      logger.info('[DOC-INTELLIGENCE] Auto-created warranty:', warranty.id);
+      logger.info({ warrantyId: warranty.id }, '[DOC-INTELLIGENCE] Auto-created warranty');
       return warranty;
     } catch (error: any) {
-      logger.error('[DOC-INTELLIGENCE] Warranty creation error:', error);
+      logger.error({ err: error }, '[DOC-INTELLIGENCE] Warranty creation error');
       return null;
     }
   }

@@ -176,7 +176,7 @@ export async function getActionsForProperty(
     try {
       homeBuyerTasks = await HomeBuyerTaskService.getTasks(userId);
     } catch (error) {
-      logger.error('Error fetching HomeBuyerTasks:', error);
+      logger.error({ err: error }, 'Error fetching HomeBuyerTasks');
     }
   }
 
@@ -189,7 +189,7 @@ export async function getActionsForProperty(
         { includeCompleted: false }
       );
     } catch (error) {
-      logger.error('Error fetching PropertyMaintenanceTasks:', error);
+      logger.error({ err: error }, 'Error fetching PropertyMaintenanceTasks');
     }
   }
 
@@ -198,7 +198,7 @@ export async function getActionsForProperty(
     const checklist = await ChecklistService.getOrCreateChecklist(userId);
     legacyChecklistItems = checklist?.items || [];
   } catch (error) {
-    logger.error('Error fetching legacy checklist items:', error);
+    logger.error({ err: error }, 'Error fetching legacy checklist items');
   }
 
   return {

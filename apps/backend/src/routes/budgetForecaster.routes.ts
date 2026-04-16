@@ -40,7 +40,7 @@ router.get(
       const userId = req.user!.userId; 
       const { propertyId } = req.params;
 
-      logger.info('[BUDGET-FORECASTER] Generating forecast for property:', propertyId);
+      logger.info({ propertyId }, '[BUDGET-FORECASTER] Generating forecast for property');
 
       const forecast = await budgetForecasterService.generateBudgetForecast(propertyId, userId);
 
@@ -50,7 +50,7 @@ router.get(
       });
 
     } catch (error: any) {
-      logger.error('[BUDGET-FORECASTER] Error:', error);
+      logger.error({ err: error }, '[BUDGET-FORECASTER] Error');
       res.status(500).json({
         success: false,
         message: error.message || 'Failed to generate forecast'

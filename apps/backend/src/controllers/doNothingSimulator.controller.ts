@@ -23,7 +23,7 @@ export async function listDoNothingScenarios(req: CustomRequest, res: Response) 
     const result = await service.listScenarios(propertyId, userId);
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error listing do-nothing scenarios:', error);
+    logger.error({ err: error }, 'Error listing do-nothing scenarios');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to list do-nothing scenarios.',
@@ -44,7 +44,7 @@ export async function createDoNothingScenario(req: CustomRequest, res: Response)
     const result = await service.createScenario(propertyId, userId, payload);
     return res.status(201).json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error creating do-nothing scenario:', error);
+    logger.error({ err: error }, 'Error creating do-nothing scenario');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to create do-nothing scenario.',
@@ -66,7 +66,7 @@ export async function updateDoNothingScenario(req: CustomRequest, res: Response)
     const result = await service.updateScenario(propertyId, scenarioId, userId, payload);
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error updating do-nothing scenario:', error);
+    logger.error({ err: error }, 'Error updating do-nothing scenario');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to update do-nothing scenario.',
@@ -87,7 +87,7 @@ export async function deleteDoNothingScenario(req: CustomRequest, res: Response)
     await service.deleteScenario(propertyId, scenarioId, userId);
     return res.status(204).send();
   } catch (error: any) {
-    logger.error('Error deleting do-nothing scenario:', error);
+    logger.error({ err: error }, 'Error deleting do-nothing scenario');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to delete do-nothing scenario.',
@@ -121,7 +121,7 @@ export async function getLatestDoNothingRun(req: CustomRequest, res: Response) {
 
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error fetching latest do-nothing run:', error);
+    logger.error({ err: error }, 'Error fetching latest do-nothing run');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch do-nothing run.',
@@ -180,12 +180,12 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] do-nothing hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] do-nothing hook failed');
     }
 
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error running do-nothing simulation:', error);
+    logger.error({ err: error }, 'Error running do-nothing simulation');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to run do-nothing simulation.',

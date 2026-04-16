@@ -50,13 +50,13 @@ export function logSharedDataEvent(input: SharedDataLogInput): void {
 
   const encoded = JSON.stringify(payload);
   if ((input.level ?? 'INFO') === 'ERROR') {
-    logger.error('[SHARED-DATA]', encoded);
+    logger.error({ encoded }, '[SHARED-DATA]');
     return;
   }
   if ((input.level ?? 'INFO') === 'WARN') {
-    logger.warn('[SHARED-DATA]', encoded);
+    logger.warn({ encoded }, '[SHARED-DATA]');
     return;
   }
-  logger.info('[SHARED-DATA]', encoded);
+  logger.info({ encoded }, '[SHARED-DATA]');
 }
 

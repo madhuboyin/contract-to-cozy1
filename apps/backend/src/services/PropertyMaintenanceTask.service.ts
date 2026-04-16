@@ -210,10 +210,10 @@ import { logger } from '../lib/logger';
       });
 
       if (existing) {
-        logger.info('✅ Task already exists (deduped):', {
+        logger.info({
           actionKey,
           taskId: existing.id,
-        });
+        }, '✅ Task already exists (deduped)');
         return { task: existing, deduped: true };
       }
 
@@ -241,11 +241,11 @@ import { logger } from '../lib/logger';
           },
         });
 
-        logger.info('✅ Created PropertyMaintenanceTask with actionKey:', {
+        logger.info({
           actionKey,
           taskId: task.id,
           title: task.title,
-        });
+        }, '✅ Created PropertyMaintenanceTask with actionKey');
 
         return { task, deduped: false };
       } catch (err: any) {
@@ -323,7 +323,7 @@ import { logger } from '../lib/logger';
     }
 
     // 🔧 FIX: Add detailed logging before create
-    logger.info('[SEASONAL] Creating PropertyMaintenanceTask:', {
+    logger.info({
       propertyId,
       title: seasonalItem.title,
       status: 'PENDING',
@@ -332,7 +332,7 @@ import { logger } from '../lib/logger';
       serviceCategory: validServiceCategory,
       isSeasonal: true,
       season: seasonalItem.seasonalChecklist.season,
-    });
+    }, '[SEASONAL] Creating PropertyMaintenanceTask');
 
     try {
       const task = await prisma.propertyMaintenanceTask.create({
@@ -351,7 +351,7 @@ import { logger } from '../lib/logger';
         },
       });
 
-      logger.info('[SEASONAL] Successfully created PropertyMaintenanceTask:', task.id);
+      logger.info({ taskId: task.id }, '[SEASONAL] Successfully created PropertyMaintenanceTask');
 
       // Update seasonal item to mark as added
       await prisma.seasonalChecklistItem.update({
@@ -365,12 +365,12 @@ import { logger } from '../lib/logger';
       return task;
     } catch (error) {
       // 🔧 FIX: Better error logging
-      logger.error('[SEASONAL] Failed to create PropertyMaintenanceTask:', {
+      logger.error({
         error,
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
         seasonalItemId,
         propertyId,
-      });
+      }, '[SEASONAL] Failed to create PropertyMaintenanceTask');
       throw error;
     }
   }
@@ -545,7 +545,7 @@ import { logger } from '../lib/logger';
             sourceId: updatedTask.id,
           });
         } catch (signalError) {
-          logger.warn('Maintenance adherence signal publish failed (task status update):', signalError);
+          logger.warn({ signalError }, 'Maintenance adherence signal publish failed (task status update)');
         }
       }
     

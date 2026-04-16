@@ -95,11 +95,11 @@ export class OrchestrationSuppressionService {
     });
 
     if (maintenanceTask) {
-      logger.info('✅ Found suppression via PropertyMaintenanceTask:', {
+      logger.info({
         actionKey,
         taskId: maintenanceTask.id,
         title: maintenanceTask.title,
-      });
+      }, '✅ Found suppression via PropertyMaintenanceTask');
 
       return {
         type: 'PROPERTY_MAINTENANCE_TASK',
@@ -125,11 +125,11 @@ export class OrchestrationSuppressionService {
     });
 
     if (checklistItem) {
-      logger.info('⚠️  Found suppression via LEGACY ChecklistItem:', {
+      logger.info({
         actionKey,
         itemId: checklistItem.id,
         title: checklistItem.title,
-      });
+      }, '⚠️  Found suppression via LEGACY ChecklistItem');
 
       return {
         type: 'CHECKLIST_ITEM',

@@ -84,7 +84,7 @@ export async function snoozeAction(params: {
       sourceId: actionKey,
     });
   } catch (signalError) {
-    logger.warn('Maintenance adherence signal publish failed (snooze):', signalError);
+    logger.warn({ signalError }, 'Maintenance adherence signal publish failed (snooze)');
   }
 
   return { success: true };
@@ -114,7 +114,7 @@ export async function unsnoozeAction(
       sourceId: actionKey,
     });
   } catch (signalError) {
-    logger.warn('Maintenance adherence signal publish failed (unsnooze):', signalError);
+    logger.warn({ signalError }, 'Maintenance adherence signal publish failed (unsnooze)');
   }
 
   return { success: true };

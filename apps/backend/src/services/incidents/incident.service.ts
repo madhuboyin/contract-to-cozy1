@@ -407,7 +407,7 @@ export class IncidentService {
       try {
         await bridgeIncidentToGuidance(hydrated);
       } catch (guidanceError) {
-        logger.warn('[GUIDANCE] incident bridge hook failed:', guidanceError);
+        logger.warn({ guidanceError }, '[GUIDANCE] incident bridge hook failed');
       }
     }
 
@@ -495,7 +495,7 @@ export class IncidentService {
       try {
         await archiveIncidentGuidance(id);
       } catch (guidanceError) {
-        logger.warn('[GUIDANCE] incident archive hook failed:', guidanceError);
+        logger.warn({ guidanceError }, '[GUIDANCE] incident archive hook failed');
       }
     }
 
@@ -601,7 +601,7 @@ static async acknowledge(incidentId: string, userId: string, input: AcknowledgeI
     try {
       await archiveIncidentGuidance(incidentId);
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] incident suppression archive hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] incident suppression archive hook failed');
     }
   }
 

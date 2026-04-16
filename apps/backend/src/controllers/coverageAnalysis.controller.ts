@@ -23,7 +23,7 @@ export async function getCoverageAnalysis(req: CustomRequest, res: Response) {
     const result = await service.getLatest(propertyId, userId);
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error fetching coverage analysis:', error);
+    logger.error({ err: error }, 'Error fetching coverage analysis');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch coverage analysis.',
@@ -85,13 +85,13 @@ export async function runCoverageAnalysis(req: CustomRequest, res: Response) {
           },
         });
       } catch (guidanceError) {
-        logger.warn('[GUIDANCE] coverage analysis hook failed:', guidanceError);
+        logger.warn({ guidanceError }, '[GUIDANCE] coverage analysis hook failed');
       }
     }
 
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
-    logger.error('Error running coverage analysis:', error);
+    logger.error({ err: error }, 'Error running coverage analysis');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to run coverage analysis.',
@@ -112,7 +112,7 @@ export async function simulateCoverageAnalysis(req: CustomRequest, res: Response
     const analysis = await service.simulate(propertyId, userId, payload);
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
-    logger.error('Error simulating coverage analysis:', error);
+    logger.error({ err: error }, 'Error simulating coverage analysis');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to simulate coverage analysis.',
@@ -133,7 +133,7 @@ export async function getItemCoverageAnalysis(req: CustomRequest, res: Response)
     const result = await service.getLatestForItem(propertyId, itemId, userId);
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error fetching item coverage analysis:', error);
+    logger.error({ err: error }, 'Error fetching item coverage analysis');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to fetch item coverage analysis.',
@@ -195,13 +195,13 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
           },
         });
       } catch (guidanceError) {
-        logger.warn('[GUIDANCE] item coverage analysis hook failed:', guidanceError);
+        logger.warn({ guidanceError }, '[GUIDANCE] item coverage analysis hook failed');
       }
     }
 
     return res.json({ success: true, data: { analysis } });
   } catch (error: any) {
-    logger.error('Error running item coverage analysis:', error);
+    logger.error({ err: error }, 'Error running item coverage analysis');
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to run item coverage analysis.',

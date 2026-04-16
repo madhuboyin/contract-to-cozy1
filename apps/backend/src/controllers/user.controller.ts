@@ -57,7 +57,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
       }
     });
   } catch (error) {
-    logger.error('Get profile error:', error);
+    logger.error({ err: error }, 'Get profile error');
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 };
@@ -151,7 +151,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       }
     });
   } catch (error) {
-    logger.error('Update profile error:', error);
+    logger.error({ err: error }, 'Update profile error');
     res.status(500).json({ error: 'Failed to update profile' });
   }
 };
@@ -203,7 +203,7 @@ export const listFavorites = async (req: AuthRequest, res: Response) => {
       data: { favorites: favoriteProviders },
     });
   } catch (error) {
-    logger.error('List favorites error:', error);
+    logger.error({ err: error }, 'List favorites error');
     res.status(500).json({ error: 'Failed to fetch favorites' });
   }
 };
@@ -245,7 +245,7 @@ export const addFavorite = async (req: AuthRequest, res: Response) => {
       // Should not happen if providerProfileId is valid
       return res.status(500).json({ error: 'Failed to retrieve provider profile after adding favorite.' });
     }
-    logger.info('DEBUG (Backend: addFavorite): Sending complete provider profile:', newFavoriteProvider);
+    logger.info({ newFavoriteProvider }, 'DEBUG (Backend: addFavorite): Sending complete provider profile');
     res.status(201).json({
       success: true,
       message: 'Provider added to favorites.',
@@ -257,7 +257,7 @@ export const addFavorite = async (req: AuthRequest, res: Response) => {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(409).json({ error: 'Provider is already in favorites.' });
     }
-    logger.error('Add favorite error:', error);
+    logger.error({ err: error }, 'Add favorite error');
     res.status(500).json({ error: 'Failed to add favorite' });
   }
 };
@@ -292,7 +292,7 @@ export const removeFavorite = async (req: AuthRequest, res: Response) => {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return res.status(404).json({ error: 'Favorite not found.' });
     }
-    logger.error('Remove favorite error:', error);
+    logger.error({ err: error }, 'Remove favorite error');
     res.status(500).json({ error: 'Failed to remove favorite' });
   }
 };

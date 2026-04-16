@@ -423,7 +423,7 @@ export class HomeEventsAutoGen {
         documentId: args.documentId,
         });
     } catch (e) {
-        logger.error('[HOME_EVENTS_AUTOGEN] promoteDocumentEventToSemantic failed:', e);
+        logger.error({ err: e }, '[HOME_EVENTS_AUTOGEN] promoteDocumentEventToSemantic failed');
     }
   
     return evt;

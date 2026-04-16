@@ -1264,12 +1264,12 @@ export async function createTaskFromOrchestration(
   source: 'HOME_BUYER' | 'EXISTING_OWNER' | 'LEGACY';
   deduped: boolean;
 }> {
-  logger.info('🔄 Creating task from orchestrated action:', {
+  logger.info({
     userId,
     actionKey: action.actionKey,
     source: action.source,
     title: action.title,
-  });
+  }, '🔄 Creating task from orchestrated action');
 
   // Calculate nextDueDate based on priority/risk level
   let nextDueDate: Date;
@@ -1305,11 +1305,11 @@ export async function createTaskFromOrchestration(
     actionKey: action.actionKey,
   });
 
-  logger.info('✅ Task created from orchestration:', {
+  logger.info({
     taskId: result.taskId,
     source: result.source,
     deduped: result.deduped,
-  });
+  }, '✅ Task created from orchestration');
 
   return result;
 }
@@ -1776,14 +1776,14 @@ async function mapChecklistItemToAction(params: {
 
   const storedKey = item?.actionKey;
 
-  logger.info('🔍 CHECKLIST ACTION KEY DECISION:', {
+  logger.info({
     itemId: item?.id,
     title: item?.title,
     storedKey: storedKey,
     computedKey,
     finalKey: finalActionKey,
     usedStored: !!storedKey,
-  });
+  }, '🔍 CHECKLIST ACTION KEY DECISION');
 
   return {
     id: `checklist:${propertyId}:${item?.id ?? 'unknown'}`,
@@ -1871,7 +1871,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
 
   const riskDetails: any[] = (riskReport as any)?.details ?? [];
 
-  logger.info('🔍 RISK REPORT DATA:', {
+  logger.info({
     reportExists: !!riskReport,
     detailsCount: riskDetails.length,
     details: riskDetails.map((d, i) => ({
@@ -1881,7 +1881,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       riskLevel: d?.riskLevel,
       actionable: d?.riskLevel && d?.riskLevel !== 'LOW',
     })),
-  });
+  }, '🔍 RISK REPORT DATA');
 
   // 3) Checklist items
   const checklistItems = await prisma.checklistItem
@@ -1901,22 +1901,24 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     })
     .catch(() => []);
 
-  logger.info('🔍 RAW CHECKLIST ITEMS FROM DB:', JSON.stringify(checklistItems.map(item => ({
-    id: item.id,
-    title: item.title,
-    actionKey: item.actionKey,
-    hasActionKey: !!item.actionKey,
-  })), null, 2));
+  logger.info({
+    checklistItems: checklistItems.map(item => ({
+      id: item.id,
+      title: item.title,
+      actionKey: item.actionKey,
+      hasActionKey: !!item.actionKey,
+    })),
+  }, 'RAW CHECKLIST ITEMS FROM DB');
 
   // 4) Build candidate actions
   const candidateRiskActions: OrchestratedAction[] = Array.isArray(riskDetails)
   ? (await Promise.all(
       riskDetails.map((d: any, idx: number) => {
-        logger.info(`🔍 Processing risk item ${idx}:`, {
+        logger.info({
           assetName: d?.assetName,
           systemType: d?.systemType,
           willMap: !!d,
-        });
+        }, `Processing risk item ${idx}`);
         
         return mapRiskDetailToAction({
           propertyId,
@@ -1932,7 +1934,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
     )).filter(Boolean) as OrchestratedAction[]
   : [];
 
-  logger.info('🔍 RISK ACTIONS CREATED:', candidateRiskActions.length);
+  logger.info({ data: candidateRiskActions.length }, '🔍 RISK ACTIONS CREATED');
 
   const candidateChecklistActions: OrchestratedAction[] = (await Promise.all(
     checklistItems.map((i: any) =>
@@ -2073,11 +2075,11 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
           actionKey: action.actionKey,
         });
 
-      logger.info('🔍 RESOLVED SUPPRESSION SOURCE FOR RISK:', {
+      logger.info({
         actionKey: action.actionKey,
         foundSourceType: source?.type || 'NONE',
         checklistItemId: source?.type === 'CHECKLIST_ITEM' ? source.checklistItem.id : null,
-      });
+      }, '🔍 RESOLVED SUPPRESSION SOURCE FOR RISK');
 
       if (source) {
         action.suppression.suppressionSource = source;
@@ -2126,7 +2128,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
       const all = [...actions, ...suppressedActions, ...snoozedActions];
       await persistDecisionTraces({ propertyId, actions: all, algoVersion: 'v1' });
     } catch (e) {
-      logger.warn('[ORCHESTRATION] decision trace persistence failed:', e);
+      logger.warn({ err: e }, '[ORCHESTRATION] decision trace persistence failed');
     }
 
   let sharedContext: OrchestrationSharedContext | null = null;
@@ -2284,7 +2286,7 @@ export async function getOrchestrationSummary(propertyId: string): Promise<Orche
         : null,
     });
   } catch (error) {
-    logger.warn('[ORCHESTRATION] shared context enrichment failed:', error);
+    logger.warn({ err: error }, '[ORCHESTRATION] shared context enrichment failed');
   }
 
   return {

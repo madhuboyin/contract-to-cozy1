@@ -39,7 +39,7 @@ export class GazetteHeadlineGenerator {
     try {
       rawText = await this._callWithTimeout(prompt, systemInstruction);
     } catch (err) {
-      logger.warn(`[GazetteHeadlineGenerator] AI call failed for story ${input.storyId}:`, (err as Error).message);
+      logger.warn({ err }, `[GazetteHeadlineGenerator] AI call failed for story ${input.storyId}`);
       return GazetteEditorialFallbackBuilder.buildStoryFallback(input, 'FAILED');
     }
 
@@ -57,8 +57,8 @@ export class GazetteHeadlineGenerator {
 
     if (!validationResult.valid) {
       logger.warn(
-        `[GazetteHeadlineGenerator] Validation failed for story ${input.storyId}:`,
-        validationResult.issues.join('; '),
+        { issues: validationResult.issues.join('; ') },
+        `[GazetteHeadlineGenerator] Validation failed for story ${input.storyId}`,
       );
       return {
         ...GazetteEditorialFallbackBuilder.buildStoryFallback(input, 'FALLBACK_USED'),

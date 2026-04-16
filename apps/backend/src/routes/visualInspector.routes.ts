@@ -99,7 +99,7 @@ router.post('/analyze', authenticate, expensiveAiRateLimiter, upload.array('imag
       roomType: parsedRoomTypes[index] || 'Other',
     }));
 
-    logger.info(`[VISUAL-INSPECTOR] Analyzing ${images.length} images for property:`, propertyId);
+    logger.info({ propertyId }, `[VISUAL-INSPECTOR] Analyzing ${images.length} images for property`);
 
     const report = await visualInspectorService.analyzePropertyImages(
       propertyId,
@@ -113,7 +113,7 @@ router.post('/analyze', authenticate, expensiveAiRateLimiter, upload.array('imag
     });
 
   } catch (error: any) {
-    logger.error('[VISUAL-INSPECTOR] Error:', error);
+    logger.error({ err: error }, '[VISUAL-INSPECTOR] Error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to analyze property images'

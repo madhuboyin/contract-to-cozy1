@@ -100,7 +100,7 @@ router.get('/check/:propertyId', authenticate, async (req: AuthRequest, res: Res
       },
     });
   } catch (error: any) {
-    logger.error('[WEATHER] /check/:propertyId error:', error);
+    logger.error({ err: error }, '[WEATHER] /check/:propertyId error');
     return res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch weather signals',

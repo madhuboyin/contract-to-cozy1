@@ -184,7 +184,7 @@ export async function finalizePriceFinalization(
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] price finalization hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] price finalization hook failed');
     }
 
     res.status(200).json({ success: true, data: { finalization: detail } });

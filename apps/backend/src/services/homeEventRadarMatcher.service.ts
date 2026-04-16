@@ -652,7 +652,7 @@ export async function runMatchingForEvent(
 
       matched++;
     } catch (err) {
-      logger.error('[RadarMatcher] Failed to upsert match for property', property.id, err);
+      logger.error({ propertyId: property.id, err }, '[RadarMatcher] Failed to upsert match for property');
       skipped++;
     }
   }

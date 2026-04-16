@@ -79,7 +79,7 @@ router.post('/generate-plan', authenticate, async (req: AuthRequest, res: Respon
       });
     }
 
-    logger.info('[MOVING-CONCIERGE] Generating moving plan for property:', propertyId);
+    logger.info({ propertyId }, '[MOVING-CONCIERGE] Generating moving plan for property');
 
     const plan = await movingConciergeService.generateMovingPlan(
       propertyId,
@@ -104,7 +104,7 @@ router.post('/generate-plan', authenticate, async (req: AuthRequest, res: Respon
     });
 
   } catch (error: any) {
-    logger.error('[MOVING-CONCIERGE] Error:', error);
+    logger.error({ err: error }, '[MOVING-CONCIERGE] Error');
     
     // Special handling for user type error
     if (error.message.includes('only available for home buyers')) {
@@ -150,7 +150,7 @@ router.post('/save-plan', authenticate, async (req: AuthRequest, res: Response) 
     });
 
   } catch (error: any) {
-    logger.error('[MOVING-CONCIERGE] Save error:', error);
+    logger.error({ err: error }, '[MOVING-CONCIERGE] Save error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to save moving plan'
@@ -180,7 +180,7 @@ router.get('/get-plan/:propertyId', authenticate, propertyAuthMiddleware, async 
     });
 
   } catch (error: any) {
-    logger.error('[MOVING-CONCIERGE] Get plan error:', error);
+    logger.error({ err: error }, '[MOVING-CONCIERGE] Get plan error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to get moving plan'
@@ -221,7 +221,7 @@ router.post('/update-tasks', authenticate, async (req: AuthRequest, res: Respons
     });
 
   } catch (error: any) {
-    logger.error('[MOVING-CONCIERGE] Update tasks error:', error);
+    logger.error({ err: error }, '[MOVING-CONCIERGE] Update tasks error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to update completed tasks'
@@ -251,7 +251,7 @@ router.delete('/delete-plan/:propertyId', authenticate, propertyAuthMiddleware, 
     });
 
   } catch (error: any) {
-    logger.error('[MOVING-CONCIERGE] Delete error:', error);
+    logger.error({ err: error }, '[MOVING-CONCIERGE] Delete error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete moving plan'

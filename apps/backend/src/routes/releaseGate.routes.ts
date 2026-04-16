@@ -29,7 +29,7 @@ router.get(
         data: summary,
       });
     } catch (err) {
-      logger.error('[ReleaseGate] GET / error:', err);
+      logger.error({ err }, '[ReleaseGate] GET / error');
       res.status(500).json({
         success: false,
         error: {
@@ -59,7 +59,7 @@ router.get(
         data: result,
       });
     } catch (err) {
-      logger.error('[ReleaseGate] GET /:toolKey error:', err);
+      logger.error({ err }, '[ReleaseGate] GET /:toolKey error');
       res.status(500).json({
         success: false,
         error: {

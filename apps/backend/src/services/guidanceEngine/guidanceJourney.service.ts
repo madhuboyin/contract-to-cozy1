@@ -271,12 +271,12 @@ export class GuidanceJourneyService {
         if (systemLink?.linkedEntityId) homeAssetId = systemLink.linkedEntityId;
       }
     } catch (error) {
-      logger.warn('[GUIDANCE] failed to infer scope from source entity', {
+      logger.warn({
         propertyId: input.propertyId,
         sourceEntityType,
         sourceEntityId,
         error: error instanceof Error ? error.message : String(error),
-      });
+      }, '[GUIDANCE] failed to infer scope from source entity');
     }
 
     return { inventoryItemId, homeAssetId };
@@ -412,12 +412,12 @@ export class GuidanceJourneyService {
     } catch (error: any) {
       const code = typeof error?.code === 'string' ? error.code : '';
       if (code === 'P2021' || code === 'P2022') {
-        logger.warn('[GUIDANCE] GuidanceStepEvidence table/column missing; skipping evidence write', {
+        logger.warn({
           propertyId: args.input.propertyId,
           journeyId: args.journey.id,
           stepId: args.step.id,
           prismaCode: code,
-        });
+        }, '[GUIDANCE] GuidanceStepEvidence table/column missing; skipping evidence write');
         return null;
       }
       throw error;
@@ -562,12 +562,12 @@ export class GuidanceJourneyService {
     });
 
     if (validation.issues.length > 0) {
-      logger.info('[GUIDANCE] validation adjusted action', {
+      logger.info({
         journeyId: journey.id,
         signalId: signal?.id ?? null,
         issueCodes: validation.issues.map((item) => item.code),
         suppressed: validation.shouldSuppress,
-      });
+      }, '[GUIDANCE] validation adjusted action');
     }
 
     const adjustedConfidenceScore = guidanceValidationService.sanitizeConfidenceScore(

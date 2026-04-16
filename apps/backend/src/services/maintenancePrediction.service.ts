@@ -613,7 +613,7 @@ export async function updateForecastStatus(
 
   if (status === PredictionStatus.COMPLETED) {
     generateForecast(propertyId).catch((err) => {
-      logger.error('[MAINTENANCE_PREDICTION] Forecast revalidation failed:', err);
+      logger.error({ err }, '[MAINTENANCE_PREDICTION] Forecast revalidation failed');
     });
   }
 

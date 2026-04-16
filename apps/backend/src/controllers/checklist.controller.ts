@@ -285,12 +285,12 @@ const handleCreateChecklistItem = async (
       actionKey,
     });
     
-    logger.info('✅ Checklist item created/found:', {
+    logger.info({
       itemId: result.item.id,
       actionKey: result.item.actionKey,
       propertyId: result.item.propertyId,
       deduped: result.deduped,
-    });
+    }, '✅ Checklist item created/found');
     
     const deduped = (result as any)?.deduped === true;
     const item = (result as any)?.item ?? result;

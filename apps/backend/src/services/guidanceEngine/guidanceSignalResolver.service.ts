@@ -313,13 +313,13 @@ export class GuidanceSignalResolverService {
       freshness.isStale && executionReadiness === 'READY' ? 'NEEDS_CONTEXT' : executionReadiness;
 
     if (freshness.isStale) {
-      logger.info('[GUIDANCE] stale signal normalized', {
+      logger.info({
         propertyId: input.propertyId,
         signalIntentFamily,
         observedAt: freshness.observedAt,
         ageDays: freshness.ageDays,
         maxAgeDays: freshness.maxAgeDays,
-      });
+      }, '[GUIDANCE] stale signal normalized');
     }
 
     return {

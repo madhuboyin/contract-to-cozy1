@@ -45,7 +45,7 @@ router.post('/analyze/:propertyId', authenticate, propertyAuthMiddleware, async 
     const { propertyId } = req.params;
     const { purchasePrice, purchaseDate } = req.body;
 
-    logger.info('[APPRECIATION] Generating report for:', propertyId);
+    logger.info({ propertyId }, '[APPRECIATION] Generating report for');
 
     const report = await propertyAppreciationService.generateAppreciationReport(
       propertyId,
@@ -60,7 +60,7 @@ router.post('/analyze/:propertyId', authenticate, propertyAuthMiddleware, async 
     });
 
   } catch (error: any) {
-    logger.error('[APPRECIATION] Error:', error);
+    logger.error({ err: error }, '[APPRECIATION] Error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate appreciation report'

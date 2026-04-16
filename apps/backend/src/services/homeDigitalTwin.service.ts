@@ -251,7 +251,7 @@ export class HomeDigitalTwinService {
           errorMessage: err instanceof Error ? err.message : 'Unknown error',
         },
       });
-      logger.error(`[HomeDigitalTwin] init failed for property=${propertyId}`, err);
+      logger.error({ err }, `[HomeDigitalTwin] init failed for property=${propertyId}`);
       throw err;
     }
 
@@ -315,7 +315,7 @@ export class HomeDigitalTwinService {
           errorMessage: err instanceof Error ? err.message : 'Unknown error',
         },
       });
-      logger.error(`[HomeDigitalTwin] refresh failed for property=${propertyId}`, err);
+      logger.error({ err }, `[HomeDigitalTwin] refresh failed for property=${propertyId}`);
       throw err;
     }
 

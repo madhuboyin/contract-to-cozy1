@@ -91,7 +91,7 @@ export class AuthService {
       }
     } catch (profileError) {
       // If profile creation fails, delete the user and throw error
-      logger.error('Failed to create profile:', profileError);
+      logger.error({ profileError }, 'Failed to create profile');
       await prisma.user.delete({ where: { id: user.id } });
       throw new APIError(
         'Failed to create user profile. Please try again.',

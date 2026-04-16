@@ -58,7 +58,7 @@ export const postExpense = async (req: AuthRequest, res: Response, next: NextFun
     res.status(201).json({ success: true, data: expense });
   } catch (error) {
     // DEBUG 2: Log the error being passed to Express's error handler
-    logger.error('DEBUG (Controller): Error caught in postExpense:', error);
+    logger.error({ err: error }, 'DEBUG (Controller): Error caught in postExpense');
     next(error);
   }
 };
@@ -78,7 +78,7 @@ export const getExpenses = async (req: AuthRequest, res: Response, next: NextFun
     res.status(200).json({ success: true, data: { expenses } });
   } catch (error) {
     // DEBUG 4: Log the error being passed to Express's error handler
-    logger.error('DEBUG (Controller): Error caught in getExpenses:', error);
+    logger.error({ err: error }, 'DEBUG (Controller): Error caught in getExpenses');
     next(error);
   }
 };
@@ -126,7 +126,7 @@ export const postWarranty = async (req: AuthRequest, res: Response, next: NextFu
     res.status(201).json({ success: true, data: warranty });
   } catch (error) {
     // DEBUG 6: Log the error being passed to Express's error handler
-    logger.error('DEBUG (Controller): Error caught in postWarranty:', error);
+    logger.error({ err: error }, 'DEBUG (Controller): Error caught in postWarranty');
     next(error);
   }
 };
@@ -142,7 +142,7 @@ export const getWarranties = async (req: AuthRequest, res: Response, next: NextF
     res.status(200).json({ success: true, data: { warranties } });
   } catch (error) {
     // DEBUG 8: Log the error being passed to Express's error handler
-    logger.error('DEBUG (Controller): Error caught in getWarranties:', error);
+    logger.error({ err: error }, 'DEBUG (Controller): Error caught in getWarranties');
     next(error);
   }
 };
@@ -221,7 +221,7 @@ export const postInsurancePolicy = async (req: AuthRequest, res: Response, next:
     res.status(201).json({ success: true, data: policy });
   } catch (error) {
     // DEBUG 10: Log the error being passed to Express's error handler
-    logger.error('DEBUG (Controller): Error caught in postInsurancePolicy:', error);
+    logger.error({ err: error }, 'DEBUG (Controller): Error caught in postInsurancePolicy');
     next(error);
   }
 };
@@ -237,7 +237,7 @@ export const getInsurancePolicies = async (req: AuthRequest, res: Response, next
     res.status(200).json({ success: true, data: { policies } });
   } catch (error) {
     // DEBUG 12: Log the error being passed to Express's error handler
-    logger.error('DEBUG (Controller): Error caught in getInsurancePolicies:', error);
+    logger.error({ err: error }, 'DEBUG (Controller): Error caught in getInsurancePolicies');
     next(error);
   }
 };

@@ -43,7 +43,7 @@ export async function createHomeReportExport(req: Request, res: Response) {
       }
     });
   } catch (error: any) {
-    logger.error('[createHomeReportExport] Error:', error);
+    logger.error({ err: error }, '[createHomeReportExport] Error');
     return res.status(500).json({ 
       success: false,
       message: error.message || 'Failed to create export' 
@@ -71,7 +71,7 @@ export async function listHomeReportExportsForProperty(req: Request, res: Respon
       data: { exports } 
     });
   } catch (error: any) {
-    logger.error('[listHomeReportExportsForProperty] Error:', error);
+    logger.error({ err: error }, '[listHomeReportExportsForProperty] Error');
     return res.status(500).json({ 
       success: false,
       message: error.message || 'Failed to list exports' 
@@ -131,7 +131,7 @@ export async function downloadHomeReportExport(req: Request, res: Response) {
       data: { url } 
     });
   } catch (error: any) {
-    logger.error('[downloadHomeReportExport] Error:', error);
+    logger.error({ err: error }, '[downloadHomeReportExport] Error');
     return res.status(500).json({ 
       success: false,
       message: error.message || 'Failed to download' 
@@ -199,7 +199,7 @@ export async function createShareLinkForReport(req: Request, res: Response) {
       }
     });
   } catch (error: any) {
-    logger.error('[createShareLinkForReport] Error:', error);
+    logger.error({ err: error }, '[createShareLinkForReport] Error');
     return res.status(500).json({ 
       success: false,
       message: error.message || 'Failed to create share link' 
@@ -252,7 +252,7 @@ export async function revokeShareLinkForReport(req: Request, res: Response) {
       data: { ok: true } 
     });
   } catch (error: any) {
-    logger.error('[revokeShareLinkForReport] Error:', error);
+    logger.error({ err: error }, '[revokeShareLinkForReport] Error');
     return res.status(500).json({ 
       success: false,
       message: error.message || 'Failed to revoke share link' 
@@ -319,7 +319,7 @@ export async function downloadHomeReportByShareToken(req: Request, res: Response
       data: { url } 
     });
   } catch (error: any) {
-    logger.error('[downloadHomeReportByShareToken] Error:', error);
+    logger.error({ err: error }, '[downloadHomeReportByShareToken] Error');
     return res.status(500).json({ 
       success: false,
       message: error.message || 'Failed to download via share token' 
@@ -388,7 +388,7 @@ export async function regenerateHomeReportExport(req: Request, res: Response) {
       },
     });
   } catch (error: any) {
-    logger.error('[regenerateHomeReportExport] Error:', error);
+    logger.error({ err: error }, '[regenerateHomeReportExport] Error');
     return res.status(500).json({
       success: false,
       message: error.message || 'Failed to regenerate export',
@@ -435,7 +435,7 @@ export async function deleteHomeReportExport(req: Request, res: Response) {
         );
       } catch (err) {
         // Never fail deletion due to S3 cleanup issues
-        logger.warn('[deleteHomeReportExport] S3 delete failed:', err);
+        logger.warn({ err }, '[deleteHomeReportExport] S3 delete failed');
       }
     }
 
@@ -458,7 +458,7 @@ export async function deleteHomeReportExport(req: Request, res: Response) {
 
     return res.json({ success: true, data: { ok: true } });
   } catch (error: any) {
-    logger.error('[deleteHomeReportExport] Error:', error);
+    logger.error({ err: error }, '[deleteHomeReportExport] Error');
     return res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete export',

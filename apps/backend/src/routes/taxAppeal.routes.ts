@@ -69,7 +69,7 @@ router.post('/extract-bill', authenticate, upload.single('taxBill'), validatePdf
     });
 
   } catch (error: any) {
-    logger.error('[TAX-APPEAL] Extract error:', error);
+    logger.error({ err: error }, '[TAX-APPEAL] Extract error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to extract tax bill data'
@@ -125,7 +125,7 @@ router.post('/analyze', authenticate, async (req: AuthRequest, res: Response) =>
       });
     }
 
-    logger.info('[TAX-APPEAL] Analyzing appeal opportunity for property:', propertyId);
+    logger.info({ propertyId }, '[TAX-APPEAL] Analyzing appeal opportunity for property');
 
     const report = await taxAppealService.analyzeAppealOpportunity(
       propertyId,
@@ -145,7 +145,7 @@ router.post('/analyze', authenticate, async (req: AuthRequest, res: Response) =>
     });
 
   } catch (error: any) {
-    logger.error('[TAX-APPEAL] Analysis error:', error);
+    logger.error({ err: error }, '[TAX-APPEAL] Analysis error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to analyze appeal opportunity'

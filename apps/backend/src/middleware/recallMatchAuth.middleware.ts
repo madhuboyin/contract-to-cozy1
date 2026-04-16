@@ -35,7 +35,7 @@ export async function recallMatchAuthMiddleware(
 
     return next();
   } catch (e) {
-    logger.error('recallMatchAuthMiddleware error:', e);
+    logger.error({ err: e }, 'recallMatchAuthMiddleware error');
     return res.status(500).json({ message: 'Failed to authorize recall match' });
   }
 }

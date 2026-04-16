@@ -294,7 +294,7 @@ async function attachHealthScore(property: PropertyWithAssets): Promise<ScoredPr
         // UPDATED CALL: Pass full booking objects instead of just category strings
         healthScore = calculateHealthScore(property, documentCount, bookingsForScore);
     } catch (error) {
-        logger.error(`CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score.`, error);
+        logger.error({ err: error }, `CRITICAL: Health score calculation failed for Property ID ${property.id}. Returning default score`);
         // Fallback to a zero score and default insights to prevent server crash
         healthScore = { 
             totalScore: 0, 
@@ -499,7 +499,7 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
 
   // Fire-and-forget: seed initial habits for the new property
   generateHabitsForProperty(property.id).catch((err) =>
-    logger.error('[HABIT-GEN] Initial generation failed for new property:', err),
+    logger.error({ err }, '[HABIT-GEN] Initial generation failed for new property'),
   );
 
   // NEW STEP: Handle assets AFTER property creation
@@ -1247,6 +1247,6 @@ export async function maybeMarkPropertyActivated(
     });
   } catch (err) {
     // Non-fatal: activation marking should never break the caller's workflow
-    logger.error(`[Property] maybeMarkPropertyActivated failed — propertyId=${propertyId}:`, err instanceof Error ? err.message : err);
+    logger.error({ err }, `[Property] maybeMarkPropertyActivated failed — propertyId=${propertyId}`);
   }
 }

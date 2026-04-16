@@ -383,7 +383,7 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
       },
     });
 
-    logger.info(`[SEASONAL API] Found checklist for property ${propertyId}:`, checklist ? 'Yes' : 'No');
+    logger.info({ found: checklist ? 'Yes' : 'No' }, `[SEASONAL API] Found checklist for property ${propertyId}`);
 
     return res.json({
       success: true,
@@ -392,7 +392,7 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
       },
     });
   } catch (error) {
-    logger.error('[SEASONAL API] Error fetching seasonal checklist:', error);
+    logger.error({ err: error }, '[SEASONAL API] Error fetching seasonal checklist');
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch seasonal checklist',

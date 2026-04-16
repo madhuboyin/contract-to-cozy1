@@ -55,13 +55,13 @@ export async function confirmMatch(req: Request, res: Response) {
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] recall confirm hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] recall confirm hook failed');
     }
 
     return res.json(row);
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
-    logger.error('confirmMatch error:', err);
+    logger.error({ err }, 'confirmMatch error');
     return res.status(500).json({ message: 'Failed to confirm recall match' });
   }
 }
@@ -94,13 +94,13 @@ export async function dismissMatch(req: Request, res: Response) {
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] recall dismiss hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] recall dismiss hook failed');
     }
 
     return res.json(row);
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
-    logger.error('dismissMatch error:', err);
+    logger.error({ err }, 'dismissMatch error');
     return res.status(500).json({ message: 'Failed to dismiss recall match' });
   }
 }
@@ -148,13 +148,13 @@ export async function resolveMatch(req: Request, res: Response) {
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] recall resolve hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] recall resolve hook failed');
     }
 
     return res.json(row);
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
-    logger.error('resolveMatch error:', err);
+    logger.error({ err }, 'resolveMatch error');
     return res.status(500).json({ message: 'Failed to resolve recall match' });
   }
 }

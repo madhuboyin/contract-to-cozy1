@@ -502,7 +502,7 @@ export class GuidanceStepResolverService {
       // step transition response returned to the user.
       if (nextStatus === 'COMPLETED' && journey.status !== 'COMPLETED') {
         runJourneyCompletionHooks(params.journeyId).catch((err: unknown) => {
-          logger.error('[guidance] runJourneyCompletionHooks failed:', err);
+          logger.error({ err }, '[guidance] runJourneyCompletionHooks failed');
         });
       }
     }

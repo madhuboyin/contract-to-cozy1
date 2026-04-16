@@ -1955,7 +1955,7 @@ export class CoverageIntelligenceService {
     try {
       await this.publishCoverageGapSignal(analysis);
     } catch (error) {
-      logger.warn('Coverage gap signal publish failed:', error);
+      logger.warn({ err: error }, 'Coverage gap signal publish failed');
     }
 
     return mapAnalysisToDto(analysis);

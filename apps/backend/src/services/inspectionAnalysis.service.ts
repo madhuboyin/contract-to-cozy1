@@ -151,7 +151,7 @@ export class InspectionAnalysisService {
       return report.id;
 
     } catch (error: any) {
-      logger.error('[INSPECTION] Analysis failed:', error);
+      logger.error({ err: error }, '[INSPECTION] Analysis failed');
       
       // Update report with error
       await prisma.inspectionReport.update({
@@ -171,7 +171,7 @@ export class InspectionAnalysisService {
    */
   private async extractTextFromPDF(buffer: Buffer): Promise<string> {
     try {
-      logger.info('[DEBUG] Buffer size:', buffer.length);
+      logger.info({ bytes: buffer.length }, '[DEBUG] Buffer size');
       
       // Direct require to avoid TypeScript issues
       const pdfParse = require('pdf-parse');
@@ -180,9 +180,9 @@ export class InspectionAnalysisService {
       const data = await pdfParse(buffer);
       
       logger.info('[INSPECTION] PDF parsed successfully');
-      logger.info('[INSPECTION] Pages:', data.numpages);
-      logger.info('[INSPECTION] Text length:', data.text.length);
-      logger.info('[INSPECTION] First 500 chars:', data.text.substring(0, 500));
+      logger.info({ pages: data.numpages }, '[INSPECTION] Pages');
+      logger.info({ length: data.text.length }, '[INSPECTION] Text length');
+      logger.info({ preview: data.text.substring(0, 500) }, '[INSPECTION] First 500 chars');
       
       if (!data.text || data.text.trim().length < 100) {
         throw new Error('Extracted text is too short or empty');
@@ -190,9 +190,9 @@ export class InspectionAnalysisService {
       
       return data.text;
     } catch (error: any) {
-      logger.error('[INSPECTION] PDF parsing error:', error);
-      logger.error('[INSPECTION] Error message:', error.message);
-      logger.error('[INSPECTION] Error stack:', error.stack);
+      logger.error({ err: error }, '[INSPECTION] PDF parsing error');
+      logger.error({ err: error }, '[INSPECTION] Error message');
+      logger.error({ err: error }, '[INSPECTION] Error stack');
       throw new Error(`Failed to parse PDF file: ${error.message}`);
     }
   }

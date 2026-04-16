@@ -352,7 +352,7 @@ If you cannot extract the data, return null.`;
           failedCount += 1;
         }
       } catch (error) {
-        logger.error('[ENERGY-AUDITOR] Bill extraction error:', error);
+        logger.error({ err: error }, '[ENERGY-AUDITOR] Bill extraction error');
         failedCount += 1;
       }
     }
@@ -541,7 +541,7 @@ Difficulty: EASY, MODERATE, PROFESSIONAL`;
       })).slice(0, 8);
 
     } catch (error) {
-      logger.error('[ENERGY-AUDITOR] AI recommendations error:', error);
+      logger.error({ err: error }, '[ENERGY-AUDITOR] AI recommendations error');
       return this.getBasicRecommendations(inputData, annualKWh, rate);
     }
   }

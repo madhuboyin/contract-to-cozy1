@@ -161,12 +161,12 @@ export class GuidanceBookingGuardService {
     const safeNextStep = dedupedMissing[0] ?? null;
     const blockedReason = Array.from(new Set(reasons))[0] ?? (safeNextStep ? `Complete ${safeNextStep.stepLabel} first.` : null);
     if (blocked) {
-      logger.info('[GUIDANCE] execution blocked', {
+      logger.info({
         propertyId: request.propertyId,
         targetAction: request.targetAction,
         journeyCount: journeys.length,
         missingPrerequisites: dedupedMissing.length,
-      });
+      }, '[GUIDANCE] execution blocked');
     }
 
     return {

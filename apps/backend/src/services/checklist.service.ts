@@ -97,7 +97,7 @@ export class ChecklistService {
         try {
             await syncRenewalTasks(userId, checklist.id);
         } catch (syncError) {
-            logger.error('WARNING: Failed to synchronize renewal tasks.', syncError);
+            logger.error({ syncError }, 'WARNING: Failed to synchronize renewal tasks.');
         }
 
         const finalChecklist = await prisma.checklist.findFirst({

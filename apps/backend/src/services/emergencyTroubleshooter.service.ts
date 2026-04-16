@@ -123,7 +123,7 @@ export class EmergencyTroubleshooterService {
         confidence: parsed.confidence,
       };
     } catch (error) {
-      logger.error(`[EMERGENCY-FATAL] Failed to call Gemini API`, error);
+      logger.error({ err: error }, `[EMERGENCY-FATAL] Failed to call Gemini API`);
       throw new Error('Failed to get emergency response');
     }
   }
@@ -229,7 +229,7 @@ export class EmergencyTroubleshooterService {
         },
       });
     } catch (error) {
-      logger.error('[EMERGENCY-INCIDENT-LOG] Failed to persist incident log', error);
+      logger.error({ err: error }, '[EMERGENCY-INCIDENT-LOG] Failed to persist incident log');
     }
   }
 }

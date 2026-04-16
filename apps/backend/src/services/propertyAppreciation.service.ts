@@ -136,18 +136,18 @@ export class PropertyAppreciationService {
         const zipCode = property.zipCode || property.state; // Fallback to state if zip not available
         const searchQuery = `median home value ${property.city}, ${property.state} zip code ${zipCode} Zillow Redfin`;
         logger.info('[APPRECIATION-SEARCH] Attempting Google search...');
-        logger.info('[APPRECIATION-SEARCH] Query:', searchQuery);
+        logger.info({ searchQuery }, '[APPRECIATION-SEARCH] Query');
 
         const searchResults = await google.search({ 
             queries: [searchQuery] 
         });
         logger.info('[APPRECIATION-SEARCH] Search successful!');
-        logger.info('[APPRECIATION-SEARCH] Results length:', searchResults.result?.length || 0);
-        logger.info('[APPRECIATION-SEARCH] First 200 chars:', searchResults.result?.substring(0, 200));
+        logger.info({ length: searchResults.result?.length || 0 }, '[APPRECIATION-SEARCH] Results length');
+        logger.info({ preview: searchResults.result?.substring(0, 200) }, '[APPRECIATION-SEARCH] First 200 chars');
         
         localMarketContext = searchResults.result;
     } catch (error) {
-        logger.error('[APPRECIATION] Google Search error:', error);
+        logger.error({ err: error }, '[APPRECIATION] Google Search error');
         // Fail gracefully: if search fails, localMarketContext remains empty string, and AI uses fallback logic.
     }
 
@@ -265,25 +265,25 @@ Consider:
 
       // === CRITICAL FIX: Aggressively extract the number ===
       const rawResponse = response.text.trim();
-      logger.info('[APPRECIATION-DEBUG] Raw AI response:', rawResponse);
+      logger.info({ rawResponse }, '[APPRECIATION-DEBUG] Raw AI response');
       
       let estimatedValue: number = NaN;
       
       // 1. Strip ALL non-digit characters from the response, leaving a single string of digits.
       // This is the ultimate brute-force method to get the number.
       const digitsOnly = rawResponse.replace(/[^0-9]/g, '');
-      logger.info('[APPRECIATION-DEBUG] Digits only:', digitsOnly);
+      logger.info({ digitsOnly }, '[APPRECIATION-DEBUG] Digits only');
       
       // 2. Ensure the remaining string is a valid price (e.g., has 5+ digits) and then parse it.
       if (digitsOnly.length >= 5) {
         estimatedValue = parseInt(digitsOnly, 10);
-        logger.info('[APPRECIATION-DEBUG] Parsed value:', estimatedValue);
-        logger.info('[APPRECIATION-DEBUG] Bounds check:', {
+        logger.info({ estimatedValue }, '[APPRECIATION-DEBUG] Parsed value');
+        logger.info({
             value: estimatedValue,
             min: purchasePrice * 0.5,
             max: purchasePrice * 3,
             passes: !(estimatedValue < purchasePrice * 0.5 || estimatedValue > purchasePrice * 3)
-        });
+        }, '[APPRECIATION-DEBUG] Bounds check');
     }
       // === END CRITICAL FIX ===
       
@@ -296,7 +296,7 @@ Consider:
       return estimatedValue;
 
     } catch (error) {
-      logger.error('[APPRECIATION] AI estimation error, forcing fallback:', error);
+      logger.error({ err: error }, '[APPRECIATION] AI estimation error, forcing fallback');
       return fallbackValue;
     }
   }
@@ -396,7 +396,7 @@ Focus on:
       return JSON.parse(text).slice(0, 4);
 
     } catch (error) {
-      logger.error('[APPRECIATION] AI insights error:', error);
+      logger.error({ err: error }, '[APPRECIATION] AI insights error');
       return this.getBasicInsights(purchasePrice, currentValue, annualRate, regionalRate);
     }
   }

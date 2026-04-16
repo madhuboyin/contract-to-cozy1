@@ -26,7 +26,7 @@ export async function listHomeSavingsCategories(req: CustomRequest, res: Respons
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error listing home savings categories:', error);
+    logger.error({ err: error }, 'Error listing home savings categories');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to list home savings categories.',
@@ -41,7 +41,7 @@ export async function getHomeSavingsSummary(req: CustomRequest, res: Response) {
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error fetching home savings summary:', error);
+    logger.error({ err: error }, 'Error fetching home savings summary');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to fetch home savings summary.',
@@ -60,7 +60,7 @@ export async function getHomeSavingsCategoryDetail(req: CustomRequest, res: Resp
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error fetching home savings category detail:', error);
+    logger.error({ err: error }, 'Error fetching home savings category detail');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to fetch home savings category detail.',
@@ -81,7 +81,7 @@ export async function upsertHomeSavingsAccount(req: CustomRequest, res: Response
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error upserting home savings account:', error);
+    logger.error({ err: error }, 'Error upserting home savings account');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to save home savings account.',
@@ -130,13 +130,13 @@ export async function runHomeSavingsComparison(req: CustomRequest, res: Response
         },
       });
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] home savings hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] home savings hook failed');
     }
 
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error running home savings comparison:', error);
+    logger.error({ err: error }, 'Error running home savings comparison');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to run home savings comparison.',
@@ -152,7 +152,7 @@ export async function setHomeSavingsOpportunityStatus(req: CustomRequest, res: R
     return res.json({ success: true, data: result });
   } catch (error: any) {
     const status = error?.message === 'Authentication required.' ? 401 : 500;
-    logger.error('Error updating home savings opportunity:', error);
+    logger.error({ err: error }, 'Error updating home savings opportunity');
     return res.status(status).json({
       success: false,
       message: error?.message || 'Failed to update home savings opportunity.',

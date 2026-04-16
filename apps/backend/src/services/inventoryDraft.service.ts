@@ -99,7 +99,7 @@ export class InventoryDraftService {
 
     // Fire-and-forget lifespan recalculation for OCR-verified item
     applianceOracleService.recalculateLifespan(item.id).catch((err) => {
-      logger.error('[OCR_CONFIRM] Lifespan recalculation failed (non-blocking):', err);
+      logger.error({ err }, '[OCR_CONFIRM] Lifespan recalculation failed (non-blocking)');
     });
 
     await prisma.inventoryDraftItem.update({

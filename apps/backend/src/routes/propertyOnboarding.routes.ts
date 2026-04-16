@@ -42,7 +42,7 @@ router.get(
       const status = await computeSetupStatus(propertyId, userId);
       return res.json({ success: true, data: status });
     } catch (error: any) {
-      logger.error('Error fetching onboarding status:', error);
+      logger.error({ err: error }, 'Error fetching onboarding status');
       return res.status(500).json({
         success: false,
         message: error?.message || 'Failed to fetch onboarding status.',
@@ -68,7 +68,7 @@ router.post(
       const status = await setCurrentStep(propertyId, userId, currentStep);
       return res.json({ success: true, data: status, message: 'Onboarding step updated.' });
     } catch (error: any) {
-      logger.error('Error updating onboarding step:', error);
+      logger.error({ err: error }, 'Error updating onboarding step');
       return res.status(500).json({
         success: false,
         message: error?.message || 'Failed to update onboarding step.',
@@ -94,7 +94,7 @@ router.post(
       const status = await completeStep(propertyId, userId, step);
       return res.json({ success: true, data: status, message: 'Step marked complete.' });
     } catch (error: any) {
-      logger.error('Error completing onboarding step:', error);
+      logger.error({ err: error }, 'Error completing onboarding step');
       return res.status(500).json({
         success: false,
         message: error?.message || 'Failed to complete onboarding step.',
@@ -118,7 +118,7 @@ router.post(
       const status = await skipOnboarding(propertyId, userId);
       return res.json({ success: true, data: status, message: 'Onboarding skipped.' });
     } catch (error: any) {
-      logger.error('Error skipping onboarding:', error);
+      logger.error({ err: error }, 'Error skipping onboarding');
       return res.status(500).json({
         success: false,
         message: error?.message || 'Failed to skip onboarding.',
@@ -142,7 +142,7 @@ router.post(
       const status = await finishOnboarding(propertyId, userId);
       return res.json({ success: true, data: status, message: 'Onboarding completed.' });
     } catch (error: any) {
-      logger.error('Error finishing onboarding:', error);
+      logger.error({ err: error }, 'Error finishing onboarding');
       return res.status(500).json({
         success: false,
         message: error?.message || 'Failed to finish onboarding.',

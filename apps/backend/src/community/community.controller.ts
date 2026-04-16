@@ -75,7 +75,7 @@ export class CommunityController {
       const schedule = await this.service.getTrashSchedule({ city, state, propertyId });
       return res.json({ success: true, data: schedule });
     } catch (error: any) {
-      logger.error('Error fetching trash schedule:', error);
+      logger.error({ err: error }, 'Error fetching trash schedule');
       return res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || 'Failed to fetch trash schedule',

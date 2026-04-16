@@ -39,7 +39,7 @@ export class GazetteSummaryGenerator {
     try {
       rawText = await this._callWithTimeout(prompt, systemInstruction);
     } catch (err) {
-      logger.warn(`[GazetteSummaryGenerator] AI call failed for edition ${input.editionId}:`, (err as Error).message);
+      logger.warn({ err }, `[GazetteSummaryGenerator] AI call failed for edition ${input.editionId}`);
       return GazetteEditorialFallbackBuilder.buildEditionFallback(input, 'FAILED');
     }
 
@@ -54,8 +54,8 @@ export class GazetteSummaryGenerator {
 
     if (!validationResult.valid) {
       logger.warn(
-        `[GazetteSummaryGenerator] Validation failed for edition ${input.editionId}:`,
-        validationResult.issues.join('; '),
+        { issues: validationResult.issues.join('; ') },
+        `[GazetteSummaryGenerator] Validation failed for edition ${input.editionId}`,
       );
       return GazetteEditorialFallbackBuilder.buildEditionFallback(input, 'FALLBACK_USED');
     }

@@ -171,18 +171,18 @@ export async function markItemVerified(
 
   // Fire-and-forget lifespan recalculation
   applianceOracleService.recalculateLifespan(itemId).catch((err) => {
-    logger.error('[VERIFICATION] Lifespan recalculation failed (non-blocking):', err);
+    logger.error({ err }, '[VERIFICATION] Lifespan recalculation failed (non-blocking)');
   });
 
   const streak = await incrementStreak(propertyId);
 
   generateForecast(propertyId).catch((err) => {
-    logger.error('[VERIFICATION] Maintenance forecast generation failed (non-blocking):', err);
+    logger.error({ err }, '[VERIFICATION] Maintenance forecast generation failed (non-blocking)');
   });
 
   if (HIGH_VALUE_CATEGORIES.includes(updated.category as string)) {
     refreshEstimatedMaintenancePremium(propertyId).catch((err) => {
-      logger.error('[VERIFICATION] Maintenance premium refresh failed (non-blocking):', err);
+      logger.error({ err }, '[VERIFICATION] Maintenance premium refresh failed (non-blocking)');
     });
   }
 

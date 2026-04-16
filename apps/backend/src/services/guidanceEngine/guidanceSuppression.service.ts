@@ -303,7 +303,7 @@ export class GuidanceSuppressionService {
       for (const item of suppressedSignals) {
         summary[item.reason] = (summary[item.reason] ?? 0) + 1;
       }
-      logger.info('[GUIDANCE] suppression applied', summary);
+      logger.info({ summary }, '[GUIDANCE] suppression applied');
     }
 
     return {

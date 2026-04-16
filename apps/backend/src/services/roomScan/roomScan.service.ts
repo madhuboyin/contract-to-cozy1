@@ -434,13 +434,13 @@ export class RoomScanService {
           const jitter = Math.floor(Math.random() * 150);
           const backoff = Math.min(8000, this.baseBackoffMs * Math.pow(2, attempt - 1)) + jitter;
 
-          logger.warn('[room-scan][retry]', {
+          logger.warn({
             sessionId: session.id,
             attempt,
             backoffMs: backoff,
             statusCode: e?.statusCode || e?.status || e?.response?.status,
             message: e?.message,
-          });
+          }, '[room-scan][retry]');
 
           await sleep(backoff);
         }
@@ -450,7 +450,7 @@ export class RoomScanService {
       const items = normalizeItems(result?.items);
       const usage = (result as any)?.raw?.usageMetadata || null;
 
-      logger.info('[room-scan][budget]', {
+      logger.info({
         sessionId: session.id,
         provider: provider.name,
         model: (result as any)?.raw?.model,
@@ -464,7 +464,7 @@ export class RoomScanService {
         promptTokenCount: usage?.promptTokenCount ?? usage?.promptTokens ?? undefined,
         candidatesTokenCount: usage?.candidatesTokenCount ?? usage?.completionTokens ?? undefined,
         totalTokenCount: usage?.totalTokenCount ?? usage?.totalTokens ?? undefined,
-      });
+      }, '[room-scan][budget]');
 
       const seen = new Map<
         string,

@@ -199,6 +199,6 @@ const options: swaggerJsdoc.Options = {
 export const swaggerSpec = swaggerJsdoc(options);
 
 // Debug output
-logger.info('📚 Swagger config loaded from:', __dirname);
-logger.info('📚 Scanning paths:', options.apis);
-logger.info('📚 Found endpoints:', Object.keys((swaggerSpec as any).paths || {}).length);
+logger.info({ __dirname }, '📚 Swagger config loaded from');
+logger.info({ apis: options.apis }, '📚 Scanning paths');
+logger.info({ count: Object.keys((swaggerSpec as any).paths || {}).length }, '📚 Found endpoints');

@@ -205,7 +205,7 @@ Only include categories with risk level MODERATE or higher.`;
       }));
 
     } catch (error) {
-      logger.error('[CLIMATE-RISK] AI analysis error:', error);
+      logger.error({ err: error }, '[CLIMATE-RISK] AI analysis error');
       return this.getBasicRisks(location);
     }
   }
@@ -342,7 +342,7 @@ Return as JSON array of strings (no markdown):
       return JSON.parse(text).slice(0, 5);
 
     } catch (error) {
-      logger.error('[CLIMATE-RISK] Recommendations error:', error);
+      logger.error({ err: error }, '[CLIMATE-RISK] Recommendations error');
       return this.getBasicRecommendations(overallScore);
     }
   }

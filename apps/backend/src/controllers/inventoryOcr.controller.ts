@@ -119,22 +119,22 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     });
   }
 
-  logger.info('[inventoryOcr] upload', {
+  logger.info({
     mimetype: file.mimetype,
     size: file.size,
     hasBuffer: !!file.buffer?.length,
-  });
+  }, '[inventoryOcr] upload');
   // 3) Extract canonical values
   const manufacturer = fields.find((f) => f.key === 'manufacturer')?.value ?? null;
   const modelNumber = fields.find((f) => f.key === 'modelNumber')?.value ?? null;
   const serialNumber = fields.find((f) => f.key === 'serialNumber')?.value ?? null;
   const upc = fields.find((f) => f.key === 'upc')?.value ?? null;
   const sku = fields.find((f) => f.key === 'sku')?.value ?? null;
-  logger.info('manufacturer', manufacturer);
-  logger.info('modelNumber', modelNumber);
-  logger.info('serialNumber', serialNumber);
-  logger.info('upc', upc);
-  logger.info('sku', sku);
+  logger.info({ manufacturer }, 'manufacturer');
+  logger.info({ modelNumber }, 'modelNumber');
+  logger.info({ serialNumber }, 'serialNumber');
+  logger.info({ upc }, 'upc');
+  logger.info({ sku }, 'sku');
 
   
   // 4) Create draft tied to session
@@ -150,7 +150,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
     confidenceJson: ocr.confidenceByField,
   });
   
-  logger.info('draft', draft);
+  logger.info({ draft }, 'draft');
   return res.json({
     sessionId: session.id,
     draftId: draft.id,

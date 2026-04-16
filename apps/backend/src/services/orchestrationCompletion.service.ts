@@ -53,7 +53,7 @@ export async function createCompletion(params: {
       sourceId: completion.id,
     });
   } catch (signalError) {
-    logger.warn('Maintenance adherence signal publish failed (completion create):', signalError);
+    logger.warn({ signalError }, 'Maintenance adherence signal publish failed (completion create)');
   }
 
   return mapCompletionToResponse(completion);
@@ -138,7 +138,7 @@ export async function updateCompletion(
       sourceId: updated.id,
     });
   } catch (signalError) {
-    logger.warn('Maintenance adherence signal publish failed (completion update):', signalError);
+    logger.warn({ signalError }, 'Maintenance adherence signal publish failed (completion update)');
   }
 
   return mapCompletionToResponse(updated);

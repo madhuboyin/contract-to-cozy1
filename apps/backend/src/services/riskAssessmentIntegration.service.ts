@@ -107,7 +107,7 @@ export async function createTasksFromRiskAssessment(
 
       logger.info(`✅ Created/found risk task: ${rec.title} (deduped: ${result.deduped})`);
     } catch (error) {
-      logger.error(`❌ Failed to create risk task for ${rec.assetType}:`, error);
+      logger.error({ err: error }, `Failed to create risk task for ${rec.assetType}`);
       skipped++;
     }
   }

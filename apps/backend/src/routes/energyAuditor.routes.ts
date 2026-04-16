@@ -118,8 +118,8 @@ router.post('/audit', authenticate, expensiveAiRateLimiter, upload.array('bills'
       hasSolarPanels: hasSolarPanels === 'true',
     };
 
-    logger.info('[ENERGY-AUDITOR] Generating audit for property:', propertyId);
-    logger.info('[ENERGY-AUDITOR] Bills uploaded:', req.files?.length || 0);
+    logger.info({ propertyId }, '[ENERGY-AUDITOR] Generating audit for property');
+    logger.info({ count: req.files?.length || 0 }, '[ENERGY-AUDITOR] Bills uploaded');
 
     const report = await energyAuditorService.generateEnergyAudit(
       propertyId,
@@ -134,7 +134,7 @@ router.post('/audit', authenticate, expensiveAiRateLimiter, upload.array('bills'
     });
 
   } catch (error: any) {
-    logger.error('[ENERGY-AUDITOR] Error:', error);
+    logger.error({ err: error }, '[ENERGY-AUDITOR] Error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate energy audit'

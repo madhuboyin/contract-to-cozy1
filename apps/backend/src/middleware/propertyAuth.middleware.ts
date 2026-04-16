@@ -36,7 +36,7 @@ export const propertyAuthMiddleware = async (
     req.property = property as any;
     return next();
   } catch (error) {
-    logger.error('Property Auth Error:', error);
+    logger.error({ err: error }, 'Property Auth Error');
     return res
       .status(500)
       .json({ message: 'Internal server error during property authorization check.' });

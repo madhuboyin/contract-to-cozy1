@@ -80,7 +80,7 @@ insuranceQuoteRouter.post(
 
       return res.json({ success: true, data: { quoteRequest: created } });
     } catch (err: any) {
-      logger.error('[INSURANCE_QUOTE] create failed', err);
+      logger.error({ err }, '[INSURANCE_QUOTE] create failed');
       return res.status(500).json({ success: false, message: err.message || 'Failed to create quote request' });
     }
   }

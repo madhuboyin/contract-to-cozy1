@@ -54,7 +54,7 @@ export async function runPostEvaluationIntegrations(
       );
     }
   } catch (err) {
-    logger.error('[RenovationAdvisor] Home timeline integration failed:', err);
+    logger.error({ err }, '[RenovationAdvisor] Home timeline integration failed');
   }
 
   // 2. Digital Twin Scenario
@@ -64,14 +64,14 @@ export async function runPostEvaluationIntegrations(
       linkedIds.linkedDigitalTwinScenarioId = scenarioId;
     }
   } catch (err) {
-    logger.error('[RenovationAdvisor] Digital twin integration failed:', err);
+    logger.error({ err }, '[RenovationAdvisor] Digital twin integration failed');
   }
 
   // 3. Compliance Task (only for high-risk permit/licensing situations)
   try {
     await integrateComplianceTask(session, output);
   } catch (err) {
-    logger.error('[RenovationAdvisor] Compliance task integration failed:', err);
+    logger.error({ err }, '[RenovationAdvisor] Compliance task integration failed');
   }
 
   // 4. Persist linked IDs back to the session (if any were populated)
@@ -79,7 +79,7 @@ export async function runPostEvaluationIntegrations(
     try {
       await persistLinkedEntityIds(session.id, linkedIds);
     } catch (err) {
-      logger.error('[RenovationAdvisor] Failed to persist linked entity IDs:', err);
+      logger.error({ err }, '[RenovationAdvisor] Failed to persist linked entity IDs');
     }
   }
 }

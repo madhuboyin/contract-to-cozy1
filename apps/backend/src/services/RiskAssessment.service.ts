@@ -250,7 +250,7 @@ class RiskAssessmentService {
             logger.info(`[RISK-SERVICE] Added ${invRisks.length} MAJOR_APPLIANCE inventory risks`);
           }
         } catch (e) {
-          logger.warn('[RISK-SERVICE] Failed to build inventory major appliance risks', e);
+          logger.warn({ err: e }, '[RISK-SERVICE] Failed to build inventory major appliance risks');
         }
 
         // Property-level resilience impact: sump-pump backup reduces basement flood risk.
@@ -266,7 +266,7 @@ class RiskAssessmentService {
         };        
 
     } catch (error: any) {
-        logger.error(`RISK CALCULATION FAILED for property ${propertyId}:`, error);
+        logger.error({ err: error }, `RISK CALCULATION FAILED for property ${propertyId}`);
         finalError = error;
         
         reportData = {
@@ -353,7 +353,7 @@ class RiskAssessmentService {
       }
     } catch (taskError) {
       // Don't fail the risk calculation if task creation fails
-      logger.error('[RISK-SERVICE] Failed to create maintenance tasks:', taskError);
+      logger.error({ taskError }, '[RISK-SERVICE] Failed to create maintenance tasks');
     }
 
     return updatedReport;

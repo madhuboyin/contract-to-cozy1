@@ -17,7 +17,7 @@ export async function fetchNycEmergencyNotifications(opts: {
   appToken?: string;
 }): Promise<NycAlertItem[]> {
   try {
-    logger.info('🔍 Fetching NYC alerts, limit:', opts.limit);
+    logger.info({ limit: opts.limit }, 'Fetching NYC alerts');
     
     const url = new URL(BASE);
     url.searchParams.set('$limit', String(Math.min(opts.limit, 50)));
@@ -30,7 +30,7 @@ export async function fetchNycEmergencyNotifications(opts: {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    logger.info('📡 Fetching from:', url.toString());
+    logger.info({ url: url.toString() }, 'Fetching from NYC Open Data');
     
     const requestUrl = url.toString();
     await assertSafeUrl(requestUrl);
@@ -42,11 +42,11 @@ export async function fetchNycEmergencyNotifications(opts: {
     
     clearTimeout(timeoutId);
 
-    logger.info('✅ NYC API response status:', resp.status);
+    logger.info({ status: resp.status }, 'NYC API response status');
 
     if (!resp.ok) {
       const errorText = await resp.text();
-      logger.error('❌ NYC API error response:', errorText);
+      logger.error({ errorText }, '❌ NYC API error response');
       throw new Error(`NYC API returned ${resp.status}`);
     }
 
@@ -65,8 +65,8 @@ export async function fetchNycEmergencyNotifications(opts: {
     return mapped;
     
   } catch (error) {
-    logger.error('❌ NYC Open Data API failed:', error);
-    logger.error('Error details:', error instanceof Error ? error.message : error);
+    logger.error({ err: error }, '❌ NYC Open Data API failed');
+    logger.error({ err: error }, 'Error details');
     return [];
   }
 }

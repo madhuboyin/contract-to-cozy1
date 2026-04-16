@@ -46,7 +46,7 @@ router.post('/recommend', authenticate, async (req: AuthRequest, res: Response) 
       });
     }
 
-    logger.info('[HOME-MODIFICATION] Generating recommendations for:', propertyId);
+    logger.info({ propertyId }, '[HOME-MODIFICATION] Generating recommendations for');
 
     const report = await homeModificationAdvisorService.generateModificationReport(
       propertyId,
@@ -60,7 +60,7 @@ router.post('/recommend', authenticate, async (req: AuthRequest, res: Response) 
     });
 
   } catch (error: any) {
-    logger.error('[HOME-MODIFICATION] Error:', error);
+    logger.error({ err: error }, '[HOME-MODIFICATION] Error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate recommendations'

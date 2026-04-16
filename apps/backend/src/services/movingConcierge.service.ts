@@ -332,7 +332,7 @@ Include 5-8 tasks per period. Focus on practical, actionable items.`;
       return processedTimeline;
 
     } catch (error) {
-      logger.error('[MOVING-CONCIERGE] Timeline generation error:', error);
+      logger.error({ err: error }, '[MOVING-CONCIERGE] Timeline generation error');
       return this.getBasicTimeline(input, daysUntilMove);
     }
   }
@@ -903,7 +903,7 @@ Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
       return JSON.parse(text).slice(0, 6);
 
     } catch (error) {
-      logger.error('[MOVING-CONCIERGE] Recommendations error:', error);
+      logger.error({ err: error }, '[MOVING-CONCIERGE] Recommendations error');
       return this.getBasicRecommendations(input, daysUntilMove);
     }
   }

@@ -109,7 +109,7 @@ export const incidentLogger = {
         },
       })
       .catch((err: unknown) => {
-        logger.error('[IncidentLogger] Failed to log safety incident:', err);
+        logger.error({ err }, '[IncidentLogger] Failed to log safety incident');
       });
   },
 
@@ -137,7 +137,7 @@ export const incidentLogger = {
         },
       })
       .catch((err: unknown) => {
-        logger.error('[IncidentLogger] Failed to log privacy incident:', err);
+        logger.error({ err }, '[IncidentLogger] Failed to log privacy incident');
       });
   },
 
@@ -168,7 +168,7 @@ export const incidentLogger = {
         },
       })
       .catch((err: unknown) => {
-        logger.error('[IncidentLogger] Failed to log tool error incident:', err);
+        logger.error({ err }, '[IncidentLogger] Failed to log tool error incident');
       });
   },
 };

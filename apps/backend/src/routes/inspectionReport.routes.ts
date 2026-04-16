@@ -140,7 +140,7 @@ router.post('/upload', authenticate, upload.single('file'), validatePdfUpload, a
         });
       }
     } catch (guidanceError) {
-      logger.warn('[GUIDANCE] inspection report hook failed:', guidanceError);
+      logger.warn({ guidanceError }, '[GUIDANCE] inspection report hook failed');
     }
 
     res.json({
@@ -152,7 +152,7 @@ router.post('/upload', authenticate, upload.single('file'), validatePdfUpload, a
     });
 
   } catch (error: any) {
-    logger.error('[INSPECTION] Upload error:', error);
+    logger.error({ err: error }, '[INSPECTION] Upload error');
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to analyze inspection report'
@@ -193,7 +193,7 @@ router.get('/:reportId', authenticate, async (req: AuthRequest, res: Response) =
     });
 
   } catch (error: any) {
-    logger.error('[INSPECTION] Get report error:', error);
+    logger.error({ err: error }, '[INSPECTION] Get report error');
     res.status(error.message === 'Report not found' ? 404 : 500).json({
       success: false,
       message: error.message
@@ -232,7 +232,7 @@ router.get('/property/:propertyId', authenticate, propertyAuthMiddleware, async 
     });
 
   } catch (error: any) {
-    logger.error('[INSPECTION] Get property reports error:', error);
+    logger.error({ err: error }, '[INSPECTION] Get property reports error');
     res.status(500).json({
       success: false,
       message: error.message
@@ -271,7 +271,7 @@ router.get('/:reportId/maintenance-calendar', authenticate, async (req: AuthRequ
     });
 
   } catch (error: any) {
-    logger.error('[INSPECTION] Generate calendar error:', error);
+    logger.error({ err: error }, '[INSPECTION] Generate calendar error');
     res.status(500).json({
       success: false,
       message: error.message

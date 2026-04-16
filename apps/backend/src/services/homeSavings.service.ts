@@ -637,7 +637,7 @@ export class HomeSavingsService {
           currency: opportunity.currency,
         });
       } catch (signalError) {
-        logger.warn('Savings realization signal publish failed:', signalError);
+        logger.warn({ signalError }, 'Savings realization signal publish failed');
       }
     }
 

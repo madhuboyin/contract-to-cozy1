@@ -95,7 +95,7 @@ export async function checkGate(toolKey: string): Promise<GateCheckResult> {
     }
   } catch (err) {
     issues.push('Failed to query incident data');
-    logger.error(`[ReleaseGate] Error checking gate for ${toolKey}:`, err);
+    logger.error({ err }, `[ReleaseGate] Error checking gate for ${toolKey}`);
   }
 
   return {

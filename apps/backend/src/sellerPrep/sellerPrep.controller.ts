@@ -20,7 +20,7 @@ export class SellerPrepController {
         message: 'Seller prep overview retrieved successfully'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] getOverview error:', error);
+      logger.error({ err: error }, '[SellerPrepController] getOverview error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to retrieve seller prep overview'
@@ -51,7 +51,7 @@ export class SellerPrepController {
         message: 'Item status updated successfully'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] updateItem error:', error);
+      logger.error({ err: error }, '[SellerPrepController] updateItem error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to update item status'
@@ -86,7 +86,7 @@ export class SellerPrepController {
           : 'No comparables available for this location'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] getComparables error:', error);
+      logger.error({ err: error }, '[SellerPrepController] getComparables error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to retrieve comparables'
@@ -126,7 +126,7 @@ export class SellerPrepController {
         message: 'Readiness report generated successfully'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] getReadinessReport error:', error);
+      logger.error({ err: error }, '[SellerPrepController] getReadinessReport error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to generate readiness report'
@@ -223,7 +223,7 @@ export class SellerPrepController {
         message: 'Preferences saved successfully'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] savePreferences error:', error);
+      logger.error({ err: error }, '[SellerPrepController] savePreferences error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to save preferences'
@@ -255,7 +255,7 @@ export class SellerPrepController {
         message: 'Preferences retrieved successfully'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] getPreferences error:', error);
+      logger.error({ err: error }, '[SellerPrepController] getPreferences error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to retrieve preferences'
@@ -290,7 +290,7 @@ export class SellerPrepController {
         message: 'Feedback submitted successfully'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] submitFeedback error:', error);
+      logger.error({ err: error }, '[SellerPrepController] submitFeedback error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to submit feedback'
@@ -350,7 +350,7 @@ export class SellerPrepController {
         message: 'Item status updated successfully'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] updateItemStatus error:', error);
+      logger.error({ err: error }, '[SellerPrepController] updateItemStatus error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to update item'
@@ -370,7 +370,7 @@ export class SellerPrepController {
         message: 'Agent interview deleted successfully'
       });
     } catch (error) {
-      logger.error('[SellerPrepController] deleteAgentInterview error:', error);
+      logger.error({ err: error }, '[SellerPrepController] deleteAgentInterview error');
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Failed to delete agent interview'

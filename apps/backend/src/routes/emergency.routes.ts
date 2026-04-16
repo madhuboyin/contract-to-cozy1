@@ -106,7 +106,7 @@ router.post('/chat', authenticate, apiRateLimiter, async (req: AuthRequest, res:
     });
   } catch (error: any) {
     const userId = (req as AuthRequest).user?.userId || 'N/A';
-    logger.error(`[ERROR] /api/emergency/chat failed for user: ${userId}`, error);
+    logger.error({ err: error }, `[ERROR] /api/emergency/chat failed for user: ${userId}`);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to process emergency chat'

@@ -26,19 +26,19 @@ export async function renderHomeReportPackPdf(
     ? process.env.CHROMIUM_PATH
     : chromium.executablePath();
   
-  logger.info('NODE_ENV', process.env.NODE_ENV);
-  logger.info('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
-  logger.info('PLAYWRIGHT_BROWSERS_PATH', process.env.PLAYWRIGHT_BROWSERS_PATH);
-  logger.info('executablePath', executablePath);
-  logger.info('chromium.executablePath()', chromium.executablePath());
-  
+  logger.info({ NODE_ENV: process.env.NODE_ENV }, 'NODE_ENV');
+  logger.info({ CHROMIUM_PATH: process.env.CHROMIUM_PATH }, 'CHROMIUM_PATH');
+  logger.info({ PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH }, 'PLAYWRIGHT_BROWSERS_PATH');
+  logger.info({ executablePath }, 'executablePath');
+  logger.info({ executablePath: chromium.executablePath() }, 'chromium.executablePath()');
+
   const browser = await chromium.launch({
     executablePath,
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
-  
-    logger.info('CHROMIUM_PATH', process.env.CHROMIUM_PATH);
-    logger.info('args', ['--no-sandbox', '--disable-dev-shm-usage']);
+
+    logger.info({ CHROMIUM_PATH: process.env.CHROMIUM_PATH }, 'CHROMIUM_PATH');
+    logger.info({ args: ['--no-sandbox', '--disable-dev-shm-usage'] }, 'chromium launch args');
   try {
     const page = await browser.newPage();
 
