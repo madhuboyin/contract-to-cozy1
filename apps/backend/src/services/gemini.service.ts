@@ -355,7 +355,7 @@ class GeminiService {
 
       return response.text;
     } catch (error) {
-      logger.error("Gemini API call error:", error);
+      logger.error({ err: error }, "Gemini API call error");
       throw new Error("Failed to get response from AI service.");
     }
   }
