@@ -837,7 +837,7 @@ export class BookingService {
           },
         })
         .catch((err) =>
-          logger.warn({ err }, '[BOOKING] guidance step advance on service completion failed'))
+          logger.warn({ err }, '[BOOKING] guidance step advance on service completion failed')
         );
     }
 
