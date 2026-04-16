@@ -13,7 +13,6 @@
 
 import { HomeBuyerTaskService } from './HomeBuyerTask.service';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
-import { ChecklistService } from './checklist.service';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
@@ -38,7 +37,7 @@ export async function createTaskFromActionCenter(data: {
 }): Promise<{
   success: boolean;
   taskId: string;
-  source: 'HOME_BUYER' | 'EXISTING_OWNER' | 'LEGACY';
+  source: 'HOME_BUYER' | 'EXISTING_OWNER';
   deduped: boolean;
 }> {
   // 1. Get property with homeowner profile to determine segment
@@ -118,26 +117,8 @@ export async function createTaskFromActionCenter(data: {
     };
   }
 
-  // 3. Fallback to legacy ChecklistService (deprecated)
-  logger.info('⚠️  Using LEGACY ChecklistService - should migrate to new services');
-  
-  const result = await ChecklistService.createDirectChecklistItem(data.userId, {
-    title: data.title,
-    description: data.description,
-    serviceCategory: data.serviceCategory,
-    propertyId: data.propertyId,
-    isRecurring: false,
-    frequency: null,
-    nextDueDate: data.nextDueDate,
-    actionKey: data.actionKey,
-  });
-
-  return {
-    success: true,
-    taskId: result.item.id,
-    source: 'LEGACY',
-    deduped: result.deduped,
-  };
+  // Should never reach here — segment enum only has HOME_BUYER and EXISTING_OWNER
+  throw new Error(`Unhandled homeowner segment: ${segment}`);
 }
 
 /**
@@ -151,7 +132,6 @@ export async function getActionsForProperty(
 ): Promise<{
   homeBuyerTasks: any[];
   maintenanceTasks: any[];
-  legacyChecklistItems: any[];
 }> {
   // Get property and segment
   const property = await prisma.property.findUnique({
@@ -169,10 +149,8 @@ export async function getActionsForProperty(
 
   let homeBuyerTasks: any[] = [];
   let maintenanceTasks: any[] = [];
-  let legacyChecklistItems: any[] = [];
 
   if (segment === 'HOME_BUYER') {
-    // Get HomeBuyerTasks
     try {
       homeBuyerTasks = await HomeBuyerTaskService.getTasks(userId);
     } catch (error) {
@@ -181,7 +159,6 @@ export async function getActionsForProperty(
   }
 
   if (segment === 'EXISTING_OWNER') {
-    // Get PropertyMaintenanceTasks
     try {
       maintenanceTasks = await PropertyMaintenanceTaskService.getTasksForProperty(
         userId,
@@ -193,18 +170,9 @@ export async function getActionsForProperty(
     }
   }
 
-  // Get legacy checklist items (for backward compatibility)
-  try {
-    const checklist = await ChecklistService.getOrCreateChecklist(userId);
-    legacyChecklistItems = checklist?.items || [];
-  } catch (error) {
-    logger.error({ err: error }, 'Error fetching legacy checklist items');
-  }
-
   return {
     homeBuyerTasks,
     maintenanceTasks,
-    legacyChecklistItems,
   };
 }
 
