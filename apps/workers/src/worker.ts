@@ -279,7 +279,6 @@ async function capturePropertyScoreSnapshots(
           insightContext: true,
           propertyId: true,
           providerId: true,
-          homeownerProfileId: true,
           scheduledDate: true,
           notes: true,
           price: true,
