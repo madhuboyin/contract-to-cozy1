@@ -170,7 +170,7 @@ export default function TrueCostClient() {
         </div>
 
         <div className="mt-4 rounded-xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-          <div className="text-xs text-slate-500 dark:text-slate-300">Assumptions (Phase 1)</div>
+          <div className="text-xs text-slate-500 dark:text-slate-300">Assumptions & methodology</div>
           <div className="mt-2 space-y-1">
             {(data?.meta?.notes || []).map((n, i) => (
               <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>

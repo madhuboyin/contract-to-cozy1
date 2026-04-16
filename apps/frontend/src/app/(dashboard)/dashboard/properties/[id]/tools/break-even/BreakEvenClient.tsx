@@ -266,7 +266,7 @@ export default function BreakEvenClient() {
 
           {data?.meta?.confidence === 'LOW' && (
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-              Estimated using localized historical heuristics (Phase 1–2 model). No persisted long-term snapshots yet.
+              Estimated using localized appreciation and cost benchmarks. Add finance snapshot details for a more precise projection.
             </div>
           )}
 

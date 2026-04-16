@@ -274,7 +274,7 @@ export default function HomeCostGrowthClient() {
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Localized insights</div>
         <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-          Phase 1 ties insights to <span className="font-medium">{data?.input?.state || '—'}</span> and ZIP{' '}
+          Insights are localized to <span className="font-medium">{data?.input?.state || '—'}</span> and ZIP{' '}
           <span className="font-medium">{data?.input?.zipCode || '—'}</span>.
         </div>
 
@@ -293,9 +293,9 @@ export default function HomeCostGrowthClient() {
 
       {/* Assumptions / Notes */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Assumptions (Phase 1)</div>
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Assumptions & methodology</div>
         <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-          These are heuristic estimates designed for story + trend comparisons. We can swap in free datasets (FHFA HPI, etc.) later.
+          Estimates are localized using state and ZIP-level benchmarks for appreciation, insurance, and maintenance. Individual results may vary based on property condition and local market activity.
         </div>
 
         <div className="mt-3 space-y-2">

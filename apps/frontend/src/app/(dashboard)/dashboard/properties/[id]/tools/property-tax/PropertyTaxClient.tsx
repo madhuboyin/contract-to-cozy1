@@ -402,7 +402,7 @@ export default function PropertyTaxClient() {
           <div className="mt-4 rounded-xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
             <div className="text-xs text-slate-500 dark:text-slate-300">Note</div>
             <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-              Comparisons are heuristic in v1. You can later swap in county/city medians from open data without changing the UI.
+              Median figures are estimates based on state and county-level averages. Your actual position may vary by local assessment district.
             </div>
           </div>
         </div>
