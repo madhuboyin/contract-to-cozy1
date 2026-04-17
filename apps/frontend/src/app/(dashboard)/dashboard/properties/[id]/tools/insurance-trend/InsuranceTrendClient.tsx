@@ -219,6 +219,20 @@ export default function InsuranceTrendClient() {
               </span> of {money(stateAvg)}/yr.{' '}
               Premiums in this area are growing at roughly <span className="font-semibold">{(cagr * 100).toFixed(1)}%/yr</span> — that adds up to{' '}
               <span className="font-semibold">{money(data.rollup?.totalPremiumPaid)}</span> over {trendYears} years.
+              {delta > 200 && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2.5 dark:border-slate-700/50">
+                  <a
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                  >
+                    Get insurance quotes
+                    <span aria-hidden="true">→</span>
+                  </a>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">Opens third-party quote comparison</span>
+                </div>
+              )}
             </div>
           );
         })()}
@@ -257,11 +271,23 @@ export default function InsuranceTrendClient() {
               <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{pct(data?.rollup?.cagrStateAvg)}</div>
 
               {data?.rollup?.cagrPremium != null && data?.rollup?.cagrStateAvg != null && (
-                <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
-                  {data.rollup.cagrPremium > data.rollup.cagrStateAvg
-                    ? 'Your premium is growing faster than the state average — worth shopping coverage annually.'
-                    : 'Your premium growth is tracking at or below the state average.'}
-                </div>
+                data.rollup.cagrPremium > data.rollup.cagrStateAvg ? (
+                  <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 dark:border-slate-700/50">
+                    <span className="text-[10px] text-rose-600 dark:text-rose-400">Growing faster than state avg</span>
+                    <a
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 inline-flex items-center rounded-full bg-rose-600 px-3 py-1.5 text-[10px] font-semibold text-white shadow-sm transition-colors hover:bg-rose-700"
+                    >
+                      Shop coverage now →
+                    </a>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+                    Premium growth tracking at or below state average.
+                  </div>
+                )
               )}
             </div>
 
@@ -304,10 +330,35 @@ export default function InsuranceTrendClient() {
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Over {trendYears}y</div>
           <div className="mt-2 text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.rollup?.totalStateAvgPaid)}</div>
         </div>
-        <div className="group rounded-2xl border border-white/70 bg-gradient-to-br from-white/78 via-amber-50/50 to-teal-50/42 p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_-24px_rgba(15,23,42,0.6)] dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Total delta vs state</div>
-          <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Over {trendYears}y</div>
-          <div className="mt-2 text-2xl font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.rollup?.totalDeltaVsState)}</div>
+        <div className={`group rounded-2xl border p-4 shadow-[0_14px_28px_-22px_rgba(15,23,42,0.65)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_36px_-24px_rgba(15,23,42,0.6)] ${
+          (data?.rollup?.totalDeltaVsState ?? 0) > 0
+            ? 'border-rose-200/70 bg-gradient-to-br from-rose-50/85 via-white/75 to-amber-50/65 dark:border-rose-800/50 dark:from-rose-950/40 dark:via-slate-900/48 dark:to-slate-900/38'
+            : 'border-white/70 bg-gradient-to-br from-white/78 via-amber-50/50 to-teal-50/42 dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38'
+        }`}>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">Total delta vs state</div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Over {trendYears}y</div>
+            </div>
+            {(data?.rollup?.totalDeltaVsState ?? 0) > 0 && (
+              <span className="shrink-0 rounded-full border border-rose-200/70 bg-rose-100/80 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:border-rose-700/50 dark:bg-rose-950/50 dark:text-rose-300">
+                overpaid
+              </span>
+            )}
+          </div>
+          <div className={`mt-2 text-2xl font-semibold leading-tight ${
+            (data?.rollup?.totalDeltaVsState ?? 0) > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-900 dark:text-slate-100'
+          }`}>{money(data?.rollup?.totalDeltaVsState)}</div>
+          {(data?.rollup?.totalDeltaVsState ?? 0) > 0 && (
+            <a
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 underline-offset-2 transition-colors hover:text-rose-900 hover:underline dark:text-rose-400 dark:hover:text-rose-300"
+            >
+              Start reducing this gap →
+            </a>
+          )}
         </div>
       </div>
 
@@ -333,6 +384,19 @@ export default function InsuranceTrendClient() {
                 }`}>{d.impact}</span>
               </div>
               <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{d.explanation}</div>
+              {d.impact === 'HIGH' && (
+                <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-rose-100/70 pt-2.5 dark:border-rose-900/30">
+                  <span className="text-[10px] text-rose-600 dark:text-rose-400">This driver may be reducible — compare alternatives</span>
+                  <a
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-[10px] font-semibold text-rose-700 underline-offset-2 transition-colors hover:text-rose-900 hover:underline dark:text-rose-400"
+                  >
+                    Get quotes →
+                  </a>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -356,27 +420,64 @@ export default function InsuranceTrendClient() {
       {data && (
         <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
-          <div className="mt-3 space-y-2">
-            {(data.current?.deltaVsStateNow ?? 0) > 200 ? (
-              <>
-                <div className="rounded-xl border border-rose-200/70 bg-rose-50/80 p-3 text-xs text-rose-800 dark:border-rose-800/50 dark:bg-rose-950/40 dark:text-rose-300">
-                  Your estimated premium is meaningfully above the state average. Consider shopping your coverage annually — a 10–15% reduction is often achievable by switching carriers or adjusting deductibles.
+
+          {(data.current?.deltaVsStateNow ?? 0) > 200 ? (
+            <div className="mt-3 space-y-3">
+              {/* Primary action card — peak intent zone */}
+              <div className="rounded-xl border border-rose-200/70 bg-gradient-to-br from-rose-50/90 to-amber-50/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur dark:border-rose-800/50 dark:from-rose-950/50 dark:to-amber-950/30">
+                <div className="text-sm font-semibold text-rose-900 dark:text-rose-200">
+                  A 10–15% reduction may be within reach
                 </div>
-                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-                  Check the <span className="font-medium">Cost Volatility Index</span> to see how unpredictable your total ownership costs are likely to be, and whether building a larger reserve is warranted.
+                <p className="mt-1.5 text-xs leading-relaxed text-rose-800 dark:text-rose-300">
+                  Your premium is running above the state average. Switching carriers or adjusting deductibles can often close this gap — the sooner you compare, the more negotiating leverage you have before your next renewal.
+                </p>
+                <div className="mt-3.5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <a
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                  >
+                    Get insurance quotes
+                  </a>
+                  <a
+                    href={`/dashboard/properties/${propertyId}/tools/cost-volatility`}
+                    className="inline-flex items-center justify-center rounded-xl border border-rose-200/70 bg-white/80 px-5 py-2.5 text-sm font-medium text-rose-800 shadow-sm transition-colors hover:bg-white dark:border-rose-700/50 dark:bg-rose-950/30 dark:text-rose-300 dark:hover:bg-rose-950/50"
+                  >
+                    Check cost volatility →
+                  </a>
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  Your estimated premium is at or below the state average — a good position. Review coverage limits annually to make sure you're not underinsured as your home's value changes.
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {/* Positive position card */}
+              <div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/85 to-teal-50/60 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur dark:border-emerald-800/50 dark:from-emerald-950/40 dark:to-teal-950/30">
+                <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+                  Your premium is competitively positioned
                 </div>
-                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-                  Use the <span className="font-medium">True Cost of Ownership</span> tool to see how insurance fits into your full annual ownership expense picture.
+                <p className="mt-1.5 text-xs leading-relaxed text-emerald-800 dark:text-emerald-300">
+                  You're at or below the state average — a strong position. Review coverage limits annually to ensure you're not underinsured as your home's replacement value changes.
+                </p>
+                <div className="mt-3.5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <a
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-xl border border-emerald-300/70 bg-white/80 px-5 py-2.5 text-sm font-medium text-emerald-800 shadow-sm transition-colors hover:bg-white dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+                  >
+                    Compare coverage options →
+                  </a>
+                  <a
+                    href={`/dashboard/properties/${propertyId}/tools/true-cost`}
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-200/70 bg-white/80 px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300"
+                  >
+                    True Cost of Ownership →
+                  </a>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
