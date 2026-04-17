@@ -10,12 +10,14 @@ import {
   Prisma,
   PropertyStreakType,
   RecallMatchStatus,
+  SignalType,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from './analytics';
 import { calculateHealthScore } from '../utils/propertyScore.util';
 import { getOwnerLocalUpdates } from '../localUpdates/localUpdates.service';
 import { logger } from '../lib/logger';
+import { weatherService } from './weather.service';
 
 type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
 type InsightSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -114,33 +116,6 @@ const PRIORITY_WEIGHT: Record<MaintenanceTaskPriority, number> = {
   LOW: 1,
 };
 
-const COLD_STATES = new Set([
-  'ME',
-  'NH',
-  'VT',
-  'MA',
-  'CT',
-  'RI',
-  'NY',
-  'NJ',
-  'PA',
-  'OH',
-  'MI',
-  'MN',
-  'WI',
-  'IL',
-  'IN',
-  'IA',
-  'ND',
-  'SD',
-  'NE',
-  'MT',
-  'WY',
-  'CO',
-  'UT',
-  'ID',
-]);
-
 function asNumber(value: unknown): number | undefined {
   if (value === null || value === undefined) return undefined;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -218,33 +193,67 @@ function severityToInsight(severity: IncidentSeverity | null | undefined): Insig
   return 'LOW';
 }
 
-function pickWeatherFallback(state: string, month: number): {
+function buildWeatherFromLiveForecast(args: {
+  cityName: string | null;
+  state: string | null | undefined;
+  signals: SignalType[];
+}): {
   headline: string;
   detail: string;
   severity: InsightSeverity;
   code: 'FREEZE' | 'STORM' | 'NONE';
 } {
-  if ([11, 0, 1].includes(month) && COLD_STATES.has(state)) {
+  const hasFreeze = args.signals.includes(SignalType.WEATHER_FORECAST_MIN_TEMP);
+  const hasHeavyRain = args.signals.includes(SignalType.WEATHER_FORECAST_HEAVY_RAIN);
+  const location = args.cityName || args.state || 'your area';
+
+  if (hasFreeze && hasHeavyRain) {
     return {
-      headline: 'Freeze risk in your area',
-      detail: 'Protect outdoor faucets and exposed pipes to reduce burst-risk overnight.',
+      headline: `Freeze and heavy rain risk in ${location}`,
+      detail:
+        'A freeze plus heavy rain window is forecast. Protect exposed pipes and check drainage and sump readiness.',
       severity: 'HIGH',
       code: 'FREEZE',
     };
   }
 
-  if ([5, 6, 7, 8].includes(month)) {
+  if (hasFreeze) {
     return {
-      headline: 'Storm season readiness',
-      detail: 'Quickly secure loose outdoor items and verify drainage before the next storm window.',
+      headline: `Freeze risk in ${location}`,
+      detail: 'Sub-freezing temperatures are forecast. Protect outdoor faucets and exposed pipes.',
+      severity: 'HIGH',
+      code: 'FREEZE',
+    };
+  }
+
+  if (hasHeavyRain) {
+    return {
+      headline: `Heavy rain risk in ${location}`,
+      detail:
+        'Heavy rain is forecast in the next 5 days. Check gutters, drainage paths, and sump pump readiness.',
       severity: 'MEDIUM',
       code: 'STORM',
     };
   }
 
   return {
-    headline: 'No local weather alerts today',
-    detail: 'No significant weather trigger detected for your home right now.',
+    headline: `No local severe weather alerts in ${location}`,
+    detail: 'No freeze or heavy-rain signal is currently forecast for your area.',
+    severity: 'LOW',
+    code: 'NONE',
+  };
+}
+
+function buildWeatherUnavailableFallback(): {
+  headline: string;
+  detail: string;
+  severity: InsightSeverity;
+  code: 'FREEZE' | 'STORM' | 'NONE';
+} {
+  return {
+    headline: 'Weather signal currently unavailable',
+    detail:
+      'We could not confirm live local forecast signals right now. Please cross-check your local weather app.',
     severity: 'LOW',
     code: 'NONE',
   };
@@ -789,13 +798,32 @@ export class DailyHomePulseService {
 
   async generateSnapshot(propertyId: string, userId: string, date = new Date()): Promise<DailySnapshotDTO> {
     const property = await this.assertProperty(propertyId, userId);
+    const zipCode = property.zipCode?.trim();
     const timezone = property.timezone || DEFAULT_TIMEZONE;
     const todayKey = formatDateKeyInTimezone(date, timezone);
     const snapshotDate = dateKeyToDate(todayKey);
     const recentWeatherCutoff = new Date(Date.now() - WEATHER_INCIDENT_MAX_AGE_HOURS * 60 * 60 * 1000);
+    const liveForecastPromise = zipCode
+      ? weatherService.getLocalForecastMeta(zipCode).catch(() => ({
+          signals: [] as SignalType[],
+          cityName: property.city ?? null,
+          isAvailable: false,
+        }))
+      : Promise.resolve({
+          signals: [] as SignalType[],
+          cityName: property.city ?? null,
+          isAvailable: false,
+        });
 
-    const [documentCount, activeBookings, maintenanceTasks, weatherIncident, recalls, localUpdates] =
-      await Promise.all([
+    const [
+      documentCount,
+      activeBookings,
+      maintenanceTasks,
+      weatherIncident,
+      recalls,
+      localUpdates,
+      liveForecastMeta,
+    ] = await Promise.all([
         prisma.document.count({ where: { propertyId } }),
         prisma.booking.findMany({
           where: {
@@ -876,6 +904,7 @@ export class DailyHomePulseService {
           state: property.state,
           propertyType: property.propertyType ?? undefined,
         }).catch(() => []),
+        liveForecastPromise,
       ]);
 
     const completedSince = new Date(Date.now() - 48 * 60 * 60 * 1000);
@@ -951,7 +980,15 @@ export class DailyHomePulseService {
         } as const;
       }
 
-      return pickWeatherFallback(property.state, date.getMonth());
+      if (liveForecastMeta.isAvailable) {
+        return buildWeatherFromLiveForecast({
+          cityName: liveForecastMeta.cityName ?? property.city ?? null,
+          state: property.state,
+          signals: liveForecastMeta.signals,
+        });
+      }
+
+      return buildWeatherUnavailableFallback();
     })();
 
     const scoreContext = {

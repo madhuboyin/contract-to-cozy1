@@ -241,7 +241,7 @@ async function getResilienceNudge(
   let cityName: string | null = null;
   const meta = await weatherService
     .getLocalForecastMeta(zipCode)
-    .catch(() => ({ signals: [] as SignalType[], cityName: null }));
+    .catch(() => ({ signals: [] as SignalType[], cityName: null, isAvailable: false }));
   if (!meta.signals.includes(SignalType.WEATHER_FORECAST_HEAVY_RAIN)) {
     logger.info(
       `[DISCOVERY] Resilience nudge suppressed — no WEATHER_FORECAST_HEAVY_RAIN for zip=${zipCode}`
@@ -257,7 +257,7 @@ async function getResilienceNudge(
     type: 'RESILIENCE',
     title: 'Home resilience check',
     description: withStreakEncouragement(
-      `Heavy rain predicted${rainLocation}. Do you have a battery backup for your sump pump? This unlocks better flood risk guidance.`,
+      `Heavy rain forecast${rainLocation} in the next 5 days. Do you have a battery backup for your sump pump? This unlocks better flood risk guidance.`,
       streak.currentStreak
     ),
     currentStreak: streak.currentStreak,

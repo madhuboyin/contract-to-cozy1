@@ -51,6 +51,11 @@ const router = Router();
  *                         enum:
  *                           - WEATHER_FORECAST_MIN_TEMP
  *                           - WEATHER_FORECAST_HEAVY_RAIN
+ *                     cityName:
+ *                       type: string
+ *                       nullable: true
+ *                     isAvailable:
+ *                       type: boolean
  *       404:
  *         description: Property not found
  */
@@ -83,20 +88,24 @@ router.get('/check/:propertyId', authenticate, async (req: AuthRequest, res: Res
           propertyId,
           zipCode: null,
           signals: [],
+          cityName: null,
+          isAvailable: false,
           message: 'No zip code on file for this property',
         },
       });
     }
 
     // 2. Delegate to WeatherService (handles caching + error isolation)
-    const signals = await weatherService.getLocalSignals(zipCode);
+    const meta = await weatherService.getLocalForecastMeta(zipCode);
 
     return res.json({
       success: true,
       data: {
         propertyId,
         zipCode,
-        signals,
+        signals: meta.signals,
+        cityName: meta.cityName,
+        isAvailable: meta.isAvailable,
       },
     });
   } catch (error: any) {

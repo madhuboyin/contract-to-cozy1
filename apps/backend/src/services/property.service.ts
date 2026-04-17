@@ -580,8 +580,8 @@ export async function getNextPropertyNudge(propertyId: string): Promise<Property
       type: 'RESILIENCE_CHECK',
       source: 'PROPERTY',
       title: 'Home resilience check',
-      description: 'Heavy rain predicted. Do you have a battery backup for your sump pump?',
-      question: 'Heavy rain predicted. Do you have a battery backup for your sump pump?',
+      description: 'Do you have a battery backup for your sump pump? This improves flood-risk guidance.',
+      question: 'Do you have a battery backup for your sump pump?',
       field: 'hasSumpPumpBackup',
       options: [
         { label: 'Yes', value: true },

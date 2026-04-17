@@ -29,12 +29,14 @@ interface OWMForecastResponse {
 interface CacheEntry {
   signals: SignalType[];
   cityName: string | null;
+  isAvailable: boolean;
   expiresAt: number;
 }
 
 export interface ForecastMeta {
   signals: SignalType[];
   cityName: string | null;
+  isAvailable: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,6 +47,7 @@ const OWM_BASE_URL = 'https://api.openweathermap.org/data/2.5/forecast';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes — stays within OWM free tier
 const FREEZE_THRESHOLD_F = 32;
 const HEAVY_RAIN_VOLUME_MM_3H = 7.5; // mm per 3-hour block = ~60mm/day threshold
+const HEAVY_RAIN_DESCRIPTION_PATTERN = /\b(heavy|very heavy|extreme)\b/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WeatherService
@@ -76,14 +79,18 @@ export class WeatherService {
     const zip = String(zipCode ?? '').trim();
     if (!zip) {
       logger.warn('[WEATHER] getLocalForecastMeta called with empty zipCode');
-      return { signals: [], cityName: null };
+      return { signals: [], cityName: null, isAvailable: false };
     }
 
     // 1. Cache check
     const cached = this.getFromCache(zip);
     if (cached) {
       logger.info(`[WEATHER] Cache hit for zip=${zip}: [${cached.signals.join(', ')}]`);
-      return { signals: cached.signals, cityName: cached.cityName };
+      return {
+        signals: cached.signals,
+        cityName: cached.cityName,
+        isAvailable: cached.isAvailable,
+      };
     }
 
     // 2. Fetch from OpenWeatherMap
@@ -94,7 +101,7 @@ export class WeatherService {
           logger.warn('[WEATHER] OPENWEATHER_API_KEY is not set — weather signals disabled');
           this.apiKeyMissingLogged = true;
         }
-        return { signals: [], cityName: null };
+        return { signals: [], cityName: null, isAvailable: false };
       }
 
       const url = new URL(OWM_BASE_URL);
@@ -113,7 +120,7 @@ export class WeatherService {
         if (!res.ok) {
           const body = await res.text().catch(() => '');
           logger.error(`[WEATHER] OWM returned ${res.status} for zip=${zip}: ${body}`);
-          return { signals: [], cityName: null };
+          return { signals: [], cityName: null, isAvailable: false };
         }
         data = (await res.json()) as OWMForecastResponse;
       } finally {
@@ -128,16 +135,16 @@ export class WeatherService {
       );
 
       // 4. Store in cache
-      this.setCache(zip, signals, cityName);
+      this.setCache(zip, signals, cityName, true);
 
-      return { signals, cityName };
+      return { signals, cityName, isAvailable: true };
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         logger.error(`[WEATHER] Fetch timed out for zip=${zip}`);
       } else {
         logger.error({ err: error }, `[WEATHER] Fetch failed for zip=${zip}`);
       }
-      return { signals: [], cityName: null };
+      return { signals: [], cityName: null, isAvailable: false };
     }
   }
 
@@ -161,11 +168,14 @@ export class WeatherService {
         signals.add(SignalType.WEATHER_FORECAST_MIN_TEMP);
       }
 
-      // ── Heavy rain: OWM main category 'Rain' OR measured volume threshold ──
-      const weatherMain = entry.weather?.[0]?.main ?? '';
+      // ── Heavy rain: measured volume threshold OR explicit heavy-rain descriptor ──
+      const weatherMain = String(entry.weather?.[0]?.main ?? '').toLowerCase();
+      const weatherDescription = String(entry.weather?.[0]?.description ?? '');
       const rainVolume3h: number = (entry as any).rain?.['3h'] ?? 0;
+      const hasHeavyRainDescriptor =
+        weatherMain === 'rain' && HEAVY_RAIN_DESCRIPTION_PATTERN.test(weatherDescription);
 
-      if (weatherMain === 'Rain' || rainVolume3h >= HEAVY_RAIN_VOLUME_MM_3H) {
+      if (rainVolume3h >= HEAVY_RAIN_VOLUME_MM_3H || hasHeavyRainDescriptor) {
         signals.add(SignalType.WEATHER_FORECAST_HEAVY_RAIN);
       }
 
@@ -186,10 +196,16 @@ export class WeatherService {
     return entry;
   }
 
-  private setCache(zip: string, signals: SignalType[], cityName: string | null): void {
+  private setCache(
+    zip: string,
+    signals: SignalType[],
+    cityName: string | null,
+    isAvailable: boolean
+  ): void {
     this.cache.set(zip, {
       signals,
       cityName,
+      isAvailable,
       expiresAt: Date.now() + CACHE_TTL_MS,
     });
   }
