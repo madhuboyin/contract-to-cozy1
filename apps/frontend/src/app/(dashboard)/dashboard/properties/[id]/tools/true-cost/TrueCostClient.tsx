@@ -103,14 +103,31 @@ export default function TrueCostClient() {
       backLabel="Back to property"
       eyebrow="Home Tool"
       title="True Cost of Home Ownership"
-      subtitle="A 5-year reality check including taxes, insurance, maintenance, and utilities."
+      subtitle={`A ${years}-year reality check including taxes, insurance, maintenance, and utilities.`}
       trust={{
-        confidenceLabel: 'Medium, based on localized tax, insurance, and maintenance assumptions',
-        freshnessLabel: data?.meta?.generatedAt ? 'Updated from latest projection run' : 'Run analysis to generate latest view',
+        confidenceLabel: data?.meta?.confidence
+          ? `${data.meta.confidence.charAt(0) + data.meta.confidence.slice(1).toLowerCase()} confidence — localized tax, insurance, and maintenance assumptions`
+          : 'Localized tax, insurance, and maintenance assumptions',
+        freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest cost inputs' : 'Analyzing your property…',
         sourceLabel: 'CtC cost model + property profile + localized trend assumptions',
         rationale: 'Bundles recurring and structural cost drivers into one ownership view to reduce hidden-spend blind spots.',
       }}
       rail={<HomeToolsRail propertyId={propertyId} context="true-cost" currentToolId="true-cost" />}
+      priorityAction={{
+        title: 'See your full ownership cost picture',
+        description: `Switch between 5-year and 10-year views to understand how costs compound over time. Utilities are only tracked here.`,
+        impactLabel: `${years}-year projection`,
+        confidenceLabel: data?.meta?.confidence ?? 'Medium',
+        primaryAction: (
+          <button
+            type="button"
+            onClick={async () => { const next = years === 5 ? 10 : 5; setYears(next); await load(next); }}
+            className="inline-flex min-h-[36px] items-center rounded-full border border-slate-900 bg-slate-900 px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-700 dark:border-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+          >
+            Switch to {years === 5 ? '10-year' : '5-year'} view
+          </button>
+        ),
+      }}
     >
 
       {error && (
@@ -123,6 +140,13 @@ export default function TrueCostClient() {
       {loading && !data && (
         <div className="flex h-48 items-center justify-center rounded-2xl border border-white/70 bg-white/65 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
           <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-slate-900 dark:border-slate-100" />
+        </div>
+      )}
+
+      {loading && data && (
+        <div className="flex items-center gap-2 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 text-xs text-slate-500 backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">
+          <div className="h-3.5 w-3.5 animate-spin rounded-full border-b-2 border-slate-500 dark:border-slate-300" />
+          Refreshing {years}-year projection…
         </div>
       )}
 
@@ -223,19 +247,36 @@ export default function TrueCostClient() {
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {(data?.drivers || []).map((d, idx) => (
             <div key={idx} className="rounded-2xl border border-white/70 bg-white/68 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
+                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm ${
+                  d.impact === 'HIGH'
+                    ? 'border-rose-200/70 bg-rose-50/85 text-rose-700 dark:border-rose-700/60 dark:bg-rose-950/40 dark:text-rose-300'
+                    : d.impact === 'MEDIUM'
+                    ? 'border-amber-200/70 bg-amber-50/85 text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300'
+                    : 'border-slate-300/70 bg-slate-50/85 text-slate-600 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300'
+                }`}>{d.impact}</span>
+              </div>
               <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{d.explanation}</div>
             </div>
           ))}
         </div>
 
         <div className="mt-4 rounded-xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-          <div className="text-xs text-slate-500 dark:text-slate-300">Assumptions & methodology</div>
+          <div className="text-xs font-medium text-slate-600 dark:text-slate-300">Assumptions & methodology</div>
           <div className="mt-2 space-y-1">
             {(data?.meta?.notes || []).map((n, i) => (
               <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>
             ))}
           </div>
+          {(data?.meta?.dataSources?.length ?? 0) > 0 && (
+            <div className="mt-3 border-t border-slate-200/60 pt-3 dark:border-slate-700/50">
+              <div className="text-xs text-slate-500 dark:text-slate-400">Data sources</div>
+              <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                {(data?.meta?.dataSources ?? []).join(' · ')}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

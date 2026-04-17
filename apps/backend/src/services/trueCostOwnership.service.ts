@@ -111,7 +111,7 @@ function estimateHomeValueNowUSD(args: { state: string; propertySize?: number | 
   const notes: string[] = [];
   if (args.propertySize && Number.isFinite(args.propertySize) && args.propertySize > 200) {
     const ppsf = VALUE_PER_SQFT_BY_STATE[args.state] ?? 200;
-    notes.push(`Estimated home value using ${ppsf}/sqft heuristic (Phase 1).`);
+    notes.push(`Home value estimated using regional $/sqft benchmarks ($${ppsf}/sqft for ${args.state}).`);
     return { value: args.propertySize * ppsf, notes, confidence: 'MEDIUM' as Confidence };
   }
   notes.push('Estimated home value using generic fallback (no property size).');
@@ -150,11 +150,11 @@ export class TrueCostOwnershipService {
 
     const notes: string[] = [];
     const dataSources: string[] = [
-      'Internal property profile (state/zip/propertySize)',
-      'PropertyTaxService (modeled)',
-      'InsuranceCostTrendService (modeled)',
-      'Phase 1 maintenance heuristic (1% rule)',
-      'Phase 1 utilities regional avg heuristic',
+      'Property profile (address, state, ZIP, size)',
+      'Property tax estimate (state and county benchmarks)',
+      'Insurance cost model (state-adjusted premium benchmarks)',
+      'Maintenance estimate (1% of home value/year, state-adjusted)',
+      'Utilities estimate (state-level regional averages)',
     ];
 
     let confidence: Confidence = 'LOW';
@@ -212,7 +212,7 @@ export class TrueCostOwnershipService {
     if (input.maintenanceAnnualNow !== undefined) {
       notes.push('Maintenance override applied.');
     } else {
-      notes.push('Maintenance estimated using ~1% of home value/year (Phase 1).');
+      notes.push('Maintenance estimated at ~1% of home value per year, adjusted for state cost-of-living.');
     }
 
     // Utilities (override or heuristic)
@@ -222,7 +222,7 @@ export class TrueCostOwnershipService {
     if (input.utilitiesAnnualNow !== undefined) {
       notes.push('Utilities override applied.');
     } else {
-      notes.push('Utilities estimated using state-level regional averages (Phase 1).');
+      notes.push('Utilities estimated using state-level regional averages.');
     }
 
     // Inflation / drift assumption for utilities + maintenance (insurance handled by its model)
@@ -232,7 +232,7 @@ export class TrueCostOwnershipService {
       notes.push('Inflation override applied.');
       confidence = 'HIGH';
     } else {
-      notes.push(`Projected utilities/maintenance drift ${(inflationRate * 100).toFixed(1)}%/yr (Phase 1).`);
+      notes.push(`Utilities and maintenance projected with a ${(inflationRate * 100).toFixed(1)}%/yr inflation assumption.`);
     }
     if (insuranceIsEducational) {
       notes.push('Insurance component is an educational estimate and should not be used as a sole financial planning input.');
@@ -304,22 +304,23 @@ export class TrueCostOwnershipService {
 
     const drivers = [
       {
-        factor: `Insurance volatility (state ${state}, ZIP ${zp})`,
+        factor: `Insurance volatility (${state}, ZIP ${zp})`,
         impact: (['FL', 'TX', 'CA', 'LA'].includes(state) ? 'HIGH' : 'MEDIUM') as Impact,
-        explanation:
-          `Insurance is modeled with localized climate/claims pressure. Phase 2 can replace this with DOI filings + FEMA/NOAA correlations.`,
+        explanation: (['FL', 'TX', 'LA'].includes(state)
+          ? `${state} has elevated weather and peril exposure, which can drive above-average premium growth. Your insurance estimate is adjusted for this state risk profile.`
+          : `Insurance is modeled using state-level claims and climate benchmarks. Premiums can spike due to insurer repricing or regional claims activity.`),
       },
       {
-        factor: `Utilities regional averages (${state})`,
+        factor: `Utilities (${state} regional average)`,
         impact: 'MEDIUM' as Impact,
         explanation:
-          `Utilities are estimated from state-level averages in Phase 1. Add provider/energy-rate datasets later for higher precision.`,
+          `Utilities are estimated from state-level averages. ${['AZ', 'TX', 'FL'].includes(state) ? `${state} homes typically see higher cooling costs, which pushes this estimate above the national average.` : 'Actual costs depend on home size, efficiency, and local utility rates.'}`,
       },
       {
         factor: `Maintenance drift vs home value`,
         impact: 'MEDIUM' as Impact,
         explanation:
-          `Maintenance uses the “1% rule” baseline with light state adjustment. Homes with deferred maintenance can exceed this baseline.`,
+          `Maintenance is estimated at ~1% of home value per year — a widely used baseline. Homes with deferred upkeep or aging systems often exceed this. Building a dedicated maintenance reserve helps prevent large unexpected bills.`,
       },
     ];
 
@@ -331,8 +332,8 @@ export class TrueCostOwnershipService {
         note: input.homeValueNow !== undefined
           ? 'Client-provided override.'
           : property.propertySize
-            ? `Estimated from ${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft (Phase 1).`
-            : 'Generic $350,000 fallback — no property size on file.',
+            ? `Estimated from regional benchmark of $${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft.`
+            : 'Generic $350,000 fallback used — no property size on file.',
       },
       {
         field: 'annualInsurance',
@@ -350,7 +351,7 @@ export class TrueCostOwnershipService {
         value: toMoney(annualMaintenanceNow),
         note: input.maintenanceAnnualNow !== undefined
           ? 'Client-provided override.'
-          : `~1% of home value × state factor (Phase 1 heuristic, state: ${state}).`,
+          : `~1% of home value × state cost-of-living factor (state-adjusted benchmark, state: ${state}).`,
       },
       {
         field: 'annualUtilities',
@@ -358,7 +359,7 @@ export class TrueCostOwnershipService {
         value: toMoney(annualUtilitiesNow),
         note: input.utilitiesAnnualNow !== undefined
           ? 'Client-provided override.'
-          : `State-level regional average for ${state} (Phase 1 — no provider/energy-rate dataset yet).`,
+          : `State-level regional average for ${state}.`,
       },
       {
         field: 'inflationRate',
@@ -366,7 +367,7 @@ export class TrueCostOwnershipService {
         value: `${(inflationRate * 100).toFixed(1)}%`,
         note: input.inflationRate !== undefined
           ? 'Client-provided override.'
-          : `State-adjusted heuristic for ${state} — used for utilities + maintenance drift (Phase 1).`,
+          : `State-adjusted inflation estimate for ${state}, applied to utilities and maintenance projections.`,
       },
     ];
 
@@ -399,10 +400,7 @@ export class TrueCostOwnershipService {
       meta: {
         generatedAt: new Date().toISOString(),
         dataSources,
-        notes: [
-          ...notes,
-          'Phase 1 is a storytelling estimator: no external utility provider data, no DOI filings, no snapshot persistence.',
-        ],
+        notes,
         confidence,
         assumptions,
       },
