@@ -149,33 +149,27 @@ export default function CoverageOptionsClient() {
         sourceLabel: 'Inventory coverage gaps + linked warranty/insurance metadata',
         rationale: 'Recommendations prioritize no-coverage items first, then partial or expired protection.',
       }}
-      priorityAction={{
-        title: topGap ? `Close coverage gap: ${topGap.itemName}` : 'Coverage looks healthy',
-        description: topGap
-          ? 'Start with the highest-priority uncovered item, then continue through remaining gaps.'
-          : 'No immediate gap action is required. Continue periodic coverage checks to stay protected.',
-        impactLabel: topGap ? `${formatEnumLabel(topGap.gapType) || 'Gap'} priority` : 'Protected baseline',
+      priorityAction={!loading && !err && totalGaps > 0 && topGap ? {
+        title: `You have ${totalGaps} coverage gap${totalGaps !== 1 ? 's' : ''} — highest priority: ${topGap.itemName}`,
+        description: `${formatEnumLabel(topGap.gapType) || 'Gap'} protection is missing on this item. Start here, then work through the remaining ${totalGaps - 1} gap${totalGaps - 1 !== 1 ? 's' : ''}.`,
+        impactLabel: `${formatEnumLabel(topGap.gapType) || 'Gap'} exposure`,
         confidenceLabel: 'Confidence improves as item-level coverage records stay current',
-        primaryAction: topGap ? (
+        primaryAction: (
           <Link
             href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/coverage`}
             className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold text-white hover:bg-black/90"
           >
             Resolve top gap
           </Link>
-        ) : (
-          <Button variant="outline" asChild className="w-full sm:w-auto">
-            <Link href={`/dashboard/properties/${propertyId}/inventory`}>Open inventory overview</Link>
-          </Button>
         ),
-        supportingAction: topGap ? (
+        supportingAction: (
           <Button variant="outline" asChild className="w-full sm:w-auto">
             <Link href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/replace-repair`}>
               Review repair/replace context
             </Link>
           </Button>
-        ) : undefined,
-      }}
+        ),
+      } : undefined}
       routeState={routeState}
       summary={
         <GuidanceInlinePanel

@@ -122,6 +122,40 @@ export default function CostVolatilityClient() {
     return `In ${top.year}, we flagged a ${eventLabel(top.type).toLowerCase()} event that can increase surprise risk.`;
   }, [recentEvents]);
 
+  const volatilityPriorityAction = (() => {
+    if (!data || loading || !data?.index?.band) return undefined;
+    const band = data.index.band;
+    if (band === 'HIGH') {
+      return {
+        title: 'Your cost volatility is HIGH — unpredictable swings detected',
+        description: spikeAnchor
+          ? `${spikeAnchor} Consider building a buffer fund before the next spike window arrives.`
+          : 'Year-to-year cost swings are above normal. Consider building a buffer fund before the next spike window.',
+        impactLabel: 'High volatility risk',
+        confidenceLabel: data.meta?.confidence ?? 'Medium',
+        primaryAction: (
+          <Button type="button" className="w-full sm:w-auto">
+            Build a buffer plan
+          </Button>
+        ),
+      };
+    }
+    if (band === 'MEDIUM') {
+      return {
+        title: 'Your cost volatility is MEDIUM — some year-to-year unpredictability',
+        description: 'Costs are somewhat unpredictable. Review the largest swing sources in the breakdown below to decide if a buffer is warranted.',
+        impactLabel: 'Medium volatility risk',
+        confidenceLabel: data.meta?.confidence ?? 'Medium',
+      };
+    }
+    return {
+      title: 'Your cost volatility is LOW — ownership costs are stable and predictable',
+      description: 'Year-to-year swings are within normal ranges. No immediate buffer action is needed.',
+      impactLabel: 'Low volatility risk',
+      confidenceLabel: data.meta?.confidence ?? 'Medium',
+    };
+  })();
+
   return (
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
@@ -136,26 +170,7 @@ export default function CostVolatilityClient() {
         sourceLabel: 'Cost history + event markers + exposure-weighted risk factors',
         rationale: 'Flags when cost swings become unpredictable so homeowners can build buffers sooner.',
       }}
-      priorityAction={{
-        title: 'Prepare for your highest volatility source',
-        description: 'Review where volatility is highest and set a budget buffer before the next spike window.',
-        impactLabel: data?.index?.band ?? 'Volatility risk',
-        confidenceLabel: data?.meta?.confidence ?? 'Medium',
-        primaryAction: (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              const nextYears = years === 5 ? 10 : 5;
-              setYears(nextYears);
-              void load(nextYears);
-            }}
-          >
-            Switch to {years === 5 ? '10-year' : '5-year'} window
-          </Button>
-        ),
-      }}
+      priorityAction={volatilityPriorityAction}
     >
 
       {error && (

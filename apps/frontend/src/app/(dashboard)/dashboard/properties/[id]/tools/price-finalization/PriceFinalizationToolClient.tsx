@@ -371,12 +371,14 @@ export default function PriceFinalizationToolClient() {
         sourceLabel: 'Quote context + selected vendor terms + guidance continuity metadata',
         rationale: 'Finalized pricing is used to reduce re-entry and keep booking decisions aligned with accepted terms.',
       }}
-      priorityAction={{
-        title: finalizedDetail ? 'Finalized record ready for booking handoff' : 'Finalize accepted price before booking',
+      priorityAction={!loading && items.length > 0 ? {
+        title: finalizedDetail
+          ? 'Price finalized — ready to continue to provider booking'
+          : 'Finalize accepted price to unlock booking',
         description: finalizedDetail
-          ? 'Primary handoff is complete. You can continue to booking with contract terms prefilled.'
-          : 'Lock the accepted amount and terms so downstream booking and negotiation steps stay aligned.',
-        impactLabel: finalizedDetail ? 'Booking-ready context' : 'Avoids downstream re-entry',
+          ? 'Contract terms are locked. Continue to booking with scope and accepted price prefilled — no re-entry needed.'
+          : 'Lock the accepted amount and terms now so the booking step can reference them automatically.',
+        impactLabel: finalizedDetail ? 'Booking-ready' : 'Avoids downstream re-entry',
         confidenceLabel: finalizedDetail ? 'High for finalized records' : 'Medium while drafting',
         primaryAction: bookingHref ? (
           <Link
@@ -390,12 +392,12 @@ export default function PriceFinalizationToolClient() {
             {finalizing ? 'Finalizing...' : 'Finalize price'}
           </Button>
         ),
-        supportingAction: (
+        supportingAction: !finalizedDetail ? (
           <Button variant="outline" className="w-full sm:w-auto" onClick={handleSaveDraft} disabled={saving || finalizing || loading}>
             {saving ? 'Saving draft...' : 'Save draft'}
           </Button>
-        ),
-      }}
+        ) : undefined,
+      } : undefined}
       summary={
         <ResultHeroCard
           eyebrow="Workspace"

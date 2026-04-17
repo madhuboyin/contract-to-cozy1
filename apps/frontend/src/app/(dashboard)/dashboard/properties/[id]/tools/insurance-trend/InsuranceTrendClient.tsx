@@ -105,6 +105,38 @@ export default function InsuranceTrendClient() {
       ? 'border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 via-white/75 to-teal-50/70 text-emerald-800'
       : 'border-rose-200/70 bg-gradient-to-br from-rose-50/85 via-white/75 to-amber-50/65 text-rose-800';
 
+  const insurancePriorityAction = (() => {
+    if (!data || loading || data.current?.deltaVsStateNow == null) return undefined;
+    const delta = data.current.deltaVsStateNow;
+    if (delta > 0.02) {
+      return {
+        title: `Your premium is running ${pct(delta)} above state average`,
+        description: 'This drift is worth acting on before your next renewal — shopping alternatives now gives you leverage.',
+        impactLabel: `${trendYears}-year premium trend`,
+        confidenceLabel: data.meta?.confidence ?? 'Medium',
+        primaryAction: (
+          <Button type="button" className="w-full sm:w-auto">
+            Get insurance quotes
+          </Button>
+        ),
+      };
+    }
+    if (delta <= 0) {
+      return {
+        title: `Your premium is tracking ${pct(Math.abs(delta))} below state average`,
+        description: 'A healthy signal. Review at renewal to confirm the gap holds — market conditions can shift it.',
+        impactLabel: `${trendYears}-year premium trend`,
+        confidenceLabel: data.meta?.confidence ?? 'Medium',
+        primaryAction: (
+          <Button type="button" variant="outline" className="w-full sm:w-auto">
+            Get insurance quotes
+          </Button>
+        ),
+      };
+    }
+    return undefined;
+  })();
+
   return (
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
@@ -119,26 +151,7 @@ export default function InsuranceTrendClient() {
         sourceLabel: 'Property premium history + state average trend data',
         rationale: 'Shows whether your premium trajectory is tracking above or below state-level pressure.',
       }}
-      priorityAction={{
-        title: 'Validate premium drift before acting',
-        description: 'Use both horizon views, then decide whether to gather quotes or adjust coverage posture.',
-        impactLabel: `${trendYears}-year premium trend`,
-        confidenceLabel: data?.meta?.confidence ?? 'Medium',
-        primaryAction: (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              const nextYears = trendYears === 5 ? 10 : 5;
-              setTrendYears(nextYears);
-              void getAndSet(nextYears);
-            }}
-          >
-            Switch to {trendYears === 5 ? '10-year' : '5-year'} view
-          </Button>
-        ),
-      }}
+      priorityAction={insurancePriorityAction}
     >
 
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">

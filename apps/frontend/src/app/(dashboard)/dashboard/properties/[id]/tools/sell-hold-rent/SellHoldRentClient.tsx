@@ -172,28 +172,17 @@ export default function SellHoldRentClient() {
         sourceLabel: 'Property valuation signals + ownership costs + rental assumptions + debt snapshot',
         rationale: 'Compares three explainable scenarios over matching horizons so homeowners can choose with clearer trade-offs.',
       }}
-      priorityAction={{
-        title: winner ? `Current best projected path: ${winnerLabel}` : 'Run comparison to identify your best path',
-        description: winner
-          ? `${winnerLabel} currently leads over ${years} years with a projected net outcome of ${money(winnerNet)}.`
-          : 'Review assumptions, run the model, then decide with confidence.',
+      priorityAction={hasScenarioData && winner && !loading ? {
+        title: `${winnerLabel} leads over ${years} years — projected net: ${money(winnerNet)}`,
+        description: `Based on your current assumptions, ${winnerLabel.toLowerCase()} produces the strongest outcome. Review the scenario inputs below to stress-test this before committing.`,
         impactLabel: `${years}-year projection`,
         confidenceLabel: data?.meta?.confidence ?? 'Medium',
         primaryAction: (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              const nextYears = years === 5 ? 10 : 5;
-              setYears(nextYears);
-              void loadSimulator(nextYears);
-            }}
-          >
-            Compare {years === 5 ? '10-year' : '5-year'} outcome
+          <Button type="button" className="w-full sm:w-auto">
+            Speak to an advisor
           </Button>
         ),
-      }}
+      } : undefined}
       summary={
         <p className="text-sm text-slate-600">
           Use the assumptions panel to tune the model before committing to a sell, hold, or rent decision.

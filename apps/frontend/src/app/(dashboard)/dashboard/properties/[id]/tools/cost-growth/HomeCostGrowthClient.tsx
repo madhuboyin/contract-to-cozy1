@@ -111,6 +111,30 @@ export default function HomeCostGrowthClient() {
       ? 'border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 via-white/75 to-teal-50/70 text-emerald-800'
       : 'border-rose-200/70 bg-gradient-to-br from-rose-50/85 via-white/75 to-amber-50/65 text-rose-800';
 
+  const costGrowthPriorityAction = (() => {
+    if (!data || loading || data?.rollup?.totalNet == null) return undefined;
+    const net = data.rollup.totalNet;
+    if (net >= 0) {
+      return {
+        title: `Appreciation is outpacing costs by ${money(net)} over ${trendYears} years`,
+        description: 'Your equity position is growing. Use the appreciation slider below to stress-test against slower-growth scenarios.',
+        impactLabel: `${trendYears}-year net gain`,
+        confidenceLabel: data.meta?.confidence ?? 'Medium',
+      };
+    }
+    return {
+      title: `Costs are exceeding appreciation by ${money(Math.abs(net))} over ${trendYears} years`,
+      description: 'Ownership expenses are currently outpacing home value growth. Explore where you can reduce recurring costs.',
+      impactLabel: `${trendYears}-year net drag`,
+      confidenceLabel: data.meta?.confidence ?? 'Medium',
+      primaryAction: (
+        <Button type="button" asChild className="w-full sm:w-auto">
+          <a href={`/dashboard/properties/${propertyId}/tools/home-savings`}>Explore savings opportunities</a>
+        </Button>
+      ),
+    };
+  })();
+
   return (
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
@@ -125,26 +149,7 @@ export default function HomeCostGrowthClient() {
         sourceLabel: 'Home value projection + ownership expense history + regional assumptions',
         rationale: 'Highlights whether appreciation is outpacing total ownership costs over time.',
       }}
-      priorityAction={{
-        title: 'Confirm your net trend direction',
-        description: 'Switch between 5-year and 10-year views before making longer-term hold decisions.',
-        impactLabel: `${trendYears}-year trend`,
-        confidenceLabel: data?.meta?.confidence ?? 'Medium',
-        primaryAction: (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              const nextYears = trendYears === 5 ? 10 : 5;
-              setTrendYears(nextYears);
-              void getAndSet(nextYears, appreciationOverridePct);
-            }}
-          >
-            Switch to {trendYears === 5 ? '10-year' : '5-year'} view
-          </Button>
-        ),
-      }}
+      priorityAction={costGrowthPriorityAction}
     >
 
       {/* Main Story Card */}

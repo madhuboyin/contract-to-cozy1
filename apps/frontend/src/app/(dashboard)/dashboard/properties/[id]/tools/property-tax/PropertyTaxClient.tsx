@@ -219,26 +219,35 @@ export default function PropertyTaxClient() {
         sourceLabel: 'Property value assumptions + local rate estimates + historical trend projection',
         rationale: 'Surfaces annual tax direction and major contributors so planning decisions stay proactive.',
       }}
-      priorityAction={{
-        title: 'Validate your assessed value assumptions',
-        description: 'Apply assessed value and local rate overrides to reduce uncertainty before acting on projected taxes.',
-        impactLabel: `${trendYears}-year projection`,
-        confidenceLabel: estimate?.current?.confidence ?? 'Medium',
-        primaryAction: (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              const nextYears = trendYears === 5 ? 10 : 5;
-              setTrendYears(nextYears);
-              void getAndSet(nextYears);
-            }}
-          >
-            Switch to {trendYears === 5 ? '10-year' : '5-year'} projection
-          </Button>
-        ),
-      }}
+      priorityAction={(() => {
+        if (!estimate || loading || estimate?.current?.yoyChangePct == null) return undefined;
+        const yoy = estimate.current.yoyChangePct;
+        const annualTax = estimate.current.annualTax ?? 0;
+        const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
+        const fmtMoney = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+        if (yoy > 0.05) {
+          return {
+            title: `Your property tax is projected up ${fmtPct(yoy)} this year — adding ${fmtMoney(annualTax * yoy)}/year`,
+            description: 'An increase above 5% is worth reviewing. If your assessed value exceeds market reality, you may have grounds to contest.',
+            impactLabel: `${fmtPct(yoy)} year-over-year increase`,
+            confidenceLabel: estimate.current.confidence ?? 'Medium',
+            primaryAction: (
+              <Button type="button" className="w-full sm:w-auto">
+                Contest your assessment
+              </Button>
+            ),
+          };
+        }
+        if (yoy > 0.01) {
+          return {
+            title: `Your property tax is up ${fmtPct(yoy)} this year — a modest increase within normal bounds`,
+            description: 'No immediate action required, but review the trend line below to catch acceleration early.',
+            impactLabel: `${fmtPct(yoy)} year-over-year`,
+            confidenceLabel: estimate.current.confidence ?? 'Medium',
+          };
+        }
+        return undefined;
+      })()}
     >
 
       {/* Controls */}

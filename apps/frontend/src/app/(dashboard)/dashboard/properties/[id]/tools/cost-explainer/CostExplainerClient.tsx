@@ -97,6 +97,32 @@ export default function CostExplainerClient() {
     };
   }, [data, years]);
 
+  const costExplainerPriorityAction = (() => {
+    if (!data || loading) return undefined;
+    const lastYear = data?.snapshot?.history?.slice(-1)[0];
+    if (!lastYear) return undefined;
+    const drivers: Record<string, number> = {
+      taxes: lastYear.annualTax ?? 0,
+      insurance: lastYear.annualInsurance ?? 0,
+      maintenance: lastYear.annualMaintenance ?? 0,
+    };
+    const topEntry = Object.entries(drivers).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])[0];
+    if (!topEntry) return undefined;
+    const categoryLabels: Record<string, string> = {
+      taxes: 'Property tax',
+      insurance: 'Insurance',
+      maintenance: 'Maintenance',
+    };
+    const topLabel = categoryLabels[topEntry[0]] ?? topEntry[0];
+    const fmt = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+    return {
+      title: `${topLabel} is your largest cost driver at ${fmt(topEntry[1])}/year`,
+      description: 'Review the breakdown below to see whether this driver is accelerating, and decide if action is warranted before your next renewal or reassessment.',
+      impactLabel: `${years}-year driver lens`,
+      confidenceLabel: data.meta?.confidence ?? 'Medium',
+    };
+  })();
+
   return (
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
@@ -111,26 +137,7 @@ export default function CostExplainerClient() {
         sourceLabel: 'Tax, insurance, maintenance, and property profile inputs',
         rationale: 'Explains which cost categories are driving homeowner spend growth and why.',
       }}
-      priorityAction={{
-        title: 'Validate the largest driver first',
-        description: 'Use a 5-year vs 10-year view to confirm whether the trend is persistent before taking action.',
-        impactLabel: `${years}-year driver lens`,
-        confidenceLabel: 'Medium',
-        primaryAction: (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              const nextYears = years === 5 ? 10 : 5;
-              setYears(nextYears);
-              void load(nextYears);
-            }}
-          >
-            Switch to {years === 5 ? '10-year' : '5-year'} view
-          </Button>
-        ),
-      }}
+      priorityAction={costExplainerPriorityAction}
     >
       {/* Top block */}
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">

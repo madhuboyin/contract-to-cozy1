@@ -97,6 +97,33 @@ export default function TrueCostClient() {
     return { x, series: visibleSeries };
   }, [data, allSeries, chartExpanded, top2SeriesKeys]);
 
+  const trueCostPriorityAction = (() => {
+    if (!data || loading || !data?.rollup?.breakdown) return undefined;
+    const breakdown = data.rollup.breakdown as Record<string, number>;
+    const total = Object.values(breakdown).reduce((s, v) => s + v, 0);
+    const topEntry = Object.entries(breakdown).sort((a, b) => b[1] - a[1])[0];
+    if (!topEntry || total <= 0) return undefined;
+    const categoryLabels: Record<string, string> = {
+      taxes: 'property tax',
+      insurance: 'insurance premiums',
+      maintenance: 'maintenance',
+      utilities: 'utilities',
+    };
+    const topLabel = categoryLabels[topEntry[0]] ?? topEntry[0];
+    const fmt = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+    return {
+      title: `Your ${years}-year ownership cost is projected at ${fmt(total)}`,
+      description: `Biggest driver: ${topLabel} at ${fmt(topEntry[1])} over ${years} years. Scroll down to see how each category compounds.`,
+      impactLabel: `${years}-year total`,
+      confidenceLabel: data.meta?.confidence ?? 'Medium',
+      primaryAction: (
+        <Button type="button" asChild className="w-full sm:w-auto">
+          <a href={`/dashboard/properties/${propertyId}/tools/home-savings`}>Find savings opportunities</a>
+        </Button>
+      ),
+    };
+  })();
+
   return (
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
@@ -113,21 +140,7 @@ export default function TrueCostClient() {
         rationale: 'Bundles recurring and structural cost drivers into one ownership view to reduce hidden-spend blind spots.',
       }}
       rail={<HomeToolsRail propertyId={propertyId} context="true-cost" currentToolId="true-cost" />}
-      priorityAction={{
-        title: 'See your full ownership cost picture',
-        description: `Switch between 5-year and 10-year views to understand how costs compound over time. Utilities are only tracked here.`,
-        impactLabel: `${years}-year projection`,
-        confidenceLabel: data?.meta?.confidence ?? 'Medium',
-        primaryAction: (
-          <button
-            type="button"
-            onClick={async () => { const next = years === 5 ? 10 : 5; setYears(next); await load(next); }}
-            className="inline-flex min-h-[36px] items-center rounded-full border border-slate-900 bg-slate-900 px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-700 dark:border-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-          >
-            Switch to {years === 5 ? '10-year' : '5-year'} view
-          </button>
-        ),
-      }}
+      priorityAction={trueCostPriorityAction}
     >
 
       {error && (

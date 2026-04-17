@@ -891,24 +891,48 @@ export default function MortgageRefinanceRadarClient() {
         sourceLabel: 'Mortgage profile + market rate snapshots + CtC refinance model',
         rationale: 'Opportunity scoring weighs rate gap, break-even horizon, and closing-cost assumptions together.',
       }}
-      priorityAction={{
-        title: available?.radarState === 'OPEN' ? 'Re-evaluate refinance opportunity now' : 'Run a fresh refinance check',
-        description: available?.radarState === 'OPEN'
-          ? 'Confirm this opportunity with up-to-date rates before committing to lender outreach.'
-          : 'Re-run the model to verify if market movement changed your refinance window.',
-        impactLabel: available?.radarState === 'OPEN' ? 'Can unlock monthly savings' : 'Keeps opportunity timing current',
-        confidenceLabel: available?.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} fit` : 'Confidence pending latest evaluation',
-        primaryAction: (
-          <Button
-            onClick={handleEvaluate}
-            disabled={evaluating || loading}
-            className="w-full sm:w-auto"
-          >
-            <RefreshCw className={`mr-1.5 h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
-            {evaluating ? 'Evaluating…' : 'Re-evaluate radar'}
-          </Button>
-        ),
-      }}
+      priorityAction={!loading && available ? (
+        available.radarState === 'OPEN' ? {
+          title: 'A refinance window is open — current rates suggest potential savings',
+          description: 'Rate movement has opened a gap worth exploring. Confirm with lender outreach before conditions change.',
+          impactLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} fit` : 'Opportunity detected',
+          confidenceLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} confidence` : 'Medium confidence',
+          primaryAction: (
+            <Button type="button" className="w-full sm:w-auto">
+              Get refinance quotes
+            </Button>
+          ),
+          supportingAction: (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={handleEvaluate}
+              disabled={evaluating}
+            >
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
+              {evaluating ? 'Evaluating…' : 'Re-evaluate radar'}
+            </Button>
+          ),
+        } : {
+          title: 'No refinance opportunity detected at current rates',
+          description: 'The model does not see a compelling rate gap right now. Re-evaluate when market rates shift to get an updated read.',
+          impactLabel: 'Window currently closed',
+          confidenceLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} confidence` : 'Medium confidence',
+          primaryAction: (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={handleEvaluate}
+              disabled={evaluating}
+            >
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${evaluating ? 'animate-spin' : ''}`} />
+              {evaluating ? 'Evaluating…' : 'Re-evaluate radar'}
+            </Button>
+          ),
+        }
+      ) : undefined}
       rail={<HomeToolsRail propertyId={propertyId} context="mortgage-refinance-radar" currentToolId="mortgage-refinance-radar" />}
     >
 
