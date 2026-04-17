@@ -29,6 +29,7 @@ export default function TrueCostClient() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TrueCostOwnershipDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [chartExpanded, setChartExpanded] = useState(false);
   const reqRef = React.useRef(0);
 
   async function load(nextYears: 5 | 10 = years) {
@@ -57,20 +58,44 @@ export default function TrueCostClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, guidanceJourneyId, guidanceStepKey, guidanceSignalIntentFamily, inventoryItemId]);
 
+  const allSeries = useMemo(() => {
+    const h = data?.history ?? [];
+    return [
+      { key: 'total', label: 'Total', values: h.map((r) => r.annualTotal), strokeWidth: 2.75, color: '#475569' },
+      { key: 'tax', label: 'Taxes', values: h.map((r) => r.annualTax), color: '#d97706', dash: '6 5' },
+      { key: 'ins', label: 'Insurance', values: h.map((r) => r.annualInsurance), color: '#e11d48', dash: '2 4' },
+      { key: 'maint', label: 'Maintenance', values: h.map((r) => r.annualMaintenance), color: '#0284c7', dash: '10 6' },
+      { key: 'util', label: 'Utilities', values: h.map((r) => r.annualUtilities), color: '#0d9488', dash: '1 6' },
+    ];
+  }, [data]);
+
+  // Keys for the 2 largest cost contributors, mapped to chart series keys
+  const top2SeriesKeys: string[] = useMemo(() => {
+    const categoryToKey: Record<string, string> = {
+      taxes: 'tax',
+      insurance: 'ins',
+      maintenance: 'maint',
+      utilities: 'util',
+    };
+    const b = data?.rollup?.breakdown;
+    if (!b) return ['tax', 'ins'];
+    // cast via variable to avoid <> generics in TSX expression context
+    const entries = Object.entries(b) as [string, number][];
+    return entries
+      .sort((entA, entB) => entB[1] - entA[1])
+      .slice(0, 2)
+      .map((ent) => categoryToKey[ent[0]])
+      .filter(Boolean) as string[];
+  }, [data]);
+
   const chartModel = useMemo(() => {
     const h = data?.history ?? [];
     const x = h.map((r) => String(r.year));
-    return {
-      x,
-      series: [
-        { key: 'total', label: 'Total', values: h.map((r) => r.annualTotal), strokeWidth: 2.75, color: '#475569' },
-        { key: 'tax', label: 'Taxes', values: h.map((r) => r.annualTax), color: '#d97706', dash: '6 5' },
-        { key: 'ins', label: 'Insurance', values: h.map((r) => r.annualInsurance), color: '#e11d48', dash: '2 4' },
-        { key: 'maint', label: 'Maintenance', values: h.map((r) => r.annualMaintenance), color: '#0284c7', dash: '10 6' },
-        { key: 'util', label: 'Utilities', values: h.map((r) => r.annualUtilities), color: '#0d9488', dash: '1 6' },
-      ],
-    };
-  }, [data]);
+    const visibleSeries = chartExpanded
+      ? allSeries
+      : allSeries.filter((s) => s.key === 'total' || top2SeriesKeys.includes(s.key));
+    return { x, series: visibleSeries };
+  }, [data, allSeries, chartExpanded, top2SeriesKeys]);
 
   return (
     <ToolWorkspaceTemplate
@@ -169,9 +194,21 @@ export default function TrueCostClient() {
         </div>
 
         <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="text-xs text-slate-500 dark:text-slate-300">
+              {chartExpanded ? 'All cost components' : 'Total + 2 largest contributors'}
+            </div>
+            <button
+              type="button"
+              onClick={() => setChartExpanded((v) => !v)}
+              className="rounded-full border border-slate-200/80 bg-white/75 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300 dark:hover:bg-slate-900/80"
+            >
+              {chartExpanded ? 'Show less' : 'Show all 5 lines'}
+            </button>
+          </div>
           <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="True cost trend chart" />
-          <div className=”mt-2 text-xs text-slate-500 dark:text-slate-300”>
-            Total is emphasized; other lines show the components that drive the “true cost”. <span className=”text-teal-600 dark:text-teal-400 font-medium”>Utilities (teal) are tracked here only</span> — not included in other home tools.
+          <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
+            Total is emphasized; other lines show the components that drive the "true cost". <span className="text-teal-600 dark:text-teal-400 font-medium">Utilities (teal) are tracked here only</span> — not included in other home tools.
           </div>
         </div>
       </div>

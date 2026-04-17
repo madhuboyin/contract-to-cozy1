@@ -192,14 +192,9 @@ export default function PropertyTaxClient() {
     if (trendYears === 5) {
       return hist.slice(-5).map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
     }
-  
-    // 10y: sample 5 points spaced by 2 years
-    const ten = hist.slice(-10);
-    const sampled = [0, 2, 4, 6, 8]
-      .filter((i) => i < ten.length)
-      .map((i) => ten[i]);
-  
-    return sampled.map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
+
+    // 10y: show all 10 data points; chart x-axis renders first/mid/last labels to avoid crowding
+    return hist.slice(-10).map((h) => ({ xLabel: String(h.year), y: h.annualTax }));
   }, [estimate, trendYears]);
     
 

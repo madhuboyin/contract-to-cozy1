@@ -102,7 +102,7 @@ export default function CostVolatilityClient() {
     return [...ev].sort((a, b) => a.year - b.year).slice(-8);
   }, [data]);
 
-  // ✅ Patch: avoid “Insurance volatility = 0” when it’s actually “not enough history”
+  // ✅ Patch: avoid "Insurance volatility = 0" when it's actually "not enough history"
   const insuranceDeltaCount = useMemo(() => {
     const hist = data?.history || [];
     // count non-null yoy insurance points
@@ -111,7 +111,7 @@ export default function CostVolatilityClient() {
 
   const showInsuranceAsMissing = useMemo(() => {
     const v = data?.index?.insuranceVolatility;
-    // If score is exactly 0 and we have <3 delta points, it’s likely “insufficient history”
+    // If score is exactly 0 and we have <3 delta points, it's likely "insufficient history"
     return v === 0 && insuranceDeltaCount < 3;
   }, [data, insuranceDeltaCount]);
 
@@ -171,17 +171,17 @@ export default function CostVolatilityClient() {
           <div>
             <div className="text-base font-semibold text-slate-900 dark:text-slate-100">Volatility score (0–100)</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-              <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || ‘—‘}</span>
+              <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || '—'}</span>
             </div>
             {data ? (
               <div className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">
-                {data.index.band === ‘HIGH’ && `Your home scores ${data.index.volatilityIndex}/100 — high unpredictability. Build a buffer now.`}
-                {data.index.band === ‘MEDIUM’ && `Your home scores ${data.index.volatilityIndex}/100 — moderate unpredictability. A typical US home scores around 30.`}
-                {data.index.band === ‘LOW’ && `Your home scores ${data.index.volatilityIndex}/100 — costs are relatively stable. A typical US home scores around 30.`}
+                {data.index.band === 'HIGH' && `Your home scores ${data.index.volatilityIndex}/100 — high unpredictability. Build a buffer now.`}
+                {data.index.band === 'MEDIUM' && `Your home scores ${data.index.volatilityIndex}/100 — moderate unpredictability. A typical US home scores around 30.`}
+                {data.index.band === 'LOW' && `Your home scores ${data.index.volatilityIndex}/100 — costs are relatively stable. A typical US home scores around 30.`}
               </div>
             ) : (
               <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-                Your costs aren’t just rising — they’re unpredictable.
+                Your costs aren't just rising — they're unpredictable.
               </div>
             )}
           </div>
@@ -376,7 +376,7 @@ export default function CostVolatilityClient() {
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What’s driving unpredictability</div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What's driving unpredictability</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Ranked by estimated impact.</div>
 
             {/* ✅ Patch: confidence clarification */}

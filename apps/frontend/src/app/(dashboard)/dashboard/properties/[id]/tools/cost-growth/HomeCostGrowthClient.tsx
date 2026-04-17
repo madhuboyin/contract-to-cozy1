@@ -29,16 +29,21 @@ export default function HomeCostGrowthClient() {
   const [error, setError] = useState<string | null>(null);
 
   const [trendYears, setTrendYears] = useState<5 | 10>(5);
+  // null = use server model rate; number = user override (percentage, e.g. 3.5 = 3.5%)
+  const [appreciationOverridePct, setAppreciationOverridePct] = useState<number | null>(null);
   const reqRef = React.useRef(0);
 
-  async function getAndSet(years: 5 | 10) {
+  async function getAndSet(years: 5 | 10, overrideRatePct?: number | null) {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
 
     const reqId = ++reqRef.current;
     try {
-      const r = await getHomeCostGrowth(propertyId, { years });
+      const r = await getHomeCostGrowth(propertyId, {
+        years,
+        appreciationRate: overrideRatePct != null ? overrideRatePct / 100 : undefined,
+      });
       if (reqId !== reqRef.current) return;
       setData(r);
     } catch (e: unknown) {
@@ -54,6 +59,12 @@ export default function HomeCostGrowthClient() {
     getAndSet(trendYears);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  // Slider display value: override if set, else server model rate, else 3.0 as pre-load placeholder
+  const modelRatePct = data?.current?.appreciationRate != null
+    ? Math.round(data.current.appreciationRate * 1000) / 10
+    : 3.0;
+  const sliderPct = appreciationOverridePct ?? modelRatePct;
 
   const chartModel = useMemo(() => {
     const hist = data?.history ?? [];
@@ -206,10 +217,59 @@ export default function HomeCostGrowthClient() {
             </div>
 
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">CAGR appreciation ({trendYears}y)</div>
-              <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{pct(data?.current?.appreciationRate)}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Appreciation rate</div>
+                {appreciationOverridePct !== null && (
+                  <button
+                    type="button"
+                    className="text-[10px] font-medium text-slate-500 underline decoration-dotted hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                    onClick={() => {
+                      setAppreciationOverridePct(null);
+                      void getAndSet(trendYears, null);
+                    }}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
 
-              <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual expenses (now)</div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-semibold tabular-nums text-slate-800 dark:text-slate-100">
+                  {sliderPct.toFixed(1)}%
+                </span>
+                {appreciationOverridePct !== null ? (
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400">custom</span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">model rate</span>
+                )}
+              </div>
+
+              <input
+                type="range"
+                min="0"
+                max="12"
+                step="0.1"
+                value={sliderPct}
+                onChange={(e) => setAppreciationOverridePct(parseFloat(e.target.value))}
+                onMouseUp={(e) => {
+                  const v = parseFloat((e.target as HTMLInputElement).value);
+                  void getAndSet(trendYears, v);
+                }}
+                onTouchEnd={(e) => {
+                  const v = parseFloat((e.target as HTMLInputElement).value);
+                  void getAndSet(trendYears, v);
+                }}
+                className="mt-2 w-full accent-slate-700 dark:accent-slate-300"
+                aria-label="Appreciation rate override"
+              />
+
+              <div className="mt-1 flex justify-between text-[10px] text-slate-400 dark:text-slate-500">
+                <span>0%</span>
+                <span>6%</span>
+                <span>12%</span>
+              </div>
+
+              <div className="mt-3 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual expenses (now)</div>
               <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualExpensesNow)}</div>
             </div>
 
@@ -229,6 +289,11 @@ export default function HomeCostGrowthClient() {
               <span className="rounded-full border border-slate-300/70 bg-white/85 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-200">Home value</span>
               <span className="rounded-full border border-slate-300/70 bg-white/60 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">Total expenses</span>
               <span className="rounded-full border border-slate-300/70 bg-white/60 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/45 dark:text-slate-300">Net Δ</span>
+              {appreciationOverridePct !== null && (
+                <span className="rounded-full border border-amber-300/70 bg-amber-50/85 px-2.5 py-1 text-xs font-medium text-amber-700 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300">
+                  Custom rate: {sliderPct.toFixed(1)}%
+                </span>
+              )}
               <span className="ml-auto text-xs text-slate-500 dark:text-slate-300">{loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}</span>
             </div>
 
