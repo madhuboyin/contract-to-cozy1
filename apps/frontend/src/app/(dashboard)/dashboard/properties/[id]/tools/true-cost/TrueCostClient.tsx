@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { getTrueCostOwnership, TrueCostOwnershipDTO } from './trueCostApi';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 // Use the upgraded chart you already shipped (legend + tooltip)

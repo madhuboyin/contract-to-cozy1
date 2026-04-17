@@ -8,7 +8,7 @@ import { CTC_TEMPLATE_SURFACES_V1 } from '@/lib/design-system/tokenGovernance';
 export interface PriorityActionHeroProps {
   title: string;
   description: string;
-  primaryAction: ReactNode;
+  primaryAction?: ReactNode;
   supportingAction?: ReactNode;
   impactLabel?: string;
   confidenceLabel?: string;
@@ -57,11 +57,12 @@ export default function PriorityActionHero({
         </div>
       ) : null}
 
-      <div className="mt-4 space-y-2">
-        {primaryAction}
-        {supportingAction ? <div>{supportingAction}</div> : null}
-      </div>
+      {(primaryAction || supportingAction) ? (
+        <div className="mt-4 space-y-2">
+          {primaryAction ? <div>{primaryAction}</div> : null}
+          {supportingAction ? <div>{supportingAction}</div> : null}
+        </div>
+      ) : null}
     </section>
   );
 }
-

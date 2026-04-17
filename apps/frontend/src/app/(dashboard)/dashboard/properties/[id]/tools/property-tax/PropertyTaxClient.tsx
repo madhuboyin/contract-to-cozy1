@@ -220,8 +220,13 @@ export default function PropertyTaxClient() {
         rationale: 'Surfaces annual tax direction and major contributors so planning decisions stay proactive.',
       }}
       priorityAction={(() => {
-        if (!estimate || loading || estimate?.current?.yoyChangePct == null) return undefined;
-        const yoy = estimate.current.yoyChangePct;
+        if (!estimate || loading) return undefined;
+        const hist = estimate.history ?? [];
+        const latestAnnualTax = hist.at(-1)?.annualTax ?? estimate.current.annualTax ?? 0;
+        const prevAnnualTax = hist.at(-2)?.annualTax ?? null;
+        if (prevAnnualTax == null || prevAnnualTax <= 0) return undefined;
+
+        const yoy = (latestAnnualTax - prevAnnualTax) / prevAnnualTax;
         const annualTax = estimate.current.annualTax ?? 0;
         const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
         const fmtMoney = (n: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);

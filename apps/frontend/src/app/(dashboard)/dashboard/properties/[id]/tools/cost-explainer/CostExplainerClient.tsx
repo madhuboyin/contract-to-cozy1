@@ -120,6 +120,11 @@ export default function CostExplainerClient() {
       description: 'Review the breakdown below to see whether this driver is accelerating, and decide if action is warranted before your next renewal or reassessment.',
       impactLabel: `${years}-year driver lens`,
       confidenceLabel: data.meta?.confidence ?? 'Medium',
+      primaryAction: (
+        <Button type="button" asChild className="w-full sm:w-auto">
+          <a href={`/dashboard/properties/${propertyId}/tools/home-savings`}>Find savings opportunities</a>
+        </Button>
+      ),
     };
   })();
 

@@ -44,6 +44,13 @@ export type CostExplainerDTO = {
     generatedAt: string;
     notes: string[];
     dataSources: string[];
+    confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+    assumptions?: Array<{
+      field: string;
+      source: 'DATA_BACKED' | 'HEURISTIC' | 'USER_OVERRIDE';
+      value: unknown;
+      note: string;
+    }>;
   };
 };
 
