@@ -59,15 +59,6 @@ export default function ToolWorkspaceTemplate({
         action={introAction}
       />
 
-      {trust ? (
-        <TrustStrip
-          confidenceLabel={trust.confidenceLabel}
-          freshnessLabel={trust.freshnessLabel}
-          sourceLabel={trust.sourceLabel}
-          rationale={trust.rationale}
-        />
-      ) : null}
-
       {priorityAction ? (
         <PriorityActionHero
           title={priorityAction.title}
@@ -87,6 +78,15 @@ export default function ToolWorkspaceTemplate({
       ) : null}
 
       {children}
+
+      {trust ? (
+        <TrustStrip
+          variant="footnote"
+          confidenceLabel={trust.confidenceLabel}
+          freshnessLabel={trust.freshnessLabel}
+          sourceLabel={trust.sourceLabel}
+        />
+      ) : null}
     </MobilePageContainer>
   );
 }

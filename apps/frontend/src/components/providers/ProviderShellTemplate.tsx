@@ -90,14 +90,14 @@ export default function ProviderShellTemplate({
             eyebrow={primaryAction.eyebrow || 'Priority Action'}
           />
 
+          {summary}
+
           <TrustStrip
+            variant="footnote"
             confidenceLabel={trustLabels.confidenceLabel}
             freshnessLabel={trustLabels.freshnessLabel}
             sourceLabel={trustLabels.sourceLabel}
-            rationale={trustLabels.rationale}
           />
-
-          {summary}
         </div>
       }
       filters={filters}

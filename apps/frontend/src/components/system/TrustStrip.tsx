@@ -13,6 +13,8 @@ export interface TrustStripProps {
   className?: string;
   trailing?: ReactNode;
   title?: string;
+  /** 'panel' = full card (dashboard). 'footnote' = single muted line (tool/detail pages). Default: 'panel' */
+  variant?: 'panel' | 'footnote';
 }
 
 export default function TrustStrip({
@@ -23,7 +25,17 @@ export default function TrustStrip({
   className,
   trailing,
   title = 'Trust Signals',
+  variant = 'panel',
 }: TrustStripProps) {
+  if (variant === 'footnote') {
+    return (
+      <p className={cn('mb-0 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[11px] text-slate-400', className)}>
+        <ShieldCheck className="h-3 w-3 shrink-0 text-slate-300" aria-hidden="true" />
+        <span>{confidenceLabel} · {freshnessLabel} · {sourceLabel}</span>
+      </p>
+    );
+  }
+
   return (
     <section className={cn(CTC_TEMPLATE_SURFACES_V1.trustCard, 'p-3', className)}>
       <div className="mb-2 flex items-center justify-between gap-2">

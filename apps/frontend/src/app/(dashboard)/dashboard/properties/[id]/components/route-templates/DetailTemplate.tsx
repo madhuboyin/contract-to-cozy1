@@ -39,16 +39,16 @@ export default function DetailTemplate({
         </div>
       </header>
 
+      {children}
+
       {trust ? (
         <TrustStrip
+          variant="footnote"
           confidenceLabel={trust.confidenceLabel}
           freshnessLabel={trust.freshnessLabel}
           sourceLabel={trust.sourceLabel}
-          rationale={trust.rationale}
         />
       ) : null}
-
-      {children}
     </section>
   );
 }

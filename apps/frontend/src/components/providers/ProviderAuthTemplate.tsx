@@ -105,17 +105,16 @@ export default function ProviderAuthTemplate({
               <p className="mt-2 text-sm text-slate-600">{subtitle}</p>
             </header>
 
+            {children}
+            {footer ? <div className="mt-6">{footer}</div> : null}
+
             <TrustStrip
-              className="mb-5"
-              title="Provider Trust Signals"
+              variant="footnote"
+              className="mt-6"
               confidenceLabel="Profile quality and response speed drive homeowner booking confidence."
               freshnessLabel="Availability and booking queue update in near real-time."
               sourceLabel="Provider profile, booking telemetry, and homeowner request history."
-              rationale="Transparent profile and queue signals reduce homeowner drop-off before booking."
             />
-
-            {children}
-            {footer ? <div className="mt-6">{footer}</div> : null}
           </div>
         </section>
       </main>

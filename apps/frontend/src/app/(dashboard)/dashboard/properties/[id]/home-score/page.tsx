@@ -1171,10 +1171,10 @@ export default function HomeScoreReportPage() {
           </div>
           <div className="mt-3">
             <TrustStrip
+              variant="footnote"
               confidenceLabel={`Decision confidence ${decisionConfidenceLabel}. ${verificationSummary}`}
               freshnessLabel={`Report freshness: ${decisionFreshnessLabel}`}
               sourceLabel={`Source mix: ${decisionSourceLabel}`}
-              rationale="The top action blends verified records, homeowner-submitted details, and model inference to surface the clearest next move."
             />
           </div>
         </section>

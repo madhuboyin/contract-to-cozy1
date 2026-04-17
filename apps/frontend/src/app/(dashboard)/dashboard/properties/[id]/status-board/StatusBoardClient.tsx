@@ -1261,10 +1261,10 @@ export default function StatusBoardClient() {
                   ]}
                 />
                 <TrustStrip
+                  variant="footnote"
                   confidenceLabel={`${summary.total} items evaluated; ${summary.actionNeeded} currently need action`}
                   freshnessLabel="Recomputes when inventory details, install dates, or maintenance signals change"
                   sourceLabel="Status board engine + inventory metadata + guidance continuity context"
-                  rationale="Condition and recommendation pairings prioritize high-risk assets and overdue maintenance first."
                 />
               </>
             ) : undefined
@@ -1515,10 +1515,10 @@ export default function StatusBoardClient() {
         <HomeToolHeader toolId="status-board" propertyId={propertyId} />
         {summary ? (
           <TrustStrip
+            variant="footnote"
             confidenceLabel={`${summary.total} items evaluated with ${summary.actionNeeded} flagged as action needed`}
             freshnessLabel="Live after recompute and inventory updates"
             sourceLabel="CtC status prediction model + asset metadata + maintenance signals"
-            rationale="Use Action Needed filter first to reduce near-term risk and avoid cascading replacement cost."
           />
         ) : null}
         {signalSummary ? (

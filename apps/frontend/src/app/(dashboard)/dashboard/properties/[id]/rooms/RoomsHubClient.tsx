@@ -251,10 +251,10 @@ export default function RoomsHubClient() {
 
           <MobileSection>
             <TrustStrip
+              variant="footnote"
               confidenceLabel={overallHealth != null ? `Room health score ${overallHealth}/100 from captured room signals` : 'Improves as room insights load'}
               freshnessLabel="Refreshed when room scans, items, and docs change"
               sourceLabel="Room insights + inventory counts + coverage/document completeness"
-              rationale="Focus room is chosen from lowest health score so effort starts where risk is highest."
             />
           </MobileSection>
 
@@ -346,10 +346,10 @@ export default function RoomsHubClient() {
 
             <div className="mt-4">
               <TrustStrip
+                variant="footnote"
                 confidenceLabel={overallHealth != null ? `Room health score ${overallHealth}/100 from loaded room insights` : 'Insight confidence increases as room data loads'}
                 freshnessLabel="Live from room scans, inventory updates, and coverage metadata"
                 sourceLabel="CtC room insight model + room-level inventory statistics"
-                rationale="Prioritizing lowest-scoring rooms first reduces hidden risk and improves maintenance readiness."
               />
             </div>
           </div>

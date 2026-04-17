@@ -386,10 +386,10 @@ export default function InventoryClient() {
 
           <MobileSection>
             <TrustStrip
+              variant="footnote"
               confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage confidence across ${portfolioStats.totalItems} items`}
               freshnessLabel="Updates from latest inventory, docs, recalls, and coverage links"
               sourceLabel="Inventory data + warranty/insurance linkage + recall matches"
-              rationale="Priority recommendations focus on uncovered value, missing documentation, and unresolved recalls."
             />
           </MobileSection>
 
@@ -558,10 +558,10 @@ export default function InventoryClient() {
           />
 
           <TrustStrip
+            variant="footnote"
             confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage confidence across ${portfolioStats.totalItems} items`}
             freshnessLabel="Live from inventory updates, coverage links, and recall scans"
             sourceLabel="CtC inventory graph + documents + policy associations"
-            rationale="Use gaps and missing-value filters first to lower financial exposure and speed claim readiness."
           />
 
           <InventoryFilterBar

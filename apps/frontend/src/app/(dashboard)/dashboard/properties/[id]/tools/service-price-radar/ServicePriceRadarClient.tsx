@@ -1199,10 +1199,10 @@ export default function ServicePriceRadarClient() {
       )}
 
       <TrustStrip
+        variant="footnote"
         confidenceLabel={currentCheck?.confidenceScore != null ? `${Math.round(currentCheck.confidenceScore * 100)}% quote confidence` : 'Confidence improves with richer quote context'}
         freshnessLabel="Updates with each quote check and linked entity adjustment"
         sourceLabel="Service category priors + property context + linked entities + regional pricing factors"
-        rationale="Recommendations prioritize price fairness and explainability before negotiation or booking actions."
       />
 
       {toolError ? (
