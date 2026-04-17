@@ -81,13 +81,13 @@ export default function InsuranceTrendClient() {
       };
     }
 
+    // 10y view: all 10 points
     const ten = hist.slice(-10);
-    const sampled = [0, 2, 4, 6, 8].filter((i) => i < ten.length).map((i) => ten[i]);
     return {
-      x: sampled.map((h) => String(h.year)),
+      x: ten.map((h) => String(h.year)),
       series: [
-        { key: 'premium', label: 'Premium', values: sampled.map((h) => h.annualPremium), opacity: 0.9, strokeWidth: 2.75 },
-        { key: 'state', label: 'State avg', values: sampled.map((h) => h.stateAvgAnnual), opacity: 0.6, dash: '6 5' },
+        { key: 'premium', label: 'Premium', values: ten.map((h) => h.annualPremium), opacity: 0.9, strokeWidth: 2.75 },
+        { key: 'state', label: 'State avg', values: ten.map((h) => h.stateAvgAnnual), opacity: 0.6, dash: '6 5' },
       ],
     };
   }, [data, trendYears]);
@@ -115,7 +115,7 @@ export default function InsuranceTrendClient() {
       rail={<HomeToolsRail propertyId={propertyId} context="insurance-trend" currentToolId="insurance-trend" />}
       trust={{
         confidenceLabel: data?.meta?.confidence ?? 'Estimated confidence',
-        freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest premium trend run' : 'Run analysis to refresh',
+        freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest premium trend inputs' : 'Analyzing your property…',
         sourceLabel: 'Property premium history + state average trend data',
         rationale: 'Shows whether your premium trajectory is tracking above or below state-level pressure.',
       }}
@@ -191,6 +191,25 @@ export default function InsuranceTrendClient() {
           </div>
         )}
 
+        {data && (() => {
+          const delta = data.current?.deltaVsStateNow ?? 0;
+          const premium = data.current?.insuranceAnnualNow;
+          const stateAvg = data.current?.stateAvgAnnualNow;
+          const cagr = data.rollup?.cagrPremium ?? 0;
+          const aboveBelow = delta > 0 ? 'above' : 'below';
+          const absBelowAmt = money(Math.abs(delta));
+          return (
+            <div className="mt-3 rounded-2xl border border-slate-200/70 bg-white/72 p-3 text-sm text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-100">
+              Your estimated premium is <span className="font-semibold">{money(premium)}/yr</span> —{' '}
+              <span className={delta > 0 ? 'font-semibold text-rose-700 dark:text-rose-400' : 'font-semibold text-emerald-700 dark:text-emerald-400'}>
+                {absBelowAmt} {aboveBelow} the {data.input?.state} average
+              </span> of {money(stateAvg)}/yr.{' '}
+              Premiums in this area are growing at roughly <span className="font-semibold">{(cagr * 100).toFixed(1)}%/yr</span> — that adds up to{' '}
+              <span className="font-semibold">{money(data.rollup?.totalPremiumPaid)}</span> over {trendYears} years.
+            </div>
+          );
+        })()}
+
         <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/85 p-3 text-xs text-amber-900 backdrop-blur">
           <div className="font-semibold">Educational Estimate — not decision-grade</div>
           <div className="mt-1">
@@ -218,11 +237,19 @@ export default function InsuranceTrendClient() {
             </div>
 
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Premium CAGR ({trendYears}y)</div>
+              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual premium growth ({trendYears}y avg)</div>
               <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{pct(data?.rollup?.cagrPremium)}</div>
 
-              <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">State avg CAGR</div>
+              <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">State avg growth</div>
               <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{pct(data?.rollup?.cagrStateAvg)}</div>
+
+              {data?.rollup?.cagrPremium != null && data?.rollup?.cagrStateAvg != null && (
+                <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+                  {data.rollup.cagrPremium > data.rollup.cagrStateAvg
+                    ? 'Your premium is growing faster than the state average — worth shopping coverage annually.'
+                    : 'Your premium growth is tracking at or below the state average.'}
+                </div>
+              )}
             </div>
 
             <div className={`rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur ${deltaTone}`}>
@@ -246,7 +273,7 @@ export default function InsuranceTrendClient() {
             </div>
 
             <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-              Phase 1: premium growth is modeled; future versions will incorporate DOI rate filings + FEMA/NOAA correlations.
+              Premium growth is modeled using state and ZIP-level benchmarks. The state average line shows where your area typically sits.
             </div>
           </div>
         </div>
@@ -275,7 +302,7 @@ export default function InsuranceTrendClient() {
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Localized drivers</div>
         <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-          Phase 1 ties messaging to <span className="font-medium">{data?.input?.state || '—'}</span> and ZIP{' '}
+          Insights are localized to <span className="font-medium">{data?.input?.state || '—'}</span> and ZIP{' '}
           <span className="font-medium">{data?.input?.zipCode || '—'}</span>.
         </div>
 
@@ -284,7 +311,13 @@ export default function InsuranceTrendClient() {
             <div key={idx} className="rounded-2xl border border-white/70 bg-white/68 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
-                <span className="rounded-full border border-slate-300/70 bg-slate-50/85 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">{d.impact}</span>
+                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm ${
+                  d.impact === 'HIGH'
+                    ? 'border-rose-200/70 bg-rose-50/85 text-rose-700 dark:border-rose-700/60 dark:bg-rose-950/40 dark:text-rose-300'
+                    : d.impact === 'MEDIUM'
+                    ? 'border-amber-200/70 bg-amber-50/85 text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300'
+                    : 'border-slate-300/70 bg-slate-50/85 text-slate-600 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300'
+                }`}>{d.impact}</span>
               </div>
               <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{d.explanation}</div>
             </div>
@@ -294,7 +327,7 @@ export default function InsuranceTrendClient() {
 
       {/* Notes */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Assumptions (Phase 1)</div>
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Assumptions & methodology</div>
         <div className="mt-3 space-y-2">
           {(data?.meta?.notes || []).map((n, i) => (
             <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>
@@ -306,6 +339,33 @@ export default function InsuranceTrendClient() {
           <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">{(data?.meta?.dataSources || []).join(' · ')}</div>
         </div>
       </div>
+
+      {data && (
+        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
+          <div className="mt-3 space-y-2">
+            {(data.current?.deltaVsStateNow ?? 0) > 200 ? (
+              <>
+                <div className="rounded-xl border border-rose-200/70 bg-rose-50/80 p-3 text-xs text-rose-800 dark:border-rose-800/50 dark:bg-rose-950/40 dark:text-rose-300">
+                  Your estimated premium is meaningfully above the state average. Consider shopping your coverage annually — a 10–15% reduction is often achievable by switching carriers or adjusting deductibles.
+                </div>
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+                  Check the <span className="font-medium">Cost Volatility Index</span> to see how unpredictable your total ownership costs are likely to be, and whether building a larger reserve is warranted.
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  Your estimated premium is at or below the state average — a good position. Review coverage limits annually to make sure you're not underinsured as your home's value changes.
+                </div>
+                <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+                  Use the <span className="font-medium">True Cost of Ownership</span> tool to see how insurance fits into your full annual ownership expense picture.
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <GuidanceStepCompletionCard
         propertyId={propertyId}

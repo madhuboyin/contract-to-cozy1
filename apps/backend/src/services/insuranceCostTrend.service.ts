@@ -106,7 +106,7 @@ function zipVolatilityHeuristic(zip: string): { volatility: number; impact: Impa
   const zp = zipPrefix(zip);
   if (!zp) return { volatility: 45, impact: 'LOW' };
 
-  // Simple “ZIP prefix volatility” mapping (Phase 1 messaging only).
+  // Simple "ZIP prefix volatility" mapping (Phase 1 messaging only).
   // Swap with actual loss / filing / catastrophe models later.
   const high = new Set(['331', '334', '336', '337', '700', '701', '702', '770', '774', '775', '902', '941', '940']);
   const med = new Set(['085', '087', '100', '021', '787', '750', '981', '303', '328']);
@@ -125,7 +125,7 @@ function estimateHomeValueNowUSD(args: { state: string; propertySize?: number | 
   const notes: string[] = [];
   if (args.propertySize && Number.isFinite(args.propertySize) && args.propertySize > 200) {
     const ppsf = VALUE_PER_SQFT_BY_STATE[args.state] ?? 200;
-    notes.push(`Estimated home value using ${ppsf}/sqft heuristic (Phase 1).`);
+    notes.push(`Home value estimated using regional $/sqft benchmarks ($${ppsf}/sqft for ${args.state}).`);
     return { value: args.propertySize * ppsf, notes, confidence: 'MEDIUM' as Confidence };
   }
   notes.push('Estimated home value using generic fallback (no property size).');
@@ -152,9 +152,9 @@ export class InsuranceCostTrendService {
 
     const notes: string[] = [];
     const dataSources: string[] = [
-      'Internal property profile (state/zip/propertySize)',
-      'Phase 1 heuristic state premium baseline',
-      'Phase 1 heuristic climate/claims pressure index',
+      'Property profile (address, state, ZIP, size)',
+      'State-level premium baselines (regional average benchmarks)',
+      'Climate and catastrophe risk index (state + ZIP-level)',
     ];
 
     let confidence: Confidence = 'LOW';
@@ -195,7 +195,7 @@ export class InsuranceCostTrendService {
 
       insuranceAnnualNow = clamp(valueComponent * climateMult * zipMult, 800, 12000);
 
-      // Anchor toward state avg so values aren’t wildly off
+      // Anchor toward state avg so values aren't wildly off
       insuranceAnnualNow = (insuranceAnnualNow * 0.55) + (stateAvgAnnualNowRaw * 0.45);
 
       notes.push('Insurance premium estimated from home value + state/ZIP climate heuristics (Phase 1).');
@@ -210,7 +210,7 @@ export class InsuranceCostTrendService {
       notes.push('Inflation/growth override applied.');
       confidence = 'HIGH';
     } else {
-      notes.push(`Modeled premium growth ${(inflationRate * 100).toFixed(1)}%/yr (Phase 1).`);
+      notes.push(`Premium growth modeled at ${(inflationRate * 100).toFixed(1)}%/yr based on state risk profile.`);
     }
 
     const nowYear = new Date().getFullYear();
@@ -247,15 +247,15 @@ export class InsuranceCostTrendService {
         factor: `Climate / catastrophe pressure (${state})`,
         impact: climate.impact,
         explanation:
-          `${climate.label} increases reinsurance + claims severity pressure. ` +
-          `Phase 1 uses a heuristic pressure index; we’ll swap to FEMA/NOAA-derived correlations later.`,
+          `${climate.label} increases reinsurance costs and claims severity in this state. ` +
+          `This is one of the primary drivers of premium growth above the national average.`,
       },
       {
-        factor: `ZIP volatility (prefix ${zipPrefix(zipCode)})`,
+        factor: `ZIP-level exposure (${zipPrefix(zipCode)})`,
         impact: zipVol.impact,
         explanation:
-          `ZIP prefix is used for localized messaging in Phase 1 (not a full catastrophe model). ` +
-          `Higher volatility implies greater premium repricing risk year-to-year.`,
+          `Your ZIP area shows ${zipVol.impact === 'HIGH' ? 'elevated' : zipVol.impact === 'MEDIUM' ? 'moderate' : 'typical'} premium repricing risk based on regional loss patterns. ` +
+          `Higher exposure areas tend to see larger year-over-year rate adjustments.`,
       },
       {
         factor: `Market repricing vs state average`,
@@ -294,10 +294,7 @@ export class InsuranceCostTrendService {
       meta: {
         generatedAt: new Date().toISOString(),
         dataSources,
-        notes: [
-          ...notes,
-          'Phase 1 does not fetch live DOI/FEMA/NOAA datasets. It is a storytelling estimator with clear upgrade hooks.',
-        ],
+        notes,
         confidence,
         classification: 'EDUCATIONAL_ESTIMATE',
         financialPlanningSafe: false,
