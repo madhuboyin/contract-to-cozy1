@@ -149,8 +149,11 @@ export default function TrueCostClient() {
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualInsuranceNow)}</div>
           </div>
 
-          <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Maintenance + Utilities ({years}y)</div>
+          <div className="rounded-2xl border border-teal-200/60 bg-teal-50/60 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-teal-700/50 dark:bg-teal-950/30">
+            <div className="flex items-center gap-2">
+              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Maintenance + Utilities ({years}y)</div>
+              <span className="rounded-full border border-teal-300/70 bg-teal-100/80 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:border-teal-600/60 dark:bg-teal-900/50 dark:text-teal-300">Includes utilities</span>
+            </div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">
               {money(
                 (data?.rollup?.breakdown?.maintenance ?? 0) +
@@ -161,13 +164,14 @@ export default function TrueCostClient() {
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               {money((data?.current?.annualMaintenanceNow ?? 0) + (data?.current?.annualUtilitiesNow ?? 0))}
             </div>
+            <div className="mt-1 text-[10px] text-teal-600 dark:text-teal-400">Not included in other tools</div>
           </div>
         </div>
 
         <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
           <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="True cost trend chart" />
-          <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-            Total is emphasized; other lines show the components that drive the “true cost”.
+          <div className=”mt-2 text-xs text-slate-500 dark:text-slate-300”>
+            Total is emphasized; other lines show the components that drive the “true cost”. <span className=”text-teal-600 dark:text-teal-400 font-medium”>Utilities (teal) are tracked here only</span> — not included in other home tools.
           </div>
         </div>
       </div>

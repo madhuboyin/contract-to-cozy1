@@ -142,10 +142,17 @@ export default function BreakEvenClient() {
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">Binary insight</div>
+            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">Break-even analysis</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || '—'}</span>
             </div>
+            {data && (
+              <div className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                {data.breakEven.status === 'ALREADY_BREAKEVEN' && `Your home has already broken even — appreciation has outpaced cumulative ownership costs.`}
+                {data.breakEven.status === 'PROJECTED' && `Your home is projected to break even in year ${data.breakEven.breakEvenYearIndex} (${data.breakEven.breakEvenCalendarYear}).`}
+                {data.breakEven.status === 'NOT_REACHED' && `Your home is not projected to break even within your ${data.input.years}-year horizon.`}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">

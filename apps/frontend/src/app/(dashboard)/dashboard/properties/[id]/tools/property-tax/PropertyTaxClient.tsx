@@ -440,6 +440,32 @@ export default function PropertyTaxClient() {
           <div className="pt-2 text-slate-500 dark:text-slate-300">Generated: {estimate?.meta?.generatedAt || '—'}</div>
         </div>
       </div>
+
+      {estimate && (
+        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What to do next</div>
+          <div className="mt-3 space-y-2">
+            {estimate.comparison?.percentileApprox !== undefined && estimate.comparison.percentileApprox > 60 && (
+              <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 p-3 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300">
+                Your estimated tax is in the <span className="font-semibold">{estimate.comparison.percentileApprox}th percentile</span> for your state — above the majority of homeowners. Consider reviewing your assessed value with your county assessor; an informal appeal can reduce your bill if the valuation is above market.
+              </div>
+            )}
+            {estimate.comparison?.percentileApprox !== undefined && estimate.comparison.percentileApprox <= 60 && (
+              <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+                Your estimated tax is below the majority of similar homeowners in your state. Review annually — reassessment cycles or local budget changes can shift your bill unexpectedly.
+              </div>
+            )}
+            {!estimate.comparison?.percentileApprox && (
+              <div className="rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+                Enter your assessed value override above for a sharper estimate, then compare to your county assessor's records annually.
+              </div>
+            )}
+            <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+              See how taxes fit into your total cost picture with the <span className="font-medium">True Cost of Ownership</span> tool — it combines taxes, insurance, maintenance, and utilities into one view.
+            </div>
+          </div>
+        </div>
+      )}
     </ToolWorkspaceTemplate>
   );
 }

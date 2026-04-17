@@ -171,11 +171,19 @@ export default function CostVolatilityClient() {
           <div>
             <div className="text-base font-semibold text-slate-900 dark:text-slate-100">Volatility score (0–100)</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-              <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || '—'}</span>
+              <span className="font-medium text-slate-700 dark:text-slate-200">{data?.input?.addressLabel || ‘—‘}</span>
             </div>
-            <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-              Your costs aren’t just rising — they’re unpredictable.
-            </div>
+            {data ? (
+              <div className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                {data.index.band === ‘HIGH’ && `Your home scores ${data.index.volatilityIndex}/100 — high unpredictability. Build a buffer now.`}
+                {data.index.band === ‘MEDIUM’ && `Your home scores ${data.index.volatilityIndex}/100 — moderate unpredictability. A typical US home scores around 30.`}
+                {data.index.band === ‘LOW’ && `Your home scores ${data.index.volatilityIndex}/100 — costs are relatively stable. A typical US home scores around 30.`}
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
+                Your costs aren’t just rising — they’re unpredictable.
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/75 p-1 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
@@ -228,6 +236,10 @@ export default function CostVolatilityClient() {
               <span>0 = very stable</span>
               <span className="flex-1 mx-1 border-t border-dotted border-slate-300 dark:border-slate-600" />
               <span>100 = highly unpredictable</span>
+            </div>
+
+            <div className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+              Typical US home ≈ 30
             </div>
 
             {!!data?.index?.dominantDriver && (
