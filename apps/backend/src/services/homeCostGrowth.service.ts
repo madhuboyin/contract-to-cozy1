@@ -140,7 +140,7 @@ function estimateHomeValueNowUSD(args: {
 
   if (propertySize && Number.isFinite(propertySize) && propertySize > 200) {
     const ppsf = VALUE_PER_SQFT_BY_STATE[state] ?? 200;
-    notes.push(`Estimated home value using ${ppsf}/sqft heuristic (Phase 1).`);
+    notes.push(`Home value estimated using regional $/sqft benchmarks (${ppsf}/sqft for ${args.state}).`);
     return { value: propertySize * ppsf, confidence: 'MEDIUM', notes };
   }
 
@@ -152,10 +152,10 @@ function estimateAppreciationRateHeuristic(state: string): { rate: number; confi
   const notes: string[] = [];
   const rate = DEFAULT_APPRECIATION_RATE_BY_STATE[state] ?? 0.035;
   if (DEFAULT_APPRECIATION_RATE_BY_STATE[state]) {
-    notes.push('Used state-level appreciation heuristic (Phase 1 fallback).');
+    notes.push('Appreciation rate estimated using state-level benchmarks (FHFA data unavailable for this area).');
     return { rate, confidence: 'MEDIUM', notes };
   }
-  notes.push('Used generic appreciation fallback (Phase 1 fallback).');
+  notes.push('Appreciation rate estimated using national average benchmarks (no state-specific data available).');
   return { rate, confidence: 'LOW', notes };
 }
 
@@ -263,10 +263,10 @@ export class HomeCostGrowthService {
 
     const notes: string[] = [];
     const dataSources: string[] = [
-      'Internal property profile (address/state/zip/propertySize)',
-      'PropertyTaxService estimate (Phase 1 heuristic)',
-      'Heuristic value-per-sqft estimate (Phase 1)',
-      'Heuristic insurance/maintenance model (Phase 1)',
+      'Property profile (address, state, ZIP, size)',
+      'Property tax estimate (state and county benchmarks)',
+      'Home value estimate (regional $/sqft benchmarks)',
+      'Insurance and maintenance model (state-adjusted benchmarks)',
     ];
 
     // Confidence: HIGH if key overrides present, else MEDIUM/LOW
@@ -303,8 +303,9 @@ export class HomeCostGrowthService {
 
         if (Number.isFinite(comp.annualizedRate)) {
           appreciationRate = comp.annualizedRate;
-          dataSources.push('FHFA HPI (repeat-sale) appreciation comps (Phase 3)');
-          notes.push(`Appreciation derived from FHFA ${comp.regionLevel} series: ${comp.regionLabel} (as of ${comp.asOf}).`);
+          dataSources.push('FHFA House Price Index (repeat-sale appreciation comps)');
+          const asOfDate = new Date(comp.asOf).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+          notes.push(`Appreciation rate sourced from FHFA repeat-sale index — ${comp.regionLabel} (as of ${asOfDate}).`);
 
           appreciationMeta = {
             source: 'FHFA',
@@ -366,7 +367,7 @@ export class HomeCostGrowthService {
       const base = 0.005 * homeValueNow; // 0.5%
       const adjusted = base * insuranceRateFactorByState(state);
       annualInsuranceNow = clamp(adjusted, 800, 12000);
-      notes.push('Insurance estimated as % of home value (state-adjusted; Phase 1).');
+      notes.push('Insurance estimated as 0.5% of home value, adjusted for state risk profile.');
       confidence = confidence === 'HIGH' ? 'HIGH' : 'MEDIUM';
     }
 
@@ -380,7 +381,7 @@ export class HomeCostGrowthService {
       const base = 0.01 * homeValueNow; // 1%
       const adjusted = base * maintenanceRateFactorByState(state);
       annualMaintenanceNow = clamp(adjusted, 1200, 18000);
-      notes.push('Maintenance estimated as 1% of home value (state-adjusted; Phase 1).');
+      notes.push('Maintenance estimated as 1% of home value per year, adjusted for state cost-of-living.');
       confidence = confidence === 'HIGH' ? 'HIGH' : 'MEDIUM';
     }
 
@@ -457,8 +458,8 @@ export class HomeCostGrowthService {
         note: opts.homeValueNow !== undefined
           ? 'Client-provided override.'
           : property.propertySize
-            ? `Estimated from ${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft (Phase 1).`
-            : 'Generic $350,000 fallback — no property size on file.',
+            ? `Estimated from regional benchmark of $${VALUE_PER_SQFT_BY_STATE[state] ?? 200}/sqft × ${property.propertySize} sqft.`
+            : 'Generic $350,000 fallback used — no property size on file.',
       },
       {
         field: 'appreciationRate',
@@ -467,8 +468,8 @@ export class HomeCostGrowthService {
         note: opts.appreciationRate !== undefined
           ? 'Client-provided override.'
           : appreciationMeta?.source === 'FHFA'
-            ? `FHFA repeat-sale index — ${appreciationMeta.regionLevel}: ${appreciationMeta.regionLabel} (as of ${appreciationMeta.asOf}).`
-            : `State-level heuristic for ${state} (FHFA unavailable).`,
+            ? `FHFA repeat-sale index — ${appreciationMeta.regionLabel} (as of ${new Date(appreciationMeta.asOf).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}).`
+            : `State-level benchmark for ${state} (FHFA data unavailable for this area).`,
       },
       {
         field: 'annualInsurance',
@@ -476,7 +477,7 @@ export class HomeCostGrowthService {
         value: toMoney(annualInsuranceNow),
         note: opts.insuranceAnnualNow !== undefined
           ? 'Client-provided override.'
-          : `0.5% of home value × state factor ${insuranceRateFactorByState(state)} (Phase 1 heuristic).`,
+          : `0.5% of home value × state risk factor ${insuranceRateFactorByState(state)} (state-adjusted benchmark).`,
       },
       {
         field: 'annualMaintenance',
@@ -484,13 +485,13 @@ export class HomeCostGrowthService {
         value: toMoney(annualMaintenanceNow),
         note: opts.maintenanceAnnualNow !== undefined
           ? 'Client-provided override.'
-          : `1% of home value × state factor ${maintenanceRateFactorByState(state)} (Phase 1 heuristic).`,
+          : `1% of home value × state cost-of-living factor ${maintenanceRateFactorByState(state)} (state-adjusted benchmark).`,
       },
       {
         field: 'inflationRate',
         source: 'HEURISTIC',
         value: `${(inflation * 100).toFixed(1)}%`,
-        note: `State-adjusted inflation estimate for ${state} (Phase 1).`,
+        note: `State-adjusted inflation estimate for ${state}.`,
       },
     ];
 
@@ -541,7 +542,7 @@ export class HomeCostGrowthService {
         dataSources,
         notes: [
           ...notes,
-          `Insurance/maintenance use inflation ${(inflation * 100).toFixed(1)}%/yr (Phase 1).`,
+          `Insurance and maintenance projections use a ${(inflation * 100).toFixed(1)}%/yr inflation assumption.`,
         ],
         confidence,
         assumptions,

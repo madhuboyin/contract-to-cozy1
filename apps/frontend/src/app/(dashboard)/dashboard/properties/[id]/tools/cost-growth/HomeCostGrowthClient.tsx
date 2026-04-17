@@ -15,11 +15,6 @@ function money(n: number | null | undefined, currency = 'USD') {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
 }
 
-function pct(n: number | null | undefined) {
-  if (n === null || n === undefined) return '—';
-  return `${(n * 100).toFixed(2)}%`;
-}
-
 export default function HomeCostGrowthClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
@@ -91,16 +86,15 @@ export default function HomeCostGrowthClient() {
       };
     }
 
-    // 10y view: sample 5 points (every ~2y), matching PropertyTaxClient behavior
+    // 10y view: all 10 points
     const ten = hist.slice(-10);
-    const sampled = [0, 2, 4, 6, 8].filter((i) => i < ten.length).map((i) => ten[i]);
 
     return {
-      x: sampled.map((h) => String(h.year)),
+      x: ten.map((h) => String(h.year)),
       series: [
-        { key: 'homeValue', label: 'Home value', values: sampled.map((h) => h.homeValue), opacity: 0.9, strokeWidth: 2.75 },
-        { key: 'expenses', label: 'Total expenses', values: sampled.map((h) => h.annualExpenses), opacity: 0.65, dash: '6 5' },
-        { key: 'net', label: 'Net Δ (gain - expenses)', values: sampled.map((h) => h.netDelta), opacity: 0.45, dash: '2 4' },
+        { key: 'homeValue', label: 'Home value', values: ten.map((h) => h.homeValue), opacity: 0.9, strokeWidth: 2.75 },
+        { key: 'expenses', label: 'Total expenses', values: ten.map((h) => h.annualExpenses), opacity: 0.65, dash: '6 5' },
+        { key: 'net', label: 'Net Δ (gain - expenses)', values: ten.map((h) => h.netDelta), opacity: 0.45, dash: '2 4' },
       ],
     };
   }, [data, trendYears]);
@@ -144,7 +138,7 @@ export default function HomeCostGrowthClient() {
             onClick={() => {
               const nextYears = trendYears === 5 ? 10 : 5;
               setTrendYears(nextYears);
-              void getAndSet(nextYears);
+              void getAndSet(nextYears, appreciationOverridePct);
             }}
           >
             Switch to {trendYears === 5 ? '10-year' : '5-year'} view
@@ -169,7 +163,7 @@ export default function HomeCostGrowthClient() {
               onClick={async () => {
                 if (trendYears === 5) return;
                 setTrendYears(5);
-                await getAndSet(5);
+                await getAndSet(5, appreciationOverridePct);
               }}
               className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
                 trendYears === 5
@@ -184,7 +178,7 @@ export default function HomeCostGrowthClient() {
               onClick={async () => {
                 if (trendYears === 10) return;
                 setTrendYears(10);
-                await getAndSet(10);
+                await getAndSet(10, appreciationOverridePct);
               }}
               className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-sm font-medium transition-all touch-manipulation ${
                 trendYears === 10
@@ -247,7 +241,7 @@ export default function HomeCostGrowthClient() {
               <input
                 type="range"
                 min="0"
-                max="12"
+                max="10"
                 step="0.1"
                 value={sliderPct}
                 onChange={(e) => setAppreciationOverridePct(parseFloat(e.target.value))}
@@ -265,8 +259,8 @@ export default function HomeCostGrowthClient() {
 
               <div className="mt-1 flex justify-between text-[10px] text-slate-400 dark:text-slate-500">
                 <span>0%</span>
-                <span>6%</span>
-                <span>12%</span>
+                <span>5%</span>
+                <span>10%</span>
               </div>
 
               <div className="mt-3 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual expenses (now)</div>
