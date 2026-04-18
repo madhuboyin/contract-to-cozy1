@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, TrendingDown, ShieldCheck } from 'lucide-react';
 
 import MultiLineChart from './MultiLineChart';
 import { getInsuranceTrend, InsuranceCostTrendDTO } from './insuranceTrendApi';
@@ -167,15 +167,15 @@ export default function InsuranceTrendClient() {
       )}
 
       {/* ── Zone B: Why your costs may differ ─────────────────────────── */}
-      <section id="why-costs" aria-label="Why your costs may differ" className="space-y-4">
+      <section id="why-costs" aria-label="Why your costs may differ" className="space-y-5">
 
         {/* 3 Summary metric cards */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
 
           {/* Card 1 — Estimated premium */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Your estimated premium</div>
-            <div className="mt-2 text-[2rem] font-semibold leading-none tracking-tight text-slate-900 dark:text-slate-100">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
+            <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Your estimated premium</div>
+            <div className="mt-2 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums text-slate-900 dark:text-slate-100">
               {data ? money(data.current?.insuranceAnnualNow) : <span className="text-slate-200 dark:text-slate-700">—</span>}
             </div>
             <div className="mt-2.5 flex items-center gap-2">
@@ -193,9 +193,9 @@ export default function InsuranceTrendClient() {
           </div>
 
           {/* Card 2 — Typical local cost */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Typical for your area</div>
-            <div className="mt-2 text-[2rem] font-semibold leading-none tracking-tight text-slate-900 dark:text-slate-100">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
+            <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Typical for your area</div>
+            <div className="mt-2 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums text-slate-900 dark:text-slate-100">
               {data ? money(data.current?.stateAvgAnnualNow) : <span className="text-slate-200 dark:text-slate-700">—</span>}
             </div>
             <div className="mt-2.5 text-xs text-slate-400 dark:text-slate-500">
@@ -204,15 +204,15 @@ export default function InsuranceTrendClient() {
           </div>
 
           {/* Card 3 — Gap */}
-          <div className={`rounded-2xl border p-4 shadow-[0_2px_10px_rgba(15,23,42,0.06)] ${
+          <div className={`rounded-2xl border p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] ${
             deltaNow > 0
               ? 'border-amber-200/80 bg-amber-50/50 dark:border-amber-800/50 dark:bg-amber-950/25'
               : 'border-emerald-200/80 bg-emerald-50/50 dark:border-emerald-800/50 dark:bg-emerald-950/25'
           }`}>
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
               {deltaNow > 0 ? 'Extra vs local average' : 'Under local average by'}
             </div>
-            <div className={`mt-2 text-[2rem] font-semibold leading-none tracking-tight ${
+            <div className={`mt-2 text-[2.25rem] font-semibold leading-none tracking-tight tabular-nums ${
               deltaNow > 0
                 ? 'text-amber-800 dark:text-amber-300'
                 : 'text-emerald-800 dark:text-emerald-300'
@@ -228,7 +228,7 @@ export default function InsuranceTrendClient() {
         </div>
 
         {/* Premium trend chart */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -269,6 +269,7 @@ export default function InsuranceTrendClient() {
               series={chartModel.series}
               ariaLabel="Insurance premium trend vs local average chart"
               gapFill
+              annotation={isOverpaying && deltaNow > 0 ? `+${money(deltaNow)} vs local avg` : undefined}
             />
           </div>
 
@@ -294,31 +295,31 @@ export default function InsuranceTrendClient() {
 
         {/* Financial impact rollup — 3 cards */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="group rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)] dark:border-slate-700/70 dark:bg-slate-900/60">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          <div className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_10px_24px_rgba(15,23,42,0.10)] dark:border-slate-700/70 dark:bg-slate-900/60">
+            <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
               Total paid over {trendYears}y
             </div>
-            <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-900 dark:text-slate-100">
               {money(data?.rollup?.totalPremiumPaid)}
             </div>
           </div>
 
-          <div className="group rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)] dark:border-slate-700/70 dark:bg-slate-900/60">
-            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          <div className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_10px_24px_rgba(15,23,42,0.10)] dark:border-slate-700/70 dark:bg-slate-900/60">
+            <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
               Typical local cost · {trendYears}y
             </div>
-            <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-slate-900 dark:text-slate-100">
               {money(data?.rollup?.totalStateAvgPaid)}
             </div>
           </div>
 
-          <div className={`group rounded-2xl border p-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)] ${
+          <div className={`group rounded-2xl border p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_10px_24px_rgba(15,23,42,0.10)] ${
             (data?.rollup?.totalDeltaVsState ?? 0) > 0
               ? 'border-amber-200/80 bg-amber-50/50 dark:border-amber-800/50 dark:bg-amber-950/25'
               : 'border-slate-200/80 bg-white dark:border-slate-700/70 dark:bg-slate-900/60'
           }`}>
             <div className="flex items-start justify-between gap-2">
-              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
                 Extra paid over {trendYears}y
               </div>
               {(data?.rollup?.totalDeltaVsState ?? 0) > 0 && (
@@ -344,7 +345,7 @@ export default function InsuranceTrendClient() {
 
         {/* What's driving your premium */}
         {allDrivers.length > 0 && (
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               What&apos;s driving your premium
             </h3>
@@ -356,7 +357,7 @@ export default function InsuranceTrendClient() {
               {visibleDrivers.map((d, idx) => (
                 <div
                   key={idx}
-                  className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 transition-colors hover:bg-slate-50 dark:border-slate-700/70 dark:bg-slate-900/48 dark:hover:bg-slate-900/60"
+                  className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 transition-colors hover:bg-slate-50 dark:border-slate-700/70 dark:bg-slate-900/48 dark:hover:bg-slate-900/60"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
@@ -370,7 +371,7 @@ export default function InsuranceTrendClient() {
                       {d.impact === 'HIGH' ? '↑ High impact' : d.impact === 'MEDIUM' ? 'Medium' : 'Low'}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                  <p className="mt-2 text-xs leading-[1.6] text-slate-600 dark:text-slate-300">
                     {d.explanation}
                   </p>
                   {d.impact === 'HIGH' && (
@@ -406,27 +407,41 @@ export default function InsuranceTrendClient() {
       {/* ── Zone C: Your next step ─────────────────────────────────────── */}
       {data && (
         <section aria-label="Your next step">
-          <div className={`rounded-2xl border p-5 ${
+          <div className={`rounded-2xl border p-6 ${
             isOverpaying
               ? 'border-teal-200/70 bg-gradient-to-br from-teal-50/60 to-white dark:border-teal-800/50 dark:from-teal-950/30 dark:to-slate-900/60'
               : 'border-emerald-200/70 bg-gradient-to-br from-emerald-50/60 to-white dark:border-emerald-800/50 dark:from-emerald-950/30 dark:to-slate-900/60'
           }`}>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {isOverpaying
-                ? 'A 10–15% reduction may be within reach'
-                : 'Your premium is well-positioned'}
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                isOverpaying
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+              }`}>
+                {isOverpaying
+                  ? <TrendingDown className="h-5 w-5" />
+                  : <ShieldCheck className="h-5 w-5" />
+                }
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold leading-snug text-slate-900 dark:text-slate-100">
+                  {isOverpaying
+                    ? 'A 10–15% reduction may be within reach'
+                    : 'Your premium is well-positioned'}
+                </h3>
+              </div>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
               {isOverpaying
                 ? 'Switching carriers or adjusting your deductible can often close the gap against the local average — the sooner you compare, the more leverage you have before your next renewal.'
                 : "You're at or below the local average — a strong position. Review your coverage limits annually to make sure protection keeps pace with your home's current value."}
             </p>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <a
                 href="#"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-px hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-all hover:-translate-y-px hover:bg-slate-700 hover:shadow-[0_6px_18px_rgba(0,0,0,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
               >
                 Compare Quotes
               </a>
@@ -447,11 +462,18 @@ export default function InsuranceTrendClient() {
           type="button"
           onClick={() => setMethodologyOpen((v) => !v)}
           aria-expanded={methodologyOpen}
-          className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-900/20 dark:hover:bg-slate-900/80"
+          className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-900/20 dark:hover:bg-slate-900/80"
         >
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            How this estimate works
-          </span>
+          <div className="min-w-0">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              How this estimate works
+            </span>
+            {!methodologyOpen && (
+              <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                Uses home profile + local trends. Not actual carrier quotes.
+              </p>
+            )}
+          </div>
           <ChevronDown
             className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${methodologyOpen ? 'rotate-180' : ''}`}
           />

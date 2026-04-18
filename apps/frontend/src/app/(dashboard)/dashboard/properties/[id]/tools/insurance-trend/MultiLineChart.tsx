@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 type Series = {
   key: string;
@@ -27,7 +27,8 @@ export default function MultiLineChart(props: {
   xLabels: string[];
   series: Series[];
   ariaLabel?: string;
-  gapFill?: boolean; // shades area between series[0] and series[1]
+  gapFill?: boolean;        // shades area between series[0] and series[1]
+  annotation?: string;       // floating label near latest point, e.g. "+$899 above avg"
 
   // additive marker props
   verticalMarkerIndex?: number | null;
@@ -35,8 +36,15 @@ export default function MultiLineChart(props: {
   eventMarkers?: Array<{ idx: number; label: string }>;
 }) {
   const w = 720;
-  const h = 200;
-  const padL = 60, padR = 24, padT = 16, padB = 34;
+  const h = 210;
+  const padL = 60, padR = 28, padT = 20, padB = 36;
+
+  // Subtle load animation — fade + slight opacity reveal
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const safe = useMemo(() => {
     const xLabels = props.xLabels.length >= 2 ? props.xLabels : ['—', '—'];
@@ -69,8 +77,7 @@ export default function MultiLineChart(props: {
       min -= pad;
       max += pad;
     } else {
-      // add a small top margin so lines don't clip
-      max += span * 0.08;
+      max += span * 0.1; // headroom for labels
     }
 
     return {
@@ -134,13 +141,15 @@ export default function MultiLineChart(props: {
 
   const events = (props.eventMarkers || []).filter((e) => e.idx >= 0 && e.idx < safe.xLabels.length);
 
-  // Gap fill path: forward along series[0], backward along series[1]
+  // Gap fill path
   const gapFillPath = useMemo(() => {
     if (!props.gapFill || safe.series.length < 2) return null;
     const s0 = safe.series[0];
     const s1 = safe.series[1];
     if (s0.values.length !== s1.values.length) return null;
-    const forward = s0.values.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i).toFixed(1)} ${yFor(v).toFixed(1)}`).join(' ');
+    const forward = s0.values
+      .map((v, i) => `${i === 0 ? 'M' : 'L'} ${xFor(i).toFixed(1)} ${yFor(v).toFixed(1)}`)
+      .join(' ');
     const backward = [...s1.values]
       .reverse()
       .map((v, i, arr) => `L ${xFor(arr.length - 1 - i).toFixed(1)} ${yFor(v).toFixed(1)}`)
@@ -149,59 +158,82 @@ export default function MultiLineChart(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.gapFill, safe.series, minY, maxY, spanY]);
 
+  // Annotation position — midpoint between s0 and s1 at last index
+  const annotationPos = useMemo(() => {
+    if (!props.annotation || safe.series.length < 2) return null;
+    const lastIdx = safe.series[0].values.length - 1;
+    const y0 = yFor(safe.series[0].values[lastIdx]);
+    const y1 = yFor(safe.series[1].values[lastIdx]);
+    const gap = Math.abs(y0 - y1);
+    if (gap < 16) return null; // not enough room
+    return { x: xFor(lastIdx) - 14, y: (y0 + y1) / 2 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.annotation, safe.series, minY, maxY, spanY]);
+
   return (
     <div className="w-full">
       <div className="relative">
         <svg
           viewBox={`0 0 ${w} ${h}`}
-          className="h-[200px] w-full text-slate-600 dark:text-slate-300"
+          className="h-[210px] w-full text-slate-600 dark:text-slate-300"
           preserveAspectRatio="none"
           role="img"
           aria-label={props.ariaLabel || 'Trend chart'}
           onMouseMove={onMove}
           onMouseLeave={() => setHoverIdx(null)}
         >
-          {/* axes */}
-          <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeOpacity="0.25" />
-          <line x1={padL} y1={padT} x2={padL} y2={h - padB} stroke="currentColor" strokeOpacity="0.25" />
+          {/* Axes */}
+          <line x1={padL} y1={h - padB} x2={w - padR} y2={h - padB} stroke="currentColor" strokeOpacity="0.2" />
+          <line x1={padL} y1={padT} x2={padL} y2={h - padB} stroke="currentColor" strokeOpacity="0.2" />
 
-          {/* y grid */}
+          {/* Y grid + labels */}
           {yTicks.map((v, i) => (
             <g key={i}>
-              <line x1={padL} y1={yFor(v)} x2={w - padR} y2={yFor(v)} stroke="currentColor" strokeOpacity="0.09" />
-              <text x={padL - 8} y={yFor(v) + 4} fontSize="12" textAnchor="end" fill="currentColor" opacity="0.6">
+              <line
+                x1={padL} y1={yFor(v)} x2={w - padR} y2={yFor(v)}
+                stroke="currentColor" strokeOpacity="0.08"
+              />
+              <text
+                x={padL - 8} y={yFor(v) + 4}
+                fontSize="12" textAnchor="end"
+                fill="currentColor" opacity="0.65"
+              >
                 {fmtMoneyShort(v)}
               </text>
             </g>
           ))}
 
-          {/* vertical marker */}
+          {/* Vertical marker */}
           {vIdx !== null && (
             <g>
               <line
-                x1={xFor(vIdx)} y1={padT}
-                x2={xFor(vIdx)} y2={h - padB}
+                x1={xFor(vIdx)} y1={padT} x2={xFor(vIdx)} y2={h - padB}
                 stroke="currentColor" strokeOpacity="0.18"
               />
               {props.verticalMarkerLabel && (
-                <text x={xFor(vIdx)} y={padT + 10} fontSize="11" textAnchor="middle" fill="currentColor" opacity="0.55">
+                <text
+                  x={xFor(vIdx)} y={padT + 10}
+                  fontSize="11" textAnchor="middle"
+                  fill="currentColor" opacity="0.55"
+                >
                   {props.verticalMarkerLabel}
                 </text>
               )}
             </g>
           )}
 
-          {/* Gap fill between lines */}
+          {/* Gap fill — subtle area between lines */}
           {gapFillPath && (
             <path
               d={gapFillPath}
               fill="currentColor"
-              fillOpacity={0.07}
+              fillOpacity={mounted ? 0.07 : 0}
               stroke="none"
+              style={{ transition: 'fill-opacity 500ms ease-out 100ms' }}
             />
           )}
 
-          {/* Series lines */}
+          {/* Series lines — fade in on mount */}
           {safe.series.map((s, idx) => (
             <path
               key={s.key}
@@ -209,29 +241,33 @@ export default function MultiLineChart(props: {
               fill="none"
               stroke="currentColor"
               strokeWidth={s.strokeWidth}
-              strokeOpacity={s.opacity}
-              strokeDasharray={dashFor(s, idx)}
               strokeLinecap="round"
               strokeLinejoin="round"
+              strokeDasharray={dashFor(s, idx)}
+              style={{
+                opacity: mounted ? s.opacity : 0,
+                transition: `opacity ${380 + idx * 120}ms cubic-bezier(0.4,0,0.2,1) ${idx * 60}ms`,
+              }}
             />
           ))}
 
-          {/* Endpoint dot + value label for premium line (series[0]) */}
+          {/* Endpoint dot + value for premium line */}
           {safe.series.length > 0 && safe.series[0].values.length > 0 && (() => {
             const s = safe.series[0];
             const lastIdx = s.values.length - 1;
             const cx = xFor(lastIdx);
             const cy = yFor(s.values[lastIdx]);
-            const labelY = cy - 8 < padT + 12 ? cy + 14 : cy - 8;
+            const labelY = cy - 10 < padT + 14 ? cy + 14 : cy - 10;
             return (
-              <g>
-                <circle
-                  cx={cx} cy={cy} r={4.5}
-                  fill="currentColor" fillOpacity={0.9}
-                  stroke="white" strokeWidth={2}
-                />
+              <g
+                style={{
+                  opacity: mounted ? 1 : 0,
+                  transition: 'opacity 400ms ease-out 350ms',
+                }}
+              >
+                <circle cx={cx} cy={cy} r={5} fill="currentColor" fillOpacity={0.9} stroke="white" strokeWidth={2} />
                 <text
-                  x={cx - 6} y={labelY}
+                  x={cx - 8} y={labelY}
                   fontSize="11" textAnchor="end"
                   fill="currentColor" opacity={0.75}
                   fontWeight="600"
@@ -241,6 +277,21 @@ export default function MultiLineChart(props: {
               </g>
             );
           })()}
+
+          {/* Gap annotation — floating label between endpoints */}
+          {annotationPos && props.annotation && (
+            <text
+              x={annotationPos.x} y={annotationPos.y + 4}
+              fontSize="10" textAnchor="end"
+              fill="currentColor"
+              style={{
+                opacity: mounted ? 0.55 : 0,
+                transition: 'opacity 500ms ease-out 450ms',
+              }}
+            >
+              {props.annotation}
+            </text>
+          )}
 
           {/* Event markers */}
           {events.map((e, i) => (
@@ -256,14 +307,18 @@ export default function MultiLineChart(props: {
             <line
               x1={xFor(hoverIdx)} y1={padT}
               x2={xFor(hoverIdx)} y2={h - padB}
-              stroke="currentColor" strokeOpacity="0.15"
+              stroke="currentColor" strokeOpacity="0.14"
               strokeDasharray="3 3"
             />
           )}
 
-          {/* x tick labels */}
+          {/* X tick labels */}
           {xTicks.map((t, i) => (
-            <text key={i} x={xFor(t.idx)} y={h - 8} fontSize="12" textAnchor="middle" fill="currentColor" opacity="0.6">
+            <text
+              key={i} x={xFor(t.idx)} y={h - 9}
+              fontSize="12" textAnchor="middle"
+              fill="currentColor" opacity="0.65"
+            >
               {t.label}
             </text>
           ))}
@@ -272,10 +327,10 @@ export default function MultiLineChart(props: {
         {/* Hover tooltip */}
         {tooltip && (
           <div
-            className="pointer-events-none absolute top-2 rounded-xl border border-white/70 bg-white/92 px-3 py-2 text-xs shadow-md backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/90"
-            style={{ left: `calc(${hoverXPct * 100}% - 90px)`, width: 180 }}
+            className="pointer-events-none absolute top-2 rounded-xl border border-white/80 bg-white/95 px-3 py-2.5 text-xs shadow-lg backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/95"
+            style={{ left: `calc(${hoverXPct * 100}% - 90px)`, width: 188 }}
           >
-            <div className="mb-1.5 font-semibold text-slate-800 dark:text-slate-100">{tooltip.year}</div>
+            <div className="mb-2 font-semibold text-slate-800 dark:text-slate-100">{tooltip.year}</div>
             {tooltip.rows.map((r) => (
               <div key={r.key} className="flex justify-between gap-3 text-slate-600 dark:text-slate-300">
                 <span>{r.label}</span>
@@ -283,10 +338,12 @@ export default function MultiLineChart(props: {
               </div>
             ))}
             {tooltip.rows.length === 2 && (
-              <div className="mt-1.5 border-t border-slate-100 pt-1.5 dark:border-slate-700/50">
+              <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-700/50">
                 <div className="flex justify-between gap-3 text-slate-500 dark:text-slate-400">
-                  <span>Gap</span>
-                  <span className="font-medium">{fmtMoneyShort(tooltip.rows[0].value - tooltip.rows[1].value)}</span>
+                  <span>Difference</span>
+                  <span className={`font-semibold ${tooltip.rows[0].value > tooltip.rows[1].value ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                    {fmtMoneyShort(tooltip.rows[0].value - tooltip.rows[1].value)}
+                  </span>
                 </div>
               </div>
             )}
@@ -295,7 +352,7 @@ export default function MultiLineChart(props: {
       </div>
 
       {/* Legend */}
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
         {safe.series.map((s, idx) => (
           <div key={s.key} className="flex items-center gap-1.5">
             <svg width="24" height="10" aria-hidden="true">
