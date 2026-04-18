@@ -22,6 +22,14 @@ import {
   FinanceSnapshotDTO,
 } from './sellHoldRentApi';
 
+function impactBadge(impact: string) {
+  const base = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur shrink-0';
+  if (impact === 'HIGH') return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700 dark:border-emerald-700/60 dark:bg-emerald-950/40 dark:text-emerald-300`}>{impact}</span>;
+  if (impact === 'MEDIUM') return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300`}>{impact}</span>;
+  if (impact === 'LOW') return <span className={`${base} border-rose-200/70 bg-rose-50/85 text-rose-700 dark:border-rose-700/60 dark:bg-rose-950/40 dark:text-rose-300`}>{impact}</span>;
+  return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-600 dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300`}>{impact}</span>;
+}
+
 function money(n?: number | null, currency = 'USD') {
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
@@ -397,7 +405,7 @@ export default function SellHoldRentClient() {
         </div>
       </div>
 
-      {/* Key drivers + assumptions */}
+      {/* Key drivers */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Key drivers</div>
         <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">What is influencing the result in this model</div>
@@ -405,24 +413,31 @@ export default function SellHoldRentClient() {
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           {(data?.drivers || []).map((d, idx) => (
             <div key={idx} className="rounded-2xl border border-white/70 bg-white/68 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-start justify-between gap-2">
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{d.factor}</div>
-                <span className="rounded-full border border-slate-300/70 bg-slate-50/85 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300">{d.impact}</span>
+                {impactBadge(d.impact)}
               </div>
               <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{d.explanation}</div>
             </div>
           ))}
         </div>
+      </div>
 
-        <div className="mt-4 rounded-xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-          <div className="text-xs text-slate-500 dark:text-slate-300">Assumptions</div>
-          <div className="mt-2 space-y-1">
-            {(data?.meta?.notes || []).map((n, i) => (
-              <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>
+      {/* Assumptions */}
+      {(data?.meta?.notes || []).length > 0 && (
+        <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Assumptions</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Model inputs and defaults applied to this simulation</div>
+          <div className="mt-3 space-y-2">
+            {(data?.meta?.notes ?? []).map((n, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-xl border border-white/70 bg-white/68 px-3 py-2 text-xs text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+                <span className="mt-0.5 shrink-0 text-slate-400 dark:text-slate-500">•</span>
+                <span>{n}</span>
+              </div>
             ))}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Phase-3: Override + Debt Snapshot Editor */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
