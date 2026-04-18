@@ -1,157 +1,94 @@
-const CACHE_NAME = 'c2c-v1.0.2';
-const OFFLINE_URL = '/offline';
+const CACHE_NAME = 'c2c-v1.1.0';
 
-// Static assets to cache immediately
-const PRECACHE_URLS = [
-  '/manifest.json'
-];
-
-function isApiRequest(request) {
-  try {
-    const url = new URL(request.url);
-    return url.origin === self.location.origin && url.pathname.startsWith('/api/');
-  } catch (_) {
-    return request.url.includes('/api/');
-  }
+// Only cache immutable Next.js static chunks — never HTML, RSC, or API responses.
+function isImmutableAsset(url) {
+  const path = new URL(url).pathname;
+  return path.startsWith('/_next/static/');
 }
 
-// Install event - cache static assets
+// Install — nothing to precache, just activate immediately.
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker...');
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('[SW] Precaching static assets');
-        return cache.addAll(PRECACHE_URLS);
-      })
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil(self.skipWaiting());
 });
 
-// Activate event - clean up old caches
+// Activate — clear all old caches and take control.
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker...');
   event.waitUntil(
     caches.keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames
-            .filter((name) => name !== CACHE_NAME)
-            .map((name) => {
-              console.log('[SW] Deleting old cache:', name);
-              return caches.delete(name);
-            })
-        );
-      })
-      .then(() => caches.open(CACHE_NAME))
-      .then(async (cache) => {
-        // Defense-in-depth: remove any legacy cached API responses.
-        const requests = await cache.keys();
-        await Promise.all(
-          requests
-            .filter((request) => isApiRequest(request))
-            .map((request) => cache.delete(request))
-        );
-      })
+      .then((names) => Promise.all(
+        names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
+      ))
       .then(() => self.clients.claim())
   );
 });
 
-// Fetch event - network first, then cache, then offline page
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') {
+  if (event.request.method !== 'GET') return;
+
+  const url = event.request.url;
+
+  // Let the browser handle cross-origin requests normally.
+  if (!url.startsWith(self.location.origin)) return;
+
+  // Never intercept: navigations, RSC requests, API calls, or monitoring.
+  // Letting these fall through to the network ensures auth redirects and
+  // fresh server state always work correctly.
+  const { pathname, search } = new URL(url);
+  if (
+    event.request.mode === 'navigate' ||
+    search.includes('_rsc=') ||
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/monitoring')
+  ) {
     return;
   }
 
-  // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) {
-    return;
-  }
-
-  // Handle navigation requests (HTML pages)
-  if (event.request.mode === 'navigate') {
+  // Cache-first for immutable _next/static/ chunks (content-hashed filenames).
+  if (isImmutableAsset(url)) {
     event.respondWith(
-      fetch(event.request)
-        .catch(() => {
-          return caches.match(event.request)
-            .then((response) => {
-              return response || caches.match(OFFLINE_URL) || new Response('Offline', { status: 503 });
-            });
-        })
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        });
+      })
     );
     return;
   }
 
-  // Handle API requests - network-only, never cache authenticated/sensitive responses
-  if (isApiRequest(event.request)) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-
-  // Handle static assets - cache first, then network
+  // Everything else (icons, fonts, manifest) — network first, cache fallback.
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then((response) => {
-        if (response) {
-          console.log('[SW] Serving from cache:', event.request.url);
-          return response;
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
-
-        return fetch(event.request)
-          .then((response) => {
-            // Cache successful responses
-            if (response.status === 200) {
-              const responseClone = response.clone();
-              caches.open(CACHE_NAME)
-                .then((cache) => cache.put(event.request, responseClone));
-            }
-            return response;
-          })
-          .catch(() => new Response('', { status: 503 }));
+        return response;
       })
+      .catch(() => caches.match(event.request))
   );
 });
 
-// Background sync for offline requests
-self.addEventListener('sync', (event) => {
-  console.log('[SW] Background sync triggered:', event.tag);
-  if (event.tag === 'sync-offline-requests') {
-    event.waitUntil(syncOfflineRequests());
-  }
-});
-
-async function syncOfflineRequests() {
-  // This will be implemented with IndexedDB integration
-  console.log('[SW] Syncing offline requests...');
-  // TODO: Fetch from IndexedDB offline-queue and replay requests
-}
-
-// Push notifications (future enhancement)
+// Push notifications
 self.addEventListener('push', (event) => {
-  console.log('[SW] Push notification received');
   const data = event.data ? event.data.json() : {};
-  
-  const options = {
-    body: data.body || 'You have a new notification',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-96x96.png',
-    vibrate: [200, 100, 200],
-    data: data.url || '/dashboard'
-  };
-
   event.waitUntil(
-    self.registration.showNotification(
-      data.title || 'Contract to Cozy',
-      options
-    )
+    self.registration.showNotification(data.title || 'Contract to Cozy', {
+      body: data.body || 'You have a new notification',
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/icon-96x96.png',
+      vibrate: [200, 100, 200],
+      data: data.url || '/dashboard',
+    })
   );
 });
 
-// Notification click handler
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(
-    clients.openWindow(event.notification.data || '/dashboard')
-  );
+  event.waitUntil(clients.openWindow(event.notification.data || '/dashboard'));
 });
