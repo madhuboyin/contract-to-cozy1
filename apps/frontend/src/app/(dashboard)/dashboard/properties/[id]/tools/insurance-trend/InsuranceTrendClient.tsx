@@ -108,9 +108,9 @@ export default function InsuranceTrendClient() {
   const insurancePriorityAction = (() => {
     if (!data || loading || data.current?.deltaVsStateNow == null) return undefined;
     const delta = data.current.deltaVsStateNow;
-    if (delta > 0.02) {
+    if (delta > 100) {
       return {
-        title: `Your premium is running ${pct(delta)} above state average`,
+        title: `Your premium is running ${money(delta)} above state average`,
         description: 'This drift is worth acting on before your next renewal — shopping alternatives now gives you leverage.',
         impactLabel: `${trendYears}-year premium trend`,
         confidenceLabel: data.meta?.confidence ?? 'Medium',
@@ -123,7 +123,7 @@ export default function InsuranceTrendClient() {
     }
     if (delta <= 0) {
       return {
-        title: `Your premium is tracking ${pct(Math.abs(delta))} below state average`,
+        title: `Your premium is tracking ${money(Math.abs(delta))} below state average`,
         description: 'A healthy signal. Review at renewal to confirm the gap holds — market conditions can shift it.',
         impactLabel: `${trendYears}-year premium trend`,
         confidenceLabel: data.meta?.confidence ?? 'Medium',
@@ -237,19 +237,10 @@ export default function InsuranceTrendClient() {
           );
         })()}
 
-        <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/85 p-3 text-xs text-amber-900 backdrop-blur">
-          <div className="font-semibold">Educational Estimate — not decision-grade</div>
-          <div className="mt-1">
-            {data?.meta?.disclaimer ??
-              'This output is an educational estimate based on heuristic models. Do not use as a sole input for major financial decisions.'}
-          </div>
-          {Array.isArray(data?.meta?.usageRestrictions) && data.meta.usageRestrictions.length > 0 && (
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              {data.meta.usageRestrictions.map((restriction, idx) => (
-                <li key={idx}>{restriction}</li>
-              ))}
-            </ul>
-          )}
+        <div className="mt-3 rounded-2xl border border-amber-200/70 bg-amber-50/85 px-3 py-2 text-xs text-amber-900 backdrop-blur">
+          <span className="font-semibold">Educational Estimate — not decision-grade.</span>{' '}
+          {data?.meta?.disclaimer ??
+            'This output is an educational estimate based on heuristic models. Do not use as a sole input for major financial decisions.'}
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-12 lg:grid-cols-12">
@@ -292,7 +283,16 @@ export default function InsuranceTrendClient() {
             </div>
 
             <div className={`rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur ${deltaTone}`}>
-              <div className="text-xs uppercase tracking-[0.12em] opacity-80">Delta vs state (now)</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs uppercase tracking-[0.12em] opacity-80">Delta vs state (now)</div>
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  deltaNow > 0
+                    ? 'border-rose-200/70 bg-rose-100/80 text-rose-700 dark:border-rose-700/50 dark:bg-rose-950/50 dark:text-rose-300'
+                    : 'border-emerald-200/70 bg-emerald-100/80 text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-950/50 dark:text-emerald-300'
+                }`}>
+                  {deltaNow > 0 ? 'above avg' : 'below avg'}
+                </span>
+              </div>
               <div className="mt-1 text-2xl font-semibold leading-tight">{money(deltaNow)}</div>
               <div className="mt-1 text-xs opacity-70">
                 State baseline: <span className="font-medium">{money(data?.current?.stateAvgAnnualNow)}</span>
@@ -408,6 +408,9 @@ export default function InsuranceTrendClient() {
         <div className="mt-3 space-y-2">
           {(data?.meta?.notes || []).map((n, i) => (
             <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>
+          ))}
+          {Array.isArray(data?.meta?.usageRestrictions) && data.meta.usageRestrictions.map((r, i) => (
+            <div key={`r${i}`} className="text-xs text-slate-500 dark:text-slate-400">• {r}</div>
           ))}
         </div>
 
