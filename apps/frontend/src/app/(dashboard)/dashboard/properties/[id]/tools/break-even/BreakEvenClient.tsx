@@ -8,6 +8,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import { Button } from '@/components/ui/button';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 
 import MultiLineChart from '../insurance-trend/MultiLineChart';
 import { getBreakEven, BreakEvenDTO } from './breakEvenApi';
@@ -136,8 +137,18 @@ export default function BreakEvenClient() {
         sourceLabel: 'CtC ownership model + appreciation scenarios + expense projections',
         rationale: 'Balances cumulative costs and projected appreciation so ownership timing decisions stay explicit.',
       }}
-      rail={<HomeToolsRail propertyId={propertyId} context="break-even" currentToolId="break-even" />}
+      introAction={
+        <HomeToolsRail propertyId={propertyId} context="break-even" currentToolId="break-even" showDesktop={false} />
+      }
     >
+
+      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      <HomeToolHeader
+        toolId="break-even"
+        propertyId={propertyId}
+        context="break-even"
+        currentToolId="break-even"
+      />
 
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
         <div className="flex flex-wrap items-start justify-between gap-4">

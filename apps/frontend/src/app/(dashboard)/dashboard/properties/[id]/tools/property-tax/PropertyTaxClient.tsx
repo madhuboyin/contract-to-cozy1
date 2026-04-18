@@ -8,6 +8,7 @@ import { getPropertyTaxEstimate, PropertyTaxEstimateDTO } from './taxApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
@@ -212,7 +213,9 @@ export default function PropertyTaxClient() {
       eyebrow="Home Tool"
       title="Property Tax Intelligence"
       subtitle="Review tax estimates, trend projection, and key drivers behind changes."
-      rail={<HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" />}
+      introAction={
+        <HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" showDesktop={false} />
+      }
       trust={{
         confidenceLabel: estimate?.current?.confidence ?? 'Estimated confidence',
         freshnessLabel: estimate?.meta?.generatedAt ? 'Updated with latest tax model run' : 'Run estimate to refresh',
@@ -254,6 +257,14 @@ export default function PropertyTaxClient() {
         return undefined;
       })()}
     >
+
+      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      <HomeToolHeader
+        toolId="property-tax"
+        propertyId={propertyId}
+        context="property-tax"
+        currentToolId="property-tax"
+      />
 
       {/* Controls */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
