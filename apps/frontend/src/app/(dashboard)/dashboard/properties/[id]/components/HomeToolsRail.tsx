@@ -106,6 +106,8 @@ export default function HomeToolsRail({
   const pathname = usePathname() || '';
   const resolvedContext = resolvePageContext({ pathname, explicitContext: context });
   const resolvedToolId = currentToolId ?? getContextToolId(resolvedContext);
+  const relatedToolsContext: PageContextId = context ?? resolvedContext ?? 'property-hub';
+  const relatedToolsCurrentToolId = currentToolId ?? getContextToolId(relatedToolsContext);
 
   const tools = HOME_TOOLS.map((t) => {
     const href = t.href(propertyId);
@@ -127,8 +129,8 @@ export default function HomeToolsRail({
           ) : (
             <RelatedTools
               propertyId={propertyId}
-              context={context}
-              currentToolId={currentToolId}
+              context={relatedToolsContext}
+              currentToolId={relatedToolsCurrentToolId}
               minViewport="lg"
             />
           )}
