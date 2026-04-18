@@ -3,8 +3,7 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import DoNothingSimulatorPanel from '@/components/ai/DoNothingSimulatorPanel';
-import { Button } from '@/components/ui/button';
-import ToolExplainerSection, { openToolExplainer } from '@/components/tool-explainer/ToolExplainerSection';
+import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
@@ -31,20 +30,8 @@ export default function DoNothingToolClient() {
         sourceLabel: 'CtC delay-impact model + property system context + risk signals',
         rationale: 'Shows likely cost escalation and risk compounding when recommended actions are deferred.',
       }}
-      rail={<HomeToolsRail propertyId={propertyId} />}
       introAction={
-        <Button
-          variant="outline"
-          className="min-h-[44px] lg:hidden"
-          onClick={() =>
-            openToolExplainer({
-              id: 'how-it-works',
-              toolKey: 'doNothingSimulator',
-            })
-          }
-        >
-          Learn how it works
-        </Button>
+        <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
     >
 

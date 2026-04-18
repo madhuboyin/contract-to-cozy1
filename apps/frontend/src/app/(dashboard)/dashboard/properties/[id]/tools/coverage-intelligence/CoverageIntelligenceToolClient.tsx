@@ -3,8 +3,7 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
-import { Button } from '@/components/ui/button';
-import ToolExplainerSection, { openToolExplainer } from '@/components/tool-explainer/ToolExplainerSection';
+import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
@@ -38,22 +37,8 @@ export default function CoverageIntelligenceToolClient() {
         sourceLabel: 'CtC coverage graph + property inventory + policy metadata',
         rationale: 'Coverage gaps are prioritized by uncovered exposure, expiration state, and room context.',
       }}
-      rail={<HomeToolsRail propertyId={propertyId} />}
       introAction={
-        !isGuidanceContext ? (
-          <Button
-            variant="outline"
-            className="min-h-[44px] lg:hidden"
-            onClick={() =>
-              openToolExplainer({
-                id: 'how-it-works',
-                toolKey: 'coverageIntelligence',
-              })
-            }
-          >
-            Learn how it works
-          </Button>
-        ) : undefined
+        <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
     >
 

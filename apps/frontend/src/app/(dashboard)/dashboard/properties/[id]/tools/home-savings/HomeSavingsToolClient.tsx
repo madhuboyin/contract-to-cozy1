@@ -29,7 +29,9 @@ export default function HomeSavingsToolClient() {
         sourceLabel: 'CtC savings model + property profile + tool-derived spend patterns',
         rationale: 'Savings recommendations prioritize realistic, actionable changes with measurable downside protection.',
       }}
-      rail={<HomeToolsRail propertyId={propertyId} />}
+      introAction={
+        <HomeToolsRail propertyId={propertyId} showDesktop={false} />
+      }
     >
 
       <div id="home-savings-opportunities">
