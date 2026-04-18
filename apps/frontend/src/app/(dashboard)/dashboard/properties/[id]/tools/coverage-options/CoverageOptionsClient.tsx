@@ -18,6 +18,7 @@ import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
+import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 
 export default function CoverageOptionsClient() {
   const params = useParams<{ id: string }>();
@@ -104,7 +105,12 @@ export default function CoverageOptionsClient() {
             title: 'No coverage gaps found',
             description: 'All tracked items currently have coverage. No policy comparisons are needed right now.',
           }
-        : undefined;
+      : undefined;
+  const trust = coverageLoopTrust({
+    confidenceLabel: 'Medium, based on current item coverage states',
+    freshnessLabel: 'Real-time when coverage records are updated',
+    sourceLabel: 'Inventory coverage gaps + linked warranty/insurance metadata',
+  });
 
   React.useEffect(() => {
     if (!propertyId || !guidanceJourneyId || proofCompleted) return;
@@ -143,12 +149,7 @@ export default function CoverageOptionsClient() {
       title="Coverage Options"
       subtitle="Compare warranty and insurance options to close identified coverage gaps."
       rail={<HomeToolsRail propertyId={propertyId} />}
-      trust={{
-        confidenceLabel: 'Medium, based on current item coverage states',
-        freshnessLabel: 'Real-time when coverage records are updated',
-        sourceLabel: 'Inventory coverage gaps + linked warranty/insurance metadata',
-        rationale: 'Recommendations prioritize no-coverage items first, then partial or expired protection.',
-      }}
+      trust={trust}
       priorityAction={!loading && !err && totalGaps > 0 && topGap ? {
         title: `You have ${totalGaps} coverage gap${totalGaps !== 1 ? 's' : ''} — highest priority: ${topGap.itemName}`,
         description: `${formatEnumLabel(topGap.gapType) || 'Gap'} protection is missing on this item. Start here, then work through the remaining ${totalGaps - 1} gap${totalGaps - 1 !== 1 ? 's' : ''}.`,

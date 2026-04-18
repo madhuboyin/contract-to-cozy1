@@ -1,4 +1,4 @@
-import QuoteComparisonWorkspaceClient from './QuoteComparisonPlaceholderClient';
+import QuoteComparisonWorkspaceClient from './QuoteComparisonWorkspaceClient';
 
 export default function QuoteComparisonPage() {
   return <QuoteComparisonWorkspaceClient />;

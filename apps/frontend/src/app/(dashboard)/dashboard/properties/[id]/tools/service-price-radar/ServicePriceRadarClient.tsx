@@ -67,6 +67,7 @@ import { getGuidanceNextStep } from '@/lib/api/guidanceApi';
 import { getInventoryItem } from '../../../../inventory/inventoryApi';
 import type { InventoryItemCategory } from '@/types';
 import TrustStrip from '../../components/route-templates/TrustStrip';
+import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 
 // Maps inventory item category to the closest ServiceRadarCategory for pre-selection.
 const INVENTORY_CATEGORY_TO_SERVICE_RADAR: Partial<Record<InventoryItemCategory, ServiceRadarCategory>> = {
@@ -673,6 +674,15 @@ export default function ServicePriceRadarClient() {
   ].join('|');
 
   const hasResult = Boolean(currentCheck);
+  const pricingTrust = pricingLoopTrust({
+    confidenceLabel:
+      currentCheck?.confidenceScore != null
+        ? `${Math.round(currentCheck.confidenceScore * 100)}% quote confidence`
+        : 'Confidence improves with richer quote context',
+    freshnessLabel: 'Updates with each quote check and linked entity adjustment',
+    sourceLabel:
+      'Service category priors + property context + linked entities + regional pricing factors',
+  });
   const currentVerdict = verdictMeta(currentCheck?.verdict ?? null);
   const currentConfidence = confidenceMeta(currentCheck?.confidenceScore ?? null);
   const currentReasons = currentCheck ? extractReasons(currentCheck) : [];
@@ -1200,9 +1210,9 @@ export default function ServicePriceRadarClient() {
 
       <TrustStrip
         variant="footnote"
-        confidenceLabel={currentCheck?.confidenceScore != null ? `${Math.round(currentCheck.confidenceScore * 100)}% quote confidence` : 'Confidence improves with richer quote context'}
-        freshnessLabel="Updates with each quote check and linked entity adjustment"
-        sourceLabel="Service category priors + property context + linked entities + regional pricing factors"
+        confidenceLabel={pricingTrust.confidenceLabel}
+        freshnessLabel={pricingTrust.freshnessLabel}
+        sourceLabel={pricingTrust.sourceLabel}
       />
 
       {toolError ? (

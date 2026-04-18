@@ -20,6 +20,7 @@ import {
 } from '../service-price-radar/servicePriceRadarApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
+import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 
 type SearchParamSource = { get(name: string): string | null };
 
@@ -353,6 +354,14 @@ export default function QuoteComparisonWorkspaceClient() {
   const backHref = isGuidanceContext
     ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
     : `/dashboard/properties/${propertyId}`;
+  const trust = pricingLoopTrust({
+    confidenceLabel:
+      selectedQuotes.length >= 2
+        ? 'High with multiple side-by-side quotes in the same decision flow'
+        : 'Medium until at least two comparable quotes are selected',
+    freshnessLabel: 'Updates as new Service Price Radar checks are created',
+    sourceLabel: 'Service Price Radar check history + guidance prefill + manual quote entries',
+  });
 
   return (
     <CompareTemplate
@@ -361,16 +370,7 @@ export default function QuoteComparisonWorkspaceClient() {
       title="Quote Comparison Workspace"
       subtitle="Compare live quote checks side by side and choose the best quote to finalize."
       rail={<HomeToolsRail propertyId={propertyId} context="quote-comparison" currentToolId="quote-comparison" />}
-      trust={{
-        confidenceLabel:
-          selectedQuotes.length >= 2
-            ? 'High with multiple side-by-side quotes in the same decision flow'
-            : 'Medium until at least two comparable quotes are selected',
-        freshnessLabel: 'Updates as new Service Price Radar checks are created',
-        sourceLabel: 'Service Price Radar check history + guidance prefill + manual quote entries',
-        rationale:
-          'This workspace keeps quote review, recommendation, and finalization handoff in one loop.',
-      }}
+      trust={trust}
       priorityAction={
         recommendedQuote
           ? {

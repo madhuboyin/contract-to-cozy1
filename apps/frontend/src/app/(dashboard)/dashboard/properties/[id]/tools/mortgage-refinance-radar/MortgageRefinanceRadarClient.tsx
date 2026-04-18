@@ -32,6 +32,7 @@ import {
 import { Button } from '@/components/ui/button';
 import RouteStateCard from '@/components/system/RouteStateCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import { refinanceLoopTrust, trustDateLabel } from '@/lib/trust/trustPresets';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -877,6 +878,13 @@ export default function MortgageRefinanceRadarClient() {
   }, [propertyId]);
 
   const available = data?.available === true ? (data as RadarStatusAvailable) : null;
+  const trust = refinanceLoopTrust({
+    confidenceLabel: available?.confidenceLevel
+      ? `${available.confidenceLevel.toLowerCase()} fit from current loan context`
+      : 'Model fit pending evaluation',
+    freshnessLabel: trustDateLabel(available?.lastEvaluatedAt, 'Evaluate now to refresh'),
+    sourceLabel: 'Mortgage profile + market rate snapshots + CtC refinance model',
+  });
 
   return (
     <ToolWorkspaceTemplate
@@ -885,12 +893,7 @@ export default function MortgageRefinanceRadarClient() {
       eyebrow="Home Tool"
       title="Mortgage Refinance Radar"
       subtitle="Monitor rates and know when refinancing is likely worth the effort."
-      trust={{
-        confidenceLabel: available?.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} fit from current loan context` : 'Model fit pending evaluation',
-        freshnessLabel: available?.lastEvaluatedAt ? `Last evaluated ${new Date(available.lastEvaluatedAt).toLocaleDateString()}` : 'Evaluate now to refresh',
-        sourceLabel: 'Mortgage profile + market rate snapshots + CtC refinance model',
-        rationale: 'Opportunity scoring weighs rate gap, break-even horizon, and closing-cost assumptions together.',
-      }}
+      trust={trust}
       priorityAction={!loading && available ? (
         available.radarState === 'OPEN' ? {
           title: 'A refinance window is open — current rates suggest potential savings',

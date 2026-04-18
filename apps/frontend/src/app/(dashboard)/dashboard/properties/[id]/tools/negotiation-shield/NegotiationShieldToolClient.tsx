@@ -62,6 +62,7 @@ import {
 } from './negotiationShieldApi';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import TrustStrip from '../../components/route-templates/TrustStrip';
+import { negotiationLoopTrust } from '@/lib/trust/trustPresets';
 
 type ScenarioRouteValue =
   | 'contractor-quote-review'
@@ -2874,6 +2875,26 @@ export default function NegotiationShieldToolClient() {
   const property = propertyQuery.data;
   const cases = casesQuery.data ?? [];
   const hasOpenCase = Boolean(caseId);
+  const missingPropertyTrust = negotiationLoopTrust({
+    confidenceLabel: 'Low until a property is selected',
+    freshnessLabel: 'Context refreshes once you open this tool from a property',
+    sourceLabel: 'Negotiation case data requires an active property scope',
+  });
+  const loadingPropertyTrust = negotiationLoopTrust({
+    confidenceLabel: 'Pending property context',
+    freshnessLabel: 'Syncing current property profile',
+    sourceLabel: 'Property data + negotiation case history',
+  });
+  const unavailablePropertyTrust = negotiationLoopTrust({
+    confidenceLabel: 'Low while context is unavailable',
+    freshnessLabel: 'Retry to restore current property and case data',
+    sourceLabel: 'Property profile + negotiation case records',
+  });
+  const activeWorkspaceTrust = negotiationLoopTrust({
+    confidenceLabel: hasOpenCase
+      ? 'Medium-High when case inputs and documents are complete'
+      : 'Medium while setting up a new review',
+  });
 
   const introAction = (
     <Button type="button" variant={hasOpenCase ? 'outline' : 'default'} className="hidden sm:inline-flex" onClick={() => openCreate()}>
@@ -2920,9 +2941,9 @@ export default function NegotiationShieldToolClient() {
          className="lg:hidden"/>
         <TrustStrip
           variant="footnote"
-          confidenceLabel="Low until a property is selected"
-          freshnessLabel="Context refreshes once you open this tool from a property"
-          sourceLabel="Negotiation case data requires an active property scope"
+          confidenceLabel={missingPropertyTrust.confidenceLabel}
+          freshnessLabel={missingPropertyTrust.freshnessLabel}
+          sourceLabel={missingPropertyTrust.sourceLabel}
         />
         <Card className={SECTION_CARD_CLASS}>
           <CardHeader className={SECTION_HEADER_CLASS}>
@@ -2950,9 +2971,9 @@ export default function NegotiationShieldToolClient() {
          className="lg:hidden"/>
         <TrustStrip
           variant="footnote"
-          confidenceLabel="Pending property context"
-          freshnessLabel="Syncing current property profile"
-          sourceLabel="Property data + negotiation case history"
+          confidenceLabel={loadingPropertyTrust.confidenceLabel}
+          freshnessLabel={loadingPropertyTrust.freshnessLabel}
+          sourceLabel={loadingPropertyTrust.sourceLabel}
         />
         <DetailSkeleton />
       </MobilePageContainer>
@@ -2970,9 +2991,9 @@ export default function NegotiationShieldToolClient() {
          className="lg:hidden"/>
         <TrustStrip
           variant="footnote"
-          confidenceLabel="Low while context is unavailable"
-          freshnessLabel="Retry to restore current property and case data"
-          sourceLabel="Property profile + negotiation case records"
+          confidenceLabel={unavailablePropertyTrust.confidenceLabel}
+          freshnessLabel={unavailablePropertyTrust.freshnessLabel}
+          sourceLabel={unavailablePropertyTrust.sourceLabel}
         />
         <Card className={SECTION_CARD_CLASS}>
           <CardHeader className={SECTION_HEADER_CLASS}>
@@ -3006,9 +3027,9 @@ export default function NegotiationShieldToolClient() {
        className="lg:hidden"/>
       <TrustStrip
         variant="footnote"
-        confidenceLabel={hasOpenCase ? 'Medium-High when case inputs and documents are complete' : 'Medium while setting up a new review'}
-        freshnessLabel="Updates with each saved input, parsed document, and analysis run"
-        sourceLabel="Case inputs + uploaded evidence + CtC negotiation analysis engine"
+        confidenceLabel={activeWorkspaceTrust.confidenceLabel}
+        freshnessLabel={activeWorkspaceTrust.freshnessLabel}
+        sourceLabel={activeWorkspaceTrust.sourceLabel}
       />
 
       <div className={cn(hasOpenCase ? 'grid gap-5 xl:items-start xl:grid-cols-[280px_minmax(0,1fr)]' : 'space-y-4 xl:space-y-5')}>

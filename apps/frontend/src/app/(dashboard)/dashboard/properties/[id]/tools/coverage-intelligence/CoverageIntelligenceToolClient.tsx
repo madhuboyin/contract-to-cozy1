@@ -6,6 +6,7 @@ import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel
 import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
 export default function CoverageIntelligenceToolClient() {
@@ -23,6 +24,11 @@ export default function CoverageIntelligenceToolClient() {
   const backHref = isGuidanceContext
     ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
     : `/dashboard/properties/${propertyId}`;
+  const trust = coverageLoopTrust({
+    confidenceLabel: 'Medium-High, based on linked policy and inventory signals',
+    freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',
+    sourceLabel: 'CtC coverage graph + property inventory + policy metadata',
+  });
 
   return (
     <ToolWorkspaceTemplate
@@ -31,12 +37,7 @@ export default function CoverageIntelligenceToolClient() {
       eyebrow="Home Tool"
       title="Coverage Intelligence"
       subtitle="Insurance and warranty coverage assessment for this property."
-      trust={{
-        confidenceLabel: 'Medium-High, based on linked policy and inventory signals',
-        freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',
-        sourceLabel: 'CtC coverage graph + property inventory + policy metadata',
-        rationale: 'Coverage gaps are prioritized by uncovered exposure, expiration state, and room context.',
-      }}
+      trust={trust}
       introAction={
         <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
