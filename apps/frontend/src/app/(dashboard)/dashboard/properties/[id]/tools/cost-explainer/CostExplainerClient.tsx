@@ -18,6 +18,7 @@ function badgeForConfidence(c?: string) {
   const base = 'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur';
   if (c === 'HIGH') return <span className={`${base} border-emerald-200/70 bg-emerald-50/85 text-emerald-700`}>High confidence</span>;
   if (c === 'MEDIUM') return <span className={`${base} border-amber-200/70 bg-amber-50/85 text-amber-800`}>Medium confidence</span>;
+  if (c === 'LOW') return <span className={`${base} border-red-200/70 bg-red-50/85 text-red-700`}>Low confidence</span>;
   return <span className={`${base} border-slate-300/70 bg-slate-50/85 text-slate-700`}>Estimated</span>;
 }
 
@@ -259,16 +260,32 @@ export default function CostExplainerClient() {
 
       {/* Explanations */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
-        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Plain-English breakdown</div>
-        <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-          Tied to <span className="font-medium">{data?.input?.state || '—'}</span> and ZIP{' '}
-          <span className="font-medium">{data?.input?.zipCode || '—'}</span>.
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Plain-English breakdown</div>
+          {loading && <span className="text-xs text-slate-500 dark:text-slate-300">Refreshing…</span>}
         </div>
+        {data?.input?.state && (
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+            Tied to <span className="font-medium">{data.input.state}</span> and ZIP{' '}
+            <span className="font-medium">{data.input.zipCode}</span>.
+          </div>
+        )}
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          {(data?.explanations || []).map((e, idx) => (
-            <div key={idx} className="rounded-2xl border border-white/70 bg-white/68 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="flex items-center justify-between gap-2">
+          {data && !loading && (data.explanations || []).length === 0 && (
+            <div className="md:col-span-2 rounded-2xl border border-white/70 bg-white/70 p-4 text-center text-sm text-slate-500 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
+              No breakdown available for this analysis.
+            </div>
+          )}
+          {(data?.explanations || []).map((e, _idx, arr) => (
+            <div
+              key={e.category}
+              className={`rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48${arr.length % 2 !== 0 && _idx === arr.length - 1 ? ' md:col-span-2' : ''}`}
+            >
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+                {e.category === 'TAXES' ? 'Property Tax' : e.category === 'INSURANCE' ? 'Insurance' : e.category === 'MAINTENANCE' ? 'Maintenance' : 'Total Cost'}
+              </div>
+              <div className="flex items-start justify-between gap-2">
                 <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{e.headline}</div>
                 {badgeForConfidence(e.confidence)}
               </div>
@@ -281,16 +298,27 @@ export default function CostExplainerClient() {
           ))}
         </div>
 
-        <div className="mt-4 rounded-xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-          <div className="text-xs text-slate-500 dark:text-slate-300">Assumptions (Phase 1)</div>
+        <div className="mt-4 rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
+          <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-300">Assumptions</div>
           <div className="mt-2 space-y-1">
-            {(data?.meta?.notes || []).map((n, i) => (
-              <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>
-            ))}
+            {(data?.meta?.notes || []).length > 0 ? (
+              (data?.meta?.notes || []).map((n, i) => (
+                <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {n}</div>
+              ))
+            ) : (
+              <div className="text-xs text-slate-400 dark:text-slate-500">No assumptions recorded for this analysis.</div>
+            )}
           </div>
-          <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-            {loading ? 'Refreshing…' : data?.meta?.generatedAt ? 'Updated just now' : ''}
-          </div>
+          {(data?.meta?.dataSources || []).length > 0 && (
+            <div className="mt-3 border-t border-slate-200/60 pt-2 dark:border-slate-700/50">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">Data sources</div>
+              <div className="mt-1 space-y-0.5">
+                {(data.meta.dataSources).map((s, i) => (
+                  <div key={i} className="text-xs text-slate-500 dark:text-slate-400">• {s}</div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </ToolWorkspaceTemplate>
