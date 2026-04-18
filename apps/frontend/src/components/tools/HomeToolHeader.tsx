@@ -57,23 +57,23 @@ export default function HomeToolHeader({
 
   return (
     <section className={cn('hidden space-y-5 lg:block', className)}>
-      <div className="rounded-[28px] border border-[hsl(var(--mobile-border-subtle))] bg-[linear-gradient(180deg,#f8fbfb,#f3f7f7)] px-6 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-        <div className="flex items-start gap-4">
-          <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-[hsl(var(--mobile-border-subtle))] bg-[#eff6f5] text-[hsl(var(--mobile-brand-strong))]">
-            <Icon className="h-6 w-6" />
+      <div className="rounded-[20px] border border-[hsl(var(--mobile-border-subtle))] bg-[linear-gradient(180deg,#f8fbfb,#f3f7f7)] px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+        <div className="flex items-start gap-3">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[#eff6f5] text-[hsl(var(--mobile-brand-strong))]">
+            <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="mb-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <p className="mb-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
               Home Tool
             </p>
-            <h1 className="mb-0 mt-1 text-[2rem] leading-tight font-semibold tracking-tight text-slate-900">
+            <h2 className="mb-0 mt-0.5 text-base font-semibold leading-snug tracking-tight text-slate-900">
               {title ?? definition.label}
-            </h1>
-            <p className="mb-0 mt-2 text-[1.05rem] text-slate-600">
+            </h2>
+            <p className="mb-0 mt-1 text-xs leading-relaxed text-slate-500">
               {description ?? definition.description}
             </p>
-            <p className="mb-0 mt-3 text-[1.03rem] text-[hsl(var(--mobile-brand-strong))]">
-              Address: {resolvedMonitoringAddress}
+            <p className="mb-0 mt-2 text-xs font-medium text-[hsl(var(--mobile-brand-strong))]">
+              {resolvedMonitoringAddress}
             </p>
           </div>
         </div>

@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
 import {
@@ -59,25 +60,37 @@ export default function ToolWorkspaceTemplate({
         action={introAction}
       />
 
-      {priorityAction ? (
-        <PriorityActionHero
-          title={priorityAction.title}
-          description={priorityAction.description}
-          primaryAction={priorityAction.primaryAction}
-          supportingAction={priorityAction.supportingAction}
-          impactLabel={priorityAction.impactLabel}
-          confidenceLabel={priorityAction.confidenceLabel}
-          eyebrow={priorityAction.eyebrow || 'Next Best Action'}
-        />
-      ) : null}
+      {/* 2-column on desktop: main content left, rail sidebar right */}
+      <div className={cn(
+        'space-y-4 lg:space-y-0',
+        rail && 'lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-6',
+      )}>
+        {/* Main column: NBA panel + page content */}
+        <div className="space-y-4">
+          {priorityAction ? (
+            <PriorityActionHero
+              title={priorityAction.title}
+              description={priorityAction.description}
+              primaryAction={priorityAction.primaryAction}
+              supportingAction={priorityAction.supportingAction}
+              impactLabel={priorityAction.impactLabel}
+              confidenceLabel={priorityAction.confidenceLabel}
+              eyebrow={priorityAction.eyebrow || 'Next Best Action'}
+            />
+          ) : null}
 
-      {rail ? (
-        <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
-          {rail}
-        </MobileFilterSurface>
-      ) : null}
+          {children}
+        </div>
 
-      {children}
+        {/* Sidebar column: rail (HomeToolHeader + RelatedTools on desktop, Home Tools sheet trigger on mobile) */}
+        {rail ? (
+          <aside>
+            <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">
+              {rail}
+            </MobileFilterSurface>
+          </aside>
+        ) : null}
+      </div>
 
       {trust ? (
         <TrustStrip
