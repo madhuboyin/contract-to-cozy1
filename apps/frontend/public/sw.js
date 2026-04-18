@@ -1,4 +1,4 @@
-const CACHE_NAME = 'c2c-v1.0.0';
+const CACHE_NAME = 'c2c-v1.0.2';
 const OFFLINE_URL = '/offline';
 
 // Static assets to cache immediately
@@ -107,7 +107,8 @@ self.addEventListener('fetch', (event) => {
                 .then((cache) => cache.put(event.request, responseClone));
             }
             return response;
-          });
+          })
+          .catch(() => new Response('', { status: 503 }));
       })
   );
 });
