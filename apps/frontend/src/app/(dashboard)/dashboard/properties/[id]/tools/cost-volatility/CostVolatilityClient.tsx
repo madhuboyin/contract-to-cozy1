@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 
 import { getCostVolatility, type CostVolatilityDTO } from './costVolatilityApi';
 import MiniLineChartPct from './MiniLineChartPct';
@@ -163,7 +164,9 @@ export default function CostVolatilityClient() {
       eyebrow="Home Tool"
       title="Cost Volatility Index"
       subtitle="Measure how unpredictable your ownership costs are year to year."
-      rail={<HomeToolsRail propertyId={propertyId} context="cost-volatility" currentToolId="cost-volatility" />}
+      introAction={
+        <HomeToolsRail propertyId={propertyId} context="cost-volatility" currentToolId="cost-volatility" showDesktop={false} />
+      }
       trust={{
         confidenceLabel: data?.meta?.confidence ?? 'Estimated confidence',
         freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest volatility run' : 'Run scan to refresh',
@@ -172,6 +175,14 @@ export default function CostVolatilityClient() {
       }}
       priorityAction={volatilityPriorityAction}
     >
+
+      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      <HomeToolHeader
+        toolId="cost-volatility"
+        propertyId={propertyId}
+        context="cost-volatility"
+        currentToolId="cost-volatility"
+      />
 
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">

@@ -8,6 +8,7 @@ import { getTrueCostOwnership, TrueCostOwnershipDTO } from './trueCostApi';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 
 // Use the upgraded chart you already shipped (legend + tooltip)
 import MultiLineChart from '../cost-growth/MultiLineChart';
@@ -140,9 +141,19 @@ export default function TrueCostClient() {
         sourceLabel: 'CtC cost model + property profile + localized trend assumptions',
         rationale: 'Bundles recurring and structural cost drivers into one ownership view to reduce hidden-spend blind spots.',
       }}
-      rail={<HomeToolsRail propertyId={propertyId} context="true-cost" currentToolId="true-cost" />}
+      introAction={
+        <HomeToolsRail propertyId={propertyId} context="true-cost" currentToolId="true-cost" showDesktop={false} />
+      }
       priorityAction={trueCostPriorityAction}
     >
+
+      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      <HomeToolHeader
+        toolId="true-cost"
+        propertyId={propertyId}
+        context="true-cost"
+        currentToolId="true-cost"
+      />
 
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">

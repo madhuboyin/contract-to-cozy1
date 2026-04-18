@@ -9,6 +9,7 @@ import { getHomeCostGrowth, HomeCostGrowthDTO } from './costGrowthApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -142,7 +143,9 @@ export default function HomeCostGrowthClient() {
       eyebrow="Home Tool"
       title="Home Cost Growth Analyzer"
       subtitle="Compare appreciation vs ownership expense growth to understand net cost trend."
-      rail={<HomeToolsRail propertyId={propertyId} context="cost-growth" currentToolId="cost-growth" />}
+      introAction={
+        <HomeToolsRail propertyId={propertyId} context="cost-growth" currentToolId="cost-growth" showDesktop={false} />
+      }
       trust={{
         confidenceLabel: data?.meta?.confidence ?? 'Estimated confidence',
         freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest market and cost inputs' : 'Run analysis to refresh',
@@ -151,6 +154,14 @@ export default function HomeCostGrowthClient() {
       }}
       priorityAction={costGrowthPriorityAction}
     >
+
+      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      <HomeToolHeader
+        toolId="cost-growth"
+        propertyId={propertyId}
+        context="cost-growth"
+        currentToolId="cost-growth"
+      />
 
       {/* Main Story Card */}
       <div className="rounded-[26px] border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/70 to-teal-50/45 p-4 sm:p-5 shadow-[0_20px_42px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/60 dark:via-slate-900/50 dark:to-teal-950/20">
