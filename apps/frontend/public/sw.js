@@ -3,7 +3,6 @@ const OFFLINE_URL = '/offline';
 
 // Static assets to cache immediately
 const PRECACHE_URLS = [
-  '/offline',
   '/manifest.json'
 ];
 
@@ -77,7 +76,7 @@ self.addEventListener('fetch', (event) => {
         .catch(() => {
           return caches.match(event.request)
             .then((response) => {
-              return response || caches.match(OFFLINE_URL);
+              return response || caches.match(OFFLINE_URL) || new Response('Offline', { status: 503 });
             });
         })
     );
