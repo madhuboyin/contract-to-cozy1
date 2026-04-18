@@ -46,8 +46,8 @@ export default function LoginPage() {
     };
   }, []);
 
-  // Show nothing while redirecting
-  if (user) return null;
+  // Show nothing while redirecting (but not if transitioning — that renders the success animation)
+  if (user && !isTransitioning) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({

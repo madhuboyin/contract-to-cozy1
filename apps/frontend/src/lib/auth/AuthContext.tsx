@@ -89,6 +89,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       localStorage.removeItem(TOKEN_STORAGE_KEY);
       localStorage.removeItem(REFRESH_TOKEN_KEY);
       localStorage.removeItem(USER_STORAGE_KEY);
+      // Clear the middleware-readable cookie so server-side auth redirects work.
+      document.cookie = 'accessToken=; path=/; max-age=0; SameSite=Lax; Secure';
     }
     setUser(null);
     router.push('/login');
@@ -124,6 +126,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
         localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        // Mirror token into a cookie so the middleware can read it for server-side
+        // auth routing. Not httpOnly — JS must be able to clear it on logout.
+        document.cookie = `accessToken=${accessToken}; path=/; SameSite=Lax; Secure`;
       }
       setUser(user);
       return { success: true, accessToken, refreshToken, user };
