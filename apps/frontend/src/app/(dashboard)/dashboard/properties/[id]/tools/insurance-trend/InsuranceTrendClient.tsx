@@ -10,7 +10,7 @@ import { getInsuranceTrend, InsuranceCostTrendDTO } from './insuranceTrendApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
-import RelatedTools from '@/components/tools/RelatedTools';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -131,6 +131,14 @@ export default function InsuranceTrendClient() {
         </div>
       )}
 
+      {/* ── Tool identity + Related Tools — desktop only, above NBA ──── */}
+      <HomeToolHeader
+        toolId="insurance-trend"
+        propertyId={propertyId}
+        context="insurance-trend"
+        currentToolId="insurance-trend"
+      />
+
       {/* ── Hero: Next Best Action — 2-column on desktop ────────────────── */}
       {loading && !data ? (
         <div className="animate-pulse rounded-[20px] border border-slate-100 bg-slate-50 h-[160px] dark:border-slate-700/50 dark:bg-slate-900/40" />
@@ -172,6 +180,11 @@ export default function InsuranceTrendClient() {
                 <span className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                   {confidenceText}
                 </span>
+                {isOverpaying && (
+                  <span className="inline-flex items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+                    Potential savings: 10–15%
+                  </span>
+                )}
               </div>
               {/* Horizontal CTA row */}
               <div className="flex flex-wrap items-center gap-3 pt-0.5">
@@ -194,24 +207,17 @@ export default function InsuranceTrendClient() {
               </div>
             </div>
 
-            {/* Right column — delta summary panel, desktop only */}
+            {/* Right column — supporting panel, desktop only */}
             {isOverpaying ? (
-              <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-amber-200/60 lg:bg-amber-50/40 lg:px-5 lg:py-5 dark:lg:border-amber-700/40 dark:lg:bg-amber-950/20">
+              <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-emerald-200/60 lg:bg-emerald-50/40 lg:px-5 lg:py-5 dark:lg:border-emerald-700/40 dark:lg:bg-emerald-950/20">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                  Extra vs local avg
+                  Potential savings
                 </div>
-                <div className="mt-1.5 text-[2rem] font-semibold leading-none tabular-nums text-amber-800 dark:text-amber-300">
-                  {money(deltaNow)}
+                <div className="mt-1.5 text-[2rem] font-bold leading-none text-slate-800 dark:text-slate-200">
+                  10–15%
                 </div>
-                <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">per year</div>
-                <div className="mt-4 border-t border-amber-200/50 pt-4 dark:border-amber-700/30">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                    Potential savings
-                  </div>
-                  <div className="mt-1 text-base font-bold text-slate-800 dark:text-slate-200">10–15%</div>
-                  <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-                    by comparing carriers
-                  </div>
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  by comparing carriers
                 </div>
               </div>
             ) : (
@@ -526,15 +532,6 @@ export default function InsuranceTrendClient() {
           </div>
         </section>
       )}
-
-      {/* ── Related tools — inline chip row ───────────────────────────── */}
-      <RelatedTools
-        context="insurance-trend"
-        currentToolId="insurance-trend"
-        propertyId={propertyId}
-        title="Explore related tools"
-        maxItems={4}
-      />
 
       {/* ── How this estimate works — collapsible ─────────────────────── */}
       <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)] dark:border-slate-700/70 dark:bg-slate-900/60">
