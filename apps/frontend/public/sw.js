@@ -1,4 +1,4 @@
-const CACHE_NAME = 'c2c-v1.1.0';
+const CACHE_NAME = 'c2c-v1.1.1';
 
 // Only cache immutable Next.js static chunks — never HTML, RSC, or API responses.
 function isImmutableAsset(url) {
@@ -60,7 +60,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else (icons, fonts, manifest) — network first, cache fallback.
+  // Only handle known static assets (icons, fonts, manifest, images).
+  // Let everything else — including page routes — pass through to the network.
+  const isStaticAsset = (
+    pathname.startsWith('/icons/') ||
+    pathname.startsWith('/images/') ||
+    pathname === '/manifest.json' ||
+    pathname === '/favicon.svg' ||
+    /\.(woff2?|ttf|otf|eot)$/.test(pathname)
+  );
+  if (!isStaticAsset) return;
+
+  // Network first, cache fallback for static assets.
   event.respondWith(
     fetch(event.request)
       .then((response) => {
@@ -70,7 +81,7 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request).then((r) => r || new Response('', { status: 503 })))
   );
 });
 
