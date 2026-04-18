@@ -2,12 +2,13 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import MultiLineChart from '../cost-growth/MultiLineChart';
 import { Button } from '@/components/ui/button';
-import CompareTemplate from '../../components/route-templates/CompareTemplate';
+import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import PriorityActionHero from '@/components/system/PriorityActionHero';
 
 import ComparisonBars from './ComparisonBars';
 import {
@@ -158,12 +159,12 @@ export default function SellHoldRentClient() {
   }, [data]);
 
   return (
-    <CompareTemplate
+    <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
+      eyebrow="Home Tool"
       title="Sell vs Hold vs Rent"
       subtitle="Compare outcomes using appreciation, ownership costs, and rental income assumptions."
-      rail={<HomeToolsRail propertyId={propertyId} context="sell-hold-rent" currentToolId="sell-hold-rent" />}
       trust={{
         confidenceLabel: data?.meta?.confidence
           ? `Model confidence: ${data.meta.confidence}`
@@ -172,24 +173,36 @@ export default function SellHoldRentClient() {
         sourceLabel: 'Property valuation signals + ownership costs + rental assumptions + debt snapshot',
         rationale: 'Compares three explainable scenarios over matching horizons so homeowners can choose with clearer trade-offs.',
       }}
-      priorityAction={hasScenarioData && winner && !loading ? {
-        title: `${winnerLabel} leads over ${years} years — projected net: ${money(winnerNet)}`,
-        description: `Based on your current assumptions, ${winnerLabel.toLowerCase()} produces the strongest outcome. Review the scenario inputs below to stress-test this before committing.`,
-        impactLabel: `${years}-year projection`,
-        confidenceLabel: data?.meta?.confidence ?? 'Medium',
-        primaryAction: (
-          <Button type="button" className="w-full sm:w-auto">
-            Speak to an advisor
-          </Button>
-        ),
-      } : undefined}
-      summary={
-        <p className="text-sm text-slate-600">
-          Use the assumptions panel to tune the model before committing to a sell, hold, or rent decision.
-        </p>
+      introAction={
+        <HomeToolsRail propertyId={propertyId} context="sell-hold-rent" currentToolId="sell-hold-rent" showDesktop={false} />
       }
-      compareContent={
-        <>
+    >
+      <HomeToolHeader
+        toolId="sell-hold-rent"
+        propertyId={propertyId}
+        context="sell-hold-rent"
+        currentToolId="sell-hold-rent"
+      />
+
+      {hasScenarioData && winner && !loading && (
+        <PriorityActionHero
+          eyebrow="Compare Decision"
+          title={`${winnerLabel} leads over ${years} years — projected net: ${money(winnerNet)}`}
+          description={`Based on your current assumptions, ${winnerLabel.toLowerCase()} produces the strongest outcome. Review the scenario inputs below to stress-test this before committing.`}
+          impactLabel={`${years}-year projection`}
+          confidenceLabel={data?.meta?.confidence ?? 'Medium'}
+          primaryAction={
+            <Button type="button" className="w-full sm:w-auto">
+              Speak to an advisor
+            </Button>
+          }
+        />
+      )}
+
+      <p className="text-sm text-slate-600">
+        Use the assumptions panel to tune the model before committing to a sell, hold, or rent decision.
+      </p>
+
       <div className="rounded-2xl border border-white/70 bg-white/65 p-3 shadow-sm backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/45">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-slate-500 dark:text-slate-300">
@@ -597,9 +610,7 @@ export default function SellHoldRentClient() {
           </div>
         </div>
       </div>
-      </>
-      }
-    />
+    </ToolWorkspaceTemplate>
   );
 }
 
