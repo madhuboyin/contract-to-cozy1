@@ -1,4 +1,3 @@
-import PreviewModeWrapper from '@/components/PreviewModeWrapper';
 import Hero from '@/components/landing/Hero';
 import Features from '@/components/landing/Features';
 import HowItWorks from '@/components/landing/HowItWorks';
@@ -10,7 +9,7 @@ import CTASection from '@/components/landing/CTASection';
 import Footer from '@/components/landing/Footer';
 
 export default function Home() {
-  const landingPage = (
+  return (
     <main className="min-h-screen">
       <Hero />
       <Features />
@@ -22,11 +21,5 @@ export default function Home() {
       <CTASection />
       <Footer />
     </main>
-  );
-
-  return (
-    <PreviewModeWrapper>
-      {landingPage}
-    </PreviewModeWrapper>
   );
 }

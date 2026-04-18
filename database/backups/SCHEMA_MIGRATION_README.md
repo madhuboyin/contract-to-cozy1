@@ -52,6 +52,11 @@ kubectl create configmap prisma-schema -n production \
   --from-file=schema.prisma=prisma/schema.prisma \
   --dry-run=client -o yaml | kubectl apply -f -
 
+kubectl create configmap prisma-schema -n production \
+  --from-file=schema.prisma=prisma/schema.prisma \
+  --dry-run=client -o yaml | kubectl apply --server-side -f -
+
+
 **What this does:** Creates/updates a ConfigMap named `prisma-schema` containing your schema file.
 
 ---
