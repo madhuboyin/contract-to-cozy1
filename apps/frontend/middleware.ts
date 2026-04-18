@@ -202,7 +202,7 @@ export const config = {
     // The browser only enforces CSP from the document response, so skipping
     // static chunks has no security impact and avoids unnecessary header overhead.
     {
-      source: '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json).*)',
+      source: '/((?!_next/static|_next/image|favicon\\.ico|icons|manifest\\.json|sw\\.js).*)',
       missing: [
         { type: 'header', key: 'next-router-prefetch' },
         { type: 'header', key: 'purpose', value: 'prefetch' },
