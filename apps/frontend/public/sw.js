@@ -3,8 +3,6 @@ const OFFLINE_URL = '/offline';
 
 // Static assets to cache immediately
 const PRECACHE_URLS = [
-  '/',
-  '/dashboard',
   '/offline',
   '/manifest.json'
 ];

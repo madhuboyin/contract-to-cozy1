@@ -14,7 +14,7 @@ import type { NextRequest } from 'next/server';
 // ---------------------------------------------------------------------------
 
 function buildCsp(nonce: string, apiUrl: string, faroUrl: string): string {
-  const connectSrc = ['self', apiUrl, faroUrl ? faroUrl : '']
+  const connectSrc = ['self', apiUrl, faroUrl && faroUrl.startsWith('http') ? faroUrl : '']
     .filter(Boolean)
     .map((u) => (u === 'self' ? "'self'" : u))
     .join(' ');
