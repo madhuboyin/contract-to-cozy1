@@ -237,7 +237,10 @@ export default function SellerPrepOverview({
               </CardHeader>
               <CardContent className="space-y-4">
                 {!hasComparables ? (
-                  <AlertMessage title="No data available" description="Real estate data integration coming soon." />
+                  <AlertMessage
+                    title="No data available"
+                    description="Comparable sales data is currently unavailable for this property."
+                  />
                 ) : (
                   comparables.map((comp, i) => <CompItem key={i} comp={comp} />)
                 )}

@@ -4,12 +4,12 @@ import { ReactNode } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CTC_TEMPLATE_SURFACES_V1 } from '@/lib/design-system/tokenGovernance';
+import type { TrustContract } from '@/lib/trust/trustContract';
 
-export interface TrustStripProps {
-  confidenceLabel: string;
-  freshnessLabel: string;
-  sourceLabel: string;
-  rationale?: string | null;
+export interface TrustStripProps extends Pick<
+  TrustContract,
+  'confidenceLabel' | 'freshnessLabel' | 'sourceLabel' | 'rationale'
+> {
   className?: string;
   trailing?: ReactNode;
   title?: string;
@@ -64,4 +64,3 @@ export default function TrustStrip({
     </section>
   );
 }
-

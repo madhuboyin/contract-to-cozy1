@@ -13,6 +13,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import TrustStrip from './TrustStrip';
 import { CTC_INTERACTION_RULES_V1 } from '@/lib/design-system/tokenGovernance';
+import type { TrustContract } from '@/lib/trust/trustContract';
 
 interface ToolWorkspaceTemplateProps {
   backHref: string;
@@ -20,12 +21,7 @@ interface ToolWorkspaceTemplateProps {
   eyebrow: string;
   title: string;
   subtitle: string;
-  trust?: {
-    confidenceLabel: string;
-    freshnessLabel: string;
-    sourceLabel: string;
-    rationale?: string | null;
-  };
+  trust?: TrustContract;
   priorityAction?: PriorityActionHeroProps;
   rail?: ReactNode;
   introAction?: ReactNode;

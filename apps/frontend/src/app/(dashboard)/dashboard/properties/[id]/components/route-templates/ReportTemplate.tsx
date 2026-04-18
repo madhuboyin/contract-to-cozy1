@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { MobileStickyActionBar } from '@/components/mobile/dashboard/MobilePrimitives';
 import { cn } from '@/lib/utils';
 import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
+import type { TrustContract } from '@/lib/trust/trustContract';
 import ToolWorkspaceTemplate from './ToolWorkspaceTemplate';
 
 interface ReportTemplateProps {
@@ -13,12 +14,7 @@ interface ReportTemplateProps {
   backLabel: string;
   title: string;
   subtitle: string;
-  trust?: {
-    confidenceLabel: string;
-    freshnessLabel: string;
-    sourceLabel: string;
-    rationale?: string | null;
-  };
+  trust?: TrustContract;
   rail?: ReactNode;
   priorityAction?: PriorityActionHeroProps;
   decisionMode: ReactNode;

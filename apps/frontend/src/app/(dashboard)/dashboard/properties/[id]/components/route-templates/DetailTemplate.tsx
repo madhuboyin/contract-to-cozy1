@@ -2,17 +2,13 @@
 
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import type { TrustContract } from '@/lib/trust/trustContract';
 import TrustStrip from './TrustStrip';
 
 interface DetailTemplateProps {
   title: string;
   subtitle: string;
-  trust?: {
-    confidenceLabel: string;
-    freshnessLabel: string;
-    sourceLabel: string;
-    rationale?: string | null;
-  };
+  trust?: TrustContract;
   controls?: ReactNode;
   className?: string;
   children: ReactNode;

@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import { MobileStickyActionBar } from '@/components/mobile/dashboard/MobilePrimitives';
 import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
 import RouteStateCard, { RouteStateKind } from '@/components/system/RouteStateCard';
+import type { TrustContract } from '@/lib/trust/trustContract';
 import ToolWorkspaceTemplate from './ToolWorkspaceTemplate';
 
 interface CompareTemplateProps {
@@ -12,12 +13,7 @@ interface CompareTemplateProps {
   title: string;
   subtitle: string;
   rail?: ReactNode;
-  trust?: {
-    confidenceLabel: string;
-    freshnessLabel: string;
-    sourceLabel: string;
-    rationale?: string | null;
-  };
+  trust?: TrustContract;
   priorityAction?: PriorityActionHeroProps;
   decisionContext?: ReactNode;
   summary: ReactNode;

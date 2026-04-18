@@ -148,7 +148,7 @@ export default function ProviderProfilePage() {
   };
 
   const handleFileUpload = (type: 'license' | 'insurance' | 'photo') => {
-    alert(`Upload ${type} - Feature coming soon!`);
+    alert(`Upload for ${type} is not available in this build yet. Please contact support to add this document.`);
   };
 
   return (

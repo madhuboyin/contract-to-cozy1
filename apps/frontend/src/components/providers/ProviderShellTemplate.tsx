@@ -5,6 +5,7 @@ import { MobilePageIntro, MobileToolWorkspace } from '@/components/mobile/dashbo
 import PriorityActionHero from '@/components/system/PriorityActionHero';
 import RouteStateCard, { RouteStateKind } from '@/components/system/RouteStateCard';
 import TrustStrip from '@/components/system/TrustStrip';
+import { mergeTrustContract, type TrustContract } from '@/lib/trust/trustContract';
 
 interface ProviderPrimaryAction {
   title: string;
@@ -16,12 +17,7 @@ interface ProviderPrimaryAction {
   eyebrow?: string;
 }
 
-interface ProviderTrustOverride {
-  confidenceLabel?: string;
-  freshnessLabel?: string;
-  sourceLabel?: string;
-  rationale?: string | null;
-}
+type ProviderTrustOverride = Partial<TrustContract>;
 
 interface ProviderRouteState {
   state: RouteStateKind;
@@ -46,7 +42,7 @@ interface ProviderShellTemplateProps {
   children: ReactNode;
 }
 
-const DEFAULT_PROVIDER_TRUST: Required<Omit<ProviderTrustOverride, 'rationale'>> & { rationale: string } = {
+const DEFAULT_PROVIDER_TRUST: TrustContract = {
   confidenceLabel: 'Signal quality improves with verified profile details, recent activity, and completed booking history.',
   freshnessLabel: 'Signals refresh when booking queue, profile, pricing, or availability changes.',
   sourceLabel: 'Provider profile data, booking telemetry, and homeowner request context.',
@@ -67,12 +63,7 @@ export default function ProviderShellTemplate({
   hideContentWhenState = false,
   children,
 }: ProviderShellTemplateProps) {
-  const trustLabels = {
-    confidenceLabel: trust?.confidenceLabel || DEFAULT_PROVIDER_TRUST.confidenceLabel,
-    freshnessLabel: trust?.freshnessLabel || DEFAULT_PROVIDER_TRUST.freshnessLabel,
-    sourceLabel: trust?.sourceLabel || DEFAULT_PROVIDER_TRUST.sourceLabel,
-    rationale: trust?.rationale === undefined ? DEFAULT_PROVIDER_TRUST.rationale : trust.rationale,
-  };
+  const trustLabels = mergeTrustContract(DEFAULT_PROVIDER_TRUST, trust);
 
   return (
     <MobileToolWorkspace
