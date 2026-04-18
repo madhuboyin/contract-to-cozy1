@@ -68,6 +68,11 @@ spec:
                 configMapKeyRef:
                   name: frontend-feature-flags
                   key: NEXT_PUBLIC_FEATURE_MILESTONE_CELEBRATIONS
+            - name: PREVIEW_KEY
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: PREVIEW_KEY
             - name: NEXT_PUBLIC_SENTRY_DSN
               valueFrom:
                 secretKeyRef:
