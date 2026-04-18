@@ -206,7 +206,7 @@ export class CostExplainerService {
             ? `Coastal/hurricane-adjacent states like ${state} tend to see more volatility tied to catastrophe losses and reinsurance pricing.`
             : `Inland states like ${state} still see premium drift from claims inflation and rebuild-cost increases.`,
           `ZIP prefix ${zipPrefix} is treated as a risk proxy by carriers (claims frequency + rebuild costs).`,
-          `In Phase 1 this is modeled; Phase 2 will incorporate DOI filings + FEMA/NOAA correlations.`,
+          `Current estimates are modeled; future updates will incorporate DOI filings + FEMA/NOAA correlations.`,
         ],
         confidence: insConfidence,
       },
@@ -253,7 +253,7 @@ export class CostExplainerService {
         field: 'annualMaintenance',
         source: 'HEURISTIC',
         value: maintNow,
-        note: `~1% of home value/year × state adjustment for ${state}, drifted by ${Math.round(inflation * 100)}% inflation (Phase 1 rule-of-thumb).`,
+        note: `~1% of home value/year × state adjustment for ${state}, drifted by ${Math.round(inflation * 100)}% inflation (rule-of-thumb estimate).`,
       },
     ];
 
@@ -278,7 +278,7 @@ export class CostExplainerService {
         dataSources: ['PropertyTaxService (modeled)', 'InsuranceTrend (modeled)', 'Maintenance heuristic'],
         assumptions,
         notes: [
-          'Phase 1 uses modeled estimates (no external datasets) and does not store snapshots.',
+          'Uses modeled estimates (no external datasets) and does not store snapshots.',
           'Maintenance is a heuristic (~1% of value/year) adjusted lightly by state and inflation.',
           ...(insuranceIsEducational
             ? ['Insurance component is an educational estimate and should not be treated as decision-grade financial input.']
