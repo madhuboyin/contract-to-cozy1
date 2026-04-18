@@ -3,14 +3,14 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { ChevronDown, TrendingDown, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Sparkles, TrendingDown, TrendingUp, ShieldCheck } from 'lucide-react';
 
 import MultiLineChart from './MultiLineChart';
 import { getInsuranceTrend, InsuranceCostTrendDTO } from './insuranceTrendApi';
 import HomeToolsRail from '../../components/HomeToolsRail';
-import { Button } from '@/components/ui/button';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import RelatedTools from '@/components/tools/RelatedTools';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -93,48 +93,6 @@ export default function InsuranceTrendClient() {
     return 'Medium confidence · Based on local trends';
   })();
 
-  // NBA panel — unified CTA funnel
-  const insurancePriorityAction = (() => {
-    if (!data || loading || data.current?.deltaVsStateNow == null) return undefined;
-    const delta = data.current.deltaVsStateNow;
-
-    if (delta > 100) {
-      return {
-        title: `You may be paying ${money(delta)} more than similar homes`,
-        description: `Your estimated premium is above the local average for ${data.input?.state ?? 'your area'}. Comparing coverage options now gives you leverage before renewal.`,
-        impactLabel: `${trendYears}-year trend`,
-        confidenceLabel: confidenceText,
-        primaryAction: (
-          <Button asChild className="w-full sm:w-auto">
-            <a href="#" target="_blank" rel="noopener noreferrer">Compare Quotes</a>
-          </Button>
-        ),
-        supportingAction: (
-          <a
-            href="#why-costs"
-            className="text-sm font-medium text-slate-500 underline-offset-2 transition-colors hover:text-slate-800 hover:underline"
-          >
-            Why costs are rising →
-          </a>
-        ),
-      };
-    }
-    if (delta <= 0) {
-      return {
-        title: `Your premium is ${money(Math.abs(delta))} below the local average`,
-        description: `A healthy position. Review coverage limits at renewal to make sure protection keeps pace with your home's current value.`,
-        impactLabel: `${trendYears}-year trend`,
-        confidenceLabel: confidenceText,
-        primaryAction: (
-          <Button asChild variant="outline" className="w-full sm:w-auto">
-            <a href="#" target="_blank" rel="noopener noreferrer">Compare Quotes</a>
-          </Button>
-        ),
-      };
-    }
-    return undefined;
-  })();
-
   return (
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
@@ -142,14 +100,21 @@ export default function InsuranceTrendClient() {
       eyebrow="Estimate"
       title="Insurance Cost Trend"
       subtitle="Based on local trends — not your actual policy data."
-      rail={<HomeToolsRail propertyId={propertyId} context="insurance-trend" currentToolId="insurance-trend" />}
+      introAction={
+        /* Mobile-only Home Tools trigger — hidden on desktop */
+        <HomeToolsRail
+          propertyId={propertyId}
+          context="insurance-trend"
+          currentToolId="insurance-trend"
+          showDesktop={false}
+        />
+      }
       trust={{
         confidenceLabel: data?.meta?.confidence ?? 'Estimated confidence',
         freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest local trend data' : 'Analyzing your property…',
         sourceLabel: 'Property profile · State premium data · Local benchmarks',
         rationale: 'Shows whether your estimated premium tracks above or below similar homes in your area.',
       }}
-      priorityAction={insurancePriorityAction}
     >
 
       {/* Error */}
@@ -165,6 +130,112 @@ export default function InsuranceTrendClient() {
           </button>
         </div>
       )}
+
+      {/* ── Hero: Next Best Action — 2-column on desktop ────────────────── */}
+      {loading && !data ? (
+        <div className="animate-pulse rounded-[20px] border border-slate-100 bg-slate-50 h-[160px] dark:border-slate-700/50 dark:bg-slate-900/40" />
+      ) : data ? (
+        <section
+          aria-label="Next best action"
+          className="rounded-[20px] border border-[hsl(var(--mobile-border-subtle))] bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.10),transparent_55%),white] p-5 shadow-[0_4px_20px_rgba(15,23,42,0.07)] dark:border-slate-700/70 dark:bg-slate-900/70 md:p-6"
+        >
+          <p className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-teal-700 dark:text-teal-400">
+            <Sparkles className="h-3.5 w-3.5" />
+            Next Best Action
+          </p>
+
+          {/* 2-col on lg: left = NBA content, right = delta summary panel */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_210px] lg:gap-8">
+
+            {/* Left column — headline, description, chips, horizontal CTA row */}
+            <div className="space-y-3.5">
+              <h2 className="text-lg font-semibold leading-snug text-slate-900 dark:text-slate-100 md:text-[1.25rem]">
+                {isOverpaying
+                  ? `You may be paying ${money(deltaNow)} more than similar homes`
+                  : deltaNow <= 0
+                  ? `Your premium is ${money(Math.abs(deltaNow))} below the local average`
+                  : `Your premium is close to the local average`
+                }
+              </h2>
+              <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                {isOverpaying
+                  ? `Your estimated premium is above the local average for ${data.input?.state ?? 'your area'}. Comparing coverage options now gives you leverage before renewal.`
+                  : `A healthy position. Review coverage limits at renewal to make sure protection keeps pace with your home's current value.`
+                }
+              </p>
+              {/* Chips */}
+              <div className="flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full border border-teal-200/80 bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700 dark:border-teal-700/50 dark:bg-teal-950/30 dark:text-teal-300">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  {trendYears}-year trend
+                </span>
+                <span className="inline-flex items-center rounded-full border border-slate-200/80 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                  {confidenceText}
+                </span>
+              </div>
+              {/* Horizontal CTA row */}
+              <div className="flex flex-wrap items-center gap-3 pt-0.5">
+                <a
+                  href="#"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(15,23,42,0.20)] transition-all hover:-translate-y-px hover:bg-slate-700 hover:shadow-[0_4px_14px_rgba(15,23,42,0.24)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                >
+                  Compare Quotes
+                </a>
+                {isOverpaying && (
+                  <a
+                    href="#why-costs"
+                    className="text-sm font-medium text-slate-500 underline-offset-2 transition-colors hover:text-slate-800 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
+                  >
+                    Why costs are rising →
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Right column — delta summary panel, desktop only */}
+            {isOverpaying ? (
+              <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-amber-200/60 lg:bg-amber-50/40 lg:px-5 lg:py-5 dark:lg:border-amber-700/40 dark:lg:bg-amber-950/20">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                  Extra vs local avg
+                </div>
+                <div className="mt-1.5 text-[2rem] font-semibold leading-none tabular-nums text-amber-800 dark:text-amber-300">
+                  {money(deltaNow)}
+                </div>
+                <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">per year</div>
+                <div className="mt-4 border-t border-amber-200/50 pt-4 dark:border-amber-700/30">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    Potential savings
+                  </div>
+                  <div className="mt-1 text-base font-bold text-slate-800 dark:text-slate-200">10–15%</div>
+                  <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                    by comparing carriers
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-emerald-200/60 lg:bg-emerald-50/40 lg:px-5 lg:py-5 dark:lg:border-emerald-700/40 dark:lg:bg-emerald-950/20">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                  vs local average
+                </div>
+                <div className="mt-1.5 text-[1.75rem] font-semibold leading-none tabular-nums text-emerald-800 dark:text-emerald-300">
+                  {money(Math.abs(deltaNow))} <span className="text-base font-medium">below</span>
+                </div>
+                <div className="mt-4 border-t border-emerald-200/50 pt-4 dark:border-emerald-700/30">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Well-positioned</span>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                    Below the local average
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {/* ── Zone B: Why your costs may differ ─────────────────────────── */}
       <section id="why-costs" aria-label="Why your costs may differ" className="space-y-5">
@@ -227,9 +298,9 @@ export default function InsuranceTrendClient() {
           </div>
         </div>
 
-        {/* Premium trend chart */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        {/* Premium trend chart — full-width, premium */}
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.06)] dark:border-slate-700/70 dark:bg-slate-900/60 md:p-6">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 Premium trend vs local average
@@ -274,7 +345,7 @@ export default function InsuranceTrendClient() {
           </div>
 
           {/* Chart footer: growth context */}
-          <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-2 border-t border-slate-100/80 pt-4 dark:border-slate-700/40">
             {data?.rollup?.cagrPremium != null && data?.rollup?.cagrStateAvg != null && (
               <p className="text-xs text-slate-600 dark:text-slate-400">
                 Your growth:{' '}
@@ -328,7 +399,7 @@ export default function InsuranceTrendClient() {
                 </span>
               )}
             </div>
-            <div className={`mt-2 text-2xl font-semibold tracking-tight ${
+            <div className={`mt-2 text-2xl font-semibold tracking-tight tabular-nums ${
               (data?.rollup?.totalDeltaVsState ?? 0) > 0
                 ? 'text-amber-800 dark:text-amber-300'
                 : 'text-slate-900 dark:text-slate-100'
@@ -455,6 +526,15 @@ export default function InsuranceTrendClient() {
           </div>
         </section>
       )}
+
+      {/* ── Related tools — inline chip row ───────────────────────────── */}
+      <RelatedTools
+        context="insurance-trend"
+        currentToolId="insurance-trend"
+        propertyId={propertyId}
+        title="Explore related tools"
+        maxItems={4}
+      />
 
       {/* ── How this estimate works — collapsible ─────────────────────── */}
       <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)] dark:border-slate-700/70 dark:bg-slate-900/60">

@@ -36,8 +36,8 @@ export default function MultiLineChart(props: {
   eventMarkers?: Array<{ idx: number; label: string }>;
 }) {
   const w = 720;
-  const h = 210;
-  const padL = 60, padR = 28, padT = 20, padB = 36;
+  const h = 260;
+  const padL = 64, padR = 32, padT = 24, padB = 42;
 
   // Subtle load animation — fade + slight opacity reveal
   const [mounted, setMounted] = useState(false);
@@ -175,7 +175,7 @@ export default function MultiLineChart(props: {
       <div className="relative">
         <svg
           viewBox={`0 0 ${w} ${h}`}
-          className="h-[210px] w-full text-slate-600 dark:text-slate-300"
+          className="h-[260px] w-full text-slate-600 dark:text-slate-300"
           preserveAspectRatio="none"
           role="img"
           aria-label={props.ariaLabel || 'Trend chart'}
@@ -191,12 +191,12 @@ export default function MultiLineChart(props: {
             <g key={i}>
               <line
                 x1={padL} y1={yFor(v)} x2={w - padR} y2={yFor(v)}
-                stroke="currentColor" strokeOpacity="0.08"
+                stroke="currentColor" strokeOpacity="0.10"
               />
               <text
-                x={padL - 8} y={yFor(v) + 4}
-                fontSize="12" textAnchor="end"
-                fill="currentColor" opacity="0.65"
+                x={padL - 10} y={yFor(v) + 4}
+                fontSize="13" textAnchor="end"
+                fill="currentColor" opacity="0.70"
               >
                 {fmtMoneyShort(v)}
               </text>
@@ -315,9 +315,9 @@ export default function MultiLineChart(props: {
           {/* X tick labels */}
           {xTicks.map((t, i) => (
             <text
-              key={i} x={xFor(t.idx)} y={h - 9}
-              fontSize="12" textAnchor="middle"
-              fill="currentColor" opacity="0.65"
+              key={i} x={xFor(t.idx)} y={h - 11}
+              fontSize="13" textAnchor="middle"
+              fill="currentColor" opacity="0.70"
             >
               {t.label}
             </text>
