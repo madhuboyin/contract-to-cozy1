@@ -313,7 +313,7 @@ export default function CostExplainerClient() {
             <div className="mt-3 border-t border-slate-200/60 pt-2 dark:border-slate-700/50">
               <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">Data sources</div>
               <div className="mt-1 space-y-0.5">
-                {(data.meta.dataSources).map((s, i) => (
+                {(data?.meta?.dataSources ?? []).map((s, i) => (
                   <div key={i} className="text-xs text-slate-500 dark:text-slate-400">• {s}</div>
                 ))}
               </div>
