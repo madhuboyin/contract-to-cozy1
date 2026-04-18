@@ -129,7 +129,7 @@ describe('guidance mappers', () => {
       next,
     });
 
-    expect(mapped.title).toContain('Lifecycle End Or Past Life');
+    expect(mapped.title).toContain('Aging System');
     expect(mapped.href).toContain('/dashboard/properties/property-1/inventory/items/item-1/replace-repair');
     expect(mapped.href).toContain('guidanceJourneyId=journey-1');
     expect(mapped.href).toContain('guidanceStepKey=repair_replace_decision');

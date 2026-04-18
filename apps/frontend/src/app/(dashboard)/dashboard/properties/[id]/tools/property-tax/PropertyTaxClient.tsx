@@ -477,7 +477,7 @@ export default function PropertyTaxClient() {
             )}
             {!estimate.comparison?.percentileApprox && (
               <div className="rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">
-                Enter your assessed value override above for a sharper estimate, then compare to your county assessor's records annually.
+                Enter your assessed value override above for a sharper estimate, then compare to your county assessor&apos;s records annually.
               </div>
             )}
             <div className="rounded-xl border border-white/70 bg-white/70 p-3 text-xs text-slate-700 dark:border-slate-700/70 dark:bg-slate-900/48 dark:text-slate-300">

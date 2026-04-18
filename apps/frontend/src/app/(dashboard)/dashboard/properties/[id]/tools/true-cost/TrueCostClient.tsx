@@ -257,7 +257,7 @@ export default function TrueCostClient() {
           </div>
           <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="True cost trend chart" />
           <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-            Total is emphasized; other lines show the components that drive the "true cost". <span className="text-teal-600 dark:text-teal-400 font-medium">Utilities (teal) are tracked here only</span> — not included in other home tools.
+            Total is emphasized; other lines show the components that drive the &quot;true cost&quot;. <span className="text-teal-600 dark:text-teal-400 font-medium">Utilities (teal) are tracked here only</span> — not included in other home tools.
           </div>
         </div>
       </div>

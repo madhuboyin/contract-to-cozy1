@@ -207,7 +207,7 @@ export default function CostVolatilityClient() {
               </div>
             ) : (
               <div className="mt-2 text-xs text-slate-500 dark:text-slate-300">
-                Your costs aren't just rising — they're unpredictable.
+                Your costs aren&apos;t just rising — they&apos;re unpredictable.
               </div>
             )}
           </div>
@@ -402,7 +402,7 @@ export default function CostVolatilityClient() {
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What's driving unpredictability</div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">What&apos;s driving unpredictability</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Ranked by estimated impact.</div>
 
             {/* ✅ Patch: confidence clarification */}

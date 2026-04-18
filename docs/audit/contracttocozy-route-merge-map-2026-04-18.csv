@@ -1,0 +1,30 @@
+priority,old_route_pattern,canonical_route_pattern,redirect_type,requires_property_resolution,dependencies,notes
+P0,/dashboard/coverage-intelligence,/dashboard/properties/:propertyId/tools/coverage-intelligence,307-resolver,true,Property resolver middleware,Remove global duplicate
+P0,/dashboard/risk-premium-optimizer,/dashboard/properties/:propertyId/tools/risk-premium-optimizer,307-resolver,true,Property resolver middleware,Remove global duplicate
+P0,/dashboard/home-savings,/dashboard/properties/:propertyId/tools/home-savings,307-resolver,true,Property resolver middleware,Remove global duplicate
+P0,/dashboard/do-nothing-simulator,/dashboard/properties/:propertyId/tools/do-nothing,307-resolver,true,Property resolver middleware,Route naming consolidation
+P0,/dashboard/home-event-radar,/dashboard/properties/:propertyId/tools/home-event-radar,307-resolver,true,"Property resolver middleware; replace inverse redirect",Canonical flips to property-scoped
+P0,/dashboard/home-renovation-risk-advisor,/dashboard/properties/:propertyId/tools/home-renovation-risk-advisor,307-resolver,true,"Property resolver middleware; replace inverse redirect",Canonical flips to property-scoped
+P0,/dashboard/risk-radar,/dashboard/properties/:propertyId/tools/home-event-radar,307-resolver,true,Property resolver middleware,Legacy alias cleanup
+P0,/dashboard/inventory,/dashboard/properties/:propertyId/inventory,307-resolver,true,Property resolver middleware,Inventory is property-scoped
+P0,/dashboard/replace-repair?itemId=:itemId,/dashboard/properties/:propertyId/inventory/items/:itemId/replace-repair,307-resolver,true,Property resolver middleware,Item-specific canonical
+P0,/dashboard/replace-repair,/dashboard/properties/:propertyId/inventory?intent=replace-repair,307-resolver,true,Property resolver middleware,Landing route for item selection
+P0,/dashboard/checklist,/dashboard/maintenance,308,false,None,Single maintenance entry
+P0,/dashboard/seasonal,/dashboard/maintenance?tab=seasonal,308,false,None,Seasonal merged under maintenance shell
+P0,/dashboard/seasonal/settings,/dashboard/maintenance-setup?tab=seasonal,308,false,None,Seasonal config under setup
+P0,/dashboard/properties/:propertyId/rooms,/dashboard/properties/:propertyId/inventory/rooms,308,false,None,Eliminate duplicate room namespace
+P0,/dashboard/properties/:propertyId/rooms/:roomId,/dashboard/properties/:propertyId/inventory/rooms/:roomId,308,false,None,Eliminate duplicate room namespace
+P0,/dashboard/properties/:propertyId/health-score,/dashboard/properties/:propertyId/home-score?tab=health,308,false,Home-score tab support,Consolidate score surfaces
+P0,/dashboard/properties/:propertyId/risk-assessment,/dashboard/properties/:propertyId/home-score?tab=risk,308,false,Home-score tab support,Consolidate score surfaces
+P0,/dashboard/inspection-report,/dashboard/properties/:propertyId/reports?report=inspection,307-resolver,true,Property resolver middleware,Consolidate report entry
+P0,/marketplace,/dashboard/providers,308,false,None,Single provider marketplace entry
+P1,/dashboard/home-tools,/dashboard/tools,308,false,Build new /dashboard/tools route,Unified launcher
+P1,/dashboard/ai-tools,/dashboard/tools?tab=ai,308,false,Build new /dashboard/tools route,Unified launcher
+P1,/dashboard/tax-appeal,/dashboard/properties/:propertyId/tools/property-tax?mode=appeal,307-resolver,true,Property-tax route accepts mode,Merge tax flows
+P1,/dashboard/appreciation,/dashboard/properties/:propertyId/tools/capital-timeline?view=appreciation,307-resolver,true,Capital timeline accepts view,Consolidate appreciation
+P1,/dashboard/budget,/dashboard/properties/:propertyId/tools/true-cost?view=budget,307-resolver,true,True-cost view mode support,Consolidate budget UX
+P1,/dashboard/expenses,/dashboard/properties/:propertyId/tools/true-cost?view=expenses,307-resolver,true,True-cost view mode support,Consolidate expense UX
+P1,/dashboard/insurance,/dashboard/properties/:propertyId/tools/coverage-intelligence?entry=insurance,307-resolver,true,Coverage intelligence insurance entry mode,Consolidate insurance entry
+P1,/dashboard/properties/:propertyId/tools/coverage-options,/dashboard/properties/:propertyId/tools/coverage-intelligence?tab=options,308,false,Coverage intelligence options tab,Remove weak standalone wrapper
+P1,/dashboard/properties/:propertyId/tools/insurance-trend,/dashboard/properties/:propertyId/tools/coverage-intelligence?tab=trend,308,false,Coverage intelligence trend tab,Retire weak standalone trend route
+P1,/dashboard/properties/:propertyId/tools/quote-comparison,/dashboard/properties/:propertyId/tools/service-price-radar?workspace=quote,308,false,Interim until real compare workspace ships,Temporary deprecation path
