@@ -33,10 +33,26 @@ import {
   snowflakePulseAnimation,
 } from '@/components/animations/lottieData';
 import Link from 'next/link';
+import { track } from '@/lib/analytics/events';
+import type { CtcTool } from '@/lib/analytics/events';
 
 type MorningHomePulseCardProps = {
   propertyId?: string;
 };
+
+type ActionToolTarget = { href: string; label: string; toolKey: CtcTool };
+
+function resolveActionTool(title: string | undefined, propertyId: string): ActionToolTarget {
+  const key = (title ?? '').toUpperCase();
+  const base = `/dashboard/properties/${propertyId}/tools`;
+  if (/INSURANCE|COVERAGE/.test(key))
+    return { href: `${base}/coverage-intelligence`, label: 'Coverage Intelligence', toolKey: 'coverage-intelligence' };
+  if (/REBATE|UTILITY|ASSET|GRANT|EXEMPTION|CREDIT/.test(key))
+    return { href: `${base}/hidden-asset-finder`, label: 'Asset Finder', toolKey: 'hidden-asset-finder' };
+  if (/REFINANC/.test(key))
+    return { href: `${base}/mortgage-refinance-radar`, label: 'Refinance Radar', toolKey: 'mortgage-refinance-radar' };
+  return { href: `${base}/maintenance`, label: 'Maintenance', toolKey: 'maintenance' };
+}
 
 type SummaryKind = 'HEALTH' | 'RISK' | 'FINANCIAL';
 
@@ -228,6 +244,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
     try {
       const data = await getDailySnapshot(propertyId);
       setSnapshot(data);
+      track('morning_brief_opened', { propertyId, itemCount: data.payload.summary.length });
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load Morning Home Pulse.');
       setSnapshot(null);
@@ -621,6 +638,24 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               </span>
             )}
           </div>
+          {propertyId && (() => {
+            const tool = resolveActionTool(payload.microAction.title, propertyId);
+            return (
+              <div className="mt-2 border-t border-gray-100 pt-2">
+                <Link
+                  href={tool.href}
+                  onClick={() => track('morning_brief_cta_clicked', {
+                    propertyId,
+                    actionType: payload.microAction.title,
+                    tool: tool.toolKey,
+                  })}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                >
+                  Open {tool.label} →
+                </Link>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

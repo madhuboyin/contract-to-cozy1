@@ -1012,6 +1012,8 @@ export interface Provider {
     id: string;
     firstName: string;
     lastName: string;
+    phone?: string | null;
+    email?: string;
   };
   firstName: string;
   lastName: string;
@@ -1023,6 +1025,9 @@ export interface Provider {
   totalCompletedJobs: number;
   serviceRadius: number;
   serviceCategories: ServiceCategory[];
+  /** Typical response time label, e.g. "Within 2 hours". Populated by backend when available. */
+  responseTime?: string | null;
+  website?: string | null;
 }
 
 /**

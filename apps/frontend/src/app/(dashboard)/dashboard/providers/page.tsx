@@ -248,7 +248,8 @@ const ProviderList = ({
                 <p className="mb-0 truncate text-sm font-semibold text-slate-900">{provider.businessName}</p>
                 <p className="mb-0 mt-0.5 text-xs text-slate-500">
                   {provider.totalReviews} {provider.totalReviews === 1 ? 'review' : 'reviews'}
-                  {provider.totalCompletedJobs > 0 ? ` • ${provider.totalCompletedJobs} jobs completed` : ''}
+                  {provider.totalCompletedJobs > 0 ? ` • ${provider.totalCompletedJobs} jobs` : ''}
+                  {provider.responseTime ? ` • ${provider.responseTime}` : ''}
                 </p>
               </div>
               <StatusChip tone={provider.averageRating >= 4.5 ? 'good' : provider.averageRating >= 4 ? 'elevated' : 'info'}>

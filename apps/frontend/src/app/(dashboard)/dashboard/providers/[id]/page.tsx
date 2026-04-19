@@ -401,6 +401,7 @@ export default function ProviderDetailPage() {
             { label: 'Reviews', value: provider.totalReviews || 0 },
             { label: 'Completed Jobs', value: provider.totalCompletedJobs || 0 },
             { label: 'Service Radius', value: `${provider.serviceRadius} miles` },
+            { label: 'Response Time', value: provider.responseTime ?? 'Not available' },
           ]}
         />
         <div className="flex flex-wrap gap-2">

@@ -38,6 +38,13 @@ type Props = {
   maxItems?: number;
 };
 
+const STALE_THRESHOLD_MS = 90 * 24 * 60 * 60 * 1000;
+
+function isStaleAction(action: OrchestratedActionDTO): boolean {
+  if (!action.createdAt) return false;
+  return Date.now() - new Date(action.createdAt).getTime() > STALE_THRESHOLD_MS;
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -424,6 +431,12 @@ export const ActionCenter: React.FC<Props> = ({
   // Group active actions by risk level for display
   const critical = useMemo(() => actions.filter(a => a.riskLevel === 'CRITICAL'), [actions]);
   const high = useMemo(() => actions.filter(a => a.riskLevel === 'HIGH'), [actions]);
+  const otherFresh = useMemo(() => actions.filter(
+    a => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH' && !isStaleAction(a)
+  ), [actions]);
+  const otherStale = useMemo(() => actions.filter(
+    a => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH' && isStaleAction(a)
+  ), [actions]);
   const other = useMemo(() => actions.filter(
     a => a.riskLevel !== 'CRITICAL' && a.riskLevel !== 'HIGH'
   ), [actions]);
@@ -619,7 +632,48 @@ export const ActionCenter: React.FC<Props> = ({
 
         {renderGroup('Critical', critical, 'text-red-700')}
         {renderGroup('High Priority', high, 'text-amber-700')}
-        {renderGroup('Other Actions', other, 'text-gray-700')}
+        {renderGroup('Other Actions', otherFresh, 'text-gray-700')}
+
+        {/* Aging Actions — items open for 90+ days */}
+        {otherStale.length > 0 && (
+          <section className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase text-gray-400">
+                Aging Actions ({otherStale.length})
+              </span>
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                90+ days open — snooze or complete to clear
+              </span>
+            </div>
+            <div className="space-y-3 opacity-80">
+              {otherStale.slice(0, maxItems).map(action => {
+                const isSuppressed = action.suppression?.suppressed;
+                const hasTaskCreated = action.hasRelatedChecklistItem === true;
+                const isCurrentlyBeingScheduled = activeActionKey === action.actionKey;
+                const isChecklistAction = action.source === 'CHECKLIST';
+                const guidanceAction = guidanceByActionKey.get(action.actionKey);
+                const guidanceCtaLabel = guidanceAction ? buildGuidanceCtaLabel(guidanceAction) : undefined;
+                return (
+                  <OrchestrationActionCard
+                    key={action.actionKey}
+                    action={action}
+                    onCtaClick={handleActionCta}
+                    ctaDisabled={isSuppressed || hasTaskCreated || isCurrentlyBeingScheduled || isModalOpen || isChecklistAction}
+                    ctaLabel={
+                      isSuppressed ? 'Suppressed'
+                        : hasTaskCreated ? 'Already scheduled'
+                        : isChecklistAction ? 'View in Maintenance'
+                        : guidanceCtaLabel
+                    }
+                    forceShowCta
+                    onOpenTrace={handleOpenDecisionTrace}
+                    onViewItem={handleViewItem}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Suppressed Actions */}
         {suppressedActions.length > 0 && (
