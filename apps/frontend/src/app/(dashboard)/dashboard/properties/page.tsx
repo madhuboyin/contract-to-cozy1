@@ -95,6 +95,10 @@ export default function PropertiesPage() {
     inventory: 'Inventory',
     'risk-radar': 'Insights > Risk Radar',
     'inspection-report': 'Reports > Inspection Report',
+    protect: 'Home Protection',
+    save: 'Wealth & Savings',
+    fix: 'Resolution Center',
+    vault: 'Home History',
     'seller-prep': 'Home Tools > Seller Prep',
     'home-timeline': 'Home Tools > Home Timeline',
     'status-board': 'Home Tools > Status Board',
@@ -123,6 +127,10 @@ export default function PropertiesPage() {
     if (navTarget === 'status-board') return appendForwardedQuery(`/dashboard/properties/${propertyId}/status-board`);
     if (navTarget === 'home-score') return appendForwardedQuery(`/dashboard/properties/${propertyId}/home-score`);
     if (navTarget === 'reports') return appendForwardedQuery(`/dashboard/properties/${propertyId}/reports`);
+    if (navTarget === 'protect') return appendForwardedQuery(`/dashboard/properties/${propertyId}/protect`);
+    if (navTarget === 'save') return appendForwardedQuery(`/dashboard/properties/${propertyId}/save`);
+    if (navTarget === 'fix') return appendForwardedQuery(`/dashboard/properties/${propertyId}/fix`);
+    if (navTarget === 'vault') return appendForwardedQuery(`/dashboard/properties/${propertyId}/vault`);
 
     const resolvedFromNavTarget = resolvePropertyHrefFromNavTarget(propertyId, navTarget, searchParams);
     if (resolvedFromNavTarget) {

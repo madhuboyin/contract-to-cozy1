@@ -8,6 +8,7 @@ import { computeSetupStatus } from '../services/propertyOnboarding.service';
 import { getOrCreateActiveNarrativeRun } from '../services/narrativeRun.service';
 import { NeighborhoodIntelligenceService } from '../neighborhoodIntelligence/neighborhoodIntelligenceService';
 import { logger } from '../lib/logger';
+import { prisma } from '../lib/prisma';
 
 const neighborhoodService = new NeighborhoodIntelligenceService();
 
@@ -250,7 +251,14 @@ export const lookupProperty = async (req: Request, res: Response) => {
 export const getPropertyResolutions = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { homeownerProfileId } = req.user!;
+    const homeownerProfileId = req.user?.homeownerProfile?.id;
+
+    if (!homeownerProfileId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Homeowner profile required',
+      });
+    }
 
     // Find active READY analyses for the property
     const resolutions = await prisma.replaceRepairAnalysis.findMany({

@@ -83,8 +83,17 @@ export class SubscriptionService {
     const limitValue = limits[feature];
 
     if (feature === 'maxVaultItems') {
+      const homeownerProfile = await prisma.homeownerProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+
+      const uploadOwners = homeownerProfile
+        ? [userId, homeownerProfile.id]
+        : [userId];
+
       const count = await prisma.document.count({
-        where: { homeownerProfile: { userId } }
+        where: { uploadedBy: { in: uploadOwners } }
       });
       return count < limitValue;
     }

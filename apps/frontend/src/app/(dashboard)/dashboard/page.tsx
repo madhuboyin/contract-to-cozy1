@@ -1248,7 +1248,14 @@ export default function DashboardPage() {
             value="Coverage Gap Found"
             description="Your current policy might not cover flood damage common in your area."
             actionLabel="Audit My Policy"
-            onAction={() => router.push('/dashboard/save')}
+            onAction={() => {
+              const targetId = effectiveSelectedPropertyId || '';
+              if (targetId) {
+                router.push(`/dashboard/properties/${targetId}/save`);
+              } else {
+                router.push('/dashboard/properties?navTarget=save');
+              }
+            }}
             isUrgent={true}
             trust={{
               confidenceLabel: "High",

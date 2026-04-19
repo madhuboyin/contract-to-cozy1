@@ -191,7 +191,11 @@ export function MagicCaptureSheet({
                 actionLabel="Review Optimized Matches"
                 onAction={() => {
                   onOpenChange(false);
-                  window.location.href = '/dashboard/save';
+                  if (selectedPropertyId) {
+                    window.location.href = `/dashboard/properties/${selectedPropertyId}/save`;
+                  } else {
+                    window.location.href = '/dashboard/properties?navTarget=save';
+                  }
                 }}
                 trust={{
                   confidenceLabel: "High (92%)",
@@ -232,7 +236,11 @@ export function MagicCaptureSheet({
               actionLabel="Go to Resolution Center"
               onAction={() => {
                 onOpenChange(false);
-                // In a real app, this would route to /dashboard/fix
+                if (selectedPropertyId) {
+                  window.location.href = `/dashboard/properties/${selectedPropertyId}/fix`;
+                } else {
+                  window.location.href = '/dashboard/properties?navTarget=fix';
+                }
               }}
               trust={{
                 confidenceLabel: `${Math.round(insights.confidence * 100)}% Confidence`,
