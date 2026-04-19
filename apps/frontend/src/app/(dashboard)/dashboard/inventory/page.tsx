@@ -2,10 +2,18 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
+
+function buildForwardQuery(serializedParams: string): string {
+  const query = new URLSearchParams(serializedParams);
+  query.delete('propertyId');
+  const next = query.toString();
+  return next ? `?${next}` : '';
+}
 
 /**
  * This page handles the top-level /dashboard/inventory route by 
@@ -13,14 +21,23 @@ import { api } from '@/lib/api/client';
  */
 export default function InventoryRedirectPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
+  const serializedSearchParams = searchParams.toString();
+  const propertyIdFromQuery = searchParams.get('propertyId') || undefined;
 
   useEffect(() => {
     let isActive = true;
+    const forwardQuery = buildForwardQuery(serializedSearchParams);
 
     const resolveAndRedirect = async () => {
-      if (selectedPropertyId) {
-        router.replace(`/dashboard/properties/${selectedPropertyId}/inventory`);
+      const directPropertyId = propertyIdFromQuery || selectedPropertyId;
+
+      if (directPropertyId) {
+        if (propertyIdFromQuery && propertyIdFromQuery !== selectedPropertyId) {
+          setSelectedPropertyId(propertyIdFromQuery);
+        }
+        router.replace(`/dashboard/properties/${directPropertyId}/inventory${forwardQuery}`);
         return;
       }
 
@@ -33,7 +50,7 @@ export default function InventoryRedirectPage() {
         if (properties.length > 0) {
           const fallbackPropertyId = properties[0].id;
           setSelectedPropertyId(fallbackPropertyId);
-          router.replace(`/dashboard/properties/${fallbackPropertyId}/inventory`);
+          router.replace(`/dashboard/properties/${fallbackPropertyId}/inventory${forwardQuery}`);
           return;
         }
       } catch (error) {
@@ -41,7 +58,7 @@ export default function InventoryRedirectPage() {
       }
 
       if (isActive) {
-        router.replace('/dashboard');
+        router.replace('/dashboard/properties?navTarget=inventory');
       }
     };
 
@@ -50,7 +67,7 @@ export default function InventoryRedirectPage() {
     return () => {
       isActive = false;
     };
-  }, [selectedPropertyId, setSelectedPropertyId, router]);
+  }, [propertyIdFromQuery, router, selectedPropertyId, serializedSearchParams, setSelectedPropertyId]);
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">

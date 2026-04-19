@@ -19,10 +19,25 @@ import {
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
+function buildForwardQuery(serializedSearchParams: string): string {
+  const query = new URLSearchParams(serializedSearchParams);
+  query.delete('propertyId');
+  query.delete('itemId');
+  query.delete('inventoryItemId');
+  const next = query.toString();
+  return next ? `?${next}` : '';
+}
+
+function buildReplaceRepairItemHref(propertyId: string, itemId: string, forwardQuery: string): string {
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory/items/${encodeURIComponent(itemId)}/replace-repair${forwardQuery}`;
+}
+
 function ReplaceRepairContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const serializedSearchParams = searchParams.toString();
   const propertyIdFromUrl = searchParams.get('propertyId');
+  const queryItemId = searchParams.get('itemId') ?? searchParams.get('inventoryItemId') ?? undefined;
 
   const [properties, setProperties] = useState<Property[]>([]);
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(propertyIdFromUrl);
@@ -30,6 +45,17 @@ function ReplaceRepairContent() {
   const [selectedItemId, setSelectedItemId] = useState('');
   const [loadingProperties, setLoadingProperties] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
+  const forwardQuery = useMemo(
+    () => buildForwardQuery(serializedSearchParams),
+    [serializedSearchParams]
+  );
+
+  useEffect(() => {
+    if (!queryItemId) return;
+    const directPropertyId = propertyIdFromUrl ?? selectedPropertyId;
+    if (!directPropertyId) return;
+    router.replace(buildReplaceRepairItemHref(directPropertyId, queryItemId, forwardQuery));
+  }, [forwardQuery, propertyIdFromUrl, queryItemId, router, selectedPropertyId]);
 
   useEffect(() => {
     let cancelled = false;
