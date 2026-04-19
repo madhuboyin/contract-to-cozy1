@@ -36,6 +36,24 @@ const NEGOTIATION_LOOP_BASE: TrustContract = {
   sourceKind: 'negotiation_loop',
 };
 
+const HIDDEN_ASSET_BASE: TrustContract = {
+  confidenceLabel: 'Eligibility confidence varies by program — HIGH means strong match, LOW means worth verifying.',
+  freshnessLabel: 'Program database refreshed periodically; verify eligibility directly with the program source.',
+  sourceLabel: 'CtC benefit and program database + property profile + location signals.',
+  rationale:
+    'Matches are ranked by estimated value and eligibility confidence. Always verify with the official program source before applying.',
+  sourceKind: 'hidden_asset',
+};
+
+const GUIDANCE_ENGINE_BASE: TrustContract = {
+  confidenceLabel: 'Journey confidence improves as more property, asset, and signal context is provided.',
+  freshnessLabel: 'Updates when property data, linked assets, or issue signals change.',
+  sourceLabel: 'CtC guidance engine + property context + linked asset and coverage signals.',
+  rationale:
+    'Guidance journeys order steps by impact and dependency — completing earlier steps improves the quality of later recommendations.',
+  sourceKind: 'guidance_engine',
+};
+
 function fromBase(base: TrustContract, overrides?: Partial<TrustContract>): TrustContract {
   return mergeTrustContract(base, overrides);
 }
@@ -54,6 +72,14 @@ export function refinanceLoopTrust(overrides?: Partial<TrustContract>): TrustCon
 
 export function negotiationLoopTrust(overrides?: Partial<TrustContract>): TrustContract {
   return fromBase(NEGOTIATION_LOOP_BASE, overrides);
+}
+
+export function hiddenAssetTrust(overrides?: Partial<TrustContract>): TrustContract {
+  return fromBase(HIDDEN_ASSET_BASE, overrides);
+}
+
+export function guidanceEngineTrust(overrides?: Partial<TrustContract>): TrustContract {
+  return fromBase(GUIDANCE_ENGINE_BASE, overrides);
 }
 
 export function trustDateLabel(
