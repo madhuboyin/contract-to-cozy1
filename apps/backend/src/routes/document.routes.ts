@@ -8,6 +8,7 @@ import { requireDocumentOwnership } from '../middleware/documentAuth.middleware'
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { documentIntelligenceService } from '../services/documentIntelligence.service';
+import { subscriptionService } from '../services/subscription.service';
 import { DocumentType } from '@prisma/client';
 import { validateDocumentUpload } from '../utils/documentValidator.util'; // Assuming this was added in the previous step
 import { HomeEventsAutoGen } from '../services/homeEvents/homeEvents.autogen';
@@ -87,6 +88,18 @@ const upload = multer({
 router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), validateDocumentUpload, async (req: CustomRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
+    
+    // Check subscription limits (Phase 3: Cozy+)
+    const canScan = await subscriptionService.hasRemainingLimit(userId, 'maxMagicScansPerMonth');
+    if (!canScan) {
+      return res.status(402).json({
+        success: false,
+        code: 'LIMIT_EXCEEDED',
+        message: 'Monthly Magic Scan limit reached. Upgrade to Cozy+ for unlimited AI analysis.',
+        feature: 'MAGIC_SCAN'
+      });
+    }
+
     const file = req.file;
     const { propertyId, autoCreateWarranty } = req.body;
 

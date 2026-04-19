@@ -110,3 +110,26 @@ export const TrackToolUsedSchema = z.object({
 });
 
 export type TrackToolUsedInput = z.infer<typeof TrackToolUsedSchema>;
+
+export const TrackOutcomeGeneratedSchema = z.object({
+  userId:       z.string().uuid().optional().nullable(),
+  propertyId:   z.string().uuid(),
+  outcomeType:  z.enum(['SAVINGS', 'RISK_PREVENTION', 'TIME_SAVED']),
+  valueUsd:     z.number().optional().nullable(),
+  sourceEngine: z.string().trim().max(80),
+  occurredAt:   z.coerce.date().optional().nullable(),
+  metadataJson: z.record(z.string(), z.unknown()).optional().nullable(),
+});
+
+export type TrackOutcomeGeneratedInput = z.infer<typeof TrackOutcomeGeneratedSchema>;
+
+export const TrackOutcomeActionTakenSchema = z.object({
+  userId:       z.string().uuid().optional().nullable(),
+  propertyId:   z.string().uuid(),
+  outcomeType:  z.enum(['SAVINGS', 'RISK_PREVENTION', 'TIME_SAVED']),
+  sourceEngine: z.string().trim().max(80),
+  occurredAt:   z.coerce.date().optional().nullable(),
+  metadataJson: z.record(z.string(), z.unknown()).optional().nullable(),
+});
+
+export type TrackOutcomeActionTakenInput = z.infer<typeof TrackOutcomeActionTakenSchema>;

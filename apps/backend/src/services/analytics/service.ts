@@ -17,6 +17,8 @@ import {
   TrackDecisionGuidedInput,
   TrackPropertyActivatedInput,
   TrackToolUsedInput,
+  TrackOutcomeGeneratedInput,
+  TrackOutcomeActionTakenInput,
 } from './schemas';
 import {
   AnalyticsModule,
@@ -195,6 +197,46 @@ export class ProductAnalyticsService {
       propertyId:   input.propertyId,
       moduleKey:    input.moduleKey,
       featureKey:   input.featureKey,
+      occurredAt:   input.occurredAt,
+      metadataJson: meta,
+    });
+  }
+
+  /**
+   * Track that an outcome (win) was generated for a user.
+   */
+  static async trackOutcomeGenerated(input: TrackOutcomeGeneratedInput) {
+    const meta: Record<string, unknown> = { ...(input.metadataJson ?? {}) };
+    meta.outcomeType = input.outcomeType;
+    meta.sourceEngine = input.sourceEngine;
+    if (input.valueUsd) meta.valueUsd = input.valueUsd;
+
+    return ProductAnalyticsService.trackEvent({
+      eventType:    ProductAnalyticsEventType.OUTCOME_GENERATED,
+      userId:       input.userId,
+      propertyId:   input.propertyId,
+      moduleKey:    'OUTCOME',
+      featureKey:   input.sourceEngine,
+      occurredAt:   input.occurredAt,
+      metadataJson: meta,
+      valueNumeric: input.valueUsd,
+    });
+  }
+
+  /**
+   * Track that a user took action on a generated outcome.
+   */
+  static async trackOutcomeActionTaken(input: TrackOutcomeActionTakenInput) {
+    const meta: Record<string, unknown> = { ...(input.metadataJson ?? {}) };
+    meta.outcomeType = input.outcomeType;
+    meta.sourceEngine = input.sourceEngine;
+
+    return ProductAnalyticsService.trackEvent({
+      eventType:    ProductAnalyticsEventType.OUTCOME_ACTION_TAKEN,
+      userId:       input.userId,
+      propertyId:   input.propertyId,
+      moduleKey:    'OUTCOME',
+      featureKey:   input.sourceEngine,
       occurredAt:   input.occurredAt,
       metadataJson: meta,
     });

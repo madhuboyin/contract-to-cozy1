@@ -822,6 +822,14 @@ class APIClient {
   }
 
   /**
+   * Get active resolutions (analyses) for a property
+   */
+  async getPropertyResolutions(id: string): Promise<APIResponse<any[]>> {
+    const res = await this.get<any[]>(`/api/properties/${id}/resolutions`);
+    return { success: true, data: res.data };
+  }
+
+  /**
    * Get dashboard bootstrap payload for a property (property + onboarding + narrative run)
    */
   async getPropertyDashboardBootstrap(id: string): Promise<APIResponse<PropertyDashboardBootstrap>> {

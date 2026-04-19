@@ -243,3 +243,46 @@ export const lookupProperty = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * Get active resolutions (analyses) for a property
+ */
+export const getPropertyResolutions = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { homeownerProfileId } = req.user!;
+
+    // Find active READY analyses for the property
+    const resolutions = await prisma.replaceRepairAnalysis.findMany({
+      where: {
+        propertyId: id,
+        homeownerProfileId,
+        status: 'READY',
+      },
+      include: {
+        inventoryItem: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+          },
+        },
+      },
+      orderBy: {
+        computedAt: 'desc',
+      },
+      take: 10,
+    });
+
+    res.json({
+      success: true,
+      data: resolutions,
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Error fetching property resolutions');
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch property resolutions',
+    });
+  }
+};

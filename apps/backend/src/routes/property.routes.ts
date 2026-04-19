@@ -71,6 +71,26 @@ router.get('/lookup', authenticate, propertyController.lookupProperty);
 
 /**
  * @swagger
+ * /api/properties/{id}/resolutions:
+ *   get:
+ *     summary: Get active resolutions (analyses) for a property
+ *     tags: [Properties]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of active resolutions
+ */
+router.get('/:id/resolutions', authenticate, propertyController.getPropertyResolutions);
+
+/**
+ * @swagger
  * /api/properties:
  *   post:
  *     summary: Create a new property

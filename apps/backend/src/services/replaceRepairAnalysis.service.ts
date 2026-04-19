@@ -9,6 +9,7 @@ import {
   HomeEventType,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { ProductAnalyticsService } from './analytics/service';
 
 type RiskTolerance = 'LOW' | 'MEDIUM' | 'HIGH';
 type UsageIntensity = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -607,6 +608,20 @@ export class ReplaceRepairService {
         expectedAnnualOwnershipDeltaCents: annualRepairRiskDeltaCents,
         breakEvenMonths,
       },
+    });
+
+    // Track outcome generated for the user
+    void ProductAnalyticsService.trackOutcomeGenerated({
+      userId,
+      propertyId,
+      outcomeType: 'RISK_PREVENTION',
+      sourceEngine: 'REPLACE_REPAIR',
+      metadataJson: {
+        itemId,
+        verdict,
+        confidence,
+        annualRepairRiskDeltaCents,
+      }
     });
 
     return mapAnalysisToDto(analysis);

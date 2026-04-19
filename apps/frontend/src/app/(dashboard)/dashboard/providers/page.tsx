@@ -246,11 +246,15 @@ const ProviderList = ({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="mb-0 truncate text-sm font-semibold text-slate-900">{provider.businessName}</p>
-                <p className="mb-0 mt-0.5 text-xs text-slate-500">
-                  {provider.totalReviews} {provider.totalReviews === 1 ? 'review' : 'reviews'}
-                  {provider.totalCompletedJobs > 0 ? ` • ${provider.totalCompletedJobs} jobs` : ''}
-                  {provider.responseTime ? ` • ${provider.responseTime}` : ''}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="mb-0 text-xs text-slate-500">
+                    {provider.totalReviews} {provider.totalReviews === 1 ? 'review' : 'reviews'}
+                    {provider.totalCompletedJobs > 0 ? ` • ${provider.totalCompletedJobs} jobs` : ''}
+                  </p>
+                  {(inventoryItemId || insightContext) && provider.serviceCategories.includes((category || insightContext) as any) && (
+                    <StatusChip tone="good" className="text-[9px] py-0 px-1.5 h-4">Best Match</StatusChip>
+                  )}
+                </div>
               </div>
               <StatusChip tone={provider.averageRating >= 4.5 ? 'good' : provider.averageRating >= 4 ? 'elevated' : 'info'}>
                 <span className="inline-flex items-center gap-1">

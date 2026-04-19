@@ -1,6 +1,7 @@
 // apps/backend/src/services/valueIntelligence.service.ts
 
 import { prisma } from '../lib/prisma';
+import { ProductAnalyticsService } from './analytics/service';
 
 const MAINTENANCE_PREMIUM_RATE = 0.08; // 8% conservative uplift from documented care
 const RESALE_ADVANTAGE_HEALTH_BASELINE = 80;
@@ -147,10 +148,23 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     select: { id: true },
   });
 
+  if (maintenancePremiumCents > 5000) {
+    void ProductAnalyticsService.trackOutcomeGenerated({
+      propertyId,
+      outcomeType: 'SAVINGS',
+      sourceEngine: 'VALUE_INTELLIGENCE',
+      valueUsd: Math.round(maintenancePremiumCents / 100),
+      metadataJson: {
+        premiumType: 'MAINTENANCE_ROI',
+        healthScore: healthScore ?? 0,
+      },
+    });
+  }
+
   return {
     propertyId,
     isEquityVerified: property.isEquityVerified,
-    purchasePriceCents: property.purchasePriceCents,
+    purchasePriceCents,
     purchaseDate: property.purchaseDate,
     lastAppraisedValueCents,
     appreciationCents,
@@ -164,4 +178,5 @@ export async function calculateHomeEquity(propertyId: string): Promise<HomeEquit
     resaleAdvantageBaseline: RESALE_ADVANTAGE_HEALTH_BASELINE,
     hasResaleAdvantage,
   };
-}
+  }
+

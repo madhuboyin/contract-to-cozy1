@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from '../lib/prisma';
 import { Prisma, WarrantyCategory } from '@prisma/client';
 import { logger } from '../lib/logger';
+import { ProductAnalyticsService } from './analytics/service';
 
 export interface DocumentInsights {
   documentType: 'WARRANTY' | 'RECEIPT' | 'MANUAL' | 'INSPECTION' | 'INVOICE' | 'INSURANCE' | 'UNKNOWN';
@@ -231,6 +232,19 @@ export class DocumentIntelligenceService {
       });
 
       logger.info({ warrantyId: warranty.id }, '[DOC-INTELLIGENCE] Auto-created warranty');
+
+      // Track outcome generated for the user
+      void ProductAnalyticsService.trackOutcomeGenerated({
+        propertyId,
+        outcomeType: 'RISK_PREVENTION',
+        sourceEngine: 'WARRANTY_AUTO_DETECTION',
+        metadataJson: {
+          warrantyId: warranty.id,
+          category: warranty.category,
+          docId: documentId
+        }
+      });
+
       return warranty;
     } catch (error: any) {
       logger.error({ err: error }, '[DOC-INTELLIGENCE] Warranty creation error');
@@ -309,6 +323,20 @@ export class DocumentIntelligenceService {
       });
 
       logger.info({ policyId: policy.id }, '[DOC-INTELLIGENCE] Auto-created insurance policy');
+
+      // Track outcome generated for the user
+      void ProductAnalyticsService.trackOutcomeGenerated({
+        propertyId,
+        outcomeType: 'SAVINGS',
+        sourceEngine: 'INSURANCE_AUTO_DETECTION',
+        valueUsd: extractedData.premiumAmount,
+        metadataJson: {
+          policyId: policy.id,
+          carrierName: policy.carrierName,
+          docId: documentId
+        }
+      });
+
       return policy;
     } catch (error: any) {
       logger.error({ err: error }, '[DOC-INTELLIGENCE] Insurance creation error');

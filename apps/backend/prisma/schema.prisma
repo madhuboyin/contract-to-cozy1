@@ -8615,6 +8615,8 @@ enum ProductAnalyticsEventType {
   RISK_VIEWED
   TOOL_USED
   ADMIN_ANALYTICS_VIEWED
+  OUTCOME_GENERATED
+  OUTCOME_ACTION_TAKEN
 }
 
 // Enum: cohort type for retention/activation cohort snapshots
