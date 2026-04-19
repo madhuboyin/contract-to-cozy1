@@ -45,6 +45,24 @@ const HIDDEN_ASSET_BASE: TrustContract = {
   sourceKind: 'hidden_asset',
 };
 
+const INSURANCE_TREND_BASE: TrustContract = {
+  confidenceLabel: 'Heuristic estimate — not derived from your actual policy. Confidence reflects local trend data quality.',
+  freshnessLabel: 'Updates with each model run using the latest local premium benchmarks.',
+  sourceLabel: 'Property profile · State premium data · Local area benchmarks.',
+  rationale:
+    'This is a model estimate, not a quote or policy figure. Use it to understand trend direction and compare to similar homes — verify any significant change with your insurer.',
+  sourceKind: 'coverage_loop',
+};
+
+const PROPERTY_TAX_BASE: TrustContract = {
+  confidenceLabel: 'Heuristic estimate — not your official assessed value. Confidence reflects local rate data availability.',
+  freshnessLabel: 'Updates each time the estimate model runs against current local rate inputs.',
+  sourceLabel: 'Property value assumptions · Local rate estimates · Historical trend projection.',
+  rationale:
+    'This is a modeled estimate, not an official tax bill or assessed value. Use it to anticipate direction and plan ahead — verify with your local tax authority before acting.',
+  sourceKind: 'coverage_loop',
+};
+
 const GUIDANCE_ENGINE_BASE: TrustContract = {
   confidenceLabel: 'Journey confidence improves as more property, asset, and signal context is provided.',
   freshnessLabel: 'Updates when property data, linked assets, or issue signals change.',
@@ -80,6 +98,14 @@ export function hiddenAssetTrust(overrides?: Partial<TrustContract>): TrustContr
 
 export function guidanceEngineTrust(overrides?: Partial<TrustContract>): TrustContract {
   return fromBase(GUIDANCE_ENGINE_BASE, overrides);
+}
+
+export function insuranceTrendTrust(overrides?: Partial<TrustContract>): TrustContract {
+  return fromBase(INSURANCE_TREND_BASE, overrides);
+}
+
+export function propertyTaxTrust(overrides?: Partial<TrustContract>): TrustContract {
+  return fromBase(PROPERTY_TAX_BASE, overrides);
 }
 
 export function trustDateLabel(

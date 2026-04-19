@@ -9,6 +9,8 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import { Button } from '@/components/ui/button';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { propertyTaxTrust } from '@/lib/trust/trustPresets';
+import { track } from '@/lib/analytics/events';
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
@@ -183,6 +185,7 @@ export default function PropertyTaxClient() {
   useEffect(() => {
     if (!propertyId) return;
     refresh();
+    track('workflow_started', { tool: 'property-tax', propertyId, entryPoint: 'direct' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
@@ -216,12 +219,10 @@ export default function PropertyTaxClient() {
       introAction={
         <HomeToolsRail propertyId={propertyId} context="property-tax" currentToolId="property-tax" showDesktop={false} />
       }
-      trust={{
-        confidenceLabel: estimate?.current?.confidence ?? 'Estimated confidence',
+      trust={propertyTaxTrust({
+        confidenceLabel: estimate?.current?.confidence ?? 'Heuristic estimate — confidence reflects local rate data availability.',
         freshnessLabel: estimate?.meta?.generatedAt ? 'Updated with latest tax model run' : 'Run estimate to refresh',
-        sourceLabel: 'Property value assumptions + local rate estimates + historical trend projection',
-        rationale: 'Surfaces annual tax direction and major contributors so planning decisions stay proactive.',
-      }}
+      })}
       priorityAction={(() => {
         if (!estimate || loading) return undefined;
         const hist = estimate.history ?? [];

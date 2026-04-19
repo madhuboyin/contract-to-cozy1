@@ -23,6 +23,7 @@ import { RadarFeedSkeleton } from '@/components/features/homeEventRadar/RadarFee
 import { RadarDetailSheet } from '@/components/features/homeEventRadar/RadarDetailSheet';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
+import { track } from '@/lib/analytics/events';
 import type { Property, RadarFeedItem as RadarFeedItemType, RadarUserState } from '@/types';
 
 // ---------------------------------------------------------------------------
@@ -318,6 +319,12 @@ export default function HomeEventRadarPageClient({ propertyId: propertyIdOverrid
       setSelectedPropertyId(propertyIdOverride);
     }
   }, [propertyIdOverride, selectedPropertyId, setSelectedPropertyId]);
+
+  React.useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'home-event-radar', propertyId, entryPoint: launchSurface ?? 'direct' });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
 
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');

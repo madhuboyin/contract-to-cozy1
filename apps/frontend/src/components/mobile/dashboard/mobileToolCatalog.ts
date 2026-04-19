@@ -503,17 +503,6 @@ export const MOBILE_HOME_TOOL_LINKS: MobilePropertyToolLink[] = [
       /^\/dashboard\/properties\/[^/]+\/tools\/home-habit-coach(\/|$)/.test(pathname),
   },
   {
-    key: 'plant-advisor',
-    name: 'Plant Advisor',
-    description: "Room-aware plant recommendations tailored to your home's spaces",
-    desktopDescription: "Get deterministic, room-aware plant recommendations with fit signals and care guidance.",
-    hrefSuffix: 'tools/plant-advisor',
-    navTarget: 'tool:plant-advisor',
-    icon: resolveToolIcon('home', 'plant-advisor'),
-    isActive: (pathname) =>
-      /^\/dashboard\/properties\/[^/]+\/tools\/plant-advisor(\/|$)/.test(pathname),
-  },
-  {
     key: 'home-renovation-risk-advisor',
     name: 'Renovation Risk Advisor',
     description: "Check permit rules, tax impact, and contractor requirements before a major renovation.",

@@ -63,6 +63,7 @@ import {
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import TrustStrip from '../../components/route-templates/TrustStrip';
 import { negotiationLoopTrust } from '@/lib/trust/trustPresets';
+import { track } from '@/lib/analytics/events';
 
 type ScenarioRouteValue =
   | 'contractor-quote-review'
@@ -2929,6 +2930,7 @@ export default function NegotiationShieldToolClient() {
       hasCaseSelection: Boolean(caseId),
       propertyLoaded: Boolean(property),
     });
+    track('workflow_started', { tool: 'negotiation-shield', propertyId, entryPoint: 'direct' });
   }, [caseId, createMode, property, propertyId]);
 
   if (!propertyId) {

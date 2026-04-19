@@ -11,6 +11,8 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { insuranceTrendTrust } from '@/lib/trust/trustPresets';
+import { track } from '@/lib/analytics/events';
 
 function money(n: number | null | undefined, currency = 'USD') {
   if (n === null || n === undefined) return '—';
@@ -56,6 +58,7 @@ export default function InsuranceTrendClient() {
   useEffect(() => {
     if (!propertyId) return;
     getAndSet(trendYears);
+    track('workflow_started', { tool: 'insurance-trend', propertyId, entryPoint: 'direct' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
@@ -109,12 +112,10 @@ export default function InsuranceTrendClient() {
           showDesktop={false}
         />
       }
-      trust={{
-        confidenceLabel: data?.meta?.confidence ?? 'Estimated confidence',
+      trust={insuranceTrendTrust({
+        confidenceLabel: data?.meta?.confidence ?? 'Heuristic estimate — confidence reflects local trend data quality.',
         freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest local trend data' : 'Analyzing your property…',
-        sourceLabel: 'Property profile · State premium data · Local benchmarks',
-        rationale: 'Shows whether your estimated premium tracks above or below similar homes in your area.',
-      }}
+      })}
     >
 
       {/* Error */}
