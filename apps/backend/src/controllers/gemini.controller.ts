@@ -2,8 +2,8 @@
 
 import { Response, NextFunction } from 'express';
 import { geminiService } from '../services/gemini.service';
-import { APIError } from '../types';
 import { AuthRequest } from '../types/auth.types';
+import { APIError } from '../middleware/error.middleware';
 
 class GeminiController {
   
@@ -21,7 +21,7 @@ class GeminiController {
 
       // Ensure userId is present after authentication middleware
       if (!userId) {
-        throw new Error('Authentication failure: User ID not found in request.');
+        return res.status(401).json({ success: false, message: 'Invalid session. Please log in again.' });
       }
 
       // Basic input validation check
@@ -45,15 +45,10 @@ class GeminiController {
         data: { text: response }, 
       });
     } catch (error) {
-      // Catch the explicit error from geminiService and return a structured response
-      if (error instanceof Error && error.message.includes('Property data does not exist')) {
-        return res.status(403).json({ success: false, message: error.message });
+      if (error instanceof APIError) {
+        next(error);
+        return;
       }
-      // Catch the Critical Fix error above
-      if (error instanceof Error && error.message.includes('Authentication failure')) {
-         return res.status(401).json({ success: false, message: 'Invalid session. Please log in again.' });
-      }
-      // Pass other errors (like Gemini API errors) to the general error handler
       next(error);
     }
   };

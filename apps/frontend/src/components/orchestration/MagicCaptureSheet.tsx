@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { toast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
+import { useRouter } from 'next/navigation';
 
 interface MagicCaptureSheetProps {
   isOpen: boolean;
@@ -32,6 +33,13 @@ interface MagicCaptureSheetProps {
 }
 
 type CaptureStep = 'idle' | 'analyzing' | 'outcome' | 'error';
+
+type CaptureErrorState = {
+  message: string;
+  code?: string;
+  statusCode?: number;
+  retryAfterSeconds?: number | null;
+};
 
 /**
  * MagicCaptureSheet implements the flagship "Camera -> Vault -> Action" loop.
@@ -43,10 +51,11 @@ export function MagicCaptureSheet({
   onOpenChange,
   onComplete 
 }: MagicCaptureSheetProps) {
+  const router = useRouter();
   const { selectedPropertyId } = usePropertyContext();
   const [step, setStep] = useState<CaptureStep>('idle');
   const [outcomeData, setOutcomeData] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<CaptureErrorState | null>(null);
 
   const handleCapture = useCallback(async (file: File) => {
     if (!selectedPropertyId) {
@@ -59,7 +68,7 @@ export function MagicCaptureSheet({
     }
 
     setStep('analyzing');
-    setError(null);
+    setErrorState(null);
     
     track('magic_scan_started', {
       propertyId: selectedPropertyId,
@@ -82,8 +91,10 @@ export function MagicCaptureSheet({
       });
 
       const result = await response.json();
+      const retryAfterHeader = response.headers.get('retry-after');
+      const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : null;
 
-      if (result.success) {
+      if (response.ok && result.success) {
         setOutcomeData(result.data);
         setStep('outcome');
         
@@ -95,16 +106,39 @@ export function MagicCaptureSheet({
 
         if (onComplete) onComplete(result.data);
       } else {
-        throw new Error(result.message || 'Analysis failed');
+        const structuredError = new Error(
+          result?.error?.message || result?.message || 'Analysis failed'
+        ) as Error & {
+          statusCode?: number;
+          code?: string;
+          retryAfterSeconds?: number | null;
+        };
+
+        structuredError.statusCode = response.status;
+        structuredError.code = result?.error?.code || result?.code;
+        structuredError.retryAfterSeconds = Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null;
+        throw structuredError;
       }
     } catch (err: any) {
       console.error('Capture error:', err);
+      const statusCode = typeof err?.statusCode === 'number' ? err.statusCode : 500;
+      const code = typeof err?.code === 'string' ? err.code : undefined;
+
       track('api_error_encountered', {
         endpoint: '/api/documents/analyze',
-        statusCode: 500,
+        statusCode,
         message: err.message || 'Capture analysis failed'
       });
-      setError(err.message || 'We couldn\'t analyze that photo. Please try again.');
+
+      setErrorState({
+        message: err.message || 'We couldn\'t analyze that photo. Please try again.',
+        code,
+        statusCode,
+        retryAfterSeconds:
+          Number.isFinite(Number(err?.retryAfterSeconds)) && Number(err.retryAfterSeconds) >= 0
+            ? Number(err.retryAfterSeconds)
+            : null,
+      });
       setStep('error');
     }
   }, [selectedPropertyId, onComplete]);
@@ -112,7 +146,7 @@ export function MagicCaptureSheet({
   const reset = () => {
     setStep('idle');
     setOutcomeData(null);
-    setError(null);
+    setErrorState(null);
   };
 
   const renderContent = () => {
@@ -262,17 +296,46 @@ export function MagicCaptureSheet({
         );
 
       case 'error':
+        const fallbackTitle =
+          errorState?.code === 'AI_TIMEOUT'
+            ? 'AI response timed out'
+            : errorState?.code === 'AI_CIRCUIT_OPEN'
+              ? 'AI service is briefly cooling down'
+              : 'Analysis Interrupted';
+
+        const retryHint =
+          typeof errorState?.retryAfterSeconds === 'number'
+            ? `Try again in about ${errorState.retryAfterSeconds} seconds.`
+            : 'You can retry now, or continue by adding this record manually.';
+
         return (
-          <div className="py-20 px-6 text-center space-y-6">
+          <div className="py-8 px-4 space-y-5">
             <div className="mx-auto w-12 h-12 bg-red-50 rounded-full flex items-center justify-center">
               <X className="h-6 w-6 text-red-600" />
             </div>
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold text-slate-900">Analysis Interrupted</h3>
-              <p className="text-sm text-slate-500">{error}</p>
+            <div className="space-y-1 text-center">
+              <h3 className="text-lg font-bold text-slate-900">{fallbackTitle}</h3>
+              <p className="text-sm text-slate-500">{errorState?.message}</p>
+              <p className="text-xs text-slate-400">{retryHint}</p>
             </div>
+
+            <WinCard
+              title="Manual fallback ready"
+              value="Keep moving without AI"
+              description="Open Vault tools to upload or log this item manually, then return to Magic Scan anytime."
+              actionLabel="Open Vault Tools"
+              onAction={() => {
+                onOpenChange(false);
+                if (selectedPropertyId) {
+                  router.push(`/dashboard/properties/${selectedPropertyId}/vault`);
+                } else {
+                  router.push('/dashboard/documents');
+                }
+              }}
+            />
+
             <Button className="w-full rounded-xl h-12" onClick={reset}>
-              Try Again
+              Retry Magic Scan
             </Button>
           </div>
         );

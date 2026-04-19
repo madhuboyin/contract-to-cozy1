@@ -43,7 +43,19 @@ export default function RevealOnboardingPage() {
   useEffect(() => {
     const savedData = sessionStorage.getItem('onboarding_lookup_data');
     if (savedData) {
-      setData(JSON.parse(savedData));
+      try {
+        setData(JSON.parse(savedData));
+      } catch {
+        setData({
+          address: 'Your home',
+          city: '',
+          state: '',
+          zipCode: '',
+          yearBuilt: null,
+          propertySize: null,
+          estimatedValue: null,
+        });
+      }
       
       // Verification sequence animation
       let step = 0;
@@ -64,6 +76,70 @@ export default function RevealOnboardingPage() {
   }, [router]);
 
   if (!data) return null;
+
+  const hasStructuredLookup =
+    typeof data.yearBuilt === 'number' &&
+    typeof data.propertySize === 'number' &&
+    typeof data.estimatedValue === 'number';
+
+  const displayAddress = data.address || 'Address pending verification';
+  const displayCityStateZip = [data.city, data.state, data.zipCode].filter(Boolean).join(' ').trim();
+  const buildYearLabel = typeof data.yearBuilt === 'number' ? String(data.yearBuilt) : 'Unknown';
+  const propertySizeLabel = typeof data.propertySize === 'number' ? `${data.propertySize} sqft` : 'Estimate pending';
+  const estimatedValueLabel =
+    typeof data.estimatedValue === 'number'
+      ? `$${(data.estimatedValue / 100000).toFixed(1)}k`
+      : 'Pending';
+
+  const protectionWin = hasStructuredLookup
+    ? {
+        title: 'Protection Insight',
+        value: '2 Maintenance Risks',
+        description: `Your ${data.yearBuilt} build year and local Texas climate suggest immediate attention is needed for your HVAC filtration.`,
+        trust: {
+          confidenceLabel: 'High (88%)',
+          freshnessLabel: 'Public Record',
+          sourceLabel: 'Building Permits',
+          rationale: 'Analysis of 1,200 similar homes in your ZIP code confirms age-based risks.',
+        },
+      }
+    : {
+        title: 'Protection Baseline',
+        value: 'Starter risk checklist',
+        description:
+          'Detailed local record data is still loading. We prepared a baseline safety and maintenance checklist so you can start now.',
+        trust: {
+          confidenceLabel: 'Low confidence (fallback)',
+          freshnessLabel: 'Template baseline',
+          sourceLabel: 'CtC starter guidance',
+          rationale: 'AI/local data inputs were incomplete, so this uses deterministic homeowner baseline guidance.',
+        },
+      };
+
+  const savingsWin = hasStructuredLookup
+    ? {
+        title: 'Wealth Optimization',
+        value: `$${(data.estimatedValue * 0.001).toFixed(0)} Annual Savings`,
+        description: "We've identified a 12% mismatch between your property's tax assessment and current market trends.",
+        trust: {
+          confidenceLabel: 'Calculated',
+          freshnessLabel: '2024 Rates',
+          sourceLabel: 'Tax Assessor Data',
+          rationale: "Your home's market value has outpaced its assessment, creating a tax appeal window.",
+        },
+      }
+    : {
+        title: 'Wealth Baseline',
+        value: 'Savings plan ready',
+        description:
+          'We can still launch your dashboard with baseline savings opportunities while deeper local valuation data finishes loading.',
+        trust: {
+          confidenceLabel: 'Low confidence (fallback)',
+          freshnessLabel: 'Template baseline',
+          sourceLabel: 'CtC starter guidance',
+          rationale: 'Shown because full valuation/trend inputs were unavailable during onboarding reveal.',
+        },
+      };
 
   return (
     <ErrorBoundary 
@@ -152,9 +228,14 @@ export default function RevealOnboardingPage() {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
-                  className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-4 py-1.5 text-xs font-bold text-emerald-400 uppercase tracking-widest shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(16,185,129,0.1)]",
+                    hasStructuredLookup
+                      ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                      : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+                  )}
                 >
-                  <ShieldCheck className="h-4 w-4" /> 100% Verified
+                  <ShieldCheck className="h-4 w-4" /> {hasStructuredLookup ? '100% Verified' : 'Baseline Fallback Mode'}
                 </motion.div>
                 <motion.h1 
                   initial={{ opacity: 0 }}
@@ -162,7 +243,7 @@ export default function RevealOnboardingPage() {
                   transition={{ delay: 0.6 }}
                   className="text-4xl font-black tracking-tight leading-none"
                 >
-                  {data.address}
+                  {displayAddress}
                 </motion.h1>
                 <motion.p 
                   initial={{ opacity: 0 }}
@@ -170,16 +251,16 @@ export default function RevealOnboardingPage() {
                   transition={{ delay: 0.7 }}
                   className="text-slate-400 text-lg"
                 >
-                  {data.city}, {data.state} {data.zipCode}
+                  {displayCityStateZip || 'Location details loading'}
                 </motion.p>
               </div>
 
               {/* 2. Core Stats Grid - Staggered Reveal */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { label: 'Built', value: data.yearBuilt, icon: Calendar },
-                  { label: 'Size', value: `${data.propertySize} sqft`, icon: Building },
-                  { label: 'Est. Value', value: `$${(data.estimatedValue / 100000).toFixed(1)}k`, icon: TrendingUp },
+                  { label: 'Built', value: buildYearLabel, icon: Calendar },
+                  { label: 'Size', value: propertySizeLabel, icon: Building },
+                  { label: 'Est. Value', value: estimatedValueLabel, icon: TrendingUp },
                   { label: 'Equity', value: 'Tracked', icon: ShieldCheck },
                 ].map((stat, i) => (
                   <motion.div 
@@ -215,15 +296,10 @@ export default function RevealOnboardingPage() {
                     transition={{ delay: 1.4 }}
                   >
                     <WinCard 
-                      title="Protection Insight"
-                      value="2 Maintenance Risks"
-                      description={`Your ${data.yearBuilt} build year and local Texas climate suggest immediate attention is needed for your HVAC filtration.`}
-                      trust={{
-                        confidenceLabel: "High (88%)",
-                        freshnessLabel: "Public Record",
-                        sourceLabel: "Building Permits",
-                        rationale: "Analysis of 1,200 similar homes in your ZIP code confirms age-based risks."
-                      }}
+                      title={protectionWin.title}
+                      value={protectionWin.value}
+                      description={protectionWin.description}
+                      trust={protectionWin.trust}
                       className="bg-white/5 border-white/10 text-white shadow-2xl"
                     />
                   </motion.div>
@@ -234,15 +310,10 @@ export default function RevealOnboardingPage() {
                     transition={{ delay: 1.6 }}
                   >
                     <WinCard 
-                      title="Wealth Optimization"
-                      value={`$${(data.estimatedValue * 0.001).toFixed(0)} Annual Savings`}
-                      description="We've identified a 12% mismatch between your property's tax assessment and current market trends."
-                      trust={{
-                        confidenceLabel: "Calculated",
-                        freshnessLabel: "2024 Rates",
-                        sourceLabel: "Tax Assessor Data",
-                        rationale: "Your home's market value has outpaced its assessment, creating a tax appeal window."
-                      }}
+                      title={savingsWin.title}
+                      value={savingsWin.value}
+                      description={savingsWin.description}
+                      trust={savingsWin.trust}
                       className="bg-white/5 border-white/10 text-white shadow-2xl"
                     />
                   </motion.div>

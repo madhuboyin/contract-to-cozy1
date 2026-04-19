@@ -20,7 +20,7 @@ export interface WinCardProps {
   /** Callback for when the primary action is clicked */
   onAction?: () => void;
   /** Trust signals from the engine */
-  trust: {
+  trust?: {
     confidenceLabel: string;
     freshnessLabel: string;
     sourceLabel: string;
@@ -50,11 +50,24 @@ export function WinCard({
   className,
   isUrgent = false,
 }: WinCardProps) {
+  const hasExplicitTrust =
+    Boolean(trust?.confidenceLabel) &&
+    Boolean(trust?.freshnessLabel) &&
+    Boolean(trust?.sourceLabel);
+
+  const trustSignals = hasExplicitTrust
+    ? (trust as NonNullable<WinCardProps['trust']>)
+    : {
+        confidenceLabel: 'Low confidence (fallback)',
+        freshnessLabel: 'Template fallback',
+        sourceLabel: 'CtC baseline guidance',
+        rationale: 'Primary AI-derived trust metadata was unavailable, so this card uses a deterministic fallback template.',
+      };
 
   const handleActionClick = () => {
     track('outcome_action_taken', {
       type: title.toLowerCase().includes('savings') || title.toLowerCase().includes('financial') ? 'SAVINGS' : 'RISK_PREVENTION',
-      sourceEngine: trust.sourceLabel,
+      sourceEngine: trustSignals.sourceLabel,
       propertyId: 'unknown', // Property ID context could be passed down in the future
     });
     if (onAction) onAction();
@@ -63,7 +76,7 @@ export function WinCard({
   const handleTrustClick = () => {
     track('trust_info_clicked', {
       insightId: title,
-      sourceEngine: trust.sourceLabel,
+      sourceEngine: trustSignals.sourceLabel,
     });
   };
 
@@ -85,6 +98,11 @@ export function WinCard({
           <h3 className="text-2xl font-bold text-slate-900 leading-tight">
             {value}
           </h3>
+          {!hasExplicitTrust && (
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
+              Baseline fallback insight
+            </p>
+          )}
           <p className="mt-1 text-sm text-slate-600">
             {description}
           </p>
@@ -103,7 +121,7 @@ export function WinCard({
 
       <CardFooter className="bg-slate-50/50 p-0 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={handleTrustClick}>
         <TrustStrip 
-          {...trust} 
+          {...trustSignals} 
           variant="footnote" 
           className="w-full px-4 py-3 border-t-0" 
         />

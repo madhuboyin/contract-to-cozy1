@@ -32,6 +32,7 @@ import {
   buildGuidanceCtaLabel,
   resolveGuidanceForOrchestrationAction,
 } from './guidanceActionLinking';
+import { track } from '@/lib/analytics/events';
 
 type Props = {
   propertyId: string;
@@ -52,6 +53,17 @@ function formatCurrency(value: number) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function orchestrationPriorityLabel(action: OrchestratedActionDTO): string {
+  if (action.overdue) return 'URGENT';
+  if (action.priority >= 80) return 'HIGH';
+  if (action.priority >= 50) return 'MEDIUM';
+  return 'LOW';
+}
+
+function orchestrationCategoryLabel(action: OrchestratedActionDTO): string {
+  return String(action.serviceCategory || action.category || action.systemType || action.source || 'ORCHESTRATION');
 }
 
 
@@ -355,6 +367,12 @@ export const ActionCenter: React.FC<Props> = ({
         completionAction.actionKey,
         data
       );
+
+      track('task_completed', {
+        priority: orchestrationPriorityLabel(completionAction),
+        category: orchestrationCategoryLabel(completionAction),
+        propertyId: completionAction.propertyId || propertyId,
+      });
   
       toast({
         title: 'Marked as completed',

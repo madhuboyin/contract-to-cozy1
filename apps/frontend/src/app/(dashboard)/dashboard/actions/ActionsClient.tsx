@@ -36,6 +36,18 @@ import {
   buildGuidanceCtaLabel,
   resolveGuidanceForOrchestrationAction,
 } from '@/components/orchestration/guidanceActionLinking';
+import { track } from '@/lib/analytics/events';
+
+function orchestrationPriorityLabel(action: OrchestratedActionDTO): string {
+  if (action.overdue) return 'URGENT';
+  if (action.priority >= 80) return 'HIGH';
+  if (action.priority >= 50) return 'MEDIUM';
+  return 'LOW';
+}
+
+function orchestrationCategoryLabel(action: OrchestratedActionDTO): string {
+  return String(action.serviceCategory || action.category || action.systemType || action.source || 'ORCHESTRATION');
+}
 
 export function ActionsClient() {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
@@ -352,6 +364,12 @@ export function ActionsClient() {
         completionAction.actionKey,
         data
       );
+
+      track('task_completed', {
+        priority: orchestrationPriorityLabel(completionAction),
+        category: orchestrationCategoryLabel(completionAction),
+        propertyId: completionAction.propertyId || propertyId,
+      });
   
       toast({
         title: 'Marked as completed',

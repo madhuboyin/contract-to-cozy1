@@ -12,6 +12,8 @@ import {
   GEMINI_CONTEXT_INSTRUCTION_TEMPLATE 
 } from '../config/ai-constants';
 import { logger } from '../lib/logger';
+import { APIError } from '../middleware/error.middleware';
+import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
 // Load environment variables
 dotenv.config();
 
@@ -19,6 +21,15 @@ dotenv.config();
  * A simple in-memory map to hold active chat sessions.
  */
 const chatSessions = new Map<string, Chat>();
+
+const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 10_000);
+const GEMINI_CHAT_TIMEOUT_MS = Number(process.env.GEMINI_CHAT_TIMEOUT_MS || DEFAULT_AI_TIMEOUT_MS);
+const AI_CIRCUIT_FAILURE_THRESHOLD = Number(process.env.AI_CIRCUIT_FAILURE_THRESHOLD || 3);
+const AI_CIRCUIT_OPEN_MS = Number(process.env.AI_CIRCUIT_OPEN_MS || 30_000);
+const geminiChatCircuit = new AICircuitBreaker('gemini-chat', {
+  failureThreshold: AI_CIRCUIT_FAILURE_THRESHOLD,
+  openMs: AI_CIRCUIT_OPEN_MS,
+});
 
 class GeminiService {
   private ai: GoogleGenAI;
@@ -334,7 +345,7 @@ class GeminiService {
 
         if (!property) {
             logger.warn(`User ${userId} attempted to access missing or unauthorized property ${propertyId} for chat context.`);
-            throw new Error("Property data does not exist or access is unauthorized.");
+            throw new APIError('Property data does not exist or access is unauthorized.', 403, 'PROPERTY_ACCESS_DENIED');
         }
 
         // Generate context string
@@ -344,19 +355,43 @@ class GeminiService {
     try {
       // Pass the generated property context to the session creator
       const chat = this.getOrCreateChat(sessionId, propertyContext);
-      
-      const response = await chat.sendMessage({
-        message: message,
-      });
+
+      const response = await geminiChatCircuit.execute(async () =>
+        withTimeout(
+          async () =>
+            chat.sendMessage({
+              message,
+            }),
+          {
+            timeoutMs: GEMINI_CHAT_TIMEOUT_MS,
+            operation: 'gemini_chat_send_message',
+          }
+        )
+      );
 
       if (!response.text) {
-        throw new Error("AI service returned an empty response.");
+        throw new APIError('AI service returned an empty response.', 502, 'AI_EMPTY_RESPONSE');
       }
 
       return response.text;
     } catch (error) {
+      if (error instanceof APIError) {
+        throw error;
+      }
+      if (error instanceof AITimeoutError) {
+        throw new APIError('AI request timed out. Please try again.', 504, 'AI_TIMEOUT');
+      }
+      if (error instanceof AICircuitOpenError) {
+        throw new APIError(
+          'AI assistant is temporarily unavailable due to upstream failures. Please retry shortly.',
+          503,
+          'AI_CIRCUIT_OPEN',
+          { retryAfterMs: error.retryAfterMs }
+        );
+      }
+
       logger.error({ err: error }, "Gemini API call error");
-      throw new Error("Failed to get response from AI service.");
+      throw new APIError('Failed to get response from AI service.', 502, 'AI_UPSTREAM_ERROR');
     }
   }
 }

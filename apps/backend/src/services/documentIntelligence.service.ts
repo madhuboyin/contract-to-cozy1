@@ -5,6 +5,8 @@ import { prisma } from '../lib/prisma';
 import { Prisma, WarrantyCategory } from '@prisma/client';
 import { logger } from '../lib/logger';
 import { ProductAnalyticsService } from './analytics/service';
+import { APIError } from '../middleware/error.middleware';
+import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
 
 export interface DocumentInsights {
   documentType: 'WARRANTY' | 'RECEIPT' | 'MANUAL' | 'INSPECTION' | 'INVOICE' | 'INSURANCE' | 'UNKNOWN';
@@ -85,6 +87,15 @@ Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
   "suggestedActions": ["action1", "action2"]
 }`;
 
+const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 10_000);
+const DOCUMENT_AI_TIMEOUT_MS = Number(process.env.DOCUMENT_AI_TIMEOUT_MS || DEFAULT_AI_TIMEOUT_MS);
+const AI_CIRCUIT_FAILURE_THRESHOLD = Number(process.env.AI_CIRCUIT_FAILURE_THRESHOLD || 3);
+const AI_CIRCUIT_OPEN_MS = Number(process.env.AI_CIRCUIT_OPEN_MS || 30_000);
+const documentIntelligenceCircuit = new AICircuitBreaker('document-intelligence', {
+  failureThreshold: AI_CIRCUIT_FAILURE_THRESHOLD,
+  openMs: AI_CIRCUIT_OPEN_MS,
+});
+
 export class DocumentIntelligenceService {
   private ai: GoogleGenAI;
   private static readonly AUTO_WARRANTY_MIN_CONFIDENCE = 0.7;
@@ -105,29 +116,38 @@ export class DocumentIntelligenceService {
       // Convert buffer to base64
       const base64Data = fileBuffer.toString('base64');
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: [{
-          role: "user",
-          parts: [
-            { text: DOCUMENT_ANALYSIS_PROMPT },
-            { 
-              inlineData: {
-                mimeType,
-                data: base64Data
+      const response = await documentIntelligenceCircuit.execute(async () =>
+        withTimeout(
+          async () =>
+            this.ai.models.generateContent({
+              model: "gemini-2.0-flash",
+              contents: [{
+                role: "user",
+                parts: [
+                  { text: DOCUMENT_ANALYSIS_PROMPT },
+                  { 
+                    inlineData: {
+                      mimeType,
+                      data: base64Data
+                    }
+                  }
+                ]
+              }],
+              config: {
+                maxOutputTokens: 1000,
+                temperature: 0.1, // Low temperature for accuracy
               }
-            }
-          ]
-        }],
-        config: {
-          maxOutputTokens: 1000,
-          temperature: 0.1, // Low temperature for accuracy
-        }
-      });
+            }),
+          {
+            timeoutMs: DOCUMENT_AI_TIMEOUT_MS,
+            operation: 'document_analysis',
+          }
+        )
+      );
 
       const text = response.text;
       if (!text) {
-        throw new Error('AI service returned an empty response');
+        throw new APIError('AI service returned an empty response', 502, 'AI_EMPTY_RESPONSE');
       }
       logger.info({ text }, '[DOC-INTELLIGENCE] Raw AI response');
 
@@ -155,16 +175,33 @@ export class DocumentIntelligenceService {
 
       return insights;
     } catch (error: any) {
+      if (error instanceof APIError) {
+        throw error;
+      }
+      if (error instanceof AITimeoutError) {
+        throw new APIError('Document analysis timed out. Please try again.', 504, 'AI_TIMEOUT');
+      }
+      if (error instanceof AICircuitOpenError) {
+        throw new APIError(
+          'Document analysis is temporarily unavailable due to upstream failures. Please retry shortly.',
+          503,
+          'AI_CIRCUIT_OPEN',
+          { retryAfterMs: error.retryAfterMs }
+        );
+      }
+      if (error instanceof SyntaxError) {
+        logger.warn({ err: error }, '[DOC-INTELLIGENCE] Non-JSON AI response; using fallback insights');
+        return {
+          documentType: 'UNKNOWN',
+          confidence: 0,
+          extractedData: {},
+          suggestedActions: ['Manual review required - AI response format was invalid'],
+          rawText: error.message
+        };
+      }
+
       logger.error({ err: error }, '[DOC-INTELLIGENCE] Analysis error');
-      
-      // Return fallback response
-      return {
-        documentType: 'UNKNOWN',
-        confidence: 0,
-        extractedData: {},
-        suggestedActions: ['Manual review required - AI analysis failed'],
-        rawText: error.message
-      };
+      throw new APIError('Failed to analyze document with AI service.', 502, 'AI_UPSTREAM_ERROR');
     }
   }
 

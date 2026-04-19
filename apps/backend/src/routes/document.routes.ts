@@ -16,6 +16,7 @@ import { auditLog, logger } from '../lib/logger';
 import { uploadDocumentBuffer, deleteDocumentObject } from '../services/storage/reportStorage';
 import { presignGetObject } from '../services/storage/presign';
 import { uploadRateLimiter } from '../middleware/rateLimiter.middleware';
+import { APIError } from '../middleware/error.middleware';
 
 const router = Router();
 
@@ -228,9 +229,24 @@ router.post('/analyze', authenticate, uploadRateLimiter, upload.single('file'), 
 
   } catch (error: any) {
     logger.error({ err: error }, '[DOCUMENT-AI] Error');
+    if (error instanceof APIError) {
+      res.status(error.statusCode).json({
+        success: false,
+        error: {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+        },
+      });
+      return;
+    }
+
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to analyze document'
+      error: {
+        message: error.message || 'Failed to analyze document',
+        code: 'DOCUMENT_ANALYSIS_FAILED',
+      },
     });
   }
 });

@@ -45,6 +45,7 @@ import humanizeActionType from '@/lib/utils/humanize';
 import { PRIORITY_CHIP, PriorityLevel } from '@/lib/utils/chipTokens';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { track } from '@/lib/analytics/events';
 
 import {
   Dialog,
@@ -142,6 +143,14 @@ function getTaskSourceBadge(task: PropertyMaintenanceTask): {
   }
 
   return null;
+}
+
+function normalizeTaskPriority(priority?: string | null): string {
+  const normalized = String(priority || '').toUpperCase();
+  if (normalized === 'URGENT' || normalized === 'HIGH' || normalized === 'MEDIUM' || normalized === 'LOW') {
+    return normalized;
+  }
+  return 'MEDIUM';
 }
 
 export default function MaintenancePage() {
@@ -419,11 +428,29 @@ export default function MaintenancePage() {
         actualCost: task.estimatedCost || undefined,
       });
       if (!response.success) throw new Error('Failed to mark as complete.');
-      return response.data;
+      return {
+        task,
+        updated: response.data,
+      };
     },
     onSuccess: (data: any) => {
+      const completedTask = data?.updated || data?.task || {};
+      const trackedPropertyId = String(completedTask.propertyId || selectedPropertyId || 'unknown');
+      const trackedCategory = String(
+        completedTask.serviceCategory || completedTask.category || 'MAINTENANCE'
+      );
+
+      track('task_completed', {
+        priority: normalizeTaskPriority(completedTask.priority),
+        category: trackedCategory,
+        propertyId: trackedPropertyId,
+      });
+
       queryClient.invalidateQueries({ queryKey: ['maintenance-tasks'] });
-      toast({ title: 'Task Completed', description: `"${data.title}" marked as complete.` });
+      toast({
+        title: 'Task Completed',
+        description: `"${completedTask.title || 'Task'}" marked as complete.`,
+      });
     },
     onError: (error: any) => {
       toast({
