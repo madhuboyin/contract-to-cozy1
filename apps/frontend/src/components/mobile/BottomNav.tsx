@@ -66,6 +66,11 @@ function buildInsightHref(propertyId: string | undefined, hrefBase: string): str
   return `${hrefBase}${separator}propertyId=${encodeURIComponent(propertyId)}`;
 }
 
+function buildRiskInsightHref(propertyId: string | undefined): string {
+  if (!propertyId) return '/dashboard/risk-radar';
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}/risk-assessment`;
+}
+
 export function BottomNav() {
   const pathname = usePathname();
   const { logout } = useAuth();
@@ -183,9 +188,11 @@ export function BottomNav() {
     },
     {
       label: 'Risk Radar',
-      href: buildInsightHref(resolvedPropertyId, '/dashboard/risk-radar'),
+      href: buildRiskInsightHref(resolvedPropertyId),
       icon: resolveToolIcon('insights', 'risk-radar', Radar),
-      isActive: (path) => path.startsWith('/dashboard/risk-radar'),
+      isActive: (path) =>
+        path.startsWith('/dashboard/risk-radar') ||
+        /^\/dashboard\/properties\/[^/]+\/risk-assessment(\/|$)/.test(path),
     },
   ];
 

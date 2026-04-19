@@ -15,6 +15,15 @@ function buildForwardQuery(serializedParams: string): string {
   return next ? `?${next}` : '';
 }
 
+function buildPropertiesFallbackHref(navTarget: string, forwardQuery: string): string {
+  const query = new URLSearchParams(forwardQuery.startsWith('?') ? forwardQuery.slice(1) : forwardQuery);
+  if (!query.has('navTarget')) {
+    query.set('navTarget', navTarget);
+  }
+  const suffix = query.toString();
+  return suffix ? `/dashboard/properties?${suffix}` : '/dashboard/properties';
+}
+
 /**
  * This page handles the top-level /dashboard/inventory route by 
  * redirecting the user to their specific property's inventory.
@@ -58,7 +67,7 @@ export default function InventoryRedirectPage() {
       }
 
       if (isActive) {
-        router.replace('/dashboard/properties?navTarget=inventory');
+        router.replace(buildPropertiesFallbackHref('inventory', forwardQuery));
       }
     };
 

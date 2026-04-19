@@ -404,7 +404,9 @@ export default function MobileDashboardHome({
   );
   const roomsHref = buildPropertyAwareHref(propertyId, 'rooms', 'rooms');
   const dailySnapshotHref = `/dashboard/daily-snapshot?propertyId=${encodeURIComponent(propertyId || '')}`;
-  const riskRadarHref = `/dashboard/risk-radar?propertyId=${encodeURIComponent(propertyId || '')}`;
+  const riskRadarHref = propertyId
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/risk-assessment`
+    : '/dashboard/risk-radar';
 
   const aiToolByKey = new Map(MOBILE_AI_TOOL_CATALOG.map((tool) => [tool.key, tool]));
   const homeToolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));

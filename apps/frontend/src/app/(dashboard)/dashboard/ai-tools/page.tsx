@@ -59,7 +59,9 @@ export default function AIToolsPage() {
   })).filter((group) => group.items.length > 0);
 
   const dailySnapshotHref = `/dashboard/daily-snapshot${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`;
-  const riskRadarHref = `/dashboard/risk-radar${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`;
+  const riskRadarHref = resolvedPropertyId
+    ? `/dashboard/properties/${encodeURIComponent(resolvedPropertyId)}/risk-assessment`
+    : '/dashboard/risk-radar';
 
   return (
     <MobilePageContainer className="space-y-7 pt-2 pb-24 lg:max-w-7xl lg:space-y-8 lg:px-8 lg:pt-4 lg:pb-10">

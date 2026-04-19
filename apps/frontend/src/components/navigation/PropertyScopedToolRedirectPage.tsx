@@ -22,6 +22,15 @@ function buildToolHref(propertyId: string, toolKey: string, forwardQuery: string
   return `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/${toolKey}${forwardQuery}`;
 }
 
+function buildPropertiesFallbackHref(navTarget: string, forwardQuery: string): string {
+  const query = new URLSearchParams(forwardQuery.startsWith('?') ? forwardQuery.slice(1) : forwardQuery);
+  if (!query.has('navTarget')) {
+    query.set('navTarget', navTarget);
+  }
+  const suffix = query.toString();
+  return suffix ? `/dashboard/properties?${suffix}` : '/dashboard/properties';
+}
+
 export default function PropertyScopedToolRedirectPage({
   toolKey,
   navTarget,
@@ -71,7 +80,7 @@ export default function PropertyScopedToolRedirectPage({
       }
 
       if (active) {
-        router.replace(`/dashboard/properties?navTarget=${encodeURIComponent(navTarget)}`);
+        router.replace(buildPropertiesFallbackHref(navTarget, forwardQuery));
       }
     };
 
