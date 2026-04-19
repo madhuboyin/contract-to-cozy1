@@ -161,7 +161,7 @@ export default function DoNothingSimulatorToolCard({
           <div className={HEADER_ICON_WRAP}>
             <PauseCircle className={HEADER_ICON} />
           </div>
-          <h3 className={TITLE_CLASS}>Do-Nothing Simulator</h3>
+          <h3 className={TITLE_CLASS}>See What Happens If You Wait</h3>
         </div>
         <StatusBadge status={status.status} customLabel={status.customLabel} />
       </div>

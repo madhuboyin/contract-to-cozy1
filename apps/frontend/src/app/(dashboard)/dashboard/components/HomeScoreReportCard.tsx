@@ -119,7 +119,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>HomeScore</span>
+            <span className={TITLE_CLASS}>Home Health Score</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -134,7 +134,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>HomeScore</span>
+            <span className={TITLE_CLASS}>Home Health Score</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -152,18 +152,18 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>HomeScore</span>
+            <span className={TITLE_CLASS}>Home Health Score</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
         <div className="text-sm text-muted-foreground">
-          HomeScore is temporarily unavailable. You can still open full details.
+          Your home health score is temporarily unavailable. You can still open full details.
         </div>
         <Link
           href={reportLink}
           className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
         >
-          Open HomeScore details
+          Open health score details
           <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
         </Link>
       </div>
@@ -187,7 +187,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity className={HEADER_ICON} />
-          <span className={TITLE_CLASS}>HomeScore</span>
+          <span className={TITLE_CLASS}>Home Health Score</span>
         </div>
         <StatusBadge status={badge.status} customLabel={badge.customLabel} />
       </div>
@@ -204,7 +204,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
           labelFontSize={14}
           labelFontWeight={600}
           labelY={37}
-          ariaLabel={`HomeScore: ${score} out of 100, ${scoreLabel}`}
+          ariaLabel={`Home Health Score: ${score} out of 100, ${scoreLabel}`}
         />
         <div className="flex min-w-0 flex-col justify-center">
           <div className={cn("text-[20px] font-bold leading-none", scoreColor)}>{scoreLabel}</div>

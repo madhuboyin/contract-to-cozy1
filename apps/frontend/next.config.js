@@ -28,6 +28,36 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   },
 
+  async redirects() {
+    return [
+      // Vault consolidation
+      { source: '/dashboard/inventory', destination: '/dashboard/vault?tab=assets', permanent: false },
+      { source: '/dashboard/documents', destination: '/dashboard/vault?tab=documents', permanent: false },
+      { source: '/dashboard/warranties', destination: '/dashboard/vault?tab=coverage', permanent: false },
+      // Resolution Center
+      { source: '/dashboard/actions', destination: '/dashboard/resolution-center', permanent: false },
+      { source: '/dashboard/maintenance', destination: '/dashboard/resolution-center?filter=preventive', permanent: false },
+      { source: '/dashboard/seasonal', destination: '/dashboard/resolution-center?filter=preventive', permanent: false },
+      { source: '/dashboard/checklist', destination: '/dashboard/resolution-center', permanent: false },
+      { source: '/dashboard/fix', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
+      { source: '/dashboard/emergency', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
+      { source: '/dashboard/replace-repair', destination: '/dashboard/resolution-center?filter=repair', permanent: false },
+      // Save consolidation
+      { source: '/dashboard/home-savings', destination: '/dashboard/save', permanent: false },
+      { source: '/dashboard/appreciation', destination: '/dashboard/save?tab=appreciation', permanent: false },
+      { source: '/dashboard/expenses', destination: '/dashboard/save?tab=expenses', permanent: false },
+      { source: '/dashboard/budget', destination: '/dashboard/save?tab=budget', permanent: false },
+      { source: '/dashboard/tax-appeal', destination: '/dashboard/save?tab=tax', permanent: false },
+      // Protect consolidation
+      { source: '/dashboard/insurance', destination: '/dashboard/protect?tab=coverage', permanent: false },
+      { source: '/dashboard/coverage-intelligence', destination: '/dashboard/protect?tab=coverage', permanent: false },
+      { source: '/dashboard/risk-radar', destination: '/dashboard/protect?tab=risks', permanent: false },
+      { source: '/dashboard/climate', destination: '/dashboard/protect?tab=risks', permanent: false },
+      // Fix / providers
+      { source: '/dashboard/providers', destination: '/dashboard/fix', permanent: false },
+    ];
+  },
+
   async headers() {
     // NOTE: Content-Security-Policy is intentionally absent here.
     // It is set dynamically per-request by src/middleware.ts using a
@@ -53,7 +83,7 @@ const nextConfig = {
           // for neighbourhood intelligence and location-based features.
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), payment=(), geolocation=(self)',
+            value: 'camera=(self), microphone=(), payment=(), geolocation=(self)',
           },
 
           // Suppress DNS prefetch to avoid leaking navigation intent

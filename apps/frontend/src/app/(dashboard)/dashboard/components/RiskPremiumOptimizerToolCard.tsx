@@ -135,7 +135,7 @@ export default function RiskPremiumOptimizerToolCard({
           <div className={HEADER_ICON_WRAP}>
             <ShieldAlert className={HEADER_ICON} />
           </div>
-          <h3 className={TITLE_CLASS}>Risk-to-Premium Optimizer</h3>
+          <h3 className={TITLE_CLASS}>Lower Your Insurance Cost</h3>
         </div>
         <StatusBadge status={status.status} customLabel={status.customLabel} />
       </div>

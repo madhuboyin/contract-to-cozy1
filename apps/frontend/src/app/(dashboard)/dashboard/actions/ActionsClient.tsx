@@ -427,8 +427,8 @@ export function ActionsClient() {
         <OnboardingReturnBanner />
         <MobilePageIntro
           eyebrow={propertyName || 'Action Center'}
-          title="All Actions"
-          subtitle="Everything your home needs right now, including suppressed and snoozed items."
+          title="What needs attention"
+          subtitle="Everything your home needs right now."
         />
         <MobileKpiStrip className="sm:grid-cols-4">
           <MobileKpiTile
@@ -460,7 +460,7 @@ export function ActionsClient() {
         <MobileSection className="space-y-4">
           <MobileSectionHeader
             title={`Active Actions (${actions.length})`}
-            subtitle="Highest-priority actions are shown first."
+            subtitle="Highest-priority items first."
           />
 
           {actions.length === 0 ? (
@@ -515,7 +515,7 @@ export function ActionsClient() {
             <MobileSection className="space-y-4">
               <MobileSectionHeader
                 title={`Suppressed Actions (${suppressedActions.length})`}
-                subtitle="Actions already covered by recent activity."
+                subtitle="Already handled by recent activity."
               />
               <div className="space-y-3">
               {suppressedActions.map(action => (
@@ -537,7 +537,7 @@ export function ActionsClient() {
             <MobileSection className="space-y-4">
               <MobileSectionHeader
                 title={`Snoozed Actions (${snoozedActions.length})`}
-                subtitle="Hidden until their snooze period ends."
+                subtitle="Snoozed — check back later."
                 action={
                   <button
                     onClick={() => setShowSnoozed(!showSnoozed)}

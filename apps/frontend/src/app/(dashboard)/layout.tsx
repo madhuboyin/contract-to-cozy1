@@ -1,11 +1,10 @@
-// apps/frontend/src/app/(dashboard)/layout.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { PRIMARY_JOBS, NavJob } from '@/lib/navigation/jobsNavigation';
+import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -16,44 +15,15 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import {
-  Home,
-  Calendar,
-  Building,
-  Search,
-  ListChecks,
   LogOut,
-  PanelLeft,
+  Menu,
   Settings,
-  Shield,
-  Wrench,
-  DollarSign,
-  FileText,
-  BookOpen,
-  Globe,
-  AlertTriangle,
-  Box,
-  ClipboardCheck,
-  LayoutGrid,
-  ShieldAlert,
-  ShieldCheck,
-  TrendingUp,
-  Info,
-  Calculator,
-  Scale,
-  Activity,
-  Target,
-  Radar,
-  ChevronDown,
-  Sparkles,
-  Zap,
-  Cloud,
-  Camera,
-  PauseCircle,
-  PiggyBank,
   BarChart2,
   Cpu,
+  BookOpen,
+  Globe,
+  ChevronDown,
 } from 'lucide-react';
-import { resolveHomeownerNavigationIcon, resolveToolIcon } from '@/lib/icons';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
 import { api } from '@/lib/api/client';
@@ -61,168 +31,20 @@ import { AIChat } from '@/components/AIChat';
 import { PropertyProvider, usePropertyContext } from '@/lib/property/PropertyContext';
 import { NotificationProvider } from '@/lib/notifications/NotificationContext';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-// Mobile-first imports
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
-import {
-  MOBILE_HOME_TOOL_LINKS,
-  type MobilePropertyToolLink,
-} from '@/components/mobile/dashboard/mobileToolCatalog';
-import { Input } from '@/components/ui/input';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-interface NavLink {
-  name: string;
-  href: string;
-  icon: React.ElementType;
-}
-
-type PropertyToolLink = MobilePropertyToolLink;
-
-interface AIToolLink {
-  key: string;
-  name: string;
-  href: string;
-  icon: React.ElementType;
-  isActive: (pathname: string) => boolean;
-}
-
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
-
-const HOME_TOOL_LINKS: PropertyToolLink[] = MOBILE_HOME_TOOL_LINKS.filter(
-  (tool) => !tool.workflowOnly
-);
-
-const AI_TOOL_LINKS: AIToolLink[] = [
-  {
-    key: 'coverage-intelligence',
-    name: 'Coverage Intelligence',
-    href: '/dashboard/coverage-intelligence',
-    icon: resolveToolIcon('ai', 'coverage-intelligence', ShieldCheck),
-    isActive: (pathname) =>
-      /^\/dashboard\/coverage-intelligence(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/coverage-intelligence(\/|$)/.test(pathname),
-  },
-  {
-    key: 'risk-premium-optimizer',
-    name: 'Risk-to-Premium Optimizer',
-    href: '/dashboard/risk-premium-optimizer',
-    icon: resolveToolIcon('ai', 'risk-premium-optimizer', ShieldAlert),
-    isActive: (pathname) =>
-      /^\/dashboard\/risk-premium-optimizer(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/risk-premium-optimizer(\/|$)/.test(pathname),
-  },
-  {
-    key: 'replace-repair',
-    name: 'Replace or Repair',
-    href: '/dashboard/replace-repair',
-    icon: resolveToolIcon('ai', 'replace-repair', Wrench),
-    isActive: (pathname) =>
-      /^\/dashboard\/replace-repair(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/inventory\/items\/[^/]+\/replace-repair(\/|$)/.test(pathname),
-  },
-  {
-    key: 'do-nothing-simulator',
-    name: 'Do-Nothing Simulator',
-    href: '/dashboard/do-nothing-simulator',
-    icon: resolveToolIcon('ai', 'do-nothing-simulator', PauseCircle),
-    isActive: (pathname) =>
-      /^\/dashboard\/do-nothing-simulator(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/do-nothing(\/|$)/.test(pathname),
-  },
-  {
-    key: 'home-savings',
-    name: 'Home Savings Check',
-    href: '/dashboard/home-savings',
-    icon: resolveToolIcon('ai', 'home-savings', PiggyBank),
-    isActive: (pathname) =>
-      /^\/dashboard\/home-savings(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/home-savings(\/|$)/.test(pathname),
-  },
-  {
-    key: 'emergency',
-    name: 'Emergency Help',
-    href: '/dashboard/emergency',
-    icon: resolveToolIcon('ai', 'emergency', AlertTriangle),
-    isActive: (pathname) => /^\/dashboard\/emergency(\/|$)/.test(pathname),
-  },
-  {
-    key: 'documents',
-    name: 'Document Vault',
-    href: '/dashboard/documents',
-    icon: resolveToolIcon('ai', 'documents', FileText),
-    isActive: (pathname) => /^\/dashboard\/documents(\/|$)/.test(pathname),
-  },
-  {
-    key: 'oracle',
-    name: 'Appliance Oracle',
-    href: '/dashboard/oracle',
-    icon: resolveToolIcon('ai', 'oracle', Zap),
-    isActive: (pathname) => /^\/dashboard\/oracle(\/|$)/.test(pathname),
-  },
-  {
-    key: 'budget',
-    name: 'Budget Planner',
-    href: '/dashboard/budget',
-    icon: resolveToolIcon('ai', 'budget', DollarSign),
-    isActive: (pathname) => /^\/dashboard\/budget(\/|$)/.test(pathname),
-  },
-  {
-    key: 'climate',
-    name: 'Climate Risk',
-    href: '/dashboard/climate',
-    icon: resolveToolIcon('ai', 'climate', Cloud),
-    isActive: (pathname) => /^\/dashboard\/climate(\/|$)/.test(pathname),
-  },
-  {
-    key: 'modifications',
-    name: 'Home Upgrades',
-    href: '/dashboard/modifications',
-    icon: resolveToolIcon('ai', 'modifications', Home),
-    isActive: (pathname) => /^\/dashboard\/modifications(\/|$)/.test(pathname),
-  },
-  {
-    key: 'appreciation',
-    name: 'Value Tracker',
-    href: '/dashboard/appreciation',
-    icon: resolveToolIcon('ai', 'appreciation', TrendingUp),
-    isActive: (pathname) => /^\/dashboard\/appreciation(\/|$)/.test(pathname),
-  },
-  {
-    key: 'energy',
-    name: 'Energy Audit',
-    href: '/dashboard/energy',
-    icon: resolveToolIcon('ai', 'energy', Activity),
-    isActive: (pathname) => /^\/dashboard\/energy(\/|$)/.test(pathname),
-  },
-  {
-    key: 'visual-inspector',
-    name: 'Visual Inspector',
-    href: '/dashboard/visual-inspector',
-    icon: resolveToolIcon('ai', 'visual-inspector', Camera),
-    isActive: (pathname) => /^\/dashboard\/visual-inspector(\/|$)/.test(pathname),
-  },
-  {
-    key: 'tax-appeal',
-    name: 'Tax Appeals',
-    href: '/dashboard/tax-appeal',
-    icon: resolveToolIcon('ai', 'tax-appeal', Scale),
-    isActive: (pathname) => /^\/dashboard\/tax-appeal(\/|$)/.test(pathname),
-  },
-];
-
-function buildAIToolHref(propertyId: string | undefined, toolHref: string): string {
-  return buildPropertyAwareDashboardHref(propertyId, toolHref);
-}
+const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {
   const match = pathname.match(PROPERTY_ID_IN_PATH);
@@ -237,59 +59,319 @@ function buildPropertyAwareHref(
   if (propertyId) {
     return `/dashboard/properties/${propertyId}/${hrefSuffix}`;
   }
-
   return `/dashboard/properties?navTarget=${encodeURIComponent(navTarget)}`;
 }
 
-const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped';
+// ─────────────────────────────────────────────────────────────────────────────
+// Persistent sidebar nav (desktop)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PersistentSidebarNav({ user }: { user: User | null }) {
+  const pathname = usePathname();
+  const { logout } = useAuth();
+  const { selectedPropertyId } = usePropertyContext();
+  const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
+
+  const handleLogout = () => {
+    logout();
+    if (typeof window !== 'undefined') window.location.href = '/login';
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="h-16 flex items-center px-5 border-b border-gray-100 flex-shrink-0">
+        <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
+          <Image
+            src="/favicon.svg"
+            alt="ContractToCozy"
+            width={28}
+            height={28}
+            className="h-7 w-7 flex-shrink-0"
+          />
+          <span className="text-[15px] font-bold text-gray-900 truncate">ContractToCozy</span>
+        </Link>
+      </div>
+
+      {/* Primary nav */}
+      <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+        {PRIMARY_JOBS.map((job) => {
+          const Icon = job.icon;
+          const href =
+            job.href === '/dashboard' || job.href === '/dashboard/properties'
+              ? job.href
+              : buildPropertyAwareHref(
+                  resolvedPropertyId,
+                  job.href.replace('/dashboard/', ''),
+                  job.key
+                );
+
+          const isActive =
+            job.href === '/dashboard'
+              ? pathname === '/dashboard'
+              : pathname
+                ? pathname.startsWith(job.href) ||
+                  job.engines.some((e) => (pathname ?? '').includes(e))
+                : false;
+
+          return (
+            <Link
+              key={job.key}
+              href={href}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group',
+                isActive
+                  ? 'bg-teal-50 text-brand-700 font-semibold'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              )}
+            >
+              <Icon
+                className={cn(
+                  'h-[18px] w-[18px] flex-shrink-0 transition-colors',
+                  isActive ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'
+                )}
+              />
+              <span>{job.name}</span>
+            </Link>
+          );
+        })}
+
+        {/* Divider + secondary links */}
+        <div className="pt-3 mt-2 border-t border-gray-100">
+          <Link
+            href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            )}
+          >
+            <BookOpen className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            Knowledge
+          </Link>
+          <Link
+            href="/dashboard/community-events"
+            className={cn(
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            )}
+          >
+            <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            Community
+          </Link>
+        </div>
+
+        {/* Admin links (ADMIN role only) */}
+        {user?.role === 'ADMIN' && (
+          <div className="pt-2 border-t border-gray-100 space-y-0.5">
+            <p className="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+              Admin
+            </p>
+            <Link
+              href="/dashboard/analytics-admin"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            >
+              <BarChart2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              Analytics
+            </Link>
+            <Link
+              href="/dashboard/knowledge-admin"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            >
+              <Settings className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              Knowledge Admin
+            </Link>
+            <Link
+              href="/dashboard/worker-jobs"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            >
+              <Cpu className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              Worker Jobs
+            </Link>
+          </div>
+        )}
+      </nav>
+
+      {/* User actions at bottom */}
+      <div className="flex-shrink-0 border-t border-gray-100 p-3">
+        <NotificationBell />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+              <div className="h-7 w-7 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-[11px] font-bold text-brand-700 uppercase">
+                  {user?.firstName?.[0] ?? 'U'}
+                </span>
+              </div>
+              <span className="flex-1 text-left truncate">{user?.firstName ?? 'Account'}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-44">
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/profile" className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={(e) => { e.preventDefault(); handleLogout(); }}
+              className="flex items-center gap-2 text-red-600 focus:text-red-600"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile drawer nav (full nav inside slide-in sheet)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MobileDrawerNav({ user }: { user: User | null }) {
+  const pathname = usePathname();
+  const { logout } = useAuth();
+  const { selectedPropertyId } = usePropertyContext();
+  const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
+
+  const handleLogout = () => {
+    logout();
+    if (typeof window !== 'undefined') window.location.href = '/login';
+  };
+
+  return (
+    <div className="flex flex-col h-full py-4 px-3">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto">
+        {PRIMARY_JOBS.map((job) => {
+          const Icon = job.icon;
+          const href =
+            job.href === '/dashboard' || job.href === '/dashboard/properties'
+              ? job.href
+              : buildPropertyAwareHref(
+                  resolvedPropertyId,
+                  job.href.replace('/dashboard/', ''),
+                  job.key
+                );
+
+          const isActive =
+            job.href === '/dashboard'
+              ? pathname === '/dashboard'
+              : pathname
+                ? pathname.startsWith(job.href) ||
+                  job.engines.some((e) => (pathname ?? '').includes(e))
+                : false;
+
+          return (
+            <SheetClose key={job.key} asChild>
+              <Link
+                href={href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-teal-50 text-brand-700 font-semibold'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                )}
+              >
+                <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-brand-600' : 'text-gray-400')} />
+                <div>
+                  <div>{job.name}</div>
+                  <div className="text-[11px] font-normal text-gray-400">{job.description}</div>
+                </div>
+              </Link>
+            </SheetClose>
+          );
+        })}
+
+        <div className="pt-3 border-t border-gray-100 space-y-0.5">
+          <SheetClose asChild>
+            <Link
+              href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              <BookOpen className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              Knowledge
+            </Link>
+          </SheetClose>
+          <SheetClose asChild>
+            <Link
+              href="/dashboard/community-events"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              Community
+            </Link>
+          </SheetClose>
+        </div>
+      </nav>
+
+      {/* User section at bottom of drawer */}
+      <div className="border-t border-gray-100 pt-4 space-y-1">
+        <div className="px-3 pb-2">
+          <div className="text-sm font-medium text-gray-900">{user?.firstName} {user?.lastName}</div>
+          <div className="text-xs text-gray-400">{user?.email}</div>
+        </div>
+        <SheetClose asChild>
+          <Link
+            href="/dashboard/profile"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            <Settings className="h-4 w-4" />
+            Profile
+          </Link>
+        </SheetClose>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex w-full items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Root layout
+// ─────────────────────────────────────────────────────────────────────────────
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth() as { user: User | null, loading: boolean };
+  const { user, loading } = useAuth() as { user: User | null; loading: boolean };
   const router = useRouter();
-  const [propertyCount, setPropertyCount] = useState<number | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const bannerFetchedRef = React.useRef(false);
 
   useEffect(() => {
-    // Guard against duplicate fetches on re-renders
     if (bannerFetchedRef.current) return;
 
     const fetchPropertyCount = async () => {
-      if (!user) {
-        setShowBanner(false);
-        return;
-      }
-
-      if (user.segment !== 'EXISTING_OWNER') {
-        setShowBanner(false);
-        return;
-      }
+      if (!user) { setShowBanner(false); return; }
+      if (user.segment !== 'EXISTING_OWNER') { setShowBanner(false); return; }
 
       bannerFetchedRef.current = true;
 
       try {
         const response = await api.getProperties();
-
         if (response.success) {
           const count = response.data.properties.length;
-          setPropertyCount(count);
-
           const hasSkipped = localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY) === 'true';
-
-          const shouldShowBanner = count === 0 && !hasSkipped;
-          setShowBanner(shouldShowBanner);
+          setShowBanner(count === 0 && !hasSkipped);
         } else {
           setShowBanner(false);
         }
-      } catch (error) {
+      } catch {
         setShowBanner(false);
       }
     };
 
-    if (!loading && user) {
-      fetchPropertyCount();
-    }
+    if (!loading && user) fetchPropertyCount();
   }, [user, loading]);
 
   useEffect(() => {
@@ -298,6 +380,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [loading, user, router]);
 
+  // Mobile bottom padding for bottom nav
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const media = window.matchMedia('(max-width: 767px)');
@@ -306,7 +389,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         ? 'calc(4rem + env(safe-area-inset-bottom))'
         : '0px';
     };
-
     applyPadding();
     media.addEventListener('change', applyPadding);
     return () => {
@@ -321,878 +403,111 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   };
 
   const handleRefresh = async () => {
-    setRefreshKey(prev => prev + 1);
-    // Optionally refetch property count or other data
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    setRefreshKey((prev) => prev + 1);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   };
 
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600 mx-auto" />
+          <p className="mt-3 text-sm text-gray-500">Loading your home...</p>
         </div>
       </div>
     );
   }
 
-  if (user && user.role === 'PROVIDER') {
-    return null;
-  }
+  if (user?.role === 'PROVIDER') return null;
 
   return (
     <NotificationProvider>
       <PropertyProvider>
-        <div className="flex min-h-screen w-full flex-col">
-          {/* Property Setup Banner - Shows at top */}
-          {showBanner && (
-            <PropertySetupBanner show={showBanner} onDismiss={handleDismissBanner} />
-          )}
+        {/* ── Outer shell ────────────────────────────────────────────────── */}
+        <div className="flex min-h-screen bg-gray-50">
 
-          {/* Desktop Header */}
-          <header className="sticky top-0 z-10 hidden border-b bg-white md:block">
-            <div className="border-b border-teal-700/50 bg-gradient-to-r from-brand-900 to-brand-700 px-8 text-white lg:px-14">
-              <div className="mx-auto flex h-16 w-full max-w-[1360px] items-center gap-4">
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 shrink-0 border border-white/25 text-white hover:bg-white/15 hover:text-white"
-                      aria-label="Open sidebar navigation"
-                    >
-                      <PanelLeft className="h-5 w-5" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="left" className="w-[320px] p-0 flex flex-col">
-                    <div className="flex h-16 items-center border-b px-6">
-                      <Link
-                        href="/dashboard"
-                        className="flex items-center gap-2 font-semibold"
-                      >
-                        <Image
-                          src="/favicon.svg"
-                          alt="Cozy Logo"
-                          width={24}
-                          height={24}
-                          className="h-6 w-6"
-                        />
-                        <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
-                      </Link>
-                    </div>
+          {/* ── Desktop persistent left sidebar ──────────────────────────── */}
+          <aside className="hidden md:flex md:flex-col md:w-56 md:fixed md:inset-y-0 md:z-50 bg-white border-r border-gray-100 shadow-sm">
+            <PersistentSidebarNav user={user} />
+          </aside>
 
-                    <div className="py-2 flex-1 overflow-auto">
-                      <SidebarNav user={user} />
-                    </div>
+          {/* ── Content area (offset by sidebar on desktop) ──────────────── */}
+          <div className="flex flex-1 flex-col md:pl-56 min-w-0">
 
-                    <MobileUserNav user={user} />
-                  </SheetContent>
-                </Sheet>
-
-                <Link
-                  href="/dashboard"
-                  className="flex items-center gap-2 font-semibold shrink-0"
-                >
+            {/* Mobile sticky header */}
+            <header className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-100 safe-area-inset-top">
+              <div
+                className="flex h-14 items-center justify-between px-4"
+                style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+              >
+                <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
                   <Image
                     src="/favicon.svg"
-                    alt="Cozy Logo"
+                    alt="ContractToCozy"
                     width={24}
                     height={24}
-                    className="h-6 w-6"
+                    className="h-6 w-6 flex-shrink-0"
                   />
-                  <span className="text-xl font-bold text-white">Contract to Cozy</span>
+                  <span className="text-[15px] font-bold text-gray-900 truncate">ContractToCozy</span>
                 </Link>
 
-                <div className="flex-1 min-w-0" />
-                <DesktopUserNav user={user} inverted />
-              </div>
-            </div>
-            <div className="border-t border-gray-100 px-8 lg:px-14">
-              <div className="mx-auto w-full max-w-[1360px]">
-                <DesktopNav user={user} />
-              </div>
-            </div>
-          </header>
+                <div className="flex items-center gap-2">
+                  <NotificationBell />
 
-          {/* Mobile Header - Shown only on mobile */}
-          <header className="hidden">
-            <div className="px-4 py-3 flex items-center justify-between">
-              <Link href="/dashboard" className="flex items-center gap-2">
-                <Image
-                  src="/favicon.svg"
-                  alt="Cozy Logo"
-                  width={24}
-                  height={24}
-                  className="h-6 w-6"
-                />
-                <span className="font-bold text-blue-600 text-lg">C2C</span>
-              </Link>
-              
-              <div className="flex items-center gap-3">
-                <NotificationBell />
-                
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="shrink-0"
-                    >
-                      <PanelLeft className="h-5 w-5" />
-                      <span className="sr-only">Toggle navigation menu</span>
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
-                    <div className="flex h-16 items-center border-b px-6">
-                      <Link
-                        href="/dashboard"
-                        className="flex items-center gap-2 font-semibold"
+                  <Sheet>
+                    <SheetTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-gray-600"
+                        aria-label="Open menu"
                       >
-                        <Image
-                          src="/favicon.svg"
-                          alt="Cozy Logo"
-                          width={24}
-                          height={24}
-                          className="h-6 w-6"
-                        />
-                        <span className="text-xl font-bold text-blue-600">Contract to Cozy</span>
-                      </Link>
-                    </div>
-                    
-                    <div className="py-2 flex-1 overflow-auto">
-                      <SidebarNav user={user} />
-                    </div>
-
-                    <MobileUserNav user={user} />
-                  </SheetContent>
-                </Sheet>
+                        <Menu className="h-5 w-5" />
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="w-[300px] p-0 flex flex-col">
+                      <div className="h-14 flex items-center px-5 border-b border-gray-100">
+                        <Link href="/dashboard" className="flex items-center gap-2.5">
+                          <Image src="/favicon.svg" alt="CtC" width={24} height={24} className="h-6 w-6" />
+                          <span className="font-bold text-gray-900">ContractToCozy</span>
+                        </Link>
+                      </div>
+                      <div className="flex-1 overflow-auto">
+                        <MobileDrawerNav user={user} />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                </div>
               </div>
-            </div>
-          </header>
+            </header>
 
-          {/* Main content with pull-to-refresh */}
-          <main className="dashboard-bg flex-1 pb-16 md:pb-0">
-            <PullToRefresh onRefresh={handleRefresh}>
-              <div className="mx-auto w-full max-w-7xl px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] md:p-8">
-                <div key={refreshKey}>
+            {/* Property setup banner */}
+            {showBanner && (
+              <PropertySetupBanner show={showBanner} onDismiss={handleDismissBanner} />
+            )}
+
+            {/* Main content */}
+            <main className="flex-1 pb-20 md:pb-8">
+              <PullToRefresh onRefresh={handleRefresh}>
+                <div
+                  className="mx-auto w-full max-w-6xl px-4 md:px-8 py-5 md:py-8"
+                  key={refreshKey}
+                >
                   {children}
                 </div>
-              </div>
-            </PullToRefresh>
-          </main>
-
-          {/* Mobile Bottom Navigation - Hidden on desktop */}
-          <BottomNav />
-
-          <DashboardCommandPalette />
-
-          {/* AI Chat Widget - Available on all screen sizes */}
-          <AIChat />
+              </PullToRefresh>
+            </main>
+          </div>
         </div>
+
+        {/* Mobile bottom nav (fixed, above all content) */}
+        <BottomNav />
+
+        {/* Global overlays */}
+        <DashboardCommandPalette />
+        <AIChat />
       </PropertyProvider>
     </NotificationProvider>
-  );
-}
-
-// ... (existing imports)
-
-function DesktopNav({ user }: { user: User | null }) {
-  const pathname = usePathname();
-  const { selectedPropertyId } = usePropertyContext();
-  const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [moreSearch, setMoreSearch] = useState('');
-  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isBuyer = user?.segment === 'HOME_BUYER';
-
-  const primaryLinks: Array<NavLink & { isActive: (path: string) => boolean }> = PRIMARY_JOBS.map((job) => ({
-    name: job.name,
-    href: job.href === '/dashboard' || job.href === '/dashboard/properties' 
-      ? job.href 
-      : buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
-    icon: job.icon,
-    isActive: (path) => {
-      if (job.href === '/dashboard') return path === '/dashboard';
-      if (job.href === '/dashboard/properties') return path.startsWith('/dashboard/properties');
-      return path.startsWith(job.href) || 
-        job.engines.some(engineKey => path.includes(engineKey));
-    },
-  }));
-
-  type MoreMenuItem = {
-    key: string;
-    name: string;
-    href: string;
-    icon: React.ElementType;
-    isActive: (path: string) => boolean;
-  };
-
-  type MoreMenuBucket = {
-    key: string;
-    label: string;
-    items: MoreMenuItem[];
-  };
-
-  const aiToolItems: MoreMenuItem[] = AI_TOOL_LINKS.map((tool) => ({
-    key: `ai-${tool.key}`,
-    name: tool.name,
-    href: buildAIToolHref(resolvedPropertyId, tool.href),
-    icon: tool.icon,
-    isActive: tool.isActive,
-  }));
-
-  const homeToolItems: MoreMenuItem[] = HOME_TOOL_LINKS.map((tool) => ({
-    key: `home-tool-${tool.key}`,
-    name: tool.name,
-    href: buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget),
-    icon: tool.icon,
-    isActive: tool.isActive,
-  }));
-
-  const homeAdminItems: MoreMenuItem[] = [
-    {
-      key: 'home-admin-reports',
-      name: 'Reports',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'),
-      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'reports', FileText),
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path),
-    },
-    {
-      key: 'home-admin-warranties',
-      name: 'Warranties',
-      href: '/dashboard/warranties',
-      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', Wrench),
-      isActive: (path) => path.startsWith('/dashboard/warranties'),
-    },
-    {
-      key: 'home-admin-insurance',
-      name: 'Insurance',
-      href: '/dashboard/insurance',
-      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'insurance', Shield),
-      isActive: (path) => path.startsWith('/dashboard/insurance'),
-    },
-    {
-      key: 'home-admin-expenses',
-      name: 'Expenses',
-      href: '/dashboard/expenses',
-      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'expenses', DollarSign),
-      isActive: (path) => path.startsWith('/dashboard/expenses'),
-    },
-    {
-      key: 'home-admin-documents',
-      name: 'Documents',
-      href: '/dashboard/documents',
-      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'documents', FileText),
-      isActive: (path) => path.startsWith('/dashboard/documents'),
-    },
-  ];
-
-  const protectionItems: MoreMenuItem[] = [
-    {
-      key: 'protection-incidents',
-      name: 'Incidents',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
-      icon: resolveHomeownerNavigationIcon('protection', 'incidents', ShieldAlert),
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
-    },
-    {
-      key: 'protection-claims',
-      name: 'Claims',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
-      icon: resolveHomeownerNavigationIcon('protection', 'claims', ClipboardCheck),
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
-    },
-    {
-      key: 'protection-recalls',
-      name: 'Recalls',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
-      icon: resolveHomeownerNavigationIcon('protection', 'recalls', ShieldCheck),
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
-    },
-  ];
-
-  const knowledgeItems: MoreMenuItem[] = [
-    {
-      key: 'knowledge-hub',
-      name: 'Knowledge Hub',
-      href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
-      icon: BookOpen,
-      isActive: (path) => path.startsWith('/knowledge'),
-    },
-    ...(user?.role === 'ADMIN'
-      ? [
-          {
-            key: 'knowledge-admin',
-            name: 'Knowledge Admin',
-            href: '/dashboard/knowledge-admin',
-            icon: Settings,
-            isActive: (path: string) => path.startsWith('/dashboard/knowledge-admin'),
-          },
-          {
-            key: 'analytics-admin',
-            name: 'Analytics',
-            href: '/dashboard/analytics-admin',
-            icon: BarChart2,
-            isActive: (path: string) => path.startsWith('/dashboard/analytics-admin'),
-          },
-          {
-            key: 'worker-jobs',
-            name: 'Worker Jobs',
-            href: '/dashboard/worker-jobs',
-            icon: Cpu,
-            isActive: (path: string) => path.startsWith('/dashboard/worker-jobs'),
-          },
-        ]
-      : []),
-  ];
-
-  const moreGroups = [
-    {
-      key: 'group-discovery',
-      label: 'Discovery',
-      buckets: [
-        {
-          key: 'bucket-engines',
-          label: 'Engines',
-          items: [
-            {
-              key: 'all-tools',
-              name: 'Explore All Engines',
-              href: buildAIToolHref(resolvedPropertyId, '/dashboard/ai-tools'),
-              icon: LayoutGrid,
-              isActive: (path: string) => path === '/dashboard/ai-tools',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      key: 'group-community',
-      label: 'Community',
-      buckets: [
-        {
-          key: 'bucket-community-events',
-          label: 'Community Events',
-          items: [
-            {
-              key: 'community-events-main',
-              name: 'Community Events',
-              href: '/dashboard/community-events',
-              icon: resolveHomeownerNavigationIcon('community', 'events', Globe),
-              isActive: (path: string) => path.startsWith('/dashboard/community-events'),
-            },
-          ],
-        },
-        {
-          key: 'bucket-knowledge',
-          label: 'Knowledge Hub',
-          items: [
-            {
-              key: 'knowledge-hub',
-              name: 'Knowledge Hub',
-              href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
-              icon: BookOpen,
-              isActive: (path: string) => path.startsWith('/knowledge'),
-            },
-          ],
-        },
-      ],
-    },
-    ...(user?.role === 'ADMIN'
-      ? [
-          {
-            key: 'group-admin',
-            label: 'Administration',
-            buckets: [
-              {
-                key: 'bucket-admin-tools',
-                label: 'System Admin',
-                items: [
-                  {
-                    key: 'knowledge-admin',
-                    name: 'Knowledge Admin',
-                    href: '/dashboard/knowledge-admin',
-                    icon: Settings,
-                    isActive: (path: string) => path.startsWith('/dashboard/knowledge-admin'),
-                  },
-                  {
-                    key: 'analytics-admin',
-                    name: 'Analytics',
-                    href: '/dashboard/analytics-admin',
-                    icon: BarChart2,
-                    isActive: (path: string) => path.startsWith('/dashboard/analytics-admin'),
-                  },
-                  {
-                    key: 'worker-jobs',
-                    name: 'Worker Jobs',
-                    href: '/dashboard/worker-jobs',
-                    icon: Cpu,
-                    isActive: (path: string) => path.startsWith('/dashboard/worker-jobs'),
-                  },
-                ],
-              },
-            ],
-          },
-        ]
-      : []),
-  ] as const;
-
-  const normalizedQuery = moreSearch.trim().toLowerCase();
-  const filteredMoreGroups = moreGroups
-    .map((group) => ({
-      ...group,
-      buckets: group.buckets
-        .map((bucket) => {
-          if (!normalizedQuery) return bucket;
-
-          const bucketMatched =
-            bucket.label.toLowerCase().includes(normalizedQuery) ||
-            group.label.toLowerCase().includes(normalizedQuery);
-
-          return {
-            ...bucket,
-            items: bucketMatched
-              ? bucket.items
-              : bucket.items.filter((item) =>
-                  item.name.toLowerCase().includes(normalizedQuery)
-                ),
-          };
-        })
-        .filter((bucket) => bucket.items.length > 0),
-    }))
-    .filter((group) => group.buckets.length > 0);
-
-  const moreActive = moreGroups.some((group) =>
-    group.buckets.some((bucket) =>
-      bucket.items.some((item) => item.isActive(pathname || ''))
-    )
-  );
-
-  const clearCloseTimer = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  };
-
-  const openMenu = () => {
-    clearCloseTimer();
-    setMoreOpen(true);
-  };
-
-  const scheduleCloseMenu = () => {
-    clearCloseTimer();
-    closeTimerRef.current = setTimeout(() => setMoreOpen(false), 120);
-  };
-
-  useEffect(() => {
-    return () => clearCloseTimer();
-  }, []);
-
-  useEffect(() => {
-    setMoreOpen(false);
-    setMoreSearch('');
-  }, [pathname]);
-
-  const topNavClass = (isActive: boolean) =>
-    cn(
-      'inline-flex min-h-[44px] items-center gap-2 border-b-2 px-1 py-3 text-sm transition-colors duration-150',
-      isActive
-        ? 'border-brand-600 text-brand-600 font-semibold'
-        : 'border-transparent text-gray-700 font-medium hover:text-brand-600'
-    );
-
-  return (
-    <nav className="w-full">
-      <div className="flex items-center gap-6">
-        {primaryLinks.map((link) => {
-          const Icon = link.icon;
-          const isActive = link.isActive(pathname || '');
-          return (
-            <Link key={link.name} href={link.href} className={topNavClass(isActive)}>
-              <Icon className="h-4 w-4" />
-              {link.name}
-            </Link>
-          );
-        })}
-
-        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className={cn(topNavClass(moreActive), 'h-auto rounded-none px-1')}
-              onMouseEnter={openMenu}
-              onMouseLeave={scheduleCloseMenu}
-            >
-              More
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            sideOffset={8}
-            className="w-80 p-0"
-            onMouseEnter={openMenu}
-            onMouseLeave={scheduleCloseMenu}
-            onInteractOutside={() => setMoreOpen(false)}
-            onPointerDownOutside={() => setMoreOpen(false)}
-            onEscapeKeyDown={() => setMoreOpen(false)}
-          >
-            <div className="border-b border-gray-100 p-3">
-              <Input
-                value={moreSearch}
-                onChange={(event) => setMoreSearch(event.target.value)}
-                placeholder="Search tools and pages..."
-                className="h-9"
-              />
-            </div>
-
-            <div className="max-h-80 overflow-y-auto p-1.5">
-              {filteredMoreGroups.map((group) => (
-                <div key={group.key} className="mb-2">
-                  <DropdownMenuLabel className="px-2 pb-1 pt-1 text-[10px] uppercase tracking-wide text-gray-400">
-                    {group.label}
-                  </DropdownMenuLabel>
-                  <div className="space-y-1">
-                    {group.buckets.map((bucket) => (
-                      <div key={bucket.key}>
-                        <div className="px-2 pt-1 text-[11px] font-medium text-gray-500">
-                          {bucket.label}
-                        </div>
-                        {bucket.items.map((item) => {
-                          const Icon = item.icon;
-                          return (
-                            <DropdownMenuItem
-                              key={item.key}
-                              asChild
-                              className={cn(
-                                'cursor-pointer',
-                                item.isActive(pathname || '') && 'bg-brand-50 text-brand-700'
-                              )}
-                            >
-                              <Link href={item.href} className="flex items-center gap-2 pl-5">
-                                <Icon className="h-4 w-4" />
-                                {item.name}
-                              </Link>
-                            </DropdownMenuItem>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {!filteredMoreGroups.length && (
-                <p className="px-2 py-4 text-sm text-gray-500">No results found.</p>
-              )}
-            </div>
-
-            <DropdownMenuSeparator />
-            <div className="px-3 py-2 text-xs text-gray-500">
-              Tip: Press <span className="font-medium">⌘K</span> to jump anywhere
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </nav>
-  );
-}
-
-function SidebarNav({ user }: { user: User | null }) {
-  const pathname = usePathname();
-  const { selectedPropertyId } = usePropertyContext();
-  const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
-  const isOwner = user?.segment === 'EXISTING_OWNER';
-  const isBuyer = user?.segment === 'HOME_BUYER';
-  const knowledgeHref = resolvedPropertyId
-    ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}`
-    : '/knowledge';
-  const inventoryHref = buildAIToolHref(resolvedPropertyId, '/dashboard/inventory');
-
-  const navLinkClass = (isActive: boolean) =>
-    cn(
-      'font-body font-medium flex items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-200',
-      isActive
-        ? 'bg-teal-50 text-brand-primary font-semibold'
-        : 'text-gray-700 hover:text-brand-primary hover:bg-teal-50'
-    );
-
-  const mainLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
-    { name: 'Dashboard', href: '/dashboard', icon: resolveHomeownerNavigationIcon('main', 'dashboard', Home), isActive: (path) => path === '/dashboard' },
-    { name: 'Actions', href: '/dashboard/actions', icon: resolveHomeownerNavigationIcon('main', 'actions', AlertTriangle), isActive: (path) => path.startsWith('/dashboard/actions') },
-    { name: 'Properties', href: '/dashboard/properties', icon: resolveHomeownerNavigationIcon('main', 'properties', Building), isActive: (path) => path.startsWith('/dashboard/properties') },
-    {
-      name: 'Inventory',
-      href: inventoryHref,
-      icon: resolveHomeownerNavigationIcon('main', 'inventory', Box),
-      isActive: (path) =>
-        path.startsWith('/dashboard/inventory') ||
-        /^\/dashboard\/properties\/[^/]+\/inventory(\/|$)/.test(path),
-    },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: resolveHomeownerNavigationIcon('main', 'bookings', Calendar), isActive: (path) => path.startsWith('/dashboard/bookings') },
-    { name: 'Find Services', href: '/dashboard/providers', icon: resolveHomeownerNavigationIcon('main', 'providers', Search), isActive: (path) => path.startsWith('/dashboard/providers') },
-    { name: 'Knowledge Hub', href: knowledgeHref, icon: BookOpen, isActive: (path) => path.startsWith('/knowledge') },
-  ];
-  const knowledgeAdminLink =
-    user?.role === 'ADMIN'
-      ? {
-          name: 'Knowledge Admin',
-          href: '/dashboard/knowledge-admin',
-          icon: Settings,
-          isActive: (path: string) => path.startsWith('/dashboard/knowledge-admin'),
-        }
-      : null;
-  const KnowledgeAdminIcon = knowledgeAdminLink?.icon;
-
-  const analyticsAdminLink =
-    user?.role === 'ADMIN'
-      ? {
-          name: 'Analytics',
-          href: '/dashboard/analytics-admin',
-          icon: BarChart2,
-          isActive: (path: string) => path.startsWith('/dashboard/analytics-admin'),
-        }
-      : null;
-  const AnalyticsAdminIcon = analyticsAdminLink?.icon;
-
-  const workerJobsLink =
-    user?.role === 'ADMIN'
-      ? {
-          name: 'Worker Jobs',
-          href: '/dashboard/worker-jobs',
-          icon: Cpu,
-          isActive: (path: string) => path.startsWith('/dashboard/worker-jobs'),
-        }
-      : null;
-  const WorkerJobsIcon = workerJobsLink?.icon;
-
-  const ownerGlobalLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
-    { name: 'Warranties', href: '/dashboard/warranties', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', Wrench), isActive: (path) => path.startsWith('/dashboard/warranties') },
-    { name: 'Insurance', href: '/dashboard/insurance', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'insurance', Shield), isActive: (path) => path.startsWith('/dashboard/insurance') },
-    { name: 'Expenses', href: '/dashboard/expenses', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'expenses', DollarSign), isActive: (path) => path.startsWith('/dashboard/expenses') },
-    { name: 'Documents', href: '/dashboard/documents', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'documents', FileText), isActive: (path) => path.startsWith('/dashboard/documents') },
-  ];
-  const ownerPropertyAdminLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
-    {
-      name: 'Reports',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'),
-      icon: resolveHomeownerNavigationIcon('ownerGlobal', 'reports', FileText),
-      navTarget: 'reports',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path),
-    },
-  ];
-
-  const propertyFeatureLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
-    {
-      name: 'Rooms',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms'),
-      icon: resolveHomeownerNavigationIcon('main', 'rooms', LayoutGrid),
-      navTarget: 'rooms',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
-    },
-  ];
-
-  const protectionLinks: Array<NavLink & { isActive: (path: string) => boolean; navTarget: string }> = [
-    {
-      name: 'Incidents',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
-      icon: resolveHomeownerNavigationIcon('protection', 'incidents', ShieldAlert),
-      navTarget: 'incidents',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
-    },
-    {
-      name: 'Claims',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
-      icon: resolveHomeownerNavigationIcon('protection', 'claims', ClipboardCheck),
-      navTarget: 'claims',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
-    },
-    {
-      name: 'Recalls',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
-      icon: resolveHomeownerNavigationIcon('protection', 'recalls', ShieldCheck),
-      navTarget: 'recalls',
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
-    },
-  ];
-  const protectionActive = protectionLinks.some((link) => link.isActive(pathname || ''));
-
-  return (
-    <nav className="grid gap-1 px-4 text-sm font-medium">
-      {mainLinks.map((link) => {
-        const Icon = link.icon;
-        const isActive = link.isActive(pathname || '');
-        return (
-          <SheetClose key={link.href} asChild>
-            <Link href={link.href} className={navLinkClass(isActive)}>
-              <Icon className="h-4 w-4" />
-              {link.name}
-            </Link>
-          </SheetClose>
-        );
-      })}
-
-      <div className="my-2 border-t border-gray-100" />
-
-      <SheetClose asChild>
-        <Link
-          href={buildAIToolHref(resolvedPropertyId, '/dashboard/ai-tools')}
-          className={navLinkClass((pathname || '') === '/dashboard/ai-tools')}
-        >
-          <LayoutGrid className="h-4 w-4" />
-          Explore Engines
-        </Link>
-      </SheetClose>
-
-      <SheetClose asChild>
-        <Link
-          href="/dashboard/community-events"
-          className={navLinkClass((pathname || '').startsWith('/dashboard/community-events'))}
-        >
-          <Globe className="h-4 w-4" />
-          Community Events
-        </Link>
-      </SheetClose>
-
-      <SheetClose asChild>
-        <Link
-          href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
-          className={navLinkClass((pathname || '').startsWith('/knowledge'))}
-        >
-          <BookOpen className="h-4 w-4" />
-          Knowledge Hub
-        </Link>
-      </SheetClose>
-
-      {knowledgeAdminLink && KnowledgeAdminIcon && (
-        <SheetClose asChild>
-          <Link
-            href={knowledgeAdminLink.href}
-            className={navLinkClass(knowledgeAdminLink.isActive(pathname || ''))}
-          >
-            <KnowledgeAdminIcon className="h-4 w-4" />
-            {knowledgeAdminLink.name}
-          </Link>
-        </SheetClose>
-      )}
-      {analyticsAdminLink && AnalyticsAdminIcon && (
-        <SheetClose asChild>
-          <Link
-            href={analyticsAdminLink.href}
-            className={navLinkClass(analyticsAdminLink.isActive(pathname || ''))}
-          >
-            <AnalyticsAdminIcon className="h-4 w-4" />
-            {analyticsAdminLink.name}
-          </Link>
-        </SheetClose>
-      )}
-      {workerJobsLink && WorkerJobsIcon && (
-        <SheetClose asChild>
-          <Link
-            href={workerJobsLink.href}
-            className={navLinkClass(workerJobsLink.isActive(pathname || ''))}
-          >
-            <WorkerJobsIcon className="h-4 w-4" />
-            {workerJobsLink.name}
-          </Link>
-        </SheetClose>
-      )}
-    </nav>
-  );
-}
-
-function DesktopUserNav({ user, inverted = false }: { user: User | null; inverted?: boolean }) {
-  const { logout } = useAuth();
-
-  const handleLogout = () => {
-    logout();
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login';
-    }
-  };
-
-  return (
-    <div className="hidden lg:flex items-center gap-4">
-      {/* 🔔 Notifications */}
-      <NotificationBell />
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'font-body flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200',
-              inverted
-                ? 'text-white/90 hover:bg-white/18 hover:text-white data-[state=open]:bg-white/22 data-[state=open]:text-white'
-                : 'text-gray-700 hover:bg-teal-50 hover:text-brand-primary data-[state=open]:bg-teal-50 data-[state=open]:text-brand-primary'
-            )}
-          >
-            <Settings className="h-4 w-4" />
-            <span>{user?.firstName || 'Account'}</span>
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={6} className="w-44">
-          <DropdownMenuItem asChild>
-            <Link href="/dashboard/profile" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Profile
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault();
-              handleLogout();
-            }}
-            className="flex items-center gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
-
-function MobileUserNav({ user }: { user: User | null }) {
-  const { logout } = useAuth();
-
-  const handleLogout = () => {
-    logout();
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login';
-    }
-  };
-
-  return (
-    <div className="border-t p-4">
-      <div className="mb-2">
-        <div className="font-body font-medium">{user?.firstName} {user?.lastName}</div>
-        <div className="font-body text-xs text-gray-500">{user?.email}</div>
-      </div>
-      <nav className="flex flex-col gap-1">
-        <SheetClose asChild>
-          <Link 
-            href="/dashboard/profile"
-            className="font-body font-medium flex items-center gap-3 rounded-lg px-3 py-2 text-gray-700 transition-colors duration-200 hover:text-brand-primary hover:bg-teal-50 -mx-3"
-          >
-            <Settings className="h-4 w-4" />
-            Profile
-          </Link>
-        </SheetClose>
-        <Button 
-          onClick={handleLogout} 
-          variant="ghost" 
-          className="font-body font-semibold text-destructive justify-start hover:bg-destructive/10 hover:text-destructive tracking-wide transition-colors duration-200 -mx-3"
-        >
-          <LogOut className="mr-3 h-4 w-4" />
-          Logout
-        </Button>
-      </nav>
-    </div>
   );
 }
 

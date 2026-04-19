@@ -162,7 +162,7 @@ export default function CoverageIntelligenceToolCard({
           <div className={HEADER_ICON_WRAP}>
             <ShieldCheck className={HEADER_ICON} />
           </div>
-          <h3 className={TITLE_CLASS}>Coverage Intelligence</h3>
+          <h3 className={TITLE_CLASS}>Coverage Review</h3>
         </div>
         <StatusBadge status={status.status} customLabel={status.customLabel} />
       </div>
