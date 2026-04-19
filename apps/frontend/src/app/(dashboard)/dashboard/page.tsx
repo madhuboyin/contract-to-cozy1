@@ -16,7 +16,8 @@ import {
   Sprout,
   TrendingUp,
   Zap,
-  ArrowRight
+  ArrowRight,
+  CheckCircle2
 } from 'lucide-react';
 import { Booking, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
 import { ScoredProperty } from './types'; 
@@ -64,6 +65,7 @@ import SupportingActionCard from './components/SupportingActionCard';
 import DashboardRouteState from './components/DashboardRouteState';
 import { MagicCaptureSheet } from '@/components/orchestration/MagicCaptureSheet';
 import { WinCard } from '@/components/shared/WinCard';
+import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { Button } from '@/components/ui/button';
 import {
   appendGuidanceContinuityToHref,
@@ -1223,7 +1225,42 @@ export default function DashboardPage() {
         summary={recommendationSummary}
       />
 
-      {/* 3. Concierge Lifecycle Alerts (Urgent but secondary to the WinCard) */}
+      {/* 3. Outcome Density: Protection Wins */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Secured for you
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <WinCard 
+            title="Warranty Active"
+            value="Dishwasher Protected"
+            description="Our scan confirmed your unit is under factory warranty until Oct 2026."
+            trust={{
+              confidenceLabel: "Verified",
+              freshnessLabel: "Synced 2h ago",
+              sourceLabel: "Manufacturer API",
+            }}
+            className="bg-emerald-50/30 border-emerald-100"
+          />
+          <WinCard 
+            title="Policy Audit"
+            value="Coverage Gap Found"
+            description="Your current policy might not cover flood damage common in your area."
+            actionLabel="Audit My Policy"
+            onAction={() => router.push('/dashboard/save')}
+            isUrgent={true}
+            trust={{
+              confidenceLabel: "High",
+              freshnessLabel: "New Data",
+              sourceLabel: "Risk Engine",
+            }}
+            className="bg-amber-50/30 border-amber-100"
+          />
+        </div>
+      </section>
+
+      {/* 4. Concierge Lifecycle Alerts (Urgent but secondary to the WinCard) */}
       <div className="space-y-6 pt-4">
         {isOwnerSegment && effectiveSelectedPropertyId && (
           <motion.div {...sectionMotion(0)}>
@@ -1296,12 +1333,14 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-500">Background tools detecting optimization wins.</p>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId} />
-          <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId} />
-          <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId} />
-          <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId} />
-        </div>
+        <ErrorBoundary>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId} />
+            <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId} />
+            <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId} />
+            <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId} />
+          </div>
+        </ErrorBoundary>
       </section>
       
       <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />

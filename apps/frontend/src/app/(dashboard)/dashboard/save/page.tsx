@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -136,29 +137,55 @@ export default function SaveHubPage() {
               className="border-brand-100"
             />
           ) : (
-            <MobileCard className="bg-slate-50 border-dashed text-center py-10 space-y-4">
-              <div className="mx-auto w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center">
-                <PiggyBank className="h-6 w-6 text-slate-400" />
+            <div className="space-y-4">
+              <MobileCard className="bg-slate-50 border-dashed text-center py-12 px-6">
+                <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                  <PiggyBank className="h-8 w-8 text-slate-300" />
+                </div>
+                <h4 className="text-lg font-bold text-slate-900">No Savings Found Yet</h4>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
+                  Our engines are ready to scan for tax appeals and insurance matches. 
+                  Upload a document to unlock your first financial win.
+                </p>
+                <div className="pt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button 
+                    className="rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold h-12 px-6"
+                    onClick={() => setIsScannerOpen(true)}
+                  >
+                    <Zap className="mr-2 h-4 w-4 fill-white" />
+                    Scan My Policy
+                  </Button>
+                  <Button variant="outline" className="rounded-xl border-slate-200 h-12 px-6" asChild>
+                    <Link href="/dashboard/documents">
+                      <FileText className="mr-2 h-4 w-4" />
+                      Browse Documents
+                    </Link>
+                  </Button>
+                </div>
+              </MobileCard>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                  <div className="h-10 w-10 bg-white rounded-xl shadow-xs flex items-center justify-center text-teal-600">
+                    <TrendingUp className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Equity Scan</p>
+                    <p className="text-sm font-semibold text-slate-700">Market trends active</p>
+                  </div>
+                </div>
+                <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex items-center gap-3 opacity-60">
+                  <div className="h-10 w-10 bg-white rounded-xl shadow-xs flex items-center justify-center text-amber-600">
+                    <DollarSign className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tax Appeal</p>
+                    <p className="text-sm font-semibold text-slate-700">Opens Feb 2026</p>
+                  </div>
+                </div>
               </div>
-              <p className="text-sm text-slate-500 max-w-xs mx-auto">
-                No major financial leaks detected yet. Upload your utility bills or insurance policy to run a deep scan.
-              </p>
-              <Button variant="outline" className="rounded-xl border-slate-200" onClick={() => setIsScannerOpen(true)}>
-                Upload Financial Doc
-              </Button>
-            </MobileCard>
-          )}
-
-          {/* Placeholder for future engines */}
-          <MobileCard variant="compact" className="bg-slate-50/50 opacity-60 grayscale border-none">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-5 w-5 text-slate-400" />
-                <span className="text-sm font-medium text-slate-600">Tax Appeal Engine (Feb 2026)</span>
-              </div>
-              <ArrowRight className="h-4 w-4 text-slate-300" />
             </div>
-          </MobileCard>
+          )}
         </div>
       </MobileSection>
 

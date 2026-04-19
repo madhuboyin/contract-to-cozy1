@@ -44,7 +44,7 @@ export const PRIMARY_JOBS: NavJob[] = [
   {
     key: 'protect',
     name: 'Protect',
-    href: '/dashboard/maintenance', // For now, points here
+    href: '/dashboard/protect',
     icon: Shield,
     description: 'Defend your home and wealth',
     engines: [

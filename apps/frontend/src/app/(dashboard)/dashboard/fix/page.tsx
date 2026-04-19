@@ -183,8 +183,22 @@ export default function ResolutionHubPage() {
                 />
               ))
             ) : (
-              <MobileCard className="bg-slate-50 border-dashed text-center py-8">
-                <p className="text-sm text-slate-500">No active decisions. Everything looks good!</p>
+              <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
+                <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+                </div>
+                <h4 className="text-lg font-bold text-slate-900">Your Home is Healthy</h4>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
+                  No active issues detected. Use the troubleshooter if something feels off, or run a seasonal scan.
+                </p>
+                <div className="pt-6">
+                  <Button variant="outline" className="rounded-xl border-slate-200 h-11 px-6" asChild>
+                    <Link href="/dashboard/replace-repair">
+                      <Zap className="mr-2 h-4 w-4 text-brand-600" />
+                      Start Troubleshooter
+                    </Link>
+                  </Button>
+                </div>
               </MobileCard>
             )}
           </div>
@@ -201,7 +215,7 @@ export default function ResolutionHubPage() {
               <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-slate-400" /></div>
             ) : activeBookings.length > 0 ? (
               activeBookings.map((booking) => (
-                <MobileCard key={booking.id} className="border-l-4 border-l-brand-500">
+                <MobileCard key={booking.id} className="border-l-4 border-l-brand-500 shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h4 className="font-bold text-slate-900">{booking.service?.name || 'Service Job'}</h4>
@@ -220,20 +234,30 @@ export default function ResolutionHubPage() {
                       ${Number(booking.estimatedPrice || 0).toFixed(2)}
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" className="w-full justify-between h-9 text-brand-700" asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-between h-9 text-brand-700 hover:bg-brand-50/50 rounded-lg" asChild>
                     <Link href={`/dashboard/bookings/${booking.id}`}>
-                      View Details
+                      View Resolution Details
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </Button>
                 </MobileCard>
               ))
             ) : (
-              <MobileCard className="bg-slate-50 border-dashed text-center py-8">
-                <p className="text-sm text-slate-500">No active bookings. Need something fixed?</p>
-                <Button variant="link" className="text-brand-600 mt-2" asChild>
-                  <Link href="/dashboard/providers">Find a Service Provider</Link>
-                </Button>
+              <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
+                <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                  <Search className="h-8 w-8 text-slate-300" />
+                </div>
+                <h4 className="text-lg font-bold text-slate-900">No Active Jobs</h4>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
+                  Need a specialist for a project? Browse our directory of verified pros to get started.
+                </p>
+                <div className="pt-6">
+                  <Button className="rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold h-11 px-6" asChild>
+                    <Link href="/dashboard/providers">
+                      Find a Service Provider
+                    </Link>
+                  </Button>
+                </div>
               </MobileCard>
             )}
             

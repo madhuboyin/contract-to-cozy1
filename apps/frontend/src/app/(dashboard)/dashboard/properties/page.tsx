@@ -12,6 +12,10 @@ import {
   BottomSafeAreaReserve,
   MobileCard,
   StatusChip,
+  MobilePageIntro,
+  MobileKpiStrip,
+  MobileKpiTile,
+  MobileSection,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { Button } from '@/components/ui/button';
 import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
@@ -210,25 +214,51 @@ export default function PropertiesPage() {
   const handoffCtaLabel = navTargetLabel ? `Continue to ${navTargetLabel}` : 'Open property hub';
 
   return (
-    <div className="space-y-5 px-4 pb-6 sm:px-6 lg:px-8 lg:pb-8">
+    <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:px-8 lg:pb-12">
+      {/* 1. Page Header */}
+      <MobilePageIntro
+        title="My Home Portfolio"
+        subtitle="Manage your properties and their individual health records."
+        action={
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
+            <Building2 className="h-5 w-5" />
+          </div>
+        }
+      />
+
+      {/* 2. Portfolio KPIs */}
+      <MobileKpiStrip className="sm:grid-cols-3">
+        <MobileKpiTile 
+          label="Total Assets" 
+          value={properties.length} 
+          hint={`${primaryHomesCount} primary`} 
+          tone="neutral" 
+        />
+        <MobileKpiTile 
+          label="Available Slots" 
+          value={slotsAvailable} 
+          hint="Out of 10 max" 
+        />
+        <MobileKpiTile 
+          label="Portfolio Health" 
+          value="Tracked" 
+          hint="Aggregated score" 
+        />
+      </MobileKpiStrip>
+
       <PortfolioListTemplate
-        title="Properties"
-        subtitle={`${properties.length} of ${MAX_PROPERTIES} properties added`}
+        title="Active Properties"
+        subtitle="Your registered home records"
         contextLabel={navTargetLabel}
-        metrics={[
-          { label: 'Properties', value: `${properties.length} / ${MAX_PROPERTIES}` },
-          { label: 'Primary', value: `${primaryHomesCount}` },
-          { label: 'Available', value: `${slotsAvailable}` },
-        ]}
+        metrics={[]}
         action={
           canAddMore ? (
-            <Link
-              href="/dashboard/properties/new"
-              className="inline-flex min-h-[40px] items-center rounded-xl bg-[#0D9488] px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0F766E]"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Property
-            </Link>
+            <Button asChild className="bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm">
+              <Link href="/dashboard/properties/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Property
+              </Link>
+            </Button>
           ) : null
         }
       >
