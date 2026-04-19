@@ -89,20 +89,20 @@ export default function ProtectHubPage() {
         </div>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:px-8 lg:pb-12">
+      <div className="mx-auto max-w-7xl space-y-12 p-4 sm:p-6 lg:px-8 lg:pb-12">
         {/* 1. Page Header */}
         <MobilePageIntro
           title="Home Protection"
           subtitle="Your proactive command center for maintenance, risks, and asset safety."
           action={
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-700">
-              <Shield className="h-5 w-5" />
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-700 hidden sm:block">
+              <Shield className="h-6 w-6" />
             </div>
           }
         />
 
         {/* 2. Protection KPIs */}
-        <MobileKpiStrip className="sm:grid-cols-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <MobileKpiTile 
             label="Home Health" 
             value={data?.healthScore ? `${data.healthScore}%` : '...'} 
@@ -121,40 +121,41 @@ export default function ProtectHubPage() {
             hint={`${activeRisks.length} active threats`} 
             tone={activeRisks.length > 0 ? 'warning' : 'positive'}
           />
-        </MobileKpiStrip>
+        </div>
 
         {/* 3. Primary Defensive Entry Points */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Button 
             variant="outline" 
-            className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 rounded-2xl group"
+            className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 rounded-2xl group transition-all"
             asChild
           >
             <Link href={selectedPropertyId ? `/dashboard/maintenance?propertyId=${selectedPropertyId}` : '/dashboard/maintenance'}>
               <CalendarClock className="h-8 w-8 text-brand-600 mb-4 group-hover:rotate-12 transition-transform" />
               <span className="font-bold text-lg text-slate-900 block">Action Center</span>
-              <span className="text-sm text-slate-500 mt-1">Manage your recurring maintenance and seasonal tasks.</span>
+              <span className="text-sm text-slate-500 mt-1 line-clamp-2">Manage your recurring maintenance and seasonal tasks.</span>
             </Link>
           </Button>
 
           <Button 
             variant="outline" 
-            className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 rounded-2xl group"
+            className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 rounded-2xl group transition-all"
             asChild
           >
             <Link href={selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/risk-assessment` : '/dashboard/risk-radar'}>
               <ShieldAlert className="h-8 w-8 text-amber-600 mb-4 group-hover:scale-110 transition-transform" />
               <span className="font-bold text-lg text-slate-900 block">Risk Radar</span>
-              <span className="text-sm text-slate-500 mt-1">Intelligence alerts for local climate and system failures.</span>
+              <span className="text-sm text-slate-500 mt-1 line-clamp-2">Intelligence alerts for local climate and system failures.</span>
             </Link>
           </Button>
         </div>
 
         {/* 4. Active "Protection Wins" & Insights */}
-        <MobileSection>
+        <MobileSection className="pt-4">
           <MobileSectionHeader 
             title="Protection Insights" 
             subtitle="Proactive recommendations to extend your home's lifespan."
+            className="mb-6"
           />
           <div className="space-y-4">
             {protectionQuery.isLoading ? (

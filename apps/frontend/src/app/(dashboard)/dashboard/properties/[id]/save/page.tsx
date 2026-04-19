@@ -71,20 +71,20 @@ export default function SaveHubPage() {
         </div>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:px-8 lg:pb-12">
+      <div className="mx-auto max-w-7xl space-y-12 p-4 sm:p-6 lg:px-8 lg:pb-12">
         {/* 1. Page Header */}
         <MobilePageIntro
           title="Wealth & Savings"
           subtitle="We monitor your home's financial health to find hidden savings and protect your equity."
           action={
-            <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700">
-              <DollarSign className="h-5 w-5" />
+            <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700 hidden sm:block">
+              <DollarSign className="h-6 w-6" />
             </div>
           }
         />
 
         {/* 2. Financial KPIs */}
-        <MobileKpiStrip className="sm:grid-cols-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <MobileKpiTile 
             label="Total Potential" 
             value={potentialSavings > 0 ? `$${potentialSavings}` : '$0'} 
@@ -102,38 +102,39 @@ export default function SaveHubPage() {
             value="Next: Feb" 
             hint="Property tax window" 
           />
-        </MobileKpiStrip>
+        </div>
 
         {/* 3. The "Magic" Onboarding Wedge */}
         <MobileSection>
-          <MobileCard className="bg-brand-900 text-white border-none shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <Zap className="h-32 w-32 rotate-12" />
+          <MobileCard className="bg-brand-900 text-white border-none shadow-xl relative overflow-hidden p-6 sm:p-10">
+            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+              <Zap className="h-48 w-48 rotate-12" />
             </div>
-            <div className="relative z-10 space-y-4">
-              <div>
-                <h3 className="text-xl font-bold">Uncover Insurance Savings</h3>
-                <p className="text-brand-100 text-sm mt-1">
+            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+              <div className="flex-1 space-y-4 text-center md:text-left">
+                <h3 className="text-2xl font-bold">Uncover Insurance Savings</h3>
+                <p className="text-brand-100 text-sm sm:text-base mt-1 leading-relaxed max-w-md">
                   Snap a photo of your current policy declaration page. 
                   Gemini will scan for coverage gaps and better rate matches.
                 </p>
+                <Button 
+                  onClick={() => setIsScannerOpen(true)}
+                  className="bg-white text-brand-900 hover:bg-brand-50 rounded-xl font-bold h-12 px-8"
+                >
+                  <Zap className="mr-2 h-4 w-4 fill-brand-900" />
+                  Scan My Policy
+                </Button>
               </div>
-              <Button 
-                onClick={() => setIsScannerOpen(true)}
-                className="bg-white text-brand-900 hover:bg-brand-50 rounded-xl font-bold h-12 px-6"
-              >
-                <Zap className="mr-2 h-4 w-4 fill-brand-900" />
-                Scan My Policy
-              </Button>
             </div>
           </MobileCard>
         </MobileSection>
 
         {/* 4. Active Savings "Wins" */}
-        <MobileSection>
+        <MobileSection className="pt-4">
           <MobileSectionHeader 
             title="Financial Wins" 
             subtitle="Real-time optimization opportunities detected for your home."
+            className="mb-6"
           />
           <div className="space-y-4">
             {homeSavingsQuery.isLoading ? (

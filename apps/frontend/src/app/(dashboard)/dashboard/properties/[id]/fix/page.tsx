@@ -96,20 +96,20 @@ export default function ResolutionHubPage() {
         </div>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:px-8 lg:pb-12">
+      <div className="mx-auto max-w-7xl space-y-12 p-4 sm:p-6 lg:px-8 lg:pb-12">
         {/* 1. Page Header */}
         <MobilePageIntro
           title="Resolution Center"
           subtitle="Something broken or need an upgrade? We'll handle the deciding, finding, and booking."
           action={
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
-              <Wrench className="h-5 w-5" />
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700 hidden sm:block">
+              <Wrench className="h-6 w-6" />
             </div>
           }
         />
 
         {/* 2. Status Summary */}
-        <MobileKpiStrip className="sm:grid-cols-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <MobileKpiTile 
             label="Active Jobs" 
             value={activeBookings.length} 
@@ -128,52 +128,52 @@ export default function ResolutionHubPage() {
             hint="24/7 help available" 
             tone="neutral"
           />
-        </MobileKpiStrip>
+        </div>
 
         {/* 3. Concierge Entry Points: "How can we help?" */}
-        <MobileSection>
-          <MobileSectionHeader title="How can we help?" />
+        <MobileSection className="pt-4">
+          <MobileSectionHeader title="How can we help?" className="mb-6" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Button 
               variant="outline" 
-              className="h-auto flex-col items-start p-4 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50"
+              className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 rounded-2xl group transition-all"
               asChild
             >
               <Link href={selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}>
-                <Zap className="h-6 w-6 text-brand-600 mb-3" />
-                <span className="font-bold text-slate-900 block">Something's Broken</span>
-                <span className="text-xs text-slate-500 mt-1">AI-driven troubleshooting and repair vs. replace guidance.</span>
+                <Zap className="h-8 w-8 text-brand-600 mb-4 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-lg text-slate-900 block">Something's Broken</span>
+                <span className="text-sm text-slate-500 mt-1">AI-driven troubleshooting and repair vs. replace guidance.</span>
               </Link>
             </Button>
 
             <Button 
               variant="outline" 
-              className="h-auto flex-col items-start p-4 text-left border-slate-200 hover:border-blue-300 hover:bg-blue-50/50"
+              className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 rounded-2xl group transition-all"
               asChild
             >
               <Link href={selectedPropertyId ? `/dashboard/providers?propertyId=${selectedPropertyId}` : '/dashboard/providers'}>
-                <Search className="h-6 w-6 text-blue-600 mb-3" />
-                <span className="font-bold text-slate-900 block">Find a Specialist</span>
-                <span className="text-xs text-slate-500 mt-1">Search our directory of verified local service providers.</span>
+                <Search className="h-8 w-8 text-blue-600 mb-4 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-lg text-slate-900 block">Find a Specialist</span>
+                <span className="text-sm text-slate-500 mt-1">Search our directory of verified local service providers.</span>
               </Link>
             </Button>
 
             <Button 
               variant="outline" 
-              className="h-auto flex-col items-start p-4 text-left border-red-100 hover:border-red-300 hover:bg-red-50/50"
+              className="h-auto flex-col items-start p-6 text-left border-red-100 hover:border-red-300 hover:bg-red-50/50 rounded-2xl group transition-all"
               asChild
             >
               <Link href={selectedPropertyId ? `/dashboard/emergency?propertyId=${selectedPropertyId}` : '/dashboard/emergency'}>
-                <AlertCircle className="h-6 w-6 text-red-600 mb-3" />
-                <span className="font-bold text-slate-900 block">Emergency Help</span>
-                <span className="text-xs text-slate-500 mt-1">Instant 24/7 emergency services and shutdown guides.</span>
+                <AlertCircle className="h-8 w-8 text-red-600 mb-4 group-hover:rotate-12 transition-transform" />
+                <span className="font-bold text-lg text-slate-900 block">Emergency Help</span>
+                <span className="text-sm text-slate-500 mt-1">Instant 24/7 emergency services and shutdown guides.</span>
               </Link>
             </Button>
           </div>
         </MobileSection>
 
         {/* 4. Active Resolutions Feed */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 pt-4">
           
           {/* Left Column: Decisions & Intelligence */}
           <MobileSection>
