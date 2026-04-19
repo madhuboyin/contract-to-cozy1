@@ -68,6 +68,7 @@ import { getInventoryItem } from '../../../../inventory/inventoryApi';
 import type { InventoryItemCategory } from '@/types';
 import TrustStrip from '../../components/route-templates/TrustStrip';
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
+import { track } from '@/lib/analytics/events';
 
 // Maps inventory item category to the closest ServiceRadarCategory for pre-selection.
 const INVENTORY_CATEGORY_TO_SERVICE_RADAR: Partial<Record<InventoryItemCategory, ServiceRadarCategory>> = {
@@ -769,6 +770,7 @@ export default function ServicePriceRadarClient() {
       device_context: deviceContext(),
       has_property_context: true,
     });
+    track('workflow_started', { tool: 'service-price-radar', propertyId, entryPoint: launchSurface ?? 'direct' });
   }, [launchSurface, prefillSignature, prefilledCategoryValue, prefilledLinkedEntityType, propertyId]);
 
   useEffect(() => {

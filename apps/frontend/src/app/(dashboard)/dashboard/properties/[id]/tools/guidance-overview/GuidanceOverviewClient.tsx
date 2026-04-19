@@ -48,6 +48,9 @@ import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import GuidedJourneyTemplate from './components/GuidedJourneyTemplate';
 import TrustPanel from '../../components/route-templates/TrustPanel';
+import TrustStrip from '../../components/route-templates/TrustStrip';
+import { guidanceEngineTrust } from '@/lib/trust/trustPresets';
+import { track } from '@/lib/analytics/events';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -390,6 +393,13 @@ export default function GuidanceOverviewClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    if (propertyId) {
+      track('workflow_started', { tool: 'guidance-overview', propertyId, entryPoint: 'direct' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
 
   // ---- URL param state ----
   const selectedInventoryItemId =
@@ -896,9 +906,15 @@ export default function GuidanceOverviewClient() {
 
     if (!href) {
       return (
-        <Button className="min-h-[44px] w-full" variant="secondary" disabled>
-          Next step is being prepared
-        </Button>
+        <div className="space-y-2">
+          <TrustStrip
+            variant="footnote"
+            {...guidanceEngineTrust()}
+          />
+          <p className="text-xs text-slate-500">
+            This step requires additional property context to generate a link. Check that your property details and linked assets are up to date, then refresh.
+          </p>
+        </div>
       );
     }
     return (

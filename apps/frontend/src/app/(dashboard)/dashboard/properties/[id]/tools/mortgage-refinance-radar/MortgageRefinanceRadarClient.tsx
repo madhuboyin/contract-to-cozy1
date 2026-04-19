@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import RouteStateCard from '@/components/system/RouteStateCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import { refinanceLoopTrust, trustDateLabel } from '@/lib/trust/trustPresets';
+import { track } from '@/lib/analytics/events';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -874,6 +875,9 @@ export default function MortgageRefinanceRadarClient() {
 
   useEffect(() => {
     load();
+    if (propertyId) {
+      track('workflow_started', { tool: 'mortgage-refinance-radar', propertyId, entryPoint: 'direct' });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 

@@ -35,6 +35,9 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolsRail from '../../components/HomeToolsRail';
+import TrustStrip from '../../components/route-templates/TrustStrip';
+import { hiddenAssetTrust } from '@/lib/trust/trustPresets';
+import { track } from '@/lib/analytics/events';
 import type {
   HiddenAssetCategory,
   HiddenAssetConfidenceLevel,
@@ -564,6 +567,13 @@ export default function HiddenAssetFinderClient() {
   // Derive selectedMatch from current query data — always fresh, no stale state.
   const selectedMatch = data?.matches.find((m) => m.id === selectedMatchId) ?? null;
 
+  useEffect(() => {
+    if (propertyId) {
+      track('workflow_started', { tool: 'hidden-asset-finder', propertyId, entryPoint: 'direct' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
+
   // Auto-close detail sheet when the selected match is no longer in the visible
   // list (expired, inactivated, filtered out, or dismissed after background refresh).
   useEffect(() => {
@@ -820,6 +830,11 @@ export default function HiddenAssetFinderClient() {
           </p>
         </MobileSection>
       )}
+
+      <TrustStrip
+        variant="footnote"
+        {...hiddenAssetTrust()}
+      />
 
       {/* Detail sheet */}
       <HiddenAssetDetailSheet

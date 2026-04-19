@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
+import { track } from '@/lib/analytics/events';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
 import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
@@ -20,6 +22,12 @@ export default function CoverageIntelligenceToolClient() {
   // (orchestration strip, "Where This Tool Fits" panel, tool explainer) and
   // surface the coverage tool immediately. Standalone page behaviour is unchanged.
   const isGuidanceContext = Boolean(guidanceJourneyId);
+
+  useEffect(() => {
+    if (!propertyId) return;
+    track('workflow_started', { tool: 'coverage-intelligence', propertyId, entryPoint: isGuidanceContext ? 'guidance' : 'direct' });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
 
   const backHref = isGuidanceContext
     ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
