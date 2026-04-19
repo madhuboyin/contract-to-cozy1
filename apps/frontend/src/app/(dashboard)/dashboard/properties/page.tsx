@@ -120,7 +120,7 @@ export default function PropertiesPage() {
     if (navTarget === 'home-score') return appendForwardedQuery(`/dashboard/properties/${propertyId}/home-score`);
     if (navTarget === 'reports') return appendForwardedQuery(`/dashboard/properties/${propertyId}/reports`);
 
-    const resolvedFromNavTarget = resolvePropertyHrefFromNavTarget(propertyId, navTarget);
+    const resolvedFromNavTarget = resolvePropertyHrefFromNavTarget(propertyId, navTarget, searchParams);
     if (resolvedFromNavTarget) {
       return appendForwardedQuery(resolvedFromNavTarget);
     }
