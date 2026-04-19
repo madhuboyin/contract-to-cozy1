@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
-import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
+import { apiRateLimiter, ocrRateLimiter } from '../middleware/rateLimiter.middleware';
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { detectCoverageGaps } from '../services/coverageGap.service';
@@ -60,7 +60,6 @@ import {
   dismissDraft,
   confirmDraft,
 } from '../controllers/inventoryOcr.controller';
-import { ocrRateLimiter } from '../middleware/ocrRateLimiter.middleware';
 import { requirePremiumForOcr } from '../middleware/premiumOcrGate.middleware';
 import { logger } from '../lib/logger';
 import {

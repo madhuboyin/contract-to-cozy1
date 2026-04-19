@@ -73,6 +73,7 @@ import {
   hasGuidanceContinuityContext,
 } from '@/features/guidance/utils/guidanceContinuity';
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
+import { track } from '@/lib/analytics/events';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -612,6 +613,20 @@ export default function DashboardPage() {
       fetchDashboardData();
     }
   }, [userLoading, user, fetchDashboardData]);
+
+  useEffect(() => {
+    if (userLoading || !user || data.isLoading || Boolean(data.error) || typeof window === 'undefined') {
+      return;
+    }
+
+    const sessionStartedKey = `ctc:session_started:${user.id}`;
+    if (window.sessionStorage.getItem(sessionStartedKey) === '1') {
+      return;
+    }
+
+    track('session_started', { propertyCount: data.properties.length });
+    window.sessionStorage.setItem(sessionStartedKey, '1');
+  }, [userLoading, user, data.isLoading, data.error, data.properties.length]);
 
   useEffect(() => {
     if (effectiveSelectedPropertyId !== selectedPropertyId) {

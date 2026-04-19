@@ -25,6 +25,7 @@ import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate'
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
+import { track } from '@/lib/analytics/events';
 
 function getInitials(firstName: string, lastName: string) {
   return (firstName?.[0] || '') + (lastName?.[0] || '');
@@ -321,6 +322,15 @@ export default function BookProviderPage() {
       ...(guidanceSignalIntentFamily && { guidanceSignalIntentFamily }),
       ...(hasGuardScopeContext && { guidanceEnforceGuard: true }),
     };
+
+    track('booking_initiated', {
+      providerId,
+      category:
+        selectedService?.category ||
+        serviceCategory ||
+        'GENERAL',
+      source: searchParams.get('from') || 'provider_booking_page',
+    });
 
     setIsSubmitting(true);
     try {

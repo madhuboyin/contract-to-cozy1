@@ -26,6 +26,7 @@ import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
 import basicAuth from 'express-basic-auth';
 import { prisma } from './lib/prisma';
+import { redis } from './lib/redis';
 
 // Import swagger config
 import { swaggerSpec } from './config/swagger.config';
@@ -348,7 +349,23 @@ app.get('/api/health/deep', requireInternalNetwork, async (req: Request, res: Re
   // Redis check (if REDIS_HOST set)
   if (process.env.REDIS_HOST) {
     try {
-      // Fire-and-forget ping — if redis module not available, mark ok (non-blocking)
+      const timeoutMs = Number(process.env.HEALTH_REDIS_TIMEOUT_MS || 1500);
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Redis ping timeout'));
+        }, timeoutMs);
+
+        redis
+          .ping()
+          .then(() => {
+            clearTimeout(timeout);
+            resolve();
+          })
+          .catch((error) => {
+            clearTimeout(timeout);
+            reject(error);
+          });
+      });
       checks.redis = 'ok';
     } catch {
       checks.redis = 'error';

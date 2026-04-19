@@ -240,3 +240,31 @@ export const uploadRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+const ocrWindowMs = 60 * 1000; // 1 minute
+const ocrMaxPerMinute = Number(process.env.OCR_MAX_PER_MINUTE || 6);
+
+function ocrRateLimitKey(req: Request): string {
+  const propertyId = typeof req.params?.propertyId === 'string' ? req.params.propertyId : 'unknown';
+  return `${rateLimitKey(req)}:property:${propertyId}:ocr`;
+}
+
+/**
+ * OCR limiter for inventory label extraction.
+ * Redis-backed to keep limits consistent across pods and restarts.
+ */
+export const ocrRateLimiter = rateLimit({
+  windowMs: ocrWindowMs,
+  max: ocrMaxPerMinute,
+  keyGenerator: ocrRateLimitKey,
+  store: new RedisRateLimitStore(ocrWindowMs),
+  message: {
+    success: false,
+    error: {
+      message: 'OCR rate limit reached. Please try again shortly.',
+      code: 'OCR_RATE_LIMITED',
+    },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
