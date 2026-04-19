@@ -18,9 +18,34 @@ export type MobileAiToolKey =
   | 'energy'
   | 'visual-inspector'
   | 'tax-appeal'
+  | 'property-tax'
+  | 'insurance-trend'
+  | 'cost-growth'
+  | 'sell-hold-rent'
+  | 'true-cost'
+  | 'cost-explainer'
+  | 'mortgage-refinance-radar'
+  | 'neighborhood-change-radar'
+  | 'home-digital-twin'
+  | 'hidden-asset-finder'
+  | 'home-habit-coach'
+  | 'break-even'
+  | 'capital-timeline'
+  | 'cost-volatility'
+  | 'guidance-overview'
+  | 'plant-advisor'
+  | 'home-event-radar'
+  | 'home-gazette'
+  | 'home-risk-replay'
+  | 'service-price-radar'
+  | 'price-finalization'
+  | 'quote-comparison'
+  | 'negotiation-shield'
+  | 'home-renovation-risk-advisor'
+  | 'home-digital-will'
   | 'view-all';
 
-export type MobileAiToolGroup = 'core' | 'monitoring' | 'planning';
+export type MobileAiToolGroup = 'core' | 'wealth' | 'monitoring' | 'planning';
 
 export type MobileAiToolDefinition = {
   key: MobileAiToolKey;
@@ -39,6 +64,7 @@ type RawAiToolDefinition = Omit<MobileAiToolDefinition, 'artworkKey'> & {
 };
 
 const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
+  // --- CORE DECISION TOOLS ---
   {
     key: 'replace-repair',
     title: 'Repair vs Replace',
@@ -53,30 +79,34 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
       /^\/dashboard\/properties\/[^/]+\/inventory\/items\/[^/]+\/replace-repair(\/|$)/.test(pathname),
   },
   {
-    key: 'coverage-intelligence',
-    title: 'Coverage Intelligence',
-    description: 'Detect and close protection gaps',
-    href: '/dashboard/coverage-intelligence',
-    icon: resolveToolIcon('ai', 'coverage-intelligence'),
-    emoji: '🧾',
+    key: 'sell-hold-rent',
+    title: 'Sell / Hold / Rent',
+    description: 'Compare ROI scenarios for your home',
+    href: '/dashboard/sell-hold-rent',
+    icon: resolveToolIcon('home', 'sell-hold-rent'),
+    emoji: '🏠',
     group: 'core',
-    artworkKey: 'coverage-intelligence',
-    isActive: (pathname) =>
-      /^\/dashboard\/coverage-intelligence(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/coverage-intelligence(\/|$)/.test(pathname),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/sell-hold-rent(\/|$)/.test(pathname),
   },
   {
-    key: 'risk-premium-optimizer',
-    title: 'Risk Optimizer',
-    description: 'Reduce risk and premium pressure',
-    href: '/dashboard/risk-premium-optimizer',
-    icon: resolveToolIcon('ai', 'risk-premium-optimizer'),
-    emoji: '📉',
+    key: 'negotiation-shield',
+    title: 'Negotiation Shield',
+    description: 'Review quotes and inspection asks',
+    href: '/dashboard/negotiation-shield',
+    icon: resolveToolIcon('home', 'negotiation-shield'),
+    emoji: '🛡️',
     group: 'core',
-    artworkKey: 'risk-optimizer',
-    isActive: (pathname) =>
-      /^\/dashboard\/risk-premium-optimizer(\/|$)/.test(pathname) ||
-      /^\/dashboard\/properties\/[^/]+\/tools\/risk-premium-optimizer(\/|$)/.test(pathname),
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/negotiation-shield(\/|$)/.test(pathname),
+  },
+  {
+    key: 'break-even',
+    title: 'Break-Even',
+    description: 'Estimate decision break-even timeline',
+    href: '/dashboard/break-even',
+    icon: resolveToolIcon('home', 'break-even'),
+    emoji: '⚖️',
+    group: 'core',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/break-even(\/|$)/.test(pathname),
   },
   {
     key: 'do-nothing-simulator',
@@ -92,17 +122,117 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
       /^\/dashboard\/properties\/[^/]+\/tools\/do-nothing(\/|$)/.test(pathname),
   },
   {
+    key: 'home-renovation-risk-advisor',
+    title: 'Renovation Advisor',
+    description: 'Check rules before major upgrades',
+    href: '/dashboard/home-renovation-risk-advisor',
+    icon: resolveToolIcon('home', 'home-renovation-risk-advisor'),
+    emoji: '🏗️',
+    group: 'core',
+    isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-renovation-risk-advisor|home-renovation-risk-advisor)(\/|$)/.test(pathname),
+  },
+
+  // --- WEALTH & SAVINGS ---
+  {
     key: 'home-savings',
     title: 'Home Savings Check',
     description: 'Find recurring savings opportunities',
     href: '/dashboard/home-savings',
     icon: resolveToolIcon('ai', 'home-savings'),
     emoji: '💸',
-    group: 'core',
+    group: 'wealth',
     artworkKey: 'home-savings-check',
     isActive: (pathname) =>
       /^\/dashboard\/home-savings(\/|$)/.test(pathname) ||
       /^\/dashboard\/properties\/[^/]+\/tools\/home-savings(\/|$)/.test(pathname),
+  },
+  {
+    key: 'property-tax',
+    title: 'Property Tax',
+    description: 'Forecast and track annual tax drag',
+    href: '/dashboard/property-tax',
+    icon: resolveToolIcon('home', 'property-tax'),
+    emoji: '🏛️',
+    group: 'wealth',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/property-tax(\/|$)/.test(pathname),
+  },
+  {
+    key: 'insurance-trend',
+    title: 'Insurance Trend',
+    description: 'Monitor premium pressure and renewal risk',
+    href: '/dashboard/insurance-trend',
+    icon: resolveToolIcon('home', 'insurance-trend'),
+    emoji: '🛡️',
+    group: 'wealth',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/insurance-trend(\/|$)/.test(pathname),
+  },
+  {
+    key: 'mortgage-refinance-radar',
+    title: 'Refi Radar',
+    description: 'Track mortgage optimization windows',
+    href: '/dashboard/mortgage-refinance-radar',
+    icon: resolveToolIcon('home', 'mortgage-refinance-radar'),
+    emoji: '📉',
+    group: 'wealth',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/mortgage-refinance-radar(\/|$)/.test(pathname),
+  },
+  {
+    key: 'coverage-intelligence',
+    title: 'Coverage Intelligence',
+    description: 'Detect and close protection gaps',
+    href: '/dashboard/coverage-intelligence',
+    icon: resolveToolIcon('ai', 'coverage-intelligence'),
+    emoji: '🧾',
+    group: 'wealth',
+    artworkKey: 'coverage-intelligence',
+    isActive: (pathname) =>
+      /^\/dashboard\/coverage-intelligence(\/|$)/.test(pathname) ||
+      /^\/dashboard\/properties\/[^/]+\/tools\/coverage-intelligence(\/|$)/.test(pathname),
+  },
+  {
+    key: 'risk-premium-optimizer',
+    title: 'Risk Optimizer',
+    description: 'Reduce risk and premium pressure',
+    href: '/dashboard/risk-premium-optimizer',
+    icon: resolveToolIcon('ai', 'risk-premium-optimizer'),
+    emoji: '📉',
+    group: 'wealth',
+    artworkKey: 'risk-optimizer',
+    isActive: (pathname) =>
+      /^\/dashboard\/risk-premium-optimizer(\/|$)/.test(pathname) ||
+      /^\/dashboard\/properties\/[^/]+\/tools\/risk-premium-optimizer(\/|$)/.test(pathname),
+  },
+  {
+    key: 'hidden-asset-finder',
+    title: 'Asset Finder',
+    description: 'Find rebates and benefits for your systems',
+    href: '/dashboard/hidden-asset-finder',
+    icon: resolveToolIcon('home', 'hidden-asset-finder'),
+    emoji: '🔍',
+    group: 'wealth',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/hidden-asset-finder(\/|$)/.test(pathname),
+  },
+
+  // --- CONTINUOUS INTELLIGENCE ---
+  {
+    key: 'home-digital-twin',
+    title: 'Home Digital Twin',
+    description: 'Living model of your home systems and risks',
+    href: '/dashboard/home-digital-twin',
+    icon: resolveToolIcon('home', 'home-digital-twin'),
+    emoji: '🧬',
+    group: 'monitoring',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-twin(\/|$)/.test(pathname),
+  },
+  {
+    key: 'home-event-radar',
+    title: 'Event Radar',
+    description: 'Track real-time signals affecting your home',
+    href: '/dashboard/home-event-radar',
+    icon: resolveToolIcon('home', 'home-event-radar'),
+    emoji: '📡',
+    group: 'monitoring',
+    isActive: (pathname) => /^\/dashboard\/(properties\/[^/]+\/tools\/home-event-radar|home-event-radar)(\/|$)/.test(pathname),
   },
   {
     key: 'climate',
@@ -114,6 +244,16 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     group: 'monitoring',
     artworkKey: 'climate-risk',
     isActive: (pathname) => /^\/dashboard\/climate(\/|$)/.test(pathname),
+  },
+  {
+    key: 'neighborhood-change-radar',
+    title: 'Neighborhood Radar',
+    description: 'Track external changes affecting home value',
+    href: '/dashboard/neighborhood-change-radar',
+    icon: resolveToolIcon('home', 'neighborhood-change-radar'),
+    emoji: '🏘️',
+    group: 'monitoring',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/neighborhood-change-radar(\/|$)/.test(pathname),
   },
   {
     key: 'energy',
@@ -147,6 +287,28 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     isActive: (pathname) => /^\/dashboard\/appreciation(\/|$)/.test(pathname),
   },
   {
+    key: 'home-risk-replay',
+    title: 'Risk Replay',
+    description: 'See what your home has been through',
+    href: '/dashboard/home-risk-replay',
+    icon: resolveToolIcon('home', 'home-risk-replay'),
+    emoji: '⏪',
+    group: 'monitoring',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-risk-replay(\/|$)/.test(pathname),
+  },
+  {
+    key: 'service-price-radar',
+    title: 'Price Radar',
+    description: 'Know if a quote is fair for your home',
+    href: '/dashboard/service-price-radar',
+    icon: resolveToolIcon('home', 'service-price-radar'),
+    emoji: '🎯',
+    group: 'monitoring',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/service-price-radar(\/|$)/.test(pathname),
+  },
+
+  // --- FUTURE READINESS ---
+  {
     key: 'budget',
     title: 'Budget Planner',
     description: 'Plan and track home spending',
@@ -167,6 +329,126 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
     isActive: (pathname) => /^\/dashboard\/tax-appeal(\/|$)/.test(pathname),
   },
   {
+    key: 'cost-growth',
+    title: 'Cost Growth',
+    description: 'Model long-term ownership cost trends',
+    href: '/dashboard/cost-growth',
+    icon: resolveToolIcon('home', 'cost-growth'),
+    emoji: '📈',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-growth(\/|$)/.test(pathname),
+  },
+  {
+    key: 'true-cost',
+    title: 'True Cost',
+    description: 'Total ownership cost visibility',
+    href: '/dashboard/true-cost',
+    icon: resolveToolIcon('home', 'true-cost'),
+    emoji: '📊',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/true-cost(\/|$)/.test(pathname),
+  },
+  {
+    key: 'cost-explainer',
+    title: 'Cost Explainer',
+    description: 'Deep dive into your home expenses',
+    href: '/dashboard/cost-explainer',
+    icon: resolveToolIcon('home', 'cost-explainer'),
+    emoji: '🧐',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-explainer(\/|$)/.test(pathname),
+  },
+  {
+    key: 'cost-volatility',
+    title: 'Volatility',
+    description: 'Measure and predict cost variability',
+    href: '/dashboard/cost-volatility',
+    icon: resolveToolIcon('home', 'cost-volatility'),
+    emoji: '📊',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/cost-volatility(\/|$)/.test(pathname),
+  },
+  {
+    key: 'capital-timeline',
+    title: 'Capital Timeline',
+    description: 'Plan major home capital events',
+    href: '/dashboard/capital-timeline',
+    icon: resolveToolIcon('home', 'capital-timeline'),
+    emoji: '📅',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/capital-timeline(\/|$)/.test(pathname),
+  },
+  {
+    key: 'home-habit-coach',
+    title: 'Habit Coach',
+    description: 'Tailored seasonal care routines',
+    href: '/dashboard/home-habit-coach',
+    icon: resolveToolIcon('home', 'home-habit-coach'),
+    emoji: '🧠',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-habit-coach(\/|$)/.test(pathname),
+  },
+  {
+    key: 'home-gazette',
+    title: 'Home Gazette',
+    description: 'Your weekly home intelligence briefing',
+    href: '/dashboard/home-gazette',
+    icon: resolveToolIcon('home', 'home-gazette'),
+    emoji: '🗞️',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-gazette(\/|$)/.test(pathname),
+  },
+  {
+    key: 'home-digital-will',
+    title: 'Home Digital Will',
+    description: 'Critical knowledge for trusted parties',
+    href: '/dashboard/home-digital-will',
+    icon: resolveToolIcon('home', 'home-digital-will'),
+    emoji: '📜',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/home-digital-will(\/|$)/.test(pathname),
+  },
+  {
+    key: 'guidance-overview',
+    title: 'Guidance Overview',
+    description: 'Review active signals and next steps',
+    href: '/dashboard/guidance-overview',
+    icon: resolveToolIcon('home', 'guidance-overview'),
+    emoji: '🧭',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/guidance-overview(\/|$)/.test(pathname),
+  },
+  {
+    key: 'plant-advisor',
+    title: 'Plant Advisor',
+    description: 'Room-aware plant recommendations',
+    href: '/dashboard/plant-advisor',
+    icon: resolveToolIcon('home', 'plant-advisor'),
+    emoji: '🌿',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/plant-advisor(\/|$)/.test(pathname),
+  },
+  {
+    key: 'price-finalization',
+    title: 'Price Finalizer',
+    description: 'Lock accepted terms before booking',
+    href: '/dashboard/price-finalization',
+    icon: resolveToolIcon('home', 'price-finalization'),
+    emoji: '🔒',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/price-finalization(\/|$)/.test(pathname),
+  },
+  {
+    key: 'quote-comparison',
+    title: 'Quote Comparison',
+    description: 'Compare vendor quotes side by side',
+    href: '/dashboard/quote-comparison',
+    icon: resolveToolIcon('home', 'quote-comparison'),
+    emoji: '⚖️',
+    group: 'planning',
+    isActive: (pathname) => /^\/dashboard\/properties\/[^/]+\/tools\/quote-comparison(\/|$)/.test(pathname),
+  },
+  {
     key: 'modifications',
     title: 'Home Upgrades',
     description: 'Track improvements and ROI impact',
@@ -179,7 +461,7 @@ const RAW_MOBILE_AI_TOOL_CATALOG: RawAiToolDefinition[] = [
   {
     key: 'oracle',
     title: 'Appliance Oracle',
-    description: 'Care, lifespan, and replacement intelligence',
+    description: 'Lifespan and replacement intelligence',
     href: '/dashboard/oracle',
     icon: resolveToolIcon('ai', 'oracle'),
     emoji: '🔮',
@@ -233,17 +515,22 @@ export const MOBILE_AI_TOOL_GROUPS: Array<{
   {
     key: 'core',
     title: 'Core Decision Tools',
-    summary: 'Repair, coverage, risk, and savings intelligence',
+    summary: 'High-impact decision support for your home',
+  },
+  {
+    key: 'wealth',
+    title: 'Wealth & Savings',
+    summary: 'Financial optimization and equity growth',
   },
   {
     key: 'monitoring',
-    title: 'Monitoring + Risk',
-    summary: 'Continuous exposure and value monitoring',
+    title: 'Continuous Intelligence',
+    summary: 'Real-time risk and condition monitoring',
   },
   {
     key: 'planning',
-    title: 'Planning + Operations',
-    summary: 'Budgeting, upgrades, and emergency readiness',
+    title: 'Future Readiness',
+    summary: 'Budgeting, upgrades, and long-term planning',
   },
 ];
 

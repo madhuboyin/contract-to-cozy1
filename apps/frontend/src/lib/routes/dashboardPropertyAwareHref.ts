@@ -105,6 +105,106 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
       return buildHref(`/dashboard/properties/${propertyId}/reports`, nextQuery);
     },
   },
+  '/dashboard/property-tax': {
+    navTarget: 'property-tax',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/property-tax`, query),
+  },
+  '/dashboard/insurance-trend': {
+    navTarget: 'insurance-trend',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/insurance-trend`, query),
+  },
+  '/dashboard/cost-growth': {
+    navTarget: 'cost-growth',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/cost-growth`, query),
+  },
+  '/dashboard/sell-hold-rent': {
+    navTarget: 'sell-hold-rent',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/sell-hold-rent`, query),
+  },
+  '/dashboard/true-cost': {
+    navTarget: 'true-cost',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/true-cost`, query),
+  },
+  '/dashboard/cost-explainer': {
+    navTarget: 'cost-explainer',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/cost-explainer`, query),
+  },
+  '/dashboard/mortgage-refinance-radar': {
+    navTarget: 'mortgage-refinance-radar',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/mortgage-refinance-radar`, query),
+  },
+  '/dashboard/neighborhood-change-radar': {
+    navTarget: 'neighborhood-change-radar',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/neighborhood-change-radar`, query),
+  },
+  '/dashboard/home-digital-twin': {
+    navTarget: 'home-digital-twin',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/home-digital-twin`, query),
+  },
+  '/dashboard/hidden-asset-finder': {
+    navTarget: 'hidden-asset-finder',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/hidden-asset-finder`, query),
+  },
+  '/dashboard/home-habit-coach': {
+    navTarget: 'home-habit-coach',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/home-habit-coach`, query),
+  },
+  '/dashboard/break-even': {
+    navTarget: 'break-even',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/break-even`, query),
+  },
+  '/dashboard/capital-timeline': {
+    navTarget: 'capital-timeline',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/capital-timeline`, query),
+  },
+  '/dashboard/cost-volatility': {
+    navTarget: 'cost-volatility',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/cost-volatility`, query),
+  },
+  '/dashboard/plant-advisor': {
+    navTarget: 'plant-advisor',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/plant-advisor`, query),
+  },
+  '/dashboard/home-gazette': {
+    navTarget: 'home-gazette',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/home-gazette`, query),
+  },
+  '/dashboard/home-digital-will': {
+    navTarget: 'home-digital-will',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/home-digital-will`, query),
+  },
+  '/dashboard/price-finalization': {
+    navTarget: 'price-finalization',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/price-finalization`, query),
+  },
+  '/dashboard/quote-comparison': {
+    navTarget: 'quote-comparison',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/quote-comparison`, query),
+  },
+  '/dashboard/negotiation-shield': {
+    navTarget: 'negotiation-shield',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/tools/negotiation-shield`, query),
+  },
 };
 
 const NAV_TARGET_SUFFIXES: Record<string, string> = {
@@ -118,6 +218,26 @@ const NAV_TARGET_SUFFIXES: Record<string, string> = {
   inventory: 'inventory',
   'risk-radar': 'risk-assessment',
   'inspection-report': 'reports?report=inspection',
+  'property-tax': 'tools/property-tax',
+  'insurance-trend': 'tools/insurance-trend',
+  'cost-growth': 'tools/cost-growth',
+  'sell-hold-rent': 'tools/sell-hold-rent',
+  'true-cost': 'tools/true-cost',
+  'cost-explainer': 'tools/cost-explainer',
+  'mortgage-refinance-radar': 'tools/mortgage-refinance-radar',
+  'neighborhood-change-radar': 'tools/neighborhood-change-radar',
+  'home-digital-twin': 'tools/home-digital-twin',
+  'hidden-asset-finder': 'tools/hidden-asset-finder',
+  'home-habit-coach': 'tools/home-habit-coach',
+  'break-even': 'tools/break-even',
+  'capital-timeline': 'tools/capital-timeline',
+  'cost-volatility': 'tools/cost-volatility',
+  'plant-advisor': 'tools/plant-advisor',
+  'home-gazette': 'tools/home-gazette',
+  'home-digital-will': 'tools/home-digital-will',
+  'price-finalization': 'tools/price-finalization',
+  'quote-comparison': 'tools/quote-comparison',
+  'negotiation-shield': 'tools/negotiation-shield',
 };
 
 export function buildPropertyAwareDashboardHref(
