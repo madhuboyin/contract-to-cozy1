@@ -4,7 +4,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
-  AlertTriangle,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -32,6 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import RouteStateCard from '@/components/system/RouteStateCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { refinanceLoopTrust, trustDateLabel } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
 
@@ -179,6 +179,10 @@ function RadarStatusHero({ data }: { data: RadarStatusAvailable }) {
   return (
     <GlassCard>
       <div className="p-5 sm:p-6">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+          Refinance Decision
+        </p>
+
         {/* Header row */}
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1.5">
@@ -197,14 +201,28 @@ function RadarStatusHero({ data }: { data: RadarStatusAvailable }) {
         <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
           {data.radarSummary}
         </p>
+      </div>
+    </GlassCard>
+  );
+}
 
-        {/* KPI grid — only when opportunity is open */}
-        {isOpen && (
-          <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 border-t border-slate-200/70 pt-4 dark:border-slate-700/70">
+function KeyMetricsCard({ data }: { data: RadarStatusAvailable }) {
+  const isOpen = data.radarState === 'OPEN';
+
+  return (
+    <GlassCard>
+      <div className="p-5 sm:p-6">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Key Metrics</h3>
+          <span className="text-xs text-slate-500 dark:text-slate-400">Current mortgage vs market rates</span>
+        </div>
+
+        {isOpen ? (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
             <KpiTile
               label="Rate Gap"
               value={pct(data.rateGapPct, 2)}
-              sub={`${pct(data.currentRatePct, 3)} → ${pct(data.marketRatePct, 3)}`}
+              sub={`${pct(data.currentRatePct, 3)} -> ${pct(data.marketRatePct, 3)}`}
               highlight="blue"
             />
             <KpiTile
@@ -223,26 +241,29 @@ function RadarStatusHero({ data }: { data: RadarStatusAvailable }) {
               highlight="green"
             />
           </div>
-        )}
-
-        {/* Not-qualified reasons when CLOSED */}
-        {!isOpen && data.notQualifiedReasons.length > 0 && (
-          <div className="mt-4 border-t border-slate-200/70 pt-4 dark:border-slate-700/70">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Why not yet
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              No compelling savings signal yet under current market conditions.
             </p>
-            <ul className="space-y-1">
-              {data.notQualifiedReasons.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
-                  {r}
-                </li>
-              ))}
-            </ul>
+            {data.notQualifiedReasons.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Why not yet
+                </p>
+                <ul className="space-y-1">
+                  {data.notQualifiedReasons.map((reason, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
+                      {reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Loan context */}
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-slate-200/70 pt-4 text-xs text-slate-500 dark:border-slate-700/70 dark:text-slate-400">
           <span>Balance: {usd(data.loanBalance)}</span>
           <span>Remaining: {months(data.remainingTermMonths)}</span>
@@ -367,11 +388,11 @@ function ScenarioCalculator({
         <div className="mb-4 flex items-center gap-2">
           <Calculator className="h-4 w-4 text-blue-500 shrink-0" />
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Scenario Calculator
+            Scenario Planner
           </h3>
         </div>
         <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
-          Run a custom refinance scenario against your current mortgage.
+          Run a custom refinance scenario against your current mortgage terms.
         </p>
 
         {/* Input rows */}
@@ -898,10 +919,18 @@ export default function MortgageRefinanceRadarClient() {
       title="Mortgage Refinance Radar"
       subtitle="Monitor rates and know when refinancing is likely worth the effort."
       trust={trust}
+      introAction={
+        <HomeToolsRail
+          propertyId={propertyId}
+          context="mortgage-refinance-radar"
+          currentToolId="mortgage-refinance-radar"
+          showDesktop={false}
+        />
+      }
       priorityAction={!loading && available ? (
         available.radarState === 'OPEN' ? {
-          title: 'A refinance window is open — current rates suggest potential savings',
-          description: 'Rate movement has opened a gap worth exploring. Confirm with lender outreach before conditions change.',
+          title: 'A refinance window is open; current rates suggest potential savings.',
+          description: 'Recent rate movement created a meaningful gap. Compare lender quotes before conditions shift.',
           impactLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} fit` : 'Opportunity detected',
           confidenceLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} confidence` : 'Medium confidence',
           primaryAction: (
@@ -922,8 +951,8 @@ export default function MortgageRefinanceRadarClient() {
             </Button>
           ),
         } : {
-          title: 'No refinance opportunity detected at current rates',
-          description: 'The model does not see a compelling rate gap right now. Re-evaluate when market rates shift to get an updated read.',
+          title: 'No refinance opportunity detected at current rates.',
+          description: 'The model does not see a compelling rate gap right now. Re-evaluate when rates shift for an updated read.',
           impactLabel: 'Window currently closed',
           confidenceLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} confidence` : 'Medium confidence',
           primaryAction: (
@@ -940,7 +969,6 @@ export default function MortgageRefinanceRadarClient() {
           ),
         }
       ) : undefined}
-      rail={<HomeToolsRail propertyId={propertyId} context="mortgage-refinance-radar" currentToolId="mortgage-refinance-radar" />}
     >
 
       {/* Loading */}
@@ -972,24 +1000,40 @@ export default function MortgageRefinanceRadarClient() {
       {/* Main content */}
       {available && !loading && (
         <>
-          {/* 1. Radar status hero */}
+          <HomeToolHeader
+            toolId="mortgage-refinance-radar"
+            propertyId={propertyId}
+            context="mortgage-refinance-radar"
+            currentToolId="mortgage-refinance-radar"
+          />
+
+          {/* 1. Refinance decision */}
           <RadarStatusHero data={available} />
 
-          {/* 2. Rate trend (from status) */}
-          <RateTrendCard data={available} />
+          {/* 2. Key metrics */}
+          <KeyMetricsCard data={available} />
 
-          {/* 3. Missed opportunity */}
-          <MissedOpportunityCard data={available} />
-
-          {/* 4. Scenario calculator (only when mortgage data is present) */}
+          {/* 3. Scenario planner */}
           <ScenarioCalculator propertyId={propertyId} contextData={available} />
 
-          {/* 5. Rate history snapshots */}
-          {rateData && rateData.snapshots.length > 0 && (
-            <RateHistoryCard rateData={rateData} />
-          )}
+          {/* 4. Market context */}
+          <section aria-label="Market Context" className="space-y-4">
+            <div className="px-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                Market Context
+              </p>
+            </div>
 
-          {/* 6. Disclaimer */}
+            <RateTrendCard data={available} />
+
+            <MissedOpportunityCard data={available} />
+
+            {rateData && rateData.snapshots.length > 0 && (
+              <RateHistoryCard rateData={rateData} />
+            )}
+          </section>
+
+          {/* 5. Disclaimer */}
           {available.disclaimer && (
             <p className="px-1 text-xs leading-relaxed text-slate-400 dark:text-slate-500">
               {available.disclaimer}
