@@ -9,7 +9,7 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Info, Loader2, MapPin, Search, Star } from 'lucide-react';
+import { Info, Loader2, MapPin, Search, Star, Zap } from 'lucide-react';
 import { Provider } from '@/types';
 import { cn } from '@/lib/utils';
 import { ServiceCategoryIcon } from '@/components/ServiceCategoryIcon';
@@ -618,6 +618,18 @@ export default function ProvidersPage() {
       )}
 
       {insightContext && fromSource !== 'replace-repair' ? (
+        <MobileCard variant="compact" className="border-sky-200 bg-sky-50">
+          <div className="flex items-start gap-2.5">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
+            <div>
+              <p className="mb-0 text-sm font-semibold text-sky-900">
+                Finding providers for <span className="font-bold">{formatEnumLabel(insightContext)}</span>
+              </p>
+              {targetPropertyId ? <p className="mb-0 mt-0.5 text-xs text-sky-700">Pre-filtered to your selected property.</p> : null}
+            </div>
+          </div>
+        </MobileCard>
+      ) : null}
 
       {contextItemName ? (
         <MobileCard variant="compact" className="border-emerald-200 bg-emerald-50">

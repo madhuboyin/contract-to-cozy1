@@ -77,7 +77,7 @@ export default function SaveHubPage() {
           label="Equity Status" 
           value="Tracked" 
           hint="Value vs Mortgage" 
-          tone="info"
+          tone="neutral"
         />
         <MobileKpiTile 
           label="Tax Audit" 

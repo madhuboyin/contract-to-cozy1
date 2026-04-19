@@ -799,7 +799,8 @@ class APIClient {
   // PROPERTY ENDPOINTS 
   // ==========================================================================
   async getProperties(): Promise<APIResponse<{ properties: Property[] }>> {
-    return this.get('/api/properties');
+    const res = await this.get<{ properties: Property[] }>('/api/properties');
+    return { success: true, data: res.data };
   }
 
   /**
@@ -808,7 +809,8 @@ class APIClient {
   async lookupProperty(address: string, zipCode?: string): Promise<APIResponse<any>> {
     const params = new URLSearchParams({ address });
     if (zipCode) params.append('zipCode', zipCode);
-    return this.get(`/api/properties/lookup?${params.toString()}`);
+    const res = await this.get<any>(`/api/properties/lookup?${params.toString()}`);
+    return { success: true, data: res.data };
   }
 
 
@@ -837,6 +839,13 @@ class APIClient {
     zipCode: string;
     isPrimary?: boolean;
     coverPhotoDocumentId?: string | null;
+    propertyType?: string | null;
+    propertySize?: number | null;
+    yearBuilt?: number | null;
+    bedrooms?: number | null;
+    bathrooms?: number | null;
+    purchasePriceCents?: number | null;
+    purchaseDate?: Date | string | null;
   }): Promise<APIResponse<Property>> {
     return this.request('/api/properties', {
       method: 'POST',

@@ -10,9 +10,11 @@ import {
   DollarSign, 
   Zap,
   Calendar,
-  ChevronLeft
+  ChevronLeft,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { WinCard } from '@/components/shared/WinCard';
 import { motion, AnimatePresence } from 'framer-motion';
 

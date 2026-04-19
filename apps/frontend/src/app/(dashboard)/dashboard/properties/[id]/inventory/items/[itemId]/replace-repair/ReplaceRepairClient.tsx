@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, ArrowLeft, Loader2, Wrench } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Loader2, Wrench, Search } from 'lucide-react';
 import { getInventoryItem } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

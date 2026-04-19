@@ -41,23 +41,24 @@ import { useQuery } from '@tanstack/react-query';
  * 4. Proof of Care (Certified History)
  */
 export default function VaultHubPage() {
-  const { selectedPropertyId, selectedProperty } = usePropertyContext();
+  const { selectedPropertyId } = usePropertyContext();
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const vaultStatsQuery = useQuery({
     queryKey: ['vault-stats', selectedPropertyId],
     queryFn: async () => {
       if (!selectedPropertyId) return null;
-      const [docs, items, rooms] = await Promise.all([
+      const [docs, items, rooms, propertyRes] = await Promise.all([
         api.listDocuments(selectedPropertyId),
         api.get<{ items: any[] }>(`/api/properties/${selectedPropertyId}/inventory`),
-        api.get<{ rooms: any[] }>(`/api/properties/${selectedPropertyId}/rooms`)
+        api.get<{ rooms: any[] }>(`/api/properties/${selectedPropertyId}/rooms`),
+        api.getProperty(selectedPropertyId)
       ]);
       return {
         docCount: docs.success ? docs.data.documents.length : 0,
-        itemCount: items.success ? items.data.items.length : 0,
-        roomCount: rooms.success ? rooms.data.rooms.length : 0,
-        healthScore: selectedProperty?.healthScore || 0
+        itemCount: items.data?.items?.length || 0,
+        roomCount: rooms.data?.rooms?.length || 0,
+        healthScore: propertyRes.success ? (propertyRes.data as any).healthScore?.totalScore || 0 : 0
       };
     },
     enabled: Boolean(selectedPropertyId),
@@ -84,14 +85,15 @@ export default function VaultHubPage() {
           label="Records" 
           value={stats.docCount + stats.itemCount} 
           hint="Verified entries" 
-          tone="protected" 
+          tone="positive" 
         />
         <MobileKpiTile 
           label="Rooms" 
           value={stats.roomCount} 
           hint="Mapped areas" 
-          tone="info"
+          tone="neutral" 
         />
+
         <MobileKpiTile 
           label="Health" 
           value={`${stats.healthScore}%`} 

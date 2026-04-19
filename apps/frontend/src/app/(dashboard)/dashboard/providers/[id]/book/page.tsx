@@ -141,7 +141,7 @@ export default function BookProviderPage() {
     if (selectedPropertyId && targetItemId) {
       api.get<{ item: { name: string } }>(`/api/properties/${selectedPropertyId}/inventory/items/${targetItemId}`)
         .then(res => {
-          if (res.success && res.data?.item?.name) {
+          if (res.data?.item?.name) {
             setContextItemName(res.data.item.name);
           }
         })

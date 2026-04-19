@@ -15,6 +15,8 @@ import {
   ShieldAlert,
   Sprout,
   TrendingUp,
+  Zap,
+  ArrowRight
 } from 'lucide-react';
 import { Booking, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
 import { ScoredProperty } from './types'; 

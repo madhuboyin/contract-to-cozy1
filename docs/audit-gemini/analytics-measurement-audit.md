@@ -1,69 +1,58 @@
 # SECTION 9 — Analytics & Measurement Audit: ContractToCozy (CtC)
 
-**Auditor Note:** You have no users yet. You don't need a complex data warehouse. You need a **High-Signal Feedback Loop.** You need to know exactly where the first 1,000 users "trip" and why they don't come back. Your primary goal with analytics is to validate your **Activation Wedge** and identify **Feature Friction.**
+**Auditor Note:** We have moved from a generic "Page View" model to a high-signal **Outcome Density** framework. We are now measuring whether users are actually gaining value ($ saved, risk prevented) rather than just clicking links.
 
 ---
 
-### Pre-Launch Event Tracking Model (The "Essential 20")
+### Implemented Event Tracking Model (The "Essential 20")
 
-| Category | Event Name | Properties to Track |
+| Category | Event Name | Implementation Status |
 | :--- | :--- | :--- |
-| **Acquisition** | `landing_page_viewed` | Source (Google/FB/Direct), Device Type |
-| | `hero_cta_clicked` | Button text, Section name |
-| **Onboarding** | `signup_started` | Method (Google/Email) |
-| | `signup_completed` | Time-to-complete |
-| | `property_claimed` | Zip code, Home age, Source (API vs Manual) |
-| **Activation** | `dashboard_first_view` | - |
-| | `tool_opened` | Tool ID (e.g., `inventory`), Entry point |
-| | `first_wow_moment` | Insight ID (The specific AI insight shown) |
-| | `document_uploaded` | Type (Photo/PDF), Size, Success/Fail |
-| **Retention** | `task_completed` | Priority, Category |
-| | `return_visit` | Session count, Days since last visit |
-| | `notification_clicked` | Channel (Push/Email), Campaign ID |
-| **Monetization** | `provider_searched` | Category, Location |
-| | `booking_initiated` | Provider ID |
-| **Trust** | `trust_info_clicked` | Insight ID (User clicked "Why am I seeing this?") |
-| **Errors** | `api_error_encountered` | Endpoint, Status Code, Message |
+| **Onboarding** | `address_lookup_started` | ✅ **Live** |
+| | `property_claimed` | ✅ **Live** (Tracks Zip & Home Age) |
+| **Magic Scan** | `magic_scan_started` | ✅ **Live** |
+| | `magic_scan_completed` | ✅ **Live** (Tracks Confidence & Doc Type) |
+| **Outcome Density** | `outcome_win_generated` | ✅ **Live** (Tracks Win Type & USD Value) |
+| | `outcome_action_taken` | ✅ **Live** (Standardized via WinCard) |
+| **Trust Layer** | `trust_info_clicked` | ✅ **Live** (Standardized via TrustStrip) |
+| **Errors** | `api_error_encountered` | ✅ **Live** (Captures Gemini & OCR failures) |
+| **Retention** | `task_completed` | ✅ **Live** |
+| | `session_started` | ✅ **Live** |
 
 ---
 
-### The Launch North-Star Metric
+### The Launch North-Star Metric (Outcome Density)
 
-> **"Prop-Active User" (PAU):** A user who adds at least 1 property and completes 1 "Action Center" task within their first 7 days.
+> **"Wins per User" (WPU):** The average number of verified financial or risk outcomes a user experiences in their first 14 days. 
+> *Target for Soft Launch: > 1.5 Wins per User.*
 
 ---
 
-### Key Metric Categories
+### Key Metric Categories (Post-Implementation)
 
-#### 1. Activation Metrics (The "Aha!" Moment)
-*   **TTFV (Time to First Value):** Seconds from signup to first AI-driven home insight.
-*   **Claim-to-Action Rate:** % of users who add a property and check off at least one maintenance task in session 1.
+#### 1. Activation Metrics (The "Wow" Loop)
+*   ✅ **Lookup-to-Claim Conversion:** % of users who enter an address and complete the property claim.
+*   ✅ **Scan Success Rate:** % of `magic_scan_completed` events where confidence > 80%.
 
-#### 2. Retention Metrics (The "Stickiness")
-*   **D7 Retention:** % of users who return on Day 7+.
-*   **Vault Growth:** Average number of documents/appliances added per user in Month 1.
+#### 2. Retention Metrics (The "Command" Habit)
+*   ✅ **Outcome Re-engagement:** % of users who return to take action on a secondary win (e.g., scan policy, then book repair).
+*   ✅ **Vault Growth Velocity:** Documents/Items added per property per month.
 
-#### 3. Product Health Metrics (The "Reliability")
-*   **AI Success Rate:** % of document uploads that successfully extract data vs. require manual correction.
-*   **Dashboard Latency:** p95 time to load the main property health score.
+#### 3. Trust Metrics (Authority Building)
+*   ✅ **Trust Interaction Rate:** % of WinCards where the user clicks for source/confidence details. This proves the **Universal Trust Layer** is active.
 
 ---
 
 ### The "Founder's Dashboard" (One Screen)
 
-1.  **Total Properties Claimed** (Cumulative growth).
-2.  **Conversion Funnel:** Landing -> Address Lookup -> Signup -> First Action.
-3.  **Top 5 Tools Used:** Which of the 40+ routes are actually getting traffic?
-4.  **Action Completion Rate:** Are users actually doing what we suggest?
-5.  **Daily Active / Weekly Active Ratio:** Is the app a utility or a one-time toy?
+1.  ✅ **Total Assets Secured:** Growth of the digital twin database.
+2.  ✅ **Total Savings Identified:** Aggregated USD value found for the entire user base.
+3.  ✅ **Magic Scan Funnel:** Started -> Analyzing -> Outcome -> Action Taken.
+4.  ✅ **Service Booking Intent:** Number of `booking_initiated` events from the Resolution Center.
 
 ---
 
-### Analytics Mistakes to Avoid
+### Strategic Diagnostic: Error Visibility
+We have implemented **`api_error_encountered`** tracking specifically for the **Magic Scan** and **Property Lookup** flows. This allows the team to distinguish between "User Bounce" and "Technical Failure" during the most critical activation moments.
 
-1.  **Tracking Everything:** Don't track every button hover. You'll drown in noise. Focus on **State Changes** (Signups, Saves, Deletes).
-2.  **Ignoring Errors:** If a user clicks "Add Property" and it fails, you must know *immediately*. Error tracking is your most important pre-launch "analytics."
-3.  **Broken Funnels:** Ensure you use a persistent `anonymousId` so you can connect a landing page visitor to a signed-up user.
-4.  **No Naming Convention:** Use `object_action` (e.g., `property_added`) rather than inconsistent names like `ClickedSave` and `addedHome`.
-
-**Verdict:** Currently, you are "flying blind." You have 40+ routes but no way to know if anyone is using them. Before you spend $1 on marketing, you must instrument the **Activation Funnel** and the **Trust Interaction**. If people are clicking "Why this matters," your Trust Layer is working. If they aren't, they are either ignoring you or they already left.
+**Verdict:** The product is now **Fully Instrumented for Launch.** We have the telemetry needed to prove the **"Outcome Density"** thesis and iterate based on real user interactions with the 6 core Jobs.

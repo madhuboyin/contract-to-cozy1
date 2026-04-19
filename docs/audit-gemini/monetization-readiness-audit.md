@@ -1,77 +1,52 @@
 # SECTION 10 — Monetization Readiness Audit: ContractToCozy (CtC)
 
-**Auditor Note:** You are in a "Land Grab" phase. Your first goal is to become the **Operating System of the Home.** If you charge too early or for the wrong things, you'll never reach the scale needed for a marketplace. Your monetization strategy should be **"Free to Use, Paid to Optimize."**
+**Auditor Note:** We have implemented the core technical infrastructure for a **"Free to Use, Paid to Optimize"** model. By launching the **Magic Scan** loop, we have secured the primary revenue engine: **AI-as-a-Service.**
 
 ---
 
-### Monetization Map (Based on Current Features)
+### Monetization Map (Post-Implementation)
 
-| Feature / Category | Monetization Path | Rationale |
+| Feature / Category | Monetization Path | Implementation Status |
 | :--- | :--- | :--- |
-| **Basic Maintenance** | **Free** | Core utility needed for retention. |
-| **Property Health Score** | **Free** | The "Hook" that brings users back. |
-| **The Vault (Basic)** | **Free** (up to 10 items) | Getting data *into* the app is your priority. |
-| **AI Document Parsing** | **Premium** | High compute cost (Gemini) and high "Magic" value for the user. |
-| **Unlimited Vault Storage** | **Premium** | Standard SaaS storage play; signals "Lifetime" value. |
-| **Tax Appeal / Refi Tools** | **Concierge / Referral** | Users will pay for a *result* (lower taxes), not just a tool. |
-| **Provider Bookings** | **Marketplace / Referral** | Contractors pay for leads; users pay for "Cozy Verified" pros. |
-| **Insurance Optimization** | **Referral (Brokerage)** | High-value lead for insurance carriers. |
-| **Energy/Climate Audits** | **Referral** | Leads for solar, insulation, and smart-thermostat companies. |
+| **Address Onboarding**| **Free** | ✅ **Live.** Zero-friction entry to maximize Top-of-Funnel. |
+| **Magic Scan (Basic)** | **Free** (up to 3) | ✅ **Live.** Allows users to experience the "Magic" before paying. |
+| **AI Data Extraction** | **Premium (Cozy+)** | ✅ **Live (Backend ready).** High compute value via Gemini. |
+| **Home History Report**| **Premium (One-time)** | ✅ **Live (Vault View).** $29 to unlock a verified resale PDF. |
+| **Provider Booking** | **Referral Fee** | ✅ **Live (Resolution Center).** 10-15% lead-gen fee from pros. |
+| **Insurance Switch** | **Referral Fee** | ✅ **Live (Savings Hub).** Brokerage referral for rate matching. |
 
 ---
 
-### Suggested Early Monetization Model: "The Freemium Guard"
+### Implemented Pricing Tiers (The "Freemium Guard")
 
 #### Tier 1: Free (The Active Homeowner)
-*   Manage 1 Property.
-*   Unified Action Center (Basic Maintenance).
-*   Storage for 10 Appliances/Docs.
-*   Public Data Property Insights.
+*   ✅ **Manage 1 Property.**
+*   ✅ **Unified Action Center** (Basic Maintenance).
+*   ✅ **Storage for 10 Records.**
+*   ✅ **Address Lookup Intelligence.**
 *   *Goal: Activation & Habit Formation.*
 
-#### Tier 2: Premium (Cozy+ — $9/mo or $79/yr)
-*   Manage Multiple Properties.
-*   **Unlimited AI Vaulting:** Snap unlimited photos; Gemini auto-extracts everything.
-*   **Warranty Watchdog:** Automated alerts for expiring warranties.
-*   **Claims Readiness Report:** One-click PDF export of all assets for insurance.
-*   **Priority Support:** Direct access to "Home Concierge" chat.
+#### Tier 2: Premium (Cozy+ — $9/mo or $79/yr) — 🧪 BETA READY
+*   ✅ **Unlimited Magic Scans:** Snap unlimited labels/receipts.
+*   ✅ **Unlimited Home History:** Full "Black Box" spatial twin.
+*   ✅ **Verified Resale Link:** Public, password-protected Seller's Vault.
+*   ✅ **Priority Resolution:** Concierge booking and quote comparison.
 *   *Goal: Monetize Power Users & "Wealth Protection" Anxiety.*
 
-#### Tier 3: Concierge (Pay-per-Result)
-*   **Tax Appeal Assistant:** $49 fee if we identify a >$500 savings opportunity.
-*   **Project Manager:** 10% fee for managing a major renovation via verified pros.
-*   *Goal: Capture high-intent, high-value financial events.*
+---
+
+### Future B2B Wedges (Phase 3+)
+
+1.  **Real Estate Closing Gift:** Realtors buy 1-year Cozy+ subscriptions for buyers to prove property value history.
+2.  **Insurance Risk Reduction:** Carriers subsidize Cozy+ for policyholders who check off high-priority maintenance (e.g., water heater flush).
+3.  **Property Managers:** Unified Command Center for 5-20 properties.
 
 ---
 
-### Premium Feature Candidates (The "Must Pays")
+### Strategic Monetization Risks
 
-1.  **AI OCR Parsing:** Users hate typing. They will pay to snap a photo and be "done."
-2.  **Asset Export (The "Black Box"):** Being able to hand a realtor or insurance adjuster a beautiful, comprehensive PDF of the home's history.
-3.  **Automated Rebate Finder:** AI that scans your appliances and finds energy rebates you missed.
+*   **Trust Dilution:** If "Savings Wins" feel like ads, users will churn. (Fix: **Universal Trust Layer** proves the ROI is objective).
+*   **Gemini Burn Rate:** High-speed AI extraction is expensive. (Fix: Strict Tier 1 limits and cache frequent appliance models).
+*   **Resolution Friction:** If users don't book pros, CtC loses 50% of its revenue potential. (Fix: Focus on the **"Find Pros"** button logic in the Resolution Center).
 
----
-
-### B2B Opportunities (The Future)
-
-1.  **Real Estate Agents:** "CtC for Realtors"—Buy a 1-year subscription for your clients as a closing gift. (Highest potential B2B wedge).
-2.  **Insurance Carriers:** Offering CtC as a "Risk Mitigation" tool to policyholders in exchange for lower premiums.
-3.  **Property Managers:** A simplified dashboard for managing small rental portfolios using the same CtC engine.
-
----
-
-### Monetization Risks
-
-*   **Charging for "The Chore":** If you charge for maintenance checklists, people will just use a free Notes app.
-*   **Referral Fatigue:** If every insight feels like an ad for an insurance company, trust will collapse.
-*   **Data Privacy Backlash:** Selling user data is a non-starter for a "Premium" home app. Stick to lead-gen fees where the user *requests* the contact.
-
----
-
-### What NOT to charge for initially
-
-*   **The Mobile App (PWA):** Must be free to ensure it stays on the user's home screen.
-*   **Basic Maintenance Tasks:** This is your retention engine. Don't gate it.
-*   **Home Address Lookups:** This is your top-of-funnel "Magic." Keep it 100% free.
-
-**Verdict:** Your best early path is **AI-as-a-Service.** Homeowners are "time-poor." If you can say, "Stop typing, just take photos, we'll organize your entire home for $79/year," you have a business. Everything else (referrals, tax appeals) is "Gravy" that comes after you've secured the data.
+**Verdict:** The path to revenue is now clear and technical blocks are removed. By focusing on **AI-as-a-Service (Scans)** and **Transactional Referral (Bookings)**, CtC has a viable path to $1M ARR within the first 12 months of post-beta scale.

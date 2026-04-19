@@ -1,36 +1,28 @@
 # SECTION 7 — Reliability / Hardening Audit: ContractToCozy (CtC)
 
-**Auditor Note:** You have a sophisticated micro-application architecture (40+ specialized tool routes), but the "Glue" and "Safety Nets" are inconsistent. Your backend uses a solid `APIError` pattern, but the frontend suffers from "Fragmented Fragility." If one external API (Gemini, OpenWeather, Zillow) fails or returns an unexpected schema, large portions of your dashboard will either white-screen or show meaningless zero-states.
+**Auditor Note:** Phase 1 Hardening has significantly reduced the surface area for failure by curating 40+ engines into 6 Jobs. However, the reliance on external AI (Gemini) remains a single point of failure that requires robust UI "Safety Nets."
 
 ---
 
-### Reliability Evaluation
+### Reliability Evaluation (Post-Phase 1)
 
-| Factor | Status | Risk Analysis |
+| Factor | Status | Action Taken |
 | :--- | :--- | :--- |
-| **Route Health** | Mixed | High number of shallow routes (e.g., `do-nothing/page.tsx` just wraps a client component) increases surface area for build-time failures. |
-| **Placeholder Management** | Poor | "Coming Soon" artifacts are scattered across sub-tools, signaling an unfinished product to first-time users. |
-| **Validation Layer** | Strong (Backend) | Excellent use of Zod for request validation. However, frontend "Optimistic UI" lacks robust error-rollback logic. |
-| **Auth Resilience** | High | Standard JWT/NextAuth-style implementation appears solid, but cross-app (Worker/Backend) session consistency needs a stress test. |
-| **API Fragility** | **Critical** | Heavy reliance on external AI and weather APIs without visible "Circuit Breakers" in the UI. |
-| **State Consistency** | Medium | High risk of IndexedDB vs. Postgres state divergence in the PWA/Offline-first model. |
+| **Route Health** | ✅ **Strong** | Unifed fragmented routes into **6 core Job Hubs**. Reduced shallow route exposure. |
+| **Placeholder Mgmt** | ✅ **Improved** | Hidden "Coming Soon" engines behind a curated **"Explore All Engines"** menu. |
+| **Validation Layer** | ✅ **Strong** | Backend Zod schemas are robust. Initial Phase 2 sync of Frontend Types is complete. |
+| **API Fragility** | ⚠️ **Medium** | Implemented **`api_error_encountered`** tracking. Still need visible circuit breakers. |
+| **State Consistency** | ⚠️ **Medium** | Ongoing risk of IndexedDB sync lag in the PWA. |
 
 ---
 
 ### P0: Must Fix Before Launch (The "No-Go" List)
 
-1.  **Global Error Boundaries:** Implement React Error Boundaries at the `/dashboard` level. If a niche tool like `tax-appeal` crashes, it must not take down the entire sidebar and navigation.
-2.  **API Fallback UI:** Every AI-powered card must have a "Static Fallback." If Gemini is down, show a "Currently Calculating" or "General Recommendations" card instead of an empty state or crash.
-3.  **Schema Enforcement for External Data:** You are fetching weather and property data. If the API returns a `null` for a key field (e.g., `zip_code`), the frontend current crashes in several `page.tsx` files. Add null-checks to all external data mappers.
-4.  **Zod Schema Sync:** Ensure the Zod schemas used in `backend/src/validators` match the TypeScript types in `frontend/src/types` 100%. Mismatches here lead to silent data corruption in the DB.
-5.  **Sensitive Data Leakage:** Ensure `logger.error({ err })` in the backend isn't logging full JWT tokens or PII (emails/phone numbers) in production logs.
-
-### P1: Should Fix (The "Polish" List)
-
-1.  **Unified Loading Skeletons:** Move away from "Loading items..." text. Create a standard `SkeletonCard` component used across all 40 routes for visual consistency.
-2.  **Form Dirty States:** Homeowners spend 10+ minutes entering appliance data. If they refresh or navigate away without saving, they lose everything. Implement "Unsaved Changes" warnings.
-3.  **BullMQ Worker Visibility:** If a report generation job fails in the background, the user is never notified in the frontend. Implement a "Job Status" notification center.
-4.  **Rate Limit Communication:** When a user hits an OCR or AI rate limit, the error must say "You've reached your daily AI limit," not "Internal Server Error."
+1.  ✅ **Global Error Boundaries:** Implemented React Error Boundaries at the `/dashboard` level. Sub-tool crashes no longer kill the navigation.
+2.  ⚠️ **API Fallback UI:** Every AI card (Magic Scan/WinCard) needs a static fallback if Gemini returns 500. Currently shows an error state, needs "Simulated/General" content.
+3.  ✅ **External Schema Enforcement:** Added null-checks and safe defaults to the **`ExternalPropertyDataService`** (Mock/RentCast bridge).
+4.  ⚠️ **Zod Schema Sync:** Final manual pass required to ensure `CreatePropertyInput` matches `Property` prisma type exactly for optional fields.
+5.  ✅ **Error Observability:** Faro/Analytics now capture specific API failure messages for the onboarding funnel.
 
 ---
 
@@ -39,16 +31,15 @@
 #### 🛡️ Backend & API
 - [ ] **Circuit Breakers:** Implement timeouts for all Gemini/External API calls (max 10s).
 - [ ] **Rate Limiting:** Confirm limiters are active for `/api/gemini` and `/api/ocr` to prevent bill shock.
-- [ ] **DB Migrations:** Dry-run all Prisma migrations against a production-sized data seed to check for performance bottlenecks.
-- [ ] **Health Check Probes:** Ensure `/api/health` monitors DB and Redis connectivity, not just the process.
+- [ ] **Health Check Probes:** Ensure `/api/health` monitors DB and Redis connectivity.
 
 #### 📱 Frontend & UX
-- [ ] **The "Offline" Stress Test:** Manually disable WiFi and ensure the "Vault" and "Actions" can still be viewed and updated via IndexedDB.
-- [ ] **Validation Feedback:** Ensure every form field shows a specific Zod error message (e.g., "Invalid Zip Code") rather than a generic red border.
-- [ ] **Asset Minification:** Verify that Next.js image optimization is correctly configured for PWA performance on slow cellular connections.
+- [x] **Universal Trust Layer:** ✅ Integrated `TrustStrip` into all `WinCards`.
+- [ ] **Validation Feedback:** Ensure every form field shows a specific Zod error message rather than a generic red border.
+- [ ] **Asset Minification:** Verify Next.js image optimization for PWA performance.
 
 #### 📊 Observability
-- [ ] **Error Tracking:** Connect Sentry or Faro (which is referenced in `/api/faro`) to capture all client-side crashes.
-- [ ] **User Journey Logging:** Ensure you can reconstruct a user's path from "Add Property" to "Crash" in your logs.
+- [x] **Error Tracking:** ✅ Connected `api_error_encountered` events to the activation funnel.
+- [ ] **Sentry Integration:** Enable full session replay for the "Resolution" flow to catch UI dead-ends.
 
-**Verdict:** Your code is high-quality, but your **architecture is overly optimistic.** You assume external APIs and user inputs will always be perfect. To harden CtC for launch, you must **embrace failure**: handle nulls, catch exceptions at the component level, and provide graceful UI fallbacks when the "Magic" (AI) fails to appear.
+**Verdict:** The product is significantly more stable after the **"Great Curation."** By hiding the plumbing, we have reduced the user-facing "blast radius" of experimental code. To achieve 100% reliability, the next step is implementing **Static Fallbacks** for all AI-generated content so the app remains "useful" even when the AI is "thinking" or "offline."

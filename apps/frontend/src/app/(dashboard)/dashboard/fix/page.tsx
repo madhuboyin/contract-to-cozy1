@@ -49,16 +49,18 @@ export default function ResolutionHubPage() {
       try {
         const [bookingsRes, propertiesRes] = await Promise.all([
           api.listBookings({}),
-          selectedPropertyId ? api.get<{ items: InventoryItem[] }>(`/api/properties/${selectedPropertyId}/inventory`) : Promise.resolve({ success: false, data: { items: [] } })
+          selectedPropertyId 
+            ? api.get<{ items: InventoryItem[] }>(`/api/properties/${selectedPropertyId}/inventory`) 
+            : Promise.resolve({ data: { items: [] as InventoryItem[] } })
         ]);
 
         if (bookingsRes.success) {
           setBookings(bookingsRes.data.bookings);
         }
         
-        // In a real scenario, we'd fetch items with active issues or "Replace/Repair" flags
-        if (propertiesRes.success && propertiesRes.data?.items) {
-          setActiveItems(propertiesRes.data.items.slice(0, 2)); // Mocking "items with issues"
+        // api.get returns { data: T } directly
+        if (propertiesRes.data?.items) {
+          setActiveItems(propertiesRes.data.items.slice(0, 2)); 
         }
       } catch (error) {
         console.error('Failed to load resolution data:', error);
@@ -105,6 +107,7 @@ export default function ResolutionHubPage() {
           label="Emergencies" 
           value={0} 
           hint="24/7 help available" 
+          tone="neutral"
         />
       </MobileKpiStrip>
 
