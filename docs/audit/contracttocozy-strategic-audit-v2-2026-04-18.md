@@ -104,7 +104,7 @@ CtC is also **not yet a premium category product**. Right now it behaves like a 
 | `/dashboard/properties/[id]/tools/home-habit-coach`             | Habit Coach                | Build preventive behaviors      | Habit generation/actions               | Strong    | High                 | Keep                               |
 | `/dashboard/home-renovation-risk-advisor`                       | Renovation Advisor         | Reduce compliance/permit risk   | Multi-domain renovation guidance       | Partial   | High                 | Improve                            |
 | `/dashboard/properties/[id]/tools/home-renovation-risk-advisor` | Property wrapper to global | Same as above                   | Redirect wrapper                       | Duplicate | Medium               | Merge                              |
-| `/dashboard/properties/[id]/tools/plant-advisor`                | Plant Advisor              | Plant care guidance             | Plant recommendations                  | Partial   | Low                  | Pause/merge                        |
+| `/dashboard/properties/[id]/tools/plant-advisor`                | Plant Advisor              | Plant care + seller integration | Plant recommendations + future CTA     | Partial   | Low → Future         | Keep — plant seller CTA planned    |
 | `/dashboard/emergency`                                          | Emergency Help             | Urgent guidance                 | Emergency assistant surface            | Partial   | High                 | Improve trust + escalation         |
 | `/dashboard/oracle`                                             | Appliance Oracle           | Appliance diagnostics guidance  | AI-backed troubleshooting              | Partial   | Medium               | Improve                            |
 | `/dashboard/climate`                                            | Climate Risk               | Climate impact awareness        | Climate risk outputs                   | Partial   | Medium               | Improve                            |
@@ -156,7 +156,7 @@ CtC is also **not yet a premium category product**. Right now it behaves like a 
 | Property Tax (current form)     | ○           | ○          | ○              | ○                 | ○               | ○               | Rare      | **3** | No                        |
 | Insurance Trend (current form)  | ○           | ○          | ○              | ○                 | ○               | ○               | Rare      | **3** | No                        |
 | Quote Comparison (placeholder)  | ○           | ○          | ○              | ○                 | ○               | ○               | —         | **3** | No                        |
-| Plant Advisor                   | ○           | ○          | ○              | ○                 | ○               | ○               | Rare      | **3** | No                        |
+| Plant Advisor                   | ○           | ○          | ○              | ○                 | ○               | ○               | Rare      | **3** | Future — plant seller CTA |
 
 
 > ● = strong contribution, ○ = weak/no contribution
@@ -431,7 +431,7 @@ No mainstream competitor owns memory + intelligence + action + savings proof in 
 | **Double Down**  | Guidance engine, Action Center, Maintenance/Habits, Morning Brief (daily anchor), Incidents/Claims, Service Price Radar, Refinance Radar, Hidden Asset Finder, Coverage Intelligence, Provider Booking (trust upgrade), Inventory + Document Vault |
 | **Upgrade**      | Dashboard home, Property workspace, Home Score, Home Timeline, Coverage UX, Provider booking trust UX, Morning pulse UX, notification relevance                                                                                                    |
 | **Merge**        | Duplicate global/property tool routes, Home/AI tool catalogs, pricing toolchain into one flow, insurance toolchain into one flow                                                                                                                   |
-| **Kill / Pause** | Placeholder standalone routes, low-value standalone side tools (Plant Advisor), customer-visible "coming soon" artifacts, Home Digital Twin (trim scope)                                                                                           |
+| **Kill / Pause** | Placeholder standalone routes, customer-visible "coming soon" artifacts, Home Digital Twin (trim scope). Plant Advisor stays — planned plant seller CTA integration.                                                                               |
 
 
 ---

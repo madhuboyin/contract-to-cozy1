@@ -99,7 +99,7 @@ CtC is also **not yet a premium category product**. Right now it behaves like a 
 | `/dashboard/properties/[id]/tools/home-habit-coach` | Habit Coach | Build preventive behaviors | Habit generation/actions | Strong | High | Keep |
 | `/dashboard/home-renovation-risk-advisor` | Renovation Advisor | Reduce compliance/permit risk | Multi-domain renovation guidance | Partial | High | Improve |
 | `/dashboard/properties/[id]/tools/home-renovation-risk-advisor` | Property wrapper to global | Same as above | Redirect wrapper | Duplicate | Medium | Merge |
-| `/dashboard/properties/[id]/tools/plant-advisor` | Plant Advisor | Plant care guidance | Plant recommendations | Partial | Low | Pause/merge |
+| `/dashboard/properties/[id]/tools/plant-advisor` | Plant Advisor | Plant care + seller integration | Plant recommendations + future CTA | Partial | Low → Future | Keep — plant seller CTA planned |
 | `/dashboard/emergency` | Emergency Help | Urgent guidance | Emergency assistant surface | Partial | High | Improve trust + escalation |
 | `/dashboard/oracle` | Appliance Oracle | Appliance diagnostics guidance | AI-backed troubleshooting | Partial | Medium | Improve |
 | `/dashboard/climate` | Climate Risk | Climate impact awareness | Climate risk outputs | Partial | Medium | Improve |
@@ -143,7 +143,7 @@ CtC is also **not yet a premium category product**. Right now it behaves like a 
 | Home Risk Replay | 5 | 5 | 5 | 6 | 6 | 4 | 3 | Mostly no |
 | Home Digital Twin | 4 | 4 | 4 | 5 | 6 | 5 | 2 | Mostly no |
 | Quote Comparison (placeholder) | 1 | 2 | 1 | 2 | 2 | 1 | 1 | No |
-| Plant Advisor | 2 | 3 | 4 | 2 | 2 | 4 | 2 | No |
+| Plant Advisor | 2 | 3 | 4 | 2 | 2 | 4 | 2 | Future — plant seller CTA |
 
 ### 2.2 Honest segmentation
 

@@ -42,7 +42,7 @@ Ship these in parallel across frontend and backend. IA decision from Sprint 1 is
 ### Entry + cleanup
 - [ ] Remove preview wall default on `/`.
 - [ ] Remove all "coming soon" text from Tier 1 flows.
-- [ ] Hide Plant Advisor from navigation and user-facing routes.
+- [ ] Keep Plant Advisor in navigation — future monetization surface for plant seller CTAs.
 - [ ] Trim Digital Twin to a single summary stub — remove multi-step flows.
 - [ ] Remove all dead-end placeholder pages.
 

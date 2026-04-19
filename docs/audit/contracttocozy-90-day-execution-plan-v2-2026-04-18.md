@@ -58,7 +58,7 @@ By Day 90, CtC should have the following outcomes in production:
 - Insurance quote API activation (groundwork in Phase 1)
 - Refinance loop v1 if partner contract slips
 - Digital Twin trim/refocus
-- Plant Advisor pause
+- Plant Advisor stays in nav — future plant seller CTA integration (not paused)
 
 ---
 

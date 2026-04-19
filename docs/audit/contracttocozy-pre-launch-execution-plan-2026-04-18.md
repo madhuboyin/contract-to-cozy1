@@ -77,7 +77,7 @@ The audit (Section 10) defines four buckets. Pre-launch work maps to those bucke
 | **Double Down** | Ensure end-to-end loops are closed. No dead ends. Trust contract applied. |
 | **Upgrade** | Redesign dashboard and property workspace. Improve Home Score and Timeline to functional standard. |
 | **Merge** | Complete remaining P0 route consolidation. Lock canonical IA before dashboard redesign ships. |
-| **Kill / Pause** | Remove or hide Plant Advisor, Digital Twin (trim to stub), all "coming soon" markers. No user should encounter these. |
+| **Kill / Pause** | Digital Twin (trim to stub), all "coming soon" markers. No user should encounter these. Plant Advisor stays in nav — planned plant seller CTA integration. |
 
 ---
 
@@ -116,7 +116,7 @@ The audit (Section 10) defines four buckets. Pre-launch work maps to those bucke
 | WS-07 | Hidden Asset Finder Closure | Apply flow + outcome tracking | BEL + FEL | Gate D |
 | WS-08 | Morning Brief + Action Center Hardening | Daily anchor functional on real property data | HOP + BEL + FEL | Gate E |
 | WS-09 | Provider Booking Trust | Reviews, response time, completion rate in booking UX | FEL + BEL | Gate F |
-| WS-10 | Kill / Pause Cleanup | Remove Plant Advisor, trim Digital Twin, kill placeholders | FEL | Gate A |
+| WS-10 | Kill / Pause Cleanup | Trim Digital Twin to stub, kill placeholders. Plant Advisor stays — future plant seller CTA surface. | FEL | Gate A |
 | WS-11 | Instrumentation Readiness | Event schema + analytics instrumentation ready before first user | DAL + BEL | Pre-launch |
 | WS-12 | Partner Groundwork | Assessor, insurance quote API, refinance partner outreach | PAL | Post-launch Phase 2 setup |
 | WS-13 | QA + Launch Hardening | Full Tier 1 QA pass, redirect validation, mobile QA | QAL + FEL + BEL | Gate G |
@@ -181,7 +181,7 @@ Most P0-safe items are already done. What remains:
 | ID | Initiative | Owner | Effort (pw) | Dependencies | Deliverable |
 |---|---|---|---:|---|---|
 | I-07 | Remove preview wall default + all "coming soon" artifacts from Tier 1 flows | GL + FEL | 3 | I-02 | Public entry live; auth cleanup done |
-| I-08 | Kill / pause low-value routes: Plant Advisor hidden, Digital Twin stubbed, placeholder pages removed | FEL | 3 | I-01 | No dead-end pages in user-facing routes |
+| I-08 | Kill / pause: Digital Twin stubbed, placeholder pages removed. Plant Advisor stays — future plant seller CTA surface. | FEL | 3 | I-01 | No dead-end pages in user-facing routes |
 | I-09 | Complete P0 deferred route redirects (risk-radar, checklist, seasonal, replace-repair, rooms, health-score, risk-assessment) | FEL + BEL | 8 | I-01 IA decision | All P0 redirects live |
 | I-10 | Build P1 canonical routes and redirects (tools launcher, insurance entry, coverage tabs, quote-comparison interim, budget/expenses, tax-appeal, appreciation) | FEL + BEL | 10 | I-01 IA decision | All P1 redirects live |
 | I-11 | Redesign Dashboard Home as action-first command center | DL + FEL | 10 | I-01 | New `/dashboard` shipped |

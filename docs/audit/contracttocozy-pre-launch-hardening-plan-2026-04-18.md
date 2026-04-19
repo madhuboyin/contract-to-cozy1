@@ -73,7 +73,7 @@ The product does not open to real users until every item below is checked off.
 | **Double Down** | Close every open loop. No tool ends at an insight without an available next action. Trust contract applied. |
 | **Upgrade** | Dashboard and property workspace redesigned around outcomes. Home Score and Timeline improved to functional standard. Morning Brief functional on real data. |
 | **Merge** | All remaining route consolidation complete. Canonical IA enforced in navigation. |
-| **Kill / Pause** | Plant Advisor hidden. Digital Twin trimmed to a stub. All "coming soon" removed from user-facing flows. |
+| **Kill / Pause** | Digital Twin trimmed to a stub. All "coming soon" removed from user-facing flows. Plant Advisor stays in nav — planned plant seller CTA integration. |
 
 ---
 
@@ -83,7 +83,7 @@ The product does not open to real users until every item below is checked off.
 |---|---|---|---|---|
 | WS-01 | IA Lock + Route Consolidation | Canonical navigation and redirects for all remaining P0 and P1 items | HOP + FEL | B |
 | WS-02 | Entry + Funnel Unblock | Remove preview wall, coming-soon markers, placeholder pages | GL + FEL | A |
-| WS-03 | Kill / Pause Cleanup | Hide Plant Advisor, stub Digital Twin, remove dead-end pages | FEL | A |
+| WS-03 | Kill / Pause Cleanup | Stub Digital Twin, remove dead-end pages. Plant Advisor stays — future plant seller CTA surface. | FEL | A |
 | WS-04 | Dashboard + Property Workspace Redesign | Outcome-first command surfaces | DL + FEL | E |
 | WS-05 | Trust Contract | Trust primitives + rollout on all Tier 1 decision routes | DL + BEL + FEL | C |
 | WS-06 | Pricing Closed Loop | Price Radar → Negotiation → Finalization → Booking handoff | BEL + FEL | D |
@@ -171,7 +171,7 @@ These are the specific gaps identified in the audit that must be closed before l
 - Booking flow has error states not handled — harden completion path
 
 ### Kill / Pause gaps
-- Plant Advisor is live but low-value — hide from navigation and user-facing routes
+- Plant Advisor stays in nav — future monetization surface for plant seller CTA integrations
 - Digital Twin is partial — trim to a single summary card, remove multi-step flows
 - "Coming soon" labels visible in Tier 1 flows — remove entirely
 
@@ -203,7 +203,7 @@ These are the specific gaps identified in the audit that must be closed before l
 | ID | Initiative | Owner | Effort (pw) | Dependencies | Deliverable |
 |---|---|---:|---|---|---|
 | I-07 | Remove preview wall + all "coming soon" artifacts from Tier 1 flows | GL + FEL | 3 | I-02 | Public entry live; Gate A partial |
-| I-08 | Kill/pause: hide Plant Advisor, stub Digital Twin, remove all dead-end placeholder pages | FEL | 3 | I-01 | No dead-end pages in user-facing routes; Gate A partial |
+| I-08 | Kill/pause: stub Digital Twin, remove all dead-end placeholder pages. Plant Advisor stays — future plant seller CTA surface. | FEL | 3 | I-01 | No dead-end pages in user-facing routes; Gate A partial |
 | I-09 | Complete all P0 deferred route redirects | FEL + BEL | 8 | I-01 IA decision | All P0 redirects live; Gate B partial |
 | I-10 | Build P1 canonical routes and redirects (tool launcher, coverage tabs, insurance entry, quote-comparison interim, budget/expenses/appreciation/tax-appeal) | FEL + BEL | 10 | I-01 IA decision | All P1 redirects live; Gate B complete |
 | I-11 | Redesign Dashboard Home — outcome-first, prioritized decision feed, one primary CTA per section | DL + FEL | 10 | I-01 | New `/dashboard` shipped |

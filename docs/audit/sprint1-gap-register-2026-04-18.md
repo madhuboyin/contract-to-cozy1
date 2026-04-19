@@ -126,7 +126,7 @@ Defines:
 - `track(event, properties)` — single call site; routes to Faro when configured, falls back to `console.debug` in dev
 
 ### Existing tracking (scattered, untyped)
-- Plant Advisor: own `trackEvent` prop pattern — not connected to `events.ts`. Migrate in Sprint 2.
+- Plant Advisor: own `trackEvent` prop pattern — not connected to `events.ts`. Migrate in Sprint 2. Note: Plant Advisor stays in nav — future plant seller CTA surface.
 - Negotiation Shield: own `trackEvent` prop pattern — not connected to `events.ts`. Migrate in Sprint 2.
 - Route redirects: no `route_redirected` event fires yet from `PropertyScopedToolRedirectPage`. Add in Sprint 2.
 
@@ -156,7 +156,7 @@ Property Tax and Insurance Trend need new presets when they are rebuilt/merged i
 
 Based on this walkthrough, the recommended execution order for Sprint 2:
 
-1. **Entry + cleanup** (I-07, I-08) — preview wall, Plant Advisor hide, Digital Twin stub. Lowest risk, unblocks first impressions immediately.
+1. **Entry + cleanup** (I-07, I-08) — preview wall, Digital Twin stub. Lowest risk, unblocks first impressions immediately. Plant Advisor stays in nav — future plant seller CTA surface.
 2. **P0 route redirects** (I-09) — resolve design decisions for rooms/health-score/risk-assessment first, then implement redirects.
 3. **Trust rollout** (I-13, I-14) — build shared trust UI primitives, wire `hiddenAssetTrust` and `guidanceEngineTrust` presets into their tools. HAF and Guidance are the two trust gaps.
 4. **Dashboard + workspace redesign** (I-11, I-12) — can run in parallel with trust rollout.
