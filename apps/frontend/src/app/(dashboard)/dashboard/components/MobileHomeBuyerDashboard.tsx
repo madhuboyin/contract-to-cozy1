@@ -30,6 +30,7 @@ import {
 import { AI_TOOL_ARTWORK } from '@/components/mobile/dashboard/aiToolArtwork';
 import { resolveIconByConcept, resolveToolIcon } from '@/lib/icons';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import {
   appendGuidanceContinuityToHref,
   extractGuidanceContinuityContext,
@@ -37,30 +38,7 @@ import {
 } from '@/features/guidance/utils/guidanceContinuity';
 
 function buildAiToolHref(propertyId: string | undefined, toolHref: string): string {
-  if (!propertyId) return toolHref;
-  const encodedPropertyId = encodeURIComponent(propertyId);
-  switch (toolHref) {
-    case '/dashboard/coverage-intelligence':
-      return `/dashboard/properties/${encodedPropertyId}/tools/coverage-intelligence`;
-    case '/dashboard/risk-premium-optimizer':
-      return `/dashboard/properties/${encodedPropertyId}/tools/risk-premium-optimizer`;
-    case '/dashboard/do-nothing-simulator':
-      return `/dashboard/properties/${encodedPropertyId}/tools/do-nothing`;
-    case '/dashboard/home-savings':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-savings`;
-    case '/dashboard/home-event-radar':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-event-radar`;
-    case '/dashboard/home-renovation-risk-advisor':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-renovation-risk-advisor`;
-    case '/dashboard/replace-repair':
-      return `/dashboard/properties/${encodedPropertyId}/inventory?intent=replace-repair`;
-    case '/dashboard/inventory':
-      return `/dashboard/properties/${encodedPropertyId}/inventory`;
-    default:
-      break;
-  }
-  const separator = toolHref.includes('?') ? '&' : '?';
-  return `${toolHref}${separator}propertyId=${encodedPropertyId}`;
+  return buildPropertyAwareDashboardHref(propertyId, toolHref);
 }
 
 function formatCurrency(value: number | null | undefined): string {

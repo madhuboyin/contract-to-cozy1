@@ -51,6 +51,7 @@ import { resolveToolIcon } from '@/lib/icons';
 import type { LocalUpdate } from '@/types';
 import type { ScoredProperty } from '../types';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import {
   appendGuidanceContinuityToHref,
   extractGuidanceContinuityContext,
@@ -78,30 +79,7 @@ function buildPropertyAwareHref(
 }
 
 function buildAiToolHref(propertyId: string | undefined, toolHref: string): string {
-  if (!propertyId) return toolHref;
-  const encodedPropertyId = encodeURIComponent(propertyId);
-  switch (toolHref) {
-    case '/dashboard/coverage-intelligence':
-      return `/dashboard/properties/${encodedPropertyId}/tools/coverage-intelligence`;
-    case '/dashboard/risk-premium-optimizer':
-      return `/dashboard/properties/${encodedPropertyId}/tools/risk-premium-optimizer`;
-    case '/dashboard/do-nothing-simulator':
-      return `/dashboard/properties/${encodedPropertyId}/tools/do-nothing`;
-    case '/dashboard/home-savings':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-savings`;
-    case '/dashboard/home-event-radar':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-event-radar`;
-    case '/dashboard/home-renovation-risk-advisor':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-renovation-risk-advisor`;
-    case '/dashboard/replace-repair':
-      return `/dashboard/properties/${encodedPropertyId}/inventory?intent=replace-repair`;
-    case '/dashboard/inventory':
-      return `/dashboard/properties/${encodedPropertyId}/inventory`;
-    default:
-      break;
-  }
-  const separator = toolHref.includes('?') ? '&' : '?';
-  return `${toolHref}${separator}propertyId=${encodedPropertyId}`;
+  return buildPropertyAwareDashboardHref(propertyId, toolHref);
 }
 
 function formatCurrency(value: number | null | undefined): string {
@@ -425,9 +403,7 @@ export default function MobileDashboardHome({
   );
   const roomsHref = buildPropertyAwareHref(propertyId, 'rooms', 'rooms');
   const dailySnapshotHref = `/dashboard/daily-snapshot?propertyId=${encodeURIComponent(propertyId || '')}`;
-  const riskRadarHref = propertyId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/risk-assessment`
-    : '/dashboard/risk-radar';
+  const riskRadarHref = buildPropertyAwareDashboardHref(propertyId, '/dashboard/risk-radar');
 
   const aiToolByKey = new Map(MOBILE_AI_TOOL_CATALOG.map((tool) => [tool.key, tool]));
   const homeToolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));
@@ -450,9 +426,7 @@ export default function MobileDashboardHome({
   const radarItems = radarFeedQuery.data?.items ?? [];
   const radarNewCount = radarItems.filter((i) => i.state === 'new').length;
   const radarActiveCount = radarItems.filter((i) => i.state !== 'dismissed').length;
-  const radarHref = propertyId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-event-radar`
-    : '/dashboard/home-event-radar';
+  const radarHref = buildAiToolHref(propertyId, '/dashboard/home-event-radar');
   const climateHeadline = weatherInsight
     ? String(weatherInsight).split(/[.!?]/)[0]
     : riskScore >= 80

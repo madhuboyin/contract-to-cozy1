@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import { Command } from 'cmdk';
 
 type CommandItem = {
@@ -106,9 +107,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const homeToolsHref = resolvedPropertyId
     ? `/dashboard/properties/${resolvedPropertyId}/status-board`
     : '/dashboard/properties?navTarget=status-board';
-  const inventoryHref = resolvedPropertyId
-    ? `/dashboard/properties/${resolvedPropertyId}/inventory`
-    : '/dashboard/inventory';
+  const inventoryHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/inventory');
   const aiToolsHref = resolvedPropertyId
     ? `/dashboard/ai-tools?propertyId=${encodeURIComponent(resolvedPropertyId)}`
     : '/dashboard/ai-tools';

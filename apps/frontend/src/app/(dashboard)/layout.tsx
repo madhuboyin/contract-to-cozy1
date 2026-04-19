@@ -69,6 +69,7 @@ import {
 } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { Input } from '@/components/ui/input';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
+import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -219,30 +220,7 @@ const AI_TOOL_LINKS: AIToolLink[] = [
 ];
 
 function buildAIToolHref(propertyId: string | undefined, toolHref: string): string {
-  if (!propertyId) return toolHref;
-  const encodedPropertyId = encodeURIComponent(propertyId);
-  switch (toolHref) {
-    case '/dashboard/coverage-intelligence':
-      return `/dashboard/properties/${encodedPropertyId}/tools/coverage-intelligence`;
-    case '/dashboard/risk-premium-optimizer':
-      return `/dashboard/properties/${encodedPropertyId}/tools/risk-premium-optimizer`;
-    case '/dashboard/do-nothing-simulator':
-      return `/dashboard/properties/${encodedPropertyId}/tools/do-nothing`;
-    case '/dashboard/home-savings':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-savings`;
-    case '/dashboard/home-event-radar':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-event-radar`;
-    case '/dashboard/home-renovation-risk-advisor':
-      return `/dashboard/properties/${encodedPropertyId}/tools/home-renovation-risk-advisor`;
-    case '/dashboard/replace-repair':
-      return `/dashboard/properties/${encodedPropertyId}/inventory?intent=replace-repair`;
-    case '/dashboard/inventory':
-      return `/dashboard/properties/${encodedPropertyId}/inventory`;
-    default:
-      break;
-  }
-  const separator = toolHref.includes('?') ? '&' : '?';
-  return `${toolHref}${separator}propertyId=${encodedPropertyId}`;
+  return buildPropertyAwareDashboardHref(propertyId, toolHref);
 }
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {

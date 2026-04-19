@@ -1,7 +1,7 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Building2, ChevronRight, Home, MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import PortfolioListTemplate from './components/PortfolioListTemplate';
 import ConfirmDestructiveActionDialog from '@/components/system/ConfirmDestructiveActionDialog';
+import { resolvePropertyHrefFromNavTarget } from '@/lib/routes/dashboardPropertyAwareHref';
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   SINGLE_FAMILY: 'Single Family',
@@ -67,12 +68,29 @@ export default function PropertiesPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const navTarget = searchParams.get('navTarget');
+  const forwardedQuery = useMemo(() => {
+    const query = new URLSearchParams(searchParams.toString());
+    query.delete('navTarget');
+    query.delete('propertyId');
+    const suffix = query.toString();
+    return suffix ? `?${suffix}` : '';
+  }, [searchParams]);
 
   const navTargetLabelMap: Record<string, string> = {
     rooms: 'Rooms',
     incidents: 'Incidents',
     claims: 'Claims',
     recalls: 'Recalls',
+    'coverage-intelligence': 'AI Tools > Coverage Intelligence',
+    'risk-premium-optimizer': 'AI Tools > Risk Optimizer',
+    'do-nothing': 'AI Tools > Do-Nothing Simulator',
+    'home-savings': 'AI Tools > Home Savings Check',
+    'home-event-radar': 'AI Tools > Home Event Radar',
+    'home-renovation-risk-advisor': 'AI Tools > Home Renovation Risk Advisor',
+    'replace-repair': 'AI Tools > Repair vs Replace',
+    inventory: 'Inventory',
+    'risk-radar': 'Insights > Risk Radar',
+    'inspection-report': 'Reports > Inspection Report',
     'seller-prep': 'Home Tools > Seller Prep',
     'home-timeline': 'Home Tools > Home Timeline',
     'status-board': 'Home Tools > Status Board',
@@ -83,26 +101,31 @@ export default function PropertiesPage() {
 
   const navTargetLabel = navTarget ? navTargetLabelMap[navTarget] || 'selected section' : null;
 
+  const appendForwardedQuery = (href: string): string => {
+    if (!forwardedQuery) return href;
+    const joiner = href.includes('?') ? '&' : '?';
+    return `${href}${joiner}${forwardedQuery.slice(1)}`;
+  };
+
   const resolvePropertyHref = (propertyId: string): string => {
-    if (!navTarget) return `/dashboard/properties/${propertyId}`;
-    if (navTarget === 'rooms') return `/dashboard/properties/${propertyId}/rooms`;
-    if (navTarget === 'incidents') return `/dashboard/properties/${propertyId}/incidents`;
-    if (navTarget === 'claims') return `/dashboard/properties/${propertyId}/claims`;
-    if (navTarget === 'recalls') return `/dashboard/properties/${propertyId}/recalls`;
-    if (navTarget === 'seller-prep') return `/dashboard/properties/${propertyId}/seller-prep`;
-    if (navTarget === 'home-timeline') return `/dashboard/properties/${propertyId}/timeline`;
-    if (navTarget === 'status-board') return `/dashboard/properties/${propertyId}/status-board`;
-    if (navTarget === 'home-score') return `/dashboard/properties/${propertyId}/home-score`;
-    if (navTarget === 'reports') return `/dashboard/properties/${propertyId}/reports`;
-    if (navTarget.startsWith('tool:')) {
-      const matchedTool = MOBILE_HOME_TOOL_LINKS.find((tool) => tool.navTarget === navTarget);
-      if (matchedTool) {
-        return `/dashboard/properties/${propertyId}/${matchedTool.hrefSuffix}`;
-      }
-      const toolSlug = navTarget.replace('tool:', '');
-      return `/dashboard/properties/${propertyId}/tools/${toolSlug}`;
+    const fallback = `/dashboard/properties/${propertyId}`;
+    if (!navTarget) return appendForwardedQuery(fallback);
+    if (navTarget === 'rooms') return appendForwardedQuery(`/dashboard/properties/${propertyId}/rooms`);
+    if (navTarget === 'incidents') return appendForwardedQuery(`/dashboard/properties/${propertyId}/incidents`);
+    if (navTarget === 'claims') return appendForwardedQuery(`/dashboard/properties/${propertyId}/claims`);
+    if (navTarget === 'recalls') return appendForwardedQuery(`/dashboard/properties/${propertyId}/recalls`);
+    if (navTarget === 'seller-prep') return appendForwardedQuery(`/dashboard/properties/${propertyId}/seller-prep`);
+    if (navTarget === 'home-timeline') return appendForwardedQuery(`/dashboard/properties/${propertyId}/timeline`);
+    if (navTarget === 'status-board') return appendForwardedQuery(`/dashboard/properties/${propertyId}/status-board`);
+    if (navTarget === 'home-score') return appendForwardedQuery(`/dashboard/properties/${propertyId}/home-score`);
+    if (navTarget === 'reports') return appendForwardedQuery(`/dashboard/properties/${propertyId}/reports`);
+
+    const resolvedFromNavTarget = resolvePropertyHrefFromNavTarget(propertyId, navTarget);
+    if (resolvedFromNavTarget) {
+      return appendForwardedQuery(resolvedFromNavTarget);
     }
-    return `/dashboard/properties/${propertyId}`;
+
+    return appendForwardedQuery(fallback);
   };
 
   const handlePropertySelect = (propertyId: string) => {

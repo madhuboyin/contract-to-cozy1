@@ -66,6 +66,7 @@ import {
   extractGuidanceContinuityContext,
   hasGuidanceContinuityContext,
 } from '@/features/guidance/utils/guidanceContinuity';
+import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
@@ -827,9 +828,7 @@ export default function DashboardPage() {
 
   const ahaCtaHref = primaryUrgentAction
     ? resolveUrgentActionHref(primaryUrgentAction, effectiveSelectedPropertyId)
-    : effectiveSelectedPropertyId
-      ? `/dashboard/properties/${encodeURIComponent(effectiveSelectedPropertyId)}/tools/home-savings`
-      : '/dashboard/home-savings';
+    : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings');
   const ahaConfidence = Math.min(
     96,
     74 +
@@ -923,7 +922,7 @@ export default function DashboardPage() {
       impact: 'Direct downside protection',
       href: effectiveSelectedPropertyId
         ? `/dashboard/properties/${effectiveSelectedPropertyId}/risk-assessment`
-        : '/dashboard/risk-radar',
+        : buildPropertyAwareDashboardHref(undefined, '/dashboard/risk-radar'),
     });
   }
   if (overdueMaintenanceCount > 0 || unscheduledMaintenanceCount > 0) {
@@ -955,7 +954,7 @@ export default function DashboardPage() {
       impact: 'Recurring cashflow win',
       href: effectiveSelectedPropertyId
         ? `/dashboard/properties/${effectiveSelectedPropertyId}/tools/home-savings`
-        : '/dashboard/home-savings',
+        : buildPropertyAwareDashboardHref(undefined, '/dashboard/home-savings'),
     });
   }
   if (recommendationMoves.length < 3 && renewalDueCount > 0) {

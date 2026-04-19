@@ -17,6 +17,7 @@ import {
   MOBILE_AI_TOOL_CATALOG,
   MOBILE_AI_TOOL_GROUPS,
 } from '@/components/mobile/dashboard/mobileToolCatalog';
+import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 
 function buildAiToolHref(
   propertyId: string | undefined,
@@ -29,38 +30,7 @@ function buildAiToolHref(
     homeAssetId?: string;
   }
 ): string {
-  const encodedPropertyId = propertyId ? encodeURIComponent(propertyId) : null;
-  let canonicalHref = toolHref;
-  if (encodedPropertyId) {
-    switch (toolHref) {
-      case '/dashboard/coverage-intelligence':
-        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/coverage-intelligence`;
-        break;
-      case '/dashboard/risk-premium-optimizer':
-        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/risk-premium-optimizer`;
-        break;
-      case '/dashboard/do-nothing-simulator':
-        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/do-nothing`;
-        break;
-      case '/dashboard/home-savings':
-        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/home-savings`;
-        break;
-      case '/dashboard/home-event-radar':
-        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/home-event-radar`;
-        break;
-      case '/dashboard/home-renovation-risk-advisor':
-        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/home-renovation-risk-advisor`;
-        break;
-      case '/dashboard/replace-repair':
-        canonicalHref = `/dashboard/properties/${encodedPropertyId}/inventory?intent=replace-repair`;
-        break;
-      case '/dashboard/inventory':
-        canonicalHref = `/dashboard/properties/${encodedPropertyId}/inventory`;
-        break;
-      default:
-        break;
-    }
-  }
+  const canonicalHref = buildPropertyAwareDashboardHref(propertyId, toolHref);
 
   const queryParams = new URLSearchParams();
   if (propertyId && canonicalHref === toolHref) queryParams.set('propertyId', propertyId);
@@ -92,9 +62,7 @@ export default function AIToolsPage() {
   })).filter((group) => group.items.length > 0);
 
   const dailySnapshotHref = `/dashboard/daily-snapshot${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`;
-  const riskRadarHref = resolvedPropertyId
-    ? `/dashboard/properties/${encodeURIComponent(resolvedPropertyId)}/risk-assessment`
-    : '/dashboard/risk-radar';
+  const riskRadarHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/risk-radar');
 
   return (
     <MobilePageContainer className="space-y-7 pt-2 pb-24 lg:max-w-7xl lg:space-y-8 lg:px-8 lg:pt-4 lg:pb-10">
