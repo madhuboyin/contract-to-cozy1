@@ -29,16 +29,49 @@ function buildAiToolHref(
     homeAssetId?: string;
   }
 ): string {
+  const encodedPropertyId = propertyId ? encodeURIComponent(propertyId) : null;
+  let canonicalHref = toolHref;
+  if (encodedPropertyId) {
+    switch (toolHref) {
+      case '/dashboard/coverage-intelligence':
+        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/coverage-intelligence`;
+        break;
+      case '/dashboard/risk-premium-optimizer':
+        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/risk-premium-optimizer`;
+        break;
+      case '/dashboard/do-nothing-simulator':
+        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/do-nothing`;
+        break;
+      case '/dashboard/home-savings':
+        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/home-savings`;
+        break;
+      case '/dashboard/home-event-radar':
+        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/home-event-radar`;
+        break;
+      case '/dashboard/home-renovation-risk-advisor':
+        canonicalHref = `/dashboard/properties/${encodedPropertyId}/tools/home-renovation-risk-advisor`;
+        break;
+      case '/dashboard/replace-repair':
+        canonicalHref = `/dashboard/properties/${encodedPropertyId}/inventory?intent=replace-repair`;
+        break;
+      case '/dashboard/inventory':
+        canonicalHref = `/dashboard/properties/${encodedPropertyId}/inventory`;
+        break;
+      default:
+        break;
+    }
+  }
+
   const queryParams = new URLSearchParams();
-  if (propertyId) queryParams.set('propertyId', propertyId);
+  if (propertyId && canonicalHref === toolHref) queryParams.set('propertyId', propertyId);
   if (guidanceContext?.guidanceJourneyId) queryParams.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
   if (guidanceContext?.guidanceStepKey) queryParams.set('guidanceStepKey', guidanceContext.guidanceStepKey);
   if (guidanceContext?.guidanceSignalIntentFamily) queryParams.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
   if (guidanceContext?.itemId) queryParams.set('itemId', guidanceContext.itemId);
   if (guidanceContext?.homeAssetId) queryParams.set('homeAssetId', guidanceContext.homeAssetId);
   const suffix = queryParams.toString();
-  if (!suffix) return toolHref;
-  return toolHref.includes('?') ? `${toolHref}&${suffix}` : `${toolHref}?${suffix}`;
+  if (!suffix) return canonicalHref;
+  return canonicalHref.includes('?') ? `${canonicalHref}&${suffix}` : `${canonicalHref}?${suffix}`;
 }
 
 export default function AIToolsPage() {

@@ -155,9 +155,11 @@ export function BottomNav() {
     },
     {
       label: 'Inventory',
-      href: '/dashboard/inventory',
+      href: buildPropertyAwareHref(resolvedPropertyId, 'inventory', 'inventory'),
       icon: resolveHomeownerNavigationIcon('main', 'inventory', Box),
-      isActive: (path) => path.startsWith('/dashboard/inventory'),
+      isActive: (path) =>
+        path.startsWith('/dashboard/inventory') ||
+        /^\/dashboard\/properties\/[^/]+\/inventory(\/|$)/.test(path),
     },
     {
       label: 'Maintenance',

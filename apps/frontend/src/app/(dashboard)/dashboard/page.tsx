@@ -828,7 +828,7 @@ export default function DashboardPage() {
   const ahaCtaHref = primaryUrgentAction
     ? resolveUrgentActionHref(primaryUrgentAction, effectiveSelectedPropertyId)
     : effectiveSelectedPropertyId
-      ? `/dashboard/home-savings?propertyId=${encodeURIComponent(effectiveSelectedPropertyId)}`
+      ? `/dashboard/properties/${encodeURIComponent(effectiveSelectedPropertyId)}/tools/home-savings`
       : '/dashboard/home-savings';
   const ahaConfidence = Math.min(
     96,

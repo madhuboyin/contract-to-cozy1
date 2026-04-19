@@ -220,8 +220,29 @@ const AI_TOOL_LINKS: AIToolLink[] = [
 
 function buildAIToolHref(propertyId: string | undefined, toolHref: string): string {
   if (!propertyId) return toolHref;
+  const encodedPropertyId = encodeURIComponent(propertyId);
+  switch (toolHref) {
+    case '/dashboard/coverage-intelligence':
+      return `/dashboard/properties/${encodedPropertyId}/tools/coverage-intelligence`;
+    case '/dashboard/risk-premium-optimizer':
+      return `/dashboard/properties/${encodedPropertyId}/tools/risk-premium-optimizer`;
+    case '/dashboard/do-nothing-simulator':
+      return `/dashboard/properties/${encodedPropertyId}/tools/do-nothing`;
+    case '/dashboard/home-savings':
+      return `/dashboard/properties/${encodedPropertyId}/tools/home-savings`;
+    case '/dashboard/home-event-radar':
+      return `/dashboard/properties/${encodedPropertyId}/tools/home-event-radar`;
+    case '/dashboard/home-renovation-risk-advisor':
+      return `/dashboard/properties/${encodedPropertyId}/tools/home-renovation-risk-advisor`;
+    case '/dashboard/replace-repair':
+      return `/dashboard/properties/${encodedPropertyId}/inventory?intent=replace-repair`;
+    case '/dashboard/inventory':
+      return `/dashboard/properties/${encodedPropertyId}/inventory`;
+    default:
+      break;
+  }
   const separator = toolHref.includes('?') ? '&' : '?';
-  return `${toolHref}${separator}propertyId=${encodeURIComponent(propertyId)}`;
+  return `${toolHref}${separator}propertyId=${encodedPropertyId}`;
 }
 
 function getPropertyIdFromPathname(pathname: string): string | undefined {
@@ -507,6 +528,7 @@ function DesktopNav({ user }: { user: User | null }) {
   const roomsHref = isBuyer
     ? '/dashboard/properties'
     : buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms');
+  const inventoryHref = buildAIToolHref(resolvedPropertyId, '/dashboard/inventory');
 
   const primaryLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
     {
@@ -689,9 +711,11 @@ function DesktopNav({ user }: { user: User | null }) {
             {
               key: 'inventory-main',
               name: 'Inventory',
-              href: '/dashboard/inventory',
+              href: inventoryHref,
               icon: resolveHomeownerNavigationIcon('main', 'inventory', Box),
-              isActive: (path: string) => path.startsWith('/dashboard/inventory'),
+              isActive: (path: string) =>
+                path.startsWith('/dashboard/inventory') ||
+                /^\/dashboard\/properties\/[^/]+\/inventory(\/|$)/.test(path),
             },
           ],
         },
@@ -890,6 +914,7 @@ function SidebarNav({ user }: { user: User | null }) {
   const knowledgeHref = resolvedPropertyId
     ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}`
     : '/knowledge';
+  const inventoryHref = buildAIToolHref(resolvedPropertyId, '/dashboard/inventory');
 
   const navLinkClass = (isActive: boolean) =>
     cn(
@@ -903,7 +928,14 @@ function SidebarNav({ user }: { user: User | null }) {
     { name: 'Dashboard', href: '/dashboard', icon: resolveHomeownerNavigationIcon('main', 'dashboard', Home), isActive: (path) => path === '/dashboard' },
     { name: 'Actions', href: '/dashboard/actions', icon: resolveHomeownerNavigationIcon('main', 'actions', AlertTriangle), isActive: (path) => path.startsWith('/dashboard/actions') },
     { name: 'Properties', href: '/dashboard/properties', icon: resolveHomeownerNavigationIcon('main', 'properties', Building), isActive: (path) => path.startsWith('/dashboard/properties') },
-    { name: 'Inventory', href: '/dashboard/inventory', icon: resolveHomeownerNavigationIcon('main', 'inventory', Box), isActive: (path) => path.startsWith('/dashboard/inventory') },
+    {
+      name: 'Inventory',
+      href: inventoryHref,
+      icon: resolveHomeownerNavigationIcon('main', 'inventory', Box),
+      isActive: (path) =>
+        path.startsWith('/dashboard/inventory') ||
+        /^\/dashboard\/properties\/[^/]+\/inventory(\/|$)/.test(path),
+    },
     { name: 'Bookings', href: '/dashboard/bookings', icon: resolveHomeownerNavigationIcon('main', 'bookings', Calendar), isActive: (path) => path.startsWith('/dashboard/bookings') },
     { name: 'Find Services', href: '/dashboard/providers', icon: resolveHomeownerNavigationIcon('main', 'providers', Search), isActive: (path) => path.startsWith('/dashboard/providers') },
     { name: 'Knowledge Hub', href: knowledgeHref, icon: BookOpen, isActive: (path) => path.startsWith('/knowledge') },
