@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -36,6 +36,7 @@ export default function PropertyScopedToolRedirectPage({
   navTarget,
 }: PropertyScopedToolRedirectPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
@@ -56,7 +57,19 @@ export default function PropertyScopedToolRedirectPage({
         if (propertyIdFromQuery && propertyIdFromQuery !== selectedPropertyId) {
           setSelectedPropertyId(propertyIdFromQuery);
         }
-        router.replace(buildToolHref(directPropertyId, toolKey, forwardQuery));
+        const canonicalRoute = buildToolHref(directPropertyId, toolKey, forwardQuery);
+        void api
+          .trackRouteRedirectEvent(directPropertyId, {
+            oldRoute: pathname,
+            canonicalRoute,
+            redirectType: 'client-resolver',
+            navTarget,
+            metadata: {
+              source: 'PropertyScopedToolRedirectPage',
+            },
+          })
+          .catch(() => undefined);
+        router.replace(canonicalRoute);
         return;
       }
 
@@ -72,7 +85,20 @@ export default function PropertyScopedToolRedirectPage({
         if (properties.length > 0) {
           const fallbackPropertyId = properties[0].id;
           setSelectedPropertyId(fallbackPropertyId);
-          router.replace(buildToolHref(fallbackPropertyId, toolKey, forwardQuery));
+          const canonicalRoute = buildToolHref(fallbackPropertyId, toolKey, forwardQuery);
+          void api
+            .trackRouteRedirectEvent(fallbackPropertyId, {
+              oldRoute: pathname,
+              canonicalRoute,
+              redirectType: 'client-resolver',
+              navTarget,
+              metadata: {
+                source: 'PropertyScopedToolRedirectPage',
+                propertyResolution: 'first-property-fallback',
+              },
+            })
+            .catch(() => undefined);
+          router.replace(canonicalRoute);
           return;
         }
       } catch (error) {
@@ -91,6 +117,7 @@ export default function PropertyScopedToolRedirectPage({
     };
   }, [
     forwardQuery,
+    pathname,
     navTarget,
     propertyIdFromQuery,
     router,

@@ -1533,6 +1533,25 @@ class APIClient {
     );
   }
 
+  async trackRouteRedirectEvent(
+    propertyId: string,
+    payload: {
+      oldRoute: string;
+      canonicalRoute: string;
+      redirectType?: string;
+      navTarget?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<void> {
+    await this.request<{ ok: true }>(
+      `/api/properties/${propertyId}/navigation/route-redirects`,
+      {
+        method: 'POST',
+        body: payload,
+      }
+    );
+  }
+
   /**
    * Fetches the full detailed FES report, queuing a new calculation if stale/missing.
    * @returns The FinancialEfficiencyReport object or the string 'QUEUED'.

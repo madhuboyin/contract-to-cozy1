@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, Wrench } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
@@ -34,6 +34,7 @@ function buildReplaceRepairItemHref(propertyId: string, itemId: string, forwardQ
 
 function ReplaceRepairContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const serializedSearchParams = searchParams.toString();
   const propertyIdFromUrl = searchParams.get('propertyId');
@@ -45,6 +46,7 @@ function ReplaceRepairContent() {
   const [selectedItemId, setSelectedItemId] = useState('');
   const [loadingProperties, setLoadingProperties] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
+  const routeRedirectTelemetryRef = useRef<string | null>(null);
   const forwardQuery = useMemo(
     () => buildForwardQuery(serializedSearchParams),
     [serializedSearchParams]
@@ -54,8 +56,25 @@ function ReplaceRepairContent() {
     if (!queryItemId) return;
     const directPropertyId = propertyIdFromUrl ?? selectedPropertyId;
     if (!directPropertyId) return;
-    router.replace(buildReplaceRepairItemHref(directPropertyId, queryItemId, forwardQuery));
-  }, [forwardQuery, propertyIdFromUrl, queryItemId, router, selectedPropertyId]);
+    const canonicalRoute = buildReplaceRepairItemHref(directPropertyId, queryItemId, forwardQuery);
+    const telemetryKey = `${pathname}=>${canonicalRoute}`;
+    if (routeRedirectTelemetryRef.current !== telemetryKey) {
+      routeRedirectTelemetryRef.current = telemetryKey;
+      void api
+        .trackRouteRedirectEvent(directPropertyId, {
+          oldRoute: pathname,
+          canonicalRoute,
+          redirectType: 'client-resolver',
+          navTarget: 'replace-repair',
+          metadata: {
+            source: 'replace-repair-legacy-route',
+            hasItemId: true,
+          },
+        })
+        .catch(() => undefined);
+    }
+    router.replace(canonicalRoute);
+  }, [forwardQuery, pathname, propertyIdFromUrl, queryItemId, router, selectedPropertyId]);
 
   useEffect(() => {
     let cancelled = false;

@@ -2,8 +2,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
@@ -30,6 +29,7 @@ function buildPropertiesFallbackHref(navTarget: string, forwardQuery: string): s
  */
 export default function InventoryRedirectPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const serializedSearchParams = searchParams.toString();
@@ -46,7 +46,19 @@ export default function InventoryRedirectPage() {
         if (propertyIdFromQuery && propertyIdFromQuery !== selectedPropertyId) {
           setSelectedPropertyId(propertyIdFromQuery);
         }
-        router.replace(`/dashboard/properties/${directPropertyId}/inventory${forwardQuery}`);
+        const canonicalRoute = `/dashboard/properties/${directPropertyId}/inventory${forwardQuery}`;
+        void api
+          .trackRouteRedirectEvent(directPropertyId, {
+            oldRoute: pathname,
+            canonicalRoute,
+            redirectType: 'client-resolver',
+            navTarget: 'inventory',
+            metadata: {
+              source: 'inventory-legacy-route',
+            },
+          })
+          .catch(() => undefined);
+        router.replace(canonicalRoute);
         return;
       }
 
@@ -59,7 +71,20 @@ export default function InventoryRedirectPage() {
         if (properties.length > 0) {
           const fallbackPropertyId = properties[0].id;
           setSelectedPropertyId(fallbackPropertyId);
-          router.replace(`/dashboard/properties/${fallbackPropertyId}/inventory${forwardQuery}`);
+          const canonicalRoute = `/dashboard/properties/${fallbackPropertyId}/inventory${forwardQuery}`;
+          void api
+            .trackRouteRedirectEvent(fallbackPropertyId, {
+              oldRoute: pathname,
+              canonicalRoute,
+              redirectType: 'client-resolver',
+              navTarget: 'inventory',
+              metadata: {
+                source: 'inventory-legacy-route',
+                propertyResolution: 'first-property-fallback',
+              },
+            })
+            .catch(() => undefined);
+          router.replace(canonicalRoute);
           return;
         }
       } catch (error) {
@@ -76,7 +101,7 @@ export default function InventoryRedirectPage() {
     return () => {
       isActive = false;
     };
-  }, [propertyIdFromQuery, router, selectedPropertyId, serializedSearchParams, setSelectedPropertyId]);
+  }, [pathname, propertyIdFromQuery, router, selectedPropertyId, serializedSearchParams, setSelectedPropertyId]);
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">

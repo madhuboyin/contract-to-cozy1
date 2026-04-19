@@ -19,7 +19,7 @@ const WEATHER_SIGNAL_PROVIDER_CATEGORY: Record<string, string> = {
 };
 
 const FALLBACK_TOOL_ROUTE: Record<string, string> = {
-  'replace-repair': '/dashboard/replace-repair',
+  'replace-repair': '/dashboard/properties/:propertyId/inventory?intent=replace-repair',
   'coverage-intelligence': '/dashboard/properties/:propertyId/tools/coverage-intelligence',
   'service-price-radar': '/dashboard/properties/:propertyId/tools/service-price-radar',
   'quote-comparison': '/dashboard/properties/:propertyId/tools/quote-comparison',
