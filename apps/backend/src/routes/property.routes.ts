@@ -45,6 +45,32 @@ router.get('/', authenticate, propertyController.listProperties);
 
 /**
  * @swagger
+ * /api/properties/lookup:
+ *   get:
+ *     summary: Lookup property data by address
+ *     tags: [Properties]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: zipCode
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Property data found
+ *       404:
+ *         description: Property not found
+ */
+router.get('/lookup', authenticate, propertyController.lookupProperty);
+
+/**
+ * @swagger
  * /api/properties:
  *   post:
  *     summary: Create a new property

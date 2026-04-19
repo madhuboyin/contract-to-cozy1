@@ -18,6 +18,15 @@ export interface DocumentInsights {
     manufacturer?: string;
     amount?: number;
     category?: string;
+    // Insurance specific
+    carrierName?: string;
+    policyNumber?: string;
+    premiumAmount?: number;
+    deductible?: number;
+    coverageLimits?: string;
+    startDate?: Date;
+    expiryDate?: Date;
+    coverageType?: string;
   };
   suggestedActions: string[];
   rawText?: string;
@@ -27,17 +36,27 @@ const DOCUMENT_ANALYSIS_PROMPT = `Analyze this home-related document and extract
 
 Document types: WARRANTY, RECEIPT, MANUAL, INSPECTION, INVOICE, INSURANCE, UNKNOWN
 
-Extract ALL available information:
+For GENERAL documents (WARRANTY, RECEIPT, etc.) extract:
 - Document type
 - Product/appliance name
 - Model number
 - Serial number  
-- Purchase or installation date (format: YYYY-MM-DD)
-- Warranty expiration date (format: YYYY-MM-DD)
+- Purchase or installation date (YYYY-MM-DD)
+- Warranty expiration date (YYYY-MM-DD)
 - Vendor/store name
 - Manufacturer name
 - Purchase amount (numbers only)
 - Category (HVAC, PLUMBING, ELECTRICAL, APPLIANCE, ROOFING, etc.)
+
+For INSURANCE documents (Declaration pages) extract:
+- Carrier name (e.g., State Farm, Allstate)
+- Policy number
+- Coverage type (Homeowners, Flood, Landlord)
+- Premium amount (Annual cost)
+- Deductible amount
+- Major coverage limits (e.g., Dwelling: $450k, Liability: $300k)
+- Policy start date (YYYY-MM-DD)
+- Policy expiration/renewal date (YYYY-MM-DD)
 
 Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
 {
@@ -52,7 +71,15 @@ Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
     "vendor": "string or null",
     "manufacturer": "string or null",
     "amount": number or null,
-    "category": "string or null"
+    "category": "string or null",
+    "carrierName": "string or null",
+    "policyNumber": "string or null",
+    "premiumAmount": number or null,
+    "deductible": number or null,
+    "coverageLimits": "string or null",
+    "startDate": "YYYY-MM-DD or null",
+    "expiryDate": "YYYY-MM-DD or null",
+    "coverageType": "string or null"
   },
   "suggestedActions": ["action1", "action2"]
 }`;
@@ -117,6 +144,12 @@ export class DocumentIntelligenceService {
       }
       if (insights.extractedData.warrantyExpiration) {
         insights.extractedData.warrantyExpiration = new Date(insights.extractedData.warrantyExpiration);
+      }
+      if (insights.extractedData.startDate) {
+        insights.extractedData.startDate = new Date(insights.extractedData.startDate);
+      }
+      if (insights.extractedData.expiryDate) {
+        insights.extractedData.expiryDate = new Date(insights.extractedData.expiryDate);
       }
 
       return insights;
@@ -231,6 +264,71 @@ export class DocumentIntelligenceService {
     }
     
     return WarrantyCategory.OTHER;
+  }
+  async autoCreateInsurancePolicy(
+    homeownerProfileId: string,
+    propertyId: string,
+    insights: DocumentInsights,
+    documentId: string
+  ): Promise<any | null> {
+    try {
+      const { extractedData } = insights;
+
+      if ((insights.confidence ?? 0) < DocumentIntelligenceService.AUTO_WARRANTY_MIN_CONFIDENCE) {
+        return null;
+      }
+
+      if (!extractedData.carrierName || !extractedData.policyNumber) {
+        return null;
+      }
+
+      // Check if policy already exists
+      const existingPolicy = await prisma.insurancePolicy.findFirst({
+        where: {
+          homeownerProfileId,
+          propertyId,
+          policyNumber: extractedData.policyNumber,
+        }
+      });
+
+      if (existingPolicy) {
+        return existingPolicy;
+      }
+
+      const policy = await prisma.insurancePolicy.create({
+        data: {
+          homeownerProfileId,
+          propertyId,
+          carrierName: extractedData.carrierName,
+          policyNumber: extractedData.policyNumber,
+          coverageType: extractedData.coverageType || 'Homeowner',
+          premiumAmount: extractedData.premiumAmount || 0,
+          startDate: extractedData.startDate || new Date(),
+          expiryDate: extractedData.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        }
+      });
+
+      logger.info({ policyId: policy.id }, '[DOC-INTELLIGENCE] Auto-created insurance policy');
+      return policy;
+    } catch (error: any) {
+      logger.error({ err: error }, '[DOC-INTELLIGENCE] Insurance creation error');
+      return null;
+    }
+  }
+
+  async autoCreate(
+    homeownerProfileId: string,
+    propertyId: string,
+    insights: DocumentInsights,
+    documentId: string
+  ): Promise<any | null> {
+    if (insights.documentType === 'WARRANTY') {
+      return this.autoCreateWarranty(homeownerProfileId, propertyId, insights, documentId);
+    }
+    if (insights.documentType === 'INSURANCE') {
+      return this.autoCreateInsurancePolicy(homeownerProfileId, propertyId, insights, documentId);
+    }
+    return null;
   }
 }
 

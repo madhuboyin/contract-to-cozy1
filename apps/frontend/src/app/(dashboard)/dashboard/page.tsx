@@ -60,6 +60,8 @@ import { RecommendedMove, SignatureRecommendationCard } from './components/Signa
 import CommandCenterTemplate from './components/CommandCenterTemplate';
 import SupportingActionCard from './components/SupportingActionCard';
 import DashboardRouteState from './components/DashboardRouteState';
+import { MagicCaptureSheet } from '@/components/orchestration/MagicCaptureSheet';
+import { WinCard } from '@/components/shared/WinCard';
 import { Button } from '@/components/ui/button';
 import {
   appendGuidanceContinuityToHref,
@@ -413,6 +415,7 @@ export default function DashboardPage() {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isReturningVisitor, setIsReturningVisitor] = useState(false);
   const [localUpdates, setLocalUpdates] = useState<LocalUpdate[]>([]);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const guidanceContext = extractGuidanceContinuityContext(searchParams);
   const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
@@ -1119,35 +1122,52 @@ export default function DashboardPage() {
   const loadingMessage = !redirectChecked ? 'Checking your account...' : 'Loading your command center...';
 
   const primaryActionHero = selectedProperty ? (
-    <AhaHero
-      propertyLabel={ahaPropertyLabel}
-      isReturningVisitor={isReturningVisitor}
-      showSpotlight={!isReturningVisitor}
-      title={ahaTitle}
-      subtitle={ahaSubtitle}
-      briefLabel={ahaBriefLabel}
-      briefValue={ahaBriefValue}
-      briefDetail={ahaBriefDetail}
-      doNowLabel={ahaDoNowLabel}
-      waitRiskLabel={ahaWaitRiskLabel}
-      ctaHref={ahaCtaHref}
-      ctaLabel={heroCtaLabel}
-      onCtaClick={handleAhaCtaClick}
-      etaLabel={heroEtaLabel}
-      impactLabel={heroImpactLabel}
-      confidenceLabel={heroConfidenceLabel}
-      feed={ahaFeed}
-      checkInStreak={heroCheckInStreak}
-      equityGainCents={heroEquityGainCents}
-      appraisedValueCents={heroAppraisedValueCents}
-      purchasePriceCents={heroPurchasePriceCents}
-      homeScore={heroHomeScore}
-      financialScore={heroFinancialScore}
-      financialScoreLoading={scoreSnapshotQuery.isLoading}
-      seasonLabel={heroSeasonLabel}
-      criticalTaskCount={heroCriticalTaskCount}
-      criticalTaskCountLoading={seasonalChecklistQuery.isLoading}
-    />
+    <div className="space-y-6">
+      {/* 1. Command Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <span className="text-[10px] uppercase tracking-widest text-brand-600 font-bold">
+            Command Center · {isReturningVisitor ? 'Welcome Back' : 'Get Started'}
+          </span>
+          <h1 className="text-3xl font-bold text-slate-900 mt-1">
+            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.firstName || 'there'}.
+          </h1>
+          <p className="text-slate-500 mt-1">Your home is {heroHomeScore && heroHomeScore > 80 ? 'highly protected' : 'needs focus'} today.</p>
+        </div>
+        
+        {/* 2. Flagship Wedge: Magic Scan CTA */}
+        <Button 
+          onClick={() => setIsScannerOpen(true)}
+          className="h-14 px-6 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200 active:scale-95 transition-all group"
+        >
+          <Zap className="mr-2 h-5 w-5 fill-current text-brand-200 group-hover:animate-pulse" />
+          <span className="text-base font-bold">Magic Scan</span>
+          <ArrowRight className="ml-4 h-4 w-4 opacity-50" />
+        </Button>
+      </div>
+
+      {/* 3. The "Outcome" Surface: Unified WinCard */}
+      <WinCard 
+        title="Highest Value Move"
+        value={heroNarrative.title}
+        description={heroNarrative.subtitle}
+        actionLabel={heroNarrative.ctaLabel}
+        onAction={handleAhaCtaClick}
+        isUrgent={primaryUrgentAction?.type === 'MAINTENANCE_OVERDUE' || primaryUrgentAction?.type === 'RENEWAL_EXPIRED'}
+        trust={{
+          confidenceLabel: heroConfidenceLabel,
+          freshnessLabel: commandCenterFreshnessLabel,
+          sourceLabel: commandCenterSourceLabel,
+          rationale: commandCenterRationale
+        }}
+        className="border-2 border-brand-100 shadow-xl shadow-brand-50/50"
+      />
+
+      <MagicCaptureSheet 
+        isOpen={isScannerOpen} 
+        onOpenChange={setIsScannerOpen} 
+      />
+    </div>
   ) : (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-2xl font-semibold text-slate-900">Choose a property to start</h2>
@@ -1191,163 +1211,99 @@ export default function DashboardPage() {
 
   const ownerSecondaryModules = (
     <>
+      {/* 1. High-Signal KPI Strip */}
       <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
+
+      {/* 2. Personalized Moves Feed */}
       <SignatureRecommendationCard
         propertyLabel={ahaPropertyLabel}
         moves={topRecommendationMoves}
         summary={recommendationSummary}
       />
 
-      {isOwnerSegment && effectiveSelectedPropertyId && (
-        <motion.div {...sectionMotion(0)}>
-          <PriorityAlertBanner propertyId={effectiveSelectedPropertyId} />
-        </motion.div>
-      )}
+      {/* 3. Concierge Lifecycle Alerts (Urgent but secondary to the WinCard) */}
+      <div className="space-y-6 pt-4">
+        {isOwnerSegment && effectiveSelectedPropertyId && (
+          <motion.div {...sectionMotion(0)}>
+            <PriorityAlertBanner propertyId={effectiveSelectedPropertyId} />
+          </motion.div>
+        )}
 
-      {isOwnerSegment && effectiveSelectedPropertyId && (
-        <motion.section className="mb-5 md:mb-6" {...sectionMotion(1)}>
-          <MorningHomePulseCard propertyId={effectiveSelectedPropertyId} />
-        </motion.section>
-      )}
-
-      {isOwnerSegment && localUpdates.length > 0 && (
-        <section className="mb-5 md:mb-6">
+        {isOwnerSegment && localUpdates.length > 0 && (
           <LocalUpdatesCarousel
             updates={localUpdates}
             variant="ticker"
             onDismiss={async (id) => {
               setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
               await api.dismissLocalUpdate(id);
-              const toastRef = toast({
-                title: 'Offer dismissed',
-                description: 'You can manage offers in Settings.',
-              });
-              window.setTimeout(() => toastRef.dismiss(), 2000);
             }}
             onCtaClick={(id) => {
               const update = localUpdates.find((u) => u.id === id);
               if (update?.ctaUrl) {
                 const resolvedHref = resolveLocalUpdateHref(update.ctaUrl);
-                trackLocalUpdateGuidanceProgress(update, resolvedHref);
-                const isExternal = /^https?:\/\//i.test(resolvedHref);
-                if (isExternal) {
-                  window.open(resolvedHref, '_blank', 'noopener,noreferrer');
-                } else {
-                  router.push(resolvedHref);
-                }
+                router.push(resolvedHref);
               }
             }}
           />
-        </section>
+        )}
+      </div>
+
+      {/* Deeper Intelligence - This will be wrapped in the expandable CommandCenterTemplate section */}
+      <div className="hidden">
+        {/* We keep these here for the template logic if needed, but the template 
+            will actually receive the entire ownerSecondaryModules as the 'secondaryModules' prop.
+            Wait, I should split these.
+        */}
+      </div>
+    </>
+  );
+
+  const deeperIntelligenceModules = (
+    <div className="space-y-12">
+      {isOwnerSegment && effectiveSelectedPropertyId && (
+        <MorningHomePulseCard propertyId={effectiveSelectedPropertyId} />
       )}
 
-      <section className="tier-intelligence mb-8 rounded-3xl border border-slate-200/70 bg-gradient-to-b from-slate-50/80 to-white p-4 shadow-sm sm:p-5">
-        <motion.div
-          className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-          {...sectionMotion(2)}
-        >
+      <section className="tier-intelligence rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
               <TrendingUp className="h-5 w-5 text-slate-600" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
-                Property Intelligence Scores
-              </h2>
-              <p className="text-sm text-gray-500">Real-time health, risk, and financial analysis</p>
+              <h2 className="text-xl font-semibold text-gray-900">Property Intelligence</h2>
+              <p className="text-sm text-gray-500">Deep health and financial scores</p>
             </div>
           </div>
-          {effectiveSelectedPropertyId && (
-            <ShareVaultButton
-              propertyId={effectiveSelectedPropertyId}
-              propertyAddress={selectedProperty?.address}
-            />
-          )}
-        </motion.div>
-        <motion.div
-          className="mb-6 rounded-2xl border border-white/70 bg-white/85 p-3 shadow-sm sm:p-4"
-          {...sectionMotion(2)}
-        >
-          <div className="grid grid-cols-1 items-stretch gap-[10px] md:grid-cols-2 lg:grid-cols-4">
-            <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
-            <PropertyHealthScoreCard property={selectedProperty} />
-            <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />
-            <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
-          </div>
-        </motion.div>
-
-        <motion.div className="rounded-2xl border border-white/70 bg-white/75 p-3 shadow-sm sm:p-4" {...sectionMotion(3)}>
-          <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
-        </motion.div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
+          <PropertyHealthScoreCard property={selectedProperty} />
+          <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />
+          <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
+        </div>
       </section>
 
-      <div className="tier-context mb-8 space-y-8">
-        <motion.section {...sectionMotion(6)}>
-          <div className="mb-4 flex items-start gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
-              <ShieldAlert className="h-5 w-5 text-slate-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">
-                Coverage, Premium & Inaction Intelligence
-              </h2>
-              <p className="text-sm text-gray-500">
-                Educational guidance to compare coverage, premium pressure, and delayed-action downside.
-              </p>
-            </div>
+      <section className="tier-context">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
+            <ShieldAlert className="h-5 w-5 text-slate-600" />
           </div>
-          <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50 p-3 shadow-sm sm:p-4">
-            {effectiveSelectedPropertyId ? (
-              <div className="grid grid-cols-1 items-start gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId} />
-                <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId} />
-                <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId} />
-                <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId} />
-              </div>
-            ) : (
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm text-slate-600">
-                  Select a property to load coverage, premium, and risk tools.
-                </p>
-                <Link
-                  href="/dashboard/properties"
-                  className="mt-3 inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
-                >
-                  Select Property
-                </Link>
-              </div>
-            )}
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Risk & Savings Engines</h2>
+            <p className="text-sm text-gray-500">Background tools detecting optimization wins.</p>
           </div>
-        </motion.section>
-      </div>
-
-      <DashboardShell className="pt-0 md:pt-0">
-        {(() => {
-          const filteredProperties = selectedProperty ? [selectedProperty] : [];
-          const filteredChecklistItems = effectiveSelectedPropertyId
-            ? checklistItems.filter((item) => item.propertyId === effectiveSelectedPropertyId)
-            : [];
-
-          return (
-            <>
-              <ExistingOwnerDashboard
-                bookings={data.bookings}
-                properties={filteredProperties}
-                checklistItems={filteredChecklistItems}
-                selectedPropertyId={effectiveSelectedPropertyId}
-              />
-
-              {homeownerSegment === 'EXISTING_OWNER' && effectiveSelectedPropertyId && (
-                <motion.div {...sectionMotion(6)}>
-                  <SeasonalBanner propertyId={effectiveSelectedPropertyId} />
-                  <SeasonalWidget propertyId={effectiveSelectedPropertyId} />
-                </motion.div>
-              )}
-            </>
-          );
-        })()}
-      </DashboardShell>
-    </>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId} />
+          <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId} />
+          <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId} />
+          <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId} />
+        </div>
+      </section>
+      
+      <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
+    </div>
   );
 
   if (userLoading || data.isLoading || !redirectChecked) {
@@ -1495,7 +1451,7 @@ export default function DashboardPage() {
           freshnessLabel={commandCenterFreshnessLabel}
           sourceLabel={commandCenterSourceLabel}
           rationale={commandCenterRationale}
-          secondaryModules={ownerSecondaryModules}
+          secondaryModules={deeperIntelligenceModules}
         />
       </div>
 

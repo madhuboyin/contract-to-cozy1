@@ -799,8 +799,18 @@ class APIClient {
   // PROPERTY ENDPOINTS 
   // ==========================================================================
   async getProperties(): Promise<APIResponse<{ properties: Property[] }>> {
-    return this.request('/api/properties');
+    return this.get('/api/properties');
   }
+
+  /**
+   * Lookup property data by address (Public record lookup)
+   */
+  async lookupProperty(address: string, zipCode?: string): Promise<APIResponse<any>> {
+    const params = new URLSearchParams({ address });
+    if (zipCode) params.append('zipCode', zipCode);
+    return this.get(`/api/properties/lookup?${params.toString()}`);
+  }
+
 
   /**
    * Get a single property by ID

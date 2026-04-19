@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as propertyService from '../services/property.service';
+import { externalPropertyDataService } from '../services/externalPropertyData.service';
 import { AuthRequest } from '../types';
 // IMPORT REQUIRED: Assuming you have defined these in your validators.ts file (Phase 2)
 import { CreatePropertyInput, UpdatePropertyInput } from '../utils/validators';
@@ -203,6 +204,42 @@ export const deleteProperty = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete property',
+    });
+  }
+};
+
+/**
+ * Lookup property data by address using external providers
+ */
+export const lookupProperty = async (req: Request, res: Response) => {
+  try {
+    const { address, zipCode } = req.query as { address: string; zipCode?: string };
+
+    if (!address) {
+      return res.status(400).json({
+        success: false,
+        message: 'Address is required',
+      });
+    }
+
+    const data = await externalPropertyDataService.getPropertyByAddress(address, zipCode);
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: 'Property data not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Error looking up property');
+    res.status(500).json({
+      success: false,
+      message: 'Failed to lookup property data',
     });
   }
 };

@@ -3,6 +3,7 @@
 'use client';
 
 import React from 'react';
+import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
 import {
   Home,
   AlertTriangle,
@@ -76,7 +77,6 @@ export function BottomNav() {
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
-  const roomsHref = buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms');
 
   const handleLogout = React.useCallback(() => {
     setMoreOpen(false);
@@ -86,32 +86,21 @@ export function BottomNav() {
     }
   }, [logout]);
 
-  const navItems = [
-    {
-      href: '/dashboard',
-      icon: resolveHomeownerNavigationIcon('main', 'dashboard', Home),
-      label: 'Home',
-      match: (path: string) => path === '/dashboard',
-    },
-    {
-      href: '/dashboard/actions',
-      icon: resolveHomeownerNavigationIcon('main', 'actions', AlertTriangle),
-      label: 'Actions',
-      match: (path: string) => path.startsWith('/dashboard/actions'),
-    },
-    {
-      href: roomsHref,
-      icon: resolveHomeownerNavigationIcon('main', 'rooms', LayoutGrid),
-      label: 'Rooms',
-      match: (path: string) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
-    },
-    {
-      href: '/dashboard/providers',
-      icon: resolveHomeownerNavigationIcon('main', 'providers', Search),
-      label: 'Services',
-      match: (path: string) => path.startsWith('/dashboard/providers'),
-    },
-  ];
+  // Select 4 primary jobs for the bottom bar
+  const primaryJobKeys = ['today', 'protect', 'fix', 'vault'];
+  const navItems = PRIMARY_JOBS
+    .filter(job => primaryJobKeys.includes(job.key))
+    .map(job => ({
+      href: job.href === '/dashboard' || job.href === '/dashboard/properties' 
+        ? job.href 
+        : buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
+      icon: job.icon,
+      label: job.name,
+      match: (path: string) => {
+        if (job.href === '/dashboard') return path === '/dashboard';
+        return path.startsWith(job.href) || job.engines.some(e => path.includes(e));
+      },
+    }));
 
   type MoreItem = {
     label: string;
@@ -120,139 +109,58 @@ export function BottomNav() {
     isActive: (path: string) => boolean;
   };
 
-  const aiToolItems: MoreItem[] = MOBILE_AI_TOOL_CATALOG
-    .filter((tool) => tool.key !== 'view-all')
-    .map((tool) => ({
-      label: tool.title,
-      href: buildAIToolHref(resolvedPropertyId, tool.href),
-      icon: tool.icon,
-      isActive: tool.isActive,
+  const secondaryJobKeys = ['my-home', 'save'];
+  const jobItems: MoreItem[] = PRIMARY_JOBS
+    .filter(job => secondaryJobKeys.includes(job.key))
+    .map(job => ({
+      label: job.name,
+      href: job.href === '/dashboard' || job.href === '/dashboard/properties' 
+        ? job.href 
+        : buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
+      icon: job.icon,
+      isActive: (path: string) => path.startsWith(job.href) || job.engines.some(e => path.includes(e)),
     }));
-
-  const homeToolItems: MoreItem[] = MOBILE_HOME_TOOL_LINKS
-    .filter((tool) => !tool.workflowOnly)
-    .map((tool) => ({
-      label: tool.name,
-      href: buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget),
-      icon: tool.icon,
-      isActive: tool.isActive,
-    }));
-
-  const corePageItems: MoreItem[] = [
-    {
-      label: 'Properties',
-      href: '/dashboard/properties',
-      icon: resolveHomeownerNavigationIcon('main', 'properties', Building),
-      isActive: (path) => path.startsWith('/dashboard/properties'),
-    },
-    {
-      label: 'Bookings',
-      href: '/dashboard/bookings',
-      icon: resolveHomeownerNavigationIcon('main', 'bookings', Calendar),
-      isActive: (path) => path.startsWith('/dashboard/bookings'),
-    },
-    {
-      label: 'Inventory',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'inventory', 'inventory'),
-      icon: resolveHomeownerNavigationIcon('main', 'inventory', Box),
-      isActive: (path) =>
-        path.startsWith('/dashboard/inventory') ||
-        /^\/dashboard\/properties\/[^/]+\/inventory(\/|$)/.test(path),
-    },
-    {
-      label: 'Maintenance',
-      href: '/dashboard/maintenance',
-      icon: resolveIconByConcept('maintenance', Wrench),
-      isActive: (path) => path.startsWith('/dashboard/maintenance'),
-    },
-    {
-      label: 'Checklist',
-      href: '/dashboard/checklist',
-      icon: resolveIconByConcept('tasks', FileText),
-      isActive: (path) => path.startsWith('/dashboard/checklist'),
-    },
-    {
-      label: 'Seasonal',
-      href: '/dashboard/seasonal',
-      icon: resolveIcon(getHomeToolIcon('seasonal'), CalendarClock),
-      isActive: (path) => path.startsWith('/dashboard/seasonal'),
-    },
-  ];
-
-  const insightItems: MoreItem[] = [
-    {
-      label: 'Daily Snapshot',
-      href: buildInsightHref(resolvedPropertyId, '/dashboard/daily-snapshot'),
-      icon: resolveToolIcon('insights', 'daily-snapshot', CalendarClock),
-      isActive: (path) => path.startsWith('/dashboard/daily-snapshot'),
-    },
-    {
-      label: 'Risk Radar',
-      href: buildRiskInsightHref(resolvedPropertyId),
-      icon: resolveToolIcon('insights', 'risk-radar', Radar),
-      isActive: (path) =>
-        path.startsWith('/dashboard/risk-radar') ||
-        /^\/dashboard\/properties\/[^/]+\/risk-assessment(\/|$)/.test(path),
-    },
-  ];
-
-  const protectionItems: MoreItem[] = [
-    {
-      label: 'Incidents',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'incidents', 'incidents'),
-      icon: resolveHomeownerNavigationIcon('protection', 'incidents', Shield),
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/incidents(\/|$)/.test(path),
-    },
-    {
-      label: 'Claims',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'claims', 'claims'),
-      icon: resolveHomeownerNavigationIcon('protection', 'claims', Shield),
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/claims(\/|$)/.test(path),
-    },
-    {
-      label: 'Recalls',
-      href: buildPropertyAwareHref(resolvedPropertyId, 'recalls', 'recalls'),
-      icon: resolveHomeownerNavigationIcon('protection', 'recalls', Shield),
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/recalls(\/|$)/.test(path),
-    },
-  ];
-
-  const homeAdminItems: MoreItem[] = [
-    { label: 'Reports', href: buildPropertyAwareHref(resolvedPropertyId, 'reports', 'reports'), icon: resolveHomeownerNavigationIcon('ownerGlobal', 'reports', FileText), isActive: (path) => /^\/dashboard\/properties\/[^/]+\/reports(\/|$)/.test(path) },
-    { label: 'Warranties', href: '/dashboard/warranties', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'warranties', FileText), isActive: (path) => path.startsWith('/dashboard/warranties') },
-    { label: 'Insurance', href: '/dashboard/insurance', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'insurance', FileText), isActive: (path) => path.startsWith('/dashboard/insurance') },
-    { label: 'Expenses', href: '/dashboard/expenses', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'expenses', FileText), isActive: (path) => path.startsWith('/dashboard/expenses') },
-    { label: 'Documents', href: '/dashboard/documents', icon: resolveHomeownerNavigationIcon('ownerGlobal', 'documents', FileText), isActive: (path) => path.startsWith('/dashboard/documents') },
-  ];
 
   const moreItems = [
     {
-      group: 'Intelligence',
+      group: 'Home Jobs',
       buckets: [
-        { label: 'AI Tools', items: aiToolItems },
-        { label: 'Insights', items: insightItems },
-        { label: 'Home Tools', items: homeToolItems },
+        { label: 'Secondary Jobs', items: jobItems },
       ],
     },
     {
-      group: 'Management',
+      group: 'Discovery',
       buckets: [
-        { label: 'Core Pages', items: corePageItems },
-        { label: 'Home Admin', items: homeAdminItems },
+        { 
+          label: 'Engines', 
+          items: [
+            {
+              label: 'Explore All Engines',
+              href: buildAIToolHref(resolvedPropertyId, '/dashboard/ai-tools'),
+              icon: LayoutGrid,
+              isActive: (path: string) => path === '/dashboard/ai-tools',
+            }
+          ] 
+        },
       ],
     },
     {
-      group: 'Community',
+      group: 'Community & Knowledge',
       buckets: [
-        { label: 'Protection', items: protectionItems },
         {
-          label: 'Community Events',
+          label: 'Resources',
           items: [
             {
               label: 'Community Events',
               href: '/dashboard/community-events',
               icon: resolveHomeownerNavigationIcon('community', 'events', Globe),
               isActive: (path: string) => path.startsWith('/dashboard/community-events'),
+            },
+            {
+              label: 'Knowledge Hub',
+              href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
+              icon: BookOpen,
+              isActive: (path: string) => path.startsWith('/knowledge'),
             },
           ],
         },

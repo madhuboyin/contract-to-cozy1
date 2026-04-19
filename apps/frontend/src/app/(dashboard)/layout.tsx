@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import { PRIMARY_JOBS, NavJob } from '@/lib/navigation/jobsNavigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -494,6 +495,8 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ... (existing imports)
+
 function DesktopNav({ user }: { user: User | null }) {
   const pathname = usePathname();
   const { selectedPropertyId } = usePropertyContext();
@@ -503,43 +506,19 @@ function DesktopNav({ user }: { user: User | null }) {
   const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isBuyer = user?.segment === 'HOME_BUYER';
 
-  const roomsHref = isBuyer
-    ? '/dashboard/properties'
-    : buildPropertyAwareHref(resolvedPropertyId, 'rooms', 'rooms');
-  const inventoryHref = buildAIToolHref(resolvedPropertyId, '/dashboard/inventory');
-
-  const primaryLinks: Array<NavLink & { isActive: (path: string) => boolean }> = [
-    {
-      name: 'Dashboard',
-      href: '/dashboard',
-      icon: resolveHomeownerNavigationIcon('main', 'dashboard', Home),
-      isActive: (path) => path === '/dashboard',
+  const primaryLinks: Array<NavLink & { isActive: (path: string) => boolean }> = PRIMARY_JOBS.map((job) => ({
+    name: job.name,
+    href: job.href === '/dashboard' || job.href === '/dashboard/properties' 
+      ? job.href 
+      : buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
+    icon: job.icon,
+    isActive: (path) => {
+      if (job.href === '/dashboard') return path === '/dashboard';
+      if (job.href === '/dashboard/properties') return path.startsWith('/dashboard/properties');
+      return path.startsWith(job.href) || 
+        job.engines.some(engineKey => path.includes(engineKey));
     },
-    {
-      name: 'Actions',
-      href: '/dashboard/actions',
-      icon: resolveHomeownerNavigationIcon('main', 'actions', AlertTriangle),
-      isActive: (path) => path.startsWith('/dashboard/actions'),
-    },
-    {
-      name: 'Properties',
-      href: '/dashboard/properties',
-      icon: resolveHomeownerNavigationIcon('main', 'properties', Building),
-      isActive: (path) => path.startsWith('/dashboard/properties'),
-    },
-    {
-      name: 'Rooms',
-      href: roomsHref,
-      icon: resolveHomeownerNavigationIcon('main', 'rooms', LayoutGrid),
-      isActive: (path) => /^\/dashboard\/properties\/[^/]+\/rooms(\/|$)/.test(path),
-    },
-    {
-      name: 'Find Services',
-      href: '/dashboard/providers',
-      icon: resolveHomeownerNavigationIcon('main', 'providers', Search),
-      isActive: (path) => path.startsWith('/dashboard/providers'),
-    },
-  ];
+  }));
 
   type MoreMenuItem = {
     key: string;
@@ -670,41 +649,28 @@ function DesktopNav({ user }: { user: User | null }) {
 
   const moreGroups = [
     {
-      key: 'group-intelligence',
-      label: 'Intelligence',
-      buckets: [
-        { key: 'bucket-ai-tools', label: 'AI Tools', items: aiToolItems },
-        { key: 'bucket-home-tools', label: 'Home Tools', items: homeToolItems },
-        { key: 'bucket-knowledge', label: 'Knowledge Hub', items: knowledgeItems },
-      ],
-    },
-    {
-      key: 'group-management',
-      label: 'Management',
+      key: 'group-discovery',
+      label: 'Discovery',
       buckets: [
         {
-          key: 'bucket-inventory',
-          label: 'Inventory',
+          key: 'bucket-engines',
+          label: 'Engines',
           items: [
             {
-              key: 'inventory-main',
-              name: 'Inventory',
-              href: inventoryHref,
-              icon: resolveHomeownerNavigationIcon('main', 'inventory', Box),
-              isActive: (path: string) =>
-                path.startsWith('/dashboard/inventory') ||
-                /^\/dashboard\/properties\/[^/]+\/inventory(\/|$)/.test(path),
+              key: 'all-tools',
+              name: 'Explore All Engines',
+              href: buildAIToolHref(resolvedPropertyId, '/dashboard/ai-tools'),
+              icon: LayoutGrid,
+              isActive: (path: string) => path === '/dashboard/ai-tools',
             },
           ],
         },
-        { key: 'bucket-home-admin', label: 'Home Admin', items: homeAdminItems },
-      ] satisfies MoreMenuBucket[],
+      ],
     },
     {
       key: 'group-community',
       label: 'Community',
       buckets: [
-        { key: 'bucket-protection', label: 'Protection', items: protectionItems },
         {
           key: 'bucket-community-events',
           label: 'Community Events',
@@ -718,8 +684,58 @@ function DesktopNav({ user }: { user: User | null }) {
             },
           ],
         },
-      ] satisfies MoreMenuBucket[],
+        {
+          key: 'bucket-knowledge',
+          label: 'Knowledge Hub',
+          items: [
+            {
+              key: 'knowledge-hub',
+              name: 'Knowledge Hub',
+              href: resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge',
+              icon: BookOpen,
+              isActive: (path) => path.startsWith('/knowledge'),
+            },
+          ],
+        },
+      ],
     },
+    ...(user?.role === 'ADMIN'
+      ? [
+          {
+            key: 'group-admin',
+            label: 'Administration',
+            buckets: [
+              {
+                key: 'bucket-admin-tools',
+                label: 'System Admin',
+                items: [
+                  {
+                    key: 'knowledge-admin',
+                    name: 'Knowledge Admin',
+                    href: '/dashboard/knowledge-admin',
+                    icon: Settings,
+                    isActive: (path: string) => path.startsWith('/dashboard/knowledge-admin'),
+                  },
+                  {
+                    key: 'analytics-admin',
+                    name: 'Analytics',
+                    href: '/dashboard/analytics-admin',
+                    icon: BarChart2,
+                    isActive: (path: string) => path.startsWith('/dashboard/analytics-admin'),
+                  },
+                  {
+                    key: 'worker-jobs',
+                    name: 'Worker Jobs',
+                    href: '/dashboard/worker-jobs',
+                    icon: Cpu,
+                    isActive: (path: string) => path.startsWith('/dashboard/worker-jobs'),
+                  },
+                ],
+              },
+            ],
+          },
+        ]
+      : []),
   ] as const;
 
   const normalizedQuery = moreSearch.trim().toLowerCase();
@@ -1017,164 +1033,17 @@ function SidebarNav({ user }: { user: User | null }) {
         );
       })}
 
-      {isBuyer && (
-        <SheetClose asChild>
-          <Link
-            href="/dashboard/checklist"
-            className={navLinkClass((pathname || '').startsWith('/dashboard/checklist'))}
-          >
-            <ListChecks className="h-4 w-4" />
-            Checklist
-          </Link>
-        </SheetClose>
-      )}
+      <div className="my-2 border-t border-gray-100" />
 
-      <details className="group rounded-lg">
-        <summary
-          className={cn(
-            navLinkClass(AI_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''))),
-            'list-none cursor-pointer justify-between'
-          )}
+      <SheetClose asChild>
+        <Link
+          href={buildAIToolHref(resolvedPropertyId, '/dashboard/ai-tools')}
+          className={navLinkClass((pathname || '') === '/dashboard/ai-tools')}
         >
-          <div className="flex items-center gap-3">
-            <Sparkles className="h-4 w-4" />
-            AI Tools
-          </div>
-          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
-          {AI_TOOL_LINKS.map((tool) => {
-            const ToolIcon = tool.icon;
-            const isActive = tool.isActive(pathname || '');
-            return (
-              <SheetClose key={tool.key} asChild>
-                <Link href={buildAIToolHref(resolvedPropertyId, tool.href)} className={navLinkClass(isActive)}>
-                  <ToolIcon className="h-4 w-4" />
-                  {tool.name}
-                </Link>
-              </SheetClose>
-            );
-          })}
-        </div>
-      </details>
-
-      {isOwner && (
-        <>
-          <div className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
-            Property Features
-          </div>
-          {propertyFeatureLinks.map((link) => {
-            const Icon = link.icon;
-            const isActive = link.isActive(pathname || '');
-            return (
-              <SheetClose key={link.navTarget} asChild>
-                <Link href={link.href} className={navLinkClass(isActive)}>
-                  <Icon className="h-4 w-4" />
-                  {link.name}
-                </Link>
-              </SheetClose>
-            );
-          })}
-
-          <details className="group rounded-lg" open={protectionActive}>
-            <summary
-              className={cn(
-                navLinkClass(protectionActive),
-                'list-none cursor-pointer justify-between'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <Shield className="h-4 w-4" />
-                Protection
-              </div>
-              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
-              {protectionLinks.map((link) => {
-                const Icon = link.icon;
-                const isActive = link.isActive(pathname || '');
-                return (
-                  <SheetClose key={link.navTarget} asChild>
-                    <Link href={link.href} className={navLinkClass(isActive)}>
-                      <Icon className="h-4 w-4" />
-                      {link.name}
-                    </Link>
-                  </SheetClose>
-                );
-              })}
-            </div>
-          </details>
-
-          <details className="group rounded-lg">
-            <summary className={cn(navLinkClass(HOME_TOOL_LINKS.some((tool) => tool.isActive(pathname || ''))), 'list-none cursor-pointer justify-between')}>
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-4 w-4" />
-                Home Tools
-              </div>
-              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
-              {HOME_TOOL_LINKS.map((tool) => {
-                const ToolIcon = tool.icon;
-                const href = buildPropertyAwareHref(resolvedPropertyId, tool.hrefSuffix, tool.navTarget);
-                const isActive = tool.isActive(pathname || '');
-                return (
-                  <SheetClose key={tool.key} asChild>
-                    <Link href={href} className={navLinkClass(isActive)}>
-                      <ToolIcon className="h-4 w-4" />
-                      {tool.name}
-                    </Link>
-                  </SheetClose>
-                );
-              })}
-            </div>
-          </details>
-
-          <div className="px-3 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
-            Homeowner
-          </div>
-          <details className="group rounded-lg">
-            <summary
-              className={cn(
-                navLinkClass(ownerGlobalLinks.some((link) => link.isActive(pathname || ''))),
-                'list-none cursor-pointer justify-between'
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <FileText className="h-4 w-4" />
-                Home Admin
-              </div>
-              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="mt-1 ml-3 border-l border-gray-200 pl-2 space-y-1">
-              {ownerPropertyAdminLinks.map((link) => {
-                const Icon = link.icon;
-                const isActive = link.isActive(pathname || '');
-                return (
-                  <SheetClose key={link.navTarget} asChild>
-                    <Link href={link.href} className={navLinkClass(isActive)}>
-                      <Icon className="h-4 w-4" />
-                      {link.name}
-                    </Link>
-                  </SheetClose>
-                );
-              })}
-              {ownerGlobalLinks.map((link) => {
-                const Icon = link.icon;
-                const isActive = link.isActive(pathname || '');
-                return (
-                  <SheetClose key={link.href} asChild>
-                    <Link href={link.href} className={navLinkClass(isActive)}>
-                      <Icon className="h-4 w-4" />
-                      {link.name}
-                    </Link>
-                  </SheetClose>
-                );
-              })}
-            </div>
-          </details>
-        </>
-      )}
+          <LayoutGrid className="h-4 w-4" />
+          Explore Engines
+        </Link>
+      </SheetClose>
 
       <SheetClose asChild>
         <Link
@@ -1183,6 +1052,16 @@ function SidebarNav({ user }: { user: User | null }) {
         >
           <Globe className="h-4 w-4" />
           Community Events
+        </Link>
+      </SheetClose>
+
+      <SheetClose asChild>
+        <Link
+          href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
+          className={navLinkClass((pathname || '').startsWith('/knowledge'))}
+        >
+          <BookOpen className="h-4 w-4" />
+          Knowledge Hub
         </Link>
       </SheetClose>
 

@@ -268,12 +268,32 @@ export default function ReplaceRepairClient() {
         </div>
       }
       summary={
-        <ResultHeroCard
-          title={item?.name || 'Inventory Item'}
-          value={analysis ? verdictLabel(analysis.verdict) : 'No analysis'}
-          status={<StatusChip tone={analysis ? statusTone : 'info'}>{analysis ? analysis.status : 'Pending'}</StatusChip>}
-          summary={analysis?.summary || `${item?.category || 'Unknown category'}${item?.room?.name ? ` • ${item.room.name}` : ''}`}
-        />
+        <div className="space-y-4">
+          <ResultHeroCard
+            title={item?.name || 'Inventory Item'}
+            value={analysis ? verdictLabel(analysis.verdict) : 'No analysis'}
+            status={<StatusChip tone={analysis ? statusTone : 'info'}>{analysis ? analysis.status : 'Pending'}</StatusChip>}
+            summary={analysis?.summary || `${item?.category || 'Unknown category'}${item?.room?.name ? ` • ${item.room.name}` : ''}`}
+          />
+          {analysis && (
+            <div className="px-1">
+              <Button 
+                className="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-xl h-12 shadow-md shadow-brand-100"
+                onClick={() => {
+                  const query = new URLSearchParams();
+                  if (propertyId) query.append('propertyId', propertyId);
+                  if (itemId) query.append('itemId', itemId);
+                  if (item?.category) query.append('category', item.category);
+                  query.append('from', 'replace-repair');
+                  router.push(`/dashboard/providers?${query.toString()}`);
+                }}
+              >
+                <Search className="mr-2 h-4 w-4" />
+                Find Pros for this {analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON' ? 'Replacement' : 'Repair'}
+              </Button>
+            </div>
+          )}
+        </div>
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >

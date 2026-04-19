@@ -598,19 +598,26 @@ export default function ProvidersPage() {
         />
       }
     >
-      {insightContext ? (
-        <MobileCard variant="compact" className="border-sky-200 bg-sky-50">
-          <div className="flex items-start gap-2.5">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
+      {fromSource === 'replace-repair' && (
+        <MobileCard variant="compact" className="border-brand-200 bg-brand-50 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-full bg-brand-100 p-1">
+              <Zap className="h-4 w-4 text-brand-600" />
+            </div>
             <div>
-              <p className="mb-0 text-sm font-semibold text-sky-900">
-                Finding providers for <span className="font-bold">{formatEnumLabel(insightContext)}</span>
+              <p className="mb-0 text-sm font-bold text-brand-900">
+                Optimized for your {contextItemName || 'Item'} decision
               </p>
-              {targetPropertyId ? <p className="mb-0 mt-0.5 text-xs text-sky-700">Pre-filtered to your selected property.</p> : null}
+              <p className="mb-0 mt-0.5 text-xs text-brand-700 leading-relaxed">
+                We've filtered for providers who specialize in {filters.category !== 'ALL' ? formatEnumLabel(filters.category) : 'this category'} 
+                to help you execute your Replace or Repair verdict quickly.
+              </p>
             </div>
           </div>
         </MobileCard>
-      ) : null}
+      )}
+
+      {insightContext && fromSource !== 'replace-repair' ? (
 
       {contextItemName ? (
         <MobileCard variant="compact" className="border-emerald-200 bg-emerald-50">

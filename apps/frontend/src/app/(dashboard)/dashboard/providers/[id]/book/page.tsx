@@ -68,6 +68,7 @@ export default function BookProviderPage() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
+  const [contextItemName, setContextItemName] = useState<string | null>(null);
 
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const { selectedPropertyId, setSelectedPropertyId } = useDashboardPropertySelection(preSelectedPropertyId);
@@ -108,23 +109,45 @@ export default function BookProviderPage() {
     }
   }, [finalPrice]);
 
-  // FRD-FR-10: Pre-populate description from guidance booking step context
+  // FRD-FR-10: Pre-populate description from guidance booking step context or item context
   useEffect(() => {
-    if (!guidanceJourneyId) return;
     setDescription((prev) => {
       if (prev.trim().length > 0) return prev;
+      
+      const fromParam = searchParams.get('from');
+      const itemParam = searchParams.get('itemName'); // We can pass this from ProvidersPage or fetch it
+      
+      if (fromParam === 'replace-repair') {
+        const itemPrefix = contextItemName ? `${contextItemName}: ` : '';
+        return `${itemPrefix}I've decided to proceed with the recommended resolution based on my Replace or Repair analysis. Please provide an estimate for this job.`;
+      }
+
+      if (!guidanceJourneyId) return prev;
       const parts: string[] = [];
       if (guidanceAssetName) parts.push(guidanceAssetName);
       if (guidanceIssueDescription) parts.push(guidanceIssueDescription);
       if (parts.length === 0) return prev;
       return parts.join(' — ');
     });
-  }, [guidanceJourneyId, guidanceAssetName, guidanceIssueDescription]);
+  }, [guidanceJourneyId, guidanceAssetName, guidanceIssueDescription, searchParams, contextItemName]);
 
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providerId, serviceCategory]);
+
+  useEffect(() => {
+    const targetItemId = inventoryItemId || homeAssetId;
+    if (selectedPropertyId && targetItemId) {
+      api.get<{ item: { name: string } }>(`/api/properties/${selectedPropertyId}/inventory/items/${targetItemId}`)
+        .then(res => {
+          if (res.success && res.data?.item?.name) {
+            setContextItemName(res.data.item.name);
+          }
+        })
+        .catch(err => console.warn('[BOOKING] Failed to load context item name:', err));
+    }
+  }, [selectedPropertyId, inventoryItemId, homeAssetId]);
 
   const loadData = async () => {
     try {
