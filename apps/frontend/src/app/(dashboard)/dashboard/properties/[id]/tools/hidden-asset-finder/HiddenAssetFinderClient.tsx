@@ -82,6 +82,57 @@ const CATEGORY_CAVEAT: Partial<Record<HiddenAssetCategory, string>> = {
     'Storm-resilience incentives depend on hazard zone designation and program availability. Verify with the program administrator.',
 };
 
+const APPLY_STEPS: Partial<Record<HiddenAssetCategory, string[]>> = {
+  TAX_EXEMPTION: [
+    'Locate your property parcel number on your latest tax bill.',
+    'Download the exemption application from your local county assessor website.',
+    'Attach supporting documents (proof of residency, income statement if required).',
+    'Submit before the annual filing deadline — most counties require filing by April 1.',
+  ],
+  REBATE: [
+    'Keep your receipt and proof of purchase for the qualifying item.',
+    'Visit the program website and create an account or log in.',
+    'Complete the rebate form and upload receipt and product details.',
+    'Allow 6–12 weeks for processing; track status in the program portal.',
+  ],
+  UTILITY_INCENTIVE: [
+    'Contact your utility provider to confirm current incentive availability.',
+    'Get a qualifying equipment quote from a certified contractor.',
+    "Apply through your utility's online portal before purchasing.",
+    'Schedule installation and retain all invoices for post-installation submission.',
+  ],
+  INSURANCE_DISCOUNT: [
+    'Call your insurance carrier and ask specifically about this discount category.',
+    'Request the discount form or qualifying criteria in writing.',
+    'Gather supporting documents (inspection reports, upgrade receipts, safety devices).',
+    'Submit and request a revised policy declaration to confirm the discount applied.',
+  ],
+  ENERGY_CREDIT: [
+    'Verify the installation qualifies under current IRS guidance (Form 5695 or 3468).',
+    'Retain itemized receipts and manufacturer certification statements.',
+    'Record the credit on the appropriate tax form when filing.',
+    'Consult a tax professional if combining federal and state credits.',
+  ],
+  LOCAL_GRANT: [
+    'Confirm the grant is currently accepting applications (funding is often limited).',
+    'Gather income documentation, property ownership proof, and project scope.',
+    'Submit the application before the listed deadline.',
+    'Follow up with the issuing authority within 30 days of submission.',
+  ],
+  HISTORIC_BENEFIT: [
+    'Verify your property is listed or eligible for local/national historic registry.',
+    'Contact your State Historic Preservation Office (SHPO) to confirm benefit details.',
+    'Engage a preservation architect if rehabilitation tax credits require certified work.',
+    'File the Part 1, Part 2, and Part 3 applications with the National Park Service if applicable.',
+  ],
+  STORM_RESILIENCE: [
+    'Review your hazard zone designation on your county floodplain map.',
+    'Document current resilience features (storm shutters, roof clips, impact glass).',
+    "Apply through your state's My Safe Home or equivalent resilience program.",
+    'Request a post-inspection certificate for insurance discount qualification.',
+  ],
+};
+
 const ALL_CATEGORIES: HiddenAssetCategory[] = [
   'TAX_EXEMPTION',
   'REBATE',
@@ -490,13 +541,38 @@ function HiddenAssetDetailSheet({
           </div>
         )}
         {match.status === 'CLAIMED' && (
-          <div className="border-t px-5 py-3 space-y-1 text-center">
-            <p className="text-xs text-green-700">
-              You marked this as pursued{match.claimedAt ? ` on ${formatDate(match.claimedAt)}` : ''}.
+          <div className="border-t px-5 py-4 space-y-3">
+            <p className="text-xs font-semibold text-green-700">
+              Pursuing{match.claimedAt ? ` — started ${formatDate(match.claimedAt)}` : ''}.
             </p>
-            <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
-              Remember to verify eligibility with the official source.
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              Steps to apply
             </p>
+            <ol className="space-y-2">
+              {APPLY_STEPS[match.category]?.map((step, i) => (
+                <li key={i} className="flex gap-2.5 text-xs text-[hsl(var(--foreground))]">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
+                    {i + 1}
+                  </span>
+                  {step}
+                </li>
+              )) ?? (
+                <li className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                  Contact the program administrator directly to begin the application.
+                </li>
+              )}
+            </ol>
+            {match.sourceUrl && (
+              <a
+                href={match.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 underline-offset-2 hover:underline"
+              >
+                Open official program source
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
           </div>
         )}
       </SheetContent>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { track } from '@/lib/analytics/events';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
@@ -10,17 +10,27 @@ import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
+import CoverageOptionsClient from '../coverage-options/CoverageOptionsClient';
+import InsuranceTrendClient from '../insurance-trend/InsuranceTrendClient';
+
+type CoverageTab = 'coverage' | 'options' | 'trend';
+
+const TABS: { key: CoverageTab; label: string }[] = [
+  { key: 'coverage', label: 'Coverage' },
+  { key: 'options', label: 'Options' },
+  { key: 'trend', label: 'Trend' },
+];
 
 export default function CoverageIntelligenceToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const searchParams = useSearchParams();
+  const router = useRouter();
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const rawTab = searchParams.get('tab') as CoverageTab | null;
+  const activeTab: CoverageTab = rawTab === 'options' || rawTab === 'trend' ? rawTab : 'coverage';
 
-  // When the user arrives from a guidance step, suppress property-wide widgets
-  // (orchestration strip, "Where This Tool Fits" panel, tool explainer) and
-  // surface the coverage tool immediately. Standalone page behaviour is unchanged.
   const isGuidanceContext = Boolean(guidanceJourneyId);
 
   useEffect(() => {
@@ -28,6 +38,16 @@ export default function CoverageIntelligenceToolClient() {
     track('workflow_started', { tool: 'coverage-intelligence', propertyId, entryPoint: isGuidanceContext ? 'guidance' : 'direct' });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  function switchTab(tab: CoverageTab) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (tab === 'coverage') {
+      next.delete('tab');
+    } else {
+      next.set('tab', tab);
+    }
+    router.replace(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?${next.toString()}`);
+  }
 
   const backHref = isGuidanceContext
     ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
@@ -37,6 +57,26 @@ export default function CoverageIntelligenceToolClient() {
     freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',
     sourceLabel: 'CtC coverage graph + property inventory + policy metadata',
   });
+
+  const tabNav = (
+    <div role="tablist" aria-label="Coverage views" className="flex gap-1 rounded-xl border border-border bg-muted/40 p-1">
+      {TABS.map(({ key, label }) => (
+        <button
+          key={key}
+          role="tab"
+          aria-selected={activeTab === key}
+          onClick={() => switchTab(key)}
+          className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            activeTab === key
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <ToolWorkspaceTemplate
@@ -50,9 +90,11 @@ export default function CoverageIntelligenceToolClient() {
         <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
     >
+      {/* Tab navigation */}
+      {tabNav}
 
       {/* Standalone-only widgets — hidden when arriving from a guidance step */}
-      {!isGuidanceContext && (
+      {!isGuidanceContext && activeTab === 'coverage' && (
         <>
           <GuidanceInlinePanel
             propertyId={propertyId}
@@ -67,8 +109,16 @@ export default function CoverageIntelligenceToolClient() {
         </>
       )}
 
-      {/* Core tool content — always shown; surfaced immediately in guidance context */}
-      <CoverageIntelligencePanel propertyId={propertyId} />
+      {/* Tab content */}
+      {activeTab === 'coverage' && (
+        <CoverageIntelligencePanel propertyId={propertyId} />
+      )}
+      {activeTab === 'options' && (
+        <CoverageOptionsClient />
+      )}
+      {activeTab === 'trend' && (
+        <InsuranceTrendClient />
+      )}
 
       <GuidanceStepCompletionCard
         propertyId={propertyId}

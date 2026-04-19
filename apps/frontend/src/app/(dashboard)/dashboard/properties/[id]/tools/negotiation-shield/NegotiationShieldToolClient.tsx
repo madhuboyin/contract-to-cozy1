@@ -2162,6 +2162,7 @@ function CaseWorkspace({
   trackEvent: (event: string, section?: string, metadata?: Record<string, unknown>) => void;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -2427,7 +2428,7 @@ function CaseWorkspace({
       await navigator.clipboard.writeText(buildCopyText(draft));
       setDraftFeedback({
         tone: 'success',
-        message: 'Draft copied. You can paste it into an email or portal message now.',
+        message: 'Draft copied. Send it, then finalize the agreed price below.',
       });
       trackEvent('DRAFT_COPIED', 'draft', {
         caseId: caseDetail.case.id,
@@ -2717,6 +2718,45 @@ function CaseWorkspace({
         <>
           {resultsSection}
           {draftSection}
+          {/* Sprint 3: pricing loop handoff — after draft is ready, route to Price Finalization */}
+          {caseDetail.latestDraft && caseDetail.case.scenarioType === 'CONTRACTOR_QUOTE_REVIEW' && (() => {
+            const inputs = caseDetail.inputs;
+            const contractorInput = inputs.find((i) => i.inputType === 'CONTRACTOR_QUOTE');
+            const vendorName = contractorInput
+              ? (contractorInput.structuredData as Record<string, unknown>)?.contractorName as string | undefined
+              : undefined;
+            const params = new URLSearchParams();
+            if (vendorName) params.set('vendorName', vendorName);
+            params.set('guidanceStepKey', 'finalize_price');
+            const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+            if (guidanceJourneyId) params.set('guidanceJourneyId', guidanceJourneyId);
+            const href = `/dashboard/properties/${propertyId}/tools/price-finalization?${params.toString()}`;
+            return (
+              <Card className={SECTION_CARD_CLASS}>
+                <CardHeader className={SECTION_HEADER_CLASS}>
+                  <CardTitle className="text-base">Ready to close the deal?</CardTitle>
+                  <CardDescription>
+                    Once you've sent the draft and agreed on a final price, record it in Price Finalization to unlock the provider booking step.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className={cn(SECTION_CONTENT_CLASS, 'flex flex-col gap-2.5 sm:flex-row sm:flex-wrap')}>
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto"
+                    onClick={() => {
+                      trackEvent('PRICE_FINALIZATION_HANDOFF_CLICKED', 'handoff', {
+                        caseId: caseDetail.case.id,
+                        scenarioType: caseDetail.case.scenarioType,
+                      });
+                      router.push(href);
+                    }}
+                  >
+                    Finalize accepted price
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })()}
           {analysisActionSection}
           {manualInputSection}
           {documentSection}

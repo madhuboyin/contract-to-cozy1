@@ -934,8 +934,15 @@ export default function MortgageRefinanceRadarClient() {
           impactLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} fit` : 'Opportunity detected',
           confidenceLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} confidence` : 'Medium confidence',
           primaryAction: (
-            <Button type="button" className="w-full sm:w-auto">
-              Get refinance quotes
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                const el = document.getElementById('refinance-steps-to-act');
+                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            >
+              View steps to act
             </Button>
           ),
           supportingAction: (
@@ -1015,6 +1022,39 @@ export default function MortgageRefinanceRadarClient() {
 
           {/* 3. Scenario planner */}
           <ScenarioCalculator propertyId={propertyId} contextData={available} />
+
+          {/* 3b. Steps to act — shown when opportunity is open */}
+          {available.radarState === 'OPEN' && (
+            <div id="refinance-steps-to-act"><GlassCard>
+              <div className="p-5 sm:p-6 space-y-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                  Steps to act today
+                </p>
+                <p className="text-sm text-slate-700 dark:text-slate-300">
+                  A refinance window doesn't stay open forever. Here's what you can do right now — no lender or partner needed.
+                </p>
+                <ol className="space-y-3">
+                  {[
+                    { n: 1, title: 'Check your current loan terms', body: 'Find your most recent mortgage statement. Note your current rate, remaining balance, and monthly payment.' },
+                    { n: 2, title: 'Run scenarios above', body: 'Use the scenario planner to compare 15-, 20-, and 30-year options. Find the term where monthly savings exceed closing costs within your target break-even window.' },
+                    { n: 3, title: 'Pull your credit score', body: 'Lenders price rate offers on your score. Check a free source (Credit Karma, your bank app) so you know where you stand before requesting quotes.' },
+                    { n: 4, title: 'Gather documents in advance', body: 'Most lenders will ask for 2 years of tax returns, 2 recent pay stubs, and 2–3 months of bank statements. Having these ready shortens approval timelines.' },
+                    { n: 5, title: 'Request quotes from 3+ lenders', body: 'Rate-shopping within a 14–45 day window counts as one hard inquiry on your credit. Compare APR — not just rate — to account for fees.' },
+                  ].map(({ n, title, body }) => (
+                    <li key={n} className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                        {n}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">{body}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </GlassCard></div>
+          )}
 
           {/* 4. Market context */}
           <section aria-label="Market Context" className="space-y-4">
