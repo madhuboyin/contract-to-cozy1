@@ -32,8 +32,8 @@
 
 #### 🛡️ Backend & API
 - [ ] **Circuit Breakers:** Implement timeouts for all Gemini/External API calls (max 10s).
-- [ ] **Rate Limiting:** Confirm limiters are active for `/api/gemini` and `/api/ocr` to prevent bill shock.
-- [ ] **Health Check Probes:** Ensure `/api/health` monitors DB and Redis connectivity.
+- [x] **Rate Limiting:** ✅ Redis-backed limiters active for `/api/gemini` and `/api/properties/:propertyId/inventory/ocr/label`; automated `429` integration tests added and wired into backend quality-gates CI.
+- [x] **Health Check Probes:** ✅ `/api/health/deep` now performs real DB check + Redis ping with timeout and degraded `503` behavior.
 
 #### 📱 Frontend & UX
 - [x] **Universal Trust Layer:** ✅ Integrated `TrustStrip` into all `WinCards`.

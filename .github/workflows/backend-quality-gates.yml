@@ -1,0 +1,30 @@
+name: Backend Quality Gates
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration-smoke:
+    name: Backend Integration Smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: apps/backend/package-lock.json
+
+      - name: Install backend deps
+        run: npm ci --ignore-scripts
+
+      - name: Integration smoke
+        run: npm run test:integration

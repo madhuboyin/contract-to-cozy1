@@ -19,8 +19,8 @@
 | **Trust Layer** | `trust_info_clicked` | ✅ **Live** (Standardized via TrustStrip) |
 | **Errors** | `api_error_encountered` | ✅ **Live** (Captures Gemini & OCR failures) |
 | **Retention** | `task_completed` | ⚠️ **Defined in catalog; wiring pending** |
-| | `session_started` | ⚠️ **Defined in catalog; wiring pending** |
-| **Monetization** | `booking_initiated` | ⚠️ **Defined in catalog; wiring pending** |
+| | `session_started` | ✅ **Live** (dashboard bootstrap, once per session with dedupe) |
+| **Monetization** | `booking_initiated` | ✅ **Live** (provider booking submit flow) |
 | **Navigation Diagnostics** | `route_redirected` | ✅ **Live** (via route-redirect analytics endpoint) |
 
 ---
@@ -52,11 +52,11 @@
 1.  ✅ **Total Assets Secured:** Growth of the digital twin database.
 2.  ⚠️ **Total Savings Identified:** Use existing tool/report outputs now; migrate to `outcome_win_generated` once wired.
 3.  ✅ **Magic Scan Funnel:** Started -> Completed -> Action Taken.
-4.  ⚠️ **Service Booking Intent:** `booking_initiated` contract exists but frontend emission is pending.
+4.  ✅ **Service Booking Intent:** `booking_initiated` is now emitted in the booking submit path.
 
 ---
 
 ### Strategic Diagnostic: Error Visibility
 We have implemented **`api_error_encountered`** tracking specifically for the **Magic Scan** and **Property Lookup** flows. This allows the team to distinguish between "User Bounce" and "Technical Failure" during the most critical activation moments.
 
-**Verdict:** The product has a **strong analytics contract and partial live instrumentation.** Activation and trust signals are live; several retention/monetization events still need runtime wiring before claiming full launch instrumentation.
+**Verdict:** The product has a **strong analytics contract with expanded live instrumentation.** Activation/trust signals are live, and milestone-1 retention/monetization first-pass wiring (`session_started`, `booking_initiated`) is now active; remaining closures are `task_completed` and `outcome_win_generated`.

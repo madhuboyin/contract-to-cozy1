@@ -45,8 +45,8 @@ Notes:
 | Dashboard-level error boundaries | ✅ Implemented |
 | Gemini/API static fallback UI on AI cards | ⚠️ Pending |
 | API circuit breakers/timeouts | ⚠️ Pending |
-| API rate-limit verification for AI endpoints | ⚠️ Pending |
-| Health probes (DB + Redis) verification | ⚠️ Pending |
+| API rate-limit verification for AI endpoints | ✅ Implemented (Redis-backed + automated `429` integration coverage) |
+| Health probes (DB + Redis) verification | ✅ Implemented (`/api/health/deep` checks DB + Redis ping with timeout/degraded status) |
 | Frontend/backend schema optional-field parity final pass | ⚠️ Pending |
 | Resolution-flow session replay instrumentation | ⚠️ Pending |
 
@@ -79,10 +79,10 @@ The strongly typed event catalog is implemented and includes onboarding, activat
 | `morning_brief_cta_clicked` | ✅ Emitting |
 | `api_error_encountered` | ✅ Emitting |
 | `route_redirected` | ✅ Emitting through navigation redirect analytics endpoint |
-| `booking_initiated` | ⚠️ Defined in catalog, not yet emitted from frontend call-sites |
+| `booking_initiated` | ✅ Emitting from provider booking submit flow |
 | `outcome_win_generated` | ⚠️ Defined in catalog, not yet emitted from frontend call-sites |
 | `task_completed` | ⚠️ Defined in catalog, not yet emitted from frontend call-sites |
-| `session_started` | ⚠️ Defined in catalog, not yet emitted from frontend call-sites |
+| `session_started` | ✅ Emitting once per dashboard session (sessionStorage dedupe) |
 
 Claims rule:
 - "Live" means emitted by code path today.
@@ -95,4 +95,3 @@ Claims rule:
 - Primary navigation reference must always be "6 Jobs".
 - Do not mix "4 jobs", "4 pillars", and "5 pillars" language in launch-state docs.
 - Prefer "curate the surface, preserve the engines" language over "remove features".
-

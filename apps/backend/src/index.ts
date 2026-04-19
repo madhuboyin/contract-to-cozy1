@@ -27,6 +27,7 @@ import swaggerUi from 'swagger-ui-express';
 import basicAuth from 'express-basic-auth';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
+import { runDeepHealthChecks } from './lib/deepHealth';
 
 // Import swagger config
 import { swaggerSpec } from './config/swagger.config';
@@ -334,52 +335,21 @@ function requireInternalNetwork(req: Request, res: Response, next: NextFunction)
 }
 
 app.get('/api/health/deep', requireInternalNetwork, async (req: Request, res: Response) => {
-  const checks: Record<string, 'ok' | 'error'> = {};
-  let allOk = true;
+  const deepHealth = await runDeepHealthChecks({
+    checkDatabase: async () => {
+      await prisma.$queryRaw`SELECT 1`;
+    },
+    redisConfigured: Boolean(process.env.REDIS_HOST),
+    pingRedis: () => redis.ping(),
+    redisTimeoutMs: Number(process.env.HEALTH_REDIS_TIMEOUT_MS || 1500),
+  });
 
-  // DB check
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    checks.database = 'ok';
-  } catch {
-    checks.database = 'error';
-    allOk = false;
-  }
-
-  // Redis check (if REDIS_HOST set)
-  if (process.env.REDIS_HOST) {
-    try {
-      const timeoutMs = Number(process.env.HEALTH_REDIS_TIMEOUT_MS || 1500);
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Redis ping timeout'));
-        }, timeoutMs);
-
-        redis
-          .ping()
-          .then(() => {
-            clearTimeout(timeout);
-            resolve();
-          })
-          .catch((error) => {
-            clearTimeout(timeout);
-            reject(error);
-          });
-      });
-      checks.redis = 'ok';
-    } catch {
-      checks.redis = 'error';
-      allOk = false;
-    }
-  }
-
-  const status = allOk ? 200 : 503;
-  res.status(status).json({
-    status: allOk ? 'healthy' : 'degraded',
+  res.status(deepHealth.httpStatus).json({
+    status: deepHealth.status,
     service: 'backend',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    checks,
+    checks: deepHealth.checks,
   });
 });
 
