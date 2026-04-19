@@ -254,7 +254,7 @@ Consider:
 `; 
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 100, temperature: 0.3 }
       });
@@ -383,7 +383,7 @@ Focus on:
 4. Actionable advice`;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 500, temperature: 0.7 }
       });

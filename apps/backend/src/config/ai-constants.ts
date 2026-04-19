@@ -10,7 +10,7 @@ export const LLM_MODEL_CONFIG = {
     // GeminiService and fallback for other services
     DEFAULT_MODEL: "gemini-2.5-flash",
     // ApplianceOracle and BudgetForecaster model choice
-    ADVANCED_MODEL: "gemini-2.0-flash-exp",
+    ADVANCED_MODEL: "gemini-2.0-flash",
     // Standard parameters for generation
     RECOMMENDATION_TEMPERATURE: 0.7,
     ORACLE_MAX_TOKENS: 1000,

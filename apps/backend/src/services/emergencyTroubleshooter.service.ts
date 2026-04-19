@@ -93,7 +93,7 @@ export class EmergencyTroubleshooterService {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: conversationHistory,
         config: {
           systemInstruction: EMERGENCY_SYSTEM_PROMPT,

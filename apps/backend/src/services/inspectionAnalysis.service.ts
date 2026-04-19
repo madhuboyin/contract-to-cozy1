@@ -262,7 +262,7 @@ Return ONLY valid JSON in this exact format:
 CRITICAL: Extract at least 95% of all issues. Match inspector severity. Cost estimates must be within 20% of market rates.`;
 
     const response = await this.ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.0-flash",
       contents: [{ 
         role: "user", 
         parts: [{ text: prompt }] 

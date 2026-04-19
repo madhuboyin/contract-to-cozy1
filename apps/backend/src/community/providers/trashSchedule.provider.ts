@@ -52,7 +52,7 @@ export async function parseTrashScheduleWithAI(
     }
 
     // Use AI to extract schedule information
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const prompt = `You are a helpful assistant that extracts trash and recycling schedule information from city websites.
 

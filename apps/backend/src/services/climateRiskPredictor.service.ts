@@ -179,7 +179,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
 Only include categories with risk level MODERATE or higher.`;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 1500, temperature: 0.3 }
       });
@@ -329,7 +329,7 @@ Return as JSON array of strings (no markdown):
 ["Recommendation 1", "Recommendation 2", "Recommendation 3", "Recommendation 4", "Recommendation 5"]`;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 500, temperature: 0.7 }
       });

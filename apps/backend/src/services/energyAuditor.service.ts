@@ -314,7 +314,7 @@ If you cannot extract the data, return null.`;
         };
 
         const response = await this.ai.models.generateContent({
-          model: "gemini-2.0-flash-exp",
+          model: "gemini-2.0-flash",
           contents: [{ 
             role: "user", 
             parts: [
@@ -510,7 +510,7 @@ Priority: HIGH, MEDIUM, LOW
 Difficulty: EASY, MODERATE, PROFESSIONAL`;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 2000, temperature: 0.7 }
       });

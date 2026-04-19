@@ -250,7 +250,7 @@ Priority: IMMEDIATE, HIGH, MEDIUM, LOW
 Include diverse recommendations across categories.`;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 2000, temperature: 0.7 }
       });

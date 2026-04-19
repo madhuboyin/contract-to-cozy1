@@ -306,7 +306,7 @@ Priorities: CRITICAL, HIGH, MEDIUM, LOW
 Include 5-8 tasks per period. Focus on practical, actionable items.`;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 2500, temperature: 0.6 }
       });
@@ -890,7 +890,7 @@ Return ONLY a JSON array of specific, actionable recommendations:
 Focus on: timing, cost-saving tips, stress reduction, family-specific advice.`;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 500, temperature: 0.7 }
       });

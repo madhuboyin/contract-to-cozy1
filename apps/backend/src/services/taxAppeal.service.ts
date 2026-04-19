@@ -151,7 +151,7 @@ Lot size in acres.`;
     };
 
     const response = await this.ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.0-flash",
       contents: [{ 
         role: "user", 
         parts: [
@@ -416,7 +416,7 @@ Include:
 Keep it concise (300-400 words). Use professional, respectful tone.`;
 
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { maxOutputTokens: 800, temperature: 0.5 }
       });
