@@ -1,5 +1,7 @@
 # SECTION 2 — First Impression Audit: ContractToCozy (CtC)
 
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
 **Auditor Note:** We have successfully moved ContractToCozy from "Builder Energy" to **"User Energy."** By implementing the Address-First Onboarding and Magic Scan, we have shifted the burden of effort from the user to the AI.
 
 ---

@@ -1,6 +1,8 @@
 # Pre-Launch Product Audit: ContractToCozy (CtC)
 ## Final Strategy: "Your Home, Handled."
 
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
 **Executive Stance:** ContractToCozy is an **Essential Homeowner Service**, not a feature catalog. We are building a **Home Command Center** that removes uncertainty and protects home wealth with minimal user effort. 
 
 The product's "Moat" is its deep technical engines. The product's "Surface" is a calm, intelligent, and outcome-driven interface that answers: **"What matters today?"**
@@ -43,10 +45,10 @@ The primary activation loop is **Camera -> Vault -> Action.**
 
 ---
 
-### EXECUTIVE VERDICT: READY TO COMMAND
+### EXECUTIVE VERDICT: BETA READY WITH HARDENING GATES
 
 **Is CtC a serious company?**
 Yes. It is a **Deep Asset Operating System.** By curating the surface to the "6 Jobs" and perfecting the "Resolution" loop, you move from a "Beta Sandbox" to an **Essential Homeowner Companion.**
 
 **The 90-Day Mandate:**
-Curate the Surfaces. Perfect the "Camera Magic" Loop. Build the **Resolution Center** (not just a task list). Ensure every insight is powered by the **Universal Trust Layer.**
+Curate the Surfaces. Perfect the "Camera Magic" Loop. Build the **Resolution Center** (not just a task list). Ensure every insight is powered by the **Universal Trust Layer.** Close remaining reliability gates before broad launch (AI fallback UI, API circuit breakers/timeouts, schema parity, and observability hardening).

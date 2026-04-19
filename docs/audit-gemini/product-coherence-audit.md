@@ -1,6 +1,8 @@
 # SECTION 5 — Product Coherence: The "Home Command Center"
 
-**Auditor Note:** ContractToCozy currently suffers from "Feature Soup" because the **Engines** (the deep code) are being treated as **Surfaces** (the UI). We must implement a strict **Surface-to-Engine** hierarchy to transform the app from a "Tool Catalog" into a **Unified Command Center.**
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
+**Auditor Note:** ContractToCozy historically suffered from "Feature Soup" because the **Engines** (the deep code) were treated as **Surfaces** (the UI). The current direction is a strict **Surface-to-Engine** hierarchy that transforms the app from a "Tool Catalog" into a **Unified Command Center.**
 
 ---
 
@@ -51,6 +53,6 @@ The 40+ engines are **invisible** until they have an **Outcome** (Win) or an **A
 
 ### Final Verdict: Is CtC One Product or Many Features?
 
-**Verdict:** **Currently Many Features, but a Unified Command Center is Ready.**
+**Verdict:** **Unified Command Center is live for beta, with reliability hardening still in progress.**
 
 By moving from a "Tool Catalog" to a **Job-based Navigation**, you preserve your technical moat while achieving the simplicity of a world-class service. **Your Home, Handled.**

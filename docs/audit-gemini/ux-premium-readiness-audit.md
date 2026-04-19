@@ -1,5 +1,7 @@
 # SECTION 4 — UX / Premium Readiness Audit: ContractToCozy (CtC)
 
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
 **Auditor Note:** We have successfully moved beyond functional UI to **High-Craft Product Design.** By adopting the "Curate, don't Reduce" architecture, we have achieved the "Apple × Calm × Stripe" aesthetic of focus and space.
 
 ---
@@ -10,7 +12,7 @@
 | :--- | :--- | :--- |
 | **Visual Hierarchy** | 8 | ✅ **Unified.** Every major surface now has a single "Hero Move" (WinCard). |
 | **Layout Quality** | 8 | ✅ **Editorial.** Multi-step reveal animations and clean Hub structures. |
-| **Spacing (Oxygen)** | 8 | ✅ **Calm.** nuked the 40-link sidebar; doubled the padding on Hub pages. |
+| **Spacing (Oxygen)** | 8 | ✅ **Calm.** Removed the 40-link sidebar; doubled the padding on Hub pages. |
 | **Typography** | 7 | ✅ **Dramatic.** High-impact health scores and bold outcome values. |
 | **Card Quality** | 9 | ✅ **Premium.** Implemented the `WinCard` and `MobileCard` primitives. |
 | **Navigation Clarity** | 10 | ✅ **Jobs-Based.** Replaced tool soup with the **6 Core Jobs** navigation. |

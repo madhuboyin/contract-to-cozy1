@@ -1,5 +1,7 @@
 # SECTION 8 — Activation Audit: ContractToCozy (CtC)
 
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
 **Auditor Note:** In a homeowner's life, "Home Management" is a chore they avoid. If CtC feels like another chore (manual entry, uploading 50 photos, filling out long forms), they will never activate. We have implemented a **3-minute Activation Wedge** to move users from "Curious Stranger" to "Relieved Homeowner."
 
 ---
@@ -12,9 +14,9 @@
 | **Onboarding Quality** | ✅ **Strong** | Guided path from Address Entry -> Data Reveal -> One-click Claim. |
 | **First Dashboard Value** | ✅ **Strong** | Initial dashboard (Today) now led by a high-signal **WinCard** derived from the property lookup. |
 | **First Action Completion** | ✅ **Strong** | **Magic Scan** loop implemented. Users can snap a photo to instantly secure an asset and create their first task. |
-| **First Savings Insight** | ✅ **Strong** | **Savings Hub (/save)** surfaces insurance and tax savings immediately upon policy scan or address lookup. |
+| **First Savings Insight** | ✅ **Strong** | **Savings Hub (`/dashboard/save` -> property Save hub)** surfaces insurance and tax savings immediately upon policy scan or address lookup. |
 | **First "Wow" Moment** | ✅ **Done** | The **Reveal Animation** sequence ("Verifying address...", "Analyzing structural age...") creates immediate perceived value. |
-| **First Retained Reason** | ✅ **Strong** | The **Resolution Hub (/fix)** and **Home History (/vault)** provide clear, outcome-oriented reasons to return. |
+| **First Retained Reason** | ✅ **Strong** | The **Resolution Hub (`/dashboard/fix`)** and **Home History (`/dashboard/vault`)** provide clear, outcome-oriented reasons to return. |
 
 ---
 
@@ -51,4 +53,4 @@
 *   ✅ **[RESOLVED] Choice Paralysis:** Navigation curated down to **6 Intention-based Jobs**. 40+ tools hidden as background engines.
 *   ✅ **[RESOLVED] Lack of Immediate Payoff:** Implemented real-time public data fetching for **Instant Health & Savings Reveal**.
 
-**Verdict:** CtC has successfully pivoted from a **"Self-Service Database"** to an **"Automated Advisor."** The activation wedge is now technically complete and visually premium. The product delivers value first, ensuring high conversion from signup to first "Wow" moment.
+**Verdict:** CtC has successfully pivoted from a **"Self-Service Database"** to an **"Automated Advisor."** The activation wedge is feature-complete and visually premium for beta. Reliability hardening (fallback UI and API resilience) remains the main launch gate.

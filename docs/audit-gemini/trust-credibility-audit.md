@@ -1,5 +1,7 @@
 # SECTION 6 — Trust & Credibility Audit: ContractToCozy (CtC)
 
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
 **Auditor Note:** You are using Google Gemini to power home insights. While powerful, AI hallucinations or "Black Box" recommendations are the fastest way to lose a homeowner's trust. We have implemented a **Universal Trust Layer** to move the app from a "Data Dump" to a **"Verified Advisor."**
 
 ---

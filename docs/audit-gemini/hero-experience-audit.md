@@ -1,5 +1,7 @@
 # SECTION 3 — Hero Experience Audit: ContractToCozy (CtC)
 
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
 **Auditor Note:** We have successfully moved away from the "Home Dashboard" trap. CtC is now defined by three **Outcome-Driven Hero Flows** that solve specific, high-anxiety homeowner problems.
 
 ---

@@ -1,6 +1,8 @@
 # SECTION 1 — Product Surface Audit: The Engine-to-Outcome Mapping
 
-**Auditor Note:** ContractToCozy's primary strength is the **Depth of its Engines.** We are no longer treating these as "Tools" that users browse in a catalog. Instead, we are mapping them as **Engines** that power the **4 Primary User Surfaces.**
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
+**Auditor Note:** ContractToCozy's primary strength is the **Depth of its Engines.** We are no longer treating these as "Tools" that users browse in a catalog. Instead, we map them as engine clusters that power the **6 Primary Jobs**.
 
 ---
 
@@ -75,6 +77,7 @@ These engines build the "Black Box" Digital Twin of the home.
 *   The **"Work" Engines** $\rightarrow$ Unified "Protect My Home" Surface.
 *   The **"Financial" Engines** $\rightarrow$ Unified "Save Money" Surface.
 *   The **"Resolution" Engines** $\rightarrow$ Unified "Fix Problems" Surface.
+*   These clusters now resolve into the canonical **6-Job navigation model** (Today, My Home, Protect, Save, Fix, Vault).
 
 #### 3. Strategic Decision: CURATE, DON'T REDUCE
 Do not delete the `do-nothing-simulator`. Instead, move it from being a "Sidebar Tool" to being a "Card" that appears when a user neglects a high-priority maintenance task. **Make your depth contextual, not navigational.**

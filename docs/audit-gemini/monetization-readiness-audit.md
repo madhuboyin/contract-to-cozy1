@@ -1,5 +1,7 @@
 # SECTION 10 — Monetization Readiness Audit: ContractToCozy (CtC)
 
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
 **Auditor Note:** We have implemented the core technical infrastructure for a **"Free to Use, Paid to Optimize"** model. By launching the **Magic Scan** loop, we have secured the primary revenue engine: **AI-as-a-Service.**
 
 ---
@@ -48,5 +50,6 @@
 *   **Trust Dilution:** If "Savings Wins" feel like ads, users will churn. (Fix: **Universal Trust Layer** proves the ROI is objective).
 *   **Gemini Burn Rate:** High-speed AI extraction is expensive. (Fix: Strict Tier 1 limits and cache frequent appliance models).
 *   **Resolution Friction:** If users don't book pros, CtC loses 50% of its revenue potential. (Fix: Focus on the **"Find Pros"** button logic in the Resolution Center).
+*   **Compliance Exposure:** Referral/brokerage monetization requires explicit disclosures, consent language, and state-by-state policy checks before scaling.
 
-**Verdict:** The path to revenue is now clear and technical blocks are removed. By focusing on **AI-as-a-Service (Scans)** and **Transactional Referral (Bookings)**, CtC has a viable path to $1M ARR within the first 12 months of post-beta scale.
+**Verdict:** The path to revenue is clear and core technical blocks are largely removed. By focusing on **AI-as-a-Service (Scans)** and **Transactional Referral (Bookings)**, CtC has a viable path to scale after reliability and compliance gates are closed.

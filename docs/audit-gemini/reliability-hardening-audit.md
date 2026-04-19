@@ -1,5 +1,7 @@
 # SECTION 7 — Reliability / Hardening Audit: ContractToCozy (CtC)
 
+> Canonical reference: [Audit Canonical Contract (v3)](./canonical-audit-contract-v3.md).
+
 **Auditor Note:** Phase 1 Hardening has significantly reduced the surface area for failure by curating 40+ engines into 6 Jobs. However, the reliance on external AI (Gemini) remains a single point of failure that requires robust UI "Safety Nets."
 
 ---
@@ -8,9 +10,9 @@
 
 | Factor | Status | Action Taken |
 | :--- | :--- | :--- |
-| **Route Health** | ✅ **Strong** | Unifed fragmented routes into **6 core Job Hubs**. Reduced shallow route exposure. |
-| **Placeholder Mgmt** | ✅ **Improved** | Hidden "Coming Soon" engines behind a curated **"Explore All Engines"** menu. |
-| **Validation Layer** | ✅ **Strong** | Backend Zod schemas are robust. Initial Phase 2 sync of Frontend Types is complete. |
+| **Route Health** | ✅ **Strong** | Unified fragmented routes into **6 core Job Hubs**. Reduced shallow route exposure. |
+| **Placeholder Mgmt** | ✅ **Improved** | Hidden "Coming Soon" engines behind a gated **"Explore Engines"** path for power users. |
+| **Validation Layer** | ⚠️ **Medium** | Backend Zod schemas are robust, but frontend/backend optional-field parity still needs a final pass. |
 | **API Fragility** | ⚠️ **Medium** | Implemented **`api_error_encountered`** tracking. Still need visible circuit breakers. |
 | **State Consistency** | ⚠️ **Medium** | Ongoing risk of IndexedDB sync lag in the PWA. |
 
