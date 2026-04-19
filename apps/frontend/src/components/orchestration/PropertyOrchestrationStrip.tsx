@@ -69,7 +69,7 @@ function buildToolPath(tool: OrchestrationToolId, propertyId: string) {
     case 'capital-timeline':
       return `/dashboard/properties/${propertyId}/tools/capital-timeline`;
     case 'home-event-radar':
-      return `/dashboard/home-event-radar?propertyId=${encodeURIComponent(propertyId)}`;
+      return `/dashboard/properties/${propertyId}/tools/home-event-radar`;
     case 'home-risk-replay':
       return `/dashboard/properties/${propertyId}/tools/home-risk-replay`;
     case 'home-timeline':

@@ -428,7 +428,7 @@ export default function MobileDashboardHome({
   const radarNewCount = radarItems.filter((i) => i.state === 'new').length;
   const radarActiveCount = radarItems.filter((i) => i.state !== 'dismissed').length;
   const radarHref = propertyId
-    ? `/dashboard/home-event-radar?propertyId=${encodeURIComponent(propertyId)}`
+    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/tools/home-event-radar`
     : '/dashboard/home-event-radar';
   const climateHeadline = weatherInsight
     ? String(weatherInsight).split(/[.!?]/)[0]
