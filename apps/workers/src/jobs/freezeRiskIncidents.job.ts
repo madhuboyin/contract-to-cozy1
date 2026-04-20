@@ -103,7 +103,6 @@ export async function freezeRiskIncidentsJob() {
   let createdOrUpdated = 0;
   let resolved = 0;
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
 
   // Simple in-memory cache so we don’t geocode the same zip repeatedly in a run
   const geoCache = new Map<string, Geo | null>();
@@ -172,7 +171,7 @@ export async function freezeRiskIncidentsJob() {
           provider: 'open-meteo',
         },
         status: 'DETECTED',
-        fingerprint: `property:${p.id}|FREEZE_RISK|${today}`,
+        fingerprint: `property:${p.id}|FREEZE_RISK`,
         dedupeWindowMins: 24 * 60,
         severityScore: score,
         confidence: 70,
@@ -204,7 +203,7 @@ export async function freezeRiskIncidentsJob() {
         sourceType: 'WEATHER',
         sourceFeatureKey: 'freeze-risk-incidents',
         sourceEntityType: 'INCIDENT',
-        sourceProvenanceId: `property:${p.id}|FREEZE_RISK|${today}`,
+        sourceProvenanceId: `property:${p.id}|FREEZE_RISK`,
         payloadJson: { minF, timeWindowHours: 36, zip, provider: 'open-meteo' },
         expiresAt: new Date(Date.now() + 36 * 60 * 60 * 1000),
       });
