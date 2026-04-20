@@ -70,7 +70,11 @@ export default function ResolutionHubPage() {
         setResolutions(resolutionsRes.data);
       } else {
         setResolutions([]);
-        errors.push(resolutionsRes.message || 'Unable to load repair analyses.');
+        const resolutionErrorMessage =
+          'message' in resolutionsRes && typeof resolutionsRes.message === 'string'
+            ? resolutionsRes.message
+            : 'Unable to load repair analyses.';
+        errors.push(resolutionErrorMessage);
       }
 
       if (errors.length > 0) {
