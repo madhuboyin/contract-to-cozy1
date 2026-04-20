@@ -80,7 +80,7 @@ export function BottomNav() {
 
   // Right item before More (Fix)
   const rightItems = PRIMARY_JOBS.filter((j) => (SECONDARY_BAR_KEYS as readonly string[]).includes(j.key)).map((job) => ({
-    href: buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
+    href: buildPropertyAwareDashboardHref(resolvedPropertyId, job.href),
     icon: job.icon,
     label: job.name,
     match: (path: string) => path.startsWith(job.href) || job.engines.some((e) => path.includes(e)),
@@ -93,7 +93,7 @@ export function BottomNav() {
     href:
       job.href === '/dashboard/properties'
         ? job.href
-        : buildPropertyAwareHref(resolvedPropertyId, job.href.replace('/dashboard/', ''), job.key),
+        : buildPropertyAwareDashboardHref(resolvedPropertyId, job.href),
     icon: job.icon,
     isActive: (path: string) => path.startsWith(job.href) || job.engines.some((e) => path.includes(e)),
   }));
