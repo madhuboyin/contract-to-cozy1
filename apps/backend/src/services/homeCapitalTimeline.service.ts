@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import {
+  Prisma,
   HomeCapitalTimelineCategory,
   HomeCapitalTimelineEventType,
   HomeCapitalTimelineConfidence,
@@ -438,6 +439,30 @@ export class HomeCapitalTimelineService {
       });
     });
 
+    const timelineJson: Prisma.InputJsonArray = itemsToCreate.map((item): Prisma.InputJsonObject => {
+      const bundleGroup = (item as { _bundleGroup?: unknown })._bundleGroup;
+
+      const timelineItem: Prisma.InputJsonObject = {
+        propertyId: item.propertyId,
+        inventoryItemId: item.inventoryItemId,
+        category: item.category,
+        eventType: item.eventType,
+        windowStart: item.windowStart.toISOString(),
+        windowEnd: item.windowEnd.toISOString(),
+        estimatedCostMinCents: item.estimatedCostMinCents,
+        estimatedCostMaxCents: item.estimatedCostMaxCents,
+        currency: item.currency,
+        confidence: item.confidence,
+        priority: item.priority,
+        why: item.why,
+        ...(typeof bundleGroup === 'string' && bundleGroup.length > 0
+          ? { bundleGroupId: bundleGroup }
+          : {}),
+      };
+
+      return timelineItem;
+    });
+
     const analysis = await prisma.homeCapitalTimelineAnalysis.create({
       data: {
         homeownerProfileId,
@@ -462,7 +487,7 @@ export class HomeCapitalTimelineService {
             'SNAPSHOT',
           ],
         },
-        timelineJson: itemsToCreate,
+        timelineJson,
         items: {
           create: itemsToCreate,
         },
