@@ -284,17 +284,36 @@ function DocumentsTab({
 
 // ─── Coverage Tab ─────────────────────────────────────────────────────────────
 
+import { getCoverageAnalysis } from '@/lib/api/coverageAnalysisApi';
+import { ConfidenceBadge, SourceChip } from '@/components/trust';
+
+function coverageVerdictMeta(verdict?: string) {
+  if (verdict === 'WORTH_IT') return { label: 'Coverage optimal', cls: 'bg-emerald-100 text-emerald-700' };
+  if (verdict === 'SITUATIONAL') return { label: 'Review recommended', cls: 'bg-amber-100 text-amber-700' };
+  if (verdict === 'NOT_WORTH_IT') return { label: 'Possibly overpaying', cls: 'bg-red-100 text-red-700' };
+  return null;
+}
+
 function CoverageTab({ propertyId }: { propertyId: string }) {
-  const { data, isLoading } = useQuery({
+  const router = useRouter();
+
+  const { data: warData, isLoading: warLoading } = useQuery({
     queryKey: ['vault-warranties', propertyId],
     queryFn: () => api.listWarranties(propertyId),
     staleTime: 5 * 60 * 1000,
   });
 
-  const warranties = data?.success ? data.data.warranties : [];
-  const router = useRouter();
+  const { data: cvData, isLoading: cvLoading } = useQuery({
+    queryKey: ['vault-coverage-analysis', propertyId],
+    queryFn: () => getCoverageAnalysis(propertyId),
+    staleTime: 10 * 60 * 1000,
+  });
 
-  if (isLoading) {
+  const warranties = warData?.success ? warData.data.warranties : [];
+  const analysis = cvData?.exists ? cvData.analysis : null;
+  const verdictMeta = coverageVerdictMeta(analysis?.overallVerdict);
+
+  if (warLoading || cvLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-5 w-5 animate-spin text-brand-600" />
@@ -302,60 +321,117 @@ function CoverageTab({ propertyId }: { propertyId: string }) {
     );
   }
 
-  if (warranties.length === 0) {
-    return (
-      <EmptyStateCard
-        title="No warranties or policies"
-        description="Track appliance warranties and insurance policies to stay protected and never miss an expiry."
-        action={
-          <Button
-            onClick={() => router.push('/dashboard/warranties')}
-            variant="outline"
-            className="mt-4 gap-2 rounded-xl"
-          >
-            <Plus className="h-4 w-4" />
-            Add Coverage
-          </Button>
-        }
-      />
-    );
-  }
-
   return (
-    <div className="space-y-2">
-      {warranties.map((w: any) => {
-        const days = warrantyDaysLeft(w.expiryDate);
-        const badge = warrantyBadge(days);
-        return (
-          <div
-            key={w.id}
-            className="flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3"
-          >
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-purple-50">
-              <BadgeCheck className="h-4 w-4 text-purple-600" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">
-                {w.providerName || 'Coverage'}
-              </p>
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {w.category?.replace(/_/g, ' ') ?? 'Warranty'}
-                {w.expiryDate
-                  ? ` · expires ${format(parseISO(w.expiryDate), 'MMM d, yyyy')}`
-                  : ''}
-              </p>
-            </div>
-            <span
-              className={cn(
-                'flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                badge.cls,
-              )}
-            >
-              {days < 0 ? 'Expired' : `${days}d left`}
-            </span>
+    <div className="space-y-4">
+      {/* Coverage Intelligence verdict */}
+      {analysis ? (
+        <div className={cn(
+          'rounded-xl border p-3.5 space-y-2',
+          analysis.overallVerdict === 'WORTH_IT'
+            ? 'border-emerald-200 bg-emerald-50/40'
+            : analysis.overallVerdict === 'SITUATIONAL'
+            ? 'border-amber-200 bg-amber-50/40'
+            : 'border-border bg-muted/30',
+        )}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-foreground">Coverage Intelligence</p>
+            {verdictMeta && (
+              <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', verdictMeta.cls)}>
+                {verdictMeta.label}
+              </span>
+            )}
           </div>
-        );
-      })}
+          {analysis.summary && (
+            <p className="text-[11px] text-muted-foreground leading-snug">{analysis.summary}</p>
+          )}
+          {analysis.nextSteps && analysis.nextSteps.length > 0 && (
+            <ul className="space-y-1">
+              {analysis.nextSteps.slice(0, 2).map((step: any, i: number) => (
+                <li key={i} className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                  <ArrowRight className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground/60" />
+                  {step.action || step.description || String(step)}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex items-center gap-2 pt-0.5">
+            <ConfidenceBadge
+              level={analysis.confidence === 'HIGH' ? 'high' : analysis.confidence === 'MEDIUM' ? 'medium' : 'low'}
+            />
+            <SourceChip source="Coverage Analysis AI" />
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => router.push('/dashboard/protect')}
+          className="w-full rounded-xl border border-dashed border-purple-200 bg-purple-50/30 px-4 py-3 text-left hover:bg-purple-50/60 transition-colors"
+        >
+          <p className="text-xs font-semibold text-purple-800">Run Coverage Intelligence</p>
+          <p className="mt-0.5 text-[11px] text-purple-600">
+            Get an AI verdict on whether your insurance and warranties are worth it.
+          </p>
+        </button>
+      )}
+
+      {/* Warranty list */}
+      {warranties.length === 0 ? (
+        <EmptyStateCard
+          title="No warranties or policies"
+          description="Track appliance warranties and insurance policies to stay protected and never miss an expiry."
+          action={
+            <Button
+              onClick={() => router.push('/dashboard/protect')}
+              variant="outline"
+              className="mt-4 gap-2 rounded-xl"
+            >
+              <Plus className="h-4 w-4" />
+              Add Coverage
+            </Button>
+          }
+        />
+      ) : (
+        <div className="space-y-2">
+          {warranties.map((w: any) => {
+            const days = warrantyDaysLeft(w.expiryDate);
+            const badge = warrantyBadge(days);
+            return (
+              <div
+                key={w.id}
+                className="rounded-xl border border-border bg-card px-3.5 py-3 space-y-2"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-purple-50">
+                    <BadgeCheck className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {w.providerName || 'Coverage'}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {w.category?.replace(/_/g, ' ') ?? 'Warranty'}
+                      {w.expiryDate
+                        ? ` · expires ${format(parseISO(w.expiryDate), 'MMM d, yyyy')}`
+                        : ''}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      'flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                      badge.cls,
+                    )}
+                  >
+                    {days < 0 ? 'Expired' : `${days}d left`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 pl-12">
+                  <ConfidenceBadge level="high" />
+                  <SourceChip source={w.providerName || 'Provider'} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
