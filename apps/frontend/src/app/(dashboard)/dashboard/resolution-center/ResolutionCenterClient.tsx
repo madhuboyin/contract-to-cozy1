@@ -208,7 +208,10 @@ export default function ResolutionCenterClient() {
             actionKey={activeItem.actionKey || activeItem.id}
             onPhotoUpload={async (file, idx) => {
               const res = await api.uploadCompletionPhoto(selectedPropertyId, activeItem.actionKey || activeItem.id, file, idx);
-              return res.data.photo;
+              if (res.success) {
+                return res.data.photo;
+              }
+              throw new Error(res.message || 'Photo upload failed');
             }}
           />
           <ServiceSelectionSheet 
