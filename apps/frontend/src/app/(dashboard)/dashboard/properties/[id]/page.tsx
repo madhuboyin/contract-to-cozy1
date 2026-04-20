@@ -62,6 +62,9 @@ import { SmartContextToolsSection } from './components/SmartContextToolsSection'
 import PlantAdvisorDashboardCard from './components/PlantAdvisorDashboardCard';
 import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner';
 import PropertyHubTemplate from './components/PropertyHubTemplate';
+import { HomeScoreReportCard } from '../../components/HomeScoreReportCard';
+import { DigitalTwinPreview } from './components/DigitalTwinPreview';
+
 
 
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
@@ -378,357 +381,64 @@ const SellingPrepBanner = ({ propertyId }: { propertyId: string }) => (
   </>
 );
 
-// UPDATED: PropertyOverview with mobile summary-first structure
+// UPDATED: PropertyOverview as the Executive Summary
 const PropertyOverview = ({ property }: { property: Property }) => {
   const propertyTypeLabel = formatEnumLabel(property.propertyType);
-  const heatingTypeLabel = formatEnumLabel(property.heatingType, "Not specified");
-  const coolingTypeLabel = formatEnumLabel(property.coolingType, "Not specified");
-  const waterHeaterTypeLabel = formatEnumLabel(property.waterHeaterType, "Not specified");
-  const roofTypeLabel = formatEnumLabel(property.roofType, "Not specified");
-  const trackedSystems = [property.hvacInstallYear, property.waterHeaterInstallYear, property.roofReplacementYear].filter(Boolean).length;
   const occupancyLabel =
     property.bedrooms != null || property.bathrooms != null
       ? `${property.bedrooms ?? "—"} bd · ${property.bathrooms ?? "—"} ba`
       : "—";
-  const appliancePreview = property.homeAssets
-    ? property.homeAssets
-        .slice(0, 2)
-        .map((asset: any) => formatEnumLabel(asset.assetType, "Appliance"))
-        .join(" • ")
-    : "";
 
   return (
-    <div className="space-y-3">
-      <PlantAdvisorDashboardCard propertyId={property.id} />
+    <div className="space-y-6">
+      {/* 1. HomeScore Hero */}
+      <HomeScoreReportCard propertyId={property.id} />
 
-      <div className="md:hidden space-y-3">
-        <MobileCard variant="compact" className="space-y-3 border-slate-200/80 bg-white">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-base font-semibold text-slate-900">Overview Snapshot</p>
-              <p className="text-xs text-slate-500">Key property facts at a glance</p>
-            </div>
-            <StatusChip tone="info">{propertyTypeLabel}</StatusChip>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Built</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">{property.yearBuilt ?? "—"}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Size</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">
-                {property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "—"}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Occupancy</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">{occupancyLabel}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Type</p>
-              <p className="mt-1 line-clamp-1 text-sm font-semibold text-slate-900">{propertyTypeLabel}</p>
-            </div>
-          </div>
-        </MobileCard>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 2. Digital Twin Preview (Span 2) */}
+        <div className="lg:col-span-2">
+          <DigitalTwinPreview propertyId={property.id} />
+        </div>
 
-        <ExpandableSummaryCard
-          title="Systems"
-          summary={`${heatingTypeLabel} · ${coolingTypeLabel}`}
-          metric={`${trackedSystems} tracked`}
-          defaultOpen={false}
-        >
-          <div className="space-y-2">
-            <CompactEntityRow
-              title="HVAC"
-              subtitle={heatingTypeLabel}
-              meta={property.hvacInstallYear ? `Installed ${property.hvacInstallYear}` : undefined}
-            />
-            <CompactEntityRow title="Cooling" subtitle={coolingTypeLabel} />
-            <CompactEntityRow
-              title="Water Heater"
-              subtitle={waterHeaterTypeLabel}
-              meta={property.waterHeaterInstallYear ? `Installed ${property.waterHeaterInstallYear}` : undefined}
-            />
-            <CompactEntityRow
-              title="Roof"
-              subtitle={roofTypeLabel}
-              meta={property.roofReplacementYear ? `Replaced ${property.roofReplacementYear}` : undefined}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Link
-              href={buildServicePriceRadarHref({
-                propertyId: property.id,
-                launchSurface: 'property_hub',
-                serviceCategory: 'HVAC',
-                serviceLabelRaw: 'HVAC service quote',
-              })}
-              className="no-brand-style inline-flex min-h-[36px] items-center justify-center rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
-            >
-              Check HVAC quote
-            </Link>
-            <Link
-              href={buildServicePriceRadarHref({
-                propertyId: property.id,
-                launchSurface: 'property_hub',
-                serviceCategory: 'WATER_HEATER',
-                serviceLabelRaw: 'Water heater service quote',
-              })}
-              className="no-brand-style inline-flex min-h-[36px] items-center justify-center rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
-            >
-              Check water heater quote
-            </Link>
-            <Link
-              href={buildServicePriceRadarHref({
-                propertyId: property.id,
-                launchSurface: 'property_hub',
-                serviceCategory: 'ROOFING',
-                serviceLabelRaw: 'Roof service quote',
-              })}
-              className="no-brand-style inline-flex min-h-[36px] items-center justify-center rounded-full border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-xs font-semibold text-[hsl(var(--mobile-text-primary))]"
-            >
-              Check roof quote
-            </Link>
-          </div>
-        </ExpandableSummaryCard>
-
-        {property.homeAssets && property.homeAssets.length > 0 ? (
-          <ExpandableSummaryCard
-            title="Major Appliances"
-            summary={
-              appliancePreview
-                ? `${appliancePreview}${property.homeAssets.length > 2 ? " +" : ""}`
-                : `${property.homeAssets.length} tracked asset${property.homeAssets.length === 1 ? "" : "s"}`
-            }
-            metric={`${property.homeAssets.length} items`}
-            defaultOpen={false}
-          >
-            <div className="space-y-2">
-              {property.homeAssets.slice(0, 6).map((asset: any, index: number) => (
-                <CompactEntityRow
-                  key={`${asset.assetType}-${index}`}
-                  title={formatEnumLabel(asset.assetType, "Appliance")}
-                  subtitle={`Installed ${asset.installationYear}`}
-                  meta={`Age ${new Date().getFullYear() - asset.installationYear} yrs`}
-                />
-              ))}
-            </div>
-          </ExpandableSummaryCard>
-        ) : (
-          <MobileCard variant="compact" className="space-y-2 border-slate-200/80 bg-white">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-base font-semibold text-slate-900">Major Appliances</p>
-              <StatusChip tone="info">0 items</StatusChip>
-            </div>
-            <p className="text-sm text-slate-600">Add appliances to track age and replacement planning.</p>
-            <Link href={`/dashboard/properties/${property.id}/edit`}>
-              <Button variant="outline" className="w-full min-h-[44px]">
-                <Edit className="mr-2 h-4 w-4" />
-                Add Appliances
-              </Button>
-            </Link>
-          </MobileCard>
-        )}
-      </div>
-
-      <div className="hidden md:block space-y-3">
-        <Card>
-          <CardHeader className="p-4">
-            <CardTitle className="font-heading text-xl">Basic Information</CardTitle>
-            <CardDescription className="font-body text-sm">
-              Core property details and location
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-3">
-            <div className="space-y-2">
-              <h4 className="font-heading text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Home className="h-4 w-4 text-blue-600" />
-                Address
+        {/* 3. Property Snapshot / Settings */}
+        <div className="space-y-4">
+          <MobileCard className="bg-white border-2 border-slate-50 shadow-sm p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <Home className="h-4 w-4 text-brand-600" />
+                Property Snapshot
               </h4>
-              <div className="font-body text-base text-gray-900 ml-6">
-                <p>{property.address}</p>
-                <p className="text-sm text-gray-600">
-                  {property.city}, {property.state} {property.zipCode}
-                </p>
+              <Link href={`/dashboard/properties/${property.id}/edit`}>
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-[10px] font-bold text-slate-500 hover:bg-slate-50 hover:text-brand-600">
+                  <Edit className="h-3 w-3 mr-1" />
+                  Edit
+                </Button>
+              </Link>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-slate-500 font-medium">Type</span>
+                <span className="text-sm font-bold text-slate-900">{propertyTypeLabel}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-slate-500 font-medium">Size</span>
+                <span className="text-sm font-bold text-slate-900">{property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "—"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-slate-500 font-medium">Built</span>
+                <span className="text-sm font-bold text-slate-900">{property.yearBuilt ?? "—"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-slate-500 font-medium">Layout</span>
+                <span className="text-sm font-bold text-slate-900">{occupancyLabel}</span>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500 flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Year Built
-                </p>
-                <p className="font-heading text-lg font-semibold text-gray-900">
-                  {property.yearBuilt || "N/A"}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500 flex items-center gap-1">
-                  <Ruler className="h-3 w-3" />
-                  Property Size
-                </p>
-                <p className="font-heading text-lg font-semibold text-gray-900">
-                  {property.propertySize ? `${property.propertySize.toLocaleString()} sqft` : "N/A"}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500 flex items-center gap-1">
-                  <Home className="h-3 w-3" />
-                  Property Type
-                </p>
-                <p className="font-heading text-lg font-semibold text-gray-900">
-                  {propertyTypeLabel}
-                </p>
-              </div>
-            </div>
-
-            {(property.bedrooms || property.bathrooms) && (
-              <div className="grid grid-cols-2 gap-4 pt-3 border-t">
-                {property.bedrooms ? (
-                  <div className="space-y-1">
-                    <p className="font-body text-xs text-gray-500">Bedrooms</p>
-                    <p className="font-heading text-lg font-semibold text-gray-900">
-                      {property.bedrooms}
-                    </p>
-                  </div>
-                ) : null}
-                {property.bathrooms ? (
-                  <div className="space-y-1">
-                    <p className="font-body text-xs text-gray-500">Bathrooms</p>
-                    <p className="font-heading text-lg font-semibold text-gray-900">
-                      {property.bathrooms}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="p-4">
-            <CardTitle className="font-heading text-xl">Home Systems</CardTitle>
-            <CardDescription className="font-body text-sm">
-              Critical system information for maintenance planning
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">Heating Type</p>
-                <p className="font-heading text-base font-medium text-gray-900">{heatingTypeLabel}</p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">Cooling Type</p>
-                <p className="font-heading text-base font-medium text-gray-900">{coolingTypeLabel}</p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">Water Heater Type</p>
-                <p className="font-heading text-base font-medium text-gray-900">{waterHeaterTypeLabel}</p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="font-body text-xs text-gray-500">Roof Type</p>
-                <p className="font-heading text-base font-medium text-gray-900">{roofTypeLabel}</p>
-              </div>
-            </div>
-
-            {(property.hvacInstallYear || property.waterHeaterInstallYear || property.roofReplacementYear) && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t">
-                {property.hvacInstallYear ? (
-                  <div className="space-y-1">
-                    <p className="font-body text-xs text-gray-500">HVAC Install Year</p>
-                    <p className="font-heading text-base font-semibold text-gray-900">{property.hvacInstallYear}</p>
-                  </div>
-                ) : null}
-                {property.waterHeaterInstallYear ? (
-                  <div className="space-y-1">
-                    <p className="font-body text-xs text-gray-500">Water Heater Install Year</p>
-                    <p className="font-heading text-base font-semibold text-gray-900">{property.waterHeaterInstallYear}</p>
-                  </div>
-                ) : null}
-                {property.roofReplacementYear ? (
-                  <div className="space-y-1">
-                    <p className="font-body text-xs text-gray-500">Roof Replacement Year</p>
-                    <p className="font-heading text-base font-semibold text-gray-900">{property.roofReplacementYear}</p>
-                  </div>
-                ) : null}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2 pt-3 border-t">
-              <Button asChild variant="outline" size="sm">
-                <Link
-                  href={buildServicePriceRadarHref({
-                    propertyId: property.id,
-                    launchSurface: 'property_hub',
-                    serviceCategory: 'HVAC',
-                    serviceLabelRaw: 'HVAC service quote',
-                  })}
-                >
-                  Check HVAC quote
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link
-                  href={buildServicePriceRadarHref({
-                    propertyId: property.id,
-                    launchSurface: 'property_hub',
-                    serviceCategory: 'WATER_HEATER',
-                    serviceLabelRaw: 'Water heater service quote',
-                  })}
-                >
-                  Check water heater quote
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link
-                  href={buildServicePriceRadarHref({
-                    propertyId: property.id,
-                    launchSurface: 'property_hub',
-                    serviceCategory: 'ROOFING',
-                    serviceLabelRaw: 'Roof service quote',
-                  })}
-                >
-                  Check roof quote
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {property.homeAssets && property.homeAssets.length > 0 && (
-          <Card>
-            <CardHeader className="p-4">
-              <CardTitle className="font-heading text-xl">Major Appliances</CardTitle>
-              <CardDescription className="font-body text-sm">
-                Installed appliances and their ages
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {property.homeAssets.map((asset: any, index: number) => (
-                  <div key={index} className="space-y-1 p-3 bg-gray-50 rounded-md border border-gray-200">
-                    <p className="font-body text-xs text-gray-500 uppercase tracking-wide">
-                      {formatEnumLabel(asset.assetType, "Appliance")}
-                    </p>
-                    <p className="font-heading text-base font-medium text-gray-900">
-                      Installed: {asset.installationYear}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      Age: {new Date().getFullYear() - asset.installationYear} years
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+          </MobileCard>
+          
+          {/* Legacy Plant Advisor */}
+          <PlantAdvisorDashboardCard propertyId={property.id} />
+        </div>
       </div>
     </div>
   );
