@@ -49,6 +49,8 @@ export type CtcEventName =
   // Morning Brief
   | 'morning_brief_opened'
   | 'morning_brief_cta_clicked'
+  // Performance
+  | 'web_vital_recorded'
   // Diagnostics
   | 'route_redirected'
   | 'dead_end_reached'
@@ -107,7 +109,7 @@ export interface CtcEventProperties {
   property_onboarded: { propertyId: string; durationSeconds: number };
   
   // Monetization / Resolution
-  provider_searched: { category: string; location: string };
+  provider_searched: { category: string; location: string; resultCount?: number };
   booking_initiated: { providerId?: string; category: string; source: string };
   
   // Diagnostics
@@ -128,6 +130,16 @@ export interface CtcEventProperties {
   // Morning Brief
   morning_brief_opened: { propertyId: string; itemCount: number };
   morning_brief_cta_clicked: { propertyId: string; actionType: string; tool: CtcTool };
+  // Performance
+  web_vital_recorded: {
+    metric: 'CLS' | 'FCP' | 'INP' | 'LCP' | 'TTFB';
+    value: number;
+    rating: 'good' | 'needs-improvement' | 'poor';
+    delta?: number;
+    id: string;
+    route: string;
+    withinBudget?: boolean;
+  };
   // Navigation
   route_redirected: { oldRoute: string; canonicalRoute: string; redirectType: '308' | '307-resolver' };
   dead_end_reached: { route: string; propertyId?: string };
