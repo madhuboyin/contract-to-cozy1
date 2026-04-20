@@ -490,18 +490,6 @@ function TimelineTab({ propertyId }: { propertyId: string }) {
   );
 }
 
-import { 
-  ConfidenceBadge, 
-  SourceChip, 
-  WhyThisMattersCard, 
-  EstimatedSavingsBadge, 
-  RiskOfDelayBadge,
-  TrustMetadataBar 
-} from '@/components/trust';
-import { listIncidents } from '../incidents/incidentsApi';
-
-// ... (existing imports)
-
 // ─── Asset Detail Sheet ───────────────────────────────────────────────────────
 
 function AssetDetailSheet({
