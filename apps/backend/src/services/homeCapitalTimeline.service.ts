@@ -409,8 +409,6 @@ export class HomeCapitalTimelineService {
             existing +
             ` Bundling with other items in a similar timeframe (group ${gid}) may reduce contractor costs by 10–15%.`;
         }
-        // Store bundle group ID in a side channel (not a DB column, stored in timelineJson snapshot only)
-        (itemsToCreate[i] as any)._bundleGroup = gid;
       }
     }
 
@@ -439,8 +437,10 @@ export class HomeCapitalTimelineService {
       });
     });
 
-    const timelineJson: Prisma.InputJsonArray = itemsToCreate.map((item): Prisma.InputJsonObject => {
-      const bundleGroup = (item as { _bundleGroup?: unknown })._bundleGroup;
+    const timelineJson: Prisma.InputJsonArray = itemsToCreate.map((item, index): Prisma.InputJsonObject => {
+      const bundleGroup = bundleGroups[index];
+      const hasBundleGroup =
+        typeof bundleGroup === 'string' && (bundleGroupCounts.get(bundleGroup) ?? 0) >= 2;
 
       const timelineItem: Prisma.InputJsonObject = {
         propertyId: item.propertyId,
@@ -455,13 +455,29 @@ export class HomeCapitalTimelineService {
         confidence: item.confidence,
         priority: item.priority,
         why: item.why,
-        ...(typeof bundleGroup === 'string' && bundleGroup.length > 0
+        ...(hasBundleGroup
           ? { bundleGroupId: bundleGroup }
           : {}),
       };
 
       return timelineItem;
     });
+
+    const itemsForCreate: Prisma.HomeCapitalTimelineItemCreateWithoutAnalysisInput[] =
+      itemsToCreate.map((item) => ({
+        property: { connect: { id: item.propertyId } },
+        ...(item.inventoryItemId ? { inventoryItem: { connect: { id: item.inventoryItemId } } } : {}),
+        category: item.category,
+        eventType: item.eventType,
+        windowStart: item.windowStart,
+        windowEnd: item.windowEnd,
+        estimatedCostMinCents: item.estimatedCostMinCents,
+        estimatedCostMaxCents: item.estimatedCostMaxCents,
+        currency: item.currency,
+        confidence: item.confidence,
+        priority: item.priority,
+        why: item.why,
+      }));
 
     const analysis = await prisma.homeCapitalTimelineAnalysis.create({
       data: {
@@ -489,7 +505,7 @@ export class HomeCapitalTimelineService {
         },
         timelineJson,
         items: {
-          create: itemsToCreate,
+          create: itemsForCreate,
         },
       },
       include: {
