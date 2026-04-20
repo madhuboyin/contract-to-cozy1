@@ -19,7 +19,8 @@ import {
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
 import { listIncidents } from '../properties/[id]/incidents/incidentsApi';
-import { OrchestratedActionDTO, IncidentDTO } from '@/types';
+import { OrchestratedActionDTO } from '@/types';
+import { IncidentDTO } from '@/types/incidents.types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ConfidenceBadge, SourceChip, WhyThisMattersCard } from '@/components/trust';
