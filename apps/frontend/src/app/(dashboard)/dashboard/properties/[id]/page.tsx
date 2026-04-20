@@ -1109,6 +1109,20 @@ export default function PropertyDetailPage() {
               </p>
               <div className="flex flex-wrap gap-2">
                 <Link
+                  href={`/dashboard/properties/${property.id}/rooms`}
+                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
+                >
+                  <Home className="h-3.5 w-3.5" />
+                  Rooms
+                </Link>
+                <Link
+                  href={`/dashboard/properties/${property.id}/timeline`}
+                  className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  Timeline
+                </Link>
+                <Link
                   href={`/dashboard/properties/${property.id}/status-board`}
                   className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
                 >

@@ -351,6 +351,7 @@ export default function ProvidersPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId') || undefined;
   const finalPrice = searchParams.get('finalPrice') || undefined;
   const vendorName = searchParams.get('vendorName') || undefined;
+  const serviceLabel = searchParams.get('serviceLabel') || undefined;
   const hasGuardScopeContext = Boolean(
     guidanceJourneyId ||
       guidanceStepKey ||
@@ -613,11 +614,39 @@ export default function ProvidersPage() {
                 Optimized for your {contextItemName || 'Item'} decision
               </p>
               <p className="mb-0 mt-0.5 text-xs text-brand-700 leading-relaxed">
-                We've filtered for providers who specialize in {filters.category !== 'ALL' ? formatEnumLabel(filters.category) : 'this category'} 
+                We've filtered for providers who specialize in {filters.category !== 'ALL' ? formatEnumLabel(filters.category) : 'this category'}
                 to help you execute your Replace or Repair verdict quickly.
               </p>
             </div>
           </div>
+        </MobileCard>
+      )}
+
+      {fromSource === 'resolution-center' && (
+        <MobileCard variant="compact" className="border-violet-200 bg-violet-50 shadow-sm space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-full bg-violet-100 p-1">
+              <Zap className="h-4 w-4 text-violet-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="mb-0 text-sm font-bold text-violet-900">
+                Booking from Resolution Center
+              </p>
+              <p className="mb-0 mt-0.5 text-xs text-violet-700 leading-relaxed">
+                {serviceLabel
+                  ? `Finding providers for "${serviceLabel}"${filters.category !== 'ALL' ? ` · ${formatEnumLabel(filters.category)}` : ''}.`
+                  : `Filtered for ${filters.category !== 'ALL' ? formatEnumLabel(filters.category) : 'your service category'}. Select a provider to book.`}
+              </p>
+            </div>
+          </div>
+          {targetPropertyId && serviceLabel && (
+            <Link
+              href={`/dashboard/quote-comparison?propertyId=${targetPropertyId}&category=${filters.category}&serviceLabel=${encodeURIComponent(serviceLabel)}`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900"
+            >
+              Compare multiple quotes first
+            </Link>
+          )}
         </MobileCard>
       )}
 

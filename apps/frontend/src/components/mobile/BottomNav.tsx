@@ -3,6 +3,7 @@
 import React from 'react';
 import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
 import {
+  Building,
   Camera,
   Ellipsis,
   BookOpen,
@@ -20,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
+import { PropertySwitcherSheet } from '@/components/navigation/PropertySwitcherSheet';
 
 const PROPERTY_ID_IN_PATH = /\/dashboard\/properties\/([^/]+)/;
 
@@ -48,6 +50,7 @@ export function BottomNav() {
   const { selectedPropertyId } = usePropertyContext();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const [propertySwitcherOpen, setPropertySwitcherOpen] = React.useState(false);
   const resolvedPropertyId = selectedPropertyId || getPropertyIdFromPathname(pathname || '');
 
   const handleLogout = React.useCallback(() => {
@@ -215,6 +218,22 @@ export function BottomNav() {
               <SheetHeader>
                 <SheetTitle>More</SheetTitle>
               </SheetHeader>
+
+              {/* Property switcher */}
+              <button
+                type="button"
+                onClick={() => { setMoreOpen(false); setPropertySwitcherOpen(true); }}
+                className="mt-3 flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-left hover:bg-white transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <Building className="h-4 w-4 shrink-0 text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-700 truncate">
+                    {resolvedPropertyId ? 'Switch property' : 'Select a property'}
+                  </span>
+                </div>
+                <Settings className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              </button>
+
               <div className="mt-3">
                 <Input
                   value={query}
@@ -279,6 +298,11 @@ export function BottomNav() {
           </Sheet>
         </div>
       </div>
+
+      <PropertySwitcherSheet
+        open={propertySwitcherOpen}
+        onOpenChange={setPropertySwitcherOpen}
+      />
     </nav>
   );
 }
