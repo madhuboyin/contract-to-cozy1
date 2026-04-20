@@ -81,9 +81,9 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
   const labJob = PRIMARY_JOBS.find(j => j.key === 'home-lab');
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col bg-white/75 backdrop-blur-xl">
       {/* Logo */}
-      <div className="h-16 flex items-center px-5 border-b border-gray-100 flex-shrink-0">
+      <div className="flex h-[74px] flex-shrink-0 items-center border-b border-slate-200/80 px-6">
         <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
           <Image
             src="/favicon.svg"
@@ -92,12 +92,12 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
             height={28}
             className="h-7 w-7 flex-shrink-0"
           />
-          <span className="text-[15px] font-bold text-gray-900 truncate">ContractToCozy</span>
+          <span className="truncate text-[15px] font-semibold tracking-tight text-slate-900">ContractToCozy</span>
         </Link>
       </div>
 
       {/* Primary nav */}
-      <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3.5 py-4">
         {coreJobs.map((job) => {
           const Icon = job.icon;
           const href =
@@ -122,18 +122,22 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
               key={job.key}
               href={href}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group',
+                'group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200',
                 isActive
-                  ? 'bg-teal-50 text-brand-700 font-semibold'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-teal-50/90 font-semibold text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.18)]'
+                  : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
               )}
             >
-              <Icon
+              <span
                 className={cn(
-                  'h-[18px] w-[18px] flex-shrink-0 transition-colors',
-                  isActive ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'
+                  'inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border transition-colors',
+                  isActive
+                    ? 'border-teal-200/80 bg-white text-teal-700'
+                    : 'border-slate-200 bg-white text-slate-400 group-hover:text-slate-600'
                 )}
-              />
+              >
+                <Icon className="h-[16px] w-[16px]" />
+              </span>
               <span>{job.name}</span>
             </Link>
           );
@@ -145,41 +149,49 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
             <Link
               href={buildPropertyAwareHref(resolvedPropertyId, 'home-lab', labJob.key)}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group',
+                'group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200',
                 pathname?.startsWith('/dashboard/home-lab')
-                  ? 'bg-brand-50 text-brand-700 font-semibold'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-teal-50/90 font-semibold text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.18)]'
+                  : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
               )}
             >
-              <labJob.icon
+              <span
                 className={cn(
-                  'h-[18px] w-[18px] flex-shrink-0 transition-colors',
-                  pathname?.startsWith('/dashboard/home-lab') ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'
+                  'inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border transition-colors',
+                  pathname?.startsWith('/dashboard/home-lab')
+                    ? 'border-teal-200/80 bg-white text-teal-700'
+                    : 'border-slate-200 bg-white text-slate-400 group-hover:text-slate-600'
                 )}
-              />
+              >
+                <labJob.icon className="h-[16px] w-[16px]" />
+              </span>
               <span>{labJob.name}</span>
             </Link>
           </div>
         )}
 
         {/* Divider + secondary links */}
-        <div className="pt-3 mt-2 border-t border-gray-100">
+        <div className="mt-3 border-t border-slate-200/80 pt-3">
           <Link
             href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              'group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-100/80 hover:text-slate-800'
             )}
           >
-            <BookOpen className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 group-hover:text-slate-600">
+              <BookOpen className="h-4 w-4 flex-shrink-0" />
+            </span>
             Knowledge
           </Link>
           <Link
             href="/dashboard/community-events"
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              'group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-100/80 hover:text-slate-800'
             )}
           >
-            <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 group-hover:text-slate-600">
+              <Globe className="h-4 w-4 flex-shrink-0" />
+            </span>
             Community
           </Link>
         </div>
@@ -216,21 +228,21 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
       </nav>
 
       {/* User actions at bottom */}
-      <div className="flex-shrink-0 border-t border-gray-100 p-3">
+      <div className="flex-shrink-0 border-t border-slate-200/80 p-3.5">
         <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              className="mt-1.5 flex w-full items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-white hover:text-slate-900"
             >
-              <div className="h-7 w-7 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-[11px] font-bold text-brand-700 uppercase">
+              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-100">
+                <span className="text-[11px] font-bold uppercase text-brand-700">
                   {user?.firstName?.[0] ?? 'U'}
                 </span>
               </div>
               <span className="flex-1 text-left truncate">{user?.firstName ?? 'Account'}</span>
-              <ChevronDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+              <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-44">
@@ -475,15 +487,15 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     <NotificationProvider>
       <PropertyProvider>
         {/* ── Outer shell ────────────────────────────────────────────────── */}
-        <div className="flex min-h-screen bg-gray-50">
+        <div className="flex min-h-screen bg-gradient-to-br from-slate-50 via-slate-50 to-teal-50/35">
 
           {/* ── Desktop persistent left sidebar ──────────────────────────── */}
-          <aside className="hidden md:flex md:flex-col md:w-56 md:fixed md:inset-y-0 md:z-50 bg-white border-r border-gray-100 shadow-sm">
+          <aside className="hidden md:fixed md:inset-y-0 md:z-50 md:flex md:w-64 md:flex-col border-r border-slate-200/80 bg-white/80 shadow-[0_20px_50px_-38px_rgba(15,23,42,0.55)]">
             <PersistentSidebarNav user={user} />
           </aside>
 
           {/* ── Content area (offset by sidebar on desktop) ──────────────── */}
-          <div className="flex flex-1 flex-col md:pl-56 min-w-0">
+          <div className="flex min-w-0 flex-1 flex-col md:pl-64">
 
             {/* Mobile sticky header */}
             <header className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-100 safe-area-inset-top">
@@ -541,7 +553,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             <main className="flex-1 pb-20 md:pb-8">
               <PullToRefresh onRefresh={handleRefresh}>
                 <div
-                  className="mx-auto w-full max-w-6xl px-4 md:px-8 py-5 md:py-8"
+                  className="mx-auto w-full max-w-[1500px] px-4 py-5 md:px-8 md:py-8 xl:px-10"
                   key={refreshKey}
                 >
                   {children}
