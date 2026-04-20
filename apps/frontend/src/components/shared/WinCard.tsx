@@ -4,6 +4,7 @@ import React, { ReactNode } from 'react';
 import { Sparkles, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import TrustStrip from '@/components/system/TrustStrip';
 import { track } from '@/lib/analytics/events';
 
@@ -80,60 +81,51 @@ export function WinCard({
   };
 
   return (
-    <div className={cn(
-      "overflow-hidden rounded-3xl bg-white border border-slate-200/70 shadow-sm",
-      "transition-all duration-200 hover:shadow-md hover:-translate-y-0.5",
-      isUrgent && "border-l-[3px] border-l-amber-400",
+    <Card className={cn(
+      "overflow-hidden border-slate-200 transition-all duration-200 hover:shadow-md",
+      isUrgent && "border-l-4 border-l-amber-500",
       className
     )}>
-      <div className="p-6">
-        <div className="flex items-center gap-1.5 mb-4">
-          {icon || <Sparkles className="h-3 w-3 text-brand-500 shrink-0" />}
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            {title}
-          </span>
-          {isUrgent && (
-            <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-              Priority
-            </span>
+      <CardHeader className="pb-2 pt-4">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          {icon || <Sparkles className="h-3.5 w-3.5 text-brand-600" />}
+          {title}
+        </div>
+      </CardHeader>
+      
+      <CardContent className="space-y-3 pb-4">
+        <div>
+          <h3 className="text-2xl font-bold text-slate-900 leading-tight">
+            {value}
+          </h3>
+          {!hasExplicitTrust && (
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
+              Baseline fallback insight
+            </p>
           )}
+          <p className="mt-1 text-sm text-slate-600">
+            {description}
+          </p>
         </div>
 
-        <h3 className="text-[1.375rem] font-semibold text-slate-900 leading-snug tracking-tight">
-          {value}
-        </h3>
-
-        {!hasExplicitTrust && (
-          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
-            Baseline insight
-          </p>
-        )}
-
-        <p className="mt-2.5 text-sm text-slate-500 leading-relaxed">
-          {description}
-        </p>
-
         {onAction && (
-          <Button
+          <Button 
             onClick={handleActionClick}
-            className="mt-5 w-full h-12 rounded-2xl bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white text-sm font-semibold justify-between px-5 shadow-sm hover:shadow-md transition-all duration-150"
+            className="w-full justify-between bg-brand-600 hover:bg-brand-700 text-white rounded-xl h-11 px-4"
           >
             {actionLabel}
             <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         )}
-      </div>
+      </CardContent>
 
-      <div
-        className="border-t border-slate-100/80 cursor-pointer hover:bg-slate-50/40 transition-colors"
-        onClick={handleTrustClick}
-      >
-        <TrustStrip
-          {...trustSignals}
-          variant="footnote"
-          className="w-full px-5 py-3 border-t-0"
+      <CardFooter className="bg-slate-50/50 p-0 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={handleTrustClick}>
+        <TrustStrip 
+          {...trustSignals} 
+          variant="footnote" 
+          className="w-full px-4 py-3 border-t-0" 
         />
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }

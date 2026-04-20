@@ -520,54 +520,45 @@ export default function DashboardPage() {
 
   if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;
 
-  // ── Derived display values ───────────────────────────────────────────────
-  const timeOfDay = new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening';
-  const healthScore = selectedProperty?.healthScore?.totalScore ?? null;
-  const roundedHealthScore = healthScore !== null ? Math.round(healthScore) : null;
-  const healthScoreColor =
-    roundedHealthScore === null ? '#94a3b8'
-    : roundedHealthScore >= 80 ? '#0d9488'
-    : roundedHealthScore >= 60 ? '#f59e0b'
-    : '#ef4444';
-  const homeStatusLabel =
-    healthScore === null ? 'Building your profile'
-    : healthScore >= 80 ? 'Well protected'
-    : healthScore >= 60 ? 'Needs attention'
-    : 'Needs focus';
+  const primaryActionHero = (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <span className="text-[10px] uppercase tracking-widest text-brand-600 font-bold">
+            Command Center · {isReturningVisitor ? 'Welcome Back' : 'Get Started'}
+          </span>
+          <h1 className="text-3xl font-bold text-slate-900 mt-1">
+            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.firstName || 'there'}.
+          </h1>
+          <p className="text-slate-500 mt-1">Your home is {selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 80 ? 'highly protected' : 'needs focus'} today.</p>
+        </div>
+        
+        <Button onClick={() => setIsScannerOpen(true)} className="h-14 px-6 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white shadow-lg active:scale-95 transition-all group">
+          <Zap className="mr-2 h-5 w-5 fill-current text-brand-200" />
+          <span className="text-base font-bold">Magic Scan</span>
+          <ArrowRight className="ml-4 h-4 w-4 opacity-50" />
+        </Button>
+      </div>
 
-  const RING_CIRCUMFERENCE = 238.76;
-  const scoreArc = roundedHealthScore !== null ? (roundedHealthScore / 100) * RING_CIRCUMFERENCE : 0;
+      <WinCard 
+        title="Highest Value Move"
+        value={heroNarrative.title}
+        description={heroNarrative.subtitle}
+        actionLabel={heroNarrative.ctaLabel}
+        onAction={() => router.push(ahaCtaHref)}
+        isUrgent={data.activeIncidents.length > 0 || overdueMaintenanceCount > 0}
+        trust={{
+          confidenceLabel: "Verified",
+          freshnessLabel: "Updated just now",
+          sourceLabel: "CtC Intelligence Engine",
+          rationale: "Ranked by financial upside, risk prevention, and data confidence."
+        }}
+        className="border-2 border-brand-100 shadow-xl shadow-brand-50/50"
+      />
 
-  const valueTiles: ValueStripTile[] = [];
-  if (roundedHealthScore !== null) {
-    valueTiles.push({
-      id: 'health',
-      label: 'Home Health',
-      value: `${roundedHealthScore}`,
-      delta: roundedHealthScore >= 80 ? 'Great' : roundedHealthScore >= 60 ? 'Fair' : 'Low',
-      icon: Gauge,
-      tone: roundedHealthScore >= 80 ? 'teal' : roundedHealthScore >= 60 ? 'amber' : 'red',
-      href: effectiveSelectedPropertyId ? `/dashboard/properties/${effectiveSelectedPropertyId}` : undefined,
-    });
-  }
-  if (riskExposureGap > 0) {
-    valueTiles.push({ id: 'risk', label: 'Risk Exposure', value: formatUsd(riskExposureGap), delta: null, icon: ShieldAlert, tone: 'amber' });
-  }
-  if (annualSavingsPotential > 0) {
-    valueTiles.push({ id: 'savings', label: 'Savings Found', value: `${formatUsd(annualSavingsPotential)}/yr`, delta: null, icon: PiggyBank, tone: 'teal', href: '/dashboard/savings' });
-  }
-  valueTiles.push({
-    id: 'vault',
-    label: 'Vault Items',
-    value: `${data.inventoryCount}`,
-    delta: data.inventoryCount < 3 ? 'Add more' : null,
-    icon: Box,
-    tone: data.inventoryCount < 3 ? 'amber' : 'slate',
-    href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/vault'),
-  });
-  if (overdueMaintenanceCount > 0) {
-    valueTiles.push({ id: 'overdue', label: 'Overdue Tasks', value: `${overdueMaintenanceCount}`, delta: 'Needs action', icon: CalendarClock, tone: 'red', href: '/dashboard/maintenance?filter=overdue' });
-  }
+      <MagicCaptureSheet isOpen={isScannerOpen} onOpenChange={setIsScannerOpen} />
+    </div>
+  );
 
   return (
     <>
@@ -581,168 +572,22 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="max-w-[1500px] mx-auto px-6 xl:px-10 w-full pb-16">
-
-        {/* ── Hero Section ── */}
-        <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="relative mt-6 overflow-hidden rounded-[28px] bg-gradient-to-br from-white via-slate-50/60 to-teal-50/30 border border-slate-200/60 shadow-sm p-8 lg:p-10"
-        >
-          <div className="absolute -top-32 -right-32 w-[28rem] h-[28rem] bg-teal-100/20 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
-
-          <div className="relative grid grid-cols-1 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px] gap-8 lg:gap-12 items-start">
-            {/* Left: Command Section */}
-            <div className="flex flex-col gap-6">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-brand-600 font-semibold">
-                  Command Center · {isReturningVisitor ? 'Welcome Back' : 'Get Started'}
-                </p>
-                <h1 className="mt-2 text-[2rem] font-semibold text-slate-900 tracking-tight leading-tight">
-                  Good {timeOfDay}, {user?.firstName || 'there'}.
-                </h1>
-                <p className="mt-1.5 text-[0.9375rem] text-slate-500 leading-relaxed max-w-[540px]">
-                  {selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 80
-                    ? "Your home is well protected. Here's what to focus on today."
-                    : "We've analyzed your home. Here's the highest-impact move."}
-                </p>
-              </div>
-
-              <WinCard
-                title="Highest Value Move"
-                value={heroNarrative.title}
-                description={heroNarrative.subtitle}
-                actionLabel={heroNarrative.ctaLabel}
-                onAction={() => router.push(ahaCtaHref)}
-                isUrgent={data.activeIncidents.length > 0 || overdueMaintenanceCount > 0}
-                trust={{
-                  confidenceLabel: "Verified",
-                  freshnessLabel: "Updated just now",
-                  sourceLabel: "CtC Intelligence Engine",
-                  rationale: "Ranked by financial upside, risk prevention, and data confidence."
-                }}
-              />
-
-              <div className="flex items-center gap-4">
-                <Button
-                  onClick={() => setIsScannerOpen(true)}
-                  className="h-12 px-7 rounded-full bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white font-semibold text-sm shadow-sm hover:shadow-md transition-all duration-150"
-                >
-                  <Zap className="mr-2 h-4 w-4 fill-current text-brand-200" />
-                  Magic Scan
-                  <ArrowRight className="ml-3 h-4 w-4 opacity-60" />
-                </Button>
-                {heroNarrative.etaLabel && (
-                  <span className="text-xs text-slate-400 font-medium">{heroNarrative.etaLabel}</span>
-                )}
-              </div>
+      <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
+        <CommandCenterTemplate
+          primaryAction={primaryActionHero}
+          confidenceLabel="Verified"
+          freshnessLabel="Updated today"
+          sourceLabel="Home Intelligence Engine"
+          secondaryModules={
+            <div className="space-y-12">
+               <HeroValueStrip tiles={[]} momentumLabel={null} /> 
+               <SignatureRecommendationCard propertyLabel="Your Home" moves={[]} summary="Analyzing latest data..." />
+               <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
             </div>
-
-            {/* Right: Home Intelligence Panel */}
-            <div className="hidden lg:flex flex-col gap-3">
-              <div className="rounded-2xl bg-white/80 border border-slate-200/60 shadow-sm p-6 flex flex-col items-center gap-4">
-                <div className="relative">
-                  <svg className="w-28 h-28 -rotate-90" viewBox="0 0 96 96" aria-hidden="true">
-                    <circle cx="48" cy="48" r="38" fill="none" stroke="#f1f5f9" strokeWidth="7" />
-                    <circle
-                      cx="48" cy="48" r="38"
-                      fill="none"
-                      stroke={healthScoreColor}
-                      strokeWidth="7"
-                      strokeDasharray={`${scoreArc} ${RING_CIRCUMFERENCE}`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-[1.625rem] font-bold text-slate-900 leading-none">
-                      {roundedHealthScore ?? '--'}
-                    </span>
-                    <span className="text-[10px] uppercase tracking-[0.12em] text-slate-400 mt-1">
-                      HomeScore
-                    </span>
-                  </div>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-slate-700">{homeStatusLabel}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Based on 12+ signals</p>
-                </div>
-              </div>
-
-              <div className="rounded-2xl bg-white/80 border border-slate-200/60 shadow-sm p-5">
-                <p className="text-[10px] uppercase tracking-[0.15em] text-slate-400 font-semibold mb-3">
-                  Intelligence Signals
-                </p>
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
-                    <span className="text-xs text-slate-600">Confidence: High</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-1.5 w-1.5 rounded-full bg-teal-400 shrink-0" />
-                    <span className="text-xs text-slate-600">Updated moments ago</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0" />
-                    <span className="text-xs text-slate-600">Source: Coverage + Home Data</span>
-                  </div>
-                  {data.activeIncidents.length > 0 && (
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
-                      <span className="text-xs text-amber-600 font-medium">
-                        {data.activeIncidents.length} active incident{data.activeIncidents.length > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  )}
-                  {overdueMaintenanceCount > 0 && (
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />
-                      <span className="text-xs text-red-600 font-medium">
-                        {overdueMaintenanceCount} overdue task{overdueMaintenanceCount > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ── Home At A Glance Strip ── */}
-        <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut', delay: 0.1 }}
-          className="mt-5"
-        >
-          <HeroValueStrip
-            tiles={valueTiles}
-            momentumLabel={annualSavingsPotential > 0 ? `${formatUsd(annualSavingsPotential)} found` : null}
-          />
-        </motion.div>
-
-        {/* ── Signature Recommendations ── */}
-        <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut', delay: 0.15 }}
-          className="mt-8"
-        >
-          <SignatureRecommendationCard propertyLabel="Your Home" moves={[]} summary="Analyzing latest data..." />
-        </motion.div>
-
-        {/* ── Rooms Snapshot ── */}
-        <motion.div
-          initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut', delay: 0.2 }}
-          className="mt-8"
-        >
-          <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
-        </motion.div>
+          }
+        />
       </div>
 
-      <MagicCaptureSheet isOpen={isScannerOpen} onOpenChange={setIsScannerOpen} />
       <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     </>
   );
