@@ -41,7 +41,8 @@ const nextConfig = {
       { source: '/dashboard/checklist', destination: '/dashboard/resolution-center', permanent: false },
       { source: '/dashboard/fix', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
       { source: '/dashboard/emergency', destination: '/dashboard/resolution-center?filter=urgent', permanent: false },
-      { source: '/dashboard/replace-repair', destination: '/dashboard/resolution-center?filter=repair', permanent: false },
+      // replace-repair is a standalone tool; keep it accessible from resolution-center cards
+      // { source: '/dashboard/replace-repair', ... } intentionally removed — direct tool links are used
       // Save consolidation
       { source: '/dashboard/home-savings', destination: '/dashboard/save', permanent: false },
       { source: '/dashboard/appreciation', destination: '/dashboard/save?tab=appreciation', permanent: false },
@@ -53,8 +54,7 @@ const nextConfig = {
       { source: '/dashboard/coverage-intelligence', destination: '/dashboard/protect?tab=coverage', permanent: false },
       { source: '/dashboard/risk-radar', destination: '/dashboard/protect?tab=risks', permanent: false },
       { source: '/dashboard/climate', destination: '/dashboard/protect?tab=risks', permanent: false },
-      // Fix / providers
-      { source: '/dashboard/providers', destination: '/dashboard/fix', permanent: false },
+      // providers marketplace intentionally kept routable — booking flow links here directly
     ];
   },
 
