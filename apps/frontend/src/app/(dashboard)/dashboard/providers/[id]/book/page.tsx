@@ -51,6 +51,8 @@ export default function BookProviderPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId');
   const finalPrice = searchParams.get('finalPrice');
   const vendorName = searchParams.get('vendorName');
+  const returnTo = searchParams.get('returnTo');
+  const actionKey = searchParams.get('actionKey');
   // FRD-FR-10: Guidance pre-population fields from book_service step
   const guidanceAssetName = searchParams.get('assetName');
   const guidanceIssueDescription = searchParams.get('issueDescription');
@@ -347,7 +349,14 @@ export default function BookProviderPage() {
 
         const fromParam = searchParams.get('from');
 
-        if (fromParam === 'risk-assessment' && selectedPropertyId) {
+        if (fromParam === 'resolution-center' && returnTo) {
+          const returnQuery = new URLSearchParams();
+          returnQuery.set('bookingCreated', 'true');
+          if (providerId) returnQuery.set('providerId', providerId);
+          if (actionKey) returnQuery.set('actionKey', actionKey);
+          const joiner = returnTo.includes('?') ? '&' : '?';
+          router.push(`${returnTo}${joiner}${returnQuery.toString()}`);
+        } else if (fromParam === 'risk-assessment' && selectedPropertyId) {
           router.push(`/dashboard/properties/${selectedPropertyId}/risk-assessment?refreshed=true`);
         } else {
           router.push('/dashboard/bookings');

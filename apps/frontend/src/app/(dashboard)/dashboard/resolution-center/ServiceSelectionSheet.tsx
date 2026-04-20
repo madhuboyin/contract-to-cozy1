@@ -27,6 +27,7 @@ import {
   ServicePriceRadarCheckDetail,
 } from '@/app/(dashboard)/dashboard/properties/[id]/tools/service-price-radar/servicePriceRadarApi';
 import { ConfidenceBadge, SourceChip } from '@/components/trust';
+import { normalizeProviderCategoryForSearch } from '@/lib/config/serviceCategoryMapping';
 
 interface ServiceSelectionSheetProps {
   item: any;
@@ -48,7 +49,10 @@ export function ServiceSelectionSheet({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [radarResult, setRadarResult] = useState<ServicePriceRadarCheckDetail | null>(null);
 
-  const serviceCategory = item?.serviceCategory || 'GENERAL_HANDYMAN';
+  const serviceCategory =
+    normalizeProviderCategoryForSearch(item?.serviceCategory) ||
+    normalizeProviderCategoryForSearch(item?.category) ||
+    'GENERAL_HANDYMAN';
 
   const handleCheckPrice = async () => {
     if (!quoteAmount || !propertyId) return;
@@ -77,8 +81,11 @@ export function ServiceSelectionSheet({
       propertyId,
       from: 'resolution-center',
       category: serviceCategory,
+      intent: 'service-booking',
+      returnTo: '/dashboard/resolution-center',
     });
     if (item?.title) params.set('serviceLabel', item.title);
+    if (item?.actionKey) params.set('actionKey', item.actionKey);
     router.push(`/dashboard/providers?${params.toString()}`);
   };
 

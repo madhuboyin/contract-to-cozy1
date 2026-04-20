@@ -43,8 +43,13 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import type { InventoryItem } from '@/types';
 import { getCoverageAnalysis } from '@/lib/api/coverageAnalysisApi';
-import { ConfidenceBadge, SourceChip, WhyThisMattersCard } from '@/components/trust';
+import { ConfidenceBadge, SourceChip, TrustMetadataBar, WhyThisMattersCard } from '@/components/trust';
 import { listIncidents } from '../incidents/incidentsApi';
+import {
+  buildCoverageTrustMetadata,
+  coverageGapSummaryText,
+  coverageVerdictMeta,
+} from '@/lib/coverage/coverageInsights';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -287,13 +292,6 @@ function DocumentsTab({
 
 // ─── Coverage Tab ─────────────────────────────────────────────────────────────
 
-function coverageVerdictMeta(verdict?: string) {
-  if (verdict === 'WORTH_IT') return { label: 'Coverage optimal', cls: 'bg-emerald-100 text-emerald-700' };
-  if (verdict === 'SITUATIONAL') return { label: 'Review recommended', cls: 'bg-amber-100 text-amber-700' };
-  if (verdict === 'NOT_WORTH_IT') return { label: 'Possibly overpaying', cls: 'bg-red-100 text-red-700' };
-  return null;
-}
-
 function CoverageTab({ propertyId }: { propertyId: string }) {
   const router = useRouter();
 
@@ -309,11 +307,22 @@ function CoverageTab({ propertyId }: { propertyId: string }) {
     staleTime: 10 * 60 * 1000,
   });
 
+  const { data: gapData, isLoading: gapLoading } = useQuery({
+    queryKey: ['vault-coverage-gaps', propertyId],
+    queryFn: () => api.getInsuranceProtectionGap(propertyId),
+    staleTime: 10 * 60 * 1000,
+  });
+
   const warranties = warData?.success ? warData.data.warranties : [];
   const analysis = cvData?.exists ? cvData.analysis : null;
+  const coverageGaps =
+    gapData?.success && gapData.data && Array.isArray((gapData.data as any).gaps)
+      ? ((gapData.data as any).gaps as any[])
+      : [];
   const verdictMeta = coverageVerdictMeta(analysis?.overallVerdict);
+  const coverageTrustMetadata = buildCoverageTrustMetadata(analysis);
 
-  if (warLoading || cvLoading) {
+  if (warLoading || cvLoading || gapLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-5 w-5 animate-spin text-brand-600" />
@@ -344,6 +353,9 @@ function CoverageTab({ propertyId }: { propertyId: string }) {
           {analysis.summary && (
             <p className="text-[11px] text-muted-foreground leading-snug">{analysis.summary}</p>
           )}
+          <p className="text-[11px] text-muted-foreground">
+            {coverageGapSummaryText(coverageGaps.length)}
+          </p>
           {analysis.nextSteps && analysis.nextSteps.length > 0 && (
             <ul className="space-y-1">
               {analysis.nextSteps.slice(0, 2).map((step: any, i: number) => (
@@ -354,12 +366,7 @@ function CoverageTab({ propertyId }: { propertyId: string }) {
               ))}
             </ul>
           )}
-          <div className="flex items-center gap-2 pt-0.5">
-            <ConfidenceBadge
-              level={analysis.confidence === 'HIGH' ? 'high' : analysis.confidence === 'MEDIUM' ? 'medium' : 'low'}
-            />
-            <SourceChip source="Coverage Analysis AI" />
-          </div>
+          <TrustMetadataBar metadata={coverageTrustMetadata} className="border-0 py-0" />
         </div>
       ) : (
         <button
@@ -372,6 +379,19 @@ function CoverageTab({ propertyId }: { propertyId: string }) {
           </p>
         </button>
       )}
+
+      {coverageGaps.length > 0 ? (
+        <div className="space-y-2">
+          {coverageGaps.slice(0, 2).map((gap: any) => (
+            <MobileCard key={gap.id} className="border border-amber-200 bg-amber-50/60 p-3.5">
+              <p className="text-xs font-semibold text-amber-900">{gap.title || 'Coverage gap detected'}</p>
+              {gap.description ? (
+                <p className="mt-1 text-[11px] text-amber-800">{gap.description}</p>
+              ) : null}
+            </MobileCard>
+          ))}
+        </div>
+      ) : null}
 
       {/* Warranty list */}
       {warranties.length === 0 ? (

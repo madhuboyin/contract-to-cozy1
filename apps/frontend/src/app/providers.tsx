@@ -10,6 +10,7 @@ import { registerServiceWorker } from '@/lib/pwa';
 import { initFaro } from '@/lib/monitoring/faro';
 import { ConsentProvider, useConsent } from '@/lib/consent';
 import { CookieConsentBanner } from '@/components/system/CookieConsentBanner';
+import { WebVitalsTracker } from '@/components/system/WebVitalsTracker';
 import { initSentryClient } from '../../sentry.client.config';
 
 // Inner component — has access to ConsentContext so it can react to consent changes.
@@ -37,6 +38,7 @@ export function Providers({ children, nonce }: { children: React.ReactNode; nonc
       <QueryProvider>
         <AuthProvider>
           <AnalyticsGate />
+          <WebVitalsTracker />
           <NetworkStatus />
           {children}
           <InstallPrompt />

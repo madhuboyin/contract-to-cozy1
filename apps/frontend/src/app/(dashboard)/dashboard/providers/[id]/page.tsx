@@ -61,6 +61,10 @@ export default function ProviderDetailPage() {
   const priceFinalizationId = searchParams.get('priceFinalizationId');
   const finalPrice = searchParams.get('finalPrice');
   const vendorName = searchParams.get('vendorName');
+  const serviceLabel = searchParams.get('serviceLabel');
+  const returnTo = searchParams.get('returnTo');
+  const intent = searchParams.get('intent');
+  const actionKey = searchParams.get('actionKey');
   const hasGuardScopeContext = Boolean(
     guidanceJourneyId ||
       guidanceStepKey ||
@@ -273,6 +277,10 @@ export default function ProviderDetailPage() {
     if (priceFinalizationId) queryParams.append('priceFinalizationId', priceFinalizationId);
     if (finalPrice) queryParams.append('finalPrice', finalPrice);
     if (vendorName) queryParams.append('vendorName', vendorName);
+    if (serviceLabel) queryParams.append('serviceLabel', serviceLabel);
+    if (returnTo) queryParams.append('returnTo', returnTo);
+    if (intent) queryParams.append('intent', intent);
+    if (actionKey) queryParams.append('actionKey', actionKey);
 
     const fromParam = searchParams.get('from');
     if (fromParam) queryParams.append('from', fromParam);

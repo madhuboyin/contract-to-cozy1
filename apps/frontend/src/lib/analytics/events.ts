@@ -79,6 +79,23 @@ export type CtcTool =
   | 'magic-scan'
   | 'resolution-hub';
 
+function toEventAttributes(properties: Record<string, unknown>): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'string') {
+      attrs[key] = value;
+      continue;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      attrs[key] = String(value);
+      continue;
+    }
+    attrs[key] = JSON.stringify(value);
+  }
+  return attrs;
+}
+
 export interface CtcEventProperties {
   // Acquisition & Onboarding
   landing_page_viewed: { source?: string; deviceType?: string };
@@ -160,12 +177,11 @@ export function track<E extends CtcEventName>(
   const faro = getFaro();
 
   if (faro) {
-    faro.api.pushEvent(event, properties as Record<string, string>);
+    faro.api.pushEvent(event, toEventAttributes(properties as Record<string, unknown>));
     return;
   }
 
   if (process.env.NODE_ENV !== 'production') {
-    // eslint-disable-next-line no-console
     console.debug('[ctc:event]', event, properties);
   }
 }

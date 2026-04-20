@@ -38,6 +38,7 @@ import { CompletionModal } from '@/components/orchestration/CompletionModal';
 import { toast } from '@/components/ui/use-toast';
 import { track } from '@/lib/analytics/events';
 import { ServiceSelectionSheet } from './ServiceSelectionSheet';
+import { normalizeProviderCategoryForSearch } from '@/lib/config/serviceCategoryMapping';
 
 // ─── Journey system ───────────────────────────────────────────────────────────
 
@@ -688,8 +689,27 @@ export default function ResolutionCenterClient() {
 
   const handleFindProviders = () => {
     if (!selectedPropertyId) return;
+    const params = new URLSearchParams({
+      propertyId: selectedPropertyId,
+      from: 'resolution-center',
+      intent: 'next-task',
+      returnTo: '/dashboard/resolution-center',
+    });
+    const maybeCategory = normalizeProviderCategoryForSearch(
+      celebratingItem?.serviceCategory || celebratingItem?.category || celebratingItem?.systemType
+    );
+    if (maybeCategory) {
+      params.set('category', maybeCategory);
+    }
+    if (celebratingItem?.title) {
+      params.set('serviceLabel', celebratingItem.title);
+    }
+    if (celebratingItem?.actionKey) {
+      params.set('actionKey', celebratingItem.actionKey);
+    }
+
     setCelebratingItem(null);
-    router.push(`/dashboard/providers?propertyId=${selectedPropertyId}&from=resolution-center`);
+    router.push(`/dashboard/providers?${params.toString()}`);
   };
 
   const handleCompletionSubmit = async (data: any) => {

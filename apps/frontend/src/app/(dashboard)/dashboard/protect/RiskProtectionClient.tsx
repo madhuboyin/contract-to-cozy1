@@ -32,22 +32,18 @@ import { WinCard } from '@/components/shared/WinCard';
 import { MagicCaptureSheet } from '@/components/orchestration/MagicCaptureSheet';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
-import { ConfidenceBadge, SourceChip } from '@/components/trust';
+import { ConfidenceBadge, SourceChip, TrustMetadataBar } from '@/components/trust';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNowStrict } from 'date-fns';
+import {
+  buildCoverageTrustMetadata,
+  coverageGapSummaryText,
+  coverageVerdictMeta,
+} from '@/lib/coverage/coverageInsights';
 
 import { listPropertyRecalls } from '../properties/[id]/recalls/recallsApi';
 import { listIncidents } from '../properties/[id]/incidents/incidentsApi';
 import { getCoverageAnalysis } from '@/lib/api/coverageAnalysisApi';
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-function verdictLabel(v?: string) {
-  if (v === 'WORTH_IT') return { label: 'Coverage optimal', cls: 'bg-emerald-100 text-emerald-700' };
-  if (v === 'SITUATIONAL') return { label: 'Review recommended', cls: 'bg-amber-100 text-amber-700' };
-  if (v === 'NOT_WORTH_IT') return { label: 'Overpaying', cls: 'bg-red-100 text-red-700' };
-  return { label: 'Not yet analyzed', cls: 'bg-slate-100 text-slate-500' };
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -131,7 +127,8 @@ export default function RiskProtectionClient() {
 
   const coverageAnalysis =
     coverageAnalysisQuery.data?.exists ? coverageAnalysisQuery.data.analysis : null;
-  const cvVerdict = verdictLabel(coverageAnalysis?.overallVerdict);
+  const cvVerdict = coverageVerdictMeta(coverageAnalysis?.overallVerdict);
+  const coverageTrustMetadata = buildCoverageTrustMetadata(coverageAnalysis);
 
   if (!selectedPropertyId) {
     return (
@@ -140,7 +137,9 @@ export default function RiskProtectionClient() {
           <Shield className="h-8 w-8 text-slate-400" />
         </div>
         <h2 className="text-xl font-bold text-slate-900">Select a property to see risk data</h2>
-        <p className="text-sm text-slate-500">Add or select a property to unlock risk scoring, coverage analysis, recalls, and active incident tracking.</p>
+        <p className="text-sm text-slate-500">
+          Add or select a property to see maintenance risk, coverage status, recalls, and open incidents.
+        </p>
         <button onClick={() => router.push('/dashboard/properties')} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
           <ArrowRight className="h-4 w-4" />
           Go to My Properties
@@ -164,13 +163,13 @@ export default function RiskProtectionClient() {
       <header className="space-y-2 px-1">
         <div className="flex items-center gap-2 text-brand-600 font-bold text-[10px] uppercase tracking-widest">
           <CalendarClock className="h-3.5 w-3.5" />
-          Home SOC
+          Protect
         </div>
         <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-          Security Operations
+          Home Protection
         </h1>
         <p className="text-slate-500 max-w-lg">
-          Your command center for system health, insurance verification, and environmental defense.
+          Your place to keep maintenance, coverage, and safety alerts on track.
         </p>
       </header>
 
@@ -216,14 +215,12 @@ export default function RiskProtectionClient() {
               <h2 className="text-2xl font-bold text-slate-900">
                 {riskScore !== null
                   ? riskScore > 80
-                    ? 'Your home is highly secured'
-                    : 'Your home is under watch'
+                    ? 'Your home is well protected'
+                    : 'Some protections need attention'
                   : 'Protection score pending'}
               </h2>
               <p className="text-sm text-slate-500 leading-relaxed">
-                {coverageGaps.length === 0
-                  ? 'Full coverage verified.'
-                  : `${coverageGaps.length} coverage gap${coverageGaps.length > 1 ? 's' : ''} found.`}{' '}
+                {coverageGapSummaryText(coverageGaps.length)}{' '}
                 {urgentTasks.length > 0 ? `${urgentTasks.length} urgent task pending.` : ''}
               </p>
             </div>
@@ -262,8 +259,7 @@ export default function RiskProtectionClient() {
       <div className="space-y-12">
 
         {/* ── Active Incidents ── */}
-        {activeIncidents.length > 0 && (
-          <section className="space-y-5">
+        <section className="space-y-5">
             <div className="flex items-start gap-4 px-1">
               <div className="mt-1 p-2 rounded-xl bg-orange-50 border-2 border-orange-100 text-orange-600">
                 <Activity className="h-5 w-5" />
@@ -276,58 +272,67 @@ export default function RiskProtectionClient() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeIncidents.slice(0, 4).map((incident: any) => (
-                <div
-                  key={incident.id}
-                  className={cn(
-                    'p-5 bg-white rounded-2xl border-2 shadow-sm space-y-3',
-                    incident.severity === 'CRITICAL'
-                      ? 'border-red-100'
-                      : 'border-orange-100',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={cn(
-                            'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
-                            incident.severity === 'CRITICAL'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-orange-100 text-orange-700',
-                          )}
-                        >
-                          {incident.severity}
-                        </span>
-                        {incident.createdAt && (
-                          <span className="text-[11px] text-slate-400">
-                            {formatDistanceToNowStrict(new Date(incident.createdAt))} ago
+            {activeIncidents.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {activeIncidents.slice(0, 4).map((incident: any) => (
+                  <div
+                    key={incident.id}
+                    className={cn(
+                      'p-5 bg-white rounded-2xl border-2 shadow-sm space-y-3',
+                      incident.severity === 'CRITICAL'
+                        ? 'border-red-100'
+                        : 'border-orange-100',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={cn(
+                              'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                              incident.severity === 'CRITICAL'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-orange-100 text-orange-700',
+                            )}
+                          >
+                            {incident.severity}
                           </span>
+                          {incident.createdAt && (
+                            <span className="text-[11px] text-slate-400">
+                              {formatDistanceToNowStrict(new Date(incident.createdAt))} ago
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-sm font-bold text-slate-900 leading-snug">
+                          {incident.title || incident.incidentType?.replace(/_/g, ' ')}
+                        </h3>
+                        {incident.description && (
+                          <p className="text-xs text-slate-500 line-clamp-2">
+                            {incident.description}
+                          </p>
                         )}
                       </div>
-                      <h3 className="text-sm font-bold text-slate-900 leading-snug">
-                        {incident.title || incident.incidentType?.replace(/_/g, ' ')}
-                      </h3>
-                      {incident.description && (
-                        <p className="text-xs text-slate-500 line-clamp-2">
-                          {incident.description}
-                        </p>
-                      )}
+                      <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
                     </div>
-                    <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                    <Button
+                      variant="ghost"
+                      onClick={() => router.push('/dashboard/resolution-center?filter=urgent')}
+                      className="w-full justify-between h-9 px-2 text-[11px] font-bold text-orange-700 hover:bg-orange-50 rounded-lg"
+                    >
+                      Triage Now
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    onClick={() => router.push('/dashboard/resolution-center?filter=urgent')}
-                    className="w-full justify-between h-9 px-2 text-[11px] font-bold text-orange-700 hover:bg-orange-50 rounded-lg"
-                  >
-                    Triage Now
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <MobileCard className="border border-emerald-200 bg-emerald-50/50 p-5 text-center">
+                <p className="text-sm font-semibold text-emerald-800">No active incidents right now</p>
+                <p className="mt-1 text-xs text-emerald-700">
+                  Great news. We will surface any new urgent issues here automatically.
+                </p>
+              </MobileCard>
+            )}
 
             {activeIncidents.length > 4 && (
               <button
@@ -339,7 +344,6 @@ export default function RiskProtectionClient() {
               </button>
             )}
           </section>
-        )}
 
         {/* ── Critical Signals: Recalls ── */}
         <section className="space-y-5">
@@ -469,18 +473,11 @@ export default function RiskProtectionClient() {
                 )}
 
                 <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center gap-2">
-                    <ConfidenceBadge
-                      level={
-                        coverageAnalysis?.confidence === 'HIGH'
-                          ? 'high'
-                          : coverageAnalysis?.confidence === 'MEDIUM'
-                          ? 'medium'
-                          : 'low'
-                      }
-                    />
-                    <SourceChip source="Coverage Analysis AI" />
-                  </div>
+                  <TrustMetadataBar
+                    metadata={coverageTrustMetadata}
+                    className="border-0 py-0"
+                    showLastUpdated
+                  />
                   <Button
                     variant="ghost"
                     size="sm"

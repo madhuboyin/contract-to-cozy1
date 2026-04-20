@@ -188,7 +188,11 @@ const ProviderList = ({
   targetPropertyId,
   insightContext,
   category,
+  serviceLabel,
   fromSource,
+  returnTo,
+  intent,
+  actionKey,
   predictionId,
   inventoryItemId,
   homeAssetId,
@@ -205,7 +209,11 @@ const ProviderList = ({
   targetPropertyId?: string;
   insightContext?: string;
   category?: string;
+  serviceLabel?: string;
   fromSource?: string;
+  returnTo?: string;
+  intent?: string;
+  actionKey?: string;
   predictionId?: string;
   inventoryItemId?: string;
   homeAssetId?: string;
@@ -225,7 +233,11 @@ const ProviderList = ({
         if (targetPropertyId) queryParams.append('propertyId', targetPropertyId);
         if (insightContext) queryParams.append('insightFactor', insightContext);
         if (category) queryParams.append('category', category);
+        if (serviceLabel) queryParams.append('serviceLabel', serviceLabel);
         if (fromSource) queryParams.append('from', fromSource);
+        if (returnTo) queryParams.append('returnTo', returnTo);
+        if (intent) queryParams.append('intent', intent);
+        if (actionKey) queryParams.append('actionKey', actionKey);
         if (predictionId) queryParams.append('predictionId', predictionId);
         if (inventoryItemId) queryParams.append('itemId', inventoryItemId);
         if (homeAssetId) queryParams.append('homeAssetId', homeAssetId);
@@ -339,13 +351,20 @@ export default function ProvidersPage() {
   const searchParams = useSearchParams();
   const { selectedPropertyId: dashboardSelectedPropertyId } = usePropertyContext();
 
-  const defaultCategory = normalizeProviderCategoryForSearch(searchParams.get('category') || searchParams.get('service'));
+  const defaultCategory = normalizeProviderCategoryForSearch(
+    searchParams.get('category') ||
+      searchParams.get('service') ||
+      searchParams.get('serviceLabel')
+  );
   const insightContext = searchParams.get('insightFactor') || undefined;
   const targetPropertyId = searchParams.get('propertyId') || dashboardSelectedPropertyId || undefined;
   const predictionId = searchParams.get('predictionId') || undefined;
   const inventoryItemId = searchParams.get('itemId') || undefined;
   const homeAssetId = searchParams.get('homeAssetId') || undefined;
   const fromSource = searchParams.get('from') || undefined;
+  const returnTo = searchParams.get('returnTo') || undefined;
+  const intent = searchParams.get('intent') || undefined;
+  const actionKey = searchParams.get('actionKey') || undefined;
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') || undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') || undefined;
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily') || undefined;
@@ -620,7 +639,7 @@ export default function ProvidersPage() {
                 Optimized for your {contextItemName || 'Item'} decision
               </p>
               <p className="mb-0 mt-0.5 text-xs text-brand-700 leading-relaxed">
-                We've filtered for providers who specialize in {filters.category !== 'ALL' ? formatEnumLabel(filters.category) : 'this category'}
+                We&apos;ve filtered for providers who specialize in {filters.category !== 'ALL' ? formatEnumLabel(filters.category) : 'this category'}
                 to help you execute your Replace or Repair verdict quickly.
               </p>
             </div>
@@ -651,6 +670,14 @@ export default function ProvidersPage() {
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900"
             >
               Compare multiple quotes first
+            </Link>
+          )}
+          {returnTo && (
+            <Link
+              href={returnTo}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900"
+            >
+              Back to Resolution Center
             </Link>
           )}
         </MobileCard>
@@ -721,7 +748,11 @@ export default function ProvidersPage() {
           targetPropertyId={targetPropertyId}
           insightContext={insightContext}
           category={filters.category === 'ALL' ? undefined : filters.category}
+          serviceLabel={serviceLabel}
           fromSource={fromSource}
+          returnTo={returnTo}
+          intent={intent}
+          actionKey={actionKey}
           predictionId={predictionId}
           inventoryItemId={inventoryItemId}
           homeAssetId={homeAssetId}
@@ -737,7 +768,16 @@ export default function ProvidersPage() {
       ) : (
         <EmptyStateCard
           title="No providers found"
-          description="Try widening the service category or removing the ZIP filter."
+          description="Try broadening your service category or removing the ZIP filter, then run search again."
+          action={
+            <button
+              type="button"
+              onClick={() => runSearch()}
+              className="inline-flex min-h-[36px] items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Retry search
+            </button>
+          }
         />
       )}
 
