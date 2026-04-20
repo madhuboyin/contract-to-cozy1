@@ -43,6 +43,8 @@ import { ConfidenceBadge, SourceChip, WhyThisMattersCard } from '@/components/tr
 import { cn } from '@/lib/utils';
 import { formatDistanceToNowStrict } from 'date-fns';
 
+import { listPropertyRecalls } from '../properties/[id]/recalls/recallsApi';
+
 export default function RiskProtectionClient() {
   const { selectedPropertyId } = usePropertyContext();
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -50,35 +52,38 @@ export default function RiskProtectionClient() {
   // 1. Fetch System Health (Maintenance)
   const tasksQuery = useQuery({
     queryKey: ['maintenance-tasks', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? api.getMaintenanceTasks(selectedPropertyId, { includeCompleted: false }) : null,
+    queryFn: () => selectedPropertyId ? api.getMaintenanceTasks(selectedPropertyId, { includeCompleted: false }) : Promise.resolve(null as any),
     enabled: !!selectedPropertyId,
   });
 
   // 2. Fetch Risk Intelligence (Climate, Failure, Local)
   const riskQuery = useQuery({
     queryKey: ['risk-intelligence', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? api.getRiskReportSummary(selectedPropertyId) : null,
+    queryFn: () => selectedPropertyId ? api.getRiskReportSummary(selectedPropertyId) : Promise.resolve(null as any),
     enabled: !!selectedPropertyId,
   });
 
   // 3. Fetch Insurance & Warranty Gaps
   const coverageQuery = useQuery({
     queryKey: ['coverage-intelligence', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? api.getInsuranceProtectionGap(selectedPropertyId) : null,
+    queryFn: () => selectedPropertyId ? api.getInsuranceProtectionGap(selectedPropertyId) : Promise.resolve(null as any),
     enabled: !!selectedPropertyId,
   });
 
   // 4. Fetch Recalls
   const recallsQuery = useQuery({
     queryKey: ['active-recalls', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? api.getRecallsForProperty(selectedPropertyId) : null,
+    queryFn: async () => {
+      if (!selectedPropertyId) return { propertyId: '', matches: [], recallMatches: [] };
+      return listPropertyRecalls(selectedPropertyId);
+    },
     enabled: !!selectedPropertyId,
   });
 
   const isLoading = tasksQuery.isLoading || riskQuery.isLoading || coverageQuery.isLoading || recallsQuery.isLoading;
 
   const riskScore = (riskQuery.data as any)?.riskScore ?? 82; // Default mock for visual if missing
-  const openRecalls = (recallsQuery.data as any)?.matches || [];
+  const openRecalls = recallsQuery.data?.matches || [];
   const urgentTasks = (tasksQuery.data as any)?.success ? (tasksQuery.data as any).data.filter((t: any) => t.priority === 'URGENT') : [];
   const coverageGaps = (coverageQuery.data as any)?.gaps || [];
 
