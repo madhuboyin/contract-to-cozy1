@@ -442,14 +442,14 @@ function AssetDetailSheet({
   // 1. Fetch linked documents
   const { data: allDocsData } = useQuery({
     queryKey: ['vault-docs', propertyId],
-    queryFn: () => propertyId ? api.listDocuments(propertyId) : Promise.resolve({ success: false, data: { documents: [] } }),
+    queryFn: () => propertyId ? api.listDocuments(propertyId) : Promise.resolve({ success: false, data: { documents: [] } } as any),
     enabled: !!propertyId,
   });
 
   // 2. Fetch history (Incidents/Service)
   const { data: incidentsData } = useQuery({
     queryKey: ['asset-history', item?.id],
-    queryFn: () => (propertyId && item?.id) ? listIncidents({ propertyId, limit: 10 }) : Promise.resolve({ items: [] }),
+    queryFn: () => (propertyId && item?.id) ? listIncidents({ propertyId, limit: 10 }) : Promise.resolve({ items: [] } as any),
     enabled: !!(propertyId && item?.id),
   });
 

@@ -47,14 +47,14 @@ export default function ResolutionCenterClient() {
   // 1. Fetch Orchestrated Actions (Maintenance/Predictive)
   const { data: orchestrationData, isLoading: orchestrationLoading } = useQuery({
     queryKey: ['orchestration-summary', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? api.getOrchestrationSummary(selectedPropertyId) : null,
+    queryFn: () => selectedPropertyId ? api.getOrchestrationSummary(selectedPropertyId) : Promise.resolve(null as any),
     enabled: !!selectedPropertyId,
   });
 
   // 2. Fetch Open Incidents (Reactive/Immediate)
   const { data: incidentsData, isLoading: incidentsLoading } = useQuery({
     queryKey: ['active-incidents', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? listIncidents({ propertyId: selectedPropertyId, limit: 10 }) : { items: [] },
+    queryFn: () => selectedPropertyId ? listIncidents({ propertyId: selectedPropertyId, limit: 10 }) : Promise.resolve({ items: [] } as any),
     enabled: !!selectedPropertyId,
   });
 

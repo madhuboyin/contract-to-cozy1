@@ -49,28 +49,28 @@ export default function FinancialEfficiencyClient() {
   // 1. Fetch Recurring Savings (Utilities, Trash, etc.)
   const homeSavingsQuery = useQuery({
     queryKey: ['home-savings-summary', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? getHomeSavingsSummary(selectedPropertyId) : null,
+    queryFn: () => selectedPropertyId ? getHomeSavingsSummary(selectedPropertyId) : Promise.resolve(null as any),
     enabled: !!selectedPropertyId,
   });
 
   // 2. Fetch Mortgage/Refinance Status
   const refinanceQuery = useQuery({
     queryKey: ['refinance-radar', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? getRadarStatus(selectedPropertyId) : null,
+    queryFn: () => selectedPropertyId ? getRadarStatus(selectedPropertyId) : Promise.resolve(null as any),
     enabled: !!selectedPropertyId,
   });
 
   // 3. Fetch Property Tax Status
   const taxQuery = useQuery({
     queryKey: ['property-tax', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? getPropertyTaxEstimate(selectedPropertyId) : null,
+    queryFn: () => selectedPropertyId ? getPropertyTaxEstimate(selectedPropertyId) : Promise.resolve(null as any),
     enabled: !!selectedPropertyId,
   });
 
   // 4. Fetch Equity & Valuation (Sell/Hold/Rent engine)
   const equityQuery = useQuery({
     queryKey: ['equity-insights', selectedPropertyId],
-    queryFn: () => selectedPropertyId ? getSellHoldRent(selectedPropertyId) : null,
+    queryFn: () => selectedPropertyId ? getSellHoldRent(selectedPropertyId) : Promise.resolve(null as any),
     enabled: !!selectedPropertyId,
   });
 
