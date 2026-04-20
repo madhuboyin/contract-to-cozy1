@@ -390,7 +390,7 @@ export default function RiskProtectionClient() {
                     onClick={() =>
                       selectedPropertyId &&
                       router.push(
-                        `/dashboard/properties/${selectedPropertyId}/recalls/${recall.id}`,
+                        `/dashboard/properties/${selectedPropertyId}/recalls?recallId=${recall.id}`,
                       )
                     }
                     className="w-full justify-between h-9 px-2 text-[11px] font-bold text-red-600 hover:bg-red-50 rounded-lg"
@@ -639,7 +639,7 @@ export default function RiskProtectionClient() {
               onClick={() =>
                 selectedPropertyId &&
                 router.push(
-                  `/dashboard/properties/${selectedPropertyId}/tools/risk-radar`,
+                  `/dashboard/properties/${selectedPropertyId}/risk-assessment`,
                 )
               }
               className="h-auto p-5 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-slate-100 hover:border-slate-400 transition-all text-center"
