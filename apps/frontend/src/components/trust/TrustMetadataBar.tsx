@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { SourceChip } from './SourceChip';
 import { TrustMetadata } from '@/lib/types/trust';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, isValid } from 'date-fns';
 
 interface TrustMetadataBarProps {
   metadata: TrustMetadata;
@@ -15,6 +15,9 @@ interface TrustMetadataBarProps {
 }
 
 export function TrustMetadataBar({ metadata, className, showLastUpdated = true }: TrustMetadataBarProps) {
+  const lastUpdatedDate = metadata.lastUpdated ? new Date(metadata.lastUpdated) : null;
+  const hasValidLastUpdated = Boolean(lastUpdatedDate && isValid(lastUpdatedDate));
+
   return (
     <div className={cn(
       "flex flex-wrap items-center gap-3 py-2 border-t border-slate-100",
@@ -24,11 +27,11 @@ export function TrustMetadataBar({ metadata, className, showLastUpdated = true }
       
       <SourceChip source={metadata.source} />
       
-      {showLastUpdated && metadata.lastUpdated && (
+      {showLastUpdated && hasValidLastUpdated && (
         <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
           <Clock className="h-3 w-3" />
           <span>
-            Updated {formatDistanceToNow(new Date(metadata.lastUpdated), { addSuffix: true })}
+            Updated {formatDistanceToNow(lastUpdatedDate as Date, { addSuffix: true })}
           </span>
         </div>
       )}

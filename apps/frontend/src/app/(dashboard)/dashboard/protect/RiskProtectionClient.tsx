@@ -45,6 +45,13 @@ import { listPropertyRecalls } from '../properties/[id]/recalls/recallsApi';
 import { listIncidents } from '../properties/[id]/incidents/incidentsApi';
 import { getCoverageAnalysis } from '@/lib/api/coverageAnalysisApi';
 
+function safeTimeAgo(value: unknown): string | null {
+  if (!value) return null;
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  return `${formatDistanceToNowStrict(date)} ago`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function RiskProtectionClient() {
@@ -299,7 +306,7 @@ export default function RiskProtectionClient() {
                           </span>
                           {incident.createdAt && (
                             <span className="text-[11px] text-slate-400">
-                              {formatDistanceToNowStrict(new Date(incident.createdAt))} ago
+                              {safeTimeAgo(incident.createdAt) || 'Recently'}
                             </span>
                           )}
                         </div>
@@ -373,7 +380,7 @@ export default function RiskProtectionClient() {
                           Active Recall
                         </span>
                         <span className="text-[11px] font-medium text-slate-400">
-                          {formatDistanceToNowStrict(new Date(recall.publishedAt))} ago
+                          {safeTimeAgo(recall.publishedAt) || 'Recently'}
                         </span>
                       </div>
                       <h3 className="text-base font-bold text-slate-900 leading-tight">
