@@ -442,14 +442,22 @@ function AssetDetailSheet({
   // 1. Fetch linked documents
   const { data: allDocsData } = useQuery({
     queryKey: ['vault-docs', propertyId],
-    queryFn: () => propertyId ? api.listDocuments(propertyId).then(res => res.data) : Promise.resolve({ documents: [] } as any),
+    queryFn: async () => {
+      if (!propertyId) return { documents: [] };
+      const res = await api.listDocuments(propertyId);
+      if (res.success) return res.data;
+      return { documents: [] };
+    },
     enabled: !!propertyId,
   });
 
   // 2. Fetch history (Incidents/Service)
   const { data: incidentsData } = useQuery({
     queryKey: ['asset-history', item?.id],
-    queryFn: () => (propertyId && item?.id) ? listIncidents({ propertyId, limit: 10 }) : Promise.resolve({ items: [] } as any),
+    queryFn: async () => {
+      if (!propertyId || !item?.id) return { items: [] };
+      return listIncidents({ propertyId, limit: 10 });
+    },
     enabled: !!(propertyId && item?.id),
   });
 
@@ -462,7 +470,7 @@ function AssetDetailSheet({
 
   if (!item) return null;
 
-  const linkedDocs = (allDocsData?.success ? allDocsData.data.documents : []).filter(
+  const linkedDocs = (allDocsData?.documents || []).filter(
     (doc: any) => doc.inventoryItemId === item.id || (item.warrantyId && doc.warrantyId === item.warrantyId)
   );
 

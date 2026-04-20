@@ -92,7 +92,7 @@ export interface CtcEventProperties {
   first_wow_moment: { insightId: string; insightType: string };
   document_uploaded: { type: string; sizeBytes: number; success: boolean };
   magic_scan_started: { propertyId: string; source: string };
-  magic_scan_completed: { propertyId: string; documentType: string; confidence: number };
+  magic_scan_completed: { propertyId: string; confidence: number; documentType?: string; draftId?: string };
   
   // Outcome Density & Trust
   outcome_win_generated: { type: 'SAVINGS' | 'RISK_PREVENTION' | 'TIME_SAVED'; valueUsd?: number; sourceEngine: string; propertyId: string };
