@@ -60,9 +60,30 @@ export interface TrackToolUsedInput {
   metadataJson?: Record<string, unknown> | null;
 }
 
+export interface TrackOutcomeGeneratedInput {
+  userId?:       string | null;
+  propertyId:    string;
+  outcomeType:   'SAVINGS' | 'RISK_PREVENTION' | 'TIME_SAVED';
+  valueUsd?:     number | null;
+  sourceEngine:  string;
+  occurredAt?:   Date | null;
+  metadataJson?: Record<string, unknown> | null;
+}
+
+export interface TrackOutcomeActionTakenInput {
+  userId?:       string | null;
+  propertyId:    string;
+  outcomeType:   'SAVINGS' | 'RISK_PREVENTION' | 'TIME_SAVED';
+  sourceEngine:  string;
+  occurredAt?:   Date | null;
+  metadataJson?: Record<string, unknown> | null;
+}
+
 // Pass-through schemas — no zod validation; workers emit fire-and-forget only.
-export const TrackEventSchema            = { parse: <T>(x: T): T => x };
-export const TrackFeatureOpenedSchema    = { parse: <T>(x: T): T => x };
-export const TrackDecisionGuidedSchema   = { parse: <T>(x: T): T => x };
+export const TrackEventSchema             = { parse: <T>(x: T): T => x };
+export const TrackFeatureOpenedSchema     = { parse: <T>(x: T): T => x };
+export const TrackDecisionGuidedSchema    = { parse: <T>(x: T): T => x };
 export const TrackPropertyActivatedSchema = { parse: <T>(x: T): T => x };
-export const TrackToolUsedSchema         = { parse: <T>(x: T): T => x };
+export const TrackToolUsedSchema          = { parse: <T>(x: T): T => x };
+export const TrackOutcomeGeneratedSchema  = { parse: <T>(x: T): T => x };
+export const TrackOutcomeActionTakenSchema = { parse: <T>(x: T): T => x };
