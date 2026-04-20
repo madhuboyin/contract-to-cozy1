@@ -42,6 +42,8 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { useToast } from '@/components/ui/use-toast';
 import type { InventoryItem } from '@/types';
+import { getCoverageAnalysis } from '@/lib/api/coverageAnalysisApi';
+import { ConfidenceBadge, SourceChip } from '@/components/trust';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -283,9 +285,6 @@ function DocumentsTab({
 }
 
 // ─── Coverage Tab ─────────────────────────────────────────────────────────────
-
-import { getCoverageAnalysis } from '@/lib/api/coverageAnalysisApi';
-import { ConfidenceBadge, SourceChip } from '@/components/trust';
 
 function coverageVerdictMeta(verdict?: string) {
   if (verdict === 'WORTH_IT') return { label: 'Coverage optimal', cls: 'bg-emerald-100 text-emerald-700' };
