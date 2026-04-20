@@ -102,7 +102,7 @@ export interface CtcEventProperties {
   // Retention & Lifecycle
   session_started: { propertyCount: number };
   return_visit: { sessionCount: number; daysSinceLastVisit: number };
-  task_completed: { priority: string; category: string; propertyId: string };
+  task_completed: { priority: string; category: string; propertyId: string; journeyType?: string };
   notification_clicked: { channel: 'PUSH' | 'EMAIL' | 'SMS'; campaignId: string };
   property_onboarded: { propertyId: string; durationSeconds: number };
   

@@ -43,7 +43,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import type { InventoryItem } from '@/types';
 import { getCoverageAnalysis } from '@/lib/api/coverageAnalysisApi';
-import { ConfidenceBadge, SourceChip } from '@/components/trust';
+import { ConfidenceBadge, SourceChip, WhyThisMattersCard } from '@/components/trust';
 import { listIncidents } from '../incidents/incidentsApi';
 
 // ─── helpers ────────────────────────────────────────────────────────────────

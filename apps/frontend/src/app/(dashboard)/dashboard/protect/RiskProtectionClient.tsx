@@ -443,10 +443,10 @@ export default function RiskProtectionClient() {
 
                 {coverageAnalysis?.nextSteps && coverageAnalysis.nextSteps.length > 0 && (
                   <ul className="space-y-1.5">
-                    {coverageAnalysis.nextSteps.slice(0, 3).map((step, i) => (
+                    {coverageAnalysis.nextSteps.slice(0, 3).map((step: any, i: number) => (
                       <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
                         <ArrowRight className="h-3 w-3 text-slate-400 mt-0.5 shrink-0" />
-                        {step.action || step.description || String(step)}
+                        {step.title || step.detail || 'Action required'}
                       </li>
                     ))}
                   </ul>
