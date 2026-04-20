@@ -1,5 +1,6 @@
 // apps/backend/src/services/orchestrationCompletionPhoto.service.ts
 import { prisma } from '../lib/prisma';
+import sharp from 'sharp';
 
 export interface PhotoUploadResult {
   id: string;
@@ -8,28 +9,41 @@ export interface PhotoUploadResult {
   fileSize: number;
 }
 
-/**
- * PLACEHOLDER: Photo upload service
- * When Image Processing & Storage phase is implemented, this will:
- * 1. Validate file type and size
- * 2. Compress images (thumbnail: 400px, full: 1920px)
- * 3. Upload to S3
- * 4. Generate signed URLs
- * 5. Store metadata in database
- * 
- * For now, this returns mock data for development/testing
- */
+function toDataUrl(buffer: Buffer, mimeType: string): string {
+  return `data:${mimeType};base64,${buffer.toString('base64')}`;
+}
+
+async function buildThumbnail(
+  source: Buffer,
+  fallbackMimeType: string
+): Promise<{ buffer: Buffer; mimeType: string; width?: number; height?: number }> {
+  try {
+    const transformed = await sharp(source)
+      .rotate()
+      .resize(640, 640, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 76, mozjpeg: true })
+      .toBuffer({ resolveWithObject: true });
+
+    return {
+      buffer: transformed.data,
+      mimeType: 'image/jpeg',
+      width: transformed.info.width,
+      height: transformed.info.height,
+    };
+  } catch {
+    return { buffer: source, mimeType: fallbackMimeType };
+  }
+}
+
 export async function uploadPhoto(params: {
   file: Express.Multer.File;
   propertyId: string;
   actionKey: string;
   orderIndex: number;
 }): Promise<PhotoUploadResult> {
-  const { file, propertyId, actionKey, orderIndex } = params;
+  const { file, propertyId, orderIndex } = params;
+  const { buffer, mimeType: thumbMime, width, height } = await buildThumbnail(file.buffer, file.mimetype);
 
-  // TODO: Implement actual S3 upload and image processing
-  // For now, create a database record with placeholder URLs
-  
   const photo = await prisma.orchestrationActionCompletionPhoto.create({
     data: {
       propertyId,
@@ -37,8 +51,10 @@ export async function uploadPhoto(params: {
       fileName: file.originalname,
       fileSizeBytes: file.size,
       mimeType: file.mimetype,
-      originalUrl: `PLACEHOLDER_ORIGINAL_${file.originalname}`,
-      thumbnailUrl: `PLACEHOLDER_THUMB_${file.originalname}`,
+      originalUrl: toDataUrl(file.buffer, file.mimetype),
+      thumbnailUrl: toDataUrl(buffer, thumbMime),
+      width,
+      height,
       orderIndex,
     },
   });

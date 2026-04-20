@@ -43,6 +43,13 @@ type CaptureErrorState = {
   retryAfterSeconds?: number | null;
 };
 
+function parseRetryAfterSeconds(rawValue: string | null | undefined): number | null {
+  if (!rawValue) return null;
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
 /**
  * MagicCaptureSheet implements the flagship "Camera -> Vault -> Action" loop.
  * It provides a high-speed, zero-friction path for homeowners to protect 
@@ -93,7 +100,12 @@ export function MagicCaptureSheet({
         body: formData,
       });
 
-      const result = await response.json();
+      let result: any = null;
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
 
       if (response.ok && result.success) {
         setOutcomeData(result.data);
@@ -114,12 +126,35 @@ export function MagicCaptureSheet({
 
         if (onComplete) onComplete(result.data);
       } else {
-        throw new Error(result.message || 'Analysis failed');
+        const apiError = result?.error;
+        const message =
+          (typeof apiError === 'object' && apiError?.message) ||
+          (typeof apiError === 'string' ? apiError : null) ||
+          result?.message ||
+          (response.status === 504
+            ? 'Document analysis timed out. Please try again.'
+            : 'Analysis failed');
+        const code =
+          (typeof apiError === 'object' && apiError?.code) ||
+          result?.code ||
+          (response.status === 504 ? 'AI_TIMEOUT' : undefined);
+
+        setStep('error');
+        setErrorState({
+          message,
+          code,
+          statusCode: response.status,
+          retryAfterSeconds: parseRetryAfterSeconds(response.headers?.get('retry-after')),
+        });
+        return;
       }
     } catch (err: any) {
       console.error('Capture error:', err);
       setStep('error');
-      setErrorState({ message: err.message });
+      setErrorState({
+        message: err?.message || 'Unable to complete analysis right now.',
+        code: err?.code,
+      });
     }
   }, [selectedPropertyId, onComplete]);
 
@@ -269,15 +304,37 @@ export function MagicCaptureSheet({
         );
 
       case 'error':
+        {
+        const isTimeout =
+          errorState?.code === 'AI_TIMEOUT' || errorState?.statusCode === 504;
+
         return (
           <div className="py-8 px-4 space-y-5">
             <div className="mx-auto w-12 h-12 bg-red-50 rounded-full flex items-center justify-center">
               <X className="h-6 w-6 text-red-600" />
             </div>
             <div className="space-y-1 text-center">
-              <h3 className="text-lg font-bold text-slate-900">Analysis Interrupted</h3>
+              <h3 className="text-lg font-bold text-slate-900">
+                {isTimeout ? 'AI response timed out' : 'Analysis Interrupted'}
+              </h3>
               <p className="text-sm text-slate-500">{errorState?.message}</p>
+              {isTimeout && (
+                <p className="text-sm text-slate-500">
+                  {errorState?.retryAfterSeconds
+                    ? `Try again in about ${errorState.retryAfterSeconds} seconds.`
+                    : 'Try again in a few moments.'}
+                </p>
+              )}
             </div>
+
+            {isTimeout && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-semibold text-amber-900">Manual fallback ready</p>
+                <p className="mt-1 text-xs text-amber-800">
+                  You can retry the scan now, or add this item manually from Inventory if the issue continues.
+                </p>
+              </div>
+            )}
 
             <Button className="w-full rounded-xl h-12" onClick={reset}>
               Retry Magic Scan
@@ -288,6 +345,7 @@ export function MagicCaptureSheet({
             </Button>
           </div>
         );
+        }
     }
   };
 

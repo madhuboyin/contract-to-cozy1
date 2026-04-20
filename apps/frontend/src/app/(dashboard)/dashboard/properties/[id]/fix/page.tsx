@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -10,14 +10,13 @@ import {
   AlertCircle, 
   ArrowRight, 
   Zap,
-  Plus,
+  Scale,
   Loader2,
   CheckCircle2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
   MobilePageIntro, 
-  MobileKpiStrip, 
   MobileKpiTile,
   MobileSection,
   MobileSectionHeader,
@@ -27,8 +26,7 @@ import {
 import { WinCard } from '@/components/shared/WinCard';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { Booking, InventoryItem } from '@/types';
-import { cn } from '@/lib/utils';
+import { Booking } from '@/types';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 
@@ -46,34 +44,49 @@ export default function ResolutionHubPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolutions, setResolutions] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [bookingsRes, resolutionsRes] = await Promise.all([
+        api.listBookings({ propertyId: selectedPropertyId || undefined }),
+        selectedPropertyId
+          ? api.getPropertyResolutions(selectedPropertyId)
+          : Promise.resolve({ success: true, data: [] }),
+      ]);
+
+      const errors: string[] = [];
+
+      if (bookingsRes.success) {
+        setBookings(bookingsRes.data.bookings);
+      } else {
+        setBookings([]);
+        errors.push(bookingsRes.message || 'Unable to load booking data.');
+      }
+
+      if (resolutionsRes.success) {
+        setResolutions(resolutionsRes.data);
+      } else {
+        setResolutions([]);
+        errors.push(resolutionsRes.message || 'Unable to load repair analyses.');
+      }
+
+      if (errors.length > 0) {
+        setLoadError(errors.join(' '));
+      }
+    } catch (error) {
+      console.error('Failed to load resolution data:', error);
+      setLoadError('We could not load Fix data right now. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedPropertyId]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [bookingsRes, resolutionsRes] = await Promise.all([
-          api.listBookings({ propertyId: selectedPropertyId || undefined }),
-          selectedPropertyId 
-            ? api.getPropertyResolutions(selectedPropertyId) 
-            : Promise.resolve({ success: true, data: [] })
-        ]);
-
-        if (bookingsRes.success) {
-          setBookings(bookingsRes.data.bookings);
-        }
-        
-        if (resolutionsRes.success) {
-          setResolutions(resolutionsRes.data);
-        }
-      } catch (error) {
-        console.error('Failed to load resolution data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [selectedPropertyId]);
+    void fetchData();
+  }, [fetchData]);
 
   const activeBookings = useMemo(() => 
     bookings.filter(b => ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)), 
@@ -133,7 +146,7 @@ export default function ResolutionHubPage() {
         {/* 3. Concierge Entry Points: "How can we help?" */}
         <MobileSection className="pt-4">
           <MobileSectionHeader title="How can we help?" className="mb-6" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Button 
               variant="outline" 
               className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 rounded-2xl group transition-all"
@@ -169,8 +182,40 @@ export default function ResolutionHubPage() {
                 <span className="text-sm text-slate-500 mt-1">Instant 24/7 emergency services and shutdown guides.</span>
               </Link>
             </Button>
+
+            <Button
+              variant="outline"
+              className="h-auto flex-col items-start p-6 text-left border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/50 rounded-2xl group transition-all"
+              asChild
+            >
+              <Link
+                href={
+                  selectedPropertyId
+                    ? `/dashboard/properties/${selectedPropertyId}/tools/quote-comparison?from=fix-hub`
+                    : '/dashboard/quote-comparison'
+                }
+              >
+                <Scale className="h-8 w-8 text-emerald-600 mb-4 group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-lg text-slate-900 block">Compare Quotes</span>
+                <span className="text-sm text-slate-500 mt-1">Review pricing side-by-side before you book.</span>
+              </Link>
+            </Button>
           </div>
         </MobileSection>
+
+        {loadError && (
+          <MobileCard className="border border-red-200 bg-red-50/70 p-4">
+            <p className="text-sm font-semibold text-red-700">Some Fix data is unavailable.</p>
+            <p className="mt-1 text-sm text-red-700/90">{loadError}</p>
+            <Button
+              variant="outline"
+              className="mt-3 border-red-200 bg-white text-red-700 hover:bg-red-50"
+              onClick={() => void fetchData()}
+            >
+              Retry loading
+            </Button>
+          </MobileCard>
+        )}
 
         {/* 4. Active Resolutions Feed */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 pt-4">

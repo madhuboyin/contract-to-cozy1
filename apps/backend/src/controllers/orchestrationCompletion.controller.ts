@@ -84,6 +84,9 @@ export async function uploadPhotoHandler(
   if (!req.file) {
     return res.status(400).json({ error: 'No file provided' });
   }
+  if (!actionKey || typeof actionKey !== 'string') {
+    return res.status(400).json({ error: 'actionKey is required' });
+  }
 
   try {
     const photo = await uploadPhoto({
@@ -95,7 +98,7 @@ export async function uploadPhotoHandler(
 
     return res.json({
       success: true,
-      photo,
+      data: { photo },
     });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });

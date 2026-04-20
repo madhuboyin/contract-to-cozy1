@@ -104,16 +104,18 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const propertyRoomsHref = resolvedPropertyId
     ? `/dashboard/properties/${resolvedPropertyId}/rooms`
     : '/dashboard/properties?navTarget=rooms';
-  const homeToolsHref = resolvedPropertyId
-    ? `/dashboard/properties/${resolvedPropertyId}/status-board`
-    : '/dashboard/properties?navTarget=status-board';
   const inventoryHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/inventory');
-  const aiToolsHref = resolvedPropertyId
-    ? `/dashboard/ai-tools?propertyId=${encodeURIComponent(resolvedPropertyId)}`
-    : '/dashboard/ai-tools';
-  const protectionHref = resolvedPropertyId
-    ? `/dashboard/properties/${resolvedPropertyId}/risk-assessment`
-    : '/dashboard/properties';
+  const resolutionCenterHref = buildPropertyAwareDashboardHref(
+    resolvedPropertyId,
+    '/dashboard/resolution-center'
+  );
+  const protectionHref = buildPropertyAwareDashboardHref(
+    resolvedPropertyId,
+    '/dashboard/protect'
+  );
+  const saveHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/save');
+  const vaultHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/vault');
+  const homeLabHref = buildPropertyAwareDashboardHref(resolvedPropertyId, '/dashboard/home-lab');
   const riskReportHref = resolvedPropertyId
     ? `/dashboard/properties/${resolvedPropertyId}/risk-assessment`
     : '/dashboard/properties';
@@ -121,12 +123,20 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const items = React.useMemo<CommandItem[]>(() => {
     const navItems: CommandItem[] = [
       { id: 'nav-dashboard', label: 'Dashboard', href: '/dashboard', group: 'Navigation' },
-      { id: 'nav-actions', label: 'Actions', href: '/dashboard/actions', group: 'Navigation' },
+      {
+        id: 'nav-resolution-center',
+        label: 'Resolution Center',
+        href: resolutionCenterHref,
+        group: 'Navigation',
+      },
+      { id: 'nav-my-home', label: 'My Home', href: '/dashboard/properties', group: 'Navigation' },
+      { id: 'nav-protect', label: 'Protect', href: protectionHref, group: 'Navigation' },
+      { id: 'nav-save', label: 'Save', href: saveHref, group: 'Navigation' },
+      { id: 'nav-vault', label: 'Vault', href: vaultHref, group: 'Navigation' },
+      { id: 'nav-home-lab', label: 'Home Lab', href: homeLabHref, group: 'Navigation' },
       { id: 'nav-rooms', label: 'Rooms', href: propertyRoomsHref, group: 'Navigation' },
       { id: 'nav-services', label: 'Find Services', href: '/dashboard/providers', group: 'Navigation' },
       { id: 'nav-inventory', label: 'Inventory', href: inventoryHref, group: 'Navigation' },
-      { id: 'nav-ai-tools', label: 'AI Tools', href: aiToolsHref, group: 'Navigation' },
-      { id: 'nav-home-tools', label: 'Home Tools', href: homeToolsHref, group: 'Navigation' },
       {
         id: 'nav-knowledge',
         label: 'Knowledge Hub',
@@ -143,7 +153,6 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
             },
           ]
         : []),
-      { id: 'nav-protection', label: 'Protection', href: protectionHref, group: 'Navigation' },
       { id: 'nav-home-admin', label: 'Home Admin', href: '/dashboard/warranties', group: 'Navigation' },
       { id: 'nav-community', label: 'Community Events', href: '/dashboard/community-events', group: 'Navigation' },
     ];
@@ -151,7 +160,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     const recent: CommandItem[] = recentActions.map((action, index) => ({
       id: `recent-${action.id}-${index}`,
       label: action.label,
-      href: `/dashboard/actions${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`,
+      href: `/dashboard/resolution-center${resolvedPropertyId ? `?propertyId=${encodeURIComponent(resolvedPropertyId)}` : ''}`,
       group: 'Recent Actions',
     }));
 
@@ -167,7 +176,19 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
     ];
 
     return [...navItems, ...recent, ...quick];
-  }, [aiToolsHref, homeToolsHref, inventoryHref, propertyRoomsHref, protectionHref, recentActions, resolvedPropertyId, riskReportHref, user?.role]);
+  }, [
+    homeLabHref,
+    inventoryHref,
+    propertyRoomsHref,
+    protectionHref,
+    recentActions,
+    resolvedPropertyId,
+    resolutionCenterHref,
+    riskReportHref,
+    saveHref,
+    user?.role,
+    vaultHref,
+  ]);
 
   const groups: Array<CommandItem['group']> = ['Navigation', 'Recent Actions', 'Quick Shortcuts'];
 

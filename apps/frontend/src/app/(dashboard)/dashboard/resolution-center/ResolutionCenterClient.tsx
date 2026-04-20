@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -87,6 +87,41 @@ function detectJourneyType(item: any): JourneyType {
   }
 
   return 'preventive';
+}
+
+type ReplaceRepairResolution = {
+  id: string;
+  inventoryItemId: string;
+  verdict?: 'REPLACE_NOW' | 'REPLACE_SOON' | 'REPAIR_AND_MONITOR' | 'REPAIR_ONLY';
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+  summary?: string | null;
+  computedAt?: string;
+  inventoryItem?: { id: string; name?: string | null } | null;
+};
+
+function resolveInventoryItemId(item: any): string | null {
+  if (typeof item?.inventoryItemId === 'string' && item.inventoryItemId.length > 0) {
+    return item.inventoryItemId;
+  }
+  if (item?.relatedEntity?.type === 'INVENTORY_ITEM' && typeof item?.relatedEntity?.id === 'string') {
+    return item.relatedEntity.id;
+  }
+  return null;
+}
+
+function verdictLabel(verdict?: ReplaceRepairResolution['verdict']): string {
+  switch (verdict) {
+    case 'REPLACE_NOW':
+      return 'Replace now';
+    case 'REPLACE_SOON':
+      return 'Plan replacement';
+    case 'REPAIR_AND_MONITOR':
+      return 'Repair and monitor';
+    case 'REPAIR_ONLY':
+      return 'Repair only';
+    default:
+      return 'Analysis ready';
+  }
 }
 
 const JOURNEY_META: Record<
@@ -229,7 +264,7 @@ function TriageActionCard({
   propertyId: string;
   onComplete: () => void;
   onOpenService: () => void;
-  onReplaceRepair: () => void;
+  onReplaceRepair: (item: any) => void;
   onAddCoverage: () => void;
 }) {
   const journey = detectJourneyType(item);
@@ -242,7 +277,7 @@ function TriageActionCard({
     journey === 'preventive' && exposure > 0;
 
   const handlePrimary = () => {
-    if (journey === 'replace-repair') return onReplaceRepair();
+    if (journey === 'replace-repair') return onReplaceRepair(item);
     if (journey === 'coverage-gap') return onAddCoverage();
     if (journey === 'urgent-repair') return onOpenService();
     if (journey === 'preventive') return onOpenService();
@@ -352,6 +387,20 @@ function TriageActionCard({
               />
             </div>
           )}
+
+          {journey === 'replace-repair' && item.replaceRepairAnalysis && (
+            <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">
+                Latest Replace vs Repair Signal
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-900">
+                {verdictLabel(item.replaceRepairAnalysis.verdict)}
+              </p>
+              <p className="mt-1 text-xs text-slate-600">
+                {item.replaceRepairAnalysis.summary || 'Prior analysis exists for this asset. Open to view full trace and next steps.'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Right: CTAs */}
@@ -433,7 +482,13 @@ export default function ResolutionCenterClient() {
   const [activeItem, setActiveItem] = useState<any>(null);
   const [celebratingItem, setCelebratingItem] = useState<any>(null);
 
-  const { data: orchestrationData, isLoading: orchestrationLoading } = useQuery({
+  const {
+    data: orchestrationData,
+    isLoading: orchestrationLoading,
+    isError: orchestrationError,
+    error: orchestrationErrorObj,
+    refetch: refetchOrchestration,
+  } = useQuery({
     queryKey: ['orchestration-summary', selectedPropertyId],
     queryFn: () =>
       selectedPropertyId
@@ -442,7 +497,13 @@ export default function ResolutionCenterClient() {
     enabled: !!selectedPropertyId,
   });
 
-  const { data: incidentsData, isLoading: incidentsLoading } = useQuery({
+  const {
+    data: incidentsData,
+    isLoading: incidentsLoading,
+    isError: incidentsError,
+    error: incidentsErrorObj,
+    refetch: refetchIncidents,
+  } = useQuery({
     queryKey: ['active-incidents', selectedPropertyId],
     queryFn: () =>
       selectedPropertyId
@@ -451,7 +512,29 @@ export default function ResolutionCenterClient() {
     enabled: !!selectedPropertyId,
   });
 
-  const isLoading = orchestrationLoading || incidentsLoading;
+  const {
+    data: resolutionsData,
+    isLoading: resolutionsLoading,
+    isError: resolutionsError,
+    error: resolutionsErrorObj,
+    refetch: refetchResolutions,
+  } = useQuery({
+    queryKey: ['replace-repair-resolutions', selectedPropertyId],
+    queryFn: () =>
+      selectedPropertyId
+        ? api.getPropertyResolutions(selectedPropertyId)
+        : Promise.resolve({ success: true, data: [] } as any),
+    enabled: !!selectedPropertyId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const isLoading = orchestrationLoading || incidentsLoading || resolutionsLoading;
+  const hasLoadError = orchestrationError || incidentsError || resolutionsError;
+  const loadErrorMessage =
+    (orchestrationErrorObj as Error | undefined)?.message ||
+    (incidentsErrorObj as Error | undefined)?.message ||
+    (resolutionsErrorObj as Error | undefined)?.message ||
+    'Unable to load one or more Resolution Center data sources.';
 
   // Build triage groups, then apply URL filter
   const triageGroups = useMemo((): TriageGroup[] => {
@@ -459,6 +542,13 @@ export default function ResolutionCenterClient() {
 
     const actions: OrchestratedActionDTO[] = (orchestrationData as any)?.actions || [];
     const incidents: IncidentDTO[] = (incidentsData as any)?.items || [];
+    const analyses: ReplaceRepairResolution[] = (resolutionsData as any)?.data || [];
+    const analysisByInventoryId = new Map<string, ReplaceRepairResolution>();
+    analyses.forEach((analysis) => {
+      if (analysis.inventoryItemId && !analysisByInventoryId.has(analysis.inventoryItemId)) {
+        analysisByInventoryId.set(analysis.inventoryItemId, analysis);
+      }
+    });
 
     const groups: TriageGroup[] = [];
 
@@ -487,7 +577,19 @@ export default function ResolutionCenterClient() {
         a.expectedLife &&
         a.age / a.expectedLife >= 0.75 &&
         a.status !== 'SUPPRESSED',
-    );
+    ).map((action) => {
+      const inventoryItemId = resolveInventoryItemId(action);
+      const byInventory = inventoryItemId ? analysisByInventoryId.get(inventoryItemId) : null;
+      const byName = analyses.find((analysis) => {
+        const lhs = (analysis.inventoryItem?.name || '').trim().toLowerCase();
+        const rhs = (action.title || action.systemType || '').trim().toLowerCase();
+        return lhs.length > 0 && rhs.length > 0 && lhs === rhs;
+      });
+      return {
+        ...action,
+        replaceRepairAnalysis: byInventory || byName || null,
+      };
+    });
 
     if (replaceRepairItems.length > 0) {
       groups.push({
@@ -538,7 +640,7 @@ export default function ResolutionCenterClient() {
     }
 
     return groups;
-  }, [orchestrationData, incidentsData, selectedPropertyId]);
+  }, [orchestrationData, incidentsData, resolutionsData, selectedPropertyId]);
 
   // Apply URL filter
   const visibleGroups = useMemo(() => {
@@ -563,7 +665,21 @@ export default function ResolutionCenterClient() {
 
   const handleReplaceRepair = (item: any) => {
     if (!selectedPropertyId) return;
-    router.push(`/dashboard/replace-repair?propertyId=${selectedPropertyId}`);
+    const inventoryItemId =
+      resolveInventoryItemId(item) ||
+      item?.replaceRepairAnalysis?.inventoryItemId ||
+      null;
+
+    if (inventoryItemId) {
+      router.push(
+        `/dashboard/properties/${selectedPropertyId}/inventory/items/${encodeURIComponent(
+          inventoryItemId
+        )}/replace-repair?from=resolution-center`
+      );
+      return;
+    }
+
+    router.push(`/dashboard/replace-repair?propertyId=${selectedPropertyId}&from=resolution-center`);
   };
 
   const handleAddCoverage = (item: any) => {
@@ -633,6 +749,24 @@ export default function ResolutionCenterClient() {
           )}
         </header>
 
+        {hasLoadError && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p className="font-semibold">Some data could not be loaded.</p>
+            <p className="mt-1 text-red-700/90">{loadErrorMessage}</p>
+            <Button
+              variant="outline"
+              className="mt-3 border-red-200 bg-white text-red-700 hover:bg-red-50"
+              onClick={() => {
+                void refetchOrchestration();
+                void refetchIncidents();
+                void refetchResolutions();
+              }}
+            >
+              Retry loading
+            </Button>
+          </div>
+        )}
+
         {visibleGroups.length > 0 ? (
           <div className="space-y-12">
             {visibleGroups.map((group) => {
@@ -666,7 +800,7 @@ export default function ResolutionCenterClient() {
                         propertyId={selectedPropertyId || ''}
                         onComplete={() => handleOpenComplete(item)}
                         onOpenService={() => handleOpenService(item)}
-                        onReplaceRepair={() => handleReplaceRepair(item)}
+                        onReplaceRepair={handleReplaceRepair}
                         onAddCoverage={() => handleAddCoverage(item)}
                       />
                     ))}

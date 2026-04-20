@@ -1637,6 +1637,12 @@ async function mapRiskDetailToAction(params: {
   // if (coverage.hasCoverage) { signalSources.push({ sourceType: SignalSourceType.COVERAGE, ... }) }
 
   const primarySignalSource = pickPrimarySignal(signalSources);
+  const relatedEntity =
+    typeof d.inventoryItemId === 'string' && d.inventoryItemId.length > 0
+      ? { type: 'INVENTORY_ITEM' as const, id: d.inventoryItemId }
+      : typeof d.homeAssetId === 'string' && d.homeAssetId.length > 0
+      ? { type: 'HOME_ASSET' as const, id: d.homeAssetId }
+      : null;
 
   return {
     id: `risk:${propertyId}:${index}`,
@@ -1658,6 +1664,7 @@ async function mapRiskDetailToAction(params: {
     cta: { show: true, label: 'Schedule Service', reason: 'ACTION_REQUIRED' },
     confidence: withDefaultConfidence(confidenceRaw),
     suppression,
+    relatedEntity,
     snooze: snooze ? {
       snoozedAt: snooze.snoozedAt.toISOString(),
       snoozeUntil: snooze.snoozeUntil.toISOString(),

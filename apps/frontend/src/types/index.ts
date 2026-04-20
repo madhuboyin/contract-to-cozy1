@@ -1793,6 +1793,10 @@ export interface OrchestratedActionDTO {
   };
 
   hasRelatedChecklistItem?: boolean;
+  relatedEntity?: {
+    type: 'INVENTORY_ITEM' | 'HOME_ASSET' | 'BOOKING' | 'WARRANTY' | 'INSURANCE' | 'CHECKLIST';
+    id: string;
+  } | null;
 
   // 🔑 NEW: Related checklist item details
   relatedChecklistItem?: {
