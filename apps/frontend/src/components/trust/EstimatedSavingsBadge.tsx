@@ -1,41 +1,54 @@
+'use client';
+
 import React from 'react';
-import { TrendingDown } from 'lucide-react';
+import { PiggyBank, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EstimatedUpside } from '@/lib/types/trust';
 
 interface EstimatedSavingsBadgeProps {
-  amount: number;
-  period?: string;
-  basis?: string;
+  upside: EstimatedUpside;
   className?: string;
 }
 
-function formatUsd(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
-}
+export function EstimatedSavingsBadge({ upside, className }: EstimatedSavingsBadgeProps) {
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
 
-export function EstimatedSavingsBadge({
-  amount,
-  period,
-  basis,
-  className,
-}: EstimatedSavingsBadgeProps) {
-  if (amount <= 0) return null;
+  const periodLabel = {
+    monthly: '/mo',
+    annual: '/year',
+    'one-time': ' once',
+  }[upside.period];
 
   return (
-    <span
-      title={basis}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200',
-        className
-      )}
-    >
-      <TrendingDown className="h-3 w-3 flex-shrink-0" />
-      Save {formatUsd(amount)}
-      {period && <span className="font-normal text-emerald-600">/{period}</span>}
-    </span>
+    <div className={cn(
+      "inline-flex flex-col rounded-xl border border-emerald-200 bg-emerald-50/50 p-2.5",
+      className
+    )}>
+      <div className="flex items-center gap-2 mb-0.5">
+        <div className="rounded-full bg-emerald-100 p-1">
+          <PiggyBank className="h-3.5 w-3.5 text-emerald-700" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+          Estimated Savings
+        </span>
+      </div>
+      <div className="flex items-baseline gap-1 mt-1">
+        <span className="text-lg font-bold text-emerald-900 leading-none">
+          {formatAmount(upside.amount)}
+        </span>
+        <span className="text-[11px] font-semibold text-emerald-700">
+          {periodLabel}
+        </span>
+      </div>
+      <p className="mt-1 text-[10px] text-emerald-700/70 font-medium border-t border-emerald-100 pt-1">
+        Based on: {upside.basis}
+      </p>
+    </div>
   );
 }

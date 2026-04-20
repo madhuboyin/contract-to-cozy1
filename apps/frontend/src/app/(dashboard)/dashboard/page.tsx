@@ -17,7 +17,9 @@ import {
   TrendingUp,
   Zap,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle,
+  Box
 } from 'lucide-react';
 import { Booking, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
 import { ScoredProperty } from './types'; 
@@ -75,6 +77,9 @@ import {
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import { track } from '@/lib/analytics/events';
 
+import { listIncidents } from './properties/[id]/incidents/incidentsApi';
+import { listInventoryItems } from './inventory/inventoryApi';
+import { IncidentDTO } from '@/types/incidents.types';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 const DASHBOARD_AHA_SEEN_PREFIX = 'dashboardAhaSeen';
@@ -111,20 +116,22 @@ function formatSeasonLabel(rawSeason: string | null | undefined): string | null 
 
 export interface UrgentActionItem {
     id: string;
-    type: 'MAINTENANCE_OVERDUE' | 'MAINTENANCE_UNSCHEDULED' | 'RENEWAL_EXPIRED' | 'RENEWAL_UPCOMING' | 'HEALTH_INSIGHT';
+    type: 'MAINTENANCE_OVERDUE' | 'MAINTENANCE_UNSCHEDULED' | 'RENEWAL_EXPIRED' | 'RENEWAL_UPCOMING' | 'HEALTH_INSIGHT' | 'INCIDENT';
     title: string;
     description: string;
     dueDate?: Date;
     daysUntilDue?: number;
     propertyId: string;
+    severity?: 'INFO' | 'WARNING' | 'CRITICAL';
 }
 
-// FIX 1: Add 'urgentActions' field to the DashboardData interface
 interface DashboardData {
     bookings: Booking[];
     properties: ScoredProperty[];
     checklist: { id: string, items: ChecklistItem[] } | null; 
     urgentActions: UrgentActionItem[];
+    inventoryCount: number;
+    activeIncidents: IncidentDTO[];
     isLoading: boolean;
     error: string | null;
 }
@@ -134,13 +141,26 @@ const consolidateUrgentActions = (
     properties: ScoredProperty[],
     checklistItems: ChecklistItem[],
     warranties: Warranty[],
-    insurancePolicies: InsurancePolicy[]
+    insurancePolicies: InsurancePolicy[],
+    incidents: IncidentDTO[]
 ): UrgentActionItem[] => {
     const actions: UrgentActionItem[] = [];
     const today = new Date();
     const ninetyDays = 90;
 
-    // 1. Process Health Score Insights (Critical items only)
+    // 1. Process Active Incidents (Highest Priority)
+    incidents.filter(inc => inc.status !== 'RESOLVED' && inc.status !== 'SUPPRESSED').forEach(inc => {
+        actions.push({
+            id: inc.id,
+            type: 'INCIDENT',
+            title: inc.title,
+            description: inc.summary || 'Critical home event detected.',
+            propertyId: inc.propertyId,
+            severity: inc.severity || 'WARNING',
+        });
+    });
+
+    // 2. Process Health Score Insights (Critical items only)
     const CRITICAL_INSIGHT_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
     
     properties.forEach(p => {
@@ -157,7 +177,7 @@ const consolidateUrgentActions = (
             });
     });
     
-    // 2. Process Maintenance Checklist (Overdue/Unscheduled Tasks)
+    // 3. Process Maintenance Checklist (Overdue/Unscheduled Tasks)
     checklistItems.forEach(item => {
         // Skip completed or cancelled items
         if (item.status === 'COMPLETED' || item.status === 'NOT_NEEDED') return;
@@ -175,20 +195,9 @@ const consolidateUrgentActions = (
                 propertyId: item.propertyId || 'N/A',
             });
         }
-        
-        // Check for Unscheduled Tasks (Tasks that are active, recurring, but have no due date)
-        if (item.isRecurring && !item.nextDueDate) {
-             actions.push({
-                id: item.id,
-                type: 'MAINTENANCE_UNSCHEDULED',
-                title: `UNSCHEDULED: ${item.title}`,
-                description: `Recurring task needs scheduling/due date set.`,
-                propertyId: item.propertyId || 'N/A',
-            });
-        }
     });
 
-    // 3. Process Renewals (Expired/Upcoming Warranties and Insurance)
+    // 4. Process Renewals (Expired/Upcoming Warranties and Insurance)
     const renewals: (Warranty | InsurancePolicy)[] = [...warranties, ...insurancePolicies];
     
     renewals.forEach(item => {
@@ -224,15 +233,15 @@ const consolidateUrgentActions = (
         }
     });
 
-    // Sort: Critical (Expired/Overdue) first, then by urgency (daysUntilDue)
+    // Sort: Incidents (Highest Priority) > Health > Urgent maintenance > Urgency (daysUntilDue)
     return actions.sort((a, b) => {
+        if (a.type === 'INCIDENT' && b.type !== 'INCIDENT') return -1;
+        if (b.type === 'INCIDENT' && a.type !== 'INCIDENT') return 1;
         if (a.daysUntilDue === undefined) return 1;
         if (b.daysUntilDue === undefined) return -1;
         return a.daysUntilDue - b.daysUntilDue;
     });
 };
-
-// --- END PHASE 1: DATA CONSOLIDATION TYPES ---
 
 function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string): string {
   const fallbackPropertyId = propertyId || undefined;
@@ -241,11 +250,11 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
 
   const propertyQuery = actionPropertyId ? `?propertyId=${encodeURIComponent(actionPropertyId)}` : '';
 
+  if (action.type === 'INCIDENT') {
+    return `/dashboard/properties/${actionPropertyId}/incidents/${action.id}`;
+  }
   if (action.type === 'MAINTENANCE_OVERDUE') {
     return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=overdue` : '?filter=overdue'}`;
-  }
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
-    return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=unscheduled` : '?filter=unscheduled'}`;
   }
   if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
     return `/dashboard/insurance${propertyQuery}`;
@@ -258,156 +267,11 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
 
 function urgentActionCtaLabel(action?: UrgentActionItem, isReturningVisitor = true): string {
   if (!action) return isReturningVisitor ? 'Take Priority Move' : 'Start First 2-Min Move';
+  if (action.type === 'INCIDENT') return 'Review Incident';
   if (action.type === 'MAINTENANCE_OVERDUE') return 'Resolve Overdue Item';
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Schedule In 90 Seconds';
   if (action.type === 'RENEWAL_EXPIRED') return 'Restore Coverage Now';
   if (action.type === 'RENEWAL_UPCOMING') return 'Lock Renewal Savings';
   return 'Run 2-Minute Risk Check';
-}
-
-function urgentActionEtaLabel(action?: UrgentActionItem): string {
-  if (!action) return 'ETA 2 min';
-  if (action.type === 'HEALTH_INSIGHT') return 'ETA 2-3 min';
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'ETA 90 sec';
-  return 'ETA 2 min';
-}
-
-function urgentActionImpactLabel(action?: UrgentActionItem): string {
-  if (!action) return 'Highest-value move this week';
-  if (action.daysUntilDue !== undefined && action.daysUntilDue < 0) {
-    return `Overdue by ${Math.abs(action.daysUntilDue)} day${Math.abs(action.daysUntilDue) === 1 ? '' : 's'}`;
-  }
-  if (action.type === 'RENEWAL_UPCOMING' && action.daysUntilDue !== undefined) {
-    return `Expires in ${Math.max(0, action.daysUntilDue)} days`;
-  }
-  if (action.type === 'HEALTH_INSIGHT') return 'Potential downside reduced early';
-  return 'Priority move for this week';
-}
-
-function cleanUrgentActionTitle(action?: UrgentActionItem): string {
-  if (!action) return 'Priority home signal';
-  return action.title
-    .replace(/^OVERDUE:\s*/i, '')
-    .replace(/^UNSCHEDULED:\s*/i, '')
-    .replace(/^EXPIRED:\s*/i, '')
-    .replace(/^UPCOMING:\s*/i, '')
-    .trim();
-}
-
-function urgentActionHeroTitle(
-  action: UrgentActionItem | undefined,
-  userFirstName: string,
-  isReturningVisitor: boolean
-): string {
-  if (!action) {
-    return isReturningVisitor
-      ? `Welcome back, ${userFirstName}. Your highest-value home move is ready.`
-      : `${userFirstName}, start with one move that delivers immediate value.`;
-  }
-
-  if (action.type === 'MAINTENANCE_OVERDUE') {
-    return `${userFirstName}, prevent a bigger repair bill with one 2-minute move today.`;
-  }
-  if (action.type === 'RENEWAL_EXPIRED') {
-    return `${userFirstName}, coverage risk is active. Resolve one move now.`;
-  }
-  if (action.type === 'RENEWAL_UPCOMING') {
-    return `${userFirstName}, your best renewal window is open right now.`;
-  }
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
-    return `${userFirstName}, one quick schedule decision protects this month’s momentum.`;
-  }
-
-  return `${userFirstName}, one high-impact move can protect up to $420 this month.`;
-}
-
-function urgentActionHeroSubtitle(action?: UrgentActionItem): string {
-  if (!action) {
-    return 'We ranked your queue by urgency, confidence, and outcome so the first click delivers visible progress.';
-  }
-  if (action.type === 'MAINTENANCE_OVERDUE') {
-    return 'An overdue maintenance risk moved into the critical window and now carries avoidable cost exposure.';
-  }
-  if (action.type === 'RENEWAL_EXPIRED') {
-    return 'Your renewal status indicates an active gap that should be closed before exploring lower-priority work.';
-  }
-  if (action.type === 'RENEWAL_UPCOMING') {
-    return 'Renewal timing favors action now while lower-friction and better-rate options are still available.';
-  }
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
-    return 'A recurring task lost schedule anchoring and can now drift into higher-risk territory.';
-  }
-  return 'We detected one insight with strong confidence and direct downstream effect on risk and cost.';
-}
-
-function urgentActionBriefLabel(isReturningVisitor: boolean): string {
-  return isReturningVisitor ? 'Do Now Vs Wait' : 'First-Click Advantage';
-}
-
-function urgentActionBriefValue(action: UrgentActionItem | undefined, userFirstName: string): string {
-  if (!action) {
-    return `Good to see you, ${userFirstName}.`;
-  }
-  if (action.type === 'MAINTENANCE_OVERDUE') {
-    return 'Act now to avoid a compounding repair window.';
-  }
-  if (action.type === 'RENEWAL_EXPIRED') {
-    return 'Act now to restore protection and stability.';
-  }
-  if (action.type === 'RENEWAL_UPCOMING') {
-    return 'Act now while better renewal options are open.';
-  }
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
-    return 'Act now to re-anchor this recurring risk.';
-  }
-  return 'Act now to convert this signal into measurable progress.';
-}
-
-function urgentActionBriefDetail(action?: UrgentActionItem): string {
-  if (!action) {
-    return 'This brief is intentionally ranked so your first click creates momentum before you scroll.';
-  }
-  if (action.type === 'MAINTENANCE_OVERDUE') {
-    return 'Completing this first prevents downstream failures and protects HomeScore consistency.';
-  }
-  if (action.type === 'RENEWAL_EXPIRED') {
-    return 'Closing the gap first reduces downside exposure and clarifies your next best optimization step.';
-  }
-  if (action.type === 'RENEWAL_UPCOMING') {
-    return 'Using this renewal window first keeps optionality high and makes price comparisons easier.';
-  }
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') {
-    return 'Reinstating schedule clarity now helps your monthly planning stay predictable.';
-  }
-  return 'Addressing this signal first keeps your dashboard aligned to impact instead of activity.';
-}
-
-function urgentActionDoNowLabel(action?: UrgentActionItem): string {
-  if (!action) return 'Capture the quick-win path and protect this week’s momentum.';
-  if (action.type === 'MAINTENANCE_OVERDUE') return 'Cut failure risk and avoid avoidable repair escalation.';
-  if (action.type === 'RENEWAL_EXPIRED') return 'Reinstate coverage and reduce downside exposure immediately.';
-  if (action.type === 'RENEWAL_UPCOMING') return 'Compare options early and lock better-rate leverage.';
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Restore calendar control and prevent silent slippage.';
-  return 'Resolve the signal early and preserve upside potential.';
-}
-
-function urgentActionWaitRiskLabel(action?: UrgentActionItem): string {
-  if (!action) return 'Priority context can stale and lower your confidence advantage.';
-  if (action.type === 'MAINTENANCE_OVERDUE') return 'Repair cost and disruption risk typically increase with delay.';
-  if (action.type === 'RENEWAL_EXPIRED') return 'Unprotected intervals can increase financial downside.';
-  if (action.type === 'RENEWAL_UPCOMING') return 'Fewer options and potential premium pressure near expiry.';
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Task drift can compound into a higher-friction fix later.';
-  return 'Signal quality drops as conditions change and issues compound.';
-}
-
-function urgentActionWhyNow(action?: UrgentActionItem): string {
-  if (!action) return 'Queue ranked by confidence and urgency.';
-  if (action.type === 'HEALTH_INSIGHT') return 'Risk moved to Needs Review after latest signal refresh.';
-  if (action.type === 'MAINTENANCE_OVERDUE') return 'Maintenance timing moved past due and now impacts risk.';
-  if (action.type === 'MAINTENANCE_UNSCHEDULED') return 'Recurring task lost schedule anchor and needs reassignment.';
-  if (action.type === 'RENEWAL_EXPIRED') return 'Renewal date has passed and requires immediate attention.';
-  if (action.type === 'RENEWAL_UPCOMING') return 'Renewal window is open now, before option quality narrows.';
-  return cleanUrgentActionTitle(action);
 }
 
 export default function DashboardPage() {
@@ -430,6 +294,8 @@ export default function DashboardPage() {
     properties: [],
     checklist: null,
     urgentActions: [], 
+    inventoryCount: 0,
+    activeIncidents: [],
     isLoading: true,
     error: null,
   });
@@ -438,7 +304,7 @@ export default function DashboardPage() {
   const { celebration, celebrate, dismiss } = useCelebration(
     `dashboard-aha-${user?.id ?? 'anon'}-${selectedPropertyId ?? 'none'}`
   );
-  const { data: homeownerSegment } = useHomeownerSegment(); // Get user segment for conditional features
+  const { data: homeownerSegment } = useHomeownerSegment();
   const properties = data.properties;
   const effectiveSelectedPropertyId =
     selectedPropertyId && properties.some((property) => property.id === selectedPropertyId)
@@ -491,50 +357,6 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const resolveLocalUpdateHref = useCallback(
-    (href: string | null | undefined) => {
-      const fallbackHref = href || '/dashboard';
-      return appendGuidanceContinuityToHref(fallbackHref, guidanceContext);
-    },
-    [guidanceContext]
-  );
-
-  const trackLocalUpdateGuidanceProgress = useCallback(
-    (update: LocalUpdate | null | undefined, resolvedHref: string) => {
-      if (
-        !update ||
-        !effectiveSelectedPropertyId ||
-        !hasGuidanceContext ||
-        !guidanceContext.guidanceJourneyId ||
-        !guidanceContext.guidanceStepKey
-      ) {
-        return;
-      }
-
-      void recordGuidanceToolStatus(effectiveSelectedPropertyId, {
-        journeyId: guidanceContext.guidanceJourneyId,
-        stepKey: guidanceContext.guidanceStepKey,
-        signalIntentFamily: guidanceContext.guidanceSignalIntentFamily ?? undefined,
-        sourceToolKey: 'dashboard-local-updates',
-        sourceEntityType: 'LOCAL_UPDATE',
-        sourceEntityId: update.id,
-        status: 'IN_PROGRESS',
-        producedData: {
-          proofType: 'cta_engagement',
-          proofId: update.id,
-          ctaKey: 'local_update_open',
-          updateTitle: update.title,
-          ctaUrl: resolvedHref,
-          openedAt: new Date().toISOString(),
-        },
-      }).catch((error) => {
-        console.warn('[dashboard] local update guidance progress hook failed:', error);
-      });
-    },
-    [effectiveSelectedPropertyId, guidanceContext, hasGuidanceContext]
-  );
-  
-  // --- DATA FETCHING LOGIC (unchanged) ---
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
     
@@ -542,36 +364,31 @@ export default function DashboardPage() {
     setRedirectChecked(false);
     
     try {
-      const [bookingsRes, propertiesRes, checklistRes, warrantiesRes, policiesRes] = await Promise.all([
+      const propertiesRes = await api.getProperties();
+      const properties = propertiesRes.success ? propertiesRes.data.properties : [];
+      const propId = selectedPropertyId || properties[0]?.id;
+
+      const [bookingsRes, checklistRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
-        api.getProperties(),
-        api.getChecklist().then(res => {
-          if (res.success && res.data) {
-            return { success: true, data: res.data };
-          }
-          return { success: false, data: null };
-        }).catch(() => ({ success: false, data: null })),
+        api.getChecklist().then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null })).catch(() => ({ success: false, data: null })),
         api.listWarranties(),
         api.listInsurancePolicies(),
+        propId ? listIncidents({ propertyId: propId, limit: 10 }) : Promise.resolve({ items: [] }),
+        propId ? listInventoryItems(propId, {}) : Promise.resolve([]),
       ]);
   
       const bookings = bookingsRes.success ? bookingsRes.data.bookings : [];
-      const properties = propertiesRes.success ? propertiesRes.data.properties : [];
       const checklist = checklistRes.success ? checklistRes.data : null;
       const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
       const policies = policiesRes.success ? policiesRes.data.policies : [];
+      const activeIncidents = (incidentsRes as any).items || [];
+      const inventoryItems = inventoryRes || [];
   
       const scoredProperties = properties.map(p => ({
         ...p,
         healthScore: (p as unknown as ScoredProperty).healthScore || {
           totalScore: 0,
-          baseScore: 0,
-          unlockedScore: 0,
-          maxPotentialScore: 100,
-          maxBaseScore: 70,
-          maxExtraScore: 30,
           insights: [],
-          ctaNeeded: false
         },
       })) as ScoredProperty[];
   
@@ -579,7 +396,8 @@ export default function DashboardPage() {
         scoredProperties,
         checklist?.items || [],
         warranties,
-        policies
+        policies,
+        activeIncidents
       );
   
       setData({
@@ -587,6 +405,8 @@ export default function DashboardPage() {
         properties: scoredProperties,
         checklist,
         urgentActions,
+        inventoryCount: inventoryItems.length,
+        activeIncidents,
         isLoading: false,
         error: null,
       });
@@ -598,15 +418,11 @@ export default function DashboardPage() {
   
     } catch (error) {
       console.error('❌ Dashboard: Error fetching data:', error);
-      setData(prev => ({
-        ...prev,
-        isLoading: false,
-        error: 'Failed to load dashboard data',
-      }));
+      setData(prev => ({ ...prev, isLoading: false, error: 'Failed to load dashboard data' }));
     } finally {
       setRedirectChecked(true);
     }
-  }, [user]);
+  }, [user, selectedPropertyId]);
   
   useEffect(() => {
     if (!userLoading && user) {
@@ -614,535 +430,85 @@ export default function DashboardPage() {
     }
   }, [userLoading, user, fetchDashboardData]);
 
-  useEffect(() => {
-    if (userLoading || !user || data.isLoading || Boolean(data.error) || typeof window === 'undefined') {
-      return;
-    }
-
-    const sessionStartedKey = `ctc:session_started:${user.id}`;
-    if (window.sessionStorage.getItem(sessionStartedKey) === '1') {
-      return;
-    }
-
-    track('session_started', { propertyCount: data.properties.length });
-    window.sessionStorage.setItem(sessionStartedKey, '1');
-  }, [userLoading, user, data.isLoading, data.error, data.properties.length]);
-
-  useEffect(() => {
-    if (effectiveSelectedPropertyId !== selectedPropertyId) {
-      setSelectedPropertyId(effectiveSelectedPropertyId);
-    }
-  }, [effectiveSelectedPropertyId, selectedPropertyId, setSelectedPropertyId]);
-
-  useEffect(() => {
-    if (!userLoading && !user) {
-      setData((prev) => ({ ...prev, isLoading: false }));
-      setRedirectChecked(true);
-    }
-  }, [userLoading, user]);
-
-  useEffect(() => {
-    if (!effectiveSelectedPropertyId) {
-      setLocalUpdates([]);
-      return;
-    }
-
-    api
-      .getLocalUpdates(effectiveSelectedPropertyId)
-      .then((res) => {
-        if (res.success) {
-          setLocalUpdates(res.data.updates || []);
-        } else {
-          setLocalUpdates([]);
-        }
-      })
-      .catch(() => {
-        setLocalUpdates([]);
-      });
-  }, [effectiveSelectedPropertyId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const media = window.matchMedia('(max-width: 767px)');
-    const syncViewport = () => setIsMobileViewport(media.matches);
-    syncViewport();
-    media.addEventListener('change', syncViewport);
-
-    return () => {
-      media.removeEventListener('change', syncViewport);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!user?.id || typeof window === 'undefined') return;
-    const storageKey = `${DASHBOARD_AHA_SEEN_PREFIX}:${user.id}`;
-    const seenBefore = window.localStorage.getItem(storageKey) === '1';
-    setIsReturningVisitor(seenBefore);
-    window.localStorage.setItem(storageKey, '1');
-  }, [user?.id]);
-
-  const trackAhaHeroEvent = useCallback(
-    (event: string, metadata?: Record<string, unknown>) => {
-      if (!effectiveSelectedPropertyId) return;
-
-      void api
-        .trackHomeScoreEvent(effectiveSelectedPropertyId, {
-          event,
-          section: 'dashboard_aha_hero',
-          metadata,
-        })
-        .catch((error) => {
-          console.warn('[dashboard] aha hero analytics event failed:', error);
-        });
-    },
-    [effectiveSelectedPropertyId]
-  );
-
   const safeFirstName = user?.firstName || 'there';
-  const userSegment = homeownerSegment ?? user?.segment;
-  const isHomeBuyerSegment = userSegment === 'HOME_BUYER';
-  const isOwnerSegment = !isHomeBuyerSegment;
-  const checklistItems = (data.checklist?.items || []) as ChecklistItem[];
-  
-  // Derived property values using a validated property selection
   const selectedProperty = properties.find(p => p.id === effectiveSelectedPropertyId); 
   const scopedUrgentActions = data.urgentActions.filter(
     (action) => action.propertyId === effectiveSelectedPropertyId
   );
   const primaryUrgentAction = scopedUrgentActions[0] || data.urgentActions[0];
-  const ahaPropertyLabel = selectedProperty?.name || selectedProperty?.address || 'your home';
 
-  const seasonalChecklist = seasonalChecklistQuery.data?.checklist ?? null;
-  const seasonalChecklistItems = Array.isArray(seasonalChecklist?.items)
-    ? seasonalChecklist.items
-    : [];
-  const seasonalTotalTasks =
-    typeof seasonalChecklist?.totalTasks === 'number'
-      ? seasonalChecklist.totalTasks
-      : seasonalChecklistItems.length;
-  const seasonalCompletedTasks =
-    typeof seasonalChecklist?.tasksCompleted === 'number'
-      ? seasonalChecklist.tasksCompleted
-      : seasonalChecklistItems.filter((item: { status?: string }) =>
-          String(item.status || '').toUpperCase() === 'COMPLETED'
-        ).length;
-  const seasonalReadinessPct =
-    seasonalTotalTasks > 0 ? Math.round((seasonalCompletedTasks / seasonalTotalTasks) * 100) : 0;
-  const heroSeasonLabel = formatSeasonLabel(
-    typeof seasonalChecklist?.season === 'string' ? seasonalChecklist.season : null
-  );
-  const heroCriticalTaskCount = seasonalChecklistItems.filter((item: { priority?: string; status?: string }) => {
-    const priority = String(item.priority || '').toUpperCase();
-    const status = String(item.status || '').toLowerCase();
-    return priority === 'CRITICAL' && ['recommended', 'added'].includes(status);
-  }).length;
-
-  const heroHomeScore = selectedProperty?.healthScore?.totalScore ?? null;
-  const heroFinancialScoreRaw = scoreSnapshotQuery.data?.scores?.FINANCIAL?.latest?.score;
-  const heroFinancialScore =
-    typeof heroFinancialScoreRaw === 'number' && Number.isFinite(heroFinancialScoreRaw)
-      ? Math.round(heroFinancialScoreRaw)
-      : null;
-  const homeScoreDelta = scoreSnapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? null;
-  const financialScoreDelta = scoreSnapshotQuery.data?.scores?.FINANCIAL?.deltaFromPreviousWeek ?? null;
-
-  const heroCheckInStreak = Math.max(0, selectedProperty?.currentStreak ?? 0);
-  const annualSavingsPotential = Math.max(
-    0,
-    Math.round(homeSavingsSummaryQuery.data?.potentialAnnualSavings ?? 0)
-  );
-  const riskExposureGap = Math.max(
-    0,
-    Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0)
-  );
-  const overdueMaintenanceCount = scopedUrgentActions.filter(
-    (action) => action.type === 'MAINTENANCE_OVERDUE'
-  ).length;
-  const unscheduledMaintenanceCount = scopedUrgentActions.filter(
-    (action) => action.type === 'MAINTENANCE_UNSCHEDULED'
-  ).length;
-  const renewalDueCount = scopedUrgentActions.filter(
-    (action) => action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING'
-  ).length;
-
-  const heroPurchasePriceCents = selectedProperty?.purchasePriceCents ?? null;
-  const heroAppraisedValueCents = selectedProperty?.lastAppraisedValue ?? null;
-  const heroEquityGainCents =
-    typeof heroPurchasePriceCents === 'number' &&
-    heroPurchasePriceCents > 0 &&
-    typeof heroAppraisedValueCents === 'number' &&
-    heroAppraisedValueCents > 0
-      ? heroAppraisedValueCents - heroPurchasePriceCents
-      : null;
-  const hasEquityGain = typeof heroEquityGainCents === 'number' && heroEquityGainCents > 0;
-  const seasonalRemaining = Math.max(seasonalTotalTasks - seasonalCompletedTasks, 0);
+  const annualSavingsPotential = Math.max(0, Math.round(homeSavingsSummaryQuery.data?.potentialAnnualSavings ?? 0));
+  const riskExposureGap = Math.max(0, Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0));
+  const overdueMaintenanceCount = scopedUrgentActions.filter(a => a.type === 'MAINTENANCE_OVERDUE').length;
 
   const heroNarrative = (() => {
-    if (annualSavingsPotential >= 180) {
+    // 1. Open Urgent Incident
+    const highSeverityIncident = data.activeIncidents.find(inc => inc.severity === 'CRITICAL' || inc.severity === 'WARNING');
+    if (highSeverityIncident) {
       return {
-        title: `We found ${formatUsd(annualSavingsPotential)}/year you may be overpaying.`,
-        subtitle: 'One adjustment could lower recurring home costs this month.',
-        ctaLabel: 'Review savings',
-        impactLabel: `${formatUsd(annualSavingsPotential)} annual potential`,
+        title: `Priority Alert: ${highSeverityIncident.title}`,
+        subtitle: highSeverityIncident.summary || 'A critical home event requires your review to prevent escalation.',
+        ctaLabel: 'Review Incident',
+        impactLabel: 'Active Home Risk',
         etaLabel: 'ETA 2 min',
       };
     }
-    if (riskExposureGap >= 3000) {
+
+    // 2. Savings > $200
+    if (annualSavingsPotential >= 200) {
       return {
-        title: `${formatUsd(riskExposureGap)} remains exposed in your protection profile.`,
-        subtitle: 'One uncovered gap still carries meaningful downside risk.',
-        ctaLabel: 'Close exposure gap',
-        impactLabel: `${formatUsd(riskExposureGap)} unprotected`,
+        title: `We found ${formatUsd(annualSavingsPotential)} in potential annual savings.`,
+        subtitle: 'Our intelligence engine identified recurring costs that could be lowered today.',
+        ctaLabel: 'See your savings',
+        impactLabel: `${formatUsd(annualSavingsPotential)}/yr potential`,
         etaLabel: 'ETA 3 min',
       };
     }
-    if (overdueMaintenanceCount > 0) {
+
+    // 3. Vault Onboarding (Empty state: < 3 items)
+    if (data.inventoryCount < 3) {
       return {
-        title:
-          overdueMaintenanceCount === 1
-            ? 'One key system is entering higher-cost delay territory.'
-            : `${overdueMaintenanceCount} systems may cost more if delayed.`,
-        subtitle: 'Addressing the top issue now protects both reliability and budget.',
-        ctaLabel: 'Fix top issue',
-        impactLabel: `${overdueMaintenanceCount} overdue item${overdueMaintenanceCount === 1 ? '' : 's'}`,
-        etaLabel: 'ETA 2 min',
-      };
-    }
-    if (renewalDueCount > 0) {
-      return {
-        title:
-          renewalDueCount === 1
-            ? 'An important renewal decision is approaching.'
-            : `${renewalDueCount} renewal decisions are approaching soon.`,
-        subtitle: 'A quick review now keeps rates and coverage options in your favor.',
-        ctaLabel: 'Review renewals',
-        impactLabel: `${renewalDueCount} policy decision${renewalDueCount === 1 ? '' : 's'}`,
-        etaLabel: 'ETA 2 min',
-      };
-    }
-    if (hasEquityGain) {
-      return {
-        title: `Your home gained ${formatUsdFromCents(heroEquityGainCents)} in value.`,
-        subtitle: 'Strong ownership progress. One smart move can better protect that gain.',
-        ctaLabel: 'Protect equity',
-        impactLabel: 'Ownership value up',
-        etaLabel: 'ETA 2 min',
-      };
-    }
-    if (homeScoreDelta !== null && homeScoreDelta > 0) {
-      return {
-        title: `Your HomeScore improved ${formatSignedPoints(homeScoreDelta)} this cycle.`,
-        subtitle: 'Momentum is building. One more move keeps this trend working for you.',
-        ctaLabel: 'Keep momentum',
-        impactLabel: 'Upward trend',
+        title: 'Start building your Home Vault for full intelligence.',
+        subtitle: 'Adding your first 3 appliances unlocks personalized risk and maintenance tracking.',
+        ctaLabel: 'Add your first item',
+        impactLabel: 'Unlock intelligence',
         etaLabel: 'ETA 90 sec',
       };
     }
+
+    // 4. Maintenance Overdue
+    if (overdueMaintenanceCount > 0) {
+      return {
+        title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need attention.`,
+        subtitle: 'Resolving these items now prevents a more expensive repair bill later.',
+        ctaLabel: 'Fix overdue tasks',
+        impactLabel: 'Preventative win',
+        etaLabel: 'ETA 2 min',
+      };
+    }
+
+    // 5. Default: Home Health
     return {
-      title: urgentActionHeroTitle(primaryUrgentAction, safeFirstName, isReturningVisitor),
-      subtitle: urgentActionHeroSubtitle(primaryUrgentAction),
-      ctaLabel: urgentActionCtaLabel(primaryUrgentAction, isReturningVisitor),
-      impactLabel: urgentActionImpactLabel(primaryUrgentAction),
-      etaLabel: urgentActionEtaLabel(primaryUrgentAction),
+      title: `Welcome back, ${safeFirstName}. Your home status is updated.`,
+      subtitle: 'We’ve analyzed 12+ signals today to rank your highest-impact moves.',
+      ctaLabel: 'Review health',
+      impactLabel: 'HomeScore up to date',
+      etaLabel: 'ETA 1 min',
     };
   })();
 
   const ahaCtaHref = primaryUrgentAction
     ? resolveUrgentActionHref(primaryUrgentAction, effectiveSelectedPropertyId)
-    : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings');
-  const ahaConfidence = Math.min(
-    96,
-    74 +
-      (primaryUrgentAction ? 10 : 0) +
-      (localUpdates.length > 0 ? 8 : 0) +
-      ((selectedProperty?.healthScore?.totalScore || 0) > 0 ? 6 : 0)
-  );
-  const ahaTitle = heroNarrative.title;
-  const ahaSubtitle = heroNarrative.subtitle;
-  const ahaBriefLabel = urgentActionBriefLabel(isReturningVisitor);
-  const ahaBriefValue = urgentActionBriefValue(primaryUrgentAction, safeFirstName);
-  const ahaBriefDetail = urgentActionBriefDetail(primaryUrgentAction);
-  const ahaDoNowLabel = urgentActionDoNowLabel(primaryUrgentAction);
-  const ahaWaitRiskLabel = urgentActionWaitRiskLabel(primaryUrgentAction);
-  const heroCtaLabel = heroNarrative.ctaLabel;
-  const heroEtaLabel = heroNarrative.etaLabel;
-  const heroImpactLabel = heroNarrative.impactLabel;
-  const heroConfidenceLabel = `${ahaConfidence}% confidence`;
-  const ahaFeed: string[] = [];
+    : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/vault');
 
-  const valueStripTiles: ValueStripTile[] = [
-    {
-      id: 'savings-potential',
-      label: 'Savings potential',
-      value: annualSavingsPotential > 0 ? `${formatUsd(annualSavingsPotential)}/yr` : 'Monitor costs',
-      delta: annualSavingsPotential > 0 ? 'Opportunity' : 'No major leak',
-      icon: PiggyBank,
-      tone: annualSavingsPotential > 0 ? 'teal' : 'slate',
-      href: effectiveSelectedPropertyId
-        ? `/dashboard/properties/${effectiveSelectedPropertyId}/tools/home-savings`
-        : undefined,
-    },
-    {
-      id: 'exposure-gap',
-      label: 'Exposure gap',
-      value: riskExposureGap > 0 ? formatUsd(riskExposureGap) : 'Protected',
-      delta: riskExposureGap > 0 ? 'Needs focus' : 'Covered',
-      icon: Shield,
-      tone: riskExposureGap > 0 ? 'red' : 'teal',
-      href: effectiveSelectedPropertyId
-        ? `/dashboard/properties/${effectiveSelectedPropertyId}/risk-assessment`
-        : undefined,
-    },
-    {
-      id: 'homescore-trend',
-      label: 'HomeScore trend',
-      value: heroHomeScore !== null ? `${Math.round(heroHomeScore)}/100` : 'N/A',
-      delta: formatSignedPoints(homeScoreDelta),
-      icon: Gauge,
-      tone: homeScoreDelta !== null && homeScoreDelta < 0 ? 'amber' : 'blue',
-      href: effectiveSelectedPropertyId
-        ? `/dashboard/properties/${effectiveSelectedPropertyId}/home-score`
-        : undefined,
-    },
-    {
-      id: 'seasonal-readiness',
-      label: 'Seasonal readiness',
-      value: seasonalTotalTasks > 0 ? `${seasonalReadinessPct}% ready` : 'Not started',
-      delta: seasonalRemaining > 0 ? `${seasonalRemaining} left` : 'On track',
-      icon: Sprout,
-      tone: seasonalReadinessPct >= 70 ? 'teal' : seasonalReadinessPct >= 40 ? 'amber' : 'red',
-      href: effectiveSelectedPropertyId ? `/dashboard/seasonal?propertyId=${effectiveSelectedPropertyId}` : undefined,
-    },
-    hasEquityGain
-      ? {
-          id: 'equity-gain',
-          label: 'Equity gain',
-          value: formatUsdFromCents(heroEquityGainCents),
-          delta: 'Since purchase',
-          icon: Landmark,
-          tone: 'blue',
-          href: effectiveSelectedPropertyId ? `/dashboard/appreciation?propertyId=${effectiveSelectedPropertyId}` : undefined,
-        }
-      : {
-          id: 'renewals',
-          label: 'Renewals due',
-          value: `${renewalDueCount}`,
-          delta: renewalDueCount > 0 ? 'Action needed' : 'All clear',
-          icon: CalendarClock,
-          tone: renewalDueCount > 0 ? 'amber' : 'slate',
-          href: '/dashboard/insurance',
-        },
-  ];
-
-  const recommendationMoves: RecommendedMove[] = [];
-  if (riskExposureGap > 0) {
-    recommendationMoves.push({
-      id: 'rec-risk-gap',
-      title: `Close ${formatUsd(riskExposureGap)} of your biggest exposure gap`,
-      detail: 'Review uncovered items and increase protected coverage where impact is highest.',
-      impact: 'Direct downside protection',
-      href: effectiveSelectedPropertyId
-        ? `/dashboard/properties/${effectiveSelectedPropertyId}/risk-assessment`
-        : buildPropertyAwareDashboardHref(undefined, '/dashboard/risk-radar'),
-    });
+  if (userLoading || data.isLoading || !redirectChecked) {
+    return <DashboardRouteState state="loading" title="Preparing your command center" description="Syncing your latest home intelligence..." />;
   }
-  if (overdueMaintenanceCount > 0 || unscheduledMaintenanceCount > 0) {
-    recommendationMoves.push({
-      id: 'rec-maintenance',
-      title:
-        overdueMaintenanceCount > 0
-          ? `Handle ${overdueMaintenanceCount} overdue maintenance item${overdueMaintenanceCount === 1 ? '' : 's'}`
-          : `Schedule ${unscheduledMaintenanceCount} recurring maintenance task${unscheduledMaintenanceCount === 1 ? '' : 's'}`,
-      detail: 'Clearing this first prevents avoidable escalation and keeps systems predictable.',
-      impact: 'Lower failure risk',
-      href: effectiveSelectedPropertyId ? `/dashboard/maintenance?propertyId=${effectiveSelectedPropertyId}` : '/dashboard/maintenance',
-    });
-  }
-  if (heroCriticalTaskCount > 0) {
-    recommendationMoves.push({
-      id: 'rec-seasonal',
-      title: `Review ${heroCriticalTaskCount} critical seasonal task${heroCriticalTaskCount === 1 ? '' : 's'}`,
-      detail: 'Finishing these high-impact items improves readiness before peak season.',
-      impact: `${seasonalReadinessPct}% seasonal ready`,
-      href: effectiveSelectedPropertyId ? `/dashboard/seasonal?propertyId=${effectiveSelectedPropertyId}` : '/dashboard/seasonal',
-    });
-  }
-  if (recommendationMoves.length < 3 && annualSavingsPotential > 0) {
-    recommendationMoves.push({
-      id: 'rec-savings',
-      title: `Capture up to ${formatUsd(annualSavingsPotential)} in annual savings`,
-      detail: 'Compare your current spend against optimized options for this property profile.',
-      impact: 'Recurring cashflow win',
-      href: effectiveSelectedPropertyId
-        ? `/dashboard/properties/${effectiveSelectedPropertyId}/tools/home-savings`
-        : buildPropertyAwareDashboardHref(undefined, '/dashboard/home-savings'),
-    });
-  }
-  if (recommendationMoves.length < 3 && renewalDueCount > 0) {
-    recommendationMoves.push({
-      id: 'rec-renewals',
-      title: `Review ${renewalDueCount} renewal${renewalDueCount === 1 ? '' : 's'} before rates shift`,
-      detail: 'A quick renewal review can protect both coverage quality and premium position.',
-      impact: 'Coverage confidence',
-      href: '/dashboard/insurance',
-    });
-  }
-  if (recommendationMoves.length < 3) {
-    recommendationMoves.push({
-      id: 'rec-momentum',
-      title: 'Run your morning pulse and lock in one quick win',
-      detail: 'Daily check-ins keep your plan current and surface the next best move early.',
-      impact: heroCheckInStreak > 0 ? `${heroCheckInStreak}-day streak active` : 'Build daily momentum',
-      href: effectiveSelectedPropertyId ? `/dashboard/daily-snapshot?propertyId=${effectiveSelectedPropertyId}` : '/dashboard/daily-snapshot',
-    });
-  }
-  const topRecommendationMoves = recommendationMoves.slice(0, 3);
-  const recommendationSignals: string[] = ['current maintenance signals'];
-  if (riskExposureGap > 0) recommendationSignals.unshift('protection gaps');
-  if (annualSavingsPotential > 0) recommendationSignals.unshift('savings potential');
-  const recommendationSummary = `Based on ${recommendationSignals.join(', ')}.`;
-  const heroMomentumLabel =
-    heroCheckInStreak > 0
-      ? `${heroCheckInStreak}-day streak`
-      : homeScoreDelta !== null && homeScoreDelta > 0
-        ? `HomeScore ${formatSignedPoints(homeScoreDelta)}`
-        : null;
-  const supportingMove = topRecommendationMoves[0];
-  const commandCenterFreshnessLabel = scoreSnapshotQuery.dataUpdatedAt
-    ? `Updated ${formatDistanceToNowStrict(new Date(scoreSnapshotQuery.dataUpdatedAt), {
-        addSuffix: true,
-      })}`
-    : 'Updated today';
-  const commandCenterSourceLabel = [
-    selectedProperty ? 'Your home details' : null,
-    checklistItems.length > 0 ? 'Your maintenance history' : null,
-    data.urgentActions.length > 0 ? 'Your coverage & risk status' : 'Your recent activity',
-  ]
-    .filter(Boolean)
-    .join(' + ');
-  const commandCenterRationale = urgentActionWhyNow(primaryUrgentAction);
 
-  const handleAhaCtaClick = useCallback(() => {
-    trackAhaHeroEvent('dashboard_aha_cta_clicked', {
-      isReturningVisitor,
-      urgentActionType: primaryUrgentAction?.type ?? null,
-      urgentActionTitle: primaryUrgentAction?.title ?? null,
-      ctaHref: ahaCtaHref,
-      propertyId: effectiveSelectedPropertyId ?? null,
-    });
-  }, [
-    ahaCtaHref,
-    effectiveSelectedPropertyId,
-    isReturningVisitor,
-    primaryUrgentAction?.title,
-    primaryUrgentAction?.type,
-    trackAhaHeroEvent,
-  ]);
+  if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;
 
-  useEffect(() => {
-    if (
-      !user?.id ||
-      !effectiveSelectedPropertyId ||
-      !redirectChecked ||
-      showWelcomeScreen ||
-      isMobileViewport
-    ) {
-      return;
-    }
-
-    if (typeof window === 'undefined') return;
-
-    const viewedKey = `${DASHBOARD_AHA_VIEWED_PREFIX}:${user.id}:${effectiveSelectedPropertyId}:${
-      isReturningVisitor ? 'returning' : 'first'
-    }`;
-
-    if (window.sessionStorage.getItem(viewedKey) === '1') {
-      return;
-    }
-
-    window.sessionStorage.setItem(viewedKey, '1');
-
-    trackAhaHeroEvent('dashboard_aha_viewed', {
-      isReturningVisitor,
-      urgentActionType: primaryUrgentAction?.type ?? null,
-      urgentActionTitle: primaryUrgentAction?.title ?? null,
-      localUpdatesCount: localUpdates.length,
-      confidenceScore: ahaConfidence,
-    });
-  }, [
-    ahaConfidence,
-    effectiveSelectedPropertyId,
-    isMobileViewport,
-    isReturningVisitor,
-    localUpdates.length,
-    primaryUrgentAction?.title,
-    primaryUrgentAction?.type,
-    redirectChecked,
-    showWelcomeScreen,
-    trackAhaHeroEvent,
-    user?.id,
-  ]);
-
-  useEffect(() => {
-    if (
-      !user?.id ||
-      !effectiveSelectedPropertyId ||
-      !redirectChecked ||
-      showWelcomeScreen ||
-      isMobileViewport
-    ) {
-      return;
-    }
-
-    if (typeof window === 'undefined') return;
-
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const celebrationKey = `${DASHBOARD_AHA_CELEBRATED_PREFIX}:${user.id}:${todayKey}`;
-
-    if (window.localStorage.getItem(celebrationKey) === '1') {
-      return;
-    }
-
-    window.localStorage.setItem(celebrationKey, '1');
-    celebrate('cozy');
-
-    trackAhaHeroEvent('dashboard_aha_celebrated', {
-      isReturningVisitor,
-      urgentActionType: primaryUrgentAction?.type ?? null,
-      confidenceScore: ahaConfidence,
-    });
-  }, [
-    ahaConfidence,
-    celebrate,
-    effectiveSelectedPropertyId,
-    isMobileViewport,
-    isReturningVisitor,
-    primaryUrgentAction?.type,
-    redirectChecked,
-    showWelcomeScreen,
-    trackAhaHeroEvent,
-    user?.id,
-  ]);
-
-  const sectionMotion = (index: number) =>
-    prefersReducedMotion
-      ? {
-          initial: { opacity: 1, y: 0 },
-          animate: { opacity: 1, y: 0 },
-          transition: { duration: 0, delay: 0 },
-        }
-      : {
-          initial: { opacity: 0, y: 20 },
-          animate: { opacity: 1, y: 0 },
-          transition: { duration: 0.4, delay: index * 0.08 },
-        };
-
-  const loadingMessage = !redirectChecked ? 'Checking your account...' : 'Loading your command center...';
-
-  const primaryActionHero = selectedProperty ? (
+  const primaryActionHero = (
     <div className="space-y-6">
-      {/* 1. Command Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <span className="text-[10px] uppercase tracking-widest text-brand-600 font-bold">
@@ -1151,348 +517,35 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-slate-900 mt-1">
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.firstName || 'there'}.
           </h1>
-          <p className="text-slate-500 mt-1">Your home is {heroHomeScore && heroHomeScore > 80 ? 'highly protected' : 'needs focus'} today.</p>
+          <p className="text-slate-500 mt-1">Your home is {selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 80 ? 'highly protected' : 'needs focus'} today.</p>
         </div>
         
-        {/* 2. Flagship Wedge: Magic Scan CTA */}
-        <Button 
-          onClick={() => setIsScannerOpen(true)}
-          className="h-14 px-6 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-200 active:scale-95 transition-all group"
-        >
-          <Zap className="mr-2 h-5 w-5 fill-current text-brand-200 group-hover:animate-pulse" />
+        <Button onClick={() => setIsScannerOpen(true)} className="h-14 px-6 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white shadow-lg active:scale-95 transition-all group">
+          <Zap className="mr-2 h-5 w-5 fill-current text-brand-200" />
           <span className="text-base font-bold">Magic Scan</span>
           <ArrowRight className="ml-4 h-4 w-4 opacity-50" />
         </Button>
       </div>
 
-      {/* 3. The "Outcome" Surface: Unified WinCard */}
       <WinCard 
         title="Highest Value Move"
         value={heroNarrative.title}
         description={heroNarrative.subtitle}
         actionLabel={heroNarrative.ctaLabel}
-        onAction={handleAhaCtaClick}
-        isUrgent={primaryUrgentAction?.type === 'MAINTENANCE_OVERDUE' || primaryUrgentAction?.type === 'RENEWAL_EXPIRED'}
+        onAction={() => router.push(ahaCtaHref)}
+        isUrgent={data.activeIncidents.length > 0 || overdueMaintenanceCount > 0}
         trust={{
-          confidenceLabel: heroConfidenceLabel,
-          freshnessLabel: commandCenterFreshnessLabel,
-          sourceLabel: commandCenterSourceLabel,
-          rationale: commandCenterRationale
+          confidenceLabel: "Verified",
+          freshnessLabel: "Updated just now",
+          sourceLabel: "CtC Intelligence Engine",
+          rationale: "Ranked by financial upside, risk prevention, and data confidence."
         }}
         className="border-2 border-brand-100 shadow-xl shadow-brand-50/50"
       />
 
-      <MagicCaptureSheet 
-        isOpen={isScannerOpen} 
-        onOpenChange={setIsScannerOpen} 
-      />
-    </div>
-  ) : (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="text-2xl font-semibold text-slate-900">Choose a property to start</h2>
-      <p className="mt-2 mb-0 text-sm text-slate-600">
-        Your command center prioritizes actions by property context.
-      </p>
-      <Link
-        href="/dashboard/properties"
-        className="mt-4 inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-      >
-        Select property
-      </Link>
-    </section>
-  );
-
-  const supportingAction = supportingMove ? (
-    <SupportingActionCard
-      title={supportingMove.title}
-      detail={supportingMove.detail}
-      href={supportingMove.href}
-      impact={supportingMove.impact}
-    />
-  ) : undefined;
-
-  const homeBuyerSecondaryModules = (
-    <>
-      <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
-      <SignatureRecommendationCard
-        propertyLabel={ahaPropertyLabel}
-        moves={topRecommendationMoves}
-        summary={recommendationSummary}
-      />
-      <HomeBuyerDashboard
-        userFirstName={user?.firstName || 'there'}
-        bookings={data.bookings}
-        properties={data.properties}
-        checklistItems={checklistItems}
-      />
-    </>
-  );
-
-  const ownerSecondaryModules = (
-    <>
-      {/* 1. High-Signal KPI Strip */}
-      <HeroValueStrip tiles={valueStripTiles} momentumLabel={heroMomentumLabel} />
-
-      {/* 2. Personalized Moves Feed */}
-      <SignatureRecommendationCard
-        propertyLabel={ahaPropertyLabel}
-        moves={topRecommendationMoves}
-        summary={recommendationSummary}
-      />
-
-      {/* 3. Outcome Density: Protection Wins */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Secured for you
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <WinCard 
-            title="Warranty Active"
-            value="Dishwasher Protected"
-            description="Our scan confirmed your unit is under factory warranty until Oct 2026."
-            trust={{
-              confidenceLabel: "Verified",
-              freshnessLabel: "Synced 2h ago",
-              sourceLabel: "Manufacturer API",
-            }}
-            className="bg-emerald-50/30 border-emerald-100"
-          />
-          <WinCard 
-            title="Policy Audit"
-            value="Coverage Gap Found"
-            description="Your current policy might not cover flood damage common in your area."
-            actionLabel="Audit My Policy"
-            onAction={() => {
-              const targetId = effectiveSelectedPropertyId || '';
-              if (targetId) {
-                router.push(`/dashboard/properties/${targetId}/save`);
-              } else {
-                router.push('/dashboard/properties?navTarget=save');
-              }
-            }}
-            isUrgent={true}
-            trust={{
-              confidenceLabel: "High",
-              freshnessLabel: "New Data",
-              sourceLabel: "Risk Engine",
-            }}
-            className="bg-amber-50/30 border-amber-100"
-          />
-        </div>
-      </section>
-
-      {/* 4. Concierge Lifecycle Alerts (Urgent but secondary to the WinCard) */}
-      <div className="space-y-6 pt-4">
-        {isOwnerSegment && effectiveSelectedPropertyId && (
-          <motion.div {...sectionMotion(0)}>
-            <PriorityAlertBanner propertyId={effectiveSelectedPropertyId} />
-          </motion.div>
-        )}
-
-        {isOwnerSegment && localUpdates.length > 0 && (
-          <LocalUpdatesCarousel
-            updates={localUpdates}
-            variant="ticker"
-            onDismiss={async (id) => {
-              setLocalUpdates((prev) => prev.filter((u) => u.id !== id));
-              await api.dismissLocalUpdate(id);
-            }}
-            onCtaClick={(id) => {
-              const update = localUpdates.find((u) => u.id === id);
-              if (update?.ctaUrl) {
-                const resolvedHref = resolveLocalUpdateHref(update.ctaUrl);
-                router.push(resolvedHref);
-              }
-            }}
-          />
-        )}
-      </div>
-
-      {/* Deeper Intelligence - This will be wrapped in the expandable CommandCenterTemplate section */}
-      <div className="hidden">
-        {/* We keep these here for the template logic if needed, but the template 
-            will actually receive the entire ownerSecondaryModules as the 'secondaryModules' prop.
-            Wait, I should split these.
-        */}
-      </div>
-    </>
-  );
-
-  const deeperIntelligenceModules = (
-    <div className="space-y-12">
-      {isOwnerSegment && effectiveSelectedPropertyId && (
-        <MorningHomePulseCard propertyId={effectiveSelectedPropertyId} />
-      )}
-
-      <section className="tier-intelligence rounded-3xl border border-slate-200/70 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
-              <TrendingUp className="h-5 w-5 text-slate-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Property Intelligence</h2>
-              <p className="text-sm text-gray-500">Deep health and financial scores</p>
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <HomeScoreReportCard propertyId={effectiveSelectedPropertyId} />
-          <PropertyHealthScoreCard property={selectedProperty} />
-          <PropertyRiskScoreCard propertyId={effectiveSelectedPropertyId} />
-          <FinancialEfficiencyScoreCard propertyId={effectiveSelectedPropertyId} />
-        </div>
-      </section>
-
-      <section className="tier-context">
-        <div className="mb-4 flex items-start gap-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-100/70 p-2">
-            <ShieldAlert className="h-5 w-5 text-slate-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Risk & Savings Engines</h2>
-            <p className="text-sm text-gray-500">Background tools detecting optimization wins.</p>
-          </div>
-        </div>
-        <ErrorBoundary>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <HomeSavingsCheckToolCard propertyId={effectiveSelectedPropertyId} />
-            <CoverageIntelligenceToolCard propertyId={effectiveSelectedPropertyId} />
-            <RiskPremiumOptimizerToolCard propertyId={effectiveSelectedPropertyId} />
-            <DoNothingSimulatorToolCard propertyId={effectiveSelectedPropertyId} />
-          </div>
-        </ErrorBoundary>
-      </section>
-      
-      <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
+      <MagicCaptureSheet isOpen={isScannerOpen} onOpenChange={setIsScannerOpen} />
     </div>
   );
-
-  if (userLoading || data.isLoading || !redirectChecked) {
-    return (
-      <DashboardRouteState
-        state="loading"
-        title="Preparing your command center"
-        description={loadingMessage}
-      />
-    );
-  }
-
-  if (showWelcomeScreen && user) {
-    return <WelcomeModal userFirstName={user.firstName} />;
-  }
-
-  if (!user) {
-    return (
-      <DashboardRouteState
-        state="error"
-        title="You are signed out"
-        description="Sign in to continue to your command center."
-        action={
-          <Button asChild>
-            <Link href="/login">Sign in</Link>
-          </Button>
-        }
-      />
-    );
-  }
-
-  if (data.error) {
-    return (
-      <DashboardRouteState
-        state="error"
-        title="We couldn’t load your command center"
-        description={data.error}
-        action={<Button onClick={fetchDashboardData}>Try again</Button>}
-        secondaryAction={
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/properties">Open properties</Link>
-          </Button>
-        }
-      />
-    );
-  }
-
-  if (!showWelcomeScreen && properties.length === 0) {
-    return (
-      <DashboardRouteState
-        state="empty"
-        title="Add your first property"
-        description="Your command center is ready. Add a property to unlock prioritized actions and trust-backed guidance."
-        action={
-          <Button asChild>
-            <Link href="/dashboard/properties/new">Add property</Link>
-          </Button>
-        }
-        secondaryAction={
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/properties">View properties</Link>
-          </Button>
-        }
-      />
-    );
-  }
-
-  if (isHomeBuyerSegment) {
-    if (isMobileViewport) {
-      return (
-        <MobileHomeBuyerDashboard
-          userFirstName={user.firstName}
-          properties={data.properties}
-          selectedPropertyId={effectiveSelectedPropertyId}
-          onPropertyChange={setSelectedPropertyId}
-          bookings={data.bookings}
-          checklistItems={checklistItems}
-          localUpdates={localUpdates}
-        />
-      );
-    }
-
-    return (
-      <>
-        {selectedProperty && properties.length > 0 && (
-          <WelcomeSection
-            userName={user?.firstName || 'there'}
-            properties={properties}
-            selectedPropertyId={effectiveSelectedPropertyId}
-            onPropertyChange={setSelectedPropertyId}
-            compact
-          />
-        )}
-
-        <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
-          <CommandCenterTemplate
-            primaryAction={primaryActionHero}
-            supportingAction={supportingAction}
-            confidenceLabel={heroConfidenceLabel}
-            freshnessLabel={commandCenterFreshnessLabel}
-            sourceLabel={commandCenterSourceLabel}
-            rationale={commandCenterRationale}
-            secondaryModules={homeBuyerSecondaryModules}
-          />
-        </div>
-
-        <MilestoneCelebration
-          type={celebration.type}
-          isOpen={celebration.isOpen}
-          onClose={dismiss}
-        />
-      </>
-    );
-  }
-
-  if (isOwnerSegment && isMobileViewport) {
-    return (
-      <MobileDashboardHome
-        userFirstName={user.firstName}
-        properties={properties}
-        selectedPropertyId={effectiveSelectedPropertyId}
-        onPropertyChange={setSelectedPropertyId}
-        localUpdates={localUpdates}
-      />
-    );
-  }
 
   return (
     <>
@@ -1509,20 +562,20 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
         <CommandCenterTemplate
           primaryAction={primaryActionHero}
-          supportingAction={supportingAction}
-          confidenceLabel={heroConfidenceLabel}
-          freshnessLabel={commandCenterFreshnessLabel}
-          sourceLabel={commandCenterSourceLabel}
-          rationale={commandCenterRationale}
-          secondaryModules={deeperIntelligenceModules}
+          confidenceLabel="Verified"
+          freshnessLabel="Updated today"
+          sourceLabel="Home Intelligence Engine"
+          secondaryModules={
+            <div className="space-y-12">
+               <HeroValueStrip tiles={[]} momentumLabel={null} /> 
+               <SignatureRecommendationCard propertyLabel="Your Home" moves={[]} summary="Analyzing latest data..." />
+               <RoomsSnapshotSection propertyId={effectiveSelectedPropertyId} />
+            </div>
+          }
         />
       </div>
 
-      <MilestoneCelebration
-        type={celebration.type}
-        isOpen={celebration.isOpen}
-        onClose={dismiss}
-      />
+      <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     </>
   );
 }

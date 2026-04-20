@@ -1,43 +1,46 @@
+'use client';
+
 import React from 'react';
+import { ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ConfidenceLevel } from '@/lib/types/trust';
 
 interface ConfidenceBadgeProps {
-  level: 'high' | 'medium' | 'low';
+  level: ConfidenceLevel;
   score?: number;
   className?: string;
 }
 
-const LABELS: Record<'high' | 'medium' | 'low', string> = {
-  high: 'High confidence',
-  medium: 'Based on estimates',
-  low: 'Limited data — verify',
-};
-
-const STYLES: Record<'high' | 'medium' | 'low', string> = {
-  high: 'bg-teal-50 text-teal-700 border-teal-200',
-  medium: 'bg-amber-50 text-amber-700 border-amber-200',
-  low: 'bg-gray-100 text-gray-500 border-gray-200',
-};
-
-const DOT_STYLES: Record<'high' | 'medium' | 'low', string> = {
-  high: 'bg-teal-500',
-  medium: 'bg-amber-500',
-  low: 'bg-gray-400',
-};
-
 export function ConfidenceBadge({ level, score, className }: ConfidenceBadgeProps) {
-  const label = score !== undefined ? `${score}% confident` : LABELS[level];
+  const config = {
+    high: {
+      icon: ShieldCheck,
+      text: 'High Confidence',
+      styles: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    },
+    medium: {
+      icon: Shield,
+      text: 'Verified Estimate',
+      styles: 'bg-amber-50 text-amber-700 border-amber-100',
+    },
+    low: {
+      icon: ShieldAlert,
+      text: 'Limited Data',
+      styles: 'bg-slate-50 text-slate-600 border-slate-200',
+    },
+  }[level];
+
+  const Icon = config.icon;
 
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium',
-        STYLES[level],
-        className
-      )}
-    >
-      <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', DOT_STYLES[level])} />
-      {label}
-    </span>
+    <div className={cn(
+      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+      config.styles,
+      className
+    )}>
+      <Icon className="h-3 w-3" />
+      {config.text}
+      {score !== undefined && <span className="ml-0.5 opacity-60">{score}%</span>}
+    </div>
   );
 }

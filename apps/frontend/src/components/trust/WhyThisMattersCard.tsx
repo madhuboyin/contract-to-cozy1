@@ -1,52 +1,66 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Info, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface WhyThisMattersCardProps {
-  children: React.ReactNode;
+  explanation: string;
   assumptions?: string[];
-  defaultOpen?: boolean;
   className?: string;
+  defaultExpanded?: boolean;
 }
 
-export function WhyThisMattersCard({
-  children,
-  assumptions,
-  defaultOpen = false,
-  className,
+export function WhyThisMattersCard({ 
+  explanation, 
+  assumptions, 
+  className, 
+  defaultExpanded = false 
 }: WhyThisMattersCardProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   return (
-    <div className={cn('rounded-lg border border-gray-100 bg-gray-50', className)}>
-      <button
+    <div className={cn(
+      "rounded-xl border border-teal-100 bg-teal-50/30 overflow-hidden transition-all duration-200",
+      className
+    )}>
+      <button 
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between px-3 py-2 text-left text-[12px] font-medium text-gray-500 hover:text-gray-700 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex w-full items-start justify-between p-3.5 text-left group"
       >
-        <span>Why this matters</span>
-        <ChevronDown
-          className={cn(
-            'h-3.5 w-3.5 flex-shrink-0 transition-transform duration-150',
-            open && 'rotate-180'
-          )}
-        />
+        <div className="flex gap-2.5">
+          <Info className="h-4 w-4 text-teal-600 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
+          <p className="text-sm font-semibold text-teal-900 leading-snug">
+            Why this matters
+          </p>
+        </div>
+        <ChevronDown className={cn(
+          "h-4 w-4 text-teal-400 transition-transform duration-200",
+          isExpanded ? "rotate-180" : ""
+        )} />
       </button>
 
-      {open && (
-        <div className="border-t border-gray-100 px-3 pb-3 pt-2">
-          <p className="text-[12px] leading-relaxed text-gray-600">{children}</p>
+      {isExpanded && (
+        <div className="px-3.5 pb-4 space-y-3 border-t border-teal-100/50 pt-3">
+          <p className="text-sm text-teal-800 leading-relaxed">
+            {explanation}
+          </p>
+          
           {assumptions && assumptions.length > 0 && (
-            <ul className="mt-2 space-y-1">
-              {assumptions.map((assumption, index) => (
-                <li key={index} className="flex items-start gap-1.5 text-[11px] text-gray-400">
-                  <span className="mt-1 h-1 w-1 rounded-full bg-gray-300 flex-shrink-0" />
-                  {assumption}
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-2 mt-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-600/70">
+                Verifiable Assumptions:
+              </p>
+              <ul className="space-y-1.5">
+                {assumptions.map((assumption, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-xs text-teal-800">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-teal-400 mt-0.5 shrink-0" />
+                    {assumption}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}
