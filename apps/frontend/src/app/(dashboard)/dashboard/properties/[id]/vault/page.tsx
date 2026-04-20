@@ -442,7 +442,7 @@ function AssetDetailSheet({
   // 1. Fetch linked documents
   const { data: allDocsData } = useQuery({
     queryKey: ['vault-docs', propertyId],
-    queryFn: () => propertyId ? api.listDocuments(propertyId) : Promise.resolve({ success: false, data: { documents: [] } } as any),
+    queryFn: () => propertyId ? api.listDocuments(propertyId).then(res => res.data) : Promise.resolve({ documents: [] } as any),
     enabled: !!propertyId,
   });
 

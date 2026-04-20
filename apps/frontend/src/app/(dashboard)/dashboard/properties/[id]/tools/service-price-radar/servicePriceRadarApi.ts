@@ -183,10 +183,7 @@ export async function createServicePriceRadarCheck(
     `/api/properties/${propertyId}/service-price-radar/checks`,
     payload
   );
-  if (res.success) {
-    return res.data.check;
-  }
-  throw new Error(res.message || 'Failed to create price check');
+  return res.data.check;
 }
 
 export async function listServicePriceRadarChecks(
@@ -197,10 +194,7 @@ export async function listServicePriceRadarChecks(
     `/api/properties/${propertyId}/service-price-radar/checks`,
     { params: { limit } }
   );
-  if (res.success) {
-    return res.data.items;
-  }
-  return [];
+  return res.data.items;
 }
 
 export async function getServicePriceRadarCheck(
@@ -210,10 +204,7 @@ export async function getServicePriceRadarCheck(
   const res = await api.get<{ check: ServicePriceRadarCheckDetail }>(
     `/api/properties/${propertyId}/service-price-radar/checks/${checkId}`
   );
-  if (res.success) {
-    return res.data.check;
-  }
-  throw new Error(res.message || 'Failed to get price check');
+  return res.data.check;
 }
 
 export async function trackServicePriceRadarEvent(
