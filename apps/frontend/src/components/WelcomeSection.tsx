@@ -63,7 +63,7 @@ export function WelcomeSection({
 
   if (compact) {
     return (
-      <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-3 md:pt-4 pb-2">
+      <div className="max-w-[1500px] mx-auto px-6 xl:px-10 w-full pt-3 md:pt-4 pb-2">
         <div className="rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm md:px-4 md:py-3">
           <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
