@@ -74,8 +74,7 @@ function detectJourneyType(item: any): JourneyType {
     item.systemType &&
     !isIncident &&
     item.coverage &&
-    !item.coverage.hasWarranty &&
-    !item.coverage.hasInsurance
+    !item.coverage.hasCoverage
   ) {
     return 'coverage-gap';
   }
@@ -506,8 +505,7 @@ export default function ResolutionCenterClient() {
         !replaceRepairItems.some((r) => r.id === (a.id || a.actionKey)) &&
         a.systemType &&
         a.coverage &&
-        !a.coverage.hasWarranty &&
-        !a.coverage.hasInsurance &&
+        !a.coverage.hasCoverage &&
         a.status !== 'SUPPRESSED',
     );
 
