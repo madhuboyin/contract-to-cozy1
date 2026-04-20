@@ -134,6 +134,7 @@ import mfaRoutes from './routes/mfa.routes';
 import { logger, auditLog } from './lib/logger';
 import { register } from './lib/metrics';
 import { metricsMiddleware } from './middleware/metrics.middleware';
+import { requestIdMiddleware } from './middleware/requestId.middleware';
 dotenv.config();
 
 const app = express();
@@ -146,6 +147,9 @@ const PORT = process.env.PORT || 8080;
 // =============================================================================
 // MIDDLEWARE
 // =============================================================================
+
+// Attach a unique request ID to each request for tracing logs
+app.use(requestIdMiddleware);
 
 // Helmet with full defaults (CSP enabled) for all API routes.
 // Swagger UI requires unsafe-inline scripts, so CSP is disabled only on /api/docs.

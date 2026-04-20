@@ -24,6 +24,32 @@ export class APIError extends Error {
 }
 
 /**
+ * Extracts a concise error message from Prisma validation error output.
+ * Prisma validation errors contain a full dump of the call stack and data,
+ * which makes logs unreadable.
+ */
+function extractPrismaMessage(message: string): string {
+  if (!message) return 'Prisma validation error';
+  
+  // Find the last sentence/phrase after double newlines which usually
+  // contains the actual validation failure.
+  const parts = message.split('\n\n');
+  if (parts.length > 1) {
+    const lastPart = parts[parts.length - 1].trim();
+    if (lastPart) return lastPart;
+  }
+  
+  // Fallback to the first line if it's not the generic invocation message
+  const lines = message.split('\n').filter(l => l.trim());
+  if (lines.length > 0) {
+    const firstLine = lines[0].trim();
+    if (firstLine && !firstLine.includes('invocation:')) return firstLine;
+  }
+
+  return 'Prisma validation error';
+}
+
+/**
  * Global error handler middleware
  */
 export const errorHandler = (
@@ -53,6 +79,7 @@ export const errorHandler = (
   }
 
   // Structured error log — redact fields are handled by pino's redact config
+  // Note: requestId is automatically added by logger's mixin via AsyncLocalStorage
   logger.error({
     name: error.name,
     message: error.message,
@@ -125,8 +152,11 @@ export const errorHandler = (
 
   // Prisma validation errors
   if (error instanceof Prisma.PrismaClientValidationError) {
+    const conciseMessage = extractPrismaMessage(error.message);
+    
     logger.error({
-      message: error.message,
+      prismaMessage: conciseMessage,
+      fullPrismaError: error.message, // Keep for full debugging in structured log but separate from concise message
       path: req.path,
       method: req.method,
       ...(isProd ? {} : { params: req.params, stack: error.stack }),
@@ -137,7 +167,7 @@ export const errorHandler = (
       error: {
         message: 'Invalid data provided',
         code: 'VALIDATION_ERROR',
-        ...(isProd ? {} : { details: error.message }),
+        details: isProd ? conciseMessage : error.message,
       },
     });
     return;

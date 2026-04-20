@@ -9,6 +9,7 @@
 //   jq 'select(.audit == true)' <log-stream>
 
 import pino from 'pino';
+import { getRequestId } from './requestContext';
 
 // Pino v10 has strict overload types that reject logger.info-style
 // `logger.info('prefix:', value)` calls. This looser interface accepts
@@ -83,6 +84,11 @@ export const logger: AppLogger = pino({
     censor: '[REDACTED]',
   },
   transport: getTransport(),
+  // Automagically inject requestId from context into EVERY log line.
+  mixin: () => {
+    const requestId = getRequestId();
+    return requestId ? { requestId } : {};
+  },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
