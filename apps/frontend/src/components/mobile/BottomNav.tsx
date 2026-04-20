@@ -84,7 +84,7 @@ export function BottomNav() {
   }));
 
   // More drawer: remaining jobs + secondary links
-  const moreJobKeys = ['my-home', 'protect', 'save'];
+  const moreJobKeys = ['my-home', 'protect', 'save', 'home-lab'];
   const moreJobs = PRIMARY_JOBS.filter((j) => moreJobKeys.includes(j.key)).map((job) => ({
     label: job.name,
     href:

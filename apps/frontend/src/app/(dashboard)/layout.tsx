@@ -77,6 +77,9 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
     if (typeof window !== 'undefined') window.location.href = '/login';
   };
 
+  const coreJobs = PRIMARY_JOBS.filter(j => j.key !== 'home-lab');
+  const labJob = PRIMARY_JOBS.find(j => j.key === 'home-lab');
+
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -95,7 +98,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
 
       {/* Primary nav */}
       <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
-        {PRIMARY_JOBS.map((job) => {
+        {coreJobs.map((job) => {
           const Icon = job.icon;
           const href =
             job.href === '/dashboard' || job.href === '/dashboard/properties'
@@ -135,6 +138,29 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
             </Link>
           );
         })}
+
+        {/* Home Lab Section */}
+        {labJob && (
+          <div className="pt-2">
+            <Link
+              href={buildPropertyAwareHref(resolvedPropertyId, 'home-lab', labJob.key)}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group',
+                pathname?.startsWith('/dashboard/home-lab')
+                  ? 'bg-brand-50 text-brand-700 font-semibold'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              )}
+            >
+              <labJob.icon
+                className={cn(
+                  'h-[18px] w-[18px] flex-shrink-0 transition-colors',
+                  pathname?.startsWith('/dashboard/home-lab') ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'
+                )}
+              />
+              <span>{labJob.name}</span>
+            </Link>
+          </div>
+        )}
 
         {/* Divider + secondary links */}
         <div className="pt-3 mt-2 border-t border-gray-100">
@@ -244,10 +270,13 @@ function MobileDrawerNav({ user }: { user: User | null }) {
     if (typeof window !== 'undefined') window.location.href = '/login';
   };
 
+  const coreJobs = PRIMARY_JOBS.filter(j => j.key !== 'home-lab');
+  const labJob = PRIMARY_JOBS.find(j => j.key === 'home-lab');
+
   return (
     <div className="flex flex-col h-full py-4 px-3">
       <nav className="flex-1 space-y-0.5 overflow-y-auto">
-        {PRIMARY_JOBS.map((job) => {
+        {coreJobs.map((job) => {
           const Icon = job.icon;
           const href =
             job.href === '/dashboard' || job.href === '/dashboard/properties'
@@ -286,6 +315,28 @@ function MobileDrawerNav({ user }: { user: User | null }) {
             </SheetClose>
           );
         })}
+
+        {labJob && (
+          <div className="pt-2">
+            <SheetClose asChild>
+              <Link
+                href={buildPropertyAwareHref(resolvedPropertyId, 'home-lab', labJob.key)}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors',
+                  pathname?.startsWith('/dashboard/home-lab')
+                    ? 'bg-brand-50 text-brand-700 font-semibold'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                )}
+              >
+                <labJob.icon className={cn('h-5 w-5 flex-shrink-0', pathname?.startsWith('/dashboard/home-lab') ? 'text-brand-600' : 'text-gray-400')} />
+                <div>
+                  <div>{labJob.name}</div>
+                  <div className="text-[11px] font-normal text-gray-400">{labJob.description}</div>
+                </div>
+              </Link>
+            </SheetClose>
+          </div>
+        )}
 
         <div className="pt-3 border-t border-gray-100 space-y-0.5">
           <SheetClose asChild>
