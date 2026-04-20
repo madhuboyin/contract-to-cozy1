@@ -2328,7 +2328,7 @@ class APIClient {
     actionKey: string,
     file: File,
     orderIndex: number
-  ): Promise<APIResponse<{ success: boolean; photo: CompletionPhotoDTO }>> {
+  ): Promise<APIResponse<{ photo: CompletionPhotoDTO }>> {
     try {
       this.validateFile(file, {
         maxSizeMB: 5,
@@ -2340,7 +2340,7 @@ class APIClient {
     formData.append('actionKey', actionKey);
     formData.append('orderIndex', orderIndex.toString());
   
-    return this.request<{ success: boolean; photo: CompletionPhotoDTO }>(
+    return this.request<{ photo: CompletionPhotoDTO }>(
       `/api/orchestration/${propertyId}/completions/photos`,
       {
         method: 'POST',
