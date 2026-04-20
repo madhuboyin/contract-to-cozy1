@@ -415,6 +415,18 @@ function TimelineTab({ propertyId }: { propertyId: string }) {
   );
 }
 
+import { 
+  ConfidenceBadge, 
+  SourceChip, 
+  WhyThisMattersCard, 
+  EstimatedSavingsBadge, 
+  RiskOfDelayBadge,
+  TrustMetadataBar 
+} from '@/components/trust';
+import { listIncidents } from '../incidents/incidentsApi';
+
+// ... (existing imports)
+
 // ─── Asset Detail Sheet ───────────────────────────────────────────────────────
 
 function AssetDetailSheet({
@@ -427,87 +439,196 @@ function AssetDetailSheet({
   const router = useRouter();
   const propertyId = item?.propertyId;
 
+  // 1. Fetch linked documents
+  const { data: allDocsData } = useQuery({
+    queryKey: ['vault-docs', propertyId],
+    queryFn: () => propertyId ? api.listDocuments(propertyId) : Promise.resolve({ success: false, data: { documents: [] } }),
+    enabled: !!propertyId,
+  });
+
+  // 2. Fetch history (Incidents/Service)
+  const { data: incidentsData } = useQuery({
+    queryKey: ['asset-history', item?.id],
+    queryFn: () => (propertyId && item?.id) ? listIncidents({ propertyId, limit: 10 }) : Promise.resolve({ items: [] }),
+    enabled: !!(propertyId && item?.id),
+  });
+
+  // 3. Fetch AI Recommendations (from Risk Report)
+  const { data: riskReport } = useQuery({
+    queryKey: ['risk-report-summary', propertyId],
+    queryFn: () => propertyId ? api.getRiskReportSummary(propertyId) : Promise.resolve(null),
+    enabled: !!propertyId,
+  });
+
   if (!item) return null;
+
+  const linkedDocs = (allDocsData?.success ? allDocsData.data.documents : []).filter(
+    (doc: any) => doc.inventoryItemId === item.id || (item.warrantyId && doc.warrantyId === item.warrantyId)
+  );
+
+  const assetHistory = (incidentsData as any)?.items?.filter(
+    (inc: any) => inc.inventoryItemId === item.id
+  ) || [];
+
+  const assetRiskDetail = (riskReport && typeof riskReport !== 'string') 
+    ? riskReport.details.find(d => d.inventoryItemId === item.id)
+    : null;
 
   const status = coverageStatus(item);
   const statusLabel =
     status === 'covered' ? 'Fully covered' : status === 'partial' ? 'Partially covered' : 'No coverage';
   const statusCls =
     status === 'covered'
-      ? 'text-emerald-600 bg-emerald-50'
+      ? 'text-emerald-600 bg-emerald-50 border-emerald-100'
       : status === 'partial'
-      ? 'text-amber-700 bg-amber-50'
-      : 'text-slate-500 bg-slate-100';
+      ? 'text-amber-700 bg-amber-50 border-amber-100'
+      : 'text-slate-500 bg-slate-100 border-slate-200';
 
   return (
     <Sheet open={Boolean(item)} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl px-5 pb-8">
-        <SheetHeader className="mb-4">
-          <SheetTitle className="text-left text-base">{item.name}</SheetTitle>
+      <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-3xl px-0 pb-10 border-t-0 shadow-2xl">
+        <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full mb-2" />
+        
+        <SheetHeader className="px-6 pb-4 border-b border-slate-50">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <SheetTitle className="text-left text-xl font-bold text-slate-900">{item.name}</SheetTitle>
+              <div className="flex items-center gap-2">
+                <ConfidenceBadge level={item.brand && item.model ? 'high' : 'medium'} />
+                {item.category && <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{item.category}</span>}
+              </div>
+            </div>
+          </div>
         </SheetHeader>
 
-        <div className="space-y-4">
-          {/* Meta */}
+        <div className="px-6 py-6 space-y-8">
+          {/* Quick Stats Grid */}
           <div className="grid grid-cols-2 gap-3">
-            {item.brand && (
-              <div className="rounded-lg bg-muted/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Brand</p>
-                <p className="mt-0.5 text-sm font-medium">{item.brand}</p>
-              </div>
-            )}
-            {item.model && (
-              <div className="rounded-lg bg-muted/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Model</p>
-                <p className="mt-0.5 text-sm font-medium">{item.model}</p>
-              </div>
-            )}
-            {item.serialNo && (
-              <div className="rounded-lg bg-muted/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Serial</p>
-                <p className="mt-0.5 text-sm font-medium font-mono text-xs">{item.serialNo}</p>
-              </div>
-            )}
-            {item.purchasedOn && (
-              <div className="rounded-lg bg-muted/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Purchased</p>
-                <p className="mt-0.5 text-sm font-medium">
-                  {format(parseISO(item.purchasedOn), 'MMM yyyy')}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Coverage */}
-          <div className="rounded-xl border border-border px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Coverage</span>
-              <span className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-semibold', statusCls)}>
-                {statusLabel}
-              </span>
+            <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Make & Model</p>
+              <p className="text-sm font-bold text-slate-900 truncate">{item.brand || 'Unknown'} {item.model || ''}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5 truncate">{item.serialNo || 'No serial recorded'}</p>
             </div>
-            {status !== 'covered' && (
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                {status === 'none'
-                  ? 'This asset has no warranty or insurance linked. Add coverage to protect its replacement value.'
-                  : 'Only partial coverage. Link a warranty or insurance policy for full protection.'}
+            <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Age & Status</p>
+              <p className="text-sm font-bold text-slate-900">
+                {item.purchasedOn ? `${differenceInCalendarDays(new Date(), parseISO(item.purchasedOn)) / 365 > 1 ? Math.floor(differenceInCalendarDays(new Date(), parseISO(item.purchasedOn)) / 365) + ' years old' : 'New'}` : 'Age unknown'}
               </p>
-            )}
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className={cn("h-1.5 w-1.5 rounded-full", coverageDot(status))} />
+                <span className="text-[11px] font-medium text-slate-600">{statusLabel}</span>
+              </div>
+            </div>
           </div>
 
-          {/* Replacement value */}
-          {Number(item.replacementCostCents ?? 0) > 0 && (
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Replacement value
-              </p>
-              <p className="mt-1 text-xl font-bold text-foreground">
-                ${(Number(item.replacementCostCents) / 100).toLocaleString()}
-              </p>
+          {/* AI Recommendations (Dynamic from Risk Engine) */}
+          {assetRiskDetail && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-brand-600" />
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">AI Recommendation</h4>
+              </div>
+              <div className="rounded-2xl border-2 border-brand-100 bg-brand-50/30 p-5 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-slate-900 leading-tight">
+                      {assetRiskDetail.actionCta || `Schedule ${item.name} Inspection`}
+                    </p>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {assetRiskDetail.riskLevel === 'HIGH' || assetRiskDetail.riskLevel === 'ELEVATED' 
+                        ? `This asset is approaching its ${assetRiskDetail.expectedLife}-year life expectancy. Proactive service can prevent a $${assetRiskDetail.replacementCost} emergency replacement.`
+                        : `Your ${item.name} is in good health. Keep it that way with regular filter changes.`}
+                    </p>
+                  </div>
+                  {assetRiskDetail.riskLevel === 'HIGH' && (
+                    <div className="shrink-0 bg-red-100 text-red-700 text-[10px] font-bold px-2 py-1 rounded-lg uppercase">High Risk</div>
+                  )}
+                </div>
+                
+                <WhyThisMattersCard 
+                  explanation={`Based on the ${item.brand} ${item.model} reliability data and your installation date, there is a ${Math.round(assetRiskDetail.probability * 100)}% probability of failure within 12 months.`}
+                  assumptions={[`Installation Year: ${item.purchasedOn ? format(parseISO(item.purchasedOn), 'yyyy') : 'Estimate'}`, `Industry Avg Life: ${assetRiskDetail.expectedLife} years`]}
+                  className="bg-white border-brand-100 shadow-sm"
+                />
+
+                <Button className="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-xl py-6 font-bold shadow-lg shadow-brand-100">
+                  Book Service Estimate
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex flex-col gap-2 pt-1">
+          {/* History Timeline */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-slate-400" />
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Care History</h4>
+              </div>
+              <span className="text-[11px] font-bold text-brand-600 uppercase tracking-widest">{assetHistory.length} Events</span>
+            </div>
+            
+            {assetHistory.length > 0 ? (
+              <div className="space-y-3 pl-2">
+                {assetHistory.map((ev: any) => (
+                  <div key={ev.id} className="flex gap-4 border-l-2 border-slate-100 pl-4 py-1">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-800 leading-none">{ev.title}</p>
+                      <p className="text-[11px] text-slate-500 mt-1">{format(parseISO(ev.openedAt), 'MMM d, yyyy')} · {ev.status}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center">
+                <p className="text-xs text-slate-500 italic">No previous service or incidents recorded for this asset.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Linked Documents */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-slate-400" />
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Linked Documents</h4>
+            </div>
+            
+            {linkedDocs.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2">
+                {linkedDocs.map((doc: any) => (
+                  <a 
+                    key={doc.id} 
+                    href={doc.fileUrl} 
+                    target="_blank" 
+                    className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-white hover:border-brand-200 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-blue-50 p-2 rounded-lg group-hover:bg-brand-50 transition-colors">
+                        <FileText className="h-4 w-4 text-blue-600 group-hover:text-brand-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{doc.name}</p>
+                        <p className="text-[10px] text-slate-500 uppercase font-medium">{doc.type}</p>
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-brand-600" />
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center">
+                <p className="text-xs text-slate-500 italic">No manuals or receipts linked to this asset.</p>
+                <Button variant="ghost" className="mt-2 text-[11px] text-brand-600 font-bold hover:bg-brand-50">
+                  <Upload className="h-3 w-3 mr-1.5" />
+                  Upload Receipt
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Advanced Actions */}
+          <div className="pt-4 border-t border-slate-100">
             <Button
               onClick={() => {
                 onClose();
@@ -517,10 +638,10 @@ function AssetDetailSheet({
                   );
                 }
               }}
-              variant="outline"
-              className="w-full justify-between rounded-xl"
+              variant="ghost"
+              className="w-full justify-between rounded-xl text-slate-500 hover:text-slate-900"
             >
-              View full details
+              Edit technical specifications
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
