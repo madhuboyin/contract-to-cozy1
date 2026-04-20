@@ -151,6 +151,22 @@ export default function FinancialEfficiencyClient() {
     );
   }
 
+  if (!selectedPropertyId) {
+    return (
+      <div className="max-w-6xl mx-auto py-20 px-4 text-center space-y-4">
+        <div className="mx-auto w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center">
+          <DollarSign className="h-8 w-8 text-emerald-600" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Select a property to see savings</h2>
+        <p className="text-sm text-slate-500">Add or select a property to unlock AI-powered savings analysis, hidden asset matching, and equity insights.</p>
+        <button onClick={() => router.push('/dashboard/properties')} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
+          <ArrowRight className="h-4 w-4" />
+          Go to My Properties
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-20 px-4 md:px-0">
       {/* Header */}

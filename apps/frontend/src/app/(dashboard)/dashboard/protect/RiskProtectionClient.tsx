@@ -133,6 +133,22 @@ export default function RiskProtectionClient() {
     coverageAnalysisQuery.data?.exists ? coverageAnalysisQuery.data.analysis : null;
   const cvVerdict = verdictLabel(coverageAnalysis?.overallVerdict);
 
+  if (!selectedPropertyId) {
+    return (
+      <div className="max-w-6xl mx-auto py-20 px-4 text-center space-y-4">
+        <div className="mx-auto w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
+          <Shield className="h-8 w-8 text-slate-400" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Select a property to see risk data</h2>
+        <p className="text-sm text-slate-500">Add or select a property to unlock risk scoring, coverage analysis, recalls, and active incident tracking.</p>
+        <button onClick={() => router.push('/dashboard/properties')} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white hover:bg-brand-700">
+          <ArrowRight className="h-4 w-4" />
+          Go to My Properties
+        </button>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">

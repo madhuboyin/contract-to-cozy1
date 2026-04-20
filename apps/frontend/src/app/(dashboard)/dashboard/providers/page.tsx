@@ -18,6 +18,7 @@ import {
   normalizeProviderCategoryForSearch,
   PROVIDER_SEARCH_CATEGORY_OPTIONS,
 } from '@/lib/config/serviceCategoryMapping';
+import { track } from '@/lib/analytics/events';
 import {
   ActionPriorityRow,
   BottomSafeAreaReserve,
@@ -424,6 +425,11 @@ export default function ProvidersPage() {
 
         if (response.success && response.data) {
           setProviders(response.data.providers);
+          track('provider_searched', {
+            category: currentFilters.category === 'ALL' ? 'ALL' : (currentFilters.category || 'ALL'),
+            location: currentFilters.zipCode || 'any',
+            resultCount: response.data.providers.length,
+          });
         } else {
           const errorMessage = 'message' in response ? response.message : 'Failed to search providers.';
           setError(errorMessage || 'Failed to search providers.');

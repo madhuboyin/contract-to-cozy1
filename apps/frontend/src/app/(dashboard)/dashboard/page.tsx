@@ -424,6 +424,15 @@ export default function DashboardPage() {
     }
   }, [user, selectedPropertyId]);
   
+  const hasTrackedFirstView = React.useRef(false);
+  useEffect(() => {
+    if (!userLoading && user && effectiveSelectedPropertyId && !hasTrackedFirstView.current) {
+      hasTrackedFirstView.current = true;
+      track('dashboard_first_view', { propertyId: effectiveSelectedPropertyId });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userLoading, user, effectiveSelectedPropertyId]);
+
   useEffect(() => {
     if (!userLoading && user) {
       fetchDashboardData();
@@ -503,6 +512,10 @@ export default function DashboardPage() {
 
   if (userLoading || data.isLoading || !redirectChecked) {
     return <DashboardRouteState state="loading" title="Preparing your command center" description="Syncing your latest home intelligence..." />;
+  }
+
+  if (data.error) {
+    return <DashboardRouteState state="error" title="Could not load dashboard" description={data.error} />;
   }
 
   if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;

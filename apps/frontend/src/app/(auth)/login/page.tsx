@@ -2,18 +2,22 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import LoginSuccessTransition from '@/components/auth/LoginSuccessTransition';
 import { UserRole } from '@/types';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const sessionExpired = searchParams.get('reason') === 'session_expired';
+  const [error, setError] = useState<string | null>(
+    sessionExpired ? 'Your session expired. Please sign in again.' : null
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionRole, setTransitionRole] = useState<UserRole>('HOMEOWNER');

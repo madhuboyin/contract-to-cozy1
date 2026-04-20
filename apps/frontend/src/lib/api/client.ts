@@ -301,7 +301,7 @@ class APIClient {
           this.processFailedQueue(error, null);
           this.removeToken();
           if (typeof window !== 'undefined') {
-            window.location.href = '/login';
+            window.location.href = '/login?reason=session_expired';
           }
           throw error;
         }
