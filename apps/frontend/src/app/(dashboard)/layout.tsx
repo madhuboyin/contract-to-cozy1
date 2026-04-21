@@ -395,12 +395,17 @@ function MobileDrawerNav({ user }: { user: User | null }) {
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null; loading: boolean };
   const router = useRouter();
+  const pathname = usePathname();
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const bannerFetchedRef = React.useRef(false);
 
   useEffect(() => {
     if (bannerFetchedRef.current) return;
+    if (pathname === '/dashboard') {
+      setShowBanner(false);
+      return;
+    }
 
     const fetchPropertyCount = async () => {
       if (!user) { setShowBanner(false); return; }
@@ -423,7 +428,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     };
 
     if (!loading && user) fetchPropertyCount();
-  }, [user, loading]);
+  }, [user, loading, pathname]);
 
   useEffect(() => {
     if (!loading && user?.role === 'PROVIDER') {

@@ -90,6 +90,10 @@ function renderSignalBadge(n: Notification) {
 export default function NotificationsPage() {
   const { notifications, markRead, markAllRead, refresh } = useNotifications();
 
+  React.useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   const sortedNotifications = [...notifications].sort((a, b) => {
     if (a.isRead === b.isRead) {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

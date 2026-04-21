@@ -51,6 +51,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
+  const refreshUnreadCount = async () => {
+    try {
+      const countResult = await api.getUnreadNotificationCount();
+      if (countResult.success) {
+        setUnreadCount(countResult.data.count);
+      }
+    } catch (error) {
+      console.error('Failed to fetch unread count', error);
+    }
+  };
 
   const refresh = async () => {
     // Use Promise.allSettled so one failing call doesn't prevent the other
@@ -107,7 +117,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
-    refresh();
+    refreshUnreadCount();
   }, []);
 
   return (

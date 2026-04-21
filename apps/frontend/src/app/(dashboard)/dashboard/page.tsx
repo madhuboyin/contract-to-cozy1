@@ -308,6 +308,7 @@ export default function DashboardPage() {
     isLoading: true,
     error: null,
   });
+  const lastKnownPropertiesRef = React.useRef<ScoredProperty[]>([]);
   
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const { celebration, celebrate, dismiss } = useCelebration(
@@ -369,21 +370,47 @@ export default function DashboardPage() {
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
     
-    setData(prev => ({ ...prev, isLoading: true }));
+    setData(prev => ({ ...prev, isLoading: true, error: null }));
     setRedirectChecked(false);
     
     try {
-      const propertiesRes = await api.getProperties();
-      const properties = propertiesRes.success ? propertiesRes.data.properties : [];
-      const propId = selectedPropertyId || properties[0]?.id;
+      let scoredProperties = lastKnownPropertiesRef.current;
+
+      try {
+        const propertiesRes = await api.getProperties();
+        const properties = propertiesRes.success ? propertiesRes.data.properties : [];
+        scoredProperties = properties.map(p => ({
+          ...p,
+          healthScore: (p as unknown as ScoredProperty).healthScore || {
+            totalScore: 0,
+            insights: [],
+          },
+        })) as ScoredProperty[];
+        lastKnownPropertiesRef.current = scoredProperties;
+      } catch (error) {
+        if (scoredProperties.length === 0) {
+          throw error;
+        }
+      }
+
+      const propId = selectedPropertyId || scoredProperties[0]?.id;
 
       const [bookingsRes, checklistRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
-        api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
-        api.getHomeBuyerChecklist().then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null })).catch(() => ({ success: false, data: null })),
-        api.listWarranties(),
-        api.listInsurancePolicies(),
-        propId ? listIncidents({ propertyId: propId, limit: 10 }) : Promise.resolve({ items: [] }),
-        propId ? listInventoryItems(propId, {}) : Promise.resolve([]),
+        api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' })
+          .catch(() => ({ success: false, data: { bookings: [] } })),
+        api.getHomeBuyerChecklist()
+          .then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null }))
+          .catch(() => ({ success: false, data: null })),
+        api.listWarranties()
+          .catch(() => ({ success: false, data: { warranties: [] } })),
+        api.listInsurancePolicies()
+          .catch(() => ({ success: false, data: { policies: [] } })),
+        propId
+          ? listIncidents({ propertyId: propId, limit: 10 }).catch(() => ({ items: [] }))
+          : Promise.resolve({ items: [] }),
+        propId
+          ? listInventoryItems(propId, {}).catch(() => [])
+          : Promise.resolve([]),
       ]);
   
       const bookings = bookingsRes.success ? bookingsRes.data.bookings : [];
@@ -392,14 +419,6 @@ export default function DashboardPage() {
       const policies = policiesRes.success ? policiesRes.data.policies : [];
       const activeIncidents = (incidentsRes as any).items || [];
       const inventoryItems = inventoryRes || [];
-  
-      const scoredProperties = properties.map(p => ({
-        ...p,
-        healthScore: (p as unknown as ScoredProperty).healthScore || {
-          totalScore: 0,
-          insights: [],
-        },
-      })) as ScoredProperty[];
   
       const urgentActions = consolidateUrgentActions(
         scoredProperties,
@@ -427,7 +446,12 @@ export default function DashboardPage() {
   
     } catch (error) {
       console.error('❌ Dashboard: Error fetching data:', error);
-      setData(prev => ({ ...prev, isLoading: false, error: 'Failed to load dashboard data' }));
+      const message =
+        error instanceof Error &&
+        error.message.toLowerCase().includes('too many requests')
+          ? 'Too many requests right now. Please wait a minute and refresh.'
+          : 'Failed to load dashboard data';
+      setData(prev => ({ ...prev, isLoading: false, error: message }));
     } finally {
       setRedirectChecked(true);
     }

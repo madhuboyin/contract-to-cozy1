@@ -84,8 +84,36 @@ function rateLimitKey(req: Request): string {
   return `ip:${ipKeyGenerator(req.ip ?? req.socket?.remoteAddress ?? 'unknown')}`;
 }
 
-const apiWindowMs = Number(process.env.API_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
-const apiMaxRequests = Number(process.env.API_RATE_LIMIT_MAX || 2000);
+const apiWindowMs = Number(
+  process.env.API_RATE_LIMIT_WINDOW_MS ||
+  process.env.RATE_LIMIT_WINDOW_MS ||
+  15 * 60 * 1000
+);
+const apiMaxRequests = Number(
+  process.env.API_RATE_LIMIT_MAX ||
+  process.env.RATE_LIMIT_MAX_REQUESTS ||
+  2000
+);
+const authenticatedApiMaxRequests = Number(
+  process.env.API_RATE_LIMIT_AUTH_MAX ||
+  Math.max(apiMaxRequests, 2000)
+);
+
+function resolveApiRateLimitMax(req: Request): number {
+  const token = bearerToken(req);
+  if (!token) return apiMaxRequests;
+
+  try {
+    const payload = verifyAccessToken(token);
+    if (payload.userId) {
+      return authenticatedApiMaxRequests;
+    }
+  } catch {
+    // Invalid/expired token: use unauthenticated max.
+  }
+
+  return apiMaxRequests;
+}
 
 /**
  * Rate limiter for authentication endpoints (/login, /register, /refresh).
@@ -133,7 +161,7 @@ export const strictRateLimiter = rateLimit({
  */
 export const apiRateLimiter = rateLimit({
   windowMs: apiWindowMs,
-  max: apiMaxRequests,
+  max: resolveApiRateLimitMax,
   keyGenerator: rateLimitKey,
   skip: (req) => req.method === 'OPTIONS',
   store: new RedisRateLimitStore(apiWindowMs),
