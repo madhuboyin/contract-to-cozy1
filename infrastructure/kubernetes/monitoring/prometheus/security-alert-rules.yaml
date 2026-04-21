@@ -1,0 +1,70 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: production-security-alert-rules
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: contract-to-cozy-security
+      rules:
+        - alert: SecurityTokenReplayDetected
+          expr: sum(increase(security_token_reuse_total[5m])) > 0
+          for: 2m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: Refresh token replay detected
+            description: One or more refresh-token replay events were observed in the last 5 minutes.
+
+        - alert: SecurityAuth401Spike
+          expr: sum(increase(security_auth_denials_total{status_code="401"}[5m])) > 25
+          for: 10m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: 401 denial spike
+            description: Authentication denials (401) exceeded 25 events over 5 minutes for at least 10 minutes.
+
+        - alert: SecurityAuth403Spike
+          expr: sum(increase(security_auth_denials_total{status_code="403"}[5m])) > 20
+          for: 10m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: 403 denial spike
+            description: Authorization denials (403) exceeded 20 events over 5 minutes for at least 10 minutes.
+
+        - alert: SecurityPropertyScopeDenialsSpike
+          expr: sum(increase(security_property_scope_denials_total[10m])) > 15
+          for: 10m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: Property-scope denial spike
+            description: Property-scope denials exceeded 15 events over 10 minutes.
+
+        - alert: SecurityMfaFailuresSpike
+          expr: sum(increase(security_mfa_failures_total[10m])) > 20
+          for: 10m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: MFA failure spike
+            description: MFA failures exceeded 20 events over 10 minutes.
+
+        - alert: SecurityMfaAccountLockoutsDetected
+          expr: sum(increase(security_mfa_failures_total{reason="account_locked"}[10m])) > 0
+          for: 2m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: MFA account lockouts detected
+            description: At least one MFA account lockout was observed in the last 10 minutes.
