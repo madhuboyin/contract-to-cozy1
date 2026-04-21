@@ -14,6 +14,7 @@ import {
   FileText,
   Loader2,
   Plus,
+  Search,
   ShieldCheck,
   Upload,
   Zap,
@@ -511,6 +512,360 @@ function TimelineTab({ propertyId }: { propertyId: string }) {
   );
 }
 
+// ─── Search Tab ───────────────────────────────────────────────────────────────
+
+type VaultSearchSource = 'all' | 'assets' | 'documents' | 'coverage' | 'timeline';
+
+type VaultSearchResult = {
+  id: string;
+  source: Exclude<VaultSearchSource, 'all'>;
+  title: string;
+  subtitle: string;
+  href?: string;
+  external?: boolean;
+  item?: InventoryItem;
+};
+
+const SEARCH_SOURCE_FILTERS: Array<{
+  value: VaultSearchSource;
+  label: string;
+}> = [
+  { value: 'all', label: 'All' },
+  { value: 'assets', label: 'Assets' },
+  { value: 'documents', label: 'Documents' },
+  { value: 'coverage', label: 'Coverage' },
+  { value: 'timeline', label: 'Timeline' },
+];
+
+function safeFormatDateLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return format(parseISO(value), 'MMM d, yyyy');
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSearchText(parts: Array<string | number | null | undefined>): string {
+  return parts
+    .filter(Boolean)
+    .map((part) => String(part).toLowerCase())
+    .join(' ');
+}
+
+function matchesSearchText(haystack: string, query: string): boolean {
+  if (!query) return true;
+  const tokens = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return tokens.every((token) => haystack.includes(token));
+}
+
+function SearchTab({
+  propertyId,
+  onItemClick,
+}: {
+  propertyId: string;
+  onItemClick: (item: InventoryItem) => void;
+}) {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<VaultSearchSource>('all');
+
+  const itemsQ = useQuery({
+    queryKey: ['vault-search-items', propertyId],
+    queryFn: () => listInventoryItems(propertyId, {}),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const docsQ = useQuery({
+    queryKey: ['vault-search-docs', propertyId],
+    queryFn: () => api.listDocuments(propertyId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const warrantiesQ = useQuery({
+    queryKey: ['vault-search-warranties', propertyId],
+    queryFn: () => api.listWarranties(propertyId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const eventsQ = useQuery({
+    queryKey: ['vault-search-events', propertyId],
+    queryFn: () => api.get<{ events: any[] }>(`/api/properties/${propertyId}/home-events?limit=60`),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const gapsQ = useQuery({
+    queryKey: ['vault-search-coverage-gaps', propertyId],
+    queryFn: () => api.getInsuranceProtectionGap(propertyId),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const loading =
+    itemsQ.isLoading ||
+    docsQ.isLoading ||
+    warrantiesQ.isLoading ||
+    eventsQ.isLoading ||
+    gapsQ.isLoading;
+
+  const items = React.useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
+  const docs = React.useMemo(
+    () => (docsQ.data?.success ? docsQ.data.data.documents : []),
+    [docsQ.data],
+  );
+  const warranties = React.useMemo(
+    () => (warrantiesQ.data?.success ? warrantiesQ.data.data.warranties : []),
+    [warrantiesQ.data],
+  );
+  const events: any[] = React.useMemo(
+    () => ((eventsQ.data as any)?.data?.events ?? []),
+    [eventsQ.data],
+  );
+  const coverageGaps: any[] = React.useMemo(
+    () =>
+      gapsQ.data?.success && Array.isArray((gapsQ.data.data as any)?.gaps)
+        ? ((gapsQ.data.data as any).gaps as any[])
+        : [],
+    [gapsQ.data],
+  );
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const results = React.useMemo(() => {
+    const allResults: VaultSearchResult[] = [];
+
+    for (const item of items) {
+      const haystack = normalizeSearchText([
+        item.name,
+        item.brand,
+        item.model,
+        item.serialNo,
+        item.category,
+        item.room?.name,
+        item.notes,
+      ]);
+
+      if (!matchesSearchText(haystack, normalizedQuery)) continue;
+      allResults.push({
+        id: `asset:${item.id}`,
+        source: 'assets',
+        title: item.name || 'Unnamed Asset',
+        subtitle: [item.brand, item.model, item.room?.name].filter(Boolean).join(' · ') || 'Asset record',
+        item,
+      });
+    }
+
+    for (const doc of docs) {
+      const createdLabel = safeFormatDateLabel(doc.createdAt);
+      const haystack = normalizeSearchText([
+        doc.name,
+        doc.documentType,
+        doc.type,
+        doc.summary,
+        createdLabel,
+      ]);
+
+      if (!matchesSearchText(haystack, normalizedQuery)) continue;
+      allResults.push({
+        id: `doc:${doc.id}`,
+        source: 'documents',
+        title: doc.name || 'Untitled Document',
+        subtitle: [doc.documentType?.replace(/_/g, ' '), createdLabel].filter(Boolean).join(' · ') || 'Document',
+        href: doc.fileUrl,
+        external: true,
+      });
+    }
+
+    for (const warranty of warranties) {
+      const expiryLabel = safeFormatDateLabel(warranty.expiryDate);
+      const haystack = normalizeSearchText([
+        warranty.providerName,
+        warranty.category,
+        expiryLabel,
+      ]);
+
+      if (!matchesSearchText(haystack, normalizedQuery)) continue;
+      allResults.push({
+        id: `warranty:${warranty.id}`,
+        source: 'coverage',
+        title: warranty.providerName || 'Coverage Record',
+        subtitle:
+          [warranty.category?.replace(/_/g, ' '), expiryLabel ? `expires ${expiryLabel}` : null]
+            .filter(Boolean)
+            .join(' · ') || 'Coverage',
+        href: `/dashboard/properties/${propertyId}/vault?tab=coverage`,
+      });
+    }
+
+    for (let index = 0; index < coverageGaps.length; index += 1) {
+      const gap = coverageGaps[index];
+      const haystack = normalizeSearchText([
+        gap.title,
+        gap.description,
+        gap.itemCategory,
+        gap.itemName,
+      ]);
+
+      if (!matchesSearchText(haystack, normalizedQuery)) continue;
+      allResults.push({
+        id: `gap:${gap.id || gap.itemName || index}`,
+        source: 'coverage',
+        title: gap.title || 'Coverage Gap',
+        subtitle: gap.description || 'Uncovered item detected',
+        href: `/dashboard/properties/${propertyId}/vault?tab=coverage`,
+      });
+    }
+
+    for (const event of events) {
+      const eventDate = safeFormatDateLabel(event.eventDate || event.createdAt);
+      const haystack = normalizeSearchText([
+        event.title,
+        event.eventType,
+        event.description,
+        eventDate,
+      ]);
+
+      if (!matchesSearchText(haystack, normalizedQuery)) continue;
+      allResults.push({
+        id: `event:${event.id || event.title}`,
+        source: 'timeline',
+        title: event.title || event.eventType?.replace(/_/g, ' ') || 'Home Event',
+        subtitle: [event.description, eventDate].filter(Boolean).join(' · ') || 'Timeline event',
+        href: `/dashboard/properties/${propertyId}/vault?tab=timeline`,
+      });
+    }
+
+    const filteredBySource =
+      sourceFilter === 'all'
+        ? allResults
+        : allResults.filter((result) => result.source === sourceFilter);
+
+    if (!normalizedQuery) {
+      return filteredBySource.slice(0, 20);
+    }
+
+    return filteredBySource.slice(0, 60);
+  }, [items, docs, warranties, coverageGaps, events, normalizedQuery, sourceFilter, propertyId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-5 w-5 animate-spin text-brand-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-card p-3.5">
+        <label htmlFor="vault-global-search" className="mb-2 block text-xs font-semibold text-foreground">
+          Search Vault
+        </label>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            id="vault-global-search"
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search assets, documents, coverage, timeline..."
+            className="h-10 w-full rounded-lg border border-input bg-background pl-9 pr-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {SEARCH_SOURCE_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              onClick={() => setSourceFilter(filter.value)}
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors',
+                sourceFilter === filter.value
+                  ? 'border-brand-200 bg-brand-50 text-brand-700'
+                  : 'border-border bg-background text-muted-foreground hover:bg-muted'
+              )}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {results.length === 0 ? (
+        <EmptyStateCard
+          title={normalizedQuery ? 'No matches found' : 'Start searching your Vault'}
+          description={
+            normalizedQuery
+              ? 'Try a broader term like appliance name, policy, receipt, or event.'
+              : 'Search across assets, documents, coverage records, and timeline events in one place.'
+          }
+        />
+      ) : (
+        <div className="space-y-2">
+          {results.map((result) => {
+            const sourceLabel = result.source.charAt(0).toUpperCase() + result.source.slice(1);
+
+            const content = (
+              <>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium text-foreground">{result.title}</p>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      {sourceLabel}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{result.subtitle}</p>
+                </div>
+                <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/60" />
+              </>
+            );
+
+            if (result.item) {
+              return (
+                <button
+                  key={result.id}
+                  onClick={() => onItemClick(result.item as InventoryItem)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/40"
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            if (result.external && result.href) {
+              return (
+                <a
+                  key={result.id}
+                  href={result.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-brand-200 hover:bg-brand-50/40"
+                >
+                  {content}
+                </a>
+              );
+            }
+
+            return (
+              <button
+                key={result.id}
+                onClick={() => {
+                  if (result.href) router.push(result.href);
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/40"
+              >
+                {content}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Asset Detail Sheet ───────────────────────────────────────────────────────
 
 function AssetDetailSheet({
@@ -841,7 +1196,7 @@ function VaultKpiStrip({ propertyId }: { propertyId: string }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const VALID_TABS = ['assets', 'documents', 'coverage', 'timeline'] as const;
+const VALID_TABS = ['search', 'assets', 'documents', 'coverage', 'timeline'] as const;
 type VaultTab = (typeof VALID_TABS)[number];
 
 export default function VaultPage() {
@@ -886,6 +1241,9 @@ export default function VaultPage() {
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="w-full rounded-xl bg-muted/60 p-1">
+            <TabsTrigger value="search" className="flex-1 rounded-lg text-xs">
+              Search
+            </TabsTrigger>
             <TabsTrigger value="assets" className="flex-1 rounded-lg text-xs">
               Assets
             </TabsTrigger>
@@ -901,6 +1259,10 @@ export default function VaultPage() {
           </TabsList>
 
           <div className="mt-4">
+            <TabsContent value="search" className="m-0">
+              <SearchTab propertyId={propertyId} onItemClick={setSelectedItem} />
+            </TabsContent>
+
             <TabsContent value="assets" className="m-0">
               <AssetsTab
                 propertyId={propertyId}
