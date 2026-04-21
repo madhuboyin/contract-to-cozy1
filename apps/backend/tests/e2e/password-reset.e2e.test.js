@@ -17,6 +17,9 @@ function createHarness(stateOverrides = {}) {
   const state = {
     users: [],
     refreshTokenSessions: [],
+    metricCalls: {
+      tokenReuse: [],
+    },
     ...stateOverrides,
   };
 
@@ -115,6 +118,20 @@ function createHarness(stateOverrides = {}) {
     },
   };
 
+  const metricsPath = require.resolve('../../src/lib/metrics.ts');
+  require.cache[metricsPath] = {
+    id: metricsPath,
+    filename: metricsPath,
+    loaded: true,
+    exports: {
+      securityTokenReuseTotal: {
+        inc: (labels) => {
+          state.metricCalls.tokenReuse.push(labels);
+        },
+      },
+    },
+  };
+
   const servicePath = require.resolve('../../src/services/auth.service.ts');
   delete require.cache[servicePath];
   const { AuthService } = require('../../src/services/auth.service.ts');
@@ -193,4 +210,41 @@ test('forgot -> reset -> login-after-reset end-to-end flow works and old session
   } finally {
     process.env.NODE_ENV = oldEnv;
   }
+});
+
+test('refresh-token replay increments token reuse security metric', async () => {
+  const { hashPassword } = require('../../src/utils/password.util.ts');
+  const { authService, state } = createHarness({
+    users: [
+      {
+        id: 'user-1',
+        email: 'replay-user@example.com',
+        firstName: 'Replay',
+        lastName: 'User',
+        role: 'HOMEOWNER',
+        status: 'ACTIVE',
+        emailVerified: true,
+        mfaEnabled: false,
+        tokenVersion: 0,
+        passwordHash: await hashPassword('ReplayPass!123'),
+        homeownerProfile: { segment: 'EXISTING_OWNER' },
+      },
+    ],
+  });
+
+  const login = await authService.login({
+    email: 'replay-user@example.com',
+    password: 'ReplayPass!123',
+  });
+
+  const oldRefreshToken = login.refreshToken;
+  const refreshed = await authService.refreshToken(oldRefreshToken);
+  assert.equal(typeof refreshed.refreshToken, 'string');
+
+  await assert.rejects(
+    () => authService.refreshToken(oldRefreshToken),
+    (error) => error && error.code === 'TOKEN_REPLAY_DETECTED',
+  );
+
+  assert.deepEqual(state.metricCalls.tokenReuse, [{ surface: 'refresh_token' }]);
 });

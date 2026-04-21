@@ -29,6 +29,7 @@ import {
 
 import { prisma } from '../lib/prisma';
 import { logger, auditLog } from '../lib/logger';
+import { securityTokenReuseTotal } from '../lib/metrics';
 
 export class AuthService {
   private async issueAuthTokens(payload: JWTPayload): Promise<{ accessToken: string; refreshToken: string }> {
@@ -358,6 +359,7 @@ export class AuthService {
       }
 
       if (existing.tokenHash !== incomingTokenHash) {
+        securityTokenReuseTotal.inc({ surface: 'refresh_token' });
         throw new APIError('Refresh token already used. Please log in again.', 401, 'TOKEN_REPLAY_DETECTED');
       }
 

@@ -9,11 +9,19 @@
 import Redis from 'ioredis';
 import { logger } from './logger';
 
+// Robust parsing for Redis connection parameters
+// Handles Kubernetes service environment variables that might collide (e.g. REDIS_PORT=tcp://...)
+const rawPort = process.env.REDIS_PORT || '6379';
+const redisPort = /^\d+$/.test(rawPort) ? parseInt(rawPort, 10) : 6379;
+
+const rawDb = process.env.REDIS_DB || '0';
+const redisDb = /^\d+$/.test(rawDb) ? parseInt(rawDb, 10) : 0;
+
 const client = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  port: redisPort,
   password: process.env.REDIS_PASSWORD || undefined,
-  db: parseInt(process.env.REDIS_DB || '0', 10),
+  db: redisDb,
   // Reconnect automatically on connection loss
   retryStrategy: (times) => Math.min(times * 200, 5_000),
   // Don't block the event loop while reconnecting

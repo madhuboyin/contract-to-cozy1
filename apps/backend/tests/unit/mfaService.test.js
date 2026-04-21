@@ -18,6 +18,8 @@ function createHarness(overrides = {}) {
     refreshSessions: [],
   };
 
+  const metricCalls = [];
+
   const prisma = {
     user: {
       findUnique: async ({ where }) => {
@@ -118,6 +120,14 @@ function createHarness(overrides = {}) {
     ...overrides.refreshUtil,
   };
 
+  const metrics = {
+    securityMfaFailuresTotal: {
+      inc: (labels) => {
+        metricCalls.push(labels);
+      },
+    },
+  };
+
   const prismaPath = require.resolve('../../src/lib/prisma.ts');
   require.cache[prismaPath] = {
     id: prismaPath,
@@ -169,6 +179,14 @@ function createHarness(overrides = {}) {
     exports: refreshUtil,
   };
 
+  const metricsPath = require.resolve('../../src/lib/metrics.ts');
+  require.cache[metricsPath] = {
+    id: metricsPath,
+    filename: metricsPath,
+    loaded: true,
+    exports: metrics,
+  };
+
   const servicePath = require.resolve('../../src/services/mfa.service.ts');
   delete require.cache[servicePath];
   const { MfaService } = require('../../src/services/mfa.service.ts');
@@ -176,6 +194,7 @@ function createHarness(overrides = {}) {
   return {
     state,
     service: new MfaService(),
+    metricCalls,
   };
 }
 
@@ -245,3 +264,21 @@ test('disable clears MFA secret and stored recovery codes', async () => {
   assert.equal(state.recoveryCodes.length, 0);
 });
 
+test('verifyChallenge emits metric for invalid challenge token', async () => {
+  const { service, metricCalls } = createHarness({
+    jwtUtil: {
+      verifyMfaChallengeToken: () => {
+        throw new Error('invalid token');
+      },
+    },
+  });
+
+  await assert.rejects(
+    () => service.verifyChallenge('invalid-token', '123456'),
+    (error) => error && error.code === 'INVALID_MFA_TOKEN',
+  );
+
+  assert.deepEqual(metricCalls, [
+    { stage: 'challenge_totp', reason: 'invalid_or_expired_challenge_token' },
+  ]);
+});

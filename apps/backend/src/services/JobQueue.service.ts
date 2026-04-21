@@ -17,11 +17,14 @@ import { logger } from '../lib/logger';
 // -----------------------------------------------------------------------------
 // Shared Redis Connection Configuration
 // -----------------------------------------------------------------------------
+const rawDb = process.env.REDIS_DB || '0';
+const redisDb = /^\d+$/.test(rawDb) ? parseInt(rawDb, 10) : 0;
+
 export const connection = {
   host: process.env.REDIS_HOST || 'localhost',
   port: 6379,
   password: process.env.REDIS_PASSWORD,
-  db: parseInt(process.env.REDIS_DB || '0', 10),
+  db: redisDb,
 };
 
 // -----------------------------------------------------------------------------

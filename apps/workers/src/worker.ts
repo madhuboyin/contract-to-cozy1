@@ -69,14 +69,17 @@ interface PropertyIntelligenceJobPayload {
 
 // Redis configuration
 const workerPort = 6379;
-const redisHost = (process.env.REDIS_HOST && process.env.REDIS_HOST.trim() !== '') 
-    ? process.env.REDIS_HOST 
+const redisHost = (process.env.REDIS_HOST && process.env.REDIS_HOST.trim() !== '')
+    ? process.env.REDIS_HOST
     : 'redis.production.svc.cluster.local';
+
+const rawDb = process.env.REDIS_DB || '0';
+const redisDb = /^\d+$/.test(rawDb) ? parseInt(rawDb, 10) : 0;
 
 const redisConnection = {
   host: redisHost,
-  port: workerPort, 
-  db: parseInt(process.env.REDIS_DB || '0', 10),
+  port: workerPort,
+  db: redisDb,
   password: process.env.REDIS_PASSWORD,
 };
 

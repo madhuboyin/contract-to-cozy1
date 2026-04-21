@@ -4,7 +4,8 @@ const globalForPrisma = global as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-const CONNECTION_LIMIT = parseInt(process.env.PRISMA_CONNECTION_LIMIT || '5', 10);
+const rawConnectionLimit = process.env.PRISMA_CONNECTION_LIMIT || '5';
+const CONNECTION_LIMIT = /^\d+$/.test(rawConnectionLimit) ? parseInt(rawConnectionLimit, 10) : 5;
 
 function buildDatasourceUrl(): string | undefined {
   const url = process.env.DATABASE_URL;

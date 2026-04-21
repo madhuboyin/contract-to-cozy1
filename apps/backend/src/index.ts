@@ -141,7 +141,8 @@ const app = express();
 
 // Trust proxy for Cloudflare Tunnel
 app.set('trust proxy', 1);
-const PORT = process.env.PORT || 8080;
+const rawPort = process.env.PORT || '8080';
+const PORT = /^\d+$/.test(rawPort) ? parseInt(rawPort, 10) : 8080;
 
 
 // =============================================================================

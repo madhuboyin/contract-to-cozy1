@@ -5,6 +5,7 @@ import { AuthRequest, UserRole } from '../types/auth.types';
 import { verifyAccessToken } from '../utils/jwt.util';
 import { prisma } from '../lib/prisma';
 import { auditLog } from '../lib/logger';
+import { securityAuthDenialsTotal } from '../lib/metrics';
 
 // NOTE: AuthRequest type is defined in '../types/auth.types' and is assumed
 // to have been updated to include homeownerProfile and providerProfile on req.user.
@@ -27,6 +28,7 @@ async function _authenticate(
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       auditLog('AUTH_NO_TOKEN', null, { ip: req.ip, path: req.path, method: req.method });
+      securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '401', code: 'NO_TOKEN' });
       res.status(401).json({
         success: false,
         error: {
@@ -61,6 +63,7 @@ async function _authenticate(
 
     if (!user) {
       auditLog('AUTH_USER_NOT_FOUND', decoded.userId, { ip: req.ip, path: req.path, method: req.method });
+      securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '401', code: 'USER_NOT_FOUND' });
       res.status(401).json({
         success: false,
         error: {
@@ -77,6 +80,7 @@ async function _authenticate(
     const tokenVer = decoded.tokenVersion ?? 0;
     if (tokenVer !== user.tokenVersion) {
       auditLog('AUTH_INVALID_TOKEN', user.id, { ip: req.ip, path: req.path, method: req.method, reason: 'token_version_mismatch' });
+      securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '401', code: 'TOKEN_REVOKED' });
       res.status(401).json({
         success: false,
         error: {
@@ -89,6 +93,7 @@ async function _authenticate(
 
     if (user.status === 'SUSPENDED') {
       auditLog('AUTH_ACCOUNT_SUSPENDED', user.id, { ip: req.ip, path: req.path, method: req.method });
+      securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '403', code: 'ACCOUNT_SUSPENDED' });
       res.status(403).json({
         success: false,
         error: {
@@ -101,6 +106,7 @@ async function _authenticate(
 
     if (user.status === 'INACTIVE') {
       auditLog('AUTH_ACCOUNT_INACTIVE', user.id, { ip: req.ip, path: req.path, method: req.method });
+      securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '403', code: 'ACCOUNT_INACTIVE' });
       res.status(403).json({
         success: false,
         error: {
@@ -115,6 +121,7 @@ async function _authenticate(
     // routes. Auth-flow routes (/me, /logout, /resend-verification) bypass this
     // by calling authenticateAllowUnverified instead.
     if (requireEmailVerified && !user.emailVerified) {
+      securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '403', code: 'EMAIL_NOT_VERIFIED' });
       res.status(403).json({
         success: false,
         error: {
@@ -143,6 +150,7 @@ async function _authenticate(
     next();
   } catch (error: any) {
     auditLog('AUTH_INVALID_TOKEN', null, { ip: req.ip, path: req.path, method: req.method, reason: error.name });
+    securityAuthDenialsTotal.inc({ surface: 'auth_middleware', status_code: '401', code: 'INVALID_TOKEN' });
     res.status(401).json({
       success: false,
       error: {
@@ -192,6 +200,7 @@ export const restrictToHomeowner = ( // <--- MUST have 'export' here
     req.user.role !== 'HOMEOWNER' || 
     !req.user.homeownerProfile?.id // Checks if the profile ID is present
   ) {
+    securityAuthDenialsTotal.inc({ surface: 'homeowner_guard', status_code: '403', code: 'HOMEOWNER_PROFILE_REQUIRED' });
     res.status(403).json({ 
       success: false, 
       error: {
@@ -212,6 +221,7 @@ export const restrictToHomeowner = ( // <--- MUST have 'export' here
 export const requireRole = (...roles: UserRole[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {
+      securityAuthDenialsTotal.inc({ surface: 'role_guard', status_code: '401', code: 'AUTH_REQUIRED' });
       res.status(401).json({
         success: false,
         error: {
@@ -230,6 +240,7 @@ export const requireRole = (...roles: UserRole[]) => {
         role: req.user.role,
         requiredRoles: roles,
       });
+      securityAuthDenialsTotal.inc({ surface: 'role_guard', status_code: '403', code: 'FORBIDDEN' });
       res.status(403).json({
         success: false,
         error: {
@@ -253,6 +264,7 @@ export const requireEmailVerification = (
   next: NextFunction
 ): void => {
   if (!req.user) {
+    securityAuthDenialsTotal.inc({ surface: 'email_verification_guard', status_code: '401', code: 'AUTH_REQUIRED' });
     res.status(401).json({
       success: false,
       error: {
@@ -264,6 +276,7 @@ export const requireEmailVerification = (
   }
 
   if (!req.user.emailVerified) {
+    securityAuthDenialsTotal.inc({ surface: 'email_verification_guard', status_code: '403', code: 'EMAIL_NOT_VERIFIED' });
     res.status(403).json({
       success: false,
       error: {
@@ -294,6 +307,7 @@ export const requireMfa = (
   next: NextFunction
 ): void => {
   if (!req.user) {
+    securityAuthDenialsTotal.inc({ surface: 'mfa_guard', status_code: '401', code: 'AUTH_REQUIRED' });
     res.status(401).json({
       success: false,
       error: { message: 'Authentication required', code: 'AUTH_REQUIRED' },
@@ -303,6 +317,7 @@ export const requireMfa = (
 
   // Only enforce MFA for ADMIN role
   if (req.user.role === 'ADMIN' && req.user.mfaEnabled && !req.user.mfaVerified) {
+    securityAuthDenialsTotal.inc({ surface: 'mfa_guard', status_code: '403', code: 'MFA_REQUIRED' });
     res.status(403).json({
       success: false,
       error: {

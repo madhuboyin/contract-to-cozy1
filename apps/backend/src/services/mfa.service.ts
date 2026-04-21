@@ -17,10 +17,15 @@ import {
   verifyMfaChallengeToken,
 } from '../utils/jwt.util';
 import { issueRefreshSessionTokenPair } from '../utils/refresh-session.util';
+import { securityMfaFailuresTotal } from '../lib/metrics';
 
 type TokenPair = { accessToken: string; refreshToken: string };
 
 export class MfaService {
+  private recordMfaFailure(stage: string, reason: string): void {
+    securityMfaFailuresTotal.inc({ stage, reason });
+  }
+
   private async issueVerifiedSessionTokens(input: {
     userId: string;
     email: string;
@@ -124,6 +129,7 @@ export class MfaService {
 
     if (!verifyTotpCode(user.mfaSecret, code)) {
       auditLog('MFA_SETUP_FAILED', userId, { reason: 'invalid_code' });
+      this.recordMfaFailure('setup', 'invalid_totp_code');
       throw new APIError('Invalid TOTP code', 401, 'INVALID_MFA_CODE');
     }
 
@@ -176,6 +182,7 @@ export class MfaService {
 
     if (!verifyTotpCode(user.mfaSecret, code)) {
       auditLog('MFA_RECOVERY_REGEN_FAILED', userId, { reason: 'invalid_code' });
+      this.recordMfaFailure('regenerate_recovery_codes', 'invalid_totp_code');
       throw new APIError('Invalid TOTP code', 401, 'INVALID_MFA_CODE');
     }
 
@@ -212,6 +219,7 @@ export class MfaService {
     try {
       challengePayload = verifyMfaChallengeToken(mfaToken);
     } catch {
+      this.recordMfaFailure('challenge_totp', 'invalid_or_expired_challenge_token');
       throw new APIError('Invalid or expired MFA challenge token', 401, 'INVALID_MFA_TOKEN');
     }
 
@@ -223,6 +231,7 @@ export class MfaService {
     if (failCount >= MFA_MAX_FAILURES) {
       const ttl = await redis.ttl(lockoutKey);
       auditLog('MFA_ACCOUNT_LOCKED', userId, { failCount, ttlSeconds: ttl });
+      this.recordMfaFailure('challenge_totp', 'account_locked');
       throw new APIError(
         `Account temporarily locked after ${MFA_MAX_FAILURES} failed MFA attempts. Try again in ${Math.ceil(ttl / 60)} minutes.`,
         429,
@@ -247,9 +256,11 @@ export class MfaService {
         failCount: newCount,
         lockedOut: newCount >= MFA_MAX_FAILURES,
       });
+      this.recordMfaFailure('challenge_totp', 'invalid_totp_code');
 
       if (newCount >= MFA_MAX_FAILURES) {
         auditLog('MFA_ACCOUNT_LOCKED', userId, { failCount: newCount });
+        this.recordMfaFailure('challenge_totp', 'account_locked');
         throw new APIError(
           `Account temporarily locked after ${MFA_MAX_FAILURES} failed MFA attempts. Try again in 15 minutes.`,
           429,
@@ -284,6 +295,7 @@ export class MfaService {
     try {
       challengePayload = verifyMfaChallengeToken(mfaToken);
     } catch {
+      this.recordMfaFailure('challenge_recovery', 'invalid_or_expired_challenge_token');
       throw new APIError('Invalid or expired MFA challenge token', 401, 'INVALID_MFA_TOKEN');
     }
 
@@ -302,6 +314,7 @@ export class MfaService {
 
     if (consumeResult.count !== 1) {
       auditLog('MFA_RECOVERY_CHALLENGE_FAILED', userId, { reason: 'invalid_recovery_code' });
+      this.recordMfaFailure('challenge_recovery', 'invalid_recovery_code');
       throw new APIError('Invalid recovery code', 401, 'INVALID_RECOVERY_CODE');
     }
 
@@ -329,6 +342,7 @@ export class MfaService {
 
     if (!verifyTotpCode(user.mfaSecret, code)) {
       auditLog('MFA_DISABLE_FAILED', userId, { reason: 'invalid_code' });
+      this.recordMfaFailure('disable', 'invalid_totp_code');
       throw new APIError('Invalid TOTP code', 401, 'INVALID_MFA_CODE');
     }
 
