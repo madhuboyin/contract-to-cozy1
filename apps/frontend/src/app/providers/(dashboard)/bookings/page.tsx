@@ -46,7 +46,7 @@ export default function ProviderBookingsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['provider-bookings'],
     queryFn: async () => {
-      const res = await api.listBookings({ limit: 200 });
+      const res = await api.listBookings({ limit: 50 });
       return res.success ? res.data.bookings : ([] as Booking[]);
     },
     staleTime: 60 * 1000,

@@ -125,6 +125,7 @@ interface ChatResponse {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const MAX_BOOKINGS_LIST_LIMIT = 50;
 
 /** Safely coerce Prisma Decimal / string values to a JS number. */
 function toNumber(value: unknown): number {
@@ -737,7 +738,12 @@ class APIClient {
   }>> {
     const queryParams = new URLSearchParams();
     if (params) {
-      Object.entries(params).forEach(([key, value]) => {
+      const normalizedParams = { ...params };
+      if (typeof normalizedParams.limit === 'number') {
+        normalizedParams.limit = Math.min(Math.max(normalizedParams.limit, 1), MAX_BOOKINGS_LIST_LIMIT);
+      }
+
+      Object.entries(normalizedParams).forEach(([key, value]) => {
         if (value !== undefined) {
           queryParams.append(key, value.toString());
         }

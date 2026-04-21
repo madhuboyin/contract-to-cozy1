@@ -42,7 +42,7 @@ export default function ProviderDashboardPage() {
   const { data: bookingsData, isLoading } = useQuery({
     queryKey: ['provider-bookings-summary'],
     queryFn: async () => {
-      const res = await api.listBookings({ limit: 100 });
+      const res = await api.listBookings({ limit: 50 });
       return res.success ? res.data.bookings : ([] as Booking[]);
     },
     staleTime: 2 * 60 * 1000,

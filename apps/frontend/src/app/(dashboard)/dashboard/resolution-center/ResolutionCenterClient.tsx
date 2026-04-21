@@ -742,7 +742,7 @@ export default function ResolutionCenterClient() {
       selectedPropertyId
         ? api.listBookings({
             propertyId: selectedPropertyId,
-            limit: 80,
+            limit: 50,
             sortBy: 'scheduledDate',
             sortOrder: 'desc',
           })
