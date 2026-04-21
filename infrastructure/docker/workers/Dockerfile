@@ -89,6 +89,7 @@ COPY apps/backend/src/services/pdf/templates/homeReportPackHtml.ts src/shared/ba
 COPY apps/backend/src/services/domainEvents/domainEvents.service.ts src/shared/backend/services/domainEvents/
 COPY apps/backend/src/lib/prisma.ts src/shared/backend/lib/
 COPY apps/backend/src/lib/logger.ts src/shared/backend/lib/
+COPY apps/backend/src/lib/requestContext.ts src/shared/backend/lib/
 COPY apps/backend/src/services/incidents/incident.service.ts src/shared/backend/services/incidents/
 COPY apps/backend/src/types/incidents.types.ts src/shared/backend/types/
 COPY apps/backend/src/services/incidents/incident.utils.ts src/shared/backend/services/incidents/
