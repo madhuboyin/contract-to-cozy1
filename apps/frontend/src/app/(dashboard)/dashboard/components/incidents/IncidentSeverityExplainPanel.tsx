@@ -170,7 +170,7 @@ export default function IncidentSeverityExplainPanel({
           )
         ) : (
           <div className="mt-2 text-sm text-slate-600">
-            No breakdown available yet. (Evaluator should populate <code>scoreBreakdown</code>.)
+            No score details are available yet. Click <b>Re-evaluate</b> to refresh this explanation.
           </div>
         )}
 
