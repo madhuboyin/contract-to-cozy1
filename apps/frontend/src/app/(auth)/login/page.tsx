@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
-import LoginSuccessTransition from '@/components/auth/LoginSuccessTransition';
+import PostLoginTransition from '@/components/system/PostLoginTransition';
 import { UserRole } from '@/types';
 
 export default function LoginPage() {
@@ -20,8 +20,6 @@ export default function LoginPage() {
   );
   const [showPassword, setShowPassword] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [transitionRole, setTransitionRole] = useState<UserRole>('HOMEOWNER');
-  const [transitionName, setTransitionName] = useState<string>('');
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [formData, setFormData] = useState({
@@ -80,7 +78,6 @@ export default function LoginPage() {
 
       if (result && 'success' in result && result.success) {
         const userRole = result.user.role as UserRole;
-        const firstName = result.user.firstName || '';
         let destination = '/dashboard';
 
         if (userRole === 'PROVIDER') {
@@ -89,8 +86,6 @@ export default function LoginPage() {
           destination = '/dashboard/knowledge-admin';
         }
 
-        setTransitionRole(userRole);
-        setTransitionName(firstName);
         setIsTransitioning(true);
 
         redirectTimerRef.current = setTimeout(() => {
@@ -123,7 +118,6 @@ export default function LoginPage() {
       }
 
       const userRole = result.user.role as UserRole;
-      const firstName = result.user.firstName || '';
       let destination = '/dashboard';
 
       if (userRole === 'PROVIDER') {
@@ -132,8 +126,6 @@ export default function LoginPage() {
         destination = '/dashboard/knowledge-admin';
       }
 
-      setTransitionRole(userRole);
-      setTransitionName(firstName);
       setIsTransitioning(true);
 
       redirectTimerRef.current = setTimeout(() => {
@@ -147,7 +139,7 @@ export default function LoginPage() {
   };
 
   if (isTransitioning) {
-    return <LoginSuccessTransition role={transitionRole} firstName={transitionName} />;
+    return <PostLoginTransition />;
   }
 
   return (

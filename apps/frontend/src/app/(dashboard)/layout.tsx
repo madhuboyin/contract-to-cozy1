@@ -4,9 +4,11 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import { AnimatePresence } from 'framer-motion';
 import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
+import PostLoginTransition from '@/components/system/PostLoginTransition';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -463,25 +465,18 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 px-4 py-6">
-        <div className="mx-auto w-full max-w-6xl animate-pulse space-y-4">
-          <div className="h-12 rounded-xl bg-gray-200" />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="h-28 rounded-xl bg-gray-200" />
-            <div className="h-28 rounded-xl bg-gray-200" />
-          </div>
-          <div className="h-64 rounded-xl bg-gray-200" />
-        </div>
-      </div>
-    );
-  }
-
   if (user?.role === 'PROVIDER') return null;
 
   return (
-    <NotificationProvider>
+    <>
+      {/* Post-login transition overlay — fades out when auth resolves */}
+      <AnimatePresence>
+        {loading && <PostLoginTransition key="dashboard-init" />}
+      </AnimatePresence>
+
+      {/* Dashboard shell — only rendered once auth is ready */}
+      {!loading && (
+      <NotificationProvider>
       <PropertyProvider>
         {/* ── Outer shell ────────────────────────────────────────────────── */}
         <div className="flex min-h-screen bg-gray-50">
@@ -567,7 +562,9 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         <DashboardCommandPalette />
         <AIChat />
       </PropertyProvider>
-    </NotificationProvider>
+      </NotificationProvider>
+      )}
+    </>
   );
 }
 
