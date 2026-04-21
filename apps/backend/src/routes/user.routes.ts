@@ -1,7 +1,15 @@
 // apps/backend/src/routes/user.routes.ts
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { addFavorite, getProfile, listFavorites, removeFavorite, updateProfile } from '../controllers/user.controller';
+import {
+  addFavorite,
+  deactivateAccount,
+  deleteAccount,
+  getProfile,
+  listFavorites,
+  removeFavorite,
+  updateProfile,
+} from '../controllers/user.controller';
 
 const router = Router();
 
@@ -95,6 +103,9 @@ router.get('/profile', authenticate, getProfile);
  *         $ref: '#/components/responses/UnauthorizedError'
  */
 router.put('/profile', authenticate, updateProfile);
+
+router.post('/account/deactivate', authenticate, deactivateAccount);
+router.delete('/account', authenticate, deleteAccount);
 
 /**
  * @swagger

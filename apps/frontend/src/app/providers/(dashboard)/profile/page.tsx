@@ -4,6 +4,8 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { api } from '@/lib/api/client';
+import { toast } from '@/components/ui/use-toast';
 import {
   BottomSafeAreaReserve,
   MobileCard,
@@ -100,11 +102,13 @@ const TABS = [
 ] as const;
 
 export default function ProviderProfilePage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['key']>('business');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo>({
     businessName: 'ABC Home Inspections',
@@ -149,6 +153,72 @@ export default function ProviderProfilePage() {
 
   const handleFileUpload = (type: 'license' | 'insurance' | 'photo') => {
     alert(`Upload for ${type} is not available in this build yet. Please contact support to add this document.`);
+  };
+
+  const handleDeactivateAccount = async () => {
+    if (isDeactivating || isDeleting) return;
+    const confirmed = window.confirm(
+      'Deactivate your account? Your provider profile will be hidden until support reactivates it.',
+    );
+    if (!confirmed) return;
+
+    setIsDeactivating(true);
+    try {
+      const response = await api.deactivateMyAccount();
+      if (!response.success) {
+        throw new Error(response.message || 'Unable to deactivate account.');
+      }
+
+      toast({
+        title: 'Account deactivated',
+        description: 'Your provider profile is now inactive.',
+      });
+      logout();
+    } catch (error: any) {
+      toast({
+        title: 'Deactivation failed',
+        description: error?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (isDeleting || isDeactivating) return;
+    const typed = window.prompt('Type DELETE to permanently remove this account.');
+    if (typed !== 'DELETE') {
+      if (typed !== null) {
+        toast({
+          title: 'Deletion cancelled',
+          description: 'Type DELETE exactly to confirm account deletion.',
+        });
+      }
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await api.deleteMyAccount();
+      if (!response.success) {
+        throw new Error(response.message || 'Unable to delete account.');
+      }
+
+      toast({
+        title: 'Account deleted',
+        description: 'Your account has been removed and access has been revoked.',
+      });
+      logout();
+    } catch (error: any) {
+      toast({
+        title: 'Deletion failed',
+        description: error?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -503,8 +573,13 @@ export default function ProviderProfilePage() {
                 <p className="mb-0 text-sm font-medium text-slate-900">Deactivate account</p>
                 <p className="mb-0 text-xs text-slate-500">Temporarily disable your profile</p>
               </div>
-              <button className="inline-flex min-h-[36px] items-center rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50">
-                Deactivate
+              <button
+                type="button"
+                onClick={() => void handleDeactivateAccount()}
+                disabled={isDeactivating || isDeleting}
+                className="inline-flex min-h-[36px] items-center rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeactivating ? 'Deactivating...' : 'Deactivate'}
               </button>
             </div>
 
@@ -513,8 +588,13 @@ export default function ProviderProfilePage() {
                 <p className="mb-0 text-sm font-medium text-slate-900">Delete account</p>
                 <p className="mb-0 text-xs text-slate-500">Permanently remove account and data</p>
               </div>
-              <button className="inline-flex min-h-[36px] items-center rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white hover:bg-rose-700">
-                Delete
+              <button
+                type="button"
+                onClick={() => void handleDeleteAccount()}
+                disabled={isDeleting || isDeactivating}
+                className="inline-flex min-h-[36px] items-center rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </MobileCard>

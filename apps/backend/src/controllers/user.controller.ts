@@ -15,6 +15,18 @@ const updateProfileSchema = z.object({
   zipCode: z.string().length(5).optional(),
 });
 
+async function deactivateProviderFootprint(tx: Prisma.TransactionClient, userId: string) {
+  await tx.providerProfile.updateMany({
+    where: { userId },
+    data: { status: 'INACTIVE' },
+  });
+
+  await tx.service.updateMany({
+    where: { providerProfile: { userId } },
+    data: { isActive: false },
+  });
+}
+
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
@@ -153,6 +165,98 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     logger.error({ err: error }, 'Update profile error');
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+};
+
+/**
+ * Deactivate the authenticated account.
+ * This is reversible by support/admin, unlike delete.
+ */
+export const deactivateAccount = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          status: 'INACTIVE',
+          tokenVersion: { increment: 1 },
+        },
+      });
+
+      await deactivateProviderFootprint(tx, userId);
+    });
+
+    res.json({
+      success: true,
+      message: 'Account deactivated successfully.',
+      data: {
+        status: 'INACTIVE',
+        deactivatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Deactivate account error');
+    res.status(500).json({ error: 'Failed to deactivate account' });
+  }
+};
+
+/**
+ * Permanently delete account access by anonymizing personal data and
+ * disabling provider visibility. This action is intentionally irreversible.
+ */
+export const deleteAccount = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const now = Date.now();
+    const shortId = userId.slice(0, 8);
+    const anonymizedEmail = `deleted+${shortId}-${now}@deleted.contracttocozy.local`;
+
+    await prisma.$transaction(async (tx) => {
+      await deactivateProviderFootprint(tx, userId);
+
+      await tx.address.deleteMany({
+        where: { userId },
+      });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          email: anonymizedEmail,
+          firstName: 'Deleted',
+          lastName: 'Account',
+          phone: null,
+          avatar: null,
+          bio: null,
+          status: 'INACTIVE',
+          emailVerified: false,
+          phoneVerified: false,
+          mfaEnabled: false,
+          mfaSecret: null,
+          tokenVersion: { increment: 1 },
+        },
+      });
+    });
+
+    res.json({
+      success: true,
+      message: 'Account deleted successfully.',
+      data: {
+        status: 'DELETED',
+        deletedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Delete account error');
+    res.status(500).json({ error: 'Failed to delete account' });
   }
 };
 

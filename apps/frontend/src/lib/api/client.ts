@@ -451,6 +451,24 @@ class APIClient {
   }
 
   /**
+   * Deactivate current user account.
+   */
+  async deactivateMyAccount(): Promise<APIResponse<{ status: string; deactivatedAt: string }>> {
+    return this.request<{ status: string; deactivatedAt: string }>('/api/users/account/deactivate', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Delete current user account.
+   */
+  async deleteMyAccount(): Promise<APIResponse<{ status: string; deletedAt: string }>> {
+    return this.request<{ status: string; deletedAt: string }>('/api/users/account', {
+      method: 'DELETE',
+    });
+  }
+
+  /**
    * Get current user (Restored name: getCurrentUser)
    */
   async getCurrentUser(tokenOverride?: string): Promise<APIResponse<User>> {
