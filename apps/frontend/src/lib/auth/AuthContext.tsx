@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, LoginInput, RegisterInput, LoginResponse, HomeownerSegment, UserRole, APISuccess, APIError } from '@/types';
+import { User, LoginInput, RegisterInput, LoginResponse, HomeownerSegment } from '@/types';
 import { api } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
 
@@ -32,7 +32,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 //   4. Add CSRF protection (double-submit cookie or Synchronizer Token)
 const USER_STORAGE_KEY = 'user';
 const TOKEN_STORAGE_KEY = 'accessToken';
-const REFRESH_TOKEN_KEY = 'refreshToken';
 
 const isBrowser = typeof window !== 'undefined';
 
@@ -47,7 +46,6 @@ const fetchCurrentUser = async (token: string | null): Promise<User | null> => {
     const response = await api.getCurrentUser(token); 
 
     if (response.success) {
-      // Type is now narrowed to APISuccess<User>, which guarantees response.data
       // Store user data in localStorage to persist minimal info needed for segment check
       if (isBrowser) {
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.data));
@@ -56,10 +54,10 @@ const fetchCurrentUser = async (token: string | null): Promise<User | null> => {
     }
   } catch (error) {
     console.error('Failed to fetch current user:', error);
-    // If fetching fails (e.g., token expired), clear local storage
+    // If fetching fails (e.g., token expired), clear auth state so middleware
+    // and API client remain in sync.
     if (isBrowser) {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      api.clearSessionTokens();
       localStorage.removeItem(USER_STORAGE_KEY);
     }
   }
@@ -86,11 +84,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // FIX 2: Define logout first to be used in refreshUser
   const logout = useCallback(() => {
     if (isBrowser) {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      api.clearSessionTokens();
       localStorage.removeItem(USER_STORAGE_KEY);
-      // Clear the middleware-readable cookie so server-side auth redirects work.
-      document.cookie = 'accessToken=; path=/; max-age=0; SameSite=Lax; Secure';
     }
     setUser(null);
     router.push('/login');
@@ -102,7 +97,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!token) {
-        return; 
+      api.clearSessionTokens();
+      return;
     }
     
     const freshUser = await fetchCurrentUser(token);
@@ -123,12 +119,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { accessToken, refreshToken, user } = loginData;
 
       if (isBrowser) {
-        localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+        // Access/refresh token persistence + middleware cookie sync are handled
+        // centrally by API client login/refresh flows.
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-        // Mirror token into a cookie so the middleware can read it for server-side
-        // auth routing. Not httpOnly — JS must be able to clear it on logout.
-        document.cookie = `accessToken=${accessToken}; path=/; SameSite=Lax; Secure`;
       }
       setUser(user);
       return { success: true, accessToken, refreshToken, user };
@@ -157,15 +150,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // --- Initialization Effect ---
   useEffect(() => {
     const initializeAuth = async () => {
-      let storedUser: User | null = null;
       let token: string | null = null;
 
       if (isBrowser) {
         token = localStorage.getItem(TOKEN_STORAGE_KEY);
         const userJson = localStorage.getItem(USER_STORAGE_KEY);
+        if (!token) {
+          api.clearSessionTokens();
+        }
         if (userJson) {
           try {
-            storedUser = JSON.parse(userJson);
+            JSON.parse(userJson);
           } catch (e) {
             console.error('Failed to parse stored user:', e);
             localStorage.removeItem(USER_STORAGE_KEY);

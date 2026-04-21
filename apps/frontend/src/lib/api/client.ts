@@ -155,6 +155,23 @@ class APIClient {
     this.baseURL = baseURL;
   }
 
+  private getCookieSecurityAttribute(): string {
+    if (typeof window === 'undefined') return '';
+    return window.location.protocol === 'https:' ? '; Secure' : '';
+  }
+
+  private setAccessTokenCookie(token: string): void {
+    if (typeof window === 'undefined') return;
+    const secureAttr = this.getCookieSecurityAttribute();
+    document.cookie = `accessToken=${encodeURIComponent(token)}; path=/; SameSite=Lax${secureAttr}`;
+  }
+
+  private clearAccessTokenCookie(): void {
+    if (typeof window === 'undefined') return;
+    const secureAttr = this.getCookieSecurityAttribute();
+    document.cookie = `accessToken=; path=/; max-age=0; SameSite=Lax${secureAttr}`;
+  }
+
   private validateFile(file: File, options?: { maxSizeMB?: number; allowedTypes?: string[] }) {
     const maxSize = (options?.maxSizeMB ?? 10) * 1024 * 1024;
     const allowedTypes = options?.allowedTypes ?? [
@@ -208,6 +225,7 @@ class APIClient {
   private setToken(token: string): void {
     if (typeof window === 'undefined') return;
     localStorage.setItem('accessToken', token);
+    this.setAccessTokenCookie(token);
   }
 
   /**
@@ -217,6 +235,11 @@ class APIClient {
     if (typeof window === 'undefined') return;
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    this.clearAccessTokenCookie();
+  }
+
+  clearSessionTokens(): void {
+    this.removeToken();
   }
 
   /**
