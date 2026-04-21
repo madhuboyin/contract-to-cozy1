@@ -3,6 +3,10 @@ import { Router } from 'express';
 import { SeasonalChecklistController } from '../controllers/seasonalChecklist.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import {
+  requireSeasonalChecklistOwnership,
+  requireSeasonalItemOwnership,
+} from '../middleware/seasonalOwnership.middleware';
 
 const router = Router();
 
@@ -38,6 +42,7 @@ router.get(
 router.get(
   '/seasonal-checklists/:checklistId',
   authenticate,
+  requireSeasonalChecklistOwnership,
   SeasonalChecklistController.getChecklistDetails
 );
 
@@ -50,12 +55,14 @@ router.post(
 router.post(
   '/seasonal-checklists/:checklistId/dismiss',
   authenticate,
+  requireSeasonalChecklistOwnership,
   SeasonalChecklistController.dismissChecklist
 );
 
 router.post(
   '/seasonal-checklists/:checklistId/add-all-critical',
   authenticate,
+  requireSeasonalChecklistOwnership,
   SeasonalChecklistController.addAllCriticalTasks
 );
 
@@ -70,6 +77,7 @@ router.post(
 router.post(
   '/seasonal-checklist-items/:itemId/add-to-tasks',
   authenticate,
+  requireSeasonalItemOwnership,
   SeasonalChecklistController.addTaskToChecklist
 );
 
@@ -85,6 +93,7 @@ router.post(
 router.post(
   '/seasonal-checklist-items/:itemId/add-to-maintenance',
   authenticate,
+  requireSeasonalItemOwnership,
   SeasonalChecklistController.addToMaintenance
 );
 
@@ -99,18 +108,21 @@ router.post(
 router.delete(
   '/seasonal-checklist-items/:itemId/remove-from-maintenance',
   authenticate,
+  requireSeasonalItemOwnership,
   SeasonalChecklistController.removeFromMaintenance
 );
 
 router.post(
   '/seasonal-checklist-items/:itemId/dismiss',
   authenticate,
+  requireSeasonalItemOwnership,
   SeasonalChecklistController.dismissTask
 );
 
 router.post(
   '/seasonal-checklist-items/:itemId/snooze',
   authenticate,
+  requireSeasonalItemOwnership,
   SeasonalChecklistController.snoozeTask
 );
 

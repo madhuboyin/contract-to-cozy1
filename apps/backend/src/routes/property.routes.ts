@@ -1,12 +1,14 @@
 import { Router } from 'express';
 // DELETE: Removed unnecessary local z import
 import { authenticate } from '../middleware/auth.middleware';
+import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import * as propertyController from '../controllers/property.controller';
 // CRITICAL FIX: Import the comprehensive schemas (with all new fields) from validators.ts
 import { createPropertySchema, updatePropertySchema } from '../utils/validators'; 
 import { AuthRequest } from '../types/auth.types'; 
 import { logger } from '../lib/logger';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 
@@ -374,9 +376,6 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
       });
     }
 
-    // Import prisma at the top if not already imported
-    const { prisma } = await import('../lib/prisma');
-
     // Verify user owns this property using nested relation check
     const property = await prisma.property.findFirst({
       where: {
@@ -453,10 +452,9 @@ router.get('/:id/seasonal-checklist/current', authenticate, async (req: AuthRequ
  * summary: List warranties for a specific property
  * tags: [Properties]
  */
-router.get('/:id/warranties', authenticate, async (req: AuthRequest, res) => {
+router.get('/:propertyId/warranties', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { id: propertyId } = req.params;
-    const { prisma } = await import('../lib/prisma');
+    const { propertyId } = req.params;
 
     const warranties = await prisma.warranty.findMany({
       where: { propertyId },
@@ -476,10 +474,9 @@ router.get('/:id/warranties', authenticate, async (req: AuthRequest, res) => {
  * summary: List insurance policies for a specific property
  * tags: [Properties]
  */
-router.get('/:id/insurance', authenticate, async (req: AuthRequest, res) => {
+router.get('/:propertyId/insurance', authenticate, propertyAuthMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { id: propertyId } = req.params;
-    const { prisma } = await import('../lib/prisma');
+    const { propertyId } = req.params;
 
     const policies = await prisma.insurancePolicy.findMany({
       where: { propertyId },

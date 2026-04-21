@@ -5,13 +5,62 @@ import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
 export class SeasonalChecklistService {
+  private static async assertPropertyOwnership(propertyId: string, userId: string) {
+    const property = await prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        homeownerProfile: {
+          userId,
+        },
+      },
+      include: {
+        homeAssets: true,
+        homeownerProfile: true,
+      },
+    });
+
+    if (!property) {
+      throw new Error('Property not found');
+    }
+
+    return property;
+  }
+
+  private static async assertChecklistOwnership(checklistId: string, userId: string) {
+    const checklist = await prisma.seasonalChecklist.findFirst({
+      where: {
+        id: checklistId,
+        property: {
+          homeownerProfile: {
+            userId,
+          },
+        },
+      },
+      include: {
+        items: {
+          where: {
+            priority: 'CRITICAL',
+            status: 'RECOMMENDED',
+          },
+        },
+      },
+    });
+
+    if (!checklist) {
+      throw new Error('Seasonal checklist not found');
+    }
+
+    return checklist;
+  }
+
   /**
    * Generate seasonal checklist for a property
    */
   static async generateSeasonalChecklist(
     propertyId: string,
     season: Season,
-    year: number
+    year: number,
+    userId: string
   ) {
     // Check if checklist already exists
     const existing = await prisma.seasonalChecklist.findUnique({
@@ -29,17 +78,7 @@ export class SeasonalChecklistService {
     }
 
     // Get property and climate settings
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId },
-      include: {
-        homeAssets: true,
-        homeownerProfile: true,
-      },
-    });
-
-    if (!property) {
-      throw new Error('Property not found');
-    }
+    const property = await this.assertPropertyOwnership(propertyId, userId);
     if (property.homeownerProfile?.segment !== 'EXISTING_OWNER') {
       logger.info(`Skipping seasonal checklist - not an existing owner (property: ${propertyId})`);
       return null;
@@ -155,9 +194,16 @@ export class SeasonalChecklistService {
   /**
    * Get seasonal checklist with items
    */
-  static async getSeasonalChecklist(checklistId: string) {
-    const checklist = await prisma.seasonalChecklist.findUnique({
-      where: { id: checklistId },
+  static async getSeasonalChecklist(checklistId: string, userId: string) {
+    const checklist = await prisma.seasonalChecklist.findFirst({
+      where: {
+        id: checklistId,
+        property: {
+          homeownerProfile: {
+            userId,
+          },
+        },
+      },
       include: {
         property: {
           select: {
@@ -209,12 +255,15 @@ export class SeasonalChecklistService {
    */
   static async getPropertySeasonalChecklists(
     propertyId: string,
+    userId: string,
     filters?: {
       year?: number;
       season?: Season;
       status?: string;
     }
   ) {
+    await this.assertPropertyOwnership(propertyId, userId);
+
     const where: any = { propertyId };
 
     if (filters?.year) where.year = filters.year;
@@ -259,6 +308,7 @@ export class SeasonalChecklistService {
    */
   static async addTaskToChecklist(
     seasonalItemId: string,
+    userId: string,
     options?: {
       nextDueDate?: Date;
       isRecurring?: boolean;
@@ -266,8 +316,15 @@ export class SeasonalChecklistService {
       notes?: string;
     }
   ) {
-    const seasonalItem = await prisma.seasonalChecklistItem.findUnique({
-      where: { id: seasonalItemId },
+    const seasonalItem = await prisma.seasonalChecklistItem.findFirst({
+      where: {
+        id: seasonalItemId,
+        property: {
+          homeownerProfile: {
+            userId,
+          },
+        },
+      },
       include: {
         seasonalChecklist: true,
         seasonalTaskTemplate: true,
@@ -347,7 +404,23 @@ export class SeasonalChecklistService {
   /**
    * Dismiss individual seasonal task
    */
-  static async dismissTask(seasonalItemId: string) {
+  static async dismissTask(seasonalItemId: string, userId: string) {
+    const item = await prisma.seasonalChecklistItem.findFirst({
+      where: {
+        id: seasonalItemId,
+        property: {
+          homeownerProfile: {
+            userId,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!item) {
+      throw new Error('Seasonal task not found');
+    }
+
     const updated = await prisma.seasonalChecklistItem.update({
       where: { id: seasonalItemId },
       data: {
@@ -362,7 +435,9 @@ export class SeasonalChecklistService {
   /**
    * Dismiss entire seasonal checklist
    */
-  static async dismissChecklist(checklistId: string) {
+  static async dismissChecklist(checklistId: string, userId: string) {
+    await this.assertChecklistOwnership(checklistId, userId);
+
     // Update checklist status
     await prisma.seasonalChecklist.update({
       where: { id: checklistId },
@@ -390,7 +465,23 @@ export class SeasonalChecklistService {
   /**
    * Snooze seasonal task
    */
-  static async snoozeTask(seasonalItemId: string, days: number = 7) {
+  static async snoozeTask(seasonalItemId: string, userId: string, days: number = 7) {
+    const item = await prisma.seasonalChecklistItem.findFirst({
+      where: {
+        id: seasonalItemId,
+        property: {
+          homeownerProfile: {
+            userId,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!item) {
+      throw new Error('Seasonal task not found');
+    }
+
     const snoozedUntil = new Date();
     snoozedUntil.setDate(snoozedUntil.getDate() + days);
 
@@ -408,28 +499,14 @@ export class SeasonalChecklistService {
   /**
    * Add all critical tasks to checklist
    */
-  static async addAllCriticalTasks(checklistId: string) {
-    const checklist = await prisma.seasonalChecklist.findUnique({
-      where: { id: checklistId },
-      include: {
-        items: {
-          where: {
-            priority: 'CRITICAL',
-            status: 'RECOMMENDED',
-          },
-        },
-      },
-    });
-
-    if (!checklist) {
-      throw new Error('Seasonal checklist not found');
-    }
+  static async addAllCriticalTasks(checklistId: string, userId: string) {
+    const checklist = await this.assertChecklistOwnership(checklistId, userId);
 
     const addedTasks = [];
 
     for (const item of checklist.items) {
       try {
-        const checklistItem = await this.addTaskToChecklist(item.id);
+        const checklistItem = await this.addTaskToChecklist(item.id, userId);
         addedTasks.push(checklistItem);
       } catch (error) {
         logger.error({ err: error }, `Failed to add task ${item.id}`);

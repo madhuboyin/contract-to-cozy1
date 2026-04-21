@@ -412,9 +412,6 @@ router.get(
   requireDocumentOwnership,
   async (req: CustomRequest, res: Response) => {
     try {
-      const documentId = req.params.id;
-      const propertyIdQuery = (req.query.propertyId as string) || undefined;
-
       // Ownership already verified by requireDocumentOwnership; use pre-fetched doc
       const document = (req as any).ownedDocument as {
         id: string;
@@ -425,7 +422,7 @@ router.get(
         createdAt: Date;
       };
 
-      const effectivePropertyId = propertyIdQuery || document.propertyId || undefined;
+      const effectivePropertyId = document.propertyId || undefined;
       if (!effectivePropertyId) {
         return res.json({
           success: true,

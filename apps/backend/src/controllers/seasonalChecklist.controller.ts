@@ -27,7 +27,13 @@ export class SeasonalChecklistController {
     next: NextFunction
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
       const { propertyId } = req.params;
+      const userId = req.user.userId;
       const property = await prisma.property.findUnique({
         where: { id: propertyId },
         include: { homeownerProfile: true },
@@ -49,6 +55,7 @@ export class SeasonalChecklistController {
 
       const checklists = await SeasonalChecklistService.getPropertySeasonalChecklists(
         propertyId,
+        userId,
         filters
       );
 
@@ -72,9 +79,14 @@ export class SeasonalChecklistController {
     next: NextFunction
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
       const { checklistId } = req.params;
 
-      const result = await SeasonalChecklistService.getSeasonalChecklist(checklistId);
+      const result = await SeasonalChecklistService.getSeasonalChecklist(checklistId, req.user.userId);
 
       res.json({
         success: true,
@@ -101,6 +113,11 @@ export class SeasonalChecklistController {
     next: NextFunction
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
       const { propertyId } = req.body;
       const { season, year } = req.body;
 
@@ -115,7 +132,8 @@ export class SeasonalChecklistController {
       const checklist = await SeasonalChecklistService.generateSeasonalChecklist(
         propertyId,
         season as Season,
-        parseInt(year)
+        parseInt(year),
+        req.user.userId
       );
 
       res.status(201).json({
@@ -136,9 +154,14 @@ export class SeasonalChecklistController {
     next: NextFunction
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
       const { checklistId } = req.params;
 
-      const result = await SeasonalChecklistService.dismissChecklist(checklistId);
+      const result = await SeasonalChecklistService.dismissChecklist(checklistId, req.user.userId);
 
       res.json({
         success: true,
@@ -159,6 +182,11 @@ export class SeasonalChecklistController {
     next: NextFunction
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
       const { itemId } = req.params;
       const { nextDueDate, isRecurring, frequency, notes } = req.body;
 
@@ -168,7 +196,7 @@ export class SeasonalChecklistController {
       if (frequency) options.frequency = frequency;
       if (notes) options.notes = notes;
 
-      const checklistItem = await SeasonalChecklistService.addTaskToChecklist(itemId, options);
+      const checklistItem = await SeasonalChecklistService.addTaskToChecklist(itemId, req.user.userId, options);
 
       res.status(201).json({
         success: true,
@@ -298,9 +326,14 @@ export class SeasonalChecklistController {
     next: NextFunction
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
       const { itemId } = req.params;
 
-      const result = await SeasonalChecklistService.dismissTask(itemId);
+      const result = await SeasonalChecklistService.dismissTask(itemId, req.user.userId);
 
       res.json({
         success: true,
@@ -320,11 +353,17 @@ export class SeasonalChecklistController {
     next: NextFunction
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
       const { itemId } = req.params;
       const { days } = req.body;
 
       const result = await SeasonalChecklistService.snoozeTask(
         itemId,
+        req.user.userId,
         days ? parseInt(days) : 7
       );
 
@@ -346,9 +385,14 @@ export class SeasonalChecklistController {
     next: NextFunction
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
       const { checklistId } = req.params;
 
-      const result = await SeasonalChecklistService.addAllCriticalTasks(checklistId);
+      const result = await SeasonalChecklistService.addAllCriticalTasks(checklistId, req.user.userId);
 
       res.json({
         success: true,

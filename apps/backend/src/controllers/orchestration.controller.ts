@@ -43,10 +43,11 @@ export async function markOrchestrationActionCompleted(
   req: AuthRequest,
   res: Response
 ) {
-  const { propertyId, actionKey, completionData } = req.body;
+  const routePropertyId = req.params.propertyId;
+  const { actionKey, completionData } = req.body;
   const userId = req.user?.userId ?? null;
 
-  if (!propertyId || !actionKey) {
+  if (!routePropertyId || !actionKey) {
     return res.status(400).json({ error: 'Missing propertyId or actionKey' });
   }
 
@@ -63,7 +64,7 @@ export async function markOrchestrationActionCompleted(
 
   // Create the event
   const event = await recordOrchestrationEvent({
-    propertyId,
+    propertyId: routePropertyId,
     actionKey,
     actionType: 'USER_MARKED_COMPLETE',
     source: 'USER',
@@ -74,7 +75,7 @@ export async function markOrchestrationActionCompleted(
   let completion = null;
   if (completionData && event) {
     completion = await createCompletion({
-      propertyId,
+      propertyId: routePropertyId,
       actionKey,
       eventId: event.id, // Link to the event
       data: completionData,
@@ -85,7 +86,7 @@ export async function markOrchestrationActionCompleted(
   // Sync completion to linked PropertyMaintenanceTask (triggers seasonal checklist sync)
   try {
     const maintenanceTask = await prisma.propertyMaintenanceTask.findFirst({
-      where: { propertyId, actionKey },
+      where: { propertyId: routePropertyId, actionKey },
     });
 
     if (maintenanceTask && maintenanceTask.status !== 'COMPLETED' && userId) {
