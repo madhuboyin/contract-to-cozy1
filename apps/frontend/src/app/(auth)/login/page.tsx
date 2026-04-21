@@ -90,7 +90,7 @@ export default function LoginPage() {
 
         redirectTimerRef.current = setTimeout(() => {
           router.replace(destination);
-        }, 1100);
+        }, 12000);
       } else {
         setError('Invalid email or password.');
       }
@@ -130,7 +130,7 @@ export default function LoginPage() {
 
       redirectTimerRef.current = setTimeout(() => {
         router.replace(destination);
-      }, 1100);
+      }, 12000);
     } catch (err: any) {
       setError(err?.message || (useRecoveryCode ? 'Invalid recovery code.' : 'Invalid authentication code.'));
     } finally {

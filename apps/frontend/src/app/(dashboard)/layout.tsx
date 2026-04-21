@@ -394,6 +394,8 @@ function MobileDrawerNav({ user }: { user: User | null }) {
 // Root layout
 // ─────────────────────────────────────────────────────────────────────────────
 
+const MIN_TRANSITION_MS = 12_000;
+
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null; loading: boolean };
   const router = useRouter();
@@ -401,6 +403,19 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const bannerFetchedRef = React.useRef(false);
+
+  // Keep transition visible for a minimum duration regardless of how fast auth resolves.
+  const mountTimeRef = React.useRef(Date.now());
+  const [transitionVisible, setTransitionVisible] = useState(loading);
+
+  useEffect(() => {
+    if (!loading && transitionVisible) {
+      const elapsed = Date.now() - mountTimeRef.current;
+      const remaining = Math.max(0, MIN_TRANSITION_MS - elapsed);
+      const t = setTimeout(() => setTransitionVisible(false), remaining);
+      return () => clearTimeout(t);
+    }
+  }, [loading, transitionVisible]);
 
   useEffect(() => {
     if (bannerFetchedRef.current) return;
@@ -469,13 +484,13 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {/* Post-login transition overlay — fades out when auth resolves */}
+      {/* Post-login transition overlay — shown for at least MIN_TRANSITION_MS */}
       <AnimatePresence>
-        {loading && <PostLoginTransition key="dashboard-init" />}
+        {transitionVisible && <PostLoginTransition key="dashboard-init" />}
       </AnimatePresence>
 
-      {/* Dashboard shell — only rendered once auth is ready */}
-      {!loading && (
+      {/* Dashboard shell — only rendered once the transition has finished */}
+      {!transitionVisible && (
       <NotificationProvider>
       <PropertyProvider>
         {/* ── Outer shell ────────────────────────────────────────────────── */}
