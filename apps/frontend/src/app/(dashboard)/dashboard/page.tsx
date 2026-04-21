@@ -449,6 +449,17 @@ export default function DashboardPage() {
   const annualSavingsPotential = Math.max(0, Math.round(homeSavingsSummaryQuery.data?.potentialAnnualSavings ?? 0));
   const riskExposureGap = Math.max(0, Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0));
   const overdueMaintenanceCount = scopedUrgentActions.filter(a => a.type === 'MAINTENANCE_OVERDUE').length;
+  const hasCompletionState =
+    Boolean(selectedProperty) &&
+    scopedUrgentActions.length === 0 &&
+    data.activeIncidents.length === 0 &&
+    overdueMaintenanceCount === 0;
+
+  useEffect(() => {
+    if (!data.isLoading && hasCompletionState) {
+      celebrate('success');
+    }
+  }, [data.isLoading, hasCompletionState, celebrate]);
 
   const heroNarrative = (() => {
     // 1. Open Urgent Incident

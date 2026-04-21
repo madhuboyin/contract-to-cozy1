@@ -14,7 +14,9 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import ProviderBookingQueueTemplate from '@/components/providers/ProviderBookingQueueTemplate';
+import { MilestoneCelebration } from '@/components/ui/MilestoneCelebration';
 import { useToast } from '@/components/ui/use-toast';
+import { useCelebration } from '@/hooks/useCelebration';
 import { api } from '@/lib/api/client';
 import type { Booking } from '@/types';
 
@@ -40,6 +42,7 @@ function fmtDate(d: string | null) {
 
 export default function ProviderBookingsPage() {
   const { toast } = useToast();
+  const { celebration, celebrate, dismiss } = useCelebration('provider-bookings-complete');
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ActiveTab>('pending');
 
@@ -109,6 +112,7 @@ export default function ProviderBookingsPage() {
       });
     },
     onSuccess: () => {
+      celebrate('success');
       toast({ title: 'Job completed', description: 'Record saved to booking history.' });
       invalidate();
     },
@@ -270,6 +274,7 @@ export default function ProviderBookingsPage() {
       )}
 
       <BottomSafeAreaReserve size="chatAware" />
+      <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />
     </ProviderBookingQueueTemplate>
   );
 }
