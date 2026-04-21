@@ -4,7 +4,6 @@ import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  AlertTriangle,
   ShieldAlert,
   Wrench,
   CalendarClock,
@@ -13,17 +12,15 @@ import {
   DollarSign,
   CheckCircle2,
   Clock,
-  Zap,
   ArrowRight,
   BarChart3,
   ShieldCheck,
-  Leaf,
   X,
 } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
 import { listIncidents } from '../properties/[id]/incidents/incidentsApi';
-import { OrchestratedActionDTO } from '@/types';
+import { Booking, OrchestratedActionDTO } from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -43,14 +40,72 @@ import { normalizeProviderCategoryForSearch } from '@/lib/config/serviceCategory
 // ─── Journey system ───────────────────────────────────────────────────────────
 
 type JourneyType =
-  | 'urgent-repair'
-  | 'replace-repair'
-  | 'coverage-gap'
+  | 'urgent-issue'
+  | 'repair-vs-replace'
+  | 'coverage'
   | 'preventive'
-  | 'seasonal';
+  | 'cost-savings'
+  | 'provider-execution'
+  | 'completed';
 
-function detectJourneyType(item: any): JourneyType {
-  const isIncident = 'severity' in item && !('actionKey' in item);
+type ResolutionFilter =
+  | 'all'
+  | 'urgent'
+  | 'save-money'
+  | 'preventive'
+  | 'coverage'
+  | 'completed';
+
+const FILTER_OPTIONS: Array<{ key: ResolutionFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'urgent', label: 'Urgent' },
+  { key: 'save-money', label: 'Save Money' },
+  { key: 'preventive', label: 'Preventive' },
+  { key: 'coverage', label: 'Coverage' },
+  { key: 'completed', label: 'Completed' },
+];
+
+const ACTIVE_BOOKING_STATUSES = new Set(['DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS']);
+const COMPLETED_BOOKING_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
+const HIGH_RISK_LEVELS = new Set(['CRITICAL', 'HIGH']);
+const COVERAGE_CATEGORY_KEYWORDS = ['COVERAGE', 'INSURANCE', 'WARRANTY', 'POLICY'];
+const SAVINGS_CATEGORY_KEYWORDS = [
+  'RISK_PREMIUM',
+  'DO_NOTHING',
+  'REFINANCE',
+  'MORTGAGE',
+  'TAX',
+  'ENERGY',
+  'BUDGET',
+  'FINANCE',
+  'HIDDEN_ASSET',
+];
+
+function normalizeUpperText(value: string | null | undefined): string {
+  return String(value ?? '').trim().toUpperCase();
+}
+
+function normalizeFilterParam(rawFilter: string | null): ResolutionFilter {
+  const normalized = String(rawFilter ?? '').trim().toLowerCase();
+  if (!normalized || normalized === 'all') return 'all';
+  if (normalized === 'urgent' || normalized === 'repair') return 'urgent';
+  if (normalized === 'save-money' || normalized === 'save' || normalized === 'savings') return 'save-money';
+  if (normalized === 'preventive') return 'preventive';
+  if (normalized === 'coverage') return 'coverage';
+  if (normalized === 'completed' || normalized === 'history') return 'completed';
+  return 'all';
+}
+
+function detectJourneyType(item: any, groupId?: string): JourneyType {
+  if (groupId === 'urgent') return 'urgent-issue';
+  if (groupId === 'cost-savings') return 'cost-savings';
+  if (groupId === 'coverage') return 'coverage';
+  if (groupId === 'replace-repair') return 'repair-vs-replace';
+  if (groupId === 'provider-execution') return 'provider-execution';
+  if (groupId === 'completed') return 'completed';
+  if (item?.resolutionJourney) return item.resolutionJourney as JourneyType;
+  if (item?.__kind === 'booking') return 'provider-execution';
+  if (item?.__kind === 'completed-booking' || item?.__kind === 'completed-incident') return 'completed';
 
   if (
     item.riskLevel === 'CRITICAL' ||
@@ -59,7 +114,7 @@ function detectJourneyType(item: any): JourneyType {
     item.severity === 'WARNING' ||
     item.overdue
   ) {
-    return 'urgent-repair';
+    return 'urgent-issue';
   }
 
   if (
@@ -68,26 +123,132 @@ function detectJourneyType(item: any): JourneyType {
     item.expectedLife &&
     item.age / item.expectedLife >= 0.75
   ) {
-    return 'replace-repair';
+    return 'repair-vs-replace';
   }
 
   if (
-    item.systemType &&
-    !isIncident &&
     item.coverage &&
-    !item.coverage.hasCoverage
+    item.coverage.hasCoverage === false
   ) {
-    return 'coverage-gap';
+    return 'coverage';
   }
 
-  if (
-    (item.source === 'CHECKLIST' || item.source === 'SEASONAL') &&
-    item.isRecurring
-  ) {
-    return 'seasonal';
+  if (isCostSavingsAction(item)) {
+    return 'cost-savings';
   }
 
   return 'preventive';
+}
+
+function isOrchestrationAction(item: any): item is OrchestratedActionDTO {
+  return typeof item?.actionKey === 'string' && (item?.source === 'RISK' || item?.source === 'CHECKLIST');
+}
+
+function hasKeyword(value: string | null | undefined, keywords: string[]): boolean {
+  const upper = normalizeUpperText(value);
+  return keywords.some((keyword) => upper.includes(keyword));
+}
+
+function isCoverageAction(action: OrchestratedActionDTO): boolean {
+  return (
+    action.coverage?.hasCoverage === false ||
+    normalizeUpperText(action.actionKey).startsWith('COVERAGE_GAP::') ||
+    hasKeyword(action.category, COVERAGE_CATEGORY_KEYWORDS) ||
+    hasKeyword(action.title, ['COVERAGE', 'WARRANTY', 'INSURANCE', 'POLICY', 'GAP']) ||
+    hasKeyword(action.description ?? null, ['COVERAGE', 'WARRANTY', 'INSURANCE', 'POLICY', 'GAP'])
+  );
+}
+
+function isCostSavingsAction(action: OrchestratedActionDTO): boolean {
+  return (
+    hasKeyword(action.category, SAVINGS_CATEGORY_KEYWORDS) ||
+    hasKeyword(action.actionKey, ['RISK_PREMIUM', 'DO_NOTHING', 'REFINANCE', 'HIDDEN_ASSET']) ||
+    hasKeyword(action.title, ['SAVE', 'SAVINGS', 'LOWER', 'REDUCE', 'PREMIUM', 'REFINANCE', 'RATE', 'BUDGET', 'ENERGY', 'TAX']) ||
+    hasKeyword(action.description ?? null, ['SAVE', 'SAVINGS', 'LOWER', 'REDUCE', 'PREMIUM', 'REFINANCE', 'RATE', 'BUDGET', 'ENERGY', 'TAX'])
+  );
+}
+
+function isReplaceRepairAction(action: any): boolean {
+  return Boolean(
+    action?.replaceRepairAnalysis ||
+      (action?.systemType &&
+        action?.age &&
+        action?.expectedLife &&
+        action.age / action.expectedLife >= 0.75)
+  );
+}
+
+function isProviderExecutionAction(action: OrchestratedActionDTO): boolean {
+  return Boolean(
+    action.serviceCategory ||
+      hasKeyword(action.title, ['BOOK', 'PROVIDER', 'QUOTE', 'SCHEDULE']) ||
+      hasKeyword(action.description ?? null, ['BOOK', 'PROVIDER', 'QUOTE', 'SCHEDULE'])
+  );
+}
+
+function isUrgentAction(action: OrchestratedActionDTO): boolean {
+  return (
+    HIGH_RISK_LEVELS.has(normalizeUpperText(action.riskLevel ?? null)) ||
+    action.overdue === true
+  );
+}
+
+function isActiveIncident(item: IncidentDTO): boolean {
+  return item.status !== 'RESOLVED' && item.status !== 'SUPPRESSED' && item.status !== 'EXPIRED';
+}
+
+function isUrgentIncident(item: IncidentDTO): boolean {
+  return isActiveIncident(item) && (item.severity === 'CRITICAL' || item.severity === 'WARNING');
+}
+
+function isCompletedSuppressedAction(action: OrchestratedActionDTO): boolean {
+  const hasCompletedReason = action.suppression?.reasons?.some(
+    (reason) => reason.reason === 'USER_MARKED_COMPLETE'
+  );
+  const completedBySource =
+    action.suppression?.suppressionSource?.type === 'USER_EVENT' &&
+    action.suppression?.suppressionSource?.eventType === 'USER_MARKED_COMPLETE';
+  return Boolean(hasCompletedReason || completedBySource || action.status === 'COMPLETED');
+}
+
+function toProviderExecutionBookingItem(booking: Booking) {
+  return {
+    id: `booking:${booking.id}`,
+    bookingId: booking.id,
+    providerId: booking.provider?.id,
+    __kind: 'booking',
+    source: 'BOOKING',
+    title: `${booking.service?.name || booking.category} booking`,
+    description: `${booking.provider?.businessName || 'Provider'} · ${booking.status.replace('_', ' ')}`,
+    status: booking.status,
+    nextDueDate: booking.scheduledDate,
+    serviceCategory: booking.category,
+    confidence: { level: 'HIGH', score: 95 },
+    primarySignalSource: { sourceSystem: 'Provider booking workflow' },
+    exposure: Number.parseFloat(booking.estimatedPrice || '0') || 0,
+    createdAt: booking.createdAt,
+    updatedAt: booking.updatedAt,
+  };
+}
+
+function toCompletedBookingItem(booking: Booking) {
+  return {
+    ...toProviderExecutionBookingItem(booking),
+    __kind: 'completed-booking',
+    resolutionJourney: 'completed',
+    title: `${booking.service?.name || booking.category} completed`,
+    description: `${booking.provider?.businessName || 'Provider'} · Completed booking record`,
+    nextDueDate: booking.completedAt || booking.updatedAt,
+  };
+}
+
+function toCompletedIncidentItem(incident: IncidentDTO) {
+  return {
+    ...incident,
+    __kind: 'completed-incident',
+    resolutionJourney: 'completed',
+    nextDueDate: incident.updatedAt || incident.createdAt,
+  };
 }
 
 type ReplaceRepairResolution = {
@@ -136,15 +297,15 @@ const JOURNEY_META: Record<
     secondaryCta: string;
   }
 > = {
-  'urgent-repair': {
-    label: 'Urgent Repair',
+  'urgent-issue': {
+    label: 'Urgent Issue',
     badgeCls: 'bg-red-100 text-red-700',
     borderCls: 'border-red-100 hover:border-red-200',
     icon: ShieldAlert,
     primaryCta: 'Get Emergency Help',
-    secondaryCta: 'Mark Fixed',
+    secondaryCta: 'Find Provider',
   },
-  'replace-repair': {
+  'repair-vs-replace': {
     label: 'Replace or Repair',
     badgeCls: 'bg-orange-100 text-orange-700',
     borderCls: 'border-orange-100 hover:border-orange-200',
@@ -152,8 +313,8 @@ const JOURNEY_META: Record<
     primaryCta: 'Run Analysis',
     secondaryCta: 'Mark Fixed',
   },
-  'coverage-gap': {
-    label: 'Coverage Gap',
+  coverage: {
+    label: 'Coverage',
     badgeCls: 'bg-purple-100 text-purple-700',
     borderCls: 'border-purple-100 hover:border-purple-200',
     icon: ShieldCheck,
@@ -168,13 +329,29 @@ const JOURNEY_META: Record<
     primaryCta: 'Schedule Service',
     secondaryCta: 'Mark Done',
   },
-  seasonal: {
-    label: 'Seasonal',
-    badgeCls: 'bg-teal-100 text-teal-700',
-    borderCls: 'border-teal-100 hover:border-teal-200',
-    icon: Leaf,
-    primaryCta: 'Mark Complete',
-    secondaryCta: 'Schedule Later',
+  'cost-savings': {
+    label: 'Cost Savings',
+    badgeCls: 'bg-emerald-100 text-emerald-700',
+    borderCls: 'border-emerald-100 hover:border-emerald-200',
+    icon: TrendingUp,
+    primaryCta: 'See Savings',
+    secondaryCta: 'Act Later',
+  },
+  'provider-execution': {
+    label: 'Provider Execution',
+    badgeCls: 'bg-sky-100 text-sky-700',
+    borderCls: 'border-sky-100 hover:border-sky-200',
+    icon: CalendarClock,
+    primaryCta: 'Track Booking',
+    secondaryCta: 'View Provider',
+  },
+  completed: {
+    label: 'Completed',
+    badgeCls: 'bg-slate-100 text-slate-700',
+    borderCls: 'border-slate-100 hover:border-slate-200',
+    icon: CheckCircle2,
+    primaryCta: 'View Details',
+    secondaryCta: 'Back to Active',
   },
 };
 
@@ -255,40 +432,59 @@ function CompletionCelebration({
 
 function TriageActionCard({
   item,
+  groupId,
   propertyId,
   onComplete,
   onOpenService,
+  onOpenIncident,
   onReplaceRepair,
   onAddCoverage,
+  onOpenSavings,
+  onOpenBooking,
+  onViewProvider,
+  onOpenHistoryItem,
+  onSwitchToActive,
 }: {
   item: any;
+  groupId: string;
   propertyId: string;
   onComplete: () => void;
   onOpenService: () => void;
+  onOpenIncident: (item: any) => void;
   onReplaceRepair: (item: any) => void;
   onAddCoverage: () => void;
+  onOpenSavings: () => void;
+  onOpenBooking: (item: any) => void;
+  onViewProvider: (item: any) => void;
+  onOpenHistoryItem: (item: any) => void;
+  onSwitchToActive: () => void;
 }) {
-  const journey = detectJourneyType(item);
+  const journey = detectJourneyType(item, groupId);
   const meta = JOURNEY_META[journey];
   const JourneyIcon = meta.icon;
 
   const exposure: number = item.exposure ?? 0;
-  const showRiskBadge = exposure > 200 && journey !== 'coverage-gap';
-  const showSavingsBadge =
-    journey === 'preventive' && exposure > 0;
+  const showRiskBadge = exposure > 200 && journey !== 'coverage' && journey !== 'completed';
+  const showSavingsBadge = (journey === 'preventive' || journey === 'cost-savings') && exposure > 0;
 
   const handlePrimary = () => {
-    if (journey === 'replace-repair') return onReplaceRepair(item);
-    if (journey === 'coverage-gap') return onAddCoverage();
-    if (journey === 'urgent-repair') return onOpenService();
+    if (journey === 'repair-vs-replace') return onReplaceRepair(item);
+    if (journey === 'coverage') return onAddCoverage();
+    if (journey === 'cost-savings') return onOpenSavings();
+    if (journey === 'provider-execution') return onOpenBooking(item);
+    if (journey === 'completed') return onOpenHistoryItem(item);
+    if (journey === 'urgent-issue' && item?.__kind === 'incident') return onOpenIncident(item);
+    if (journey === 'urgent-issue') return onOpenService();
     if (journey === 'preventive') return onOpenService();
-    if (journey === 'seasonal') return onComplete();
+    if (!isOrchestrationAction(item)) return;
     onComplete();
   };
 
   const handleSecondary = () => {
-    if (journey === 'replace-repair') return onComplete();
-    if (journey === 'coverage-gap') return onComplete();
+    if (journey === 'completed') return onSwitchToActive();
+    if (journey === 'urgent-issue' && item?.__kind === 'incident') return onOpenService();
+    if (journey === 'provider-execution') return onViewProvider(item);
+    if (!isOrchestrationAction(item)) return;
     onComplete();
   };
 
@@ -389,7 +585,7 @@ function TriageActionCard({
             </div>
           )}
 
-          {journey === 'replace-repair' && item.replaceRepairAnalysis && (
+          {journey === 'repair-vs-replace' && item.replaceRepairAnalysis && (
             <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">
                 Latest Replace vs Repair Signal
@@ -410,14 +606,16 @@ function TriageActionCard({
             onClick={handlePrimary}
             className={cn(
               'w-full h-11 rounded-xl font-bold text-white',
-              journey === 'urgent-repair'
+              journey === 'urgent-issue'
                 ? 'bg-red-600 hover:bg-red-700'
-                : journey === 'replace-repair'
+                : journey === 'repair-vs-replace'
                 ? 'bg-orange-600 hover:bg-orange-700'
-                : journey === 'coverage-gap'
+                : journey === 'coverage'
                 ? 'bg-purple-600 hover:bg-purple-700'
-                : journey === 'seasonal'
-                ? 'bg-teal-600 hover:bg-teal-700'
+                : journey === 'cost-savings'
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : journey === 'provider-execution'
+                ? 'bg-sky-600 hover:bg-sky-700'
                 : 'bg-slate-900 hover:bg-slate-800',
             )}
           >
@@ -435,7 +633,7 @@ function TriageActionCard({
           </Button>
 
           {/* Compare prices — available for repair journeys */}
-          {(journey === 'urgent-repair' || journey === 'preventive') && (
+          {(journey === 'urgent-issue' || journey === 'preventive') && (
             <button
               onClick={onOpenService}
               className="w-full h-9 text-[11px] font-bold text-slate-400 hover:text-brand-600 flex items-center justify-center gap-1.5 rounded-xl hover:bg-brand-50 transition-colors"
@@ -453,11 +651,13 @@ function TriageActionCard({
 // ─── Triage group header ──────────────────────────────────────────────────────
 
 const GROUP_ICON: Record<string, React.ElementType> = {
-  immediate: ShieldAlert,
+  urgent: ShieldAlert,
+  'cost-savings': TrendingUp,
   'replace-repair': BarChart3,
-  'coverage-gaps': ShieldCheck,
-  maintenance: Wrench,
-  seasonal: Leaf,
+  coverage: ShieldCheck,
+  'provider-execution': CalendarClock,
+  preventive: Wrench,
+  completed: CheckCircle2,
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -476,7 +676,8 @@ export default function ResolutionCenterClient() {
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
 
-  const filterParam = searchParams.get('filter'); // 'urgent' | 'repair' | 'preventive' | null
+  const normalizedFilter = normalizeFilterParam(searchParams.get('filter'));
+  const shouldLoadCompletedIncidents = normalizedFilter === 'completed';
 
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
   const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
@@ -529,12 +730,63 @@ export default function ResolutionCenterClient() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const isLoading = orchestrationLoading || incidentsLoading || resolutionsLoading;
-  const hasLoadError = orchestrationError || incidentsError || resolutionsError;
+  const {
+    data: bookingsData,
+    isLoading: bookingsLoading,
+    isError: bookingsError,
+    error: bookingsErrorObj,
+    refetch: refetchBookings,
+  } = useQuery({
+    queryKey: ['resolution-bookings', selectedPropertyId],
+    queryFn: () =>
+      selectedPropertyId
+        ? api.listBookings({
+            propertyId: selectedPropertyId,
+            limit: 80,
+            sortBy: 'scheduledDate',
+            sortOrder: 'desc',
+          })
+        : Promise.resolve({ success: true, data: { bookings: [], pagination: {} } } as any),
+    enabled: !!selectedPropertyId,
+    staleTime: 3 * 60 * 1000,
+  });
+
+  const {
+    data: completedIncidentsData,
+    isLoading: completedIncidentsLoading,
+    isError: completedIncidentsError,
+    error: completedIncidentsErrorObj,
+    refetch: refetchCompletedIncidents,
+  } = useQuery({
+    queryKey: ['completed-incidents', selectedPropertyId],
+    queryFn: () =>
+      selectedPropertyId
+        ? listIncidents({ propertyId: selectedPropertyId, status: 'RESOLVED', limit: 20 })
+        : Promise.resolve({ items: [] } as any),
+    enabled: !!selectedPropertyId && shouldLoadCompletedIncidents,
+    staleTime: 3 * 60 * 1000,
+  });
+
+  const isLoading =
+    orchestrationLoading ||
+    incidentsLoading ||
+    resolutionsLoading ||
+    bookingsLoading ||
+    (shouldLoadCompletedIncidents && completedIncidentsLoading);
+
+  const hasLoadError =
+    orchestrationError ||
+    incidentsError ||
+    resolutionsError ||
+    bookingsError ||
+    (shouldLoadCompletedIncidents && completedIncidentsError);
+
   const loadErrorMessage =
     (orchestrationErrorObj as Error | undefined)?.message ||
     (incidentsErrorObj as Error | undefined)?.message ||
     (resolutionsErrorObj as Error | undefined)?.message ||
+    (bookingsErrorObj as Error | undefined)?.message ||
+    (completedIncidentsErrorObj as Error | undefined)?.message ||
     'Unable to load one or more Resolution Center data sources.';
 
   // Build triage groups, then apply URL filter
@@ -542,7 +794,13 @@ export default function ResolutionCenterClient() {
     if (!selectedPropertyId) return [];
 
     const actions: OrchestratedActionDTO[] = (orchestrationData as any)?.actions || [];
+    const suppressedActions: OrchestratedActionDTO[] = (orchestrationData as any)?.suppressedActions || [];
     const incidents: IncidentDTO[] = (incidentsData as any)?.items || [];
+    const bookings: Booking[] =
+      bookingsData && 'success' in bookingsData && bookingsData.success
+        ? bookingsData.data?.bookings ?? []
+        : [];
+    const completedIncidents: IncidentDTO[] = (completedIncidentsData as any)?.items || [];
     const analyses: ReplaceRepairResolution[] = (resolutionsData as any)?.data || [];
     const analysisByInventoryId = new Map<string, ReplaceRepairResolution>();
     analyses.forEach((analysis) => {
@@ -551,34 +809,7 @@ export default function ResolutionCenterClient() {
       }
     });
 
-    const groups: TriageGroup[] = [];
-
-    const immediate = [
-      ...incidents.filter(
-        (inc) => inc.severity === 'CRITICAL' || inc.severity === 'WARNING',
-      ),
-      ...actions.filter((a) => a.riskLevel === 'CRITICAL' || a.overdue),
-    ];
-
-    if (immediate.length > 0) {
-      groups.push({
-        id: 'immediate',
-        title: 'Urgent Needs',
-        subtitle: 'Critical safety issues and overdue actions requiring immediate triage.',
-        items: immediate,
-        tone: 'danger',
-      });
-    }
-
-    const replaceRepairItems = actions.filter(
-      (a) =>
-        !immediate.some((i) => i.id === (a.id || a.actionKey)) &&
-        a.systemType &&
-        a.age &&
-        a.expectedLife &&
-        a.age / a.expectedLife >= 0.75 &&
-        a.status !== 'SUPPRESSED',
-    ).map((action) => {
+    const enrichWithReplaceRepair = (action: OrchestratedActionDTO) => {
       const inventoryItemId = resolveInventoryItemId(action);
       const byInventory = inventoryItemId ? analysisByInventoryId.get(inventoryItemId) : null;
       const byName = analyses.find((analysis) => {
@@ -590,71 +821,171 @@ export default function ResolutionCenterClient() {
         ...action,
         replaceRepairAnalysis: byInventory || byName || null,
       };
-    });
+    };
 
+    const activeActions = actions
+      .filter((action) => action.status !== 'SUPPRESSED')
+      .map(enrichWithReplaceRepair);
+
+    const claimedActionKeys = new Set<string>();
+    const takeActions = (predicate: (action: any) => boolean) => {
+      const selected: any[] = [];
+      for (const action of activeActions) {
+        if (claimedActionKeys.has(action.actionKey)) continue;
+        if (!predicate(action)) continue;
+        claimedActionKeys.add(action.actionKey);
+        selected.push(action);
+      }
+      return selected;
+    };
+
+    const groups: TriageGroup[] = [];
+
+    const urgentItems = [
+      ...incidents.filter(isUrgentIncident).map((incident) => ({ ...incident, __kind: 'incident' })),
+      ...takeActions((action) => isUrgentAction(action)),
+    ];
+
+    if (urgentItems.length > 0) {
+      groups.push({
+        id: 'urgent',
+        title: 'Urgent Issues',
+        subtitle: 'Time-sensitive incidents and overdue work that need immediate attention.',
+        items: urgentItems,
+        tone: 'danger',
+      });
+    }
+
+    const savingsItems = takeActions((action) => isCostSavingsAction(action) && !isCoverageAction(action));
+    if (savingsItems.length > 0) {
+      groups.push({
+        id: 'cost-savings',
+        title: 'Save Money',
+        subtitle: 'High-confidence opportunities to reduce recurring and one-time costs.',
+        items: savingsItems,
+        tone: 'success',
+      });
+    }
+
+    const coverageItems = takeActions((action) => isCoverageAction(action));
+    if (coverageItems.length > 0) {
+      groups.push({
+        id: 'coverage',
+        title: 'Coverage',
+        subtitle: 'Protection and warranty gaps that can expose your home to avoidable loss.',
+        items: coverageItems,
+        tone: 'warning',
+      });
+    }
+
+    const replaceRepairItems = takeActions((action) => isReplaceRepairAction(action));
     if (replaceRepairItems.length > 0) {
       groups.push({
         id: 'replace-repair',
         title: 'Replace or Repair',
-        subtitle: 'Aging systems approaching end-of-life — run the analysis to decide.',
+        subtitle: 'Deterministic repair-vs-replace guidance for aging systems and major assets.',
         items: replaceRepairItems,
         tone: 'warning',
       });
     }
 
-    const coverageGaps = actions.filter(
-      (a) =>
-        !immediate.some((i) => i.id === (a.id || a.actionKey)) &&
-        !replaceRepairItems.some((r) => r.id === (a.id || a.actionKey)) &&
-        a.systemType &&
-        a.coverage &&
-        !a.coverage.hasCoverage &&
-        a.status !== 'SUPPRESSED',
-    );
-
-    if (coverageGaps.length > 0) {
+    const providerExecutionItems = [
+      ...bookings
+        .filter((booking) => ACTIVE_BOOKING_STATUSES.has(booking.status))
+        .map(toProviderExecutionBookingItem),
+      ...takeActions((action) => isProviderExecutionAction(action)),
+    ];
+    if (providerExecutionItems.length > 0) {
       groups.push({
-        id: 'coverage-gaps',
-        title: 'Coverage Gaps',
-        subtitle: 'Assets with no warranty or insurance — protect your investment.',
-        items: coverageGaps,
-        tone: 'warning',
-      });
-    }
-
-    const maintenance = actions.filter(
-      (a) =>
-        !immediate.some((i) => i.id === (a.id || a.actionKey)) &&
-        !replaceRepairItems.some((r) => r.id === (a.id || a.actionKey)) &&
-        !coverageGaps.some((c) => c.id === (a.id || a.actionKey)) &&
-        a.status !== 'SUPPRESSED',
-    );
-
-    if (maintenance.length > 0) {
-      groups.push({
-        id: 'maintenance',
-        title: 'Preventive Maintenance',
-        subtitle: 'Proactive tasks to extend the life of your home systems.',
-        items: maintenance,
+        id: 'provider-execution',
+        title: 'Provider Execution',
+        subtitle: 'Book, track, and complete real-world service work with provider context.',
+        items: providerExecutionItems,
         tone: 'info',
       });
     }
 
-    return groups;
-  }, [orchestrationData, incidentsData, resolutionsData, selectedPropertyId]);
+    const preventiveItems = takeActions(() => true);
+    if (preventiveItems.length > 0) {
+      groups.push({
+        id: 'preventive',
+        title: 'Preventive Maintenance',
+        subtitle: 'Planned maintenance journeys that keep systems reliable and reduce emergency risk.',
+        items: preventiveItems,
+        tone: 'info',
+      });
+    }
 
-  // Apply URL filter
-  const visibleGroups = useMemo(() => {
-    if (!filterParam) return triageGroups;
-    return triageGroups.filter((g) => {
-      if (filterParam === 'urgent') return g.id === 'immediate';
-      if (filterParam === 'repair') return g.id === 'replace-repair' || g.id === 'immediate';
-      if (filterParam === 'preventive') return g.id === 'maintenance' || g.id === 'seasonal';
-      return true;
+    const completedItems = [
+      ...suppressedActions
+        .filter((action) => isCompletedSuppressedAction(action))
+        .map((action) => ({ ...action, resolutionJourney: 'completed' })),
+      ...bookings
+        .filter((booking) => COMPLETED_BOOKING_STATUSES.has(booking.status))
+        .map(toCompletedBookingItem),
+      ...completedIncidents.map(toCompletedIncidentItem),
+    ].sort((a: any, b: any) => {
+      const left = Date.parse(String(a.nextDueDate || a.updatedAt || a.createdAt || 0));
+      const right = Date.parse(String(b.nextDueDate || b.updatedAt || b.createdAt || 0));
+      return right - left;
     });
-  }, [triageGroups, filterParam]);
+
+    if (completedItems.length > 0) {
+      groups.push({
+        id: 'completed',
+        title: 'Completed History',
+        subtitle: 'Verified outcomes and finished actions for your home record.',
+        items: completedItems,
+        tone: 'success',
+      });
+    }
+
+    return groups;
+  }, [
+    orchestrationData,
+    incidentsData,
+    completedIncidentsData,
+    bookingsData,
+    resolutionsData,
+    selectedPropertyId,
+  ]);
+
+  const visibleGroups = useMemo(() => {
+    if (normalizedFilter === 'all') {
+      return triageGroups.filter((group) => group.id !== 'completed');
+    }
+    if (normalizedFilter === 'urgent') {
+      return triageGroups.filter((group) => group.id === 'urgent');
+    }
+    if (normalizedFilter === 'save-money') {
+      return triageGroups.filter((group) => group.id === 'cost-savings');
+    }
+    if (normalizedFilter === 'preventive') {
+      return triageGroups.filter((group) => group.id === 'preventive');
+    }
+    if (normalizedFilter === 'coverage') {
+      return triageGroups.filter((group) => group.id === 'coverage');
+    }
+    return triageGroups.filter((group) => group.id === 'completed');
+  }, [triageGroups, normalizedFilter]);
+
+  const filterCounts = useMemo(() => {
+    const byId = new Map(triageGroups.map((group) => [group.id, group.items.length]));
+    const allCount = triageGroups
+      .filter((group) => group.id !== 'completed')
+      .reduce((sum, group) => sum + group.items.length, 0);
+    return {
+      all: allCount,
+      urgent: byId.get('urgent') ?? 0,
+      'save-money': byId.get('cost-savings') ?? 0,
+      preventive: byId.get('preventive') ?? 0,
+      coverage: byId.get('coverage') ?? 0,
+      completed: byId.get('completed') ?? 0,
+    } as Record<ResolutionFilter, number>;
+  }, [triageGroups]);
 
   const handleOpenComplete = (item: any) => {
+    if (!isOrchestrationAction(item)) return;
     setActiveItem(item);
     setIsCompletionModalOpen(true);
   };
@@ -662,6 +993,11 @@ export default function ResolutionCenterClient() {
   const handleOpenService = (item: any) => {
     setActiveItem(item);
     setIsServiceSheetOpen(true);
+  };
+
+  const handleOpenIncident = (item: any) => {
+    if (!selectedPropertyId || !item?.id) return;
+    router.push(`/dashboard/properties/${selectedPropertyId}/incidents/${encodeURIComponent(item.id)}`);
   };
 
   const handleReplaceRepair = (item: any) => {
@@ -685,6 +1021,65 @@ export default function ResolutionCenterClient() {
 
   const handleAddCoverage = (item: any) => {
     router.push('/dashboard/vault?tab=coverage');
+  };
+
+  const handleOpenSavings = () => {
+    router.push('/dashboard/save');
+  };
+
+  const handleOpenBooking = (item: any) => {
+    const bookingId = item?.bookingId || item?.id;
+    if (!bookingId) return;
+    router.push(`/dashboard/bookings/${encodeURIComponent(bookingId)}`);
+  };
+
+  const handleViewProvider = (item: any) => {
+    const providerId = item?.providerId;
+    if (!providerId) return;
+    router.push(`/dashboard/providers/${encodeURIComponent(providerId)}`);
+  };
+
+  const handleOpenHistoryItem = (item: any) => {
+    if (item?.bookingId) {
+      handleOpenBooking(item);
+      return;
+    }
+
+    if (item?.__kind === 'completed-incident' || item?.__kind === 'incident') {
+      handleOpenIncident(item);
+      return;
+    }
+
+    if (selectedPropertyId && item?.relatedEntity?.type === 'INVENTORY_ITEM' && item?.relatedEntity?.id) {
+      router.push(
+        `/dashboard/properties/${selectedPropertyId}/inventory/items/${encodeURIComponent(
+          item.relatedEntity.id
+        )}/replace-repair?from=resolution-center`
+      );
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('filter', 'completed');
+    router.replace(`/dashboard/resolution-center?${params.toString()}`);
+  };
+
+  const handleSwitchToActiveFilter = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('filter');
+    const query = params.toString();
+    router.replace(query ? `/dashboard/resolution-center?${query}` : '/dashboard/resolution-center');
+  };
+
+  const handleFilterChange = (nextFilter: ResolutionFilter) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextFilter === 'all') {
+      params.delete('filter');
+    } else {
+      params.set('filter', nextFilter);
+    }
+    const query = params.toString();
+    router.replace(query ? `/dashboard/resolution-center?${query}` : '/dashboard/resolution-center');
   };
 
   const handleFindProviders = () => {
@@ -713,7 +1108,7 @@ export default function ResolutionCenterClient() {
   };
 
   const handleCompletionSubmit = async (data: any) => {
-    if (!activeItem || !selectedPropertyId) return;
+    if (!activeItem || !selectedPropertyId || !isOrchestrationAction(activeItem)) return;
 
     try {
       await api.markOrchestrationActionCompleted(
@@ -722,8 +1117,8 @@ export default function ResolutionCenterClient() {
         data,
       );
       track('task_completed', {
-        priority: activeItem.riskLevel || activeItem.severity,
-        category: activeItem.category || activeItem.systemType,
+        priority: activeItem.riskLevel || 'MEDIUM',
+        category: String(activeItem.category || activeItem.systemType || activeItem.serviceCategory || 'GENERAL'),
         propertyId: selectedPropertyId,
         journeyType: detectJourneyType(activeItem),
       });
@@ -758,15 +1153,35 @@ export default function ResolutionCenterClient() {
           <p className="text-slate-500 max-w-lg">
             We&apos;ve analyzed your home signals to rank exactly what needs your attention today.
           </p>
-          {filterParam && (
-            <button
-              onClick={() => router.replace('/dashboard/resolution-center')}
-              className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 transition-colors"
-            >
-              Filter: {filterParam}
-              <X className="h-3 w-3" />
-            </button>
-          )}
+          <div className="pt-3">
+            <div className="flex flex-wrap gap-2">
+              {FILTER_OPTIONS.map((filterOption) => {
+                const active = normalizedFilter === filterOption.key;
+                return (
+                  <button
+                    key={filterOption.key}
+                    onClick={() => handleFilterChange(filterOption.key)}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                      active
+                        ? 'border-brand-300 bg-brand-50 text-brand-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                    )}
+                  >
+                    <span>{filterOption.label}</span>
+                    <span
+                      className={cn(
+                        'rounded-full px-1.5 py-0.5 text-[10px] leading-none',
+                        active ? 'bg-white/80 text-brand-700' : 'bg-slate-100 text-slate-600'
+                      )}
+                    >
+                      {filterCounts[filterOption.key]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </header>
 
         {hasLoadError && (
@@ -780,6 +1195,10 @@ export default function ResolutionCenterClient() {
                 void refetchOrchestration();
                 void refetchIncidents();
                 void refetchResolutions();
+                void refetchBookings();
+                if (shouldLoadCompletedIncidents) {
+                  void refetchCompletedIncidents();
+                }
               }}
             >
               Retry loading
@@ -801,6 +1220,8 @@ export default function ResolutionCenterClient() {
                           ? 'bg-red-50 border-red-100 text-red-600'
                           : group.tone === 'warning'
                           ? 'bg-orange-50 border-orange-100 text-orange-600'
+                          : group.tone === 'success'
+                          ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                           : 'bg-blue-50 border-blue-100 text-blue-600',
                       )}
                     >
@@ -817,11 +1238,18 @@ export default function ResolutionCenterClient() {
                       <TriageActionCard
                         key={item.id || item.actionKey}
                         item={item}
+                        groupId={group.id}
                         propertyId={selectedPropertyId || ''}
                         onComplete={() => handleOpenComplete(item)}
                         onOpenService={() => handleOpenService(item)}
+                        onOpenIncident={handleOpenIncident}
                         onReplaceRepair={handleReplaceRepair}
                         onAddCoverage={() => handleAddCoverage(item)}
+                        onOpenSavings={handleOpenSavings}
+                        onOpenBooking={handleOpenBooking}
+                        onViewProvider={handleViewProvider}
+                        onOpenHistoryItem={handleOpenHistoryItem}
+                        onSwitchToActive={handleSwitchToActiveFilter}
                       />
                     ))}
                   </div>
@@ -835,8 +1263,14 @@ export default function ResolutionCenterClient() {
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-xl font-bold text-slate-900">Your Home is All Set</h3>
-              <p className="text-slate-500">No active incidents or urgent maintenance required.</p>
+              <h3 className="text-xl font-bold text-slate-900">
+                {normalizedFilter === 'completed' ? 'No completed history yet' : 'Your Home is All Set'}
+              </h3>
+              <p className="text-slate-500">
+                {normalizedFilter === 'completed'
+                  ? 'Completed actions and finished bookings will appear here once logged.'
+                  : 'No active items in this filter right now.'}
+              </p>
             </div>
           </div>
         )}
