@@ -72,15 +72,18 @@ function restoreRedis() {
 installRedisMock();
 
 const {
+  authRateLimiter,
+  apiRateLimiter,
   geminiRateLimiter,
   ocrRateLimiter,
 } = require('../../src/middleware/rateLimiter.middleware.ts');
 
-function createMockReq({ params = {}, headers = {}, method = 'POST', ip = '127.0.0.1', path = '/' } = {}) {
+function createMockReq({ params = {}, headers = {}, body = {}, method = 'POST', ip = '127.0.0.1', path = '/' } = {}) {
   return {
     method,
     params,
     headers,
+    body,
     ip,
     path,
     url: path,
@@ -230,4 +233,46 @@ test('ocr rate limiter returns 429 with retry metadata after threshold', async (
   const retryAfter = blocked.res.getHeader('retry-after');
   assert.ok(retryAfter, 'Expected Retry-After header on OCR 429 response');
   assert.ok(Number(retryAfter) >= 0, 'Retry-After should be numeric');
+});
+
+test('auth rate limiter scopes login attempts by email to avoid shared-IP collisions', async () => {
+  clearBuckets();
+
+  for (let i = 0; i < 20; i += 1) {
+    const allowed = await runLimiter(authRateLimiter, {
+      path: '/login',
+      body: { email: 'alpha@example.com', password: 'Password!123' },
+      ip: '10.0.0.1',
+    });
+    assert.equal(allowed.blocked, false, `alpha request ${i + 1} should be allowed`);
+  }
+
+  const blocked = await runLimiter(authRateLimiter, {
+    path: '/login',
+    body: { email: 'alpha@example.com', password: 'Password!123' },
+    ip: '10.0.0.1',
+  });
+  assert.equal(blocked.blocked, true);
+  assert.equal(blocked.res.statusCode, 429);
+
+  const otherAccountAllowed = await runLimiter(authRateLimiter, {
+    path: '/login',
+    body: { email: 'beta@example.com', password: 'Password!123' },
+    ip: '10.0.0.1',
+  });
+  assert.equal(otherAccountAllowed.blocked, false);
+});
+
+test('global api limiter skips /api/auth paths', async () => {
+  clearBuckets();
+
+  for (let i = 0; i < 150; i += 1) {
+    const result = await runLimiter(apiRateLimiter, {
+      method: 'POST',
+      path: '/auth/login',
+      body: { email: 'skip-check@example.com', password: 'Password!123' },
+      ip: '192.168.1.5',
+    });
+    assert.equal(result.blocked, false, `auth path request ${i + 1} should be skipped`);
+  }
 });

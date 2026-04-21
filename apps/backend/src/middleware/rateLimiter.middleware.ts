@@ -1,5 +1,6 @@
 import rateLimit, { ipKeyGenerator, Store, ClientRateLimitInfo } from 'express-rate-limit';
 import type { Request } from 'express';
+import { createHash } from 'crypto';
 import { authConfig } from '../config/jwt.config';
 import { verifyAccessToken } from '../utils/jwt.util';
 import { redis } from '../lib/redis';
@@ -84,6 +85,39 @@ function rateLimitKey(req: Request): string {
   return `ip:${ipKeyGenerator(req.ip ?? req.socket?.remoteAddress ?? 'unknown')}`;
 }
 
+function getPathAtApiBoundary(req: Request): string {
+  return (req.path || '').toLowerCase();
+}
+
+function normalizeEmail(input: unknown): string | null {
+  if (typeof input !== 'string') return null;
+  const normalized = input.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function hashTokenForRateLimit(token: string): string {
+  return createHash('sha256').update(token).digest('hex').slice(0, 24);
+}
+
+function authRateLimitKey(req: Request): string {
+  const path = getPathAtApiBoundary(req);
+  const ipKey = `ip:${ipKeyGenerator(req.ip ?? req.socket?.remoteAddress ?? 'unknown')}`;
+  const body = req.body as Record<string, unknown> | undefined;
+
+  // Key login/register attempts by account identity to avoid shared-IP lockouts.
+  if (path === '/login' || path === '/register') {
+    const email = normalizeEmail(body?.email);
+    if (email) return `auth:${path}:email:${email}`;
+  }
+
+  // Key refresh attempts by refresh-session identity, not raw IP.
+  if (path === '/refresh' && typeof body?.refreshToken === 'string' && body.refreshToken.length > 0) {
+    return `auth:${path}:rt:${hashTokenForRateLimit(body.refreshToken)}`;
+  }
+
+  return `auth:${path}:${ipKey}`;
+}
+
 const apiWindowMs = Number(
   process.env.API_RATE_LIMIT_WINDOW_MS ||
   process.env.RATE_LIMIT_WINDOW_MS ||
@@ -122,6 +156,7 @@ function resolveApiRateLimitMax(req: Request): number {
 export const authRateLimiter = rateLimit({
   windowMs: authConfig.rateLimit.windowMs,
   max: authConfig.rateLimit.maxRequests,
+  keyGenerator: authRateLimitKey,
   store: new RedisRateLimitStore(authConfig.rateLimit.windowMs),
   message: {
     success: false,
@@ -163,7 +198,13 @@ export const apiRateLimiter = rateLimit({
   windowMs: apiWindowMs,
   max: resolveApiRateLimitMax,
   keyGenerator: rateLimitKey,
-  skip: (req) => req.method === 'OPTIONS',
+  // Auth routes have dedicated authRateLimiter policies and should not be
+  // counted against the generic /api bucket.
+  skip: (req) => {
+    if (req.method === 'OPTIONS') return true;
+    const path = getPathAtApiBoundary(req);
+    return path === '/auth' || path.startsWith('/auth/');
+  },
   store: new RedisRateLimitStore(apiWindowMs),
   message: {
     success: false,
