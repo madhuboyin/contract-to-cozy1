@@ -662,9 +662,8 @@ function SearchTab({
       const createdLabel = safeFormatDateLabel(doc.createdAt);
       const haystack = normalizeSearchText([
         doc.name,
-        doc.documentType,
         doc.type,
-        doc.summary,
+        doc.description,
         createdLabel,
       ]);
 
@@ -673,7 +672,7 @@ function SearchTab({
         id: `doc:${doc.id}`,
         source: 'documents',
         title: doc.name || 'Untitled Document',
-        subtitle: [doc.documentType?.replace(/_/g, ' '), createdLabel].filter(Boolean).join(' · ') || 'Document',
+        subtitle: [doc.type?.replace(/_/g, ' '), createdLabel].filter(Boolean).join(' · ') || 'Document',
         href: doc.fileUrl,
         external: true,
       });
@@ -683,7 +682,8 @@ function SearchTab({
       const expiryLabel = safeFormatDateLabel(warranty.expiryDate);
       const haystack = normalizeSearchText([
         warranty.providerName,
-        warranty.category,
+        warranty.coverageDetails,
+        warranty.policyNumber,
         expiryLabel,
       ]);
 
@@ -693,7 +693,7 @@ function SearchTab({
         source: 'coverage',
         title: warranty.providerName || 'Coverage Record',
         subtitle:
-          [warranty.category?.replace(/_/g, ' '), expiryLabel ? `expires ${expiryLabel}` : null]
+          [warranty.coverageDetails || warranty.policyNumber, expiryLabel ? `expires ${expiryLabel}` : null]
             .filter(Boolean)
             .join(' · ') || 'Coverage',
         href: `/dashboard/properties/${propertyId}/vault?tab=coverage`,
