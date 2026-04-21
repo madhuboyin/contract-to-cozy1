@@ -3,11 +3,12 @@
 
 import { Router } from 'express';
 import { ProviderController } from '../controllers/provider.controller';
+import { UserRole } from '../types/auth.types';
 
 const router = Router();
 
 // Use require to avoid circular dependency
-const { authenticate } = require('../middleware/auth.middleware');
+const { authenticate, requireRole } = require('../middleware/auth.middleware');
 
 // =============================================================================
 // AUTHENTICATED PROVIDER ROUTES (MUST COME BEFORE /:id ROUTES!)
@@ -41,7 +42,12 @@ const { authenticate } = require('../middleware/auth.middleware');
  *       403:
  *         description: Provider only
  */
-router.get('/services', authenticate, ProviderController.getMyServices);
+router.get(
+  '/services',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.getMyServices,
+);
 
 /**
  * @swagger
@@ -113,7 +119,12 @@ router.get('/services', authenticate, ProviderController.getMyServices);
  *       403:
  *         description: Provider only
  */
-router.post('/services', authenticate, ProviderController.createService);
+router.post(
+  '/services',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.createService,
+);
 
 /**
  * @swagger
@@ -165,7 +176,12 @@ router.post('/services', authenticate, ProviderController.createService);
  *       403:
  *         description: Provider only
  */
-router.patch('/services/:id', authenticate, ProviderController.updateService);
+router.patch(
+  '/services/:id',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.updateService,
+);
 
 /**
  * @swagger
@@ -193,7 +209,12 @@ router.patch('/services/:id', authenticate, ProviderController.updateService);
  *       403:
  *         description: Provider only
  */
-router.delete('/services/:id', authenticate, ProviderController.deleteService);
+router.delete(
+  '/services/:id',
+  authenticate,
+  requireRole(UserRole.PROVIDER, UserRole.ADMIN),
+  ProviderController.deleteService,
+);
 
 // =============================================================================
 // PUBLIC ROUTES (COME AFTER AUTHENTICATED ROUTES)

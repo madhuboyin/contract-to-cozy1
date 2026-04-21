@@ -2,15 +2,17 @@
 
 import express from 'express';
 import { BookingController } from '../controllers/booking.controller';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { UserRole } from '../types/auth.types';
 
 const router = express.Router();
 
 /**
  * Booking Management Routes
  * 
- * All routes require authentication
- * Permissions are checked within each controller
+ * All routes require authentication.
+ * Sensitive role boundaries are enforced at route level with requireRole(),
+ * and controllers/services retain permission checks as defense-in-depth.
  */
 
 /**
@@ -87,7 +89,12 @@ const router = express.Router();
  *       403:
  *         description: Homeowner only
  */
-router.post('/', authenticate, BookingController.createBooking);
+router.post(
+  '/',
+  authenticate,
+  requireRole(UserRole.HOMEOWNER),
+  BookingController.createBooking,
+);
 
 /**
  * @swagger
@@ -292,7 +299,12 @@ router.put('/:id', authenticate, BookingController.updateBooking);
  *       403:
  *         description: Provider only
  */
-router.post('/:id/confirm', authenticate, BookingController.confirmBooking);
+router.post(
+  '/:id/confirm',
+  authenticate,
+  requireRole(UserRole.PROVIDER),
+  BookingController.confirmBooking,
+);
 
 /**
  * @swagger
@@ -324,7 +336,12 @@ router.post('/:id/confirm', authenticate, BookingController.confirmBooking);
  *       403:
  *         description: Provider only
  */
-router.post('/:id/start', authenticate, BookingController.startBooking);
+router.post(
+  '/:id/start',
+  authenticate,
+  requireRole(UserRole.PROVIDER),
+  BookingController.startBooking,
+);
 
 /**
  * @swagger
@@ -383,7 +400,12 @@ router.post('/:id/start', authenticate, BookingController.startBooking);
  *       403:
  *         description: Provider only
  */
-router.post('/:id/complete', authenticate, BookingController.completeBooking);
+router.post(
+  '/:id/complete',
+  authenticate,
+  requireRole(UserRole.PROVIDER),
+  BookingController.completeBooking,
+);
 
 /**
  * @swagger

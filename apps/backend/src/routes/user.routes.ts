@@ -1,6 +1,7 @@
 // apps/backend/src/routes/user.routes.ts
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth.middleware';
+import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { UserRole } from '../types/auth.types';
 import {
   addFavorite,
   deactivateAccount,
@@ -132,7 +133,12 @@ router.delete('/account', authenticate, deleteAccount);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.get('/favorites', authenticate, listFavorites);
+router.get(
+  '/favorites',
+  authenticate,
+  requireRole(UserRole.HOMEOWNER),
+  listFavorites,
+);
 
 /**
  * @swagger
@@ -164,7 +170,12 @@ router.get('/favorites', authenticate, listFavorites);
  *       409:
  *         description: Provider already in favorites
  */
-router.post('/favorites', authenticate, addFavorite);
+router.post(
+  '/favorites',
+  authenticate,
+  requireRole(UserRole.HOMEOWNER),
+  addFavorite,
+);
 
 /**
  * @swagger
@@ -190,6 +201,11 @@ router.post('/favorites', authenticate, addFavorite);
  *       401:
  *         $ref: '#/components/responses/UnauthorizedError'
  */
-router.delete('/favorites/:providerProfileId', authenticate, removeFavorite);
+router.delete(
+  '/favorites/:providerProfileId',
+  authenticate,
+  requireRole(UserRole.HOMEOWNER),
+  removeFavorite,
+);
 
 export default router;
