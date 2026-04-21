@@ -1,4 +1,4 @@
-import { ProviderStatus } from '@prisma/client';
+import { DeliveryStatus, NotificationChannel, ProviderStatus } from '@prisma/client';
 import { hashPassword, comparePassword } from '../utils/password.util';
 import {
   JWTPayload,
@@ -43,6 +43,64 @@ export class AuthService {
     });
 
     return issued.tokens;
+  }
+
+  private getPasswordResetBaseUrl(): string {
+    const explicitBaseUrl =
+      process.env.PASSWORD_RESET_BASE_URL ||
+      process.env.FRONTEND_BASE_URL ||
+      process.env.APP_BASE_URL;
+
+    if (explicitBaseUrl && explicitBaseUrl.trim().length > 0) {
+      return explicitBaseUrl.trim().replace(/\/+$/, '');
+    }
+
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+
+    if (allowedOrigins.length > 0) {
+      return allowedOrigins[0].replace(/\/+$/, '');
+    }
+
+    return 'http://localhost:3000';
+  }
+
+  private buildPasswordResetLink(resetToken: string): string {
+    const baseUrl = this.getPasswordResetBaseUrl();
+    return `${baseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+  }
+
+  private async enqueuePasswordResetDelivery(user: {
+    id: string;
+    email: string;
+  }, resetToken: string): Promise<void> {
+    const resetLink = this.buildPasswordResetLink(resetToken);
+
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        type: 'PASSWORD_RESET_REQUESTED',
+        title: 'Reset your Contract to Cozy password',
+        message:
+          'Use the secure link to set a new password. If you did not request this, you can ignore this email.',
+        actionUrl: resetLink,
+        metadata: {
+          priority: 'HIGH',
+          category: 'AUTH',
+          template: 'PASSWORD_RESET',
+        },
+        deliveries: {
+          create: [
+            {
+              channel: NotificationChannel.EMAIL,
+              status: DeliveryStatus.PENDING,
+            },
+          ],
+        },
+      },
+    });
   }
 
   /**
@@ -360,6 +418,26 @@ export class AuthService {
         message: 'If an account with that email exists, a password reset link has been sent.',
         resetToken: resetToken // For dev/testing purposes
       };
+    }
+
+    try {
+      await this.enqueuePasswordResetDelivery(
+        {
+          id: user.id,
+          email: user.email,
+        },
+        resetToken
+      );
+    } catch (error: any) {
+      // Never leak delivery failures to callers (anti-enumeration + resilience).
+      logger.error(
+        {
+          err: error,
+          userId: user.id,
+          stage: 'forgotPassword_delivery',
+        },
+        'Password reset delivery enqueue failed'
+      );
     }
 
     return { message: 'If an account with that email exists, a password reset link has been sent.' };
