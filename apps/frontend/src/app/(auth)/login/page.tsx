@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import PostLoginTransition from '@/components/system/PostLoginTransition';
+import { APP_CONFIG } from '@/lib/config/appConfig';
 import { UserRole } from '@/types';
 
 export default function LoginPage() {
@@ -90,7 +91,7 @@ export default function LoginPage() {
 
         redirectTimerRef.current = setTimeout(() => {
           router.replace(destination);
-        }, 12000);
+        }, APP_CONFIG.postLoginTransitionMs);
       } else {
         setError('Invalid email or password.');
       }

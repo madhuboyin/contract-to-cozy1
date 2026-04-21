@@ -9,6 +9,7 @@ import { PRIMARY_JOBS } from '@/lib/navigation/jobsNavigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
 import PostLoginTransition from '@/components/system/PostLoginTransition';
+import { APP_CONFIG } from '@/lib/config/appConfig';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -394,7 +395,7 @@ function MobileDrawerNav({ user }: { user: User | null }) {
 // Root layout
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MIN_TRANSITION_MS = 12_000;
+const MIN_TRANSITION_MS = APP_CONFIG.postLoginTransitionMs;
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null; loading: boolean };
