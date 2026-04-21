@@ -29,6 +29,18 @@ interface CategoryBreakdown {
   items: string[];
 }
 
+interface BudgetRecommendation {
+  title: string;
+  why?: string;
+  costOfDelay?: string;
+}
+
+interface NormalizedRecommendation {
+  title: string;
+  why: string;
+  costOfDelay: string;
+}
+
 interface BudgetForecast {
   propertyId: string;
   propertyAddress: string;
@@ -38,12 +50,75 @@ interface BudgetForecast {
   confidenceLevel: number;
   monthlyForecasts: MonthlyForecast[];
   categoryBreakdowns: CategoryBreakdown[];
-  recommendations: string[];
+  recommendations: Array<string | BudgetRecommendation>;
   generatedAt: string;
 }
 
 interface BudgetForecasterProps {
   propertyId: string;
+}
+
+function formatDelayEstimate(monthlyAverage: number) {
+  const low = Math.max(200, Math.round(monthlyAverage * 0.3));
+  const high = Math.max(low + 100, Math.round(monthlyAverage * 0.8));
+  return `$${low.toLocaleString()}–$${high.toLocaleString()}`;
+}
+
+function inferRecommendationDetails(
+  recommendationTitle: string,
+  monthlyAverage: number,
+  propertyAge: number
+): Pick<NormalizedRecommendation, 'why' | 'costOfDelay'> {
+  const normalized = recommendationTitle.toLowerCase();
+  const delayRange = formatDelayEstimate(monthlyAverage);
+
+  if (/(hvac|furnace|heat|ac|cooling)/.test(normalized)) {
+    return {
+      why: 'HVAC systems are a top budget driver, and preventive work reduces the chance of expensive seasonal failures.',
+      costOfDelay: `Delaying can turn routine service into an emergency call, often adding ${delayRange} within the next year.`,
+    };
+  }
+
+  if (/(roof|gutter|leak|water|plumb)/.test(normalized)) {
+    return {
+      why: 'Water-related issues compound quickly and can damage multiple systems if left unresolved.',
+      costOfDelay: `Waiting can escalate from a single repair to broader remediation, often increasing spend by ${delayRange}.`,
+    };
+  }
+
+  if (/(electrical|panel|wiring|circuit)/.test(normalized)) {
+    return {
+      why: 'Electrical reliability protects both safety and appliance lifespan, especially as homes age.',
+      costOfDelay: `Postponing can increase failure risk and urgent troubleshooting costs by ${delayRange}.`,
+    };
+  }
+
+  return {
+    why: `This recommendation targets a meaningful maintenance cost driver for a ${propertyAge}-year-old home.`,
+    costOfDelay: `Deferring this work can increase next-year maintenance spend by an estimated ${delayRange}.`,
+  };
+}
+
+function normalizeRecommendation(
+  recommendation: string | BudgetRecommendation,
+  monthlyAverage: number,
+  propertyAge: number
+): NormalizedRecommendation {
+  if (typeof recommendation === 'string') {
+    const inferred = inferRecommendationDetails(recommendation, monthlyAverage, propertyAge);
+    return {
+      title: recommendation,
+      ...inferred,
+    };
+  }
+
+  const title = recommendation.title;
+  const inferred = inferRecommendationDetails(title, monthlyAverage, propertyAge);
+  return {
+    title,
+    why: recommendation.why || inferred.why,
+    costOfDelay: recommendation.costOfDelay || inferred.costOfDelay,
+  };
 }
 
 export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) {
@@ -119,6 +194,9 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
   const maxMonthly = forecast.monthlyForecasts.length > 0
     ? Math.max(...forecast.monthlyForecasts.map(m => m.total))
     : 1;
+  const normalizedRecommendations = forecast.recommendations.map((recommendation) =>
+    normalizeRecommendation(recommendation, forecast.monthlyAverage, forecast.propertyAge)
+  );
 
   return (
     <div className="space-y-6">
@@ -350,12 +428,27 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
         </CardHeader>
         <CardContent>
           <ul className="space-y-3">
-            {forecast.recommendations.map((rec, index) => (
-              <li key={rec} className="flex items-start gap-3">
-                <span className="flex-shrink-0 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                  {index + 1}
-                </span>
-                <span className="text-gray-800">{rec}</span>
+            {normalizedRecommendations.map((recommendation, index) => (
+              <li
+                key={`${recommendation.title}:${index}`}
+                className="rounded-xl border border-purple-200/80 bg-white/85 p-3"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-purple-600 text-sm font-bold text-white">
+                    {index + 1}
+                  </span>
+                  <div className="space-y-2.5">
+                    <p className="mb-0 font-medium text-gray-900">{recommendation.title}</p>
+                    <div className="rounded-lg border border-teal-200 bg-teal-50 p-2.5">
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-teal-800">Why this matters</p>
+                      <p className="mb-0 text-sm text-teal-900">{recommendation.why}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Cost of delay</p>
+                      <p className="mb-0 text-sm text-amber-900">{recommendation.costOfDelay}</p>
+                    </div>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
