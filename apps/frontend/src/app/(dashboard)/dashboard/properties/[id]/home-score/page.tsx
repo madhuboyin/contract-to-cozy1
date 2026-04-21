@@ -1508,7 +1508,21 @@ export default function HomeScoreReportPage() {
                 ) : null}
               </div>
             ) : (
-              <p className="text-sm text-slate-600">No score driver details available yet.</p>
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-slate-900">No score driver details yet</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Open Resolution Center to add or confirm home records and unlock recommendations with cost-of-delay estimates.
+                </p>
+                <Link
+                  href={propertyId ? `/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}` : "/dashboard/resolution-center"}
+                  className="mt-3 inline-flex items-center text-sm text-slate-900 hover:underline"
+                  onClick={() =>
+                    trackEvent("IMPROVEMENT_ACTION_CLICKED", "score-drivers", { action: "empty_state_cta", target: "resolution-center" })
+                  }
+                >
+                  Open Resolution Center <ChevronRight className="ml-1 h-3 w-3" />
+                </Link>
+              </div>
             )}
           </div>
         </SectionCard>
