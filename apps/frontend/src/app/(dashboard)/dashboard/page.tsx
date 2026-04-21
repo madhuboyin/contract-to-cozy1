@@ -21,7 +21,7 @@ import {
   AlertCircle,
   Box
 } from 'lucide-react';
-import { Booking, ChecklistItem, Warranty, InsurancePolicy, LocalUpdate } from '@/types'; 
+import { Booking, HomeBuyerTask, HomeBuyerChecklist, Warranty, InsurancePolicy, LocalUpdate } from '@/types';
 import { ScoredProperty } from './types'; 
 import { differenceInDays, formatDistanceToNowStrict, isPast, parseISO } from 'date-fns'; 
 
@@ -128,7 +128,7 @@ export interface UrgentActionItem {
 interface DashboardData {
     bookings: Booking[];
     properties: ScoredProperty[];
-    checklist: { id: string, items: ChecklistItem[] } | null; 
+    checklist: HomeBuyerChecklist | null;
     urgentActions: UrgentActionItem[];
     inventoryCount: number;
     activeIncidents: IncidentDTO[];
@@ -136,10 +136,19 @@ interface DashboardData {
     error: string | null;
 }
 
+type ChecklistEntry = {
+    id: string;
+    status: string;
+    nextDueDate?: string | null;
+    title: string;
+    description?: string | null;
+    propertyId?: string | null;
+};
+
 // Helper to consolidate data into a single, actionable list
 const consolidateUrgentActions = (
     properties: ScoredProperty[],
-    checklistItems: ChecklistItem[],
+    checklistItems: ChecklistEntry[],
     warranties: Warranty[],
     insurancePolicies: InsurancePolicy[],
     incidents: IncidentDTO[]
@@ -370,7 +379,7 @@ export default function DashboardPage() {
 
       const [bookingsRes, checklistRes, warrantiesRes, policiesRes, incidentsRes, inventoryRes] = await Promise.all([
         api.listBookings({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' }),
-        api.getChecklist().then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null })).catch(() => ({ success: false, data: null })),
+        api.getHomeBuyerChecklist().then(res => (res.success && res.data ? { success: true, data: res.data } : { success: false, data: null })).catch(() => ({ success: false, data: null })),
         api.listWarranties(),
         api.listInsurancePolicies(),
         propId ? listIncidents({ propertyId: propId, limit: 10 }) : Promise.resolve({ items: [] }),
@@ -394,7 +403,7 @@ export default function DashboardPage() {
   
       const urgentActions = consolidateUrgentActions(
         scoredProperties,
-        checklist?.items || [],
+        checklist?.tasks || [],
         warranties,
         policies,
         activeIncidents

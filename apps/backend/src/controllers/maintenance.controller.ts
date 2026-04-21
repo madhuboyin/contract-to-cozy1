@@ -2,8 +2,8 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types/auth.types';
 import { MaintenanceService } from '../services/maintenance.service';
-import { ChecklistService } from '../services/checklist.service'; // --- ADDED ---
-import { MaintenanceTaskConfig } from '../types/maintenance.types'; // --- ADDED ---
+import { PropertyMaintenanceTaskService } from '../services/PropertyMaintenanceTask.service';
+import { MaintenanceTaskConfig } from '../types/maintenance.types';
 
 /**
  * Gets the list of available maintenance task templates.
@@ -31,9 +31,8 @@ const handleGetMaintenanceTemplates = async (
   }
 };
 
-// --- NEW CONTROLLER FUNCTION FOR PHASE 1 ---
 /**
- * Creates new custom maintenance items for the authenticated user.
+ * Creates new custom maintenance tasks for the authenticated user.
  */
 const handleCreateCustomMaintenanceItems = async (
   req: AuthRequest,
@@ -45,22 +44,36 @@ const handleCreateCustomMaintenanceItems = async (
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    // Body is already validated by the 'validate' middleware
     const { tasks } = req.body as { tasks: MaintenanceTaskConfig[] };
     const { userId } = req.user;
 
-    const result = await ChecklistService.createCustomMaintenanceItems(userId, tasks);
+    const missingPropertyId = tasks.some(t => !t.propertyId);
+    if (missingPropertyId) {
+      return res.status(400).json({ success: false, message: 'Each task must include a propertyId.' });
+    }
+
+    await Promise.all(
+      tasks.map(task =>
+        PropertyMaintenanceTaskService.createUserTask(userId, task.propertyId as string, {
+          title: task.title,
+          description: task.description ?? undefined,
+          serviceCategory: task.serviceCategory ?? undefined,
+          isRecurring: task.isRecurring,
+          frequency: task.frequency ?? undefined,
+          nextDueDate: task.nextDueDate ? (task.nextDueDate as unknown as Date).toISOString() : undefined,
+        })
+      )
+    );
 
     res.status(201).json({
       success: true,
-      message: `${result.count} custom maintenance tasks created.`,
-      data: result,
+      message: `${tasks.length} custom maintenance tasks created.`,
+      data: { count: tasks.length },
     });
   } catch (error) {
     next(error);
   }
 };
-// --- END NEW FUNCTION ---
 
 export const maintenanceController = {
   handleGetMaintenanceTemplates,
