@@ -118,6 +118,9 @@ export default function ProfilePage() {
     const loadProfile = async () => {
       try {
         const result = await api.getUserProfile();
+        if (!result.success) {
+          throw new Error(result.message || 'Failed to load profile');
+        }
         const profileData = result.data;
         const loaded: ProfileFormData = {
           firstName: profileData.firstName || '',
@@ -189,6 +192,9 @@ export default function ProfilePage() {
 
     try {
       const response = await api.updateUserProfile(formData);
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to update profile');
+      }
 
       const updated: ProfileFormData = {
         firstName: response.data?.firstName || '',

@@ -971,6 +971,11 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;

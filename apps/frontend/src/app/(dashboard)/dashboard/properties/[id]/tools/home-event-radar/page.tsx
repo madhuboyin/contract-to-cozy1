@@ -1,9 +1,10 @@
 import HomeEventRadarPageClient from '@/app/(dashboard)/dashboard/home-event-radar/HomeEventRadarPageClient';
 
-export default function HomeEventRadarToolPage({
+export default async function HomeEventRadarToolPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  return <HomeEventRadarPageClient propertyId={params.id} />;
+  const { id } = await params;
+  return <HomeEventRadarPageClient propertyId={id} />;
 }

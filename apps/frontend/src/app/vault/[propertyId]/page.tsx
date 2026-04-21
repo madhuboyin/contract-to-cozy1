@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { VaultView } from '@/components/vault/VaultView';
 
 interface Props {
-  params: { propertyId: string };
+  params: Promise<{ propertyId: string }>;
 }
 
 export const metadata: Metadata = {
@@ -13,6 +13,7 @@ export const metadata: Metadata = {
   description: 'Verified proof-of-care report for a Contract to Cozy managed property.',
 };
 
-export default function VaultPage({ params }: Props) {
-  return <VaultView propertyId={params.propertyId} />;
+export default async function VaultPage({ params }: Props) {
+  const { propertyId } = await params;
+  return <VaultView propertyId={propertyId} />;
 }

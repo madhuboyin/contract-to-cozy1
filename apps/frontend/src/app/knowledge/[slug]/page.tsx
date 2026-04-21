@@ -14,18 +14,19 @@ import { buildKnowledgeArticleToc } from '@/lib/knowledge/articleToc';
 import { buildKnowledgeArticleHref, withKnowledgeProperty } from '@/lib/knowledge/links';
 
 type KnowledgeArticlePageProps = {
-  params: {
+  params: Promise<{
     slug: string;
-  };
-  searchParams?: {
+  }>;
+  searchParams?: Promise<{
     propertyId?: string;
-  };
+  }>;
 };
 
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: KnowledgeArticlePageProps): Promise<Metadata> {
-  const article = await getKnowledgeArticleBySlug(params.slug);
+  const { slug } = await params;
+  const article = await getKnowledgeArticleBySlug(slug);
 
   if (!article) {
     return {
@@ -40,8 +41,9 @@ export async function generateMetadata({ params }: KnowledgeArticlePageProps): P
 }
 
 export default async function KnowledgeArticlePage({ params, searchParams }: KnowledgeArticlePageProps) {
-  const article = await getKnowledgeArticleBySlug(params.slug);
-  const propertyId = searchParams?.propertyId || null;
+  const [{ slug }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const article = await getKnowledgeArticleBySlug(slug);
+  const propertyId = resolvedSearchParams?.propertyId || null;
 
   if (!article) {
     notFound();

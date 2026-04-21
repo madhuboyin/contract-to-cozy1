@@ -18,8 +18,9 @@ export const dynamic = 'force-dynamic';
 export default async function KnowledgeHubPage({
   searchParams,
 }: {
-  searchParams?: { propertyId?: string };
+  searchParams?: Promise<{ propertyId?: string }>;
 }) {
+  const resolvedSearchParams = await searchParams;
   let articles: Awaited<ReturnType<typeof getPublishedKnowledgeArticles>> = [];
   let fetchError = false;
   try {
@@ -27,7 +28,7 @@ export default async function KnowledgeHubPage({
   } catch {
     fetchError = true;
   }
-  const propertyId = searchParams?.propertyId || null;
+  const propertyId = resolvedSearchParams?.propertyId || null;
   const featuredArticle = articles.find((article) => article.featured) || articles[0] || null;
   const remainingArticles = featuredArticle
     ? articles.filter((article) => article.slug !== featuredArticle.slug)

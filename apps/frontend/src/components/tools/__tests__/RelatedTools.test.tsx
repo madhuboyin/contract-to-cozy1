@@ -9,7 +9,7 @@ jest.mock('next/link', () => ({
 const trackRelatedToolsEvent = jest.fn(() => Promise.resolve());
 
 jest.mock('@/features/tools/relatedToolsAnalytics', () => ({
-  trackRelatedToolsEvent: (...args: any[]) => trackRelatedToolsEvent(...args),
+  trackRelatedToolsEvent,
 }));
 
 import RelatedTools from '../RelatedTools';

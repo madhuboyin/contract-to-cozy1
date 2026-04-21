@@ -1,9 +1,10 @@
 import HomeRenovationRiskAdvisorPageClient from '@/app/(dashboard)/dashboard/home-renovation-risk-advisor/HomeRenovationRiskAdvisorPageClient';
 
-export default function HomeRenovationRiskAdvisorToolPage({
+export default async function HomeRenovationRiskAdvisorToolPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  return <HomeRenovationRiskAdvisorPageClient propertyId={params.id} />;
+  const { id } = await params;
+  return <HomeRenovationRiskAdvisorPageClient propertyId={id} />;
 }
