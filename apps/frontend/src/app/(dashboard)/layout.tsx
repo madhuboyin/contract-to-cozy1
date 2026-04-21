@@ -460,10 +460,14 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600 mx-auto" />
-          <p className="mt-3 text-sm text-gray-500">Loading your home...</p>
+      <div className="min-h-screen bg-gray-50 px-4 py-6">
+        <div className="mx-auto w-full max-w-6xl animate-pulse space-y-4">
+          <div className="h-12 rounded-xl bg-gray-200" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="h-28 rounded-xl bg-gray-200" />
+            <div className="h-28 rounded-xl bg-gray-200" />
+          </div>
+          <div className="h-64 rounded-xl bg-gray-200" />
         </div>
       </div>
     );

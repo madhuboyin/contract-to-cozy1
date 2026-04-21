@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { api } from '@/lib/api/client';
 import { formatMemberSince, formatPhoneNumber, toTitleCase } from '@/lib/utils/formatters';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -116,16 +117,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const token = localStorage.getItem('accessToken');
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) return;
-
-        const result = await response.json();
+        const result = await api.getUserProfile();
         const profileData = result.data;
         const loaded: ProfileFormData = {
           firstName: profileData.firstName || '',
@@ -196,39 +188,17 @@ export default function ProfilePage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        let errorMessage = data.error || 'Failed to update profile';
-        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
-          const firstDetail = data.details[0];
-          let fieldName = firstDetail.path.join('.') || 'A field';
-          fieldName = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
-          errorMessage = `Validation Error: ${fieldName} - ${firstDetail.message}`;
-        }
-        setMessage({ type: 'error', text: errorMessage });
-        return;
-      }
+      const response = await api.updateUserProfile(formData);
 
       const updated: ProfileFormData = {
-        firstName: data.data?.firstName || '',
-        lastName: data.data?.lastName || '',
-        email: data.data?.email || '',
-        phone: data.data?.phone || '',
-        address: data.data?.address || '',
-        city: data.data?.city || '',
-        state: data.data?.state || '',
-        zipCode: data.data?.zipCode || '',
+        firstName: response.data?.firstName || '',
+        lastName: response.data?.lastName || '',
+        email: response.data?.email || '',
+        phone: response.data?.phone || '',
+        address: response.data?.address || '',
+        city: response.data?.city || '',
+        state: response.data?.state || '',
+        zipCode: response.data?.zipCode || '',
       };
 
       setFormData(updated);
@@ -236,8 +206,20 @@ export default function ProfilePage() {
       setEditingSection(null);
       setMessage({ type: 'success', text: 'Profile updated successfully.' });
       await refreshUser();
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update profile due to a network error.' });
+    } catch (error: any) {
+      const payload = error?.payload;
+      let errorMessage = error?.message || 'Failed to update profile due to a network error.';
+
+      if (payload?.details && Array.isArray(payload.details) && payload.details.length > 0) {
+        const firstDetail = payload.details[0];
+        let fieldName = firstDetail.path.join('.') || 'A field';
+        fieldName = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+        errorMessage = `Validation Error: ${fieldName} - ${firstDetail.message}`;
+      } else if (payload?.error && typeof payload.error === 'string') {
+        errorMessage = payload.error;
+      }
+
+      setMessage({ type: 'error', text: errorMessage });
     } finally {
       setSavingSection(null);
     }
@@ -254,25 +236,13 @@ export default function ProfilePage() {
     setMessage(null);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      // Keep response behavior aligned with forgot-password page:
-      // only surface server errors; otherwise show generic success.
-      if (response.status >= 500) {
-        setMessage({ type: 'error', text: 'Unable to send reset link right now. Please try again.' });
-        return;
-      }
-
+      await api.requestPasswordReset(email);
       setMessage({
         type: 'success',
         text: 'If an account with that email exists, a password reset link has been sent.',
       });
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to send password reset link due to a network error.' });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to send password reset link due to a network error.' });
     } finally {
       setIsSendingPasswordReset(false);
     }

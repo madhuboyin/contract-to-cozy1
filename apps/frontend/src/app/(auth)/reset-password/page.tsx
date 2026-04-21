@@ -6,25 +6,7 @@
 import { useState, useEffect, Suspense } from 'react'; // Added Suspense
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-async function resetPassword(token: string, newPassword: string) {
-  const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, newPassword }),
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    const message = data.error?.message || 'Password reset failed. The link may be expired or invalid.';
-    return { success: false, error: message };
-  }
-
-  return { success: true, message: 'Your password has been reset successfully.' };
-}
+import { api } from '@/lib/api/client';
 
 // ----------------------------------------------------------------------
 // 1. Client Component using useSearchParams
@@ -86,7 +68,7 @@ function ResetPasswordForm() {
 
     setLoading(true);
     try {
-      const result = await resetPassword(token, formData.newPassword);
+      const result = await api.resetPasswordWithToken(token, formData.newPassword);
 
       if (result.success) {
         setSuccess(true);

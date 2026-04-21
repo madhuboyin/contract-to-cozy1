@@ -4,25 +4,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-async function requestPasswordReset(email: string) {
-  const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-  });
-
-  // Server errors (5xx) should surface to the user so they can retry
-  if (response.status >= 500) {
-    throw new Error('Server error. Please try again later.');
-  }
-
-  // For 4xx responses (including "user not found"), show generic success
-  // to prevent email enumeration attacks.
-  return { success: true, message: 'If an account with that email exists, a password reset link has been sent.' };
-}
+import { api } from '@/lib/api/client';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -42,7 +24,7 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      await requestPasswordReset(email);
+      await api.requestPasswordReset(email);
       setSuccess(true);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');

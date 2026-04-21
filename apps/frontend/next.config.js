@@ -30,6 +30,14 @@ const nextConfig = {
 
   async redirects() {
     return [
+      // Marketplace alias
+      { source: '/marketplace', destination: '/dashboard/providers', permanent: false },
+
+      // Property-scoped canonical redirects
+      { source: '/dashboard/properties/:id/home-lab', destination: '/dashboard/home-lab?propertyId=:id', permanent: false },
+      { source: '/dashboard/properties/:id/resolution-center', destination: '/dashboard/resolution-center?propertyId=:id', permanent: false },
+      { source: '/dashboard/properties/:id/inventory/coverage', destination: '/dashboard/properties/:id/inventory?tab=coverage', permanent: false },
+
       // Vault consolidation
       { source: '/dashboard/inventory', destination: '/dashboard/vault?tab=assets', permanent: false },
       { source: '/dashboard/documents', destination: '/dashboard/vault?tab=documents', permanent: false },

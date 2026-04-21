@@ -452,6 +452,69 @@ class APIClient {
   }
 
   /**
+   * Request password reset email.
+   * Keeps anti-enumeration behavior: treat 4xx as a generic success message.
+   */
+  async requestPasswordReset(email: string): Promise<{ message: string }> {
+    const response = await fetch(`${this.baseURL}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (response.status >= 500) {
+      throw new APIError('Server error. Please try again later.', response.status, data);
+    }
+
+    return {
+      message: 'If an account with that email exists, a password reset link has been sent.',
+    };
+  }
+
+  /**
+   * Reset password using token from email flow.
+   */
+  async resetPasswordWithToken(
+    token: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    const response = await fetch(`${this.baseURL}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, newPassword }),
+    });
+
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error:
+          data?.error?.message ||
+          data?.message ||
+          'Password reset failed. The link may be expired or invalid.',
+      };
+    }
+
+    return {
+      success: true,
+      message: data?.message || 'Your password has been reset successfully.',
+    };
+  }
+
+  /**
    * Deactivate current user account.
    */
   async deactivateMyAccount(): Promise<APIResponse<{ status: string; deactivatedAt: string }>> {
@@ -2173,6 +2236,25 @@ class APIClient {
   async getUserProfile(): Promise<APIResponse<User & { homeownerProfile?: { id: string; segment: string } | null }>> {
     return this.request('/api/users/profile', {
       method: 'GET',
+    });
+  }
+
+  /**
+   * Update user profile.
+   */
+  async updateUserProfile(payload: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+  }): Promise<APIResponse<User & { homeownerProfile?: { id: string; segment: string } | null }>> {
+    return this.request('/api/users/profile', {
+      method: 'PUT',
+      body: payload,
     });
   }
 

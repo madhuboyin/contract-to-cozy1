@@ -20,6 +20,9 @@ export default function ProviderDashboardLayout({
 
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const handleCameraFabClick = () => {
+    router.push('/providers/portfolio?capture=1');
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -48,10 +51,14 @@ export default function ProviderDashboardLayout({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-brand-primary" />
-          <p className="mt-3 text-sm text-slate-600">Loading provider portal...</p>
+      <div className="min-h-screen bg-slate-50 px-4 py-6">
+        <div className="mx-auto w-full max-w-7xl animate-pulse space-y-4">
+          <div className="h-12 rounded-xl bg-slate-200" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="h-28 rounded-xl bg-slate-200" />
+            <div className="h-28 rounded-xl bg-slate-200" />
+          </div>
+          <div className="h-64 rounded-xl bg-slate-200" />
         </div>
       </div>
     );
@@ -166,6 +173,15 @@ export default function ProviderDashboardLayout({
       </header>
 
       <main className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">{children}</main>
+
+      <button
+        type="button"
+        onClick={handleCameraFabClick}
+        className="fixed bottom-6 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-200/60 transition-transform active:scale-95 md:hidden"
+        aria-label="Open camera capture"
+      >
+        <Camera className="h-6 w-6" />
+      </button>
     </div>
   );
 }
