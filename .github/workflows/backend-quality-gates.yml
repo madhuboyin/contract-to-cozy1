@@ -26,5 +26,11 @@ jobs:
       - name: Install backend deps
         run: npm ci --ignore-scripts
 
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+
+      - name: Unit tests
+        run: npm run test:unit
+
       - name: Integration smoke
         run: npm run test:integration
