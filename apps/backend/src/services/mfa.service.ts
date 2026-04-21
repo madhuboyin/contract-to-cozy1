@@ -9,13 +9,12 @@ import { auditLog } from '../lib/logger';
 import {
   generateTotpSecret,
   verifyTotpCode,
-  encryptTotpSecret,
 } from '../utils/mfa.util';
 import {
   generateMfaChallengeToken,
-  generateMfaVerifiedTokenPair,
   verifyMfaChallengeToken,
 } from '../utils/jwt.util';
+import { issueRefreshSessionTokenPair } from '../utils/refresh-session.util';
 
 export class MfaService {
   /**
@@ -164,16 +163,25 @@ export class MfaService {
     await redis.del(lockoutKey);
     auditLog('MFA_CHALLENGE_SUCCESS', userId, {});
 
-    const tokens = generateMfaVerifiedTokenPair({
+    const issued = issueRefreshSessionTokenPair({
       userId,
       email,
       role,
       tokenVersion: user.tokenVersion,
-      mfaEnabled:  true,
+      mfaEnabled: true,
       mfaVerified: true,
     });
 
-    return tokens;
+    await prisma.refreshTokenSession.create({
+      data: {
+        id: issued.sessionId,
+        userId,
+        tokenHash: issued.tokenHash,
+        expiresAt: issued.expiresAt,
+      },
+    });
+
+    return issued.tokens;
   }
 
   /**

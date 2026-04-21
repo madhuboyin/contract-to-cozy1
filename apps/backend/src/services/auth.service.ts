@@ -1,7 +1,7 @@
-import { PrismaClient, ProviderStatus } from '@prisma/client';
+import { ProviderStatus } from '@prisma/client';
 import { hashPassword, comparePassword } from '../utils/password.util';
 import {
-  generateTokenPair,
+  JWTPayload,
   generateEmailVerificationToken,
   generatePasswordResetToken,
   generateMfaChallengeToken,
@@ -20,14 +20,31 @@ import { APIError } from '../middleware/error.middleware';
 import {
   LoginResponse,
   MfaChallengeResponse,
-  RegisterResponse,
   RefreshTokenResponse,
 } from '../types/auth.types';
+import {
+  issueRefreshSessionTokenPair,
+  hashRefreshToken,
+} from '../utils/refresh-session.util';
 
 import { prisma } from '../lib/prisma';
 import { logger, auditLog } from '../lib/logger';
 
 export class AuthService {
+  private async issueAuthTokens(payload: JWTPayload): Promise<{ accessToken: string; refreshToken: string }> {
+    const issued = issueRefreshSessionTokenPair(payload);
+    await prisma.refreshTokenSession.create({
+      data: {
+        id: issued.sessionId,
+        userId: payload.userId,
+        tokenHash: issued.tokenHash,
+        expiresAt: issued.expiresAt,
+      },
+    });
+
+    return issued.tokens;
+  }
+
   /**
    * Register a new user and auto-login
    */
@@ -102,11 +119,12 @@ export class AuthService {
 
     // --- AUTO-LOGIN LOGIC ---
     // Generate access and refresh tokens (tokenVersion starts at 0 for new users)
-    const { accessToken, refreshToken } = generateTokenPair({
+    const { accessToken, refreshToken } = await this.issueAuthTokens({
       userId: user.id,
       email: user.email,
       role: user.role,
-      tokenVersion: 0,
+      tokenVersion: user.tokenVersion,
+      mfaEnabled: user.mfaEnabled,
     });
 
     // Return the same response as the login function
@@ -168,7 +186,7 @@ export class AuthService {
     }
 
     // Generate access and refresh tokens
-    const { accessToken, refreshToken } = generateTokenPair({
+    const { accessToken, refreshToken } = await this.issueAuthTokens({
       userId: user.id,
       email: user.email,
       role: user.role,
@@ -196,8 +214,20 @@ export class AuthService {
    * Logout user
    */
   async logout(refreshToken: string): Promise<void> {
-    // Refresh tokens are stateless JWTs - no database cleanup needed
-    return;
+    try {
+      const payload = verifyRefreshToken(refreshToken);
+      await prisma.refreshTokenSession.updateMany({
+        where: {
+          id: payload.sessionId,
+          userId: payload.userId,
+          tokenHash: hashRefreshToken(refreshToken),
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+    } catch {
+      // Keep logout idempotent and do not reveal token validity.
+    }
   }
 
   /**
@@ -227,17 +257,56 @@ export class AuthService {
       throw new APIError('Session expired. Please log in again.', 401, 'TOKEN_REVOKED');
     }
 
-    // Generate new token pair
-    const newTokens = generateTokenPair({
+    const now = new Date();
+    const incomingTokenHash = hashRefreshToken(refreshToken);
+    const issued = issueRefreshSessionTokenPair({
       userId: user.id,
       email: user.email,
       role: user.role,
       tokenVersion: user.tokenVersion,
+      mfaEnabled: payload.mfaEnabled,
+      mfaVerified: payload.mfaVerified,
     });
 
+    const rotateResult = await prisma.refreshTokenSession.updateMany({
+      where: {
+        id: payload.sessionId,
+        userId: user.id,
+        tokenHash: incomingTokenHash,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: {
+        tokenHash: issued.tokenHash,
+        expiresAt: issued.expiresAt,
+      },
+    });
+
+    if (rotateResult.count !== 1) {
+      const existing = await prisma.refreshTokenSession.findUnique({
+        where: { id: payload.sessionId },
+        select: { userId: true, tokenHash: true, revokedAt: true, expiresAt: true },
+      });
+
+      if (
+        !existing ||
+        existing.userId !== user.id ||
+        existing.revokedAt !== null ||
+        existing.expiresAt <= now
+      ) {
+        throw new APIError('Session expired. Please log in again.', 401, 'TOKEN_REVOKED');
+      }
+
+      if (existing.tokenHash !== incomingTokenHash) {
+        throw new APIError('Refresh token already used. Please log in again.', 401, 'TOKEN_REPLAY_DETECTED');
+      }
+
+      throw new APIError('Session expired. Please log in again.', 401, 'TOKEN_REVOKED');
+    }
+
     return {
-      accessToken: newTokens.accessToken,
-      refreshToken: newTokens.refreshToken,
+      accessToken: issued.tokens.accessToken,
+      refreshToken: issued.tokens.refreshToken,
     };
   }
 
@@ -310,9 +379,15 @@ export class AuthService {
 
     const passwordHash = await hashPassword(data.newPassword);
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash, tokenVersion: { increment: 1 } },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+      });
+      await tx.refreshTokenSession.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
 
     auditLog('PASSWORD_CHANGED', user.id, { method: 'reset' });
@@ -336,9 +411,15 @@ export class AuthService {
     }
 
     const passwordHash = await hashPassword(data.newPassword);
-    await prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash, tokenVersion: { increment: 1 } },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+      });
+      await tx.refreshTokenSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
 
     auditLog('PASSWORD_CHANGED', userId, { method: 'change' });

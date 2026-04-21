@@ -1339,6 +1339,7 @@ model User {
   messages               Message[]
   notifications          Notification[]
   favorites              Favorite[]
+  refreshTokenSessions   RefreshTokenSession[]
   homeReportExports      HomeReportExport[]
   claimsCreated          Claim[]
   claimTimelineEvents    ClaimTimelineEvent[]
@@ -1376,6 +1377,23 @@ model User {
   @@index([role])
   @@index([status])
   @@map("users")
+}
+
+model RefreshTokenSession {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("refresh_token_sessions")
 }
 
 model Address {

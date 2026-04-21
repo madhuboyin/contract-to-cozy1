@@ -1,7 +1,10 @@
 // apps/backend/src/utils/jwt.util.ts
 
+import { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { jwtConfig } from '../config/jwt.config'; // Keep import for expiration times and other keys
+
+type TokenType = 'access' | 'refresh';
 
 export interface JWTPayload {
   userId: string;
@@ -14,6 +17,11 @@ export interface JWTPayload {
   mfaEnabled?: boolean;
   /** True only when the MFA challenge was completed in this session. */
   mfaVerified?: boolean;
+}
+
+export interface RefreshTokenPayload extends JWTPayload {
+  tokenType: 'refresh';
+  sessionId: string;
 }
 
 export interface TokenPair {
@@ -38,11 +46,7 @@ const getJwtSecret = (): string => {
   return secret;
 };
 
-const parseAuthPayload = (decoded: string | jwt.JwtPayload): JWTPayload => {
-  if (typeof decoded === 'string') {
-    throw new Error('Invalid token payload');
-  }
-
+const parseBaseAuthPayload = (decoded: jwt.JwtPayload): JWTPayload => {
   const { userId, email, role, tokenVersion, mfaEnabled, mfaVerified } = decoded as any;
   if (typeof userId !== 'string' || typeof email !== 'string' || typeof role !== 'string') {
     throw new Error('Invalid token payload');
@@ -53,8 +57,54 @@ const parseAuthPayload = (decoded: string | jwt.JwtPayload): JWTPayload => {
     email,
     role,
     tokenVersion: typeof tokenVersion === 'number' ? tokenVersion : undefined,
-    mfaEnabled:   typeof mfaEnabled  === 'boolean' ? mfaEnabled  : undefined,
-    mfaVerified:  typeof mfaVerified === 'boolean' ? mfaVerified : undefined,
+    mfaEnabled: typeof mfaEnabled === 'boolean' ? mfaEnabled : undefined,
+    mfaVerified: typeof mfaVerified === 'boolean' ? mfaVerified : undefined,
+  };
+};
+
+const parseAccessPayload = (decoded: string | jwt.JwtPayload): JWTPayload => {
+  if (typeof decoded === 'string') {
+    throw new Error('Invalid token payload');
+  }
+
+  const payload = decoded as jwt.JwtPayload;
+  if (payload.tokenType !== 'access') {
+    throw new Error('Invalid token type');
+  }
+
+  return parseBaseAuthPayload(payload);
+};
+
+const parseRefreshPayload = (decoded: string | jwt.JwtPayload): RefreshTokenPayload => {
+  if (typeof decoded === 'string') {
+    throw new Error('Invalid token payload');
+  }
+
+  const payload = decoded as jwt.JwtPayload;
+  if (payload.tokenType !== 'refresh' || typeof payload.sessionId !== 'string') {
+    throw new Error('Invalid token payload');
+  }
+
+  return {
+    ...parseBaseAuthPayload(payload),
+    tokenType: 'refresh',
+    sessionId: payload.sessionId,
+  };
+};
+
+const buildBaseClaims = (payload: JWTPayload): JWTPayload => {
+  const { userId, email, role, tokenVersion, mfaEnabled, mfaVerified } = payload;
+  if (typeof userId !== 'string' || typeof email !== 'string' || typeof role !== 'string') {
+    throw new Error('Invalid token payload');
+  }
+
+  return {
+    userId,
+    email,
+    role,
+    tokenVersion: typeof tokenVersion === 'number' ? tokenVersion : undefined,
+    mfaEnabled: typeof mfaEnabled === 'boolean' ? mfaEnabled : undefined,
+    mfaVerified: typeof mfaVerified === 'boolean' ? mfaVerified : undefined,
   };
 };
 
@@ -85,28 +135,41 @@ const verifyPurposeToken = (
  * Generate access token (FIXED to use ENV variable for signing)
  */
 export const generateAccessToken = (payload: JWTPayload): string => {
-  return jwt.sign(payload, getJwtSecret(), {
-    expiresIn: jwtConfig.accessToken.expiresIn,
-  } as jwt.SignOptions);
+  return jwt.sign(
+    { ...buildBaseClaims(payload), tokenType: 'access' as TokenType },
+    getJwtSecret(),
+    {
+      expiresIn: jwtConfig.accessToken.expiresIn,
+    } as jwt.SignOptions
+  );
 };
 
 /**
  * Generate refresh token (FIXED to use ENV variable for signing)
  */
-export const generateRefreshToken = (payload: JWTPayload): string => {
+export const generateRefreshToken = (payload: JWTPayload, refreshSessionId: string): string => {
   // Uses the same main secret for consistency and reliability
-  return jwt.sign(payload, getJwtSecret(), {
-    expiresIn: jwtConfig.refreshToken.expiresIn,
-  } as jwt.SignOptions);
+  return jwt.sign(
+    {
+      ...buildBaseClaims(payload),
+      tokenType: 'refresh' as TokenType,
+      sessionId: refreshSessionId,
+      jti: randomUUID(),
+    },
+    getJwtSecret(),
+    {
+      expiresIn: jwtConfig.refreshToken.expiresIn,
+    } as jwt.SignOptions
+  );
 };
 
 /**
  * Generate both access and refresh tokens
  */
-export const generateTokenPair = (payload: JWTPayload): TokenPair => {
+export const generateTokenPair = (payload: JWTPayload, refreshSessionId: string): TokenPair => {
   return {
     accessToken: generateAccessToken(payload),
-    refreshToken: generateRefreshToken(payload),
+    refreshToken: generateRefreshToken(payload, refreshSessionId),
   };
 };
 
@@ -116,7 +179,7 @@ export const generateTokenPair = (payload: JWTPayload): TokenPair => {
 export const verifyAccessToken = (token: string): JWTPayload => {
   try {
     const decoded = jwt.verify(token, getJwtSecret());
-    return parseAuthPayload(decoded);
+    return parseAccessPayload(decoded);
   } catch (error) {
     throw new Error('Invalid or expired access token');
   }
@@ -125,10 +188,10 @@ export const verifyAccessToken = (token: string): JWTPayload => {
 /**
  * Verify refresh token (FIXED to use ENV variable for verification)
  */
-export const verifyRefreshToken = (token: string): JWTPayload => {
+export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
   try {
     const decoded = jwt.verify(token, getJwtSecret());
-    return parseAuthPayload(decoded);
+    return parseRefreshPayload(decoded);
   } catch (error) {
     throw new Error('Invalid or expired refresh token');
   }
@@ -236,10 +299,9 @@ export const verifyMfaChallengeToken = (
  * Use this instead of generateTokenPair when the full MFA challenge has
  * been completed.
  */
-export const generateMfaVerifiedTokenPair = (payload: JWTPayload): TokenPair => {
-  const enriched = { ...payload, mfaVerified: true };
-  return {
-    accessToken:  jwt.sign(enriched, getJwtSecret(), { expiresIn: jwtConfig.accessToken.expiresIn }  as jwt.SignOptions),
-    refreshToken: jwt.sign(enriched, getJwtSecret(), { expiresIn: jwtConfig.refreshToken.expiresIn } as jwt.SignOptions),
-  };
+export const generateMfaVerifiedTokenPair = (
+  payload: JWTPayload,
+  refreshSessionId: string
+): TokenPair => {
+  return generateTokenPair({ ...payload, mfaVerified: true }, refreshSessionId);
 };

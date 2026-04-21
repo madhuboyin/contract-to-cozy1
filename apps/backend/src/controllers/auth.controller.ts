@@ -185,13 +185,10 @@ export class AuthController {
    */
   async logout(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      // In a stateless JWT system, logout is handled client-side
-      // by removing the tokens from storage
-      // 
-      // For a more robust solution, you could:
-      // 1. Maintain a token blacklist in Redis
-      // 2. Use shorter-lived tokens
-      // 3. Implement token versioning
+      const maybeRefreshToken = req.body?.refreshToken;
+      if (typeof maybeRefreshToken === 'string' && maybeRefreshToken.length > 0) {
+        await authService.logout(maybeRefreshToken);
+      }
 
       res.status(200).json({
         success: true,
