@@ -97,7 +97,7 @@ export default function SignupPage() {
           password: formData.password,
         });
 
-        if (loginResult && loginResult.success) {
+        if (loginResult && 'success' in loginResult && loginResult.success) {
           router.push('/dashboard');
           return;
         }

@@ -9,6 +9,7 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHash,
   createHmac,
   randomBytes,
   timingSafeEqual,
@@ -191,4 +192,38 @@ export function verifyTotpCode(encryptedSecret: string, code: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Normalize user-entered recovery codes so UI formatting differences
+ * (spaces/hyphens/casing) do not affect verification.
+ */
+export function normalizeRecoveryCode(input: string): string {
+  return input.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+
+function formatRecoveryCode(normalized: string): string {
+  if (normalized.length <= 4) return normalized;
+  return `${normalized.slice(0, 4)}-${normalized.slice(4)}`;
+}
+
+/**
+ * Generate one-time recovery codes for MFA fallback.
+ * Codes are returned in user-facing format (e.g. "A1B2-C3D4").
+ */
+export function generateRecoveryCodes(count = 10): string[] {
+  const set = new Set<string>();
+  while (set.size < count) {
+    const normalized = randomBytes(4).toString('hex').toUpperCase();
+    set.add(formatRecoveryCode(normalized));
+  }
+  return Array.from(set);
+}
+
+/**
+ * Hash normalized recovery code values before DB storage.
+ */
+export function hashRecoveryCode(input: string): string {
+  const normalized = normalizeRecoveryCode(input);
+  return createHash('sha256').update(normalized, 'utf8').digest('hex');
 }

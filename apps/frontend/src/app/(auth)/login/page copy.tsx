@@ -57,8 +57,8 @@ export default function LoginPage() {
         password: formData.password 
       });
 
-      // FIX: Check if result is a truthy value (not null) for SUCCESS.
-      if (result) {
+      // FIX: Check if login returned a completed session (not MFA challenge response).
+      if (result && 'user' in result) {
         // SUCCESS: The AuthContext handled saving tokens and setting user state.
         
         // Use the returned user role for immediate redirection
@@ -73,6 +73,8 @@ export default function LoginPage() {
           router.push('/dashboard');
         }
         
+      } else if (result && 'mfaRequired' in result && result.mfaRequired) {
+        setError('MFA is required for this account. Please use the updated login flow.');
       } else {
         // FAILURE: login() returned null.
         setError('Invalid email or password. Please try again.');

@@ -139,6 +139,7 @@ export class AuthService {
         role: user.role as any,
         emailVerified: user.emailVerified,
         status: user.status as any,
+        mfaEnabled: user.mfaEnabled,
         segment: segment, // <-- segment included in the response
       },
     };
@@ -205,6 +206,7 @@ export class AuthService {
         role: user.role as any,
         emailVerified: user.emailVerified,
         status: user.status as any,
+        mfaEnabled: user.mfaEnabled,
         segment: user.homeownerProfile?.segment || 'EXISTING_OWNER',
       },
     };
@@ -440,6 +442,7 @@ export class AuthService {
         role: true,
         emailVerified: true,
         status: true,
+        mfaEnabled: true,
         avatar: true,
         bio: true,
         createdAt: true,

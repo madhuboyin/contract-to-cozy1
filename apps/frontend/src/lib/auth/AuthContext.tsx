@@ -2,14 +2,18 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, LoginInput, RegisterInput, LoginResponse, HomeownerSegment } from '@/types';
+import { User, LoginInput, RegisterInput, LoginResponse, HomeownerSegment, MfaChallengeResponse } from '@/types';
 import { api } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
+
+type AuthLoginResult = LoginResponse | MfaChallengeResponse;
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (data: LoginInput) => Promise<LoginResponse | null>;
+  login: (data: LoginInput) => Promise<AuthLoginResult | null>;
+  completeMfaChallenge: (mfaToken: string, code: string) => Promise<LoginResponse | null>;
+  completeMfaRecoveryChallenge: (mfaToken: string, recoveryCode: string) => Promise<LoginResponse | null>;
   logout: () => void;
   register: (data: RegisterInput) => Promise<LoginResponse | null>;
   isAuthenticated: boolean;
@@ -34,6 +38,13 @@ const USER_STORAGE_KEY = 'user';
 const TOKEN_STORAGE_KEY = 'accessToken';
 
 const isBrowser = typeof window !== 'undefined';
+
+function extractApiData<T>(payload: any): T {
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return payload.data as T;
+  }
+  return payload as T;
+}
 
 /**
  * Fetches the current user data using the stored token.
@@ -111,12 +122,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [logout]);
 
 
-  const login = useCallback(async (data: LoginInput): Promise<LoginResponse | null> => {
+  const login = useCallback(async (data: LoginInput): Promise<AuthLoginResult | null> => {
     const response = await api.login(data);
 
     if (response.success) {
-      const loginData = (response.data as any).data || response.data;
-      const { accessToken, refreshToken, user } = loginData;
+      const loginData = extractApiData<AuthLoginResult>(response.data);
+
+      if ((loginData as MfaChallengeResponse).mfaRequired) {
+        return loginData;
+      }
+
+      const { accessToken, refreshToken, user } = loginData as LoginResponse;
 
       if (isBrowser) {
         // Access/refresh token persistence + middleware cookie sync are handled
@@ -129,6 +145,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return null;
   }, []);
 
+  const completeMfaChallenge = useCallback(
+    async (mfaToken: string, code: string): Promise<LoginResponse | null> => {
+      const response = await api.verifyMfaChallenge(mfaToken, code);
+      if (!response.success) return null;
+
+      const token = isBrowser ? localStorage.getItem(TOKEN_STORAGE_KEY) : null;
+      if (!token) return null;
+
+      const freshUser = await fetchCurrentUser(token);
+      if (!freshUser) return null;
+
+      setUser(freshUser);
+      const tokenData = extractApiData<{ accessToken: string; refreshToken: string }>(response.data);
+      return {
+        success: true,
+        accessToken: tokenData.accessToken,
+        refreshToken: tokenData.refreshToken,
+        user: freshUser,
+      };
+    },
+    []
+  );
+
+  const completeMfaRecoveryChallenge = useCallback(
+    async (mfaToken: string, recoveryCode: string): Promise<LoginResponse | null> => {
+      const response = await api.verifyMfaRecoveryChallenge(mfaToken, recoveryCode);
+      if (!response.success) return null;
+
+      const token = isBrowser ? localStorage.getItem(TOKEN_STORAGE_KEY) : null;
+      if (!token) return null;
+
+      const freshUser = await fetchCurrentUser(token);
+      if (!freshUser) return null;
+
+      setUser(freshUser);
+      const tokenData = extractApiData<{ accessToken: string; refreshToken: string }>(response.data);
+      return {
+        success: true,
+        accessToken: tokenData.accessToken,
+        refreshToken: tokenData.refreshToken,
+        user: freshUser,
+      };
+    },
+    []
+  );
+
   const register = useCallback(async (data: RegisterInput): Promise<LoginResponse | null> => {
     try {
       const response = await api.register(data);
@@ -136,8 +198,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (response.success && response.data.user) {
         // After registration, immediately log them in or grab tokens if provided
         // For simplicity, assuming the backend immediately gives them a valid session to use 'me' endpoint
-        const loginResponse = await login({ email: data.email, password: data.password }); 
-        return loginResponse;
+        const loginResponse = await login({ email: data.email, password: data.password });
+        if (loginResponse && !('mfaRequired' in loginResponse)) {
+          return loginResponse;
+        }
+        return null;
       }
       return null;
     } catch (error) {
@@ -189,6 +254,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     user,
     loading,
     login,
+    completeMfaChallenge,
+    completeMfaRecoveryChallenge,
     logout,
     register,
     isAuthenticated,

@@ -33,8 +33,14 @@ export async function verifyMfaSetup(req: AuthRequest, res: Response, next: Next
   try {
     const userId = req.user!.userId;
     const { code } = req.body as { code: string };
-    await mfaService.verifySetup(userId, code);
-    res.status(200).json({ success: true, data: { message: 'MFA enabled successfully' } });
+    const result = await mfaService.verifySetup(userId, code);
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'MFA enabled successfully',
+        recoveryCodes: result.recoveryCodes,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -57,6 +63,25 @@ export async function verifyMfaChallenge(req: AuthRequest, res: Response, next: 
 }
 
 /**
+ * POST /api/auth/mfa/challenge/recovery
+ * Exchange an MFA challenge token + recovery code for real access/refresh tokens.
+ */
+export async function verifyMfaRecoveryChallenge(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { mfaToken, recoveryCode } = req.body as { mfaToken: string; recoveryCode: string };
+    auditLog('MFA_RECOVERY_CHALLENGE_ATTEMPT', null, { ip: req.ip });
+    const tokens = await mfaService.verifyRecoveryChallenge(mfaToken, recoveryCode);
+    res.status(200).json({ success: true, data: tokens });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * POST /api/auth/mfa/disable
  * Disable MFA after verifying the current TOTP code.
  * Requires: authenticated, mfaEnabled=true.
@@ -67,6 +92,39 @@ export async function disableMfa(req: AuthRequest, res: Response, next: NextFunc
     const { code } = req.body as { code: string };
     await mfaService.disable(userId, code);
     res.status(200).json({ success: true, data: { message: 'MFA disabled successfully' } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/auth/mfa/status
+ * Return MFA enabled status + remaining recovery code count for authenticated user.
+ */
+export async function getMfaStatus(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = req.user!.userId;
+    const data = await mfaService.getStatus(userId);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/auth/mfa/recovery-codes/regenerate
+ * Regenerate one-time recovery codes after verifying current TOTP code.
+ */
+export async function regenerateMfaRecoveryCodes(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = req.user!.userId;
+    const { code } = req.body as { code: string };
+    const data = await mfaService.regenerateRecoveryCodes(userId, code);
+    res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
   }

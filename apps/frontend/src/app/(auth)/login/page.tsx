@@ -5,14 +5,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { AlertCircle, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import LoginSuccessTransition from '@/components/auth/LoginSuccessTransition';
 import { UserRole } from '@/types';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, user } = useAuth();
+  const { login, user, completeMfaChallenge, completeMfaRecoveryChallenge } = useAuth();
   const [loading, setLoading] = useState(false);
   const sessionExpired = searchParams.get('reason') === 'session_expired';
   const [error, setError] = useState<string | null>(
@@ -28,6 +28,10 @@ export default function LoginPage() {
     email: '',
     password: '',
   });
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
   // Redirect if already authenticated — in useEffect to avoid render-time side effects
   useEffect(() => {
@@ -68,7 +72,13 @@ export default function LoginPage() {
       setLoading(true);
       const result = await login({ email: formData.email, password: formData.password });
 
-      if (result) {
+      if (result && 'mfaRequired' in result && result.mfaRequired) {
+        setMfaToken(result.mfaToken);
+        setError(null);
+        return;
+      }
+
+      if (result && 'success' in result && result.success) {
         const userRole = result.user.role as UserRole;
         const firstName = result.user.firstName || '';
         let destination = '/dashboard';
@@ -92,6 +102,45 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error('Login component caught network error:', err);
       setError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaToken) return;
+
+    try {
+      setLoading(true);
+      const result = useRecoveryCode
+        ? await completeMfaRecoveryChallenge(mfaToken, recoveryCode)
+        : await completeMfaChallenge(mfaToken, mfaCode);
+
+      if (!result?.success) {
+        setError(useRecoveryCode ? 'Invalid recovery code.' : 'Invalid authentication code.');
+        return;
+      }
+
+      const userRole = result.user.role as UserRole;
+      const firstName = result.user.firstName || '';
+      let destination = '/dashboard';
+
+      if (userRole === 'PROVIDER') {
+        destination = '/providers/dashboard';
+      } else if (userRole === 'ADMIN') {
+        destination = '/dashboard/knowledge-admin';
+      }
+
+      setTransitionRole(userRole);
+      setTransitionName(firstName);
+      setIsTransitioning(true);
+
+      redirectTimerRef.current = setTimeout(() => {
+        router.replace(destination);
+      }, 1100);
+    } catch (err: any) {
+      setError(err?.message || (useRecoveryCode ? 'Invalid recovery code.' : 'Invalid authentication code.'));
     } finally {
       setLoading(false);
     }
@@ -156,78 +205,152 @@ export default function LoginPage() {
             )}
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="w-full pl-11 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="you@example.com"
-                  />
+            {!mfaToken ? (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Email */}
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      required
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="w-full pl-11 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="you@example.com"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {/* Password with Toggle */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
-                  <input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="w-full pl-11 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="••••••••"
-                  />
+                {/* Password with Toggle */}
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={formData.password}
+                      onChange={handleChange}
+                      className="w-full pl-11 pr-12 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700 focus:outline-none touch-manipulation"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Forgot Password */}
+                <div className="text-right">
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                >
+                  {loading ? 'Signing In...' : 'Sign In'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleMfaSubmit} className="space-y-4">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                  Enter your {useRecoveryCode ? 'recovery code' : '6-digit authenticator code'} to finish signing in.
+                </div>
+
+                {!useRecoveryCode ? (
+                  <div>
+                    <label htmlFor="mfaCode" className="block text-sm font-medium text-gray-700 mb-1">
+                      Authenticator code
+                    </label>
+                    <input
+                      id="mfaCode"
+                      name="mfaCode"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      required
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="123456"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label htmlFor="recoveryCode" className="block text-sm font-medium text-gray-700 mb-1">
+                      Recovery code
+                    </label>
+                    <input
+                      id="recoveryCode"
+                      name="recoveryCode"
+                      required
+                      value={recoveryCode}
+                      onChange={(e) => setRecoveryCode(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="ABCD-EF12"
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                >
+                  {loading ? 'Verifying...' : 'Verify and continue'}
+                </button>
+
+                <div className="flex items-center justify-between text-sm">
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-gray-500 hover:text-gray-700 focus:outline-none touch-manipulation"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={() => setUseRecoveryCode((prev) => !prev)}
+                    className="font-medium text-blue-600 hover:text-blue-700"
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
+                    {useRecoveryCode ? 'Use authenticator code' : 'Use recovery code'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMfaToken(null);
+                      setMfaCode('');
+                      setRecoveryCode('');
+                      setUseRecoveryCode(false);
+                      setError(null);
+                    }}
+                    className="font-medium text-gray-600 hover:text-gray-800"
+                  >
+                    Use another account
                   </button>
                 </div>
-              </div>
-
-              {/* Forgot Password */}
-              <div className="text-right">
-                <Link
-                  href="/forgot-password"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-              >
-                {loading ? 'Signing In...' : 'Sign In'}
-              </button>
-            </form>
+              </form>
+            )}
 
             {/* Footer Links */}
             <div className="mt-6 space-y-3 text-center">

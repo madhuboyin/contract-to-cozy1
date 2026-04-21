@@ -18,6 +18,7 @@ import {
   AddressSummaryCard,
   ProfileHeroCard,
 } from '@/components/profile/MobileProfileCards';
+import { MfaSettingsPanel } from '@/components/security/MfaSettingsPanel';
 
 type EditableSection = 'profile' | 'address';
 
@@ -324,6 +325,12 @@ export default function ProfilePage() {
               memberSince={memberSinceLabel}
             />
           </MobileSection>
+
+          <MobileSection>
+            <MobileCard variant="compact">
+              <MfaSettingsPanel />
+            </MobileCard>
+          </MobileSection>
         </MobilePageContainer>
       </div>
 
@@ -610,6 +617,10 @@ export default function ProfilePage() {
                   }
                 />
               </div>
+            </SectionCard>
+
+            <SectionCard className="h-full xl:col-span-2" title="Security">
+              <MfaSettingsPanel />
             </SectionCard>
           </div>
         </div>

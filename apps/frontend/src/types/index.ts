@@ -979,6 +979,7 @@ export interface User {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
+  mfaEnabled?: boolean;
   // FIX: Add missing creation date property to resolve the build error in profile/page.tsx
   createdAt: string; 
   segment?: HomeownerSegment; 
@@ -998,6 +999,22 @@ export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   user: User;
+}
+
+export interface MfaChallengeResponse {
+  mfaRequired: true;
+  mfaToken: string;
+}
+
+export type AuthLoginResponse = LoginResponse | MfaChallengeResponse;
+
+export interface MfaStatusResponse {
+  mfaEnabled: boolean;
+  recoveryCodesRemaining: number;
+}
+
+export interface MfaRecoveryCodesResponse {
+  recoveryCodes: string[];
 }
 
 // FIX: Add success property to RegisterResponse

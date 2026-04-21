@@ -44,6 +44,7 @@ export interface UserResponse {
   role: UserRole;
   emailVerified: boolean;
   status: UserStatus;
+  mfaEnabled?: boolean;
   segment?: string;
 }
 
@@ -59,6 +60,15 @@ export interface LoginResponse {
 export interface MfaChallengeResponse {
   mfaRequired: true;
   mfaToken: string;
+}
+
+export interface MfaStatusResponse {
+  mfaEnabled: boolean;
+  recoveryCodesRemaining: number;
+}
+
+export interface MfaRecoveryCodesResponse {
+  recoveryCodes: string[];
 }
 
 // Register response

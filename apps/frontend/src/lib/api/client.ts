@@ -4,8 +4,11 @@ import {
   APIResponse,
   LoginInput,
   LoginResponse,
+  AuthLoginResponse,
   RegisterInput,
   RegisterResponse,
+  MfaStatusResponse,
+  MfaRecoveryCodesResponse,
   User,
   Provider,
   Service,
@@ -443,20 +446,139 @@ class APIClient {
   /**
    * Login user
    */
-  async login(input: LoginInput): Promise<APIResponse<LoginResponse>> {
-    const response = await this.request<LoginResponse>('/api/auth/login', {
+  async login(input: LoginInput): Promise<APIResponse<AuthLoginResponse>> {
+    const response = await this.request<AuthLoginResponse>('/api/auth/login', {
       method: 'POST',
       body: input,
     });
 
     if (response.success) {
-      this.setToken(response.data.accessToken);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('refreshToken', response.data.refreshToken);
+      const payload: any =
+        response.data && typeof response.data === 'object' && 'data' in (response.data as any)
+          ? (response.data as any).data
+          : response.data;
+
+      const hasTokenPair =
+        payload &&
+        typeof payload === 'object' &&
+        typeof payload.accessToken === 'string' &&
+        typeof payload.refreshToken === 'string';
+
+      if (hasTokenPair) {
+        this.setToken(payload.accessToken);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('refreshToken', payload.refreshToken);
+        }
       }
     }
 
     return response;
+  }
+
+  /**
+   * Verify TOTP code for MFA login challenge.
+   */
+  async verifyMfaChallenge(
+    mfaToken: string,
+    code: string
+  ): Promise<APIResponse<{ accessToken: string; refreshToken: string }>> {
+    const response = await this.request<{ accessToken: string; refreshToken: string }>('/api/auth/mfa/challenge', {
+      method: 'POST',
+      body: { mfaToken, code },
+    });
+
+    if (response.success) {
+      const payload: any =
+        response.data && typeof response.data === 'object' && 'data' in (response.data as any)
+          ? (response.data as any).data
+          : response.data;
+
+      if (payload?.accessToken && payload?.refreshToken) {
+        this.setToken(payload.accessToken);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('refreshToken', payload.refreshToken);
+        }
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Verify one-time recovery code for MFA login challenge.
+   */
+  async verifyMfaRecoveryChallenge(
+    mfaToken: string,
+    recoveryCode: string
+  ): Promise<APIResponse<{ accessToken: string; refreshToken: string }>> {
+    const response = await this.request<{ accessToken: string; refreshToken: string }>('/api/auth/mfa/challenge/recovery', {
+      method: 'POST',
+      body: { mfaToken, recoveryCode },
+    });
+
+    if (response.success) {
+      const payload: any =
+        response.data && typeof response.data === 'object' && 'data' in (response.data as any)
+          ? (response.data as any).data
+          : response.data;
+
+      if (payload?.accessToken && payload?.refreshToken) {
+        this.setToken(payload.accessToken);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('refreshToken', payload.refreshToken);
+        }
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Begin MFA setup and return otpauth URI + base32 secret.
+   */
+  async setupMfa(): Promise<APIResponse<{ otpauthUri: string; base32Secret: string }>> {
+    return this.request('/api/auth/mfa/setup', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Verify initial setup TOTP and receive recovery codes.
+   */
+  async verifyMfaSetup(code: string): Promise<APIResponse<{ message: string; recoveryCodes: string[] }>> {
+    return this.request('/api/auth/mfa/setup/verify', {
+      method: 'POST',
+      body: { code },
+    });
+  }
+
+  /**
+   * Disable MFA after verifying current TOTP code.
+   */
+  async disableMfa(code: string): Promise<APIResponse<{ message: string }>> {
+    return this.request('/api/auth/mfa/disable', {
+      method: 'POST',
+      body: { code },
+    });
+  }
+
+  /**
+   * Regenerate recovery codes after verifying current TOTP code.
+   */
+  async regenerateMfaRecoveryCodes(code: string): Promise<APIResponse<MfaRecoveryCodesResponse>> {
+    return this.request('/api/auth/mfa/recovery-codes/regenerate', {
+      method: 'POST',
+      body: { code },
+    });
+  }
+
+  /**
+   * Fetch MFA status and remaining recovery code count.
+   */
+  async getMfaStatus(): Promise<APIResponse<MfaStatusResponse>> {
+    return this.request('/api/auth/mfa/status', {
+      method: 'GET',
+    });
   }
 
   /**

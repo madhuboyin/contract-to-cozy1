@@ -7,7 +7,9 @@ import { redis } from '../lib/redis';
 import { APIError } from '../middleware/error.middleware';
 import { auditLog } from '../lib/logger';
 import {
+  generateRecoveryCodes,
   generateTotpSecret,
+  hashRecoveryCode,
   verifyTotpCode,
 } from '../utils/mfa.util';
 import {
@@ -16,7 +18,68 @@ import {
 } from '../utils/jwt.util';
 import { issueRefreshSessionTokenPair } from '../utils/refresh-session.util';
 
+type TokenPair = { accessToken: string; refreshToken: string };
+
 export class MfaService {
+  private async issueVerifiedSessionTokens(input: {
+    userId: string;
+    email: string;
+    role: string;
+    tokenVersion: number;
+  }): Promise<TokenPair> {
+    const issued = issueRefreshSessionTokenPair({
+      userId: input.userId,
+      email: input.email,
+      role: input.role,
+      tokenVersion: input.tokenVersion,
+      mfaEnabled: true,
+      mfaVerified: true,
+    });
+
+    await prisma.refreshTokenSession.create({
+      data: {
+        id: issued.sessionId,
+        userId: input.userId,
+        tokenHash: issued.tokenHash,
+        expiresAt: issued.expiresAt,
+      },
+    });
+
+    return issued.tokens;
+  }
+
+  private async replaceRecoveryCodes(userId: string): Promise<string[]> {
+    const recoveryCodes = generateRecoveryCodes(10);
+    const hashedCodes = recoveryCodes.map((code) => ({
+      userId,
+      codeHash: hashRecoveryCode(code),
+    }));
+
+    await prisma.$transaction(async (tx) => {
+      await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
+      await tx.mfaRecoveryCode.createMany({ data: hashedCodes });
+    });
+
+    return recoveryCodes;
+  }
+
+  private async loadMfaUserForChallenge(userId: string): Promise<{ mfaSecret: string; tokenVersion: number }> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { mfaEnabled: true, mfaSecret: true, status: true, tokenVersion: true },
+    });
+
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      throw new APIError('MFA not configured for this account', 400, 'MFA_NOT_CONFIGURED');
+    }
+
+    if (user.status === 'SUSPENDED' || user.status === 'INACTIVE') {
+      throw new APIError('Account access denied', 403, 'ACCOUNT_DENIED');
+    }
+
+    return { mfaSecret: user.mfaSecret, tokenVersion: user.tokenVersion };
+  }
+
   /**
    * Begin MFA setup for a user.
    * Generates a new TOTP secret, stores it (encrypted) in the DB,
@@ -49,7 +112,7 @@ export class MfaService {
    * Confirm MFA setup by verifying the first TOTP code from the authenticator app.
    * Sets mfaEnabled = true on success.
    */
-  async verifySetup(userId: string, code: string): Promise<void> {
+  async verifySetup(userId: string, code: string): Promise<{ recoveryCodes: string[] }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { mfaEnabled: true, mfaSecret: true },
@@ -69,7 +132,56 @@ export class MfaService {
       data: { mfaEnabled: true },
     });
 
+    const recoveryCodes = await this.replaceRecoveryCodes(userId);
+
     auditLog('MFA_SETUP_COMPLETE', userId, {});
+    return { recoveryCodes };
+  }
+
+  /**
+   * Return MFA status and remaining (unused) recovery codes for authenticated user.
+   */
+  async getStatus(userId: string): Promise<{ mfaEnabled: boolean; recoveryCodesRemaining: number }> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { mfaEnabled: true },
+    });
+
+    if (!user) throw new APIError('User not found', 404, 'USER_NOT_FOUND');
+
+    if (!user.mfaEnabled) {
+      return { mfaEnabled: false, recoveryCodesRemaining: 0 };
+    }
+
+    const recoveryCodesRemaining = await prisma.mfaRecoveryCode.count({
+      where: { userId, usedAt: null },
+    });
+
+    return { mfaEnabled: true, recoveryCodesRemaining };
+  }
+
+  /**
+   * Regenerate one-time recovery codes after verifying a valid TOTP code.
+   * Existing unused/used recovery codes are invalidated.
+   */
+  async regenerateRecoveryCodes(userId: string, code: string): Promise<{ recoveryCodes: string[] }> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { mfaEnabled: true, mfaSecret: true },
+    });
+
+    if (!user) throw new APIError('User not found', 404, 'USER_NOT_FOUND');
+    if (!user.mfaEnabled) throw new APIError('MFA is not enabled', 400, 'MFA_NOT_ENABLED');
+    if (!user.mfaSecret) throw new APIError('MFA state inconsistent', 500, 'MFA_STATE_ERROR');
+
+    if (!verifyTotpCode(user.mfaSecret, code)) {
+      auditLog('MFA_RECOVERY_REGEN_FAILED', userId, { reason: 'invalid_code' });
+      throw new APIError('Invalid TOTP code', 401, 'INVALID_MFA_CODE');
+    }
+
+    const recoveryCodes = await this.replaceRecoveryCodes(userId);
+    auditLog('MFA_RECOVERY_REGENERATED', userId, {});
+    return { recoveryCodes };
   }
 
   /**
@@ -91,7 +203,7 @@ export class MfaService {
   async verifyChallenge(
     mfaToken: string,
     code: string
-  ): Promise<{ accessToken: string; refreshToken: string }> {
+  ): Promise<TokenPair> {
     const MFA_MAX_FAILURES = 5;
     const MFA_LOCKOUT_TTL = 900; // 15 minutes in seconds
 
@@ -119,18 +231,7 @@ export class MfaService {
     }
 
     // --- 3. Load user and verify account status -----------------------------
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { mfaEnabled: true, mfaSecret: true, status: true, tokenVersion: true },
-    });
-
-    if (!user || !user.mfaEnabled || !user.mfaSecret) {
-      throw new APIError('MFA not configured for this account', 400, 'MFA_NOT_CONFIGURED');
-    }
-
-    if (user.status === 'SUSPENDED' || user.status === 'INACTIVE') {
-      throw new APIError('Account access denied', 403, 'ACCOUNT_DENIED');
-    }
+    const user = await this.loadMfaUserForChallenge(userId);
 
     // --- 4. Verify TOTP code ------------------------------------------------
     if (!verifyTotpCode(user.mfaSecret, code)) {
@@ -163,25 +264,54 @@ export class MfaService {
     await redis.del(lockoutKey);
     auditLog('MFA_CHALLENGE_SUCCESS', userId, {});
 
-    const issued = issueRefreshSessionTokenPair({
+    return this.issueVerifiedSessionTokens({
       userId,
       email,
       role,
       tokenVersion: user.tokenVersion,
-      mfaEnabled: true,
-      mfaVerified: true,
     });
+  }
 
-    await prisma.refreshTokenSession.create({
-      data: {
-        id: issued.sessionId,
+  /**
+   * Exchange an MFA challenge token + one-time recovery code for a token pair.
+   * Recovery codes are single-use and immediately consumed on success.
+   */
+  async verifyRecoveryChallenge(
+    mfaToken: string,
+    recoveryCode: string
+  ): Promise<TokenPair> {
+    let challengePayload: { userId: string; email: string; role: string };
+    try {
+      challengePayload = verifyMfaChallengeToken(mfaToken);
+    } catch {
+      throw new APIError('Invalid or expired MFA challenge token', 401, 'INVALID_MFA_TOKEN');
+    }
+
+    const { userId, email, role } = challengePayload;
+    const user = await this.loadMfaUserForChallenge(userId);
+    const hashedCode = hashRecoveryCode(recoveryCode);
+
+    const consumeResult = await prisma.mfaRecoveryCode.updateMany({
+      where: {
         userId,
-        tokenHash: issued.tokenHash,
-        expiresAt: issued.expiresAt,
+        codeHash: hashedCode,
+        usedAt: null,
       },
+      data: { usedAt: new Date() },
     });
 
-    return issued.tokens;
+    if (consumeResult.count !== 1) {
+      auditLog('MFA_RECOVERY_CHALLENGE_FAILED', userId, { reason: 'invalid_recovery_code' });
+      throw new APIError('Invalid recovery code', 401, 'INVALID_RECOVERY_CODE');
+    }
+
+    auditLog('MFA_RECOVERY_CHALLENGE_SUCCESS', userId, {});
+    return this.issueVerifiedSessionTokens({
+      userId,
+      email,
+      role,
+      tokenVersion: user.tokenVersion,
+    });
   }
 
   /**
@@ -202,9 +332,12 @@ export class MfaService {
       throw new APIError('Invalid TOTP code', 401, 'INVALID_MFA_CODE');
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { mfaEnabled: false, mfaSecret: null },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { mfaEnabled: false, mfaSecret: null },
+      });
+      await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
     });
 
     auditLog('MFA_DISABLED', userId, {});

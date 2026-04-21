@@ -14,6 +14,7 @@ import {
   MobileKpiTile,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate';
+import { MfaSettingsPanel } from '@/components/security/MfaSettingsPanel';
 
 interface BusinessInfo {
   businessName: string;
@@ -563,6 +564,10 @@ export default function ProviderProfilePage() {
             <button className="inline-flex min-h-[40px] items-center rounded-lg bg-brand-primary px-3 text-sm font-semibold text-white hover:bg-brand-primary/90">
               Update password
             </button>
+          </MobileCard>
+
+          <MobileCard variant="compact" className="space-y-3">
+            <MfaSettingsPanel />
           </MobileCard>
 
           <MobileCard variant="compact" className="space-y-3 border-rose-200 bg-rose-50/40">

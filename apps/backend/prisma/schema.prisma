@@ -1340,6 +1340,7 @@ model User {
   notifications          Notification[]
   favorites              Favorite[]
   refreshTokenSessions   RefreshTokenSession[]
+  mfaRecoveryCodes       MfaRecoveryCode[]
   homeReportExports      HomeReportExport[]
   claimsCreated          Claim[]
   claimTimelineEvents    ClaimTimelineEvent[]
@@ -1394,6 +1395,21 @@ model RefreshTokenSession {
   @@index([expiresAt])
   @@index([revokedAt])
   @@map("refresh_token_sessions")
+}
+
+model MfaRecoveryCode {
+  id        String   @id @default(uuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([usedAt])
+  @@unique([userId, codeHash])
+  @@map("mfa_recovery_codes")
 }
 
 model Address {
