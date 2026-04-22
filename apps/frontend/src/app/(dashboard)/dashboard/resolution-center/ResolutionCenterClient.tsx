@@ -19,7 +19,6 @@ import {
   BarChart3,
   ShieldCheck,
   CircleDollarSign,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -30,10 +29,8 @@ import { IncidentDTO } from '@/types/incidents.types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  ConfidenceBadge,
   SourceChip,
   WhyThisMattersCard,
-  RiskOfDelayBadge,
   EstimatedSavingsBadge,
 } from '@/components/trust';
 import { CompletionModal } from '@/components/orchestration/CompletionModal';
@@ -79,34 +76,34 @@ const FILTER_META: Record<
   }
 > = {
   all: {
-    icon: CalendarClock,
-    tintCls: 'text-slate-500',
-    activeCls: 'border-slate-300 bg-slate-900 text-white shadow-sm shadow-slate-900/20',
+    icon: Wrench,
+    tintCls: 'text-teal-600',
+    activeCls: 'border-teal-400 bg-teal-50 text-teal-700',
   },
   urgent: {
     icon: ShieldAlert,
-    tintCls: 'text-rose-600',
-    activeCls: 'border-rose-300 bg-rose-50 text-rose-700 shadow-sm shadow-rose-200/60',
+    tintCls: 'text-red-500',
+    activeCls: 'border-red-300 bg-red-50 text-red-700',
   },
   'save-money': {
     icon: CircleDollarSign,
     tintCls: 'text-emerald-600',
-    activeCls: 'border-emerald-300 bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-200/60',
+    activeCls: 'border-emerald-300 bg-emerald-50 text-emerald-700',
   },
   preventive: {
     icon: Wrench,
     tintCls: 'text-amber-600',
-    activeCls: 'border-amber-300 bg-amber-50 text-amber-700 shadow-sm shadow-amber-200/60',
+    activeCls: 'border-amber-300 bg-amber-50 text-amber-700',
   },
   coverage: {
     icon: ShieldCheck,
     tintCls: 'text-blue-600',
-    activeCls: 'border-blue-300 bg-blue-50 text-blue-700 shadow-sm shadow-blue-200/60',
+    activeCls: 'border-blue-300 bg-blue-50 text-blue-700',
   },
   completed: {
     icon: CheckCircle2,
     tintCls: 'text-slate-500',
-    activeCls: 'border-slate-300 bg-slate-100 text-slate-700 shadow-sm shadow-slate-300/50',
+    activeCls: 'border-slate-300 bg-slate-100 text-slate-700',
   },
 };
 
@@ -232,6 +229,21 @@ function resolveItemSubtitle(item: any): string {
     item.relatedChecklistItem?.title ||
     'Home workflow'
   );
+}
+
+function resolveAssetImage(item: any): string | null {
+  const token = String(item?.title || item?.systemType || item?.category || '')
+    .trim()
+    .toLowerCase();
+
+  if (!token) return null;
+  if (token.includes('hvac') || token.includes('furnace') || token.includes('ac')) return '/images/HVAC.png';
+  if (token.includes('water heater') || token.includes('heater')) return '/images/Water-Heater.png';
+  if (token.includes('refrigerator') || token.includes('fridge')) return '/images/Refrigerator.png';
+  if (token.includes('washer')) return '/images/washer.png';
+  if (token.includes('roof')) return '/images/roof.png';
+  if (token.includes('panel')) return '/images/electric-panel.png';
+  return null;
 }
 
 function normalizeFilterParam(rawFilter: string | null): ResolutionFilter {
@@ -449,24 +461,24 @@ const JOURNEY_META: Record<
   }
 > = {
   'urgent-issue': {
-    label: 'Urgent Issue',
-    badgeCls: 'border border-rose-200 bg-rose-50 text-rose-700',
+    label: 'Urgent',
+    badgeCls: 'border border-red-200 bg-red-50 text-red-600',
     borderCls: 'border-rose-200/80 hover:border-rose-300',
-    panelCls: 'border-rose-100 bg-rose-50/50',
+    panelCls: 'border-rose-100 bg-rose-50/40',
     primaryButtonCls: 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700',
     icon: ShieldAlert,
-    primaryCta: 'Get Emergency Help',
-    secondaryCta: 'Find Provider',
+    primaryCta: 'Resolve Now',
+    secondaryCta: 'Find Local Pros',
   },
   'repair-vs-replace': {
-    label: 'Replace or Repair',
+    label: 'Urgent',
     badgeCls: 'border border-orange-200 bg-orange-50 text-orange-700',
     borderCls: 'border-orange-200/80 hover:border-orange-300',
     panelCls: 'border-orange-100 bg-orange-50/50',
     primaryButtonCls: 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700',
     icon: BarChart3,
-    primaryCta: 'Run Analysis',
-    secondaryCta: 'Mark Fixed',
+    primaryCta: 'Resolve Now',
+    secondaryCta: 'Find Local Pros',
   },
   coverage: {
     label: 'Coverage',
@@ -475,38 +487,38 @@ const JOURNEY_META: Record<
     panelCls: 'border-blue-100 bg-blue-50/50',
     primaryButtonCls: 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700',
     icon: ShieldCheck,
-    primaryCta: 'Add Coverage',
-    secondaryCta: 'Mark Covered',
+    primaryCta: 'Resolve Now',
+    secondaryCta: 'Find Local Pros',
   },
   preventive: {
-    label: 'Maintenance',
+    label: 'Preventive',
     badgeCls: 'border border-amber-200 bg-amber-50 text-amber-700',
     borderCls: 'border-amber-200/80 hover:border-amber-300',
     panelCls: 'border-amber-100 bg-amber-50/50',
-    primaryButtonCls: 'bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700',
+    primaryButtonCls: 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700',
     icon: Wrench,
-    primaryCta: 'Schedule Service',
-    secondaryCta: 'Mark Done',
+    primaryCta: 'Resolve Now',
+    secondaryCta: 'Find Local Pros',
   },
   'cost-savings': {
-    label: 'Cost Savings',
+    label: 'Save Money',
     badgeCls: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
     borderCls: 'border-emerald-200/80 hover:border-emerald-300',
     panelCls: 'border-emerald-100 bg-emerald-50/50',
     primaryButtonCls: 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700',
     icon: TrendingUp,
-    primaryCta: 'See Savings',
-    secondaryCta: 'Act Later',
+    primaryCta: 'Resolve Now',
+    secondaryCta: 'Find Local Pros',
   },
   'provider-execution': {
-    label: 'Provider Execution',
+    label: 'In Progress',
     badgeCls: 'border border-sky-200 bg-sky-50 text-sky-700',
     borderCls: 'border-sky-200/80 hover:border-sky-300',
     panelCls: 'border-sky-100 bg-sky-50/50',
     primaryButtonCls: 'bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700',
     icon: CalendarClock,
-    primaryCta: 'Track Booking',
-    secondaryCta: 'View Provider',
+    primaryCta: 'Resolve Now',
+    secondaryCta: 'Find Local Pros',
   },
   completed: {
     label: 'Completed',
@@ -632,6 +644,9 @@ function TriageActionCard({
   const subtitle = resolveItemSubtitle(item);
   const confidence = normalizeConfidence(item);
   const dueLabel = formatRelativeDateLabel(item.nextDueDate);
+  const confidenceScore =
+    confidence.score ?? (confidence.level === 'high' ? 100 : confidence.level === 'medium' ? 80 : 55);
+  const assetImage = resolveAssetImage(item);
   const sourceLabels = [
     item.primarySignalSource?.sourceSystem,
     ...(Array.isArray(item.signalSources)
@@ -678,7 +693,7 @@ function TriageActionCard({
     exposure > 0
       ? {
           icon: DollarSign,
-          label: 'At Risk',
+          label: 'At risk',
           value: formatCompactUsd(Math.round(exposure)),
           tone: 'text-rose-700',
         }
@@ -686,7 +701,7 @@ function TriageActionCard({
     exposure > 0 && journey !== 'completed'
       ? {
           icon: AlertTriangle,
-          label: 'If Delayed',
+          label: 'If delayed',
           value: formatCompactUsd(Math.round(exposure * 1.4)),
           tone: 'text-amber-700',
         }
@@ -694,7 +709,7 @@ function TriageActionCard({
     dueLabel
       ? {
           icon: Clock,
-          label: 'Action Window',
+          label: 'Best window',
           value: dueLabel,
           tone: item.overdue ? 'text-rose-700' : 'text-slate-700',
         }
@@ -704,76 +719,84 @@ function TriageActionCard({
   return (
     <article
       className={cn(
-        'group relative overflow-hidden rounded-[24px] border bg-white/90 p-4 shadow-[0_6px_30px_rgba(15,23,42,0.06)] transition-all duration-300 motion-reduce:transition-none md:p-5 lg:p-6 hover:-translate-y-0.5 hover:shadow-[0_12px_36px_rgba(15,23,42,0.10)]',
-        meta.borderCls,
+        'group relative overflow-hidden rounded-2xl border bg-white transition-colors',
+        journey === 'urgent-issue' || journey === 'repair-vs-replace'
+          ? 'border-red-300'
+          : journey === 'cost-savings'
+          ? 'border-emerald-300'
+          : 'border-slate-200',
       )}
     >
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-300/80 to-transparent" />
-      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_240px]">
-        <div className={cn('space-y-4 rounded-2xl border p-4', meta.panelCls)}>
-          <div className="flex items-center justify-between gap-2">
+      <div className="grid gap-0 lg:grid-cols-[230px_minmax(0,1fr)_255px]">
+        <div
+          className={cn(
+            'flex h-full flex-col rounded-l-2xl border-r p-4',
+            journey === 'urgent-issue' || journey === 'repair-vs-replace'
+              ? 'bg-red-50/40 border-red-100'
+              : journey === 'cost-savings'
+              ? 'bg-emerald-50/40 border-emerald-100'
+              : 'bg-slate-50/50 border-slate-100'
+          )}
+        >
+          <div className="mb-4 flex items-center justify-start">
             <span
               className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]',
+                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em]',
                 meta.badgeCls,
               )}
             >
               <JourneyIcon className="h-3 w-3" />
               {meta.label}
             </span>
-            {item.overdue && (
-              <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-rose-700">
-                Overdue
-              </span>
+          </div>
+
+          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm">
+            {assetImage ? (
+              <Image
+                src={assetImage}
+                alt={item.title || 'Issue'}
+                width={78}
+                height={78}
+                className="h-[78px] w-[78px] object-contain"
+                unoptimized
+              />
+            ) : (
+              <JourneyIcon className="h-8 w-8 text-slate-700" />
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/70 bg-white/80 shadow-sm">
-              <JourneyIcon className="h-5 w-5 text-slate-700" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="truncate text-lg font-semibold text-slate-900">{item.title}</h3>
-              <p className="truncate text-xs font-medium uppercase tracking-[0.08em] text-slate-500">{subtitle}</p>
-            </div>
+          <div className="mt-4 text-center">
+            <h3 className="line-clamp-2 text-2xl font-semibold leading-7 text-slate-900">{item.title}</h3>
+            <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <ConfidenceBadge level={confidence.level} score={confidence.score} />
-            {dueLabel && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">
-                <Clock className="h-3 w-3" />
-                {dueLabel}
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {(sourceLabels.length > 0 ? sourceLabels : ['CtC Intelligence']).map((source) => (
-              <SourceChip key={source} source={source} />
-            ))}
+          <div className="mt-4 flex justify-center">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {confidenceScore}% Confidence
+            </span>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <p className="text-sm leading-6 text-slate-600">{item.description || item.summary || 'No additional summary available yet.'}</p>
+        <div className="space-y-4 p-5">
+          <div>
+            <h4 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-[40px] md:leading-[44px]">{item.title}</h4>
+            <p className="mt-2 max-w-xl text-base leading-7 text-slate-600">
+              {item.description || item.summary || 'No additional summary available yet.'}
+            </p>
           </div>
 
           {insightPills.length > 0 && (
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-3">
               {insightPills.map((metric) => {
                 const MetricIcon = metric.icon;
                 return (
-                  <div
-                    key={metric.label}
-                    className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2"
-                  >
-                    <div className={cn('flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]', metric.tone)}>
+                  <div key={metric.label} className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                    <div className={cn('flex items-center gap-1 text-[11px] font-semibold uppercase', metric.tone)}>
                       <MetricIcon className="h-3.5 w-3.5" />
                       {metric.label}
                     </div>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{metric.value}</p>
+                    <p className="mt-1 text-base font-semibold text-slate-900">{metric.value}</p>
                   </div>
                 );
               })}
@@ -781,14 +804,14 @@ function TriageActionCard({
           )}
 
           {showRiskBadge && (
-            <RiskOfDelayBadge
-              className="w-full border-amber-200/80 bg-amber-50/70"
-              riskText={
-                item.riskLevel === 'CRITICAL'
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">Risk of delay</p>
+              <p className="mt-1 text-sm font-medium text-amber-900">
+                {item.riskLevel === 'CRITICAL'
                   ? 'Delaying this can escalate into emergency repair costs and property damage.'
-                  : `Postponing this can increase total cost to ${formatCompactUsd(Math.round(exposure * 1.4))}.`
-              }
-            />
+                  : `Postponing this can increase total cost to ${formatCompactUsd(Math.round(exposure * 1.4))}.`}
+              </p>
+            </div>
           )}
 
           {showSavingsBadge && (
@@ -819,15 +842,18 @@ function TriageActionCard({
               </p>
             </div>
           )}
+
+          <div className="flex flex-wrap gap-2">
+            {(sourceLabels.length > 0 ? sourceLabels : ['CtC Intelligence']).map((source) => (
+              <SourceChip key={source} source={source} className="bg-slate-100/70 text-slate-500" />
+            ))}
+          </div>
         </div>
 
-        <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white/80 p-3.5">
+        <div className="space-y-2 border-l border-slate-100 p-5">
           <Button
             onClick={handlePrimary}
-            className={cn(
-              'h-11 w-full rounded-xl text-sm font-semibold text-white shadow-sm',
-              meta.primaryButtonCls,
-            )}
+            className={cn('h-11 w-full rounded-xl text-base font-semibold text-white', meta.primaryButtonCls)}
           >
             {meta.primaryCta}
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -836,30 +862,35 @@ function TriageActionCard({
           <Button
             variant="outline"
             onClick={handleSecondary}
-            className="h-10 w-full rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+            className="h-10 w-full rounded-xl border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             {meta.secondaryCta}
           </Button>
 
-          {(journey === 'urgent-issue' || journey === 'preventive') && (
-            <Button
-              variant="ghost"
-              onClick={onOpenService}
-              className="h-10 w-full justify-between rounded-xl border border-transparent px-3 text-slate-600 hover:border-brand-100 hover:bg-brand-50 hover:text-brand-700"
-            >
-              Compare Prices
-              <TrendingUp className="h-4 w-4" />
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            onClick={onOpenService}
+            className="h-10 w-full rounded-xl border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Compare Quotes
+          </Button>
 
           <Button
-            variant="ghost"
-            onClick={handleDetails}
-            className="h-10 w-full justify-between rounded-xl border border-transparent px-3 text-slate-500 hover:border-slate-200 hover:bg-slate-100 hover:text-slate-700"
+            variant="outline"
+            onClick={onAddCoverage}
+            className="h-10 w-full rounded-xl border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            View Details
-            <ChevronRight className="h-4 w-4" />
+            Check Warranty
           </Button>
+
+          <button
+            type="button"
+            onClick={handleDetails}
+            className="mt-2 flex h-10 w-full items-center justify-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
+          >
+            View details
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </article>
@@ -1455,209 +1486,177 @@ export default function ResolutionCenterClient() {
 
   return (
     <>
-      <div className="space-y-6 pb-20">
-        <header className="relative overflow-hidden rounded-[28px] border border-cyan-100 bg-gradient-to-br from-cyan-50 via-sky-50 to-white p-6 shadow-[0_10px_40px_rgba(14,116,144,0.08)] md:p-8">
-          <div className="pointer-events-none absolute -left-16 top-1/2 h-52 w-52 -translate-y-1/2 rounded-full bg-cyan-200/20 blur-3xl" />
-          <div className="pointer-events-none absolute -right-8 top-6 h-40 w-40 rounded-full bg-sky-200/25 blur-3xl" />
-
-          <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center">
-            <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-200/70 bg-white/70 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-700">
-                <CalendarClock className="h-3.5 w-3.5" />
-                Resolution Center
-              </div>
-
-              <div className="space-y-2">
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">Home Triage</h1>
-                <p className="max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-                  We analyzed your home signals and ranked what needs attention now, what protects your budget, and what can wait.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-rose-200/70 bg-white/80 p-3">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-rose-700">
-                    <ShieldAlert className="h-4 w-4" />
-                    Urgent Issues
-                  </div>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">{filterCounts.urgent}</p>
+      <div className="grid items-start gap-6 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="space-y-6">
+          <header className="rounded-3xl border border-[#cdebf4] bg-[#eaf7fc] p-6 md:p-8">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
+              <div className="space-y-6">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700 md:text-sm">
+                  Resolution Center
                 </div>
-                <div className="rounded-2xl border border-amber-200/70 bg-white/80 p-3">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-700">
-                    <DollarSign className="h-4 w-4" />
-                    Total At Risk
-                  </div>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">{formatCompactUsd(Math.round(totalAtRisk))}</p>
+                <div className="space-y-2">
+                  <h1 className="text-5xl font-bold tracking-tight text-slate-900 md:text-7xl">Home Triage</h1>
+                  <p className="max-w-xl text-base leading-7 text-slate-600 md:text-[28px] md:leading-9">
+                    We&apos;ve analyzed your home signals to rank exactly what needs your attention today.
+                  </p>
                 </div>
-                <div className="rounded-2xl border border-emerald-200/70 bg-white/80 p-3">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
-                    <Sparkles className="h-4 w-4" />
-                    High Confidence
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-red-200 bg-white p-4">
+                    <p className="text-sm font-semibold text-red-600">Urgent Issues</p>
+                    <p className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">{filterCounts.urgent}</p>
+                    <p className="text-sm text-red-600">Need attention</p>
                   </div>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">{highConfidenceCount}</p>
-                </div>
-                <div className="rounded-2xl border border-blue-200/70 bg-white/80 p-3">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
-                    <ShieldCheck className="h-4 w-4" />
-                    Coverage Gaps
+                  <div className="rounded-xl border border-emerald-200 bg-white p-4">
+                    <p className="text-sm font-semibold text-slate-600">Total at risk</p>
+                    <p className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">{formatCompactUsd(Math.round(totalAtRisk))}</p>
+                    <p className="text-sm text-slate-500">Potential exposure</p>
                   </div>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">{filterCounts.coverage}</p>
+                  <div className="rounded-xl border border-indigo-200 bg-white p-4">
+                    <p className="text-sm font-semibold text-slate-600">High confidence</p>
+                    <p className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">{highConfidenceCount}</p>
+                    <p className="text-sm text-slate-500">Issues detected</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="relative">
-              <div className="hidden md:block">
+              <div className="grid grid-cols-[1fr_150px] items-center gap-3">
                 <Image
                   src="/images/Home_Illustration.png"
                   alt="Home triage illustration"
-                  width={580}
-                  height={420}
-                  className="pointer-events-none mx-auto w-full max-w-[280px] select-none object-contain"
+                  width={460}
+                  height={300}
+                  className="h-auto w-full object-contain"
                   priority
+                  unoptimized
                 />
-              </div>
-              <div className="rounded-2xl border border-white/90 bg-white/90 p-4 shadow-lg shadow-sky-100/50 md:mt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Triage Pulse</p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5">
-                    <p className="text-[11px] text-slate-500">Open items</p>
-                    <p className="text-lg font-semibold text-slate-900">{filterCounts.all}</p>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center">
+                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-[6px] border-emerald-500/90 text-5xl font-bold text-slate-900">
+                    82
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5">
-                    <p className="text-[11px] text-slate-500">Completed</p>
-                    <p className="text-lg font-semibold text-slate-900">{filterCounts.completed}</p>
-                  </div>
+                  <p className="mt-3 text-sm font-medium text-slate-600">Home Health</p>
+                  <p className="mt-1 text-xl font-semibold text-emerald-600">Good</p>
+                  <p className="mt-2 text-xs text-slate-400">{latestUpdateLabel}</p>
                 </div>
-                <p className="mt-3 text-xs text-slate-500">{latestUpdateLabel}</p>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="space-y-6">
-            <section className="rounded-2xl border border-slate-200 bg-white/90 p-2 shadow-sm">
-              <div
-                className="flex gap-2 overflow-x-auto pb-1"
-                role="tablist"
-                aria-label="Resolution filters"
+          <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div
+              className="flex flex-wrap gap-3"
+              role="tablist"
+              aria-label="Resolution filters"
+            >
+              {FILTER_OPTIONS.map((filterOption) => {
+                const active = normalizedFilter === filterOption.key;
+                const filterMeta = FILTER_META[filterOption.key];
+                const FilterIcon = filterMeta.icon;
+                return (
+                  <button
+                    key={filterOption.key}
+                    onClick={() => handleFilterChange(filterOption.key)}
+                    className={cn(
+                      'inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold',
+                      active
+                        ? filterMeta.activeCls
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                    )}
+                    aria-pressed={active}
+                  >
+                    <FilterIcon className={cn('h-4 w-4', active ? 'text-current' : filterMeta.tintCls)} />
+                    <span>{filterOption.label}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                      {filterCounts[filterOption.key]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {hasLoadError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm text-rose-800">
+              <p className="font-semibold">Some data sources are temporarily unavailable.</p>
+              <p className="mt-1 text-rose-700/90">{loadErrorMessage}</p>
+              <Button
+                variant="outline"
+                className="mt-3 border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                onClick={() => {
+                  void refetchOrchestration();
+                  void refetchIncidents();
+                  void refetchResolutions();
+                  void refetchBookings();
+                  if (shouldLoadCompletedIncidents) {
+                    void refetchCompletedIncidents();
+                  }
+                }}
               >
-                {FILTER_OPTIONS.map((filterOption) => {
-                  const active = normalizedFilter === filterOption.key;
-                  const filterMeta = FILTER_META[filterOption.key];
-                  const FilterIcon = filterMeta.icon;
-                  return (
-                    <button
-                      key={filterOption.key}
-                      onClick={() => handleFilterChange(filterOption.key)}
-                      className={cn(
-                        'inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-all duration-200 motion-reduce:transition-none',
-                        active
-                          ? filterMeta.activeCls
-                          : 'border-transparent bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50'
-                      )}
-                      aria-pressed={active}
-                    >
-                      <FilterIcon className={cn('h-4 w-4', active ? 'text-current' : filterMeta.tintCls)} />
-                      <span>{filterOption.label}</span>
-                      <span
-                        className={cn(
-                          'rounded-full px-2 py-0.5 text-[11px] leading-none',
-                          active ? 'bg-white/80 text-slate-700' : 'bg-slate-100 text-slate-600'
-                        )}
-                      >
-                        {filterCounts[filterOption.key]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+                Retry loading
+              </Button>
+            </div>
+          )}
 
-            {hasLoadError && (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-sm text-rose-800">
-                <p className="font-semibold">Some data sources are temporarily unavailable.</p>
-                <p className="mt-1 text-rose-700/90">{loadErrorMessage}</p>
-                <Button
-                  variant="outline"
-                  className="mt-3 border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
-                  onClick={() => {
-                    void refetchOrchestration();
-                    void refetchIncidents();
-                    void refetchResolutions();
-                    void refetchBookings();
-                    if (shouldLoadCompletedIncidents) {
-                      void refetchCompletedIncidents();
-                    }
-                  }}
-                >
-                  Retry loading
-                </Button>
-              </div>
-            )}
-
-            {visibleGroups.length > 0 ? (
-              <div className="space-y-8">
-                {visibleGroups.map((group) => {
-                  const GroupIcon = GROUP_ICON[group.id] || Wrench;
-                  return (
-                    <section key={group.id} className="space-y-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex items-start gap-3">
-                          <div
-                            className={cn(
-                              'mt-1 rounded-xl border p-2.5',
-                              group.tone === 'danger'
-                                ? 'border-rose-200 bg-rose-50 text-rose-600'
-                                : group.tone === 'warning'
-                                ? 'border-amber-200 bg-amber-50 text-amber-600'
-                                : group.tone === 'success'
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
-                                : 'border-blue-200 bg-blue-50 text-blue-600',
-                            )}
-                          >
-                            <GroupIcon className="h-5 w-5" />
-                          </div>
-                          <div className="space-y-1">
-                            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{group.title}</h2>
-                            <p className="max-w-3xl text-sm text-slate-600">{group.subtitle}</p>
-                          </div>
+          {visibleGroups.length > 0 ? (
+            <div className="space-y-8">
+              {visibleGroups.map((group) => {
+                const GroupIcon = GROUP_ICON[group.id] || Wrench;
+                return (
+                  <section key={group.id} className="space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={cn(
+                            'mt-1 rounded-xl border p-2.5',
+                            group.tone === 'danger'
+                              ? 'border-rose-200 bg-rose-50 text-rose-600'
+                              : group.tone === 'warning'
+                              ? 'border-amber-200 bg-amber-50 text-amber-600'
+                              : group.tone === 'success'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                              : 'border-blue-200 bg-blue-50 text-blue-600',
+                          )}
+                        >
+                          <GroupIcon className="h-5 w-5" />
                         </div>
-                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                          {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
-                        </span>
+                        <div className="space-y-1">
+                          <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{group.title}</h2>
+                          <p className="max-w-3xl text-base text-slate-600">{group.subtitle}</p>
+                        </div>
                       </div>
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                        {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+                      </span>
+                    </div>
 
-                      <div className="space-y-4">
-                        {group.items.map((item: any) => (
-                          <TriageActionCard
-                            key={item.id || item.actionKey}
-                            item={item}
-                            groupId={group.id}
-                            onComplete={() => handleOpenComplete(item)}
-                            onOpenService={() => handleOpenService(item)}
-                            onOpenIncident={handleOpenIncident}
-                            onReplaceRepair={handleReplaceRepair}
-                            onAddCoverage={handleAddCoverage}
-                            onOpenSavings={handleOpenSavings}
-                            onOpenBooking={handleOpenBooking}
-                            onViewProvider={handleViewProvider}
-                            onOpenHistoryItem={handleOpenHistoryItem}
-                            onSwitchToActive={handleSwitchToActiveFilter}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyQueueState isCompletedFilter={normalizedFilter === 'completed'} />
-            )}
-          </div>
+                    <div className="space-y-4">
+                      {group.items.map((item: any) => (
+                        <TriageActionCard
+                          key={item.id || item.actionKey}
+                          item={item}
+                          groupId={group.id}
+                          onComplete={() => handleOpenComplete(item)}
+                          onOpenService={() => handleOpenService(item)}
+                          onOpenIncident={handleOpenIncident}
+                          onReplaceRepair={handleReplaceRepair}
+                          onAddCoverage={handleAddCoverage}
+                          onOpenSavings={handleOpenSavings}
+                          onOpenBooking={handleOpenBooking}
+                          onViewProvider={handleViewProvider}
+                          onOpenHistoryItem={handleOpenHistoryItem}
+                          onSwitchToActive={handleSwitchToActiveFilter}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyQueueState isCompletedFilter={normalizedFilter === 'completed'} />
+          )}
+        </div>
 
-          <aside className="space-y-4 xl:sticky xl:top-24">
+        <aside className="space-y-4 xl:sticky xl:top-24">
             <section className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
               <h3 className="text-xl font-semibold text-slate-900">Today&apos;s Snapshot</h3>
               <div className="mt-4 space-y-3 text-sm">
@@ -1717,8 +1716,7 @@ export default function ResolutionCenterClient() {
                 <Link href={applyPropertyId('/dashboard/emergency')}>Get Emergency Help</Link>
               </Button>
             </section>
-          </aside>
-        </div>
+        </aside>
 
         {selectedPropertyId && activeItem && (
           <>
