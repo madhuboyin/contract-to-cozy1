@@ -1583,19 +1583,19 @@ export default function ResolutionCenterClient() {
 
   return (
     <>
-      <div className="grid items-start gap-4 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="mx-auto max-w-[1100px] grid items-start gap-4 pb-20 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-6">
-          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-6 md:px-9 md:py-8">
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:items-end">
+          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-5 md:px-7 md:py-6">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px] xl:items-end">
               <div className="space-y-6">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700 md:text-[13px]">
                   Resolution Center
                 </div>
                 <div className="space-y-3">
-                  <h1 className="text-[52px] font-bold leading-[0.98] tracking-[-0.03em] text-slate-950 md:text-[62px] md:whitespace-nowrap">
+                  <h1 className="text-[36px] font-bold leading-[1.05] tracking-[-0.02em] text-slate-950">
                     Home Triage
                   </h1>
-                  <p className="max-w-[520px] text-[15px] leading-8 text-slate-600">
+                  <p className="max-w-[400px] text-[14px] leading-6 text-slate-600">
                     We&apos;ve analyzed your home signals to rank exactly what needs your attention today.
                   </p>
                 </div>
@@ -1636,8 +1636,8 @@ export default function ResolutionCenterClient() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-[minmax(0,1fr)_146px] items-end gap-4">
-                <div className="relative h-[240px]">
+              <div className="grid grid-cols-[minmax(0,1fr)_130px] items-end gap-3">
+                <div className="relative h-[180px]">
                   <Image
                     src="/images/Home_Illustration.png"
                     alt="Home triage illustration"
@@ -1647,15 +1647,15 @@ export default function ResolutionCenterClient() {
                     unoptimized
                   />
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-5 text-center shadow-sm">
-                  <div className="relative mx-auto h-24 w-24 rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[6px]">
-                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[44px] font-semibold text-slate-900">
+                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-center shadow-sm">
+                  <div className="relative mx-auto h-20 w-20 rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[5px]">
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[28px] font-semibold text-slate-900">
                       {homeHealthScore}
                     </div>
                   </div>
-                  <p className="mt-4 text-sm font-medium text-slate-600">Home Health</p>
-                  <p className="mt-1 text-2xl font-semibold text-emerald-600">{homeHealthStatus}</p>
-                  <p className="mt-3 text-xs text-slate-400">{latestUpdateLabel}</p>
+                  <p className="mt-2 text-xs font-medium text-slate-600">Home Health</p>
+                  <p className="mt-0.5 text-base font-semibold text-emerald-600">{homeHealthStatus}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{latestUpdateLabel}</p>
                 </div>
               </div>
             </div>
