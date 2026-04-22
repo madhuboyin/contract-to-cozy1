@@ -21,6 +21,7 @@ type HomeToolHeaderProps = {
   className?: string;
   backHref?: string;
   backLabel?: string;
+  showBackLink?: boolean;
 };
 
 function formatPropertyAddress(property: Property | null | undefined): string {
@@ -40,6 +41,7 @@ export default function HomeToolHeader({
   className,
   backHref,
   backLabel = 'Back to Property',
+  showBackLink = false,
 }: HomeToolHeaderProps) {
   const definition = getToolDefinition(toolId);
   const Icon = definition.icon;
@@ -64,7 +66,7 @@ export default function HomeToolHeader({
 
   return (
     <section className={cn('hidden space-y-5 lg:block', className)}>
-      {resolvedBackHref ? (
+      {showBackLink && resolvedBackHref ? (
         <Link
           href={resolvedBackHref}
           className="no-brand-style inline-flex min-h-[40px] w-fit items-center gap-2 text-sm font-medium text-[hsl(var(--mobile-brand-strong))] hover:text-[hsl(var(--mobile-brand-strong))]/90"

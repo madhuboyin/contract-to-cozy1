@@ -1535,6 +1535,7 @@ export default function StatusBoardClient() {
           propertyId={propertyId}
           backHref={backHref}
           backLabel="Back to Property"
+          showBackLink
         />
         {summary ? (
           <TrustStrip

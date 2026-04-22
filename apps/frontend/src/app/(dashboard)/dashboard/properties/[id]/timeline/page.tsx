@@ -406,6 +406,7 @@ export default function Page() {
             propertyId={propertyId}
             backHref={backHref}
             backLabel="Back to Property"
+            showBackLink
           />
           <ResultHeroCard
             eyebrow="Property History"
