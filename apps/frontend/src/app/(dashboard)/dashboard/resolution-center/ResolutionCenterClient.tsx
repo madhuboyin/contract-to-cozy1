@@ -19,6 +19,8 @@ import {
   BarChart3,
   ShieldCheck,
   CircleDollarSign,
+  User,
+  GitCompareArrows,
   X,
 } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -78,12 +80,12 @@ const FILTER_META: Record<
   all: {
     icon: Wrench,
     tintCls: 'text-teal-600',
-    activeCls: 'border-teal-400 bg-teal-50 text-teal-700',
+    activeCls: 'border-teal-500 bg-white text-teal-700 shadow-[0_1px_0_rgba(15,23,42,0.04)]',
   },
   urgent: {
     icon: ShieldAlert,
     tintCls: 'text-red-500',
-    activeCls: 'border-red-300 bg-red-50 text-red-700',
+    activeCls: 'border-rose-300 bg-rose-50 text-rose-700',
   },
   'save-money': {
     icon: CircleDollarSign,
@@ -229,6 +231,62 @@ function resolveItemSubtitle(item: any): string {
     item.relatedChecklistItem?.title ||
     'Home workflow'
   );
+}
+
+function isMachineToken(value: string | null | undefined): boolean {
+  const text = String(value ?? '').trim();
+  if (!text) return false;
+  if (text.includes('_')) return true;
+  return /^[A-Z0-9\s-]+$/.test(text) && text === text.toUpperCase();
+}
+
+function toDisplayLabel(value: string | null | undefined): string {
+  const text = String(value ?? '').trim();
+  if (!text) return 'Home Asset';
+
+  return text
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((word) => {
+      const upper = word.toUpperCase();
+      if (upper.length <= 4 && upper === word.toUpperCase()) return upper;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+function resolveAssetTitle(item: any): string {
+  return toDisplayLabel(item?.systemType || item?.category || item?.title || item?.relatedChecklistItem?.title);
+}
+
+function resolveIssueHeadline(item: any, journey: JourneyType, assetTitle: string): string {
+  const candidate = [item?.title, item?.summary, item?.description, item?.relatedChecklistItem?.title]
+    .map((value) => String(value ?? '').trim())
+    .find(
+      (value) =>
+        value &&
+        value.length <= 80 &&
+        toDisplayLabel(value) !== assetTitle &&
+        !isMachineToken(value)
+    );
+
+  if (candidate) return candidate;
+  if (journey === 'cost-savings') return 'High efficiency upgrade available';
+  if (journey === 'coverage') return 'Coverage gap detected';
+  if (journey === 'preventive') return 'Preventive service recommended';
+  if (journey === 'provider-execution') return 'Service workflow in progress';
+  if (journey === 'completed') return 'Action completed';
+  return 'Failure risk rising quickly';
+}
+
+function resolveIssueDescription(item: any, headline: string): string {
+  const candidate = [item?.description, item?.summary, item?.title]
+    .map((value) => String(value ?? '').trim())
+    .find((value) => value && value !== headline && !isMachineToken(value));
+
+  return candidate || 'Take action now to reduce avoidable cost and protect home performance.';
 }
 
 function resolveAssetImage(item: any): string | null {
@@ -465,7 +523,7 @@ const JOURNEY_META: Record<
     badgeCls: 'border border-red-200 bg-red-50 text-red-600',
     borderCls: 'border-rose-200/80 hover:border-rose-300',
     panelCls: 'border-rose-100 bg-rose-50/40',
-    primaryButtonCls: 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700',
+    primaryButtonCls: 'bg-[#ef2b2d] hover:bg-[#dd1f24]',
     icon: ShieldAlert,
     primaryCta: 'Resolve Now',
     secondaryCta: 'Find Local Pros',
@@ -475,7 +533,7 @@ const JOURNEY_META: Record<
     badgeCls: 'border border-orange-200 bg-orange-50 text-orange-700',
     borderCls: 'border-orange-200/80 hover:border-orange-300',
     panelCls: 'border-orange-100 bg-orange-50/50',
-    primaryButtonCls: 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700',
+    primaryButtonCls: 'bg-[#ef2b2d] hover:bg-[#dd1f24]',
     icon: BarChart3,
     primaryCta: 'Resolve Now',
     secondaryCta: 'Find Local Pros',
@@ -485,7 +543,7 @@ const JOURNEY_META: Record<
     badgeCls: 'border border-blue-200 bg-blue-50 text-blue-700',
     borderCls: 'border-blue-200/80 hover:border-blue-300',
     panelCls: 'border-blue-100 bg-blue-50/50',
-    primaryButtonCls: 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700',
+    primaryButtonCls: 'bg-[#2f6fed] hover:bg-[#245fd4]',
     icon: ShieldCheck,
     primaryCta: 'Resolve Now',
     secondaryCta: 'Find Local Pros',
@@ -495,7 +553,7 @@ const JOURNEY_META: Record<
     badgeCls: 'border border-amber-200 bg-amber-50 text-amber-700',
     borderCls: 'border-amber-200/80 hover:border-amber-300',
     panelCls: 'border-amber-100 bg-amber-50/50',
-    primaryButtonCls: 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700',
+    primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
     icon: Wrench,
     primaryCta: 'Resolve Now',
     secondaryCta: 'Find Local Pros',
@@ -505,7 +563,7 @@ const JOURNEY_META: Record<
     badgeCls: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
     borderCls: 'border-emerald-200/80 hover:border-emerald-300',
     panelCls: 'border-emerald-100 bg-emerald-50/50',
-    primaryButtonCls: 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700',
+    primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
     icon: TrendingUp,
     primaryCta: 'Resolve Now',
     secondaryCta: 'Find Local Pros',
@@ -515,7 +573,7 @@ const JOURNEY_META: Record<
     badgeCls: 'border border-sky-200 bg-sky-50 text-sky-700',
     borderCls: 'border-sky-200/80 hover:border-sky-300',
     panelCls: 'border-sky-100 bg-sky-50/50',
-    primaryButtonCls: 'bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700',
+    primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
     icon: CalendarClock,
     primaryCta: 'Resolve Now',
     secondaryCta: 'Find Local Pros',
@@ -639,14 +697,17 @@ function TriageActionCard({
   const JourneyIcon = meta.icon;
 
   const exposure: number = item.exposure ?? 0;
-  const showRiskBadge = exposure > 200 && journey !== 'coverage' && journey !== 'completed';
-  const showSavingsBadge = (journey === 'preventive' || journey === 'cost-savings') && exposure > 0;
+  const showRiskBadge = exposure > 200 && (journey === 'urgent-issue' || journey === 'repair-vs-replace');
+  const showSavingsBadge = journey === 'preventive' && exposure > 0;
   const subtitle = resolveItemSubtitle(item);
   const confidence = normalizeConfidence(item);
   const dueLabel = formatRelativeDateLabel(item.nextDueDate);
   const confidenceScore =
     confidence.score ?? (confidence.level === 'high' ? 100 : confidence.level === 'medium' ? 80 : 55);
   const assetImage = resolveAssetImage(item);
+  const assetTitle = resolveAssetTitle(item);
+  const issueHeadline = resolveIssueHeadline(item, journey, assetTitle);
+  const issueDescription = resolveIssueDescription(item, issueHeadline);
   const sourceLabels = [
     item.primarySignalSource?.sourceSystem,
     ...(Array.isArray(item.signalSources)
@@ -727,21 +788,21 @@ function TriageActionCard({
           : 'border-slate-200',
       )}
     >
-      <div className="grid gap-0 lg:grid-cols-[230px_minmax(0,1fr)_255px]">
+      <div className="grid gap-0 xl:grid-cols-[230px_minmax(0,1fr)_286px]">
         <div
           className={cn(
-            'flex h-full flex-col rounded-l-2xl border-r p-4',
+            'flex h-full flex-col rounded-l-2xl border-r px-5 py-4',
             journey === 'urgent-issue' || journey === 'repair-vs-replace'
-              ? 'bg-red-50/40 border-red-100'
+              ? 'border-rose-100 bg-rose-50/35'
               : journey === 'cost-savings'
-              ? 'bg-emerald-50/40 border-emerald-100'
-              : 'bg-slate-50/50 border-slate-100'
+              ? 'border-emerald-100 bg-emerald-50/35'
+              : 'border-slate-100 bg-slate-50/45'
           )}
         >
-          <div className="mb-4 flex items-center justify-start">
+          <div className="mb-5 flex items-center justify-start">
             <span
               className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em]',
+                'inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.11em]',
                 meta.badgeCls,
               )}
             >
@@ -750,44 +811,48 @@ function TriageActionCard({
             </span>
           </div>
 
-          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm">
             {assetImage ? (
               <Image
                 src={assetImage}
                 alt={item.title || 'Issue'}
-                width={78}
-                height={78}
-                className="h-[78px] w-[78px] object-contain"
+                width={68}
+                height={68}
+                className="h-[68px] w-[68px] rounded-full object-cover"
                 unoptimized
               />
             ) : (
-              <JourneyIcon className="h-8 w-8 text-slate-700" />
+              <JourneyIcon className="h-7 w-7 text-slate-700" />
             )}
           </div>
 
           <div className="mt-4 text-center">
-            <h3 className="line-clamp-2 text-2xl font-semibold leading-7 text-slate-900">{item.title}</h3>
-            <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
+            <h3 className="line-clamp-2 text-[34px] font-semibold leading-[1.08] tracking-[-0.02em] text-slate-900">
+              {assetTitle}
+            </h3>
+            <p className="mt-1 text-[15px] text-slate-600">{subtitle}</p>
           </div>
 
-          <div className="mt-4 flex justify-center">
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">
+          <div className="mt-5 flex justify-center">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-[12px] font-semibold text-emerald-700">
               <ShieldCheck className="h-3.5 w-3.5" />
               {confidenceScore}% Confidence
             </span>
           </div>
         </div>
 
-        <div className="space-y-4 p-5">
+        <div className="space-y-4 px-5 py-4">
           <div>
-            <h4 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-[40px] md:leading-[44px]">{item.title}</h4>
+            <h4 className="text-[40px] font-semibold leading-[1.06] tracking-[-0.03em] text-slate-900">
+              {issueHeadline}
+            </h4>
             <p className="mt-2 max-w-xl text-base leading-7 text-slate-600">
-              {item.description || item.summary || 'No additional summary available yet.'}
+              {issueDescription}
             </p>
           </div>
 
           {insightPills.length > 0 && (
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 lg:grid-cols-3">
               {insightPills.map((metric) => {
                 const MetricIcon = metric.icon;
                 return (
@@ -804,7 +869,7 @@ function TriageActionCard({
           )}
 
           {showRiskBadge && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+            <div className="rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">Risk of delay</p>
               <p className="mt-1 text-sm font-medium text-amber-900">
                 {item.riskLevel === 'CRITICAL'
@@ -845,15 +910,15 @@ function TriageActionCard({
 
           <div className="flex flex-wrap gap-2">
             {(sourceLabels.length > 0 ? sourceLabels : ['CtC Intelligence']).map((source) => (
-              <SourceChip key={source} source={source} className="bg-slate-100/70 text-slate-500" />
+              <SourceChip key={source} source={source} className="bg-slate-100/80 text-slate-500" />
             ))}
           </div>
         </div>
 
-        <div className="space-y-2 border-l border-slate-100 p-5">
+        <div className="space-y-2.5 border-l border-slate-100 px-5 py-4">
           <Button
             onClick={handlePrimary}
-            className={cn('h-11 w-full rounded-xl text-base font-semibold text-white', meta.primaryButtonCls)}
+            className={cn('h-11 w-full rounded-[10px] text-base font-semibold text-white', meta.primaryButtonCls)}
           >
             {meta.primaryCta}
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -862,31 +927,43 @@ function TriageActionCard({
           <Button
             variant="outline"
             onClick={handleSecondary}
-            className="h-10 w-full rounded-xl border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            {meta.secondaryCta}
+            <span className="inline-flex items-center gap-2">
+              <User className="h-4 w-4 text-slate-500" />
+              {meta.secondaryCta}
+            </span>
+            <ChevronRight className="h-4 w-4 text-slate-400" />
           </Button>
 
           <Button
             variant="outline"
             onClick={onOpenService}
-            className="h-10 w-full rounded-xl border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            Compare Quotes
+            <span className="inline-flex items-center gap-2">
+              <GitCompareArrows className="h-4 w-4 text-slate-500" />
+              Compare Quotes
+            </span>
+            <ChevronRight className="h-4 w-4 text-slate-400" />
           </Button>
 
           <Button
             variant="outline"
             onClick={onAddCoverage}
-            className="h-10 w-full rounded-xl border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            Check Warranty
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-slate-500" />
+              Check Warranty
+            </span>
+            <ChevronRight className="h-4 w-4 text-slate-400" />
           </Button>
 
           <button
             type="button"
             onClick={handleDetails}
-            className="mt-2 flex h-10 w-full items-center justify-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
+            className="mt-1 flex h-9 w-full items-center justify-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
           >
             View details
             <ChevronRight className="h-4 w-4" />
@@ -941,18 +1018,6 @@ function ResolutionLoadingState() {
     </div>
   );
 }
-
-// ─── Triage group header ──────────────────────────────────────────────────────
-
-const GROUP_ICON: Record<string, React.ElementType> = {
-  urgent: ShieldAlert,
-  'cost-savings': TrendingUp,
-  'replace-repair': BarChart3,
-  coverage: ShieldCheck,
-  'provider-execution': CalendarClock,
-  preventive: Wrench,
-  completed: CheckCircle2,
-};
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -1263,6 +1328,17 @@ export default function ResolutionCenterClient() {
     return triageGroups.filter((group) => group.id === 'completed');
   }, [triageGroups, normalizedFilter]);
 
+  const visibleItems = useMemo(
+    () =>
+      visibleGroups.flatMap((group) =>
+        group.items.map((item) => ({
+          item,
+          groupId: group.id,
+        })),
+      ),
+    [visibleGroups],
+  );
+
   const filterCounts = useMemo(() => {
     const byId = new Map(triageGroups.map((group) => [group.id, group.items.length]));
     const allCount = triageGroups
@@ -1298,6 +1374,8 @@ export default function ResolutionCenterClient() {
   );
 
   const latestUpdateLabel = useMemo(() => formatLastUpdated(activeItems), [activeItems]);
+  const homeHealthScore = 82;
+  const homeHealthStatus = homeHealthScore >= 75 ? 'Good' : homeHealthScore >= 55 ? 'Watch' : 'At risk';
 
   const applyPropertyId = (href: string) => {
     if (!selectedPropertyId) return href;
@@ -1486,67 +1564,80 @@ export default function ResolutionCenterClient() {
 
   return (
     <>
-      <div className="grid items-start gap-6 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid items-start gap-6 pb-20 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-6">
-          <header className="rounded-3xl border border-[#cdebf4] bg-[#eaf7fc] p-6 md:p-8">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
+          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-6 md:px-9 md:py-8">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_450px] xl:items-end">
               <div className="space-y-6">
-                <div className="text-xs font-bold uppercase tracking-[0.16em] text-teal-700 md:text-sm">
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700 md:text-[13px]">
                   Resolution Center
                 </div>
-                <div className="space-y-2">
-                  <h1 className="text-5xl font-bold tracking-tight text-slate-900 md:text-7xl">Home Triage</h1>
-                  <p className="max-w-xl text-base leading-7 text-slate-600 md:text-[28px] md:leading-9">
+                <div className="space-y-3">
+                  <h1 className="text-[62px] font-bold leading-[0.96] tracking-[-0.03em] text-slate-950 md:text-[70px]">
+                    Home Triage
+                  </h1>
+                  <p className="max-w-[520px] text-[15px] leading-8 text-slate-600">
                     We&apos;ve analyzed your home signals to rank exactly what needs your attention today.
                   </p>
                 </div>
+
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl border border-red-200 bg-white p-4">
-                    <p className="text-sm font-semibold text-red-600">Urgent Issues</p>
-                    <p className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">{filterCounts.urgent}</p>
-                    <p className="text-sm text-red-600">Need attention</p>
+                  <div className="rounded-xl border border-rose-200 bg-white px-4 py-3.5">
+                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                      <ShieldAlert className="h-4 w-4" />
+                    </div>
+                    <p className="mt-2 text-3xl font-semibold text-slate-900">{filterCounts.urgent}</p>
+                    <p className="text-[13px] font-medium text-slate-700">Urgent Issues</p>
+                    <p className="text-[12px] text-rose-600">Need attention</p>
                   </div>
-                  <div className="rounded-xl border border-emerald-200 bg-white p-4">
-                    <p className="text-sm font-semibold text-slate-600">Total at risk</p>
-                    <p className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">{formatCompactUsd(Math.round(totalAtRisk))}</p>
-                    <p className="text-sm text-slate-500">Potential exposure</p>
+                  <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3.5">
+                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                      <DollarSign className="h-4 w-4" />
+                    </div>
+                    <p className="mt-2 text-3xl font-semibold text-slate-900">
+                      {formatCompactUsd(Math.round(totalAtRisk))}
+                    </p>
+                    <p className="text-[13px] font-medium text-slate-700">Total at risk</p>
+                    <p className="text-[12px] text-slate-500">Potential exposure</p>
                   </div>
-                  <div className="rounded-xl border border-indigo-200 bg-white p-4">
-                    <p className="text-sm font-semibold text-slate-600">High confidence</p>
-                    <p className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">{highConfidenceCount}</p>
-                    <p className="text-sm text-slate-500">Issues detected</p>
+                  <div className="rounded-xl border border-indigo-200 bg-white px-4 py-3.5">
+                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                      <TrendingUp className="h-4 w-4" />
+                    </div>
+                    <p className="mt-2 text-3xl font-semibold text-slate-900">{highConfidenceCount}</p>
+                    <p className="text-[13px] font-medium text-slate-700">High confidence</p>
+                    <p className="text-[12px] text-slate-500">Issues detected</p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-[1fr_150px] items-center gap-3">
-                <Image
-                  src="/images/Home_Illustration.png"
-                  alt="Home triage illustration"
-                  width={460}
-                  height={300}
-                  className="h-auto w-full object-contain"
-                  priority
-                  unoptimized
-                />
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center">
-                  <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-[6px] border-emerald-500/90 text-5xl font-bold text-slate-900">
-                    82
+              <div className="grid grid-cols-[minmax(0,1fr)_146px] items-end gap-4">
+                <div className="relative h-[250px]">
+                  <Image
+                    src="/images/Home_Illustration.png"
+                    alt="Home triage illustration"
+                    fill
+                    className="object-cover object-[68%_52%] mix-blend-multiply"
+                    priority
+                    unoptimized
+                  />
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-5 text-center shadow-sm">
+                  <div className="relative mx-auto h-24 w-24 rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[6px]">
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[44px] font-semibold text-slate-900">
+                      {homeHealthScore}
+                    </div>
                   </div>
-                  <p className="mt-3 text-sm font-medium text-slate-600">Home Health</p>
-                  <p className="mt-1 text-xl font-semibold text-emerald-600">Good</p>
-                  <p className="mt-2 text-xs text-slate-400">{latestUpdateLabel}</p>
+                  <p className="mt-4 text-sm font-medium text-slate-600">Home Health</p>
+                  <p className="mt-1 text-2xl font-semibold text-emerald-600">{homeHealthStatus}</p>
+                  <p className="mt-3 text-xs text-slate-400">{latestUpdateLabel}</p>
                 </div>
               </div>
             </div>
           </header>
 
-          <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <div
-              className="flex flex-wrap gap-3"
-              role="tablist"
-              aria-label="Resolution filters"
-            >
+          <section className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
+            <div className="flex flex-wrap gap-2.5" role="tablist" aria-label="Resolution filters">
               {FILTER_OPTIONS.map((filterOption) => {
                 const active = normalizedFilter === filterOption.key;
                 const filterMeta = FILTER_META[filterOption.key];
@@ -1556,16 +1647,16 @@ export default function ResolutionCenterClient() {
                     key={filterOption.key}
                     onClick={() => handleFilterChange(filterOption.key)}
                     className={cn(
-                      'inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold',
+                      'inline-flex min-h-[42px] items-center gap-2 rounded-xl border px-4 py-2 text-[15px] font-semibold transition-colors',
                       active
                         ? filterMeta.activeCls
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50',
                     )}
                     aria-pressed={active}
                   >
                     <FilterIcon className={cn('h-4 w-4', active ? 'text-current' : filterMeta.tintCls)} />
                     <span>{filterOption.label}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                       {filterCounts[filterOption.key]}
                     </span>
                   </button>
@@ -1596,60 +1687,25 @@ export default function ResolutionCenterClient() {
             </div>
           )}
 
-          {visibleGroups.length > 0 ? (
-            <div className="space-y-8">
-              {visibleGroups.map((group) => {
-                const GroupIcon = GROUP_ICON[group.id] || Wrench;
-                return (
-                  <section key={group.id} className="space-y-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={cn(
-                            'mt-1 rounded-xl border p-2.5',
-                            group.tone === 'danger'
-                              ? 'border-rose-200 bg-rose-50 text-rose-600'
-                              : group.tone === 'warning'
-                              ? 'border-amber-200 bg-amber-50 text-amber-600'
-                              : group.tone === 'success'
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
-                              : 'border-blue-200 bg-blue-50 text-blue-600',
-                          )}
-                        >
-                          <GroupIcon className="h-5 w-5" />
-                        </div>
-                        <div className="space-y-1">
-                          <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{group.title}</h2>
-                          <p className="max-w-3xl text-base text-slate-600">{group.subtitle}</p>
-                        </div>
-                      </div>
-                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                        {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
-                      </span>
-                    </div>
-
-                    <div className="space-y-4">
-                      {group.items.map((item: any) => (
-                        <TriageActionCard
-                          key={item.id || item.actionKey}
-                          item={item}
-                          groupId={group.id}
-                          onComplete={() => handleOpenComplete(item)}
-                          onOpenService={() => handleOpenService(item)}
-                          onOpenIncident={handleOpenIncident}
-                          onReplaceRepair={handleReplaceRepair}
-                          onAddCoverage={handleAddCoverage}
-                          onOpenSavings={handleOpenSavings}
-                          onOpenBooking={handleOpenBooking}
-                          onViewProvider={handleViewProvider}
-                          onOpenHistoryItem={handleOpenHistoryItem}
-                          onSwitchToActive={handleSwitchToActiveFilter}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
+          {visibleItems.length > 0 ? (
+            <div className="space-y-4">
+              {visibleItems.map(({ item, groupId }) => (
+                <TriageActionCard
+                  key={`${groupId}:${item.id || item.actionKey}`}
+                  item={item}
+                  groupId={groupId}
+                  onComplete={() => handleOpenComplete(item)}
+                  onOpenService={() => handleOpenService(item)}
+                  onOpenIncident={handleOpenIncident}
+                  onReplaceRepair={handleReplaceRepair}
+                  onAddCoverage={handleAddCoverage}
+                  onOpenSavings={handleOpenSavings}
+                  onOpenBooking={handleOpenBooking}
+                  onViewProvider={handleViewProvider}
+                  onOpenHistoryItem={handleOpenHistoryItem}
+                  onSwitchToActive={handleSwitchToActiveFilter}
+                />
+              ))}
             </div>
           ) : (
             <EmptyQueueState isCompletedFilter={normalizedFilter === 'completed'} />
@@ -1657,65 +1713,84 @@ export default function ResolutionCenterClient() {
         </div>
 
         <aside className="space-y-4 xl:sticky xl:top-24">
-            <section className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
-              <h3 className="text-xl font-semibold text-slate-900">Today&apos;s Snapshot</h3>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-slate-500">Total at risk</span>
-                  <span className="font-semibold text-rose-600">{formatCompactUsd(Math.round(totalAtRisk))}</span>
-                </div>
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-slate-500">Urgent issues</span>
-                  <span className="font-semibold text-rose-600">{filterCounts.urgent}</span>
-                </div>
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-slate-500">High confidence</span>
-                  <span className="font-semibold text-emerald-600">{highConfidenceCount}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Coverage gaps</span>
-                  <span className="font-semibold text-blue-600">{filterCounts.coverage}</span>
-                </div>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h3 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-900">Today&apos;s Snapshot</h3>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
+                <span className="text-slate-500">Total at risk</span>
+                <span className="font-semibold text-rose-600">{formatCompactUsd(Math.round(totalAtRisk))}</span>
               </div>
-              <p className="mt-4 text-xs text-slate-500">{latestUpdateLabel}</p>
-            </section>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
+                <span className="text-slate-500">Urgent issues</span>
+                <span className="font-semibold text-rose-600">{filterCounts.urgent}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
+                <span className="text-slate-500">High confidence</span>
+                <span className="font-semibold text-emerald-600">{highConfidenceCount}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Coverage gaps</span>
+                <span className="font-semibold text-blue-600">{filterCounts.coverage}</span>
+              </div>
+            </div>
+            <div className="mt-5 border-t border-slate-100 pt-4 text-center">
+              <Link
+                href={applyPropertyId('/dashboard/actions')}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
+              >
+                View full report
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
-              <h3 className="text-xl font-semibold text-slate-900">Quick Actions</h3>
-              <div className="mt-4 space-y-2.5">
-                {quickActions.map((action) => {
-                  const ActionIcon = action.icon;
-                  return (
-                    <Link
-                      key={action.label}
-                      href={action.href}
-                      className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-slate-300 hover:bg-slate-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-slate-100 p-2">
-                          <ActionIcon className="h-4 w-4 text-slate-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{action.label}</p>
-                          <p className="text-xs text-slate-500">{action.description}</p>
-                        </div>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h3 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-900">Quick Actions</h3>
+            <div className="mt-4 space-y-2.5">
+              {quickActions.map((action, index) => {
+                const ActionIcon = action.icon;
+                const iconTone =
+                  index === 0
+                    ? 'bg-blue-50 text-blue-600'
+                    : index === 1
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : index === 2
+                    ? 'bg-indigo-50 text-indigo-600'
+                    : 'bg-slate-100 text-slate-600';
+                return (
+                  <Link
+                    key={action.label}
+                    href={action.href}
+                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn('rounded-lg p-2', iconTone)}>
+                        <ActionIcon className="h-4 w-4" />
                       </div>
-                      <ChevronRight className="h-4 w-4 text-slate-400" />
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{action.label}</p>
+                        <p className="text-xs text-slate-500">{action.description}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
 
-            <section className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-5 shadow-sm">
-              <h3 className="text-xl font-semibold text-slate-900">Need Help Now?</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Connect with trusted local pros available in your area.
-              </p>
-              <Button asChild className="mt-4 h-11 w-full rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:from-teal-700 hover:to-cyan-700">
-                <Link href={applyPropertyId('/dashboard/emergency')}>Get Emergency Help</Link>
-              </Button>
-            </section>
+          <section className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-5">
+            <h3 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-900">Need Help Now?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Connect with trusted local pros available in your area.
+            </p>
+            <Button
+              asChild
+              className="mt-4 h-11 w-full rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:from-teal-700 hover:to-cyan-700"
+            >
+              <Link href={applyPropertyId('/dashboard/emergency')}>Get Emergency Help</Link>
+            </Button>
+          </section>
         </aside>
 
         {selectedPropertyId && activeItem && (
