@@ -958,6 +958,11 @@ export default function PropertyDetailPage() {
   const tabPanelClassName = askCozyDockVisible
     ? "mt-4 pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0"
     : "mt-4";
+  const propertyHubPath = `/dashboard/properties/${property.id}`;
+  const withBackToPropertyHub = (href: string) => {
+    const separator = href.includes("?") ? "&" : "?";
+    return `${href}${separator}backTo=${encodeURIComponent(propertyHubPath)}`;
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-6 lg:px-8">
@@ -1029,7 +1034,7 @@ export default function PropertyDetailPage() {
                   </Button>
                 ) : (
                   <Button asChild className="min-h-[44px] w-full sm:w-auto">
-                    <Link href={`/dashboard/properties/${property.id}/status-board`}>
+                    <Link href={withBackToPropertyHub(`/dashboard/properties/${property.id}/status-board`)}>
                       Open Status Board
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
@@ -1040,7 +1045,7 @@ export default function PropertyDetailPage() {
           }
           supportingAction={
             <Button variant="outline" className="min-h-[44px] w-full justify-start gap-2" asChild>
-              <Link href={`/dashboard/home-tools?propertyId=${property.id}`}>
+              <Link href={withBackToPropertyHub(`/dashboard/home-tools?propertyId=${property.id}`)}>
                 <Wrench className="h-4 w-4" />
                 Open Home Tools
               </Link>
@@ -1109,21 +1114,21 @@ export default function PropertyDetailPage() {
               </p>
               <div className="flex flex-wrap gap-2">
                 <Link
-                  href={`/dashboard/properties/${property.id}/rooms`}
+                  href={withBackToPropertyHub(`/dashboard/properties/${property.id}/rooms`)}
                   className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
                 >
                   <Home className="h-3.5 w-3.5" />
                   Rooms
                 </Link>
                 <Link
-                  href={`/dashboard/properties/${property.id}/timeline`}
+                  href={withBackToPropertyHub(`/dashboard/properties/${property.id}/timeline`)}
                   className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
                 >
                   <Calendar className="h-3.5 w-3.5" />
                   Timeline
                 </Link>
                 <Link
-                  href={`/dashboard/properties/${property.id}/status-board`}
+                  href={withBackToPropertyHub(`/dashboard/properties/${property.id}/status-board`)}
                   className="no-brand-style inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700"
                 >
                   <History className="h-3.5 w-3.5" />

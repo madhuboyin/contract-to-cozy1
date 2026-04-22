@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
 import RelatedTools from '@/components/tools/RelatedTools';
@@ -17,6 +19,8 @@ type HomeToolHeaderProps = {
   title?: string;
   description?: string;
   className?: string;
+  backHref?: string;
+  backLabel?: string;
 };
 
 function formatPropertyAddress(property: Property | null | undefined): string {
@@ -34,9 +38,12 @@ export default function HomeToolHeader({
   title,
   description,
   className,
+  backHref,
+  backLabel = 'Back to Property',
 }: HomeToolHeaderProps) {
   const definition = getToolDefinition(toolId);
   const Icon = definition.icon;
+  const resolvedBackHref = backHref ?? (propertyId ? `/dashboard/properties/${propertyId}` : null);
 
   const propertyQuery = useQuery({
     queryKey: ['home-tool-header-property', propertyId],
@@ -57,6 +64,15 @@ export default function HomeToolHeader({
 
   return (
     <section className={cn('hidden space-y-5 lg:block', className)}>
+      {resolvedBackHref ? (
+        <Link
+          href={resolvedBackHref}
+          className="no-brand-style inline-flex min-h-[40px] w-fit items-center gap-2 text-sm font-medium text-[hsl(var(--mobile-brand-strong))] hover:text-[hsl(var(--mobile-brand-strong))]/90"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {backLabel}
+        </Link>
+      ) : null}
       <div className="rounded-[20px] border border-[hsl(var(--mobile-border-subtle))] bg-[linear-gradient(180deg,#f8fbfb,#f3f7f7)] px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
         <div className="flex items-start gap-3">
           <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[#eff6f5] text-[hsl(var(--mobile-brand-strong))]">

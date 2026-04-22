@@ -2,7 +2,9 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
 import TimelineClient from './TimelineClient';
@@ -18,6 +20,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
+import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 
 type Mode = 'LIST' | 'VISUAL';
 
@@ -307,7 +310,12 @@ function TimelineVisual({
 
 export default function Page() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const backHref = useMemo(
+    () => resolveDashboardBackHref(searchParams.get('backTo'), `/dashboard/properties/${propertyId}`),
+    [propertyId, searchParams]
+  );
 
   // Replay state MUST be declared before any effects that use it
   const [replayOn, setReplayOn] = useState(false);
@@ -380,11 +388,25 @@ export default function Page() {
           className="lg:hidden"
           title="Home Timeline"
           subtitle="Your home's story of repairs, claims, improvements, and key documents."
+          action={(
+            <Link
+              href={backHref}
+              className="no-brand-style inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
+            </Link>
+          )}
         />
       }
       summary={
         <>
-          <HomeToolHeader toolId="home-timeline" propertyId={propertyId} />
+          <HomeToolHeader
+            toolId="home-timeline"
+            propertyId={propertyId}
+            backHref={backHref}
+            backLabel="Back to Property"
+          />
           <ResultHeroCard
             eyebrow="Property History"
             title={mode === 'VISUAL' ? 'Visual Timeline' : 'Event Timeline'}

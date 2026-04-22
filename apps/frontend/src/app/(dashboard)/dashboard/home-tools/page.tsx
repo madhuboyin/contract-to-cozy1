@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { LayoutGrid } from 'lucide-react';
+import { ArrowLeft, LayoutGrid } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
+import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import {
   ExpandableSummaryCard,
   MobilePageContainer,
@@ -109,6 +110,11 @@ export default function HomeToolsPage() {
   const itemId = searchParams.get('itemId') || undefined;
   const homeAssetId = searchParams.get('homeAssetId') || undefined;
   const resolvedPropertyId = selectedPropertyId || propertyIdFromQuery;
+  const propertyFallbackBackHref = resolvedPropertyId
+    ? `/dashboard/properties/${resolvedPropertyId}`
+    : '/dashboard';
+  const backHref = resolveDashboardBackHref(searchParams.get('backTo'), propertyFallbackBackHref);
+  const backLabel = resolvedPropertyId ? 'Back to Property' : 'Back to Dashboard';
   const toolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));
 
   const groupedTools = HOME_TOOL_GROUPS.map((group) => ({
@@ -122,6 +128,13 @@ export default function HomeToolsPage() {
     <MobilePageContainer className="space-y-7 pt-2 pb-24 lg:max-w-7xl lg:px-8 lg:pb-10">
       <MobileSection>
         <MobileSectionHeader title="Home Tools" subtitle="Ownership planning tools for your property" />
+        <Link
+          href={backHref}
+          className="no-brand-style mt-2 inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {backLabel}
+        </Link>
       </MobileSection>
 
       {groupedTools.map((group) => (
@@ -162,11 +175,11 @@ export default function HomeToolsPage() {
       <MobileSection>
         <SummaryCard title="Need broader navigation?" subtitle="Use the More tab for full dashboard navigation.">
           <Link
-            href="/dashboard"
+            href={backHref}
             className="no-brand-style inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
           >
             <LayoutGrid className="h-4 w-4" />
-            Back to Dashboard
+            {backLabel}
           </Link>
         </SummaryCard>
       </MobileSection>

@@ -3,7 +3,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import { useParams, useSearchParams } from 'next/navigation';
 
 import { InventoryRoom } from '@/types';
 import { getRoomInsights, listInventoryRooms, patchRoomMeta } from '../../../inventory/inventoryApi';
@@ -27,6 +28,7 @@ import {
   MobileSectionHeader,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import TrustStrip from '../components/route-templates/TrustStrip';
+import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 
 function guessRoomType(name: string) {
   const t = (name || '').toLowerCase();
@@ -69,7 +71,12 @@ function computeHealthScore(insights: any): number {
 
 export default function RoomsHubClient() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const propertyId = params.id;
+  const backHref = useMemo(
+    () => resolveDashboardBackHref(searchParams.get('backTo'), `/dashboard/properties/${propertyId}`),
+    [propertyId, searchParams]
+  );
 
   const [rooms, setRooms] = useState<InventoryRoom[]>([]);
   const [loading, setLoading] = useState(false);
@@ -241,6 +248,16 @@ export default function RoomsHubClient() {
             <OnboardingReturnBanner />
           </MobileSection>
 
+          <MobileSection className="pt-0">
+            <Link
+              href={backHref}
+              className="no-brand-style inline-flex min-h-[40px] w-fit items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Property
+            </Link>
+          </MobileSection>
+
           <MobileSection>
             <RoomsHeroCard propertyId={propertyId} />
           </MobileSection>
@@ -335,10 +352,10 @@ export default function RoomsHubClient() {
                     Manage rooms
                   </Link>
                   <Link
-                    href={`/dashboard/properties/${propertyId}/inventory`}
+                    href={backHref}
                     className="inline-flex min-h-[46px] items-center justify-center rounded-xl border border-slate-300/70 bg-white/80 px-4 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:hover:bg-slate-900"
                   >
-                    Back to inventory
+                    Back to property
                   </Link>
                 </div>
               </div>

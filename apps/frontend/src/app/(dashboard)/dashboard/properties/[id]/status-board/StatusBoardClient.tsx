@@ -60,6 +60,7 @@ import {
   Building,
   Box,
   AlertCircle,
+  ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback } from "react";
@@ -89,6 +90,7 @@ import {
 import PriorityActionHero from "@/components/system/PriorityActionHero";
 import RouteStateCard from "@/components/system/RouteStateCard";
 import TrustStrip from "../components/route-templates/TrustStrip";
+import { resolveDashboardBackHref } from "@/lib/navigation/backNavigation";
 
 // ---------------------------------------------------------------------------
 // Badge helpers
@@ -259,6 +261,14 @@ export default function StatusBoardClient() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const propertyId = params.id as string;
+  const backHref = useMemo(
+    () =>
+      resolveDashboardBackHref(
+        searchParams.get("backTo"),
+        `/dashboard/properties/${propertyId}`
+      ),
+    [propertyId, searchParams]
+  );
   const guidanceContext = useMemo(
     () => extractGuidanceContinuityContext(searchParams),
     [searchParams]
@@ -1222,15 +1232,23 @@ export default function StatusBoardClient() {
               title="Home Status Board"
               subtitle="Track item condition, priority actions, and health signals."
               action={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={recomputeMutation.isPending}
-                  onClick={() => recomputeMutation.mutate()}
-                >
-                  <RefreshCw className={cn("mr-1 h-3.5 w-3.5", recomputeMutation.isPending && "animate-spin")} />
-                  {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={backHref}>
+                      <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                      Back
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={recomputeMutation.isPending}
+                    onClick={() => recomputeMutation.mutate()}
+                  >
+                    <RefreshCw className={cn("mr-1 h-3.5 w-3.5", recomputeMutation.isPending && "animate-spin")} />
+                    {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
+                  </Button>
+                </div>
               }
             />
           }
@@ -1512,7 +1530,12 @@ export default function StatusBoardClient() {
       <div className="hidden lg:block pb-6">
       <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
         <div className="relative z-10 space-y-3">
-        <HomeToolHeader toolId="status-board" propertyId={propertyId} />
+        <HomeToolHeader
+          toolId="status-board"
+          propertyId={propertyId}
+          backHref={backHref}
+          backLabel="Back to Property"
+        />
         {summary ? (
           <TrustStrip
             variant="footnote"
