@@ -37,6 +37,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
+import DashboardBreadcrumbs from '@/components/navigation/DashboardBreadcrumbs';
 import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import {
   DropdownMenu,
@@ -564,6 +565,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                   className="mx-auto w-full max-w-6xl px-4 md:px-8 py-5 md:py-8"
                   key={refreshKey}
                 >
+                  <DashboardBreadcrumbs />
                   {children}
                 </div>
               </PullToRefresh>
