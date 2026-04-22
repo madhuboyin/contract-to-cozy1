@@ -220,16 +220,22 @@ function normalizeConfidence(item: any): { level: 'high' | 'medium' | 'low'; sco
 }
 
 function resolveItemSubtitle(item: any): string {
-  if (item?.__kind === 'booking') return item.status ? String(item.status).replaceAll('_', ' ') : 'Provider workflow';
+  if (item?.__kind === 'booking') {
+    return item.status ? toDisplayLabel(String(item.status).replaceAll('_', ' ')) : 'Provider workflow';
+  }
   if (item?.__kind === 'completed-booking') return 'Completed booking';
-  if (item?.__kind === 'incident') return item.category || item.typeKey || 'Incident';
-  if (item?.__kind === 'completed-incident') return item.category || item.typeKey || 'Resolved incident';
-  return (
-    item.serviceCategory ||
-    item.systemType ||
-    item.category ||
-    item.relatedChecklistItem?.title ||
-    'Home workflow'
+  if (item?.__kind === 'incident') return toDisplayLabel(item.location || item.room || item.category || item.typeKey || 'Incident');
+  if (item?.__kind === 'completed-incident') {
+    return toDisplayLabel(item.location || item.room || item.category || item.typeKey || 'Resolved incident');
+  }
+  return toDisplayLabel(
+    item.location ||
+      item.room ||
+      item.serviceCategory ||
+      item.systemType ||
+      item.category ||
+      item.relatedChecklistItem?.title ||
+      'Home workflow',
   );
 }
 
@@ -258,26 +264,39 @@ function toDisplayLabel(value: string | null | undefined): string {
 }
 
 function resolveAssetTitle(item: any): string {
+  const token = String(item?.title || item?.systemType || item?.category || '')
+    .trim()
+    .toLowerCase();
+
+  if (token.includes('hvac') || token.includes('furnace') || token.includes('ac')) return 'HVAC Furnace';
+  if (token.includes('water heater') || token.includes('heater')) return 'Water Heater Tank';
+  if (token.includes('refrigerator') || token.includes('fridge')) return 'Refrigerator';
+  if (token.includes('washer')) return 'Washer';
+  if (token.includes('oven') || token.includes('range') || token.includes('stove')) return 'Oven Range';
+  if (token.includes('smoke detector')) return 'Smoke Detector';
+  if (token.includes('roof')) return 'Roof';
+  if (token.includes('panel')) return 'Electrical Panel';
+
   return toDisplayLabel(item?.systemType || item?.category || item?.title || item?.relatedChecklistItem?.title);
 }
 
 function resolveIssueHeadline(item: any, journey: JourneyType, assetTitle: string): string {
-  const candidate = [item?.title, item?.summary, item?.description, item?.relatedChecklistItem?.title]
-    .map((value) => String(value ?? '').trim())
-    .find(
-      (value) =>
-        value &&
-        value.length <= 80 &&
-        toDisplayLabel(value) !== assetTitle &&
-        !isMachineToken(value)
-    );
-
-  if (candidate) return candidate;
+  if (journey === 'urgent-issue' || journey === 'repair-vs-replace') return 'Failure risk rising quickly';
   if (journey === 'cost-savings') return 'High efficiency upgrade available';
   if (journey === 'coverage') return 'Coverage gap detected';
-  if (journey === 'preventive') return 'Preventive service recommended';
+  if (journey === 'preventive') return 'Preventive task due soon';
   if (journey === 'provider-execution') return 'Service workflow in progress';
-  if (journey === 'completed') return 'Action completed';
+  if (journey === 'completed') {
+    const candidate = [item?.title, item?.summary]
+      .map((value) => String(value ?? '').trim())
+      .find((value) => value && !isMachineToken(value));
+    return candidate ? toDisplayLabel(candidate) : 'Action completed';
+  }
+
+  const fallback = [item?.title, item?.summary]
+    .map((value) => String(value ?? '').trim())
+    .find((value) => value && value.length <= 80 && toDisplayLabel(value) !== assetTitle && !isMachineToken(value));
+  if (fallback) return fallback;
   return 'Failure risk rising quickly';
 }
 
@@ -788,7 +807,7 @@ function TriageActionCard({
           : 'border-slate-200',
       )}
     >
-      <div className="grid gap-0 xl:grid-cols-[230px_minmax(0,1fr)_286px]">
+      <div className="grid gap-0 xl:grid-cols-[250px_minmax(0,1fr)_270px]">
         <div
           className={cn(
             'flex h-full flex-col rounded-l-2xl border-r px-5 py-4',
@@ -827,7 +846,7 @@ function TriageActionCard({
           </div>
 
           <div className="mt-4 text-center">
-            <h3 className="line-clamp-2 text-[34px] font-semibold leading-[1.08] tracking-[-0.02em] text-slate-900">
+            <h3 className="line-clamp-2 text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] text-slate-900">
               {assetTitle}
             </h3>
             <p className="mt-1 text-[15px] text-slate-600">{subtitle}</p>
@@ -843,7 +862,7 @@ function TriageActionCard({
 
         <div className="space-y-4 px-5 py-4">
           <div>
-            <h4 className="text-[40px] font-semibold leading-[1.06] tracking-[-0.03em] text-slate-900">
+            <h4 className="text-[52px] font-semibold leading-[0.98] tracking-[-0.03em] text-slate-900">
               {issueHeadline}
             </h4>
             <p className="mt-2 max-w-xl text-base leading-7 text-slate-600">
@@ -1567,13 +1586,13 @@ export default function ResolutionCenterClient() {
       <div className="grid items-start gap-6 pb-20 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-6">
           <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-6 md:px-9 md:py-8">
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_450px] xl:items-end">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:items-end">
               <div className="space-y-6">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700 md:text-[13px]">
                   Resolution Center
                 </div>
                 <div className="space-y-3">
-                  <h1 className="text-[62px] font-bold leading-[0.96] tracking-[-0.03em] text-slate-950 md:text-[70px]">
+                  <h1 className="text-[62px] font-bold leading-[0.96] tracking-[-0.03em] text-slate-950 md:text-[72px] md:whitespace-nowrap">
                     Home Triage
                   </h1>
                   <p className="max-w-[520px] text-[15px] leading-8 text-slate-600">
@@ -1582,42 +1601,48 @@ export default function ResolutionCenterClient() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl border border-rose-200 bg-white px-4 py-3.5">
-                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                  <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-white px-3 py-3">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-600">
                       <ShieldAlert className="h-4 w-4" />
                     </div>
-                    <p className="mt-2 text-3xl font-semibold text-slate-900">{filterCounts.urgent}</p>
-                    <p className="text-[13px] font-medium text-slate-700">Urgent Issues</p>
-                    <p className="text-[12px] text-rose-600">Need attention</p>
+                    <div className="space-y-0.5">
+                      <p className="text-[31px] font-semibold leading-none text-slate-900">{filterCounts.urgent}</p>
+                      <p className="text-xs font-medium text-slate-700">Urgent Issues</p>
+                      <p className="text-[11px] text-rose-600">Need attention</p>
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3.5">
-                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                  <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-white px-3 py-3">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                       <DollarSign className="h-4 w-4" />
                     </div>
-                    <p className="mt-2 text-3xl font-semibold text-slate-900">
-                      {formatCompactUsd(Math.round(totalAtRisk))}
-                    </p>
-                    <p className="text-[13px] font-medium text-slate-700">Total at risk</p>
-                    <p className="text-[12px] text-slate-500">Potential exposure</p>
+                    <div className="space-y-0.5">
+                      <p className="text-[31px] font-semibold leading-none text-slate-900">
+                        {formatCompactUsd(Math.round(totalAtRisk))}
+                      </p>
+                      <p className="text-xs font-medium text-slate-700">Total at risk</p>
+                      <p className="text-[11px] text-slate-500">Potential exposure</p>
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-indigo-200 bg-white px-4 py-3.5">
-                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                  <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-white px-3 py-3">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
                       <TrendingUp className="h-4 w-4" />
                     </div>
-                    <p className="mt-2 text-3xl font-semibold text-slate-900">{highConfidenceCount}</p>
-                    <p className="text-[13px] font-medium text-slate-700">High confidence</p>
-                    <p className="text-[12px] text-slate-500">Issues detected</p>
+                    <div className="space-y-0.5">
+                      <p className="text-[31px] font-semibold leading-none text-slate-900">{highConfidenceCount}</p>
+                      <p className="text-xs font-medium text-slate-700">High confidence</p>
+                      <p className="text-[11px] text-slate-500">Issues detected</p>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-[minmax(0,1fr)_146px] items-end gap-4">
-                <div className="relative h-[250px]">
+                <div className="relative h-[240px]">
                   <Image
                     src="/images/Home_Illustration.png"
                     alt="Home triage illustration"
                     fill
-                    className="object-cover object-[68%_52%] mix-blend-multiply"
+                    className="object-cover object-[68%_52%]"
                     priority
                     unoptimized
                   />
