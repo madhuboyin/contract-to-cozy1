@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import transitionImg from '../../../public/images/ctc-transition.png';
 
 type Props = {
   reducedMotion: boolean;
@@ -22,12 +23,9 @@ export function PostLoginTransitionScene({ reducedMotion }: Props) {
         className="relative mx-auto w-full max-w-[560px] md:max-w-[680px]"
       >
         <Image
-          src="/images/ctc-transition.png"
+          src={transitionImg}
           alt="ContractToCozy — home intelligence dashboard"
-          width={1535}
-          height={1024}
           priority
-          unoptimized
           className="w-full h-auto
             rounded-2xl
             shadow-[0_6px_32px_-6px_rgba(13,148,136,0.18),0_2px_8px_-2px_rgba(0,0,0,0.05)]
