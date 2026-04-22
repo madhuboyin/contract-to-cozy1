@@ -38,7 +38,6 @@ import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
 import DashboardBreadcrumbs from '@/components/navigation/DashboardBreadcrumbs';
-import { buildPropertyAwareDashboardHref } from '@/lib/routes/dashboardPropertyAwareHref';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +59,13 @@ function buildPropertyAwareHref(
   hrefSuffix: string,
   navTarget: string
 ): string {
+  if (navTarget === 'fix') {
+    if (propertyId) {
+      return `/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}`;
+    }
+    return '/dashboard/resolution-center';
+  }
+
   if (propertyId) {
     return `/dashboard/properties/${propertyId}/${hrefSuffix}`;
   }
