@@ -19,6 +19,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 export default function SeasonalSettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -102,7 +103,7 @@ export default function SeasonalSettingsPage() {
           action={
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => navigateBackWithDashboardFallback(router)}
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
             >
               <ArrowLeft className="h-4 w-4" />

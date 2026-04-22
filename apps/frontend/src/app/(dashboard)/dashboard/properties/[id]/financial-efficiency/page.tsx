@@ -31,6 +31,7 @@ import {
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 // --- Types for Query Data ---
 // The API returns either the raw report object (FinancialEfficiencyReport) or the string 'QUEUED'
 type FESQueryData = FinancialEfficiencyReport | 'QUEUED'; 
@@ -532,7 +533,7 @@ export default function FinancialEfficiencyPage() {
                             <Button
                                 variant="ghost"
                                 className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground"
-                                onClick={() => router.back()}
+                                onClick={() => navigateBackWithDashboardFallback(router)}
                             >
                                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
                             </Button>
@@ -631,7 +632,7 @@ export default function FinancialEfficiencyPage() {
                 <Button 
                     variant="link" 
                     className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-                    onClick={() => router.back()}
+                    onClick={() => navigateBackWithDashboardFallback(router)}
                 >
                     <ArrowLeft className="h-4 w-4 mr-1" /> Back
                 </Button>

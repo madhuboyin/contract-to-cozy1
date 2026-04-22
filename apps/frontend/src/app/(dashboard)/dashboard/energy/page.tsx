@@ -11,6 +11,7 @@ import { api } from '@/lib/api/client';
 import { useDashboardPropertySelection } from '@/lib/property/useDashboardPropertySelection';
 import { Button } from '@/components/ui/button';  
 import { MobileFilterSurface, MobilePageIntro } from '@/components/mobile/dashboard/MobilePrimitives';
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 function EnergyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -58,7 +59,7 @@ function EnergyContent() {
         <Button 
           variant="link" 
           className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-          onClick={() => router.back()}
+          onClick={() => navigateBackWithDashboardFallback(router)}
         >
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>

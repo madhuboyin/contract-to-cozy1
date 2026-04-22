@@ -37,6 +37,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 interface QuoteEntry {
   id: string;
   vendorName: string;
@@ -171,7 +172,7 @@ export default function QuoteComparisonPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-4 sm:px-6">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="px-0" onClick={() => router.back()}>
+        <Button variant="ghost" size="sm" className="px-0" onClick={() => navigateBackWithDashboardFallback(router)}>
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back
         </Button>

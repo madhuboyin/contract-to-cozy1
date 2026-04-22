@@ -19,6 +19,7 @@ import {
   MobilePageIntro,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 function buildForwardQuery(serializedSearchParams: string): string {
   const query = new URLSearchParams(serializedSearchParams);
   query.delete('propertyId');
@@ -150,7 +151,7 @@ function ReplaceRepairContent() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       {propertyIdFromUrl && (
-        <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground" onClick={() => router.back()}>
+        <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground" onClick={() => navigateBackWithDashboardFallback(router)}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
       )}

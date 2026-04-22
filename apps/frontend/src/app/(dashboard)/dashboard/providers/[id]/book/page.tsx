@@ -27,6 +27,7 @@ import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
 import { track } from '@/lib/analytics/events';
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 function getInitials(firstName: string, lastName: string) {
   return (firstName?.[0] || '') + (lastName?.[0] || '');
 }
@@ -415,7 +416,7 @@ export default function BookProviderPage() {
           primaryAction: (
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => navigateBackWithDashboardFallback(router)}
               className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
             >
               Go back
@@ -471,7 +472,7 @@ export default function BookProviderPage() {
         supportingAction: (
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => navigateBackWithDashboardFallback(router)}
             className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             Back to provider profile
@@ -506,7 +507,7 @@ export default function BookProviderPage() {
       }
     >
       <button
-        onClick={() => router.back()}
+        onClick={() => navigateBackWithDashboardFallback(router)}
         className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
       >
         <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -727,7 +728,7 @@ export default function BookProviderPage() {
             secondaryActions={
               <button
                 type="button"
-                onClick={() => router.back()}
+                onClick={() => navigateBackWithDashboardFallback(router)}
                 className="min-h-[44px] w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
               >
                 Cancel

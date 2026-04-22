@@ -29,6 +29,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { useConfirmDestructiveAction } from '@/components/system/ConfirmDestructiveActionDialog';
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 // --- Document Type Constants for UI ---
 const DOCUMENT_TYPES: DocumentType[] = [
     'INSPECTION_REPORT', 'ESTIMATE', 'INVOICE', 'CONTRACT', 'PERMIT', 
@@ -623,7 +624,7 @@ export default function DocumentsPage() {
         <Button 
             variant="link" 
             className="p-0 h-auto mb-2 text-sm text-muted-foreground"
-            onClick={() => router.back()}
+            onClick={() => navigateBackWithDashboardFallback(router)}
         >
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>

@@ -43,6 +43,7 @@ import { useGuidance } from "@/features/guidance/hooks/useGuidance";
 import type { GuidanceActionModel } from "@/features/guidance/utils/guidanceMappers";
 import type { GuidanceIssueDomain } from "@/lib/api/guidanceApi";
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
 // The API returns either the raw report object (RiskReportFull) or the string 'QUEUED'
@@ -1275,7 +1276,7 @@ export default function RiskAssessmentPage() {
                             <Button
                                 variant="ghost"
                                 className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground"
-                                onClick={() => router.back()}
+                                onClick={() => navigateBackWithDashboardFallback(router)}
                             >
                                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
                             </Button>
@@ -1392,7 +1393,7 @@ export default function RiskAssessmentPage() {
                 <Button 
                     variant="link" 
                     className="p-0 h-auto mb-2 text-sm text-muted-foreground min-h-[44px] flex items-center"
-                    onClick={() => router.back()}
+                    onClick={() => navigateBackWithDashboardFallback(router)}
                 >
                     <ArrowLeft className="h-4 w-4 mr-1" /> Back
                 </Button>

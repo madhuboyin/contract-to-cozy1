@@ -23,6 +23,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 const formatDate = (dateString: string | null) => {
   if (!dateString) return 'Not scheduled';
   const date = new Date(dateString);
@@ -166,7 +167,7 @@ export default function BookingDetailsPage() {
       intro={
         <div className="space-y-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => navigateBackWithDashboardFallback(router)}
             className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
           >
             <ChevronLeft className="mr-1 h-4 w-4" />

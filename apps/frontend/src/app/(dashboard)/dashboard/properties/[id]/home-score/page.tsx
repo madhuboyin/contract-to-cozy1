@@ -49,6 +49,7 @@ import {
   HomeScoreTimelineEvent,
 } from "@/types";
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -927,7 +928,7 @@ export default function HomeScoreReportPage() {
           description="We couldn't generate this report right now. Try again or go back to the property hub."
           action={<Button onClick={() => reportQuery.refetch()}>Try again</Button>}
           secondaryAction={
-            <Button variant="outline" onClick={() => router.back()}>
+            <Button variant="outline" onClick={() => navigateBackWithDashboardFallback(router)}>
               Back
             </Button>
           }
@@ -1081,7 +1082,7 @@ export default function HomeScoreReportPage() {
     <DashboardShell className="pb-8 print:bg-white">
       <div className="space-y-5">
         <div className="flex items-center justify-between print:hidden">
-          <Button variant="ghost" className="px-0 text-slate-600" onClick={() => router.back()}>
+          <Button variant="ghost" className="px-0 text-slate-600" onClick={() => navigateBackWithDashboardFallback(router)}>
             <ArrowLeft className="mr-1 h-4 w-4" /> Back
           </Button>
           <div className="flex items-center gap-2">

@@ -26,6 +26,7 @@ import {
 } from '@/lib/api/replaceRepairApi';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
   APPLIANCE: 12,
   HVAC: 15,
@@ -253,7 +254,7 @@ export default function ReplaceRepairClient() {
         <div className="space-y-2">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => navigateBackWithDashboardFallback(router)}
             className="inline-flex min-h-[44px] items-center gap-2 text-sm text-teal-700 hover:text-teal-800"
           >
             <ArrowLeft className="h-4 w-4" />

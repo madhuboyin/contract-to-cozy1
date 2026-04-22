@@ -67,6 +67,7 @@ import { DigitalTwinPreview } from './components/DigitalTwinPreview';
 
 
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 // --- START INLINED INTERFACES AND COMPONENTS FOR HEALTH INSIGHTS ---
 
 interface HealthScoreResult {
@@ -991,7 +992,7 @@ export default function PropertyDetailPage() {
         <Button
           variant="ghost"
           className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground"
-          onClick={() => router.back()}
+          onClick={() => navigateBackWithDashboardFallback(router)}
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Back

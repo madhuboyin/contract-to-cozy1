@@ -26,6 +26,7 @@ import {
   StatusChip,
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 const REQUIRED_ACTION_STATUSES = ["Needs Attention", "Needs Review", "Needs Inspection", "Missing Data", "Needs Warranty"];
 const IN_PROGRESS_STATUSES = ["Action Pending"];
 const WATCH_STATUSES = ["Aging", "Incomplete", "Partial", "Average", "Standard"];
@@ -514,7 +515,7 @@ export default function PropertyHealthDetailPage() {
         <MobileToolWorkspace
           intro={
             <div className="space-y-2">
-              <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground" onClick={() => router.back()}>
+              <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-sm text-muted-foreground" onClick={() => navigateBackWithDashboardFallback(router)}>
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Button>
               <MobilePageIntro
@@ -689,7 +690,7 @@ export default function PropertyHealthDetailPage() {
       </div>
 
       <PageHeader className="hidden md:block pt-4 pb-4 md:pt-8 md:pb-8">
-        <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground" onClick={() => router.back()}>
+        <Button variant="link" className="p-0 h-auto mb-2 text-sm text-muted-foreground" onClick={() => navigateBackWithDashboardFallback(router)}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
         <PageHeaderHeading className="flex items-center gap-2">

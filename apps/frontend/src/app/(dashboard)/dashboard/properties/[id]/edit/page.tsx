@@ -45,6 +45,7 @@ import {
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 // --- Appliance Constants and Schemas ---
 const CURRENT_YEAR = new Date().getFullYear();
 const MAJOR_APPLIANCE_OPTIONS = [
@@ -1859,7 +1860,7 @@ export default function EditPropertyPage() {
             <div className="hidden md:flex items-center justify-between rounded-lg border border-black/10 bg-white/90 px-4 py-3 shadow-sm dark:border-white/10 dark:bg-slate-950/40">
               <p className="text-sm text-gray-700 dark:text-slate-300">{saveBarCopy}</p>
               <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => router.back()} disabled={updateMutation.isPending} className="h-10 border-black/10 text-gray-700 hover:bg-black/[0.02] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.03]">
+                <Button type="button" variant="outline" size="sm" onClick={() => navigateBackWithDashboardFallback(router)} disabled={updateMutation.isPending} className="h-10 border-black/10 text-gray-700 hover:bg-black/[0.02] dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.03]">
                   <X className="mr-1.5 h-4 w-4" />
                   Cancel
                 </Button>
@@ -1883,7 +1884,7 @@ export default function EditPropertyPage() {
               isSaving={updateMutation.isPending}
               completionPct={confidenceScore}
               onSave={form.handleSubmit(onSubmit)}
-              onCancel={() => router.back()}
+              onCancel={() => navigateBackWithDashboardFallback(router)}
             />
           </form>
         </Form>

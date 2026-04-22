@@ -25,6 +25,7 @@ import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
 
+import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 interface CompleteUser extends User {
   phone: string | null;
   email: string;
@@ -242,7 +243,7 @@ export default function ProviderDetailPage() {
           primaryAction: (
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => navigateBackWithDashboardFallback(router)}
               className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
             >
               Back to provider search
@@ -374,7 +375,7 @@ export default function ProviderDetailPage() {
       }
     >
       <button
-        onClick={() => router.back()}
+        onClick={() => navigateBackWithDashboardFallback(router)}
         className="min-h-[44px] text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
       >
         ← Back
