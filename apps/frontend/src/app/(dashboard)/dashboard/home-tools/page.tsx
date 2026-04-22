@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, LayoutGrid } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import {
   ExpandableSummaryCard,
   MobilePageContainer,
+  MobilePageIntro,
   MobileSection,
-  MobileSectionHeader,
   QuickActionGrid,
   QuickActionTile,
   SummaryCard,
@@ -114,7 +115,7 @@ export default function HomeToolsPage() {
     ? `/dashboard/properties/${resolvedPropertyId}`
     : '/dashboard';
   const backHref = resolveDashboardBackHref(searchParams.get('backTo'), propertyFallbackBackHref);
-  const backLabel = resolvedPropertyId ? 'Back to Property' : 'Back to Dashboard';
+  const backLabel = resolvedPropertyId ? 'Back to property' : 'Back to dashboard';
   const toolByKey = new Map(MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.key, tool]));
 
   const groupedTools = HOME_TOOL_GROUPS.map((group) => ({
@@ -126,15 +127,14 @@ export default function HomeToolsPage() {
 
   return (
     <MobilePageContainer className="space-y-7 pt-2 pb-24 lg:max-w-7xl lg:px-8 lg:pb-10">
-      <MobileSection>
-        <MobileSectionHeader title="Home Tools" subtitle="Ownership planning tools for your property" />
-        <Link
-          href={backHref}
-          className="no-brand-style mt-2 inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          {backLabel}
-        </Link>
+      <MobileSection className="space-y-3">
+        <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+          <Link href={backHref}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {backLabel}
+          </Link>
+        </Button>
+        <MobilePageIntro title="Home Tools" subtitle="Ownership planning tools for your property" />
       </MobileSection>
 
       {groupedTools.map((group) => (
@@ -175,11 +175,11 @@ export default function HomeToolsPage() {
       <MobileSection>
         <SummaryCard title="Need broader navigation?" subtitle="Use the More tab for full dashboard navigation.">
           <Link
-            href={backHref}
+            href="/dashboard"
             className="no-brand-style inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-4 py-2 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
           >
             <LayoutGrid className="h-4 w-4" />
-            {backLabel}
+            Open dashboard
           </Link>
         </SummaryCard>
       </MobileSection>
