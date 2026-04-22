@@ -564,10 +564,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
               <PullToRefresh onRefresh={handleRefresh}>
                 <div
                   className={cn(
-                    'mx-auto w-full py-5 md:py-8',
+                    'w-full py-5 md:py-8',
                     isResolutionCenterRoute
-                      ? 'max-w-[1520px] px-4 md:px-6 lg:px-8'
-                      : 'max-w-6xl px-4 md:px-8',
+                      ? 'px-3 md:px-4 lg:px-5 xl:px-6'
+                      : 'mx-auto max-w-6xl px-4 md:px-8',
                   )}
                   key={refreshKey}
                 >
