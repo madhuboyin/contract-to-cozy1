@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { PostLoginTransitionScene } from './PostLoginTransitionScene';
 import { ROTATING_MESSAGES } from '@/lib/loading/postLoginTransitionMessages';
@@ -32,9 +31,14 @@ function ProgressDots({ reducedMotion }: { reducedMotion: boolean }) {
       {[0, 1, 2].map((i) => (
         <motion.div
           key={i}
-          className="w-1.5 h-1.5 rounded-full bg-teal-400 dark:bg-teal-500"
-          animate={reducedMotion ? undefined : { opacity: [0.25, 1, 0.25] }}
-          transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.22, ease: 'easeInOut' }}
+          className={[
+            'rounded-full',
+            i === 1
+              ? 'w-2.5 h-2.5 bg-teal-500 dark:bg-teal-400'
+              : 'w-2 h-2 bg-slate-300 dark:bg-slate-600',
+          ].join(' ')}
+          animate={reducedMotion ? undefined : { opacity: i === 1 ? [0.6, 1, 0.6] : [0.4, 0.7, 0.4] }}
+          transition={{ duration: 1.8, repeat: Infinity, delay: i * 0.3, ease: 'easeInOut' }}
         />
       ))}
     </div>
@@ -42,7 +46,7 @@ function ProgressDots({ reducedMotion }: { reducedMotion: boolean }) {
 }
 
 export default function PostLoginTransition({
-  progressMode = 'bar',
+  progressMode = 'dots',
   className,
 }: PostLoginTransitionProps) {
   const prefersReducedMotion = useReducedMotion();
@@ -80,7 +84,7 @@ export default function PostLoginTransition({
         'flex flex-col items-center justify-center',
         'bg-gradient-to-br from-slate-50 via-white to-cyan-50/40',
         'dark:from-[#08142a] dark:via-[#0c1a2e] dark:to-[#081220]',
-        'px-6',
+        'px-6 py-8',
         className ?? '',
       ].join(' ')}
       role="status"
@@ -88,56 +92,27 @@ export default function PostLoginTransition({
       aria-busy="true"
       aria-label="Preparing your home command center"
     >
-      {/* Logo */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
-        className="flex items-center gap-2.5 mb-7 md:mb-9"
-      >
-        <Image
-          src="/favicon.svg"
-          alt="ContractToCozy"
-          width={30}
-          height={30}
-          className="h-[30px] w-[30px] flex-shrink-0"
-          priority
-        />
-        <span
-          className="text-[16px] font-bold tracking-tight text-slate-900 dark:text-slate-50 select-none"
-          style={{ fontFamily: 'var(--font-heading)' }}
-        >
-          ContractToCozy
-        </span>
-      </motion.div>
+      {/* Main visual — image carries the logo, orbit, house, and signal cards */}
+      <PostLoginTransitionScene reducedMotion={reducedMotion} />
 
-      {/* Central scene: stage + signals */}
+      {/* Status copy */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.93, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.55, delay: 0.08, ease: [0.23, 1, 0.32, 1] }}
-      >
-        <PostLoginTransitionScene reducedMotion={reducedMotion} />
-      </motion.div>
-
-      {/* Status copy block */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, delay: 0.32, ease: 'easeOut' }}
-        className="mt-7 md:mt-9 text-center w-full max-w-[300px] md:max-w-[360px]"
+        transition={{ duration: 0.45, delay: 0.4, ease: 'easeOut' }}
+        className="mt-5 md:mt-6 text-center w-full max-w-[300px] md:max-w-[380px]"
       >
         <p
-          className="text-[14.5px] md:text-[15px] font-semibold tracking-tight text-slate-900 dark:text-slate-50"
+          className="text-[14px] md:text-[15px] font-semibold tracking-tight text-slate-900 dark:text-slate-50"
           style={{ fontFamily: 'var(--font-heading)' }}
         >
           Preparing your home command center…
         </p>
-        <p className="mt-1.5 text-[12px] md:text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-[11.5px] md:text-[12.5px] leading-relaxed text-slate-500 dark:text-slate-400">
           Syncing your property, protections, and next best actions.
         </p>
 
-        {/* Rotating tertiary status — slow, subtle */}
+        {/* Rotating tertiary status */}
         <div className="mt-2 h-[18px] flex items-center justify-center">
           <AnimatePresence mode="wait">
             {messageVisible && (
@@ -160,13 +135,13 @@ export default function PostLoginTransition({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.4, delay: 0.5 }}
-        className="mt-5 md:mt-6 w-full max-w-[200px] md:max-w-[240px] flex items-center justify-center"
+        transition={{ duration: 0.4, delay: 0.55 }}
+        className="mt-4 flex items-center justify-center w-full max-w-[200px] md:max-w-[240px]"
       >
-        {progressMode === 'dots' ? (
-          <ProgressDots reducedMotion={reducedMotion} />
-        ) : (
+        {progressMode === 'bar' ? (
           <ProgressBar reducedMotion={reducedMotion} />
+        ) : (
+          <ProgressDots reducedMotion={reducedMotion} />
         )}
       </motion.div>
     </motion.div>
