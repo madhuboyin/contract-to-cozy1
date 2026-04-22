@@ -8,5 +8,5 @@ export const APP_CONFIG = {
    * visible, regardless of how quickly auth resolves.
    * Also used as the navigation delay in the login page.
    */
-  postLoginTransitionMs: 6_000,
+  postLoginTransitionMs: 4_000,
 } as const;
