@@ -87,7 +87,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="h-16 flex items-center px-5 border-b border-gray-100 flex-shrink-0">
+      <div className="h-[86px] flex items-center px-5 border-b border-gray-100 flex-shrink-0">
         <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
           <Image
             src="/favicon.svg"
@@ -101,7 +101,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
       </div>
 
       {/* Primary nav */}
-      <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 py-5 px-3 space-y-0.5 overflow-y-auto">
         {coreJobs.map((job) => {
           const Icon = job.icon;
           const href =
@@ -402,6 +402,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null; loading: boolean };
   const router = useRouter();
   const pathname = usePathname();
+  const isResolutionCenterRoute = pathname?.startsWith('/dashboard/resolution-center');
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const bannerFetchedRef = React.useRef(false);
@@ -499,12 +500,12 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
         <div className="flex min-h-screen bg-gray-50">
 
           {/* ── Desktop persistent left sidebar ──────────────────────────── */}
-          <aside className="hidden md:flex md:flex-col md:w-56 md:fixed md:inset-y-0 md:z-50 bg-white border-r border-gray-100 shadow-sm">
+          <aside className="hidden border-r border-gray-100 bg-white shadow-sm md:fixed md:inset-y-0 md:z-50 md:flex md:w-[246px] md:flex-col">
             <PersistentSidebarNav user={user} />
           </aside>
 
           {/* ── Content area (offset by sidebar on desktop) ──────────────── */}
-          <div className="flex flex-1 flex-col md:pl-56 min-w-0">
+          <div className="flex min-w-0 flex-1 flex-col md:pl-[246px]">
 
             {/* Mobile sticky header */}
             <header className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-100 safe-area-inset-top">
@@ -562,7 +563,12 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             <main className="flex-1 pb-20 md:pb-8">
               <PullToRefresh onRefresh={handleRefresh}>
                 <div
-                  className="mx-auto w-full max-w-6xl px-4 md:px-8 py-5 md:py-8"
+                  className={cn(
+                    'mx-auto w-full py-5 md:py-8',
+                    isResolutionCenterRoute
+                      ? 'max-w-[1520px] px-4 md:px-6 lg:px-8'
+                      : 'max-w-6xl px-4 md:px-8',
+                  )}
                   key={refreshKey}
                 >
                   <DashboardBreadcrumbs />

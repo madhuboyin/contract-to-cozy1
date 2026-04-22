@@ -1583,7 +1583,7 @@ export default function ResolutionCenterClient() {
 
   return (
     <>
-      <div className="grid items-start gap-6 pb-20 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid items-start gap-6 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6">
           <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-6 md:px-9 md:py-8">
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:items-end">
@@ -1606,7 +1606,7 @@ export default function ResolutionCenterClient() {
                       <ShieldAlert className="h-4 w-4" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[31px] font-semibold leading-none text-slate-900">{filterCounts.urgent}</p>
+                      <p className="text-2xl font-semibold leading-none text-slate-900">{filterCounts.urgent}</p>
                       <p className="text-xs font-medium text-slate-700">Urgent Issues</p>
                       <p className="text-[11px] text-rose-600">Need attention</p>
                     </div>
@@ -1616,7 +1616,7 @@ export default function ResolutionCenterClient() {
                       <DollarSign className="h-4 w-4" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[31px] font-semibold leading-none text-slate-900">
+                      <p className="text-2xl font-semibold leading-none text-slate-900">
                         {formatCompactUsd(Math.round(totalAtRisk))}
                       </p>
                       <p className="text-xs font-medium text-slate-700">Total at risk</p>
@@ -1628,7 +1628,7 @@ export default function ResolutionCenterClient() {
                       <TrendingUp className="h-4 w-4" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[31px] font-semibold leading-none text-slate-900">{highConfidenceCount}</p>
+                      <p className="text-2xl font-semibold leading-none text-slate-900">{highConfidenceCount}</p>
                       <p className="text-xs font-medium text-slate-700">High confidence</p>
                       <p className="text-[11px] text-slate-500">Issues detected</p>
                     </div>
@@ -1739,7 +1739,7 @@ export default function ResolutionCenterClient() {
 
         <aside className="space-y-4 xl:sticky xl:top-24">
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-900">Today&apos;s Snapshot</h3>
+            <h3 className="text-[37px] font-semibold tracking-[-0.02em] text-slate-900">Today&apos;s Snapshot</h3>
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
                 <span className="text-slate-500">Total at risk</span>
@@ -1770,7 +1770,7 @@ export default function ResolutionCenterClient() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-900">Quick Actions</h3>
+            <h3 className="text-[37px] font-semibold tracking-[-0.02em] text-slate-900">Quick Actions</h3>
             <div className="mt-4 space-y-2.5">
               {quickActions.map((action, index) => {
                 const ActionIcon = action.icon;
@@ -1805,7 +1805,7 @@ export default function ResolutionCenterClient() {
           </section>
 
           <section className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-5">
-            <h3 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-900">Need Help Now?</h3>
+            <h3 className="text-[37px] font-semibold tracking-[-0.02em] text-slate-900">Need Help Now?</h3>
             <p className="mt-2 text-sm text-slate-600">
               Connect with trusted local pros available in your area.
             </p>
