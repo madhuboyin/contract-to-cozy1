@@ -846,7 +846,7 @@ function TriageActionCard({
           </div>
 
           <div className="mt-4 text-center">
-            <h3 className="line-clamp-2 text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] text-slate-900">
+            <h3 className="line-clamp-2 text-[18px] font-semibold leading-[1.2] tracking-[-0.01em] text-slate-900">
               {assetTitle}
             </h3>
             <p className="mt-1 text-[15px] text-slate-600">{subtitle}</p>
@@ -862,7 +862,7 @@ function TriageActionCard({
 
         <div className="space-y-4 px-5 py-4">
           <div>
-            <h4 className="text-[44px] font-semibold leading-[1.02] tracking-[-0.03em] text-slate-900">
+            <h4 className="text-[22px] font-semibold leading-[1.2] tracking-[-0.01em] text-slate-900">
               {issueHeadline}
             </h4>
             <p className="mt-2 max-w-xl text-base leading-7 text-slate-600">
@@ -1739,7 +1739,7 @@ export default function ResolutionCenterClient() {
 
         <aside className="space-y-4 xl:sticky xl:top-24">
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="text-[32px] font-semibold tracking-[-0.02em] text-slate-900">Today&apos;s Snapshot</h3>
+            <h3 className="text-[18px] font-semibold tracking-[-0.01em] text-slate-900">Today&apos;s Snapshot</h3>
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
                 <span className="text-slate-500">Total at risk</span>
@@ -1770,7 +1770,7 @@ export default function ResolutionCenterClient() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="text-[32px] font-semibold tracking-[-0.02em] text-slate-900">Quick Actions</h3>
+            <h3 className="text-[18px] font-semibold tracking-[-0.01em] text-slate-900">Quick Actions</h3>
             <div className="mt-4 space-y-2.5">
               {quickActions.map((action, index) => {
                 const ActionIcon = action.icon;
@@ -1805,7 +1805,7 @@ export default function ResolutionCenterClient() {
           </section>
 
           <section className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-5">
-            <h3 className="text-[32px] font-semibold tracking-[-0.02em] text-slate-900">Need Help Now?</h3>
+            <h3 className="text-[18px] font-semibold tracking-[-0.01em] text-slate-900">Need Help Now?</h3>
             <p className="mt-2 text-sm text-slate-600">
               Connect with trusted local pros available in your area.
             </p>
