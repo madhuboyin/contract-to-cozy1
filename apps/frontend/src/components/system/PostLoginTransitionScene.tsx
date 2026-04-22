@@ -27,6 +27,7 @@ export function PostLoginTransitionScene({ reducedMotion }: Props) {
           width={1535}
           height={1024}
           priority
+          unoptimized
           className="w-full h-auto
             rounded-2xl
             shadow-[0_6px_32px_-6px_rgba(13,148,136,0.18),0_2px_8px_-2px_rgba(0,0,0,0.05)]
