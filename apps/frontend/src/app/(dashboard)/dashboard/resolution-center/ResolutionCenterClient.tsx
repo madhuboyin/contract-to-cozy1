@@ -1457,6 +1457,9 @@ export default function ResolutionCenterClient() {
   const inventoryActionHref = selectedPropertyId
     ? `/dashboard/properties/${encodeURIComponent(selectedPropertyId)}/inventory?from=status-board`
     : '/dashboard/inventory?from=status-board';
+  const fullReportHref = selectedPropertyId
+    ? `/dashboard/properties/${encodeURIComponent(selectedPropertyId)}/reports`
+    : '/dashboard/properties';
 
   const handleRunFullScan = () => {
     void refetchOrchestration();
@@ -1837,7 +1840,7 @@ export default function ResolutionCenterClient() {
                 type="button"
                 onClick={() => {
                   if (typeof window !== 'undefined') {
-                    window.location.assign(applyPropertyId('/dashboard/actions'));
+                    window.location.assign(fullReportHref);
                   }
                 }}
                 className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
