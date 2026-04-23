@@ -9,6 +9,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const PUBLIC_FILE_PATH_REGEX =
+  /\/[^/?]+\.(?:avif|bmp|css|gif|ico|jpe?g|js|json|map|mp3|mp4|ogg|otf|pdf|png|svg|ttf|txt|wav|webm|webmanifest|webp|woff2?|xml)$/i;
+
 // ---------------------------------------------------------------------------
 // CSP helpers
 // ---------------------------------------------------------------------------
@@ -131,7 +134,11 @@ export function middleware(request: NextRequest) {
 
   // Let Next.js internals and top-level API routes pass through unchanged.
   // The CSP headers are still written to the response below.
-  if (pathname.startsWith('/_next') || pathname.startsWith('/api')) {
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api') ||
+    PUBLIC_FILE_PATH_REGEX.test(pathname)
+  ) {
     const response = NextResponse.next({ request: { headers: requestHeaders } });
     response.headers.set('Content-Security-Policy', csp);
     response.headers.set('Reporting-Endpoints', `csp-endpoint="${reportUri}"`);
