@@ -1658,15 +1658,16 @@ export default function ResolutionCenterClient() {
               </div>
 
               <div className="grid grid-cols-[minmax(0,1fr)_146px] items-end gap-2.5">
-                <div className="relative h-[176px]">
+                <div className="relative h-[176px] overflow-hidden">
                   <Image
-                    src="/images/Home_Illustration.png"
+                    src="/images/Home_Illustration_cutout.png"
                     alt="Home triage illustration"
                     fill
-                    className="object-cover object-[63%_58%] mix-blend-multiply"
+                    className="object-contain object-bottom"
                     priority
                     unoptimized
                   />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-b from-transparent to-[#e2f4fc]" />
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-center shadow-sm">
                   <div className="relative mx-auto h-[84px] w-[84px] rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[6px]">
