@@ -896,12 +896,12 @@ function TriageActionCard({
               {insightPills.map((metric) => {
                 const MetricIcon = metric.icon;
                 return (
-                  <div key={metric.label} className="w-[124px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-1">
+                  <div key={metric.label} className="w-[124px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-0.5">
                     <div className={cn('flex items-center gap-1 text-[11px] font-semibold uppercase leading-none', metric.tone)}>
                       <MetricIcon className="h-3.5 w-3.5" />
                       {metric.label}
                     </div>
-                    <p className="mt-0.5 text-[15px] font-semibold leading-none text-slate-900">{metric.value}</p>
+                    <p className="mt-0 text-[15px] font-semibold leading-none text-slate-900">{metric.value}</p>
                   </div>
                 );
               })}
@@ -909,9 +909,9 @@ function TriageActionCard({
           )}
 
           {showRiskBadge && (
-            <div className="w-full max-w-[480px] rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">Risk of delay</p>
-              <p className="mt-0.5 text-sm font-medium leading-snug text-amber-900">
+            <div className="w-full max-w-[480px] rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-0.5">
+              <p className="text-xs font-semibold uppercase leading-none tracking-[0.08em] text-amber-700">Risk of delay</p>
+              <p className="mt-0 text-sm font-medium leading-tight text-amber-900">
                 {item.riskLevel === 'CRITICAL'
                   ? 'Delaying this can escalate into emergency repair costs and property damage.'
                   : `Postponing this can increase total cost to ${formatCompactUsd(Math.round(exposure * 1.4))}.`}
