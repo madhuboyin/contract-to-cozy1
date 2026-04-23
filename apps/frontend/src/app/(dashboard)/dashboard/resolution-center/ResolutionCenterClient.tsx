@@ -163,19 +163,27 @@ function formatRelativeDateLabel(dateLike: string | null | undefined): string | 
   return `${Math.abs(dayDelta)} days ago`;
 }
 
-function formatLastUpdated(items: any[]): string {
+function formatLastUpdated(items: any[], fallbackTs?: number): string {
+  const minValidTs = Date.UTC(2020, 0, 1);
+  const maxValidTs = Date.now() + 24 * 60 * 60 * 1000;
+
   const mostRecentTs = items.reduce((latest, item) => {
     const candidate = Date.parse(String(item.updatedAt || item.nextDueDate || item.createdAt || 0));
-    return Number.isFinite(candidate) && candidate > latest ? candidate : latest;
+    if (!Number.isFinite(candidate)) return latest;
+    if (candidate < minValidTs || candidate > maxValidTs) return latest;
+    return candidate > latest ? candidate : latest;
   }, 0);
 
-  if (!mostRecentTs) return 'No recent updates';
+  const effectiveTs =
+    mostRecentTs || (typeof fallbackTs === 'number' && Number.isFinite(fallbackTs) ? fallbackTs : 0);
+  if (!effectiveTs) return 'Updated recently';
 
-  const minutes = Math.max(1, Math.round((Date.now() - mostRecentTs) / 60000));
+  const minutes = Math.max(1, Math.round((Date.now() - effectiveTs) / 60000));
   if (minutes < 60) return `Updated ${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `Updated ${hours}h ago`;
   const days = Math.round(hours / 24);
+  if (days > 365) return 'Updated recently';
   return `Updated ${days}d ago`;
 }
 
@@ -318,6 +326,9 @@ function resolveAssetImage(item: any): string | null {
   if (token.includes('water heater') || token.includes('heater')) return '/images/Water-Heater.png';
   if (token.includes('refrigerator') || token.includes('fridge')) return '/images/Refrigerator.png';
   if (token.includes('washer')) return '/images/washer.png';
+  if (token.includes('smoke') || token.includes('co detector') || token.includes('carbon monoxide')) {
+    return '/images/Safety-Smoke-Detectors.png';
+  }
   if (token.includes('roof')) return '/images/roof.png';
   if (token.includes('panel')) return '/images/electric-panel.png';
   return null;
@@ -1089,6 +1100,7 @@ export default function ResolutionCenterClient() {
     isError: orchestrationError,
     error: orchestrationErrorObj,
     refetch: refetchOrchestration,
+    dataUpdatedAt: orchestrationUpdatedAt,
   } = useQuery({
     queryKey: ['orchestration-summary', selectedPropertyId],
     queryFn: () =>
@@ -1104,6 +1116,7 @@ export default function ResolutionCenterClient() {
     isError: incidentsError,
     error: incidentsErrorObj,
     refetch: refetchIncidents,
+    dataUpdatedAt: incidentsUpdatedAt,
   } = useQuery({
     queryKey: ['active-incidents', selectedPropertyId],
     queryFn: () =>
@@ -1119,6 +1132,7 @@ export default function ResolutionCenterClient() {
     isError: resolutionsError,
     error: resolutionsErrorObj,
     refetch: refetchResolutions,
+    dataUpdatedAt: resolutionsUpdatedAt,
   } = useQuery({
     queryKey: ['replace-repair-resolutions', selectedPropertyId],
     queryFn: () =>
@@ -1135,6 +1149,7 @@ export default function ResolutionCenterClient() {
     isError: bookingsError,
     error: bookingsErrorObj,
     refetch: refetchBookings,
+    dataUpdatedAt: bookingsUpdatedAt,
   } = useQuery({
     queryKey: ['resolution-bookings', selectedPropertyId],
     queryFn: () =>
@@ -1156,6 +1171,7 @@ export default function ResolutionCenterClient() {
     isError: completedIncidentsError,
     error: completedIncidentsErrorObj,
     refetch: refetchCompletedIncidents,
+    dataUpdatedAt: completedIncidentsUpdatedAt,
   } = useQuery({
     queryKey: ['completed-incidents', selectedPropertyId],
     queryFn: () =>
@@ -1413,7 +1429,22 @@ export default function ResolutionCenterClient() {
     [activeItems]
   );
 
-  const latestUpdateLabel = useMemo(() => formatLastUpdated(activeItems), [activeItems]);
+  const latestDataRefreshTs = useMemo(
+    () =>
+      Math.max(
+        orchestrationUpdatedAt || 0,
+        incidentsUpdatedAt || 0,
+        resolutionsUpdatedAt || 0,
+        bookingsUpdatedAt || 0,
+        completedIncidentsUpdatedAt || 0
+      ),
+    [orchestrationUpdatedAt, incidentsUpdatedAt, resolutionsUpdatedAt, bookingsUpdatedAt, completedIncidentsUpdatedAt]
+  );
+
+  const latestUpdateLabel = useMemo(
+    () => formatLastUpdated(activeItems, latestDataRefreshTs),
+    [activeItems, latestDataRefreshTs]
+  );
   const homeHealthScore = 82;
   const homeHealthStatus = homeHealthScore >= 75 ? 'Good' : homeHealthScore >= 55 ? 'Watch' : 'At risk';
 
@@ -1787,13 +1818,14 @@ export default function ResolutionCenterClient() {
               </div>
             </div>
             <div className="mt-5 border-t border-slate-100 pt-4 text-center">
-              <Link
-                href={applyPropertyId('/dashboard/actions')}
+              <button
+                type="button"
+                onClick={() => router.push(applyPropertyId('/dashboard/actions'))}
                 className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
               >
                 View full report
                 <ArrowRight className="h-4 w-4" />
-              </Link>
+              </button>
             </div>
           </section>
 
