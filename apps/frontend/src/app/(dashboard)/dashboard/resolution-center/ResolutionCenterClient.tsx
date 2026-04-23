@@ -732,10 +732,20 @@ function TriageActionCard({
   const normalizedAssetTitle = assetTitle.trim().toLowerCase();
   const normalizedLocationSubtitle = locationSubtitle.trim().toLowerCase();
   const normalizedSubtitleDisplay = subtitleDisplay.trim().toLowerCase();
+  const condensedAssetTitle = normalizedAssetTitle.replace(/[^a-z0-9]/g, '');
+  const condensedLocationSubtitle = normalizedLocationSubtitle.replace(/[^a-z0-9]/g, '');
+  const condensedSubtitleDisplay = normalizedSubtitleDisplay.replace(/[^a-z0-9]/g, '');
   const displaySubtitle =
-    normalizedLocationSubtitle && normalizedLocationSubtitle !== 'home asset' && normalizedLocationSubtitle !== normalizedAssetTitle
+    normalizedLocationSubtitle &&
+    normalizedLocationSubtitle !== 'home asset' &&
+    condensedLocationSubtitle !== condensedAssetTitle &&
+    !condensedLocationSubtitle.includes(condensedAssetTitle) &&
+    !condensedAssetTitle.includes(condensedLocationSubtitle)
       ? locationSubtitle
-      : normalizedSubtitleDisplay && normalizedSubtitleDisplay !== normalizedAssetTitle
+      : normalizedSubtitleDisplay &&
+        condensedSubtitleDisplay !== condensedAssetTitle &&
+        !condensedSubtitleDisplay.includes(condensedAssetTitle) &&
+        !condensedAssetTitle.includes(condensedSubtitleDisplay)
       ? subtitleDisplay
       : '';
   const sourceLabels = [
@@ -886,7 +896,7 @@ function TriageActionCard({
               {insightPills.map((metric) => {
                 const MetricIcon = metric.icon;
                 return (
-                  <div key={metric.label} className="w-auto rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-1.5">
+                  <div key={metric.label} className="w-[124px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-1.5">
                     <div className={cn('flex items-center gap-1 text-[11px] font-semibold uppercase leading-none', metric.tone)}>
                       <MetricIcon className="h-3.5 w-3.5" />
                       {metric.label}
@@ -899,7 +909,7 @@ function TriageActionCard({
           )}
 
           {showRiskBadge && (
-            <div className="w-fit max-w-full rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-2">
+            <div className="w-full max-w-[480px] rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-1.5">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">Risk of delay</p>
               <p className="mt-1 text-sm font-medium leading-snug text-amber-900">
                 {item.riskLevel === 'CRITICAL'
@@ -1596,14 +1606,14 @@ export default function ResolutionCenterClient() {
     <>
       <div className="grid items-start gap-4 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6">
-          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-5 md:px-8 md:py-6">
+          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-5 md:px-8 md:py-5">
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:items-end">
               <div className="space-y-6">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700 md:text-[13px]">
                   Resolution Center
                 </div>
                 <div className="space-y-3">
-                  <h1 className="text-[34px] font-semibold leading-[1.04] tracking-[-0.015em] text-slate-950 md:text-[40px] md:whitespace-nowrap">
+                  <h1 className="text-[30px] font-medium leading-[1.06] tracking-[-0.01em] text-slate-950 md:text-[36px] md:whitespace-nowrap">
                     Home Triage
                   </h1>
                   <p className="max-w-[520px] text-[15px] leading-8 text-slate-600">
@@ -1724,7 +1734,7 @@ export default function ResolutionCenterClient() {
           )}
 
           {visibleItems.length > 0 ? (
-            <div className="max-w-[1080px] space-y-4">
+            <div className="max-w-[1040px] space-y-4">
               {visibleItems.map(({ item, groupId }) => (
                 <TriageActionCard
                   key={`${groupId}:${item.id || item.actionKey}`}
