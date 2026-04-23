@@ -831,7 +831,7 @@ function TriageActionCard({
       <div className="grid gap-0 xl:grid-cols-[250px_minmax(0,1fr)_270px]">
         <div
           className={cn(
-            'flex h-full flex-col rounded-l-2xl border-r px-5 py-4',
+            'flex h-full flex-col rounded-l-2xl border-r px-5 py-3',
             journey === 'urgent-issue' || journey === 'repair-vs-replace'
               ? 'border-rose-100 bg-rose-50/35'
               : journey === 'cost-savings'
@@ -839,7 +839,7 @@ function TriageActionCard({
               : 'border-slate-100 bg-slate-50/45'
           )}
         >
-          <div className="mb-5 flex items-center justify-start">
+          <div className="mb-4 flex items-center justify-start">
             <span
               className={cn(
                 'inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.11em]',
@@ -866,14 +866,14 @@ function TriageActionCard({
             )}
           </div>
 
-          <div className="mt-4 text-center">
+          <div className="mt-3 text-center">
             <h3 className="line-clamp-2 text-[18px] font-semibold leading-[1.2] tracking-[-0.01em] text-slate-900">
               {assetTitle}
             </h3>
             {displaySubtitle ? <p className="mt-1 text-[15px] text-slate-600">{displaySubtitle}</p> : null}
           </div>
 
-          <div className="mt-5 flex justify-center">
+          <div className="mt-4 flex justify-center">
             <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-[12px] font-semibold text-emerald-700">
               <ShieldCheck className="h-3.5 w-3.5" />
               {confidenceScore}% Confidence
@@ -881,7 +881,7 @@ function TriageActionCard({
           </div>
         </div>
 
-        <div className="space-y-4 px-5 py-4">
+        <div className="space-y-3 px-5 py-3">
           <div>
             <h4 className="text-[18px] font-medium leading-[1.3] tracking-[-0.01em] text-slate-900">
               {issueHeadline}
@@ -896,12 +896,12 @@ function TriageActionCard({
               {insightPills.map((metric) => {
                 const MetricIcon = metric.icon;
                 return (
-                  <div key={metric.label} className="w-[124px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-1.5">
+                  <div key={metric.label} className="w-[124px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-1">
                     <div className={cn('flex items-center gap-1 text-[11px] font-semibold uppercase leading-none', metric.tone)}>
                       <MetricIcon className="h-3.5 w-3.5" />
                       {metric.label}
                     </div>
-                    <p className="mt-1 text-[15px] font-semibold leading-none text-slate-900">{metric.value}</p>
+                    <p className="mt-0.5 text-[15px] font-semibold leading-none text-slate-900">{metric.value}</p>
                   </div>
                 );
               })}
@@ -909,9 +909,9 @@ function TriageActionCard({
           )}
 
           {showRiskBadge && (
-            <div className="w-full max-w-[480px] rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-1.5">
+            <div className="w-full max-w-[480px] rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-1">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">Risk of delay</p>
-              <p className="mt-1 text-sm font-medium leading-snug text-amber-900">
+              <p className="mt-0.5 text-sm font-medium leading-snug text-amber-900">
                 {item.riskLevel === 'CRITICAL'
                   ? 'Delaying this can escalate into emergency repair costs and property damage.'
                   : `Postponing this can increase total cost to ${formatCompactUsd(Math.round(exposure * 1.4))}.`}
@@ -955,7 +955,7 @@ function TriageActionCard({
           </div>
         </div>
 
-        <div className="space-y-2.5 border-l border-slate-100 px-5 py-4">
+        <div className="space-y-2.5 border-l border-slate-100 px-5 py-3">
           <Button
             onClick={handlePrimary}
             className={cn('h-11 w-full rounded-[10px] text-base font-semibold text-white', meta.primaryButtonCls)}
@@ -1734,7 +1734,7 @@ export default function ResolutionCenterClient() {
           )}
 
           {visibleItems.length > 0 ? (
-            <div className="max-w-[1040px] space-y-4">
+            <div className="space-y-4">
               {visibleItems.map(({ item, groupId }) => (
                 <TriageActionCard
                   key={`${groupId}:${item.id || item.actionKey}`}
