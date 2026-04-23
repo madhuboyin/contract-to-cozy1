@@ -1606,50 +1606,50 @@ export default function ResolutionCenterClient() {
     <>
       <div className="grid items-start gap-4 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6">
-          <header className="rounded-[24px] border border-[#cfe3ef] bg-[#dff1fb] px-6 py-5 md:px-8 md:py-5">
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] xl:items-end">
-              <div className="space-y-5">
+          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] px-6 py-4 md:px-8 md:py-4">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:items-end">
+              <div className="space-y-4">
                 <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700 md:text-[13px]">
                   Resolution Center
                 </div>
-                <div className="space-y-2.5">
-                  <h1 className="text-[30px] font-medium leading-[1.06] tracking-[-0.01em] text-slate-950 md:text-[34px] md:whitespace-nowrap">
+                <div className="space-y-2">
+                  <h1 className="text-[30px] font-medium leading-[1.04] tracking-[-0.01em] text-slate-950 md:text-[32px] md:whitespace-nowrap">
                     Home Triage
                   </h1>
-                  <p className="max-w-[560px] text-[15px] leading-7 text-slate-600">
+                  <p className="max-w-[520px] text-[15px] leading-6 text-slate-600">
                     We&apos;ve analyzed your home signals to rank exactly what needs your attention today.
                   </p>
                 </div>
 
-                <div className="grid max-w-[780px] gap-3 sm:grid-cols-3">
-                  <div className="flex items-center gap-2.5 rounded-xl border border-rose-200 bg-white px-3 py-2.5">
-                    <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-600">
-                      <ShieldAlert className="h-[18px] w-[18px]" />
+                <div className="grid max-w-[760px] gap-3 sm:grid-cols-3">
+                  <div className="flex items-center gap-2.5 rounded-xl border border-rose-200 bg-white px-3 py-2">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                      <ShieldAlert className="h-4 w-4" />
                     </div>
                     <div className="space-y-0">
-                      <p className="text-[23px] font-semibold leading-none text-slate-900">{filterCounts.urgent}</p>
+                      <p className="text-[22px] font-semibold leading-none text-slate-900">{filterCounts.urgent}</p>
                       <p className="text-[11px] font-medium text-slate-700">Urgent Issues</p>
                       <p className="text-[11px] text-rose-600">Need attention</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-white px-3 py-2.5">
-                    <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                      <DollarSign className="h-[18px] w-[18px]" />
+                  <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                      <DollarSign className="h-4 w-4" />
                     </div>
                     <div className="space-y-0">
-                      <p className="text-[23px] font-semibold leading-none text-slate-900">
+                      <p className="text-[22px] font-semibold leading-none text-slate-900">
                         {formatCompactUsd(Math.round(totalAtRisk))}
                       </p>
                       <p className="text-[11px] font-medium text-slate-700">Total at risk</p>
                       <p className="text-[11px] text-slate-500">Potential exposure</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 rounded-xl border border-indigo-200 bg-white px-3 py-2.5">
-                    <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-                      <TrendingUp className="h-[18px] w-[18px]" />
+                  <div className="flex items-center gap-2.5 rounded-xl border border-indigo-200 bg-white px-3 py-2">
+                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                      <TrendingUp className="h-4 w-4" />
                     </div>
                     <div className="space-y-0">
-                      <p className="text-[23px] font-semibold leading-none text-slate-900">{highConfidenceCount}</p>
+                      <p className="text-[22px] font-semibold leading-none text-slate-900">{highConfidenceCount}</p>
                       <p className="text-[11px] font-medium text-slate-700">High confidence</p>
                       <p className="text-[11px] text-slate-500">Issues detected</p>
                     </div>
@@ -1657,29 +1657,29 @@ export default function ResolutionCenterClient() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-[minmax(0,1fr)_146px] items-end gap-3">
-                <div className="relative h-[190px]">
+              <div className="grid grid-cols-[minmax(0,1fr)_146px] items-end gap-2.5">
+                <div className="relative h-[176px]">
                   <Image
                     src="/images/Home_Illustration.png"
                     alt="Home triage illustration"
                     fill
-                    className="object-cover object-[62%_54%]"
+                    className="object-cover object-[63%_58%] mix-blend-multiply"
                     priority
                     unoptimized
                   />
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-center shadow-sm">
-                  <div className="relative mx-auto h-[88px] w-[88px] rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[6px]">
-                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[40px] font-semibold text-slate-900">
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-center shadow-sm">
+                  <div className="relative mx-auto h-[84px] w-[84px] rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[6px]">
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[38px] font-semibold text-slate-900">
                       {homeHealthScore}
                     </div>
                   </div>
-                  <p className="mt-3 text-sm font-medium text-slate-600">Home Health</p>
-                  <p className="mt-1 inline-flex items-center gap-1 text-2xl font-semibold leading-none text-emerald-600">
+                  <p className="mt-2.5 text-sm font-medium text-slate-600">Home Health</p>
+                  <p className="mt-1 inline-flex items-center gap-1 text-[20px] font-semibold leading-none text-emerald-600">
                     <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
                     {homeHealthStatus}
                   </p>
-                  <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400">
+                  <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-slate-400">
                     <BarChart3 className="h-3 w-3" />
                     {latestUpdateLabel}
                   </p>
