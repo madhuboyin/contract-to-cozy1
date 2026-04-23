@@ -727,6 +727,17 @@ function TriageActionCard({
   const assetTitle = resolveAssetTitle(item);
   const issueHeadline = resolveIssueHeadline(item, journey, assetTitle);
   const issueDescription = resolveIssueDescription(item, issueHeadline);
+  const locationSubtitle = toDisplayLabel(item?.location || item?.room || item?.area || item?.level || '');
+  const subtitleDisplay = toDisplayLabel(subtitle);
+  const normalizedAssetTitle = assetTitle.trim().toLowerCase();
+  const normalizedLocationSubtitle = locationSubtitle.trim().toLowerCase();
+  const normalizedSubtitleDisplay = subtitleDisplay.trim().toLowerCase();
+  const displaySubtitle =
+    normalizedLocationSubtitle && normalizedLocationSubtitle !== 'home asset' && normalizedLocationSubtitle !== normalizedAssetTitle
+      ? locationSubtitle
+      : normalizedSubtitleDisplay && normalizedSubtitleDisplay !== normalizedAssetTitle
+      ? subtitleDisplay
+      : '';
   const sourceLabels = [
     item.primarySignalSource?.sourceSystem,
     ...(Array.isArray(item.signalSources)
@@ -849,7 +860,7 @@ function TriageActionCard({
             <h3 className="line-clamp-2 text-[18px] font-semibold leading-[1.2] tracking-[-0.01em] text-slate-900">
               {assetTitle}
             </h3>
-            <p className="mt-1 text-[15px] text-slate-600">{subtitle}</p>
+            {displaySubtitle ? <p className="mt-1 text-[15px] text-slate-600">{displaySubtitle}</p> : null}
           </div>
 
           <div className="mt-5 flex justify-center">
@@ -871,16 +882,16 @@ function TriageActionCard({
           </div>
 
           {insightPills.length > 0 && (
-            <div className="grid gap-2 lg:grid-cols-3">
+            <div className="flex flex-wrap gap-2">
               {insightPills.map((metric) => {
                 const MetricIcon = metric.icon;
                 return (
-                  <div key={metric.label} className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-                    <div className={cn('flex items-center gap-1 text-[11px] font-semibold uppercase', metric.tone)}>
+                  <div key={metric.label} className="w-auto rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-1.5">
+                    <div className={cn('flex items-center gap-1 text-[11px] font-semibold uppercase leading-none', metric.tone)}>
                       <MetricIcon className="h-3.5 w-3.5" />
                       {metric.label}
                     </div>
-                    <p className="mt-1 text-base font-semibold text-slate-900">{metric.value}</p>
+                    <p className="mt-1 text-[15px] font-semibold leading-none text-slate-900">{metric.value}</p>
                   </div>
                 );
               })}
@@ -888,9 +899,9 @@ function TriageActionCard({
           )}
 
           {showRiskBadge && (
-            <div className="rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-3">
+            <div className="w-fit max-w-full rounded-xl border border-amber-200 bg-[#fff6e8] px-4 py-2">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">Risk of delay</p>
-              <p className="mt-1 text-sm font-medium text-amber-900">
+              <p className="mt-1 text-sm font-medium leading-snug text-amber-900">
                 {item.riskLevel === 'CRITICAL'
                   ? 'Delaying this can escalate into emergency repair costs and property damage.'
                   : `Postponing this can increase total cost to ${formatCompactUsd(Math.round(exposure * 1.4))}.`}
@@ -1585,14 +1596,14 @@ export default function ResolutionCenterClient() {
     <>
       <div className="grid items-start gap-4 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6">
-          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-6 md:px-9 md:py-8">
+          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] p-5 md:px-8 md:py-6">
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] xl:items-end">
               <div className="space-y-6">
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700 md:text-[13px]">
                   Resolution Center
                 </div>
                 <div className="space-y-3">
-                  <h1 className="text-[40px] font-semibold leading-[1.02] tracking-[-0.02em] text-slate-950 md:text-[48px] md:whitespace-nowrap">
+                  <h1 className="text-[34px] font-semibold leading-[1.04] tracking-[-0.015em] text-slate-950 md:text-[40px] md:whitespace-nowrap">
                     Home Triage
                   </h1>
                   <p className="max-w-[520px] text-[15px] leading-8 text-slate-600">
@@ -1637,7 +1648,7 @@ export default function ResolutionCenterClient() {
               </div>
 
               <div className="grid grid-cols-[minmax(0,1fr)_146px] items-end gap-4">
-                <div className="relative h-[240px]">
+                <div className="relative h-[220px]">
                   <Image
                     src="/images/Home_Illustration.png"
                     alt="Home triage illustration"
@@ -1713,7 +1724,7 @@ export default function ResolutionCenterClient() {
           )}
 
           {visibleItems.length > 0 ? (
-            <div className="space-y-4">
+            <div className="max-w-[1080px] space-y-4">
               {visibleItems.map(({ item, groupId }) => (
                 <TriageActionCard
                   key={`${groupId}:${item.id || item.actionKey}`}
