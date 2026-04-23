@@ -908,7 +908,7 @@ function TriageActionCard({
                 const MetricIcon = metric.icon;
                 return (
                   <div key={metric.label} className="w-[124px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 pt-0.5 pb-0">
-                    <div className={cn('flex items-center gap-1 text-[11px] font-semibold uppercase leading-none', metric.tone)}>
+                    <div className={cn('flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold uppercase leading-none', metric.tone)}>
                       <MetricIcon className="h-3.5 w-3.5" />
                       {metric.label}
                     </div>
@@ -1454,17 +1454,32 @@ export default function ResolutionCenterClient() {
     return `${href}${divider}propertyId=${encodeURIComponent(selectedPropertyId)}`;
   };
 
+  const inventoryActionHref = selectedPropertyId
+    ? `/dashboard/properties/${encodeURIComponent(selectedPropertyId)}/inventory?from=status-board`
+    : '/dashboard/inventory?from=status-board';
+
+  const handleRunFullScan = () => {
+    void refetchOrchestration();
+    void refetchIncidents();
+    void refetchResolutions();
+    void refetchBookings();
+    if (shouldLoadCompletedIncidents) {
+      void refetchCompletedIncidents();
+    }
+    toast({ title: 'Scan started', description: 'Refreshing home signals now.' });
+  };
+
   const quickActions = [
     {
       label: 'Run Full Scan',
       description: 'Refresh home signals',
-      href: applyPropertyId('/dashboard/oracle'),
+      onClick: handleRunFullScan,
       icon: BarChart3,
     },
     {
       label: 'Add Appliance',
       description: 'Track a new home item',
-      href: applyPropertyId('/dashboard/inventory'),
+      href: inventoryActionHref,
       icon: Wrench,
     },
     {
@@ -1820,7 +1835,11 @@ export default function ResolutionCenterClient() {
             <div className="mt-5 border-t border-slate-100 pt-4 text-center">
               <button
                 type="button"
-                onClick={() => router.push(applyPropertyId('/dashboard/actions'))}
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.location.assign(applyPropertyId('/dashboard/actions'));
+                  }
+                }}
                 className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
               >
                 View full report
@@ -1843,10 +1862,19 @@ export default function ResolutionCenterClient() {
                     ? 'bg-indigo-50 text-indigo-600'
                     : 'bg-slate-100 text-slate-600';
                 return (
-                  <Link
+                  <button
                     key={action.label}
-                    href={action.href}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                    type="button"
+                    onClick={() => {
+                      if ('onClick' in action && typeof action.onClick === 'function') {
+                        action.onClick();
+                        return;
+                      }
+                      if ('href' in action && action.href) {
+                        router.push(action.href);
+                      }
+                    }}
+                    className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
                   >
                     <div className="flex items-center gap-3">
                       <div className={cn('rounded-lg p-2', iconTone)}>
@@ -1858,7 +1886,7 @@ export default function ResolutionCenterClient() {
                       </div>
                     </div>
                     <ChevronRight className="h-4 w-4 text-slate-400" />
-                  </Link>
+                  </button>
                 );
               })}
             </div>
