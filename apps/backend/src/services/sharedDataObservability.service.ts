@@ -48,15 +48,14 @@ export function logSharedDataEvent(input: SharedDataLogInput): void {
     loggedAt: new Date().toISOString(),
   };
 
-  const encoded = JSON.stringify(payload);
   if ((input.level ?? 'INFO') === 'ERROR') {
-    logger.error({ encoded }, '[SHARED-DATA]');
+    logger.error(payload, '[SHARED-DATA]');
     return;
   }
   if ((input.level ?? 'INFO') === 'WARN') {
-    logger.warn({ encoded }, '[SHARED-DATA]');
+    logger.warn(payload, '[SHARED-DATA]');
     return;
   }
-  logger.info({ encoded }, '[SHARED-DATA]');
+  logger.info(payload, '[SHARED-DATA]');
 }
 
