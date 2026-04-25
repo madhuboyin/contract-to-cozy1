@@ -356,7 +356,7 @@ export default function MobileHomeBuyerDashboard({
                 onClick={() => setShowMoreModules((prev) => !prev)}
                 className="w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
               >
-                {showMoreModules ? 'Show fewer modules' : 'View more modules'}
+                {showMoreModules ? 'Show less' : 'Show more'}
               </button>
             </MobileSection>
 

@@ -162,7 +162,7 @@ function buildRoomInsight(
   if (gapCount > 0) {
     return {
       summary: `${gapCount} coverage gap${gapCount === 1 ? '' : 's'} detected`,
-      implication: 'Review protected items before the next claim scenario.',
+      implication: `Check your covered items — ${gapCount} gap${gapCount === 1 ? '' : 's'} could cost you at claim time.`,
     };
   }
   if (docsCount === 0 && itemCount > 0) {

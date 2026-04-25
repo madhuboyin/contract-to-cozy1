@@ -5,7 +5,6 @@ import { Sparkles, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import TrustStrip from '@/components/system/TrustStrip';
 import { track } from '@/lib/analytics/events';
 
 export interface WinCardProps {
@@ -14,7 +13,7 @@ export interface WinCardProps {
   /** The hero value (e.g., "$420 annual savings") */
   value: string;
   /** A brief description of what this win means for the user */
-  description: string;
+  description?: string;
   /** The primary action text (e.g., "Claim Savings") */
   actionLabel?: string;
   /** Callback for when the primary action is clicked */
@@ -73,13 +72,6 @@ export function WinCard({
     if (onAction) onAction();
   };
 
-  const handleTrustClick = () => {
-    track('trust_info_clicked', {
-      insightId: title,
-      sourceEngine: trustSignals.sourceLabel,
-    });
-  };
-
   return (
     <Card className={cn(
       "overflow-hidden border-slate-200 transition-all duration-200 hover:shadow-md",
@@ -87,7 +79,7 @@ export function WinCard({
       className
     )}>
       <CardHeader className="pb-2 pt-4">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
           {icon || <Sparkles className="h-3.5 w-3.5 text-brand-600" />}
           {title}
         </div>
@@ -99,13 +91,15 @@ export function WinCard({
             {value}
           </h3>
           {!hasExplicitTrust && (
-            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
+            <p className="mt-1 text-xs font-semibold text-amber-700">
               Baseline fallback insight
             </p>
           )}
-          <p className="mt-1 text-sm text-slate-600">
-            {description}
-          </p>
+          {description && (
+            <p className="mt-1 text-sm text-slate-600">
+              {description}
+            </p>
+          )}
         </div>
 
         {onAction && (
@@ -119,12 +113,10 @@ export function WinCard({
         )}
       </CardContent>
 
-      <CardFooter className="bg-slate-50/50 p-0 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={handleTrustClick}>
-        <TrustStrip 
-          {...trustSignals} 
-          variant="footnote" 
-          className="w-full px-4 py-3 border-t-0" 
-        />
+      <CardFooter className="bg-slate-50/50 border-t border-slate-100 p-0">
+        <p className="w-full px-4 py-3 text-[11px] text-slate-500">
+          Analyzed 12+ signals · {trustSignals.freshnessLabel}
+        </p>
       </CardFooter>
     </Card>
   );

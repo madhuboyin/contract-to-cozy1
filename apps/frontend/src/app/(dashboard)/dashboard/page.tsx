@@ -499,52 +499,64 @@ export default function DashboardPage() {
     const highSeverityIncident = data.activeIncidents.find(inc => inc.severity === 'CRITICAL' || inc.severity === 'WARNING');
     if (highSeverityIncident) {
       return {
-        title: `Priority Alert: ${highSeverityIncident.title}`,
+        title: `Priority alert: ${highSeverityIncident.title}`,
         subtitle: highSeverityIncident.summary || 'A critical home event requires your review to prevent escalation.',
-        ctaLabel: 'Review Incident',
-        impactLabel: 'Active Home Risk',
+        ctaLabel: 'Review incident',
+        impactLabel: 'Active home risk',
         etaLabel: 'ETA 2 min',
       };
     }
 
-    // 2. Savings > $200
+    // 2. Top health insight
+    const topHealthInsight = scopedUrgentActions.find(a => a.type === 'HEALTH_INSIGHT');
+    if (topHealthInsight) {
+      return {
+        title: `${topHealthInsight.title} needs attention — your top priority this week.`,
+        subtitle: null,
+        ctaLabel: `Review ${topHealthInsight.title.toLowerCase()}`,
+        impactLabel: 'Top risk signal',
+        etaLabel: 'ETA 2 min',
+      };
+    }
+
+    // 3. Savings > $200
     if (annualSavingsPotential >= 200) {
       return {
         title: `We found ${formatUsd(annualSavingsPotential)} in potential annual savings.`,
-        subtitle: 'Our intelligence engine identified recurring costs that could be lowered today.',
+        subtitle: null,
         ctaLabel: 'See your savings',
         impactLabel: `${formatUsd(annualSavingsPotential)}/yr potential`,
         etaLabel: 'ETA 3 min',
       };
     }
 
-    // 3. Vault Onboarding (Empty state: < 3 items)
+    // 4. Vault Onboarding (Empty state: < 3 items)
     if (data.inventoryCount < 3) {
       return {
         title: 'Start building your Home Vault for full intelligence.',
-        subtitle: 'Adding your first 3 appliances unlocks personalized risk and maintenance tracking.',
+        subtitle: null,
         ctaLabel: 'Add your first item',
         impactLabel: 'Unlock intelligence',
         etaLabel: 'ETA 90 sec',
       };
     }
 
-    // 4. Maintenance Overdue
+    // 5. Maintenance Overdue
     if (overdueMaintenanceCount > 0) {
       return {
-        title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need attention.`,
-        subtitle: 'Resolving these items now prevents a more expensive repair bill later.',
+        title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need${overdueMaintenanceCount === 1 ? 's' : ''} attention.`,
+        subtitle: null,
         ctaLabel: 'Fix overdue tasks',
         impactLabel: 'Preventative win',
         etaLabel: 'ETA 2 min',
       };
     }
 
-    // 5. Default: Home Health
+    // 6. Default: All clear
     return {
-      title: `Welcome back, ${safeFirstName}. Your home status is updated.`,
-      subtitle: 'We’ve analyzed 12+ signals today to rank your highest-impact moves.',
-      ctaLabel: 'Review health',
+      title: 'All systems healthy — schedule your next maintenance check.',
+      subtitle: null,
+      ctaLabel: 'View full report',
       impactLabel: 'HomeScore up to date',
       etaLabel: 'ETA 1 min',
     };
@@ -568,33 +580,35 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <span className="text-[10px] uppercase tracking-widest text-brand-600 font-bold">
-            Command Center · {isReturningVisitor ? 'Welcome Back' : 'Get Started'}
-          </span>
-          <h1 className="text-3xl font-bold text-slate-900 mt-1">
+          <h1 className="text-3xl font-bold text-slate-900">
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.firstName || 'there'}.
           </h1>
-          <p className="text-slate-500 mt-1">Your home is {selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 80 ? 'highly protected' : 'needs focus'} today.</p>
+          <p className="text-slate-500 mt-1">Your home {selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 80 ? 'is highly protected' : 'needs attention'} today.</p>
         </div>
-        
-        <Button onClick={() => setIsScannerOpen(true)} className="h-14 px-6 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white shadow-lg active:scale-95 transition-all group">
+
+        <Button
+          onClick={() => setIsScannerOpen(true)}
+          title="Refresh all home signals and re-rank your issues"
+          className="h-14 px-6 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white shadow-lg active:scale-95 transition-all group"
+        >
           <Zap className="mr-2 h-5 w-5 fill-current text-brand-200" />
           <span className="text-base font-bold">Magic Scan</span>
           <ArrowRight className="ml-4 h-4 w-4 opacity-50" />
         </Button>
       </div>
 
-      <WinCard 
-        title="Highest Value Move"
+      <WinCard
+        title="Highest value move"
         value={heroNarrative.title}
-        description={heroNarrative.subtitle}
+        description={heroNarrative.subtitle ?? undefined}
+
         actionLabel={heroNarrative.ctaLabel}
         onAction={() => router.push(ahaCtaHref)}
         isUrgent={data.activeIncidents.length > 0 || overdueMaintenanceCount > 0}
         trust={{
           confidenceLabel: "Verified",
           freshnessLabel: "Updated just now",
-          sourceLabel: "CtC Intelligence Engine",
+          sourceLabel: "Home analysis",
           rationale: "Ranked by financial upside, risk prevention, and data confidence."
         }}
         className="border-2 border-brand-100 shadow-xl shadow-brand-50/50"
@@ -621,7 +635,7 @@ export default function DashboardPage() {
           primaryAction={primaryActionHero}
           confidenceLabel="Verified"
           freshnessLabel="Updated today"
-          sourceLabel="Home Intelligence Engine"
+          sourceLabel="Home analysis"
           secondaryModules={
             <div className="space-y-12">
                <HeroValueStrip tiles={[]} momentumLabel={null} /> 

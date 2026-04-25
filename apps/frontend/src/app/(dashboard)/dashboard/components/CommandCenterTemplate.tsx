@@ -4,7 +4,6 @@ import { ReactNode, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PriorityActionHero, { PriorityActionHeroProps } from '@/components/system/PriorityActionHero';
-import TrustStrip from '@/components/system/TrustStrip';
 
 interface CommandCenterTemplateProps {
   primaryAction: ReactNode;
@@ -52,14 +51,6 @@ export default function CommandCenterTemplate({
         )}
       </div>
 
-      <TrustStrip
-        title="Trust Signals"
-        confidenceLabel={confidenceLabel}
-        freshnessLabel={freshnessLabel}
-        sourceLabel={sourceLabel}
-        rationale={rationale}
-      />
-
       {supportingAction ? <div>{supportingAction}</div> : null}
 
       {hasSecondaryModules ? (
@@ -69,7 +60,7 @@ export default function CommandCenterTemplate({
             onClick={() => setExpanded((prev) => !prev)}
             className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
           >
-            <span>{expanded ? 'Show fewer modules' : 'View more intelligence modules'}</span>
+            <span>{expanded ? 'Show less' : 'Show more'}</span>
             <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', expanded ? 'rotate-180' : '')} />
           </button>
           {expanded ? <div className="mt-4 space-y-6">{secondaryModules}</div> : null}

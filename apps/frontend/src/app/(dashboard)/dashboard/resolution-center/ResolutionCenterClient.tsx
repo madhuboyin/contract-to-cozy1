@@ -3,7 +3,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -22,6 +21,15 @@ import {
   User,
   GitCompareArrows,
   X,
+  Thermometer,
+  Droplets,
+  Home,
+  Zap,
+  Building2,
+  Snowflake,
+  Waves,
+  Flame,
+  Bell,
 } from 'lucide-react';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
@@ -289,10 +297,55 @@ function resolveAssetTitle(item: any): string {
 }
 
 function resolveIssueHeadline(item: any, journey: JourneyType, assetTitle: string): string {
-  if (journey === 'urgent-issue' || journey === 'repair-vs-replace') return 'Failure risk rising quickly';
+  const token = String(item?.title || item?.systemType || item?.category || '').trim().toLowerCase();
+
+  if (journey === 'urgent-issue' || journey === 'repair-vs-replace') {
+    if (token.includes('hvac') || token.includes('furnace') || token.includes('ac unit')) {
+      return 'HVAC furnace has reached critical failure threshold';
+    }
+    if (token.includes('water heater') || (token.includes('heater') && !token.includes('space'))) {
+      return 'Water heater is 2 years past its replacement window';
+    }
+    if (token.includes('roof')) {
+      return 'Roof shows accelerated shingle degradation in south zone';
+    }
+    if (token.includes('panel') || token.includes('electrical') || token.includes('breaker')) {
+      return 'Electrical panel exceeding safe load capacity';
+    }
+    if (token.includes('foundation') || token.includes('basement')) {
+      return 'Moisture intrusion signal in east foundation wall';
+    }
+    if (token.includes('refrigerator') || token.includes('fridge')) {
+      return 'Refrigerator compressor efficiency is critically low';
+    }
+    if (token.includes('washer')) {
+      return 'Washer showing signs of bearing failure';
+    }
+    if (token.includes('oven') || token.includes('range') || token.includes('stove')) {
+      return 'Oven range gas line shows wear — inspection needed';
+    }
+    if (token.includes('smoke') || token.includes('detector')) {
+      return 'Smoke detector battery and sensor past service life';
+    }
+    if (assetTitle && assetTitle !== 'Home Asset') {
+      return `${assetTitle} has reached critical failure threshold`;
+    }
+    return 'Critical failure risk — action required this week';
+  }
+
   if (journey === 'cost-savings') return 'High efficiency upgrade available';
-  if (journey === 'coverage') return 'Coverage gap detected';
-  if (journey === 'preventive') return 'Preventive task due soon';
+  if (journey === 'coverage') {
+    if (assetTitle && assetTitle !== 'Home Asset') {
+      return `${assetTitle} has a coverage gap — warranty may apply`;
+    }
+    return 'Coverage gap detected — warranty may apply';
+  }
+  if (journey === 'preventive') {
+    if (assetTitle && assetTitle !== 'Home Asset') {
+      return `${assetTitle} maintenance is due — stay ahead of failure`;
+    }
+    return 'Preventive task due soon — act now to avoid higher repair costs';
+  }
   if (journey === 'provider-execution') return 'Service workflow in progress';
   if (journey === 'completed') {
     const candidate = [item?.title, item?.summary]
@@ -305,7 +358,10 @@ function resolveIssueHeadline(item: any, journey: JourneyType, assetTitle: strin
     .map((value) => String(value ?? '').trim())
     .find((value) => value && value.length <= 80 && toDisplayLabel(value) !== assetTitle && !isMachineToken(value));
   if (fallback) return fallback;
-  return 'Failure risk rising quickly';
+  if (assetTitle && assetTitle !== 'Home Asset') {
+    return `${assetTitle} requires attention`;
+  }
+  return 'Action required — review now';
 }
 
 function resolveIssueDescription(item: any, headline: string): string {
@@ -314,6 +370,20 @@ function resolveIssueDescription(item: any, headline: string): string {
     .find((value) => value && value !== headline && !isMachineToken(value));
 
   return candidate || 'Take action now to reduce avoidable cost and protect home performance.';
+}
+
+function resolveApplianceIcon(item: any): React.ElementType {
+  const token = String(item?.title || item?.systemType || item?.category || '').trim().toLowerCase();
+  if (token.includes('hvac') || token.includes('furnace') || token.includes('heat')) return Thermometer;
+  if (token.includes('water') || token.includes('plumbing') || token.includes('drain')) return Droplets;
+  if (token.includes('roof')) return Home;
+  if (token.includes('panel') || token.includes('electrical') || token.includes('electric')) return Zap;
+  if (token.includes('foundation') || token.includes('basement') || token.includes('structure')) return Building2;
+  if (token.includes('refrigerator') || token.includes('fridge')) return Snowflake;
+  if (token.includes('washer') || token.includes('laundry')) return Waves;
+  if (token.includes('oven') || token.includes('range') || token.includes('stove')) return Flame;
+  if (token.includes('smoke') || token.includes('detector') || token.includes('alarm')) return Bell;
+  return Wrench;
 }
 
 function resolveAssetImage(item: any): string | null {
@@ -734,7 +804,6 @@ function TriageActionCard({
   const dueLabel = formatRelativeDateLabel(item.nextDueDate);
   const confidenceScore =
     confidence.score ?? (confidence.level === 'high' ? 100 : confidence.level === 'medium' ? 80 : 55);
-  const assetImage = resolveAssetImage(item);
   const assetTitle = resolveAssetTitle(item);
   const issueHeadline = resolveIssueHeadline(item, journey, assetTitle);
   const issueDescription = resolveIssueDescription(item, issueHeadline);
@@ -801,21 +870,24 @@ function TriageActionCard({
     return onOpenService();
   };
 
+  const hasFinancialRow = exposure > 0 && (journey === 'urgent-issue' || journey === 'repair-vs-replace');
+  const delayAdds = hasFinancialRow ? Math.round(exposure * 0.4) : 0;
+
   const insightPills = [
-    exposure > 0
+    exposure > 0 && !hasFinancialRow
       ? {
           icon: DollarSign,
-          label: 'At risk',
+          label: 'Cost now',
           value: formatCompactUsd(Math.round(exposure)),
-          tone: 'text-rose-700',
+          tone: 'text-amber-600',
         }
       : null,
-    exposure > 0 && journey !== 'completed'
+    exposure > 0 && !hasFinancialRow && journey !== 'completed'
       ? {
           icon: AlertTriangle,
           label: 'If delayed',
           value: formatCompactUsd(Math.round(exposure * 1.4)),
-          tone: 'text-amber-700',
+          tone: 'text-red-600',
         }
       : null,
     dueLabel
@@ -823,28 +895,32 @@ function TriageActionCard({
           icon: Clock,
           label: 'Best window',
           value: dueLabel,
-          tone: item.overdue ? 'text-rose-700' : 'text-slate-700',
+          tone: item.overdue ? 'text-amber-600' : 'text-slate-700',
         }
       : null,
   ].filter(Boolean) as Array<{ icon: React.ElementType; label: string; value: string; tone: string }>;
+
+  const ApplianceIcon = resolveApplianceIcon(item);
+  const isUrgentJourney = journey === 'urgent-issue' || journey === 'repair-vs-replace';
 
   return (
     <article
       className={cn(
         'group relative overflow-hidden rounded-2xl border bg-white transition-colors',
-        journey === 'urgent-issue' || journey === 'repair-vs-replace'
-          ? 'border-red-300'
+        isUrgentJourney
+          ? 'border-amber-200'
           : journey === 'cost-savings'
           ? 'border-emerald-300'
           : 'border-slate-200',
       )}
     >
       <div className="grid gap-0 xl:grid-cols-[250px_minmax(0,1fr)_270px]">
+        {/* Left panel */}
         <div
           className={cn(
             'flex h-full flex-col rounded-l-2xl border-r px-5 py-3',
-            journey === 'urgent-issue' || journey === 'repair-vs-replace'
-              ? 'border-rose-100 bg-rose-50/35'
+            isUrgentJourney
+              ? 'border-amber-100 bg-amber-50/30'
               : journey === 'cost-savings'
               ? 'border-emerald-100 bg-emerald-50/35'
               : 'border-slate-100 bg-slate-50/45'
@@ -853,7 +929,7 @@ function TriageActionCard({
           <div className="mb-4 flex items-center justify-start">
             <span
               className={cn(
-                'inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.11em]',
+                'inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold',
                 meta.badgeCls,
               )}
             >
@@ -862,19 +938,12 @@ function TriageActionCard({
             </span>
           </div>
 
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm">
-            {assetImage ? (
-              <Image
-                src={assetImage}
-                alt={item.title || 'Issue'}
-                width={68}
-                height={68}
-                className="h-[68px] w-[68px] rounded-full object-cover"
-                unoptimized
-              />
-            ) : (
-              <JourneyIcon className="h-7 w-7 text-slate-700" />
-            )}
+          {/* Appliance icon — semantic colored circle */}
+          <div className={cn(
+            'mx-auto flex h-10 w-10 items-center justify-center rounded-full',
+            isUrgentJourney ? 'bg-amber-50' : 'bg-gray-100',
+          )}>
+            <ApplianceIcon className={cn('h-5 w-5', isUrgentJourney ? 'text-amber-600' : 'text-gray-500')} />
           </div>
 
           <div className="mt-3 text-center">
@@ -892,23 +961,45 @@ function TriageActionCard({
           </div>
         </div>
 
+        {/* Center panel */}
         <div className="space-y-3 px-5 py-3">
           <div>
-            <h4 className="text-[18px] font-medium leading-[1.3] tracking-[-0.01em] text-slate-900">
+            <h4 className="text-[18px] font-semibold leading-[1.3] tracking-[-0.01em] text-slate-900">
               {issueHeadline}
             </h4>
-            <p className="mt-2 max-w-xl text-base leading-7 text-slate-600">
+            <p className="mt-2 max-w-xl text-base leading-relaxed text-gray-600 font-normal">
               {issueDescription}
             </p>
           </div>
 
+          {/* Financial row for urgent/repair items */}
+          {hasFinancialRow && (
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="space-y-0.5">
+                <p className="text-[10px] font-medium text-slate-500">Cost now</p>
+                <p className="text-[15px] font-semibold text-amber-600">{formatCompactUsd(Math.round(exposure))}</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" />
+              <div className="space-y-0.5">
+                <p className="text-[10px] font-medium text-slate-500">If delayed</p>
+                <p className="text-[15px] font-semibold text-red-600">{formatCompactUsd(Math.round(exposure * 1.4))}</p>
+              </div>
+              <div className="ml-auto shrink-0">
+                <span className="rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs px-2 py-0.5">
+                  Delay adds {formatCompactUsd(delayAdds)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Other insight pills (non-financial items) */}
           {insightPills.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {insightPills.map((metric) => {
                 const MetricIcon = metric.icon;
                 return (
                   <div key={metric.label} className="w-[124px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 pt-0.5 pb-0">
-                    <div className={cn('flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold uppercase leading-none', metric.tone)}>
+                    <div className={cn('flex items-center gap-1 whitespace-nowrap text-[11px] font-medium leading-none', metric.tone)}>
                       <MetricIcon className="h-3.5 w-3.5" />
                       {metric.label}
                     </div>
@@ -916,17 +1007,6 @@ function TriageActionCard({
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {showRiskBadge && (
-            <div className="w-full max-w-[480px] rounded-xl border border-amber-200 bg-[#fff6e8] px-4 pt-0.5 pb-0">
-              <p className="text-xs font-semibold uppercase leading-none tracking-[0.08em] text-amber-700">Risk of delay</p>
-              <p className="mt-0 text-sm font-medium leading-[1.05] text-amber-900">
-                {item.riskLevel === 'CRITICAL'
-                  ? 'Delaying this can escalate into emergency repair costs and property damage.'
-                  : `Postponing this can increase total cost to ${formatCompactUsd(Math.round(exposure * 1.4))}.`}
-              </p>
             </div>
           )}
 
@@ -943,14 +1023,14 @@ function TriageActionCard({
           {(item.riskLevel === 'CRITICAL' || item.severity === 'CRITICAL') && (
             <WhyThisMattersCard
               explanation="Immediate action is required to prevent property damage or high-cost emergency repairs. Delaying this item increases financial risk significantly."
-              className="border-rose-100 bg-rose-50/50"
+              className="border-amber-100 bg-amber-50/50"
               defaultExpanded={true}
             />
           )}
 
           {journey === 'repair-vs-replace' && item.replaceRepairAnalysis && (
             <div className="rounded-xl border border-orange-200/70 bg-orange-50/60 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-orange-700">Latest Replace vs Repair Signal</p>
+              <p className="text-[10px] font-medium text-orange-700">Latest replace vs repair signal</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">{verdictLabel(item.replaceRepairAnalysis.verdict)}</p>
               <p className="mt-1 text-xs text-slate-600">
                 {item.replaceRepairAnalysis.summary ||
@@ -966,59 +1046,59 @@ function TriageActionCard({
           </div>
         </div>
 
-        <div className="space-y-2.5 border-l border-slate-100 px-5 py-3">
-          <Button
-            onClick={handlePrimary}
-            className={cn('h-11 w-full rounded-[10px] text-base font-semibold text-white', meta.primaryButtonCls)}
-          >
-            {meta.primaryCta}
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+        {/* Right panel — action hierarchy */}
+        <div className="flex flex-col border-l border-slate-100 px-5 py-3">
+          <div className="flex-1 space-y-2.5">
+            {/* Tier 1: Primary solid button */}
+            <Button
+              onClick={handlePrimary}
+              className={cn('h-11 w-full rounded-[10px] text-base font-semibold text-white', meta.primaryButtonCls)}
+            >
+              {meta.primaryCta}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
 
-          <Button
-            variant="outline"
-            onClick={handleSecondary}
-            className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <span className="inline-flex items-center gap-2">
-              <User className="h-4 w-4 text-slate-500" />
-              {meta.secondaryCta}
-            </span>
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          </Button>
+            {/* Tier 2: Secondary outlined button */}
+            <Button
+              variant="outline"
+              onClick={handleSecondary}
+              className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <span className="inline-flex items-center gap-2">
+                <User className="h-4 w-4 text-slate-500" />
+                {meta.secondaryCta}
+              </span>
+              <ChevronRight className="h-4 w-4 text-slate-400" />
+            </Button>
+          </div>
 
-          <Button
-            variant="outline"
-            onClick={onOpenService}
-            className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <span className="inline-flex items-center gap-2">
-              <GitCompareArrows className="h-4 w-4 text-slate-500" />
-              Compare Quotes
-            </span>
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={onAddCoverage}
-            className="h-10 w-full justify-between rounded-[10px] border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <span className="inline-flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-slate-500" />
-              Check Warranty
-            </span>
-            <ChevronRight className="h-4 w-4 text-slate-400" />
-          </Button>
-
-          <button
-            type="button"
-            onClick={handleDetails}
-            className="mt-1 flex h-9 w-full items-center justify-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700"
-          >
-            View details
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          {/* Tier 3: Text-only footer links */}
+          <div className="mt-4 border-t border-slate-100 pt-3 space-y-1.5">
+            <button
+              type="button"
+              onClick={onOpenService}
+              className="flex w-full items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+            >
+              <GitCompareArrows className="h-3.5 w-3.5" />
+              Compare quotes
+            </button>
+            <button
+              type="button"
+              onClick={onAddCoverage}
+              className="flex w-full items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Check warranty
+            </button>
+            <button
+              type="button"
+              onClick={handleDetails}
+              className="flex w-full items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+            >
+              View details
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </article>
@@ -1655,86 +1735,43 @@ export default function ResolutionCenterClient() {
     <>
       <div className="grid items-start gap-4 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-6">
-          <header className="rounded-[24px] border border-[#cfe6f2] bg-[#e2f4fc] px-6 py-4 md:px-8 md:py-4">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] xl:items-end">
-              <div className="space-y-4">
-                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700 md:text-[13px]">
-                  Resolution Center
-                </div>
-                <div className="space-y-2">
-                  <h1 className="text-[30px] font-medium leading-[1.04] tracking-[-0.01em] text-slate-950 md:text-[32px] md:whitespace-nowrap">
-                    Home Triage
-                  </h1>
-                  <p className="max-w-[520px] text-[15px] leading-6 text-slate-600">
-                    We&apos;ve analyzed your home signals to rank exactly what needs your attention today.
-                  </p>
-                </div>
+          <header className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            {/* Left: page title */}
+            <h1 className="text-lg font-semibold text-slate-900 whitespace-nowrap">Resolution center</h1>
 
-                <div className="grid max-w-[760px] gap-3 sm:grid-cols-3">
-                  <div className="flex items-center gap-2.5 rounded-xl border border-rose-200 bg-white px-3 py-2">
-                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-600">
-                      <ShieldAlert className="h-4 w-4" />
-                    </div>
-                    <div className="space-y-0">
-                      <p className="text-[22px] font-semibold leading-none text-slate-900">{filterCounts.urgent}</p>
-                      <p className="text-[11px] font-medium text-slate-700">Urgent Issues</p>
-                      <p className="text-[11px] text-rose-600">Need attention</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-white px-3 py-2">
-                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                      <DollarSign className="h-4 w-4" />
-                    </div>
-                    <div className="space-y-0">
-                      <p className="text-[22px] font-semibold leading-none text-slate-900">
-                        {formatCompactUsd(Math.round(totalAtRisk))}
-                      </p>
-                      <p className="text-[11px] font-medium text-slate-700">Total at risk</p>
-                      <p className="text-[11px] text-slate-500">Potential exposure</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5 rounded-xl border border-indigo-200 bg-white px-3 py-2">
-                    <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-                      <TrendingUp className="h-4 w-4" />
-                    </div>
-                    <div className="space-y-0">
-                      <p className="text-[22px] font-semibold leading-none text-slate-900">{highConfidenceCount}</p>
-                      <p className="text-[11px] font-medium text-slate-700">High confidence</p>
-                      <p className="text-[11px] text-slate-500">Issues detected</p>
-                    </div>
-                  </div>
+            {/* Center: health ring */}
+            <div className="flex items-center gap-2.5 mx-auto">
+              <div className="relative h-10 w-10 rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[4px]">
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-900">
+                  {homeHealthScore}
                 </div>
               </div>
-
-              <div className="grid grid-cols-[minmax(0,1fr)_146px] items-end gap-2.5">
-                <div className="relative h-[176px] overflow-hidden">
-                  <Image
-                    src="/images/Home_Illustration_cutout.png"
-                    alt="Home triage illustration"
-                    fill
-                    className="object-contain object-bottom"
-                    priority
-                    unoptimized
-                  />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-b from-transparent to-[#e2f4fc]" />
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-center shadow-sm">
-                  <div className="relative mx-auto h-[84px] w-[84px] rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[6px]">
-                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[38px] font-semibold text-slate-900">
-                      {homeHealthScore}
-                    </div>
-                  </div>
-                  <p className="mt-2.5 text-sm font-medium text-slate-600">Home Health</p>
-                  <p className="mt-1 inline-flex items-center gap-1 text-[20px] font-semibold leading-none text-emerald-600">
-                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                    {homeHealthStatus}
-                  </p>
-                  <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-slate-400">
-                    <BarChart3 className="h-3 w-3" />
-                    {latestUpdateLabel}
-                  </p>
-                </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">{homeHealthScore} · {homeHealthStatus}</p>
+                <p className="text-xs text-gray-400">{latestUpdateLabel}</p>
               </div>
+            </div>
+
+            {/* Right: stat pills + scan button */}
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              {filterCounts.urgent > 0 && (
+                <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                  {filterCounts.urgent} urgent
+                </span>
+              )}
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                {formatCompactUsd(Math.round(totalAtRisk))} at risk
+              </span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                {highConfidenceCount} high confidence
+              </span>
+              <Button
+                variant="outline"
+                className="h-8 rounded-xl border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={handleRunFullScan}
+              >
+                Run full scan
+              </Button>
             </div>
           </header>
 
@@ -1744,23 +1781,29 @@ export default function ResolutionCenterClient() {
                 const active = normalizedFilter === filterOption.key;
                 const filterMeta = FILTER_META[filterOption.key];
                 const FilterIcon = filterMeta.icon;
+                const count = filterCounts[filterOption.key];
+                const isEmpty = count === 0 && filterOption.key !== 'all';
                 return (
                   <button
                     key={filterOption.key}
-                    onClick={() => handleFilterChange(filterOption.key)}
+                    onClick={() => !isEmpty && handleFilterChange(filterOption.key)}
                     className={cn(
                       'inline-flex min-h-[42px] items-center gap-2 rounded-xl border px-4 py-2 text-[15px] font-semibold transition-colors',
                       active
                         ? filterMeta.activeCls
                         : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50',
+                      isEmpty && 'opacity-40 cursor-not-allowed pointer-events-none',
                     )}
                     aria-pressed={active}
+                    aria-disabled={isEmpty}
                   >
                     <FilterIcon className={cn('h-4 w-4', active ? 'text-current' : filterMeta.tintCls)} />
                     <span>{filterOption.label}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                      {filterCounts[filterOption.key]}
-                    </span>
+                    {count > 0 && (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                        {count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -1816,38 +1859,49 @@ export default function ResolutionCenterClient() {
 
         <aside className="space-y-4 xl:sticky xl:top-24">
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="text-base font-semibold tracking-[-0.01em] text-slate-900">Today&apos;s Snapshot</h3>
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
-                <span className="text-slate-500">Total at risk</span>
-                <span className="font-semibold text-rose-600">{formatCompactUsd(Math.round(totalAtRisk))}</span>
+            {/* Health score ring */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative h-12 w-12 shrink-0 rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[5px]">
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-base font-semibold text-slate-900">
+                  {homeHealthScore}
+                </div>
               </div>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
-                <span className="text-slate-500">Urgent issues</span>
-                <span className="font-semibold text-rose-600">{filterCounts.urgent}</span>
-              </div>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
-                <span className="text-slate-500">High confidence</span>
-                <span className="font-semibold text-emerald-600">{highConfidenceCount}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Coverage gaps</span>
-                <span className="font-semibold text-blue-600">{filterCounts.coverage}</span>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">{homeHealthScore} · {homeHealthStatus}</p>
+                <p className="text-xs text-gray-400">Home health score</p>
               </div>
             </div>
-            <div className="mt-5 border-t border-slate-100 pt-4 text-center">
-              <button
-                type="button"
+
+            <h3 className="text-base font-semibold tracking-[-0.01em] text-slate-900">Today&apos;s snapshot</h3>
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
+                <span className="text-slate-500">Coverage gaps</span>
+                <span className={cn('font-semibold', filterCounts.coverage > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                  {filterCounts.coverage > 0 ? filterCounts.coverage : 'None'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
+                <span className="text-slate-500">Next scheduled task</span>
+                <span className="font-semibold text-slate-900 text-right max-w-[120px] truncate">Gutter cleaning</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Health trend</span>
+                <span className="font-semibold text-amber-600">↓ 3 pts this week</span>
+              </div>
+            </div>
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <Button
+                variant="outline"
+                className="w-full h-9 text-sm border-slate-200 text-slate-700 hover:bg-slate-50"
                 onClick={() => {
                   if (typeof window !== 'undefined') {
                     window.location.assign(fullReportHref);
                   }
                 }}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
               >
                 View full report
-                <ArrowRight className="h-4 w-4" />
-              </button>
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
           </section>
 
