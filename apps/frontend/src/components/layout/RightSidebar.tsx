@@ -28,6 +28,7 @@ import { toast } from '@/components/ui/use-toast';
 import type { Booking, OrchestratedActionDTO, Property } from '@/types';
 import type { IncidentDTO } from '@/types/incidents.types';
 import { listIncidents } from '@/app/(dashboard)/dashboard/properties/[id]/incidents/incidentsApi';
+import { getSidebarActions, getPageAwareSubtitle, type SidebarAction } from '@/lib/sidebar/dynamicSidebarActions';
 
 type HealthTone = 'good' | 'fair' | 'poor';
 
@@ -447,68 +448,122 @@ function SnapshotBlock({
   );
 }
 
-function QuickActionsBlock({ propertyId }: { propertyId: string | undefined }) {
+function DynamicActionsBlock({ 
+  propertyId, 
+  pathname,
+  signals,
+}: { 
+  propertyId: string | undefined;
+  pathname: string | null;
+  signals: {
+    urgentCount: number;
+    atRisk: number;
+    highConfidence: number;
+    gapCount: number;
+  };
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const applyPropertyId = (href: string) => {
-    if (!propertyId) return href;
-    const divider = href.includes('?') ? '&' : '?';
-    return `${href}${divider}propertyId=${encodeURIComponent(propertyId)}`;
+  // Get dynamic actions based on current context
+  const actions = useMemo(() => {
+    return getSidebarActions({
+      route: pathname || '/dashboard',
+      propertyId,
+      signals: {
+        urgentCount: signals.urgentCount,
+        atRisk: signals.atRisk,
+        gapCount: signals.gapCount,
+        highConfidence: signals.highConfidence,
+      },
+      missingData: {
+        // These would ideally come from property data
+        hasInsurance: undefined,
+        hasWarranties: undefined,
+        hasInventory: undefined,
+        hasDocuments: undefined,
+        hasFinanceSnapshot: undefined,
+        hasRooms: undefined,
+      },
+      activeTool: pathname?.includes('/tools/') 
+        ? pathname.split('/tools/')[1]?.split('/')[0] 
+        : undefined,
+    });
+  }, [pathname, propertyId, signals]);
+
+  const subtitle = useMemo(() => {
+    return getPageAwareSubtitle(pathname || '/dashboard', signals);
+  }, [pathname, signals]);
+
+  const handleActionClick = (action: SidebarAction) => {
+    if (action.onClickAction === 'refresh-signals') {
+      if (propertyId) {
+        void queryClient.invalidateQueries({ queryKey: ['orchestration-summary', propertyId] });
+        void queryClient.invalidateQueries({ queryKey: ['active-incidents', propertyId] });
+        void queryClient.invalidateQueries({ queryKey: ['replace-repair-resolutions', propertyId] });
+        void queryClient.invalidateQueries({ queryKey: ['resolution-bookings', propertyId] });
+      }
+      toast({ title: 'Scan started', description: 'Refreshing home signals now.' });
+    } else if (action.onClickAction === 'mark-resolved') {
+      toast({ title: 'Action needed', description: 'Please mark the issue as resolved from the incident page.' });
+    } else if (action.onClickAction === 'export-report') {
+      toast({ title: 'Export started', description: 'Preparing your report for download.' });
+    } else if (action.href) {
+      router.push(action.href);
+    }
   };
 
-  const inventoryActionHref = propertyId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?from=status-board`
-    : '/dashboard/inventory?from=status-board';
-
-  const actions = [
-    {
-      label: 'Run full scan',
-      description: 'Refresh home signals',
-      icon: BarChart3,
-      onClick: () => {
-        if (propertyId) {
-          void queryClient.invalidateQueries({ queryKey: ['orchestration-summary', propertyId] });
-          void queryClient.invalidateQueries({ queryKey: ['active-incidents', propertyId] });
-          void queryClient.invalidateQueries({ queryKey: ['replace-repair-resolutions', propertyId] });
-          void queryClient.invalidateQueries({ queryKey: ['resolution-bookings', propertyId] });
-        }
-        toast({ title: 'Scan started', description: 'Refreshing home signals now.' });
-      },
-    },
-    {
-      label: 'Add appliance',
-      description: 'Track a new home item',
-      icon: Plus,
-      onClick: () => router.push(inventoryActionHref),
-    },
-    {
-      label: 'Schedule maintenance',
-      description: 'Stay ahead of issues',
-      icon: CalendarClock,
-      onClick: () => router.push(applyPropertyId('/dashboard/maintenance')),
-    },
-  ];
+  // Get icon background color based on priority
+  const getIconBgClass = (priority?: string) => {
+    if (priority === 'high') return 'bg-teal-100 text-teal-700';
+    if (priority === 'medium') return 'bg-slate-100 text-slate-600';
+    return 'bg-slate-50 text-slate-500';
+  };
 
   return (
     <section className="rounded-[22px] border border-slate-200/80 bg-white/88 px-3 py-3 shadow-[var(--ctc-shadow-card)]">
-      <h2 className="text-[10px] font-semibold text-slate-400 tracking-normal">Contextual actions</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[10px] font-semibold text-slate-400 tracking-normal">Contextual actions</h2>
+        <span className="text-[9px] text-slate-400">{subtitle}</span>
+      </div>
       <div className="mt-2">
-        {actions.map((action) => {
+        {actions.map((action, index) => {
           const Icon = action.icon;
+          const isFirstHighPriority = index === 0 && action.priority === 'high';
+          
           return (
             <button
-              key={action.label}
+              key={action.id}
               type="button"
-              onClick={action.onClick}
-              className="flex w-full cursor-pointer items-center gap-2 rounded-xl border-b border-slate-100 py-2 text-left transition-colors last:border-0 hover:bg-slate-50"
+              onClick={() => handleActionClick(action)}
+              className={cn(
+                "flex w-full cursor-pointer items-center gap-2 rounded-xl border-b border-slate-100 py-2 text-left transition-colors last:border-0 hover:bg-slate-50",
+                isFirstHighPriority && "bg-teal-50/30"
+              )}
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+              <span className={cn(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+                getIconBgClass(action.priority)
+              )}>
                 <Icon className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] font-semibold text-slate-800">{action.label}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="block truncate text-[12px] font-semibold text-slate-800">
+                    {action.title}
+                  </span>
+                  {action.badge && (
+                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">
+                      {action.badge}
+                    </span>
+                  )}
+                </div>
                 <span className="block truncate text-[10px] text-slate-500">{action.description}</span>
+                {action.confidenceLabel && (
+                  <span className="mt-0.5 block text-[9px] text-slate-400">
+                    {action.confidenceLabel}
+                  </span>
+                )}
               </span>
               <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
             </button>
@@ -620,7 +675,11 @@ export function RightSidebar() {
           />
         </>
       )}
-      <QuickActionsBlock propertyId={data.propertyId} />
+      <DynamicActionsBlock 
+        propertyId={data.propertyId} 
+        pathname={pathname}
+        signals={data.snapshot}
+      />
       <ViewReportLink propertyId={data.propertyId} />
     </aside>
   );
