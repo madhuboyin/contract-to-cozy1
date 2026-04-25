@@ -201,7 +201,7 @@ export function ServiceSelectionSheet({
                   className="w-full rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-between px-5 py-5 text-left transition-colors"
                 >
                   <div className="space-y-0.5">
-                    <p className="font-bold text-slate-900">Find Local Pros</p>
+                    <p className="font-bold text-slate-900">Find local pros</p>
                     <p className="text-xs text-slate-500">
                       Vetted providers in your neighborhood.
                     </p>

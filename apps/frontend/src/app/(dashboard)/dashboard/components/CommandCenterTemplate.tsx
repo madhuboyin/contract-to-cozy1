@@ -58,10 +58,10 @@ export default function CommandCenterTemplate({
           <button
             type="button"
             onClick={() => setExpanded((prev) => !prev)}
-            className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+            className="flex w-full items-center justify-center gap-1 py-2 text-sm text-gray-400 transition-colors hover:text-gray-600"
           >
             <span>{expanded ? 'Show less' : 'Show more'}</span>
-            <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', expanded ? 'rotate-180' : '')} />
+            <ChevronDown className={cn('h-4 w-4 transition-transform', expanded ? 'rotate-180' : '')} />
           </button>
           {expanded ? <div className="mt-4 space-y-6">{secondaryModules}</div> : null}
         </div>

@@ -364,6 +364,18 @@ function resolveIssueHeadline(item: any, journey: JourneyType, assetTitle: strin
   return 'Action required — review now';
 }
 
+function getCardSubhead(item: any, journey: JourneyType): string {
+  const severity = item?.severity || item?.riskLevel || '';
+  if (journey === 'urgent-issue' || journey === 'repair-vs-replace') {
+    if (severity === 'CRITICAL') return 'Repair or replace — act before cost increases';
+    if (severity === 'WARNING' || severity === 'HIGH') return 'Professional inspection recommended';
+  }
+  if (journey === 'preventive' || journey === 'cost-savings' || journey === 'coverage') {
+    if (severity === 'WARNING' || severity === 'HIGH') return 'Professional inspection recommended';
+  }
+  return 'Schedule maintenance';
+}
+
 function resolveIssueDescription(item: any, headline: string): string {
   const candidate = [item?.description, item?.summary, item?.title]
     .map((value) => String(value ?? '').trim())
@@ -625,8 +637,8 @@ const JOURNEY_META: Record<
     panelCls: 'border-rose-100 bg-rose-50/40',
     primaryButtonCls: 'bg-[#ef2b2d] hover:bg-[#dd1f24]',
     icon: ShieldAlert,
-    primaryCta: 'Resolve Now',
-    secondaryCta: 'Find Local Pros',
+    primaryCta: 'Resolve now',
+    secondaryCta: 'Find local pros',
   },
   'repair-vs-replace': {
     label: 'Urgent',
@@ -635,8 +647,8 @@ const JOURNEY_META: Record<
     panelCls: 'border-orange-100 bg-orange-50/50',
     primaryButtonCls: 'bg-[#ef2b2d] hover:bg-[#dd1f24]',
     icon: BarChart3,
-    primaryCta: 'Resolve Now',
-    secondaryCta: 'Find Local Pros',
+    primaryCta: 'Resolve now',
+    secondaryCta: 'Find local pros',
   },
   coverage: {
     label: 'Coverage',
@@ -645,8 +657,8 @@ const JOURNEY_META: Record<
     panelCls: 'border-blue-100 bg-blue-50/50',
     primaryButtonCls: 'bg-[#2f6fed] hover:bg-[#245fd4]',
     icon: ShieldCheck,
-    primaryCta: 'Resolve Now',
-    secondaryCta: 'Find Local Pros',
+    primaryCta: 'Resolve now',
+    secondaryCta: 'Find local pros',
   },
   preventive: {
     label: 'Preventive',
@@ -655,8 +667,8 @@ const JOURNEY_META: Record<
     panelCls: 'border-amber-100 bg-amber-50/50',
     primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
     icon: Wrench,
-    primaryCta: 'Resolve Now',
-    secondaryCta: 'Find Local Pros',
+    primaryCta: 'Resolve now',
+    secondaryCta: 'Find local pros',
   },
   'cost-savings': {
     label: 'Save Money',
@@ -665,8 +677,8 @@ const JOURNEY_META: Record<
     panelCls: 'border-emerald-100 bg-emerald-50/50',
     primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
     icon: TrendingUp,
-    primaryCta: 'Resolve Now',
-    secondaryCta: 'Find Local Pros',
+    primaryCta: 'Resolve now',
+    secondaryCta: 'Find local pros',
   },
   'provider-execution': {
     label: 'In Progress',
@@ -675,8 +687,8 @@ const JOURNEY_META: Record<
     panelCls: 'border-sky-100 bg-sky-50/50',
     primaryButtonCls: 'bg-[#109b86] hover:bg-[#0e8b78]',
     icon: CalendarClock,
-    primaryCta: 'Resolve Now',
-    secondaryCta: 'Find Local Pros',
+    primaryCta: 'Resolve now',
+    secondaryCta: 'Find local pros',
   },
   completed: {
     label: 'Completed',
@@ -806,6 +818,7 @@ function TriageActionCard({
     confidence.score ?? (confidence.level === 'high' ? 100 : confidence.level === 'medium' ? 80 : 55);
   const assetTitle = resolveAssetTitle(item);
   const issueHeadline = resolveIssueHeadline(item, journey, assetTitle);
+  const cardSubhead = getCardSubhead(item, journey);
   const issueDescription = resolveIssueDescription(item, issueHeadline);
   const locationSubtitle = toDisplayLabel(item?.location || item?.room || item?.area || item?.level || '');
   const subtitleDisplay = toDisplayLabel(subtitle);
@@ -967,6 +980,7 @@ function TriageActionCard({
             <h4 className="text-[18px] font-semibold leading-[1.3] tracking-[-0.01em] text-slate-900">
               {issueHeadline}
             </h4>
+            <p className="mt-0.5 text-xs font-medium text-slate-400">{cardSubhead}</p>
             <p className="mt-2 max-w-xl text-base leading-relaxed text-gray-600 font-normal">
               {issueDescription}
             </p>

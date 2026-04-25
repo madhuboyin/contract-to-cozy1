@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from '@/lib/utils';
 import { Property } from '@/types';
 
 interface WelcomeSectionProps {
@@ -62,43 +63,33 @@ export function WelcomeSection({
   }, [coverPhotoUrl]);
 
   if (compact) {
+    const activeId = selectedPropertyId || properties[0]?.id;
     return (
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-3 md:pt-4 pb-2">
         <div className="rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm md:px-4 md:py-3">
-          <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.14em]">
-                Property Workspace
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <p className="truncate text-sm font-semibold text-slate-900">{selectedPropertyName}</p>
-                <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700">
-                  {selectedPropertyContextType}
-                </span>
-                {selectedPropertyStructuralType ? (
-                  <span className="text-xs text-slate-500">{selectedPropertyStructuralType}</span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 md:w-[340px] md:shrink-0">
-              <span className="hidden sm:inline text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Viewing:
-              </span>
-              <div className="w-full">
-                <Select value={selectedPropertyId || ''} onValueChange={onPropertyChange}>
-                  <SelectTrigger className="bg-white border-slate-200 shadow-sm font-semibold text-xs text-slate-900 h-8 px-2.5 focus:ring-1 focus:ring-teal-500/20">
-                    <SelectValue placeholder="Select a property" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {properties.map((property) => (
-                      <SelectItem key={property.id} value={property.id} className="text-xs font-medium">
-                        {formatPropertyDisplay(property)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium text-gray-400 tracking-[0.14em]">
+              Property Workspace
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {properties.map((property) => {
+                const isActive = property.id === activeId;
+                const label = property.name?.trim() || property.address || 'Unnamed';
+                return (
+                  <button
+                    key={property.id}
+                    onClick={() => onPropertyChange(property.id)}
+                    className={cn(
+                      'inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+                      isActive
+                        ? 'bg-teal-50 text-teal-700 border-teal-200'
+                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
