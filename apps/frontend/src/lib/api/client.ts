@@ -143,6 +143,11 @@ function toNumber(value: unknown): number {
  */
 class APIClient {
   private baseURL: string;
+  private propertiesCache: {
+    data: APIResponse<{ properties: Property[] }>;
+    expiresAt: number;
+  } | null = null;
+  private propertiesRequest: Promise<APIResponse<{ properties: Property[] }>> | null = null;
 
   // Add state to prevent multiple refresh attempts at the same time
   private isRefreshing = false;
@@ -1031,8 +1036,29 @@ class APIClient {
   // PROPERTY ENDPOINTS 
   // ==========================================================================
   async getProperties(): Promise<APIResponse<{ properties: Property[] }>> {
-    const res = await this.get<{ properties: Property[] }>('/api/properties');
-    return { success: true, data: res.data };
+    const now = Date.now();
+    if (this.propertiesCache && this.propertiesCache.expiresAt > now) {
+      return this.propertiesCache.data;
+    }
+
+    if (this.propertiesRequest) {
+      return this.propertiesRequest;
+    }
+
+    this.propertiesRequest = this.get<{ properties: Property[] }>('/api/properties')
+      .then((res) => {
+        const response: APIResponse<{ properties: Property[] }> = { success: true, data: res.data };
+        this.propertiesCache = {
+          data: response,
+          expiresAt: Date.now() + 15_000,
+        };
+        return response;
+      })
+      .finally(() => {
+        this.propertiesRequest = null;
+      });
+
+    return this.propertiesRequest;
   }
 
   /**

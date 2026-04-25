@@ -95,6 +95,12 @@ function formatUsd(value: number): string {
   }).format(value);
 }
 
+function isRateLimitedError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const status = (error as Error & { status?: number | string }).status;
+  return status === 429 || error.message.toLowerCase().includes('too many requests');
+}
+
 function formatUsdFromCents(value: number): string {
   return formatUsd(value / 100);
 }
@@ -376,6 +382,7 @@ export default function DashboardPage() {
     
     try {
       let scoredProperties = lastKnownPropertiesRef.current;
+      let propertyLoadRateLimited = false;
 
       try {
         const propertiesRes = await api.getProperties();
@@ -389,7 +396,9 @@ export default function DashboardPage() {
         })) as ScoredProperty[];
         lastKnownPropertiesRef.current = scoredProperties;
       } catch (error) {
-        if (scoredProperties.length === 0) {
+        if (isRateLimitedError(error)) {
+          propertyLoadRateLimited = true;
+        } else if (scoredProperties.length === 0) {
           throw error;
         }
       }
@@ -442,14 +451,13 @@ export default function DashboardPage() {
 
       if (typeof window !== 'undefined') {
         const skipped = window.localStorage.getItem(PROPERTY_SETUP_SKIPPED_KEY);
-        setShowWelcomeScreen(scoredProperties.length === 0 && !skipped);
+        setShowWelcomeScreen(scoredProperties.length === 0 && !skipped && !propertyLoadRateLimited);
       }
   
     } catch (error) {
       console.error('❌ Dashboard: Error fetching data:', error);
       const message =
-        error instanceof Error &&
-        error.message.toLowerCase().includes('too many requests')
+        isRateLimitedError(error)
           ? 'Too many requests right now. Please wait a minute and refresh.'
           : 'Failed to load dashboard data';
       setData(prev => ({ ...prev, isLoading: false, error: message }));
@@ -464,7 +472,6 @@ export default function DashboardPage() {
       hasTrackedFirstView.current = true;
       track('dashboard_first_view', { propertyId: effectiveSelectedPropertyId });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLoading, user, effectiveSelectedPropertyId]);
 
   useEffect(() => {
