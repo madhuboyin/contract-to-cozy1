@@ -38,6 +38,7 @@ import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
 import DashboardBreadcrumbs from '@/components/navigation/DashboardBreadcrumbs';
+import { AppShell } from '@/components/layout/AppShell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -502,18 +503,13 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       {!transitionVisible && (
       <NotificationProvider>
       <PropertyProvider>
-        {/* ── Outer shell ────────────────────────────────────────────────── */}
-        <div className="flex min-h-screen bg-gray-50">
-
-          {/* ── Desktop persistent left sidebar ──────────────────────────── */}
-          <aside className="hidden border-r border-gray-100 bg-white shadow-sm md:fixed md:inset-y-0 md:z-50 md:flex md:w-[246px] md:flex-col">
-            <PersistentSidebarNav user={user} />
-          </aside>
-
-          {/* ── Content area (offset by sidebar on desktop) ──────────────── */}
-          <div className="flex min-w-0 flex-1 flex-col md:pl-[246px]">
-
-            {/* Mobile sticky header */}
+        <AppShell
+          leftNav={
+            <aside className="hidden border-r border-gray-100 bg-white shadow-sm md:fixed md:inset-y-0 md:z-50 md:flex md:w-[246px] md:flex-col">
+              <PersistentSidebarNav user={user} />
+            </aside>
+          }
+          mobileHeader={
             <header className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-100 safe-area-inset-top">
               <div
                 className="flex h-14 items-center justify-between px-4"
@@ -559,31 +555,30 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             </header>
-
-            {/* Property setup banner */}
-            {showBanner && (
+          }
+          banner={
+            showBanner ? (
               <PropertySetupBanner show={showBanner} onDismiss={handleDismissBanner} />
-            )}
-
-            {/* Main content */}
-            <main className="flex-1 pb-20 md:pb-8">
-              <PullToRefresh onRefresh={handleRefresh}>
-                <div
-                  className={cn(
-                    'w-full py-5 md:py-8',
-                    isResolutionCenterRoute
-                      ? 'px-3 md:px-4 lg:px-5 xl:px-6'
-                      : 'mx-auto max-w-6xl px-4 md:px-8',
-                  )}
-                  key={refreshKey}
-                >
-                  <DashboardBreadcrumbs />
-                  {children}
-                </div>
-              </PullToRefresh>
-            </main>
-          </div>
-        </div>
+            ) : null
+          }
+        >
+          <main className="min-w-0 flex-1 pb-20 md:pb-8">
+            <PullToRefresh onRefresh={handleRefresh}>
+              <div
+                className={cn(
+                  'w-full py-5 md:py-8',
+                  isResolutionCenterRoute
+                    ? 'px-3 md:px-4 lg:px-5 xl:px-6'
+                    : 'mx-auto max-w-6xl px-4 md:px-8',
+                )}
+                key={refreshKey}
+              >
+                <DashboardBreadcrumbs />
+                {children}
+              </div>
+            </PullToRefresh>
+          </main>
+        </AppShell>
 
         {/* Mobile bottom nav (fixed, above all content) */}
         <BottomNav />

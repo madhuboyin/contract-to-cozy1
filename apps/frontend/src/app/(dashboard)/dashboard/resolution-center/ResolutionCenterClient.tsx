@@ -1542,19 +1542,6 @@ export default function ResolutionCenterClient() {
   const homeHealthScore = 82;
   const homeHealthStatus = homeHealthScore >= 75 ? 'Good' : homeHealthScore >= 55 ? 'Watch' : 'At risk';
 
-  const applyPropertyId = (href: string) => {
-    if (!selectedPropertyId) return href;
-    const divider = href.includes('?') ? '&' : '?';
-    return `${href}${divider}propertyId=${encodeURIComponent(selectedPropertyId)}`;
-  };
-
-  const inventoryActionHref = selectedPropertyId
-    ? `/dashboard/properties/${encodeURIComponent(selectedPropertyId)}/inventory?from=status-board`
-    : '/dashboard/inventory?from=status-board';
-  const fullReportHref = selectedPropertyId
-    ? `/dashboard/properties/${encodeURIComponent(selectedPropertyId)}/reports`
-    : '/dashboard/properties';
-
   const handleRunFullScan = () => {
     void refetchOrchestration();
     void refetchIncidents();
@@ -1565,33 +1552,6 @@ export default function ResolutionCenterClient() {
     }
     toast({ title: 'Scan started', description: 'Refreshing home signals now.' });
   };
-
-  const quickActions = [
-    {
-      label: 'Run Full Scan',
-      description: 'Refresh home signals',
-      onClick: handleRunFullScan,
-      icon: BarChart3,
-    },
-    {
-      label: 'Add Appliance',
-      description: 'Track a new home item',
-      href: inventoryActionHref,
-      icon: Wrench,
-    },
-    {
-      label: 'Schedule Maintenance',
-      description: 'Stay ahead of issues',
-      href: applyPropertyId('/dashboard/maintenance'),
-      icon: CalendarClock,
-    },
-    {
-      label: 'View All Tasks',
-      description: 'See your full queue',
-      href: applyPropertyId('/dashboard/actions'),
-      icon: CheckCircle2,
-    },
-  ];
 
   const handleOpenComplete = (item: any) => {
     if (!isOrchestrationAction(item)) return;
@@ -1747,7 +1707,7 @@ export default function ResolutionCenterClient() {
 
   return (
     <>
-      <div className="grid items-start gap-4 pb-20 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="pb-20">
         <div className="space-y-6">
           <header className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
             {/* Left: page title */}
@@ -1870,112 +1830,6 @@ export default function ResolutionCenterClient() {
             <EmptyQueueState isCompletedFilter={normalizedFilter === 'completed'} />
           )}
         </div>
-
-        <aside className="space-y-4 xl:sticky xl:top-24">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            {/* Health score ring */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="relative h-12 w-12 shrink-0 rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[5px]">
-                <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-base font-semibold text-slate-900">
-                  {homeHealthScore}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">{homeHealthScore} · {homeHealthStatus}</p>
-                <p className="text-xs text-gray-400">Home health score</p>
-              </div>
-            </div>
-
-            <h3 className="text-base font-semibold tracking-[-0.01em] text-slate-900">Today&apos;s snapshot</h3>
-            <div className="mt-3 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
-                <span className="text-slate-500">Coverage gaps</span>
-                <span className={cn('font-semibold', filterCounts.coverage > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                  {filterCounts.coverage > 0 ? filterCounts.coverage : 'None'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm">
-                <span className="text-slate-500">Next scheduled task</span>
-                <span className="font-semibold text-slate-900 text-right max-w-[120px] truncate">Gutter cleaning</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Health trend</span>
-                <span className="font-semibold text-amber-600">↓ 3 pts this week</span>
-              </div>
-            </div>
-            <div className="mt-5 border-t border-slate-100 pt-4">
-              <Button
-                variant="outline"
-                className="w-full h-9 text-sm border-slate-200 text-slate-700 hover:bg-slate-50"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.location.assign(fullReportHref);
-                  }
-                }}
-              >
-                View full report
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="text-base font-semibold tracking-[-0.01em] text-slate-900">Quick Actions</h3>
-            <div className="mt-4 space-y-2.5">
-              {quickActions.map((action, index) => {
-                const ActionIcon = action.icon;
-                const iconTone =
-                  index === 0
-                    ? 'bg-blue-50 text-blue-600'
-                    : index === 1
-                    ? 'bg-emerald-50 text-emerald-600'
-                    : index === 2
-                    ? 'bg-indigo-50 text-indigo-600'
-                    : 'bg-slate-100 text-slate-600';
-                return (
-                  <button
-                    key={action.label}
-                    type="button"
-                    onClick={() => {
-                      if ('onClick' in action && typeof action.onClick === 'function') {
-                        action.onClick();
-                        return;
-                      }
-                      if ('href' in action && action.href) {
-                        router.push(action.href);
-                      }
-                    }}
-                    className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={cn('rounded-lg p-2', iconTone)}>
-                        <ActionIcon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{action.label}</p>
-                        <p className="text-xs text-slate-500">{action.description}</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-slate-400" />
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-5">
-            <h3 className="text-base font-semibold tracking-[-0.01em] text-slate-900">Need Help Now?</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              Connect with trusted local pros available in your area.
-            </p>
-            <Button
-              asChild
-              className="mt-4 h-11 w-full rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 text-white hover:from-teal-700 hover:to-cyan-700"
-            >
-              <Link href={applyPropertyId('/dashboard/emergency')}>Get Emergency Help</Link>
-            </Button>
-          </section>
-        </aside>
 
         {selectedPropertyId && activeItem && (
           <>
