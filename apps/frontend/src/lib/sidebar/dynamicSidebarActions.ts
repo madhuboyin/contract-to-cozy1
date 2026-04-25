@@ -217,17 +217,6 @@ function getMyHomeActions(ctx: SidebarContext): SidebarAction[] {
     group: 'contextual-actions',
   });
 
-  // Review home profile
-  actions.push({
-    id: 'review-home-profile',
-    title: 'Review home profile',
-    description: 'Update property details',
-    icon: Home,
-    href: `${propPath}`,
-    priority: 'medium',
-    group: 'contextual-actions',
-  });
-
   // Upload document
   if (ctx.missingData?.hasDocuments === false) {
     actions.push({
@@ -241,15 +230,26 @@ function getMyHomeActions(ctx: SidebarContext): SidebarAction[] {
     });
   }
 
-  // Complete missing details
+  // Run property scan
   actions.push({
-    id: 'complete-missing-details',
-    title: 'Complete missing home details',
-    description: 'Improve data accuracy',
-    icon: CheckCircle,
-    href: `${propPath}`,
+    id: 'run-property-scan',
+    title: 'Run property scan',
+    description: 'Refresh home intelligence',
+    icon: BarChart3,
+    onClickAction: 'refresh-signals',
+    priority: 'medium',
+    group: 'contextual-actions',
+  });
+
+  // View health score
+  actions.push({
+    id: 'view-health-score',
+    title: 'View health score',
+    description: 'Check property wellness',
+    icon: Sparkles,
+    href: `${propPath}/health-score`,
     priority: 'low',
-    group: 'missing-info',
+    group: 'contextual-actions',
   });
 
   return actions;
