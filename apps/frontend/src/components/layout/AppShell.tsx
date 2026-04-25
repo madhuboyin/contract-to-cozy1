@@ -21,7 +21,7 @@ type AppShellProps = {
 
 export function AppShell({ leftNav, mobileHeader, banner, children }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-[var(--ctc-surface-base)] text-slate-950">
       {leftNav}
 
       <div className="flex min-w-0 flex-1 flex-col md:pl-[246px]">

@@ -30,6 +30,7 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 import { useQuery } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
+import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 
 /**
  * SaveHubPage is the "Financial Job" surface.
@@ -63,7 +64,7 @@ export default function SaveHubPage() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Savings Engine Resetting</h1>
           <p className="text-slate-500 mt-2 max-w-sm mx-auto">
-            We're optimizing your financial dashboard. Please refresh or try again in a few moments.
+            We&apos;re optimizing your financial dashboard. Please refresh or try again in a few moments.
           </p>
           <Button className="mt-8 rounded-xl h-11 px-8 bg-brand-600" onClick={() => window.location.reload()}>
             Refresh Dashboard
@@ -72,37 +73,20 @@ export default function SaveHubPage() {
       }
     >
       <div className="mx-auto max-w-7xl space-y-12 p-4 sm:p-6 lg:px-8 lg:pb-12">
-        {/* 1. Page Header */}
-        <MobilePageIntro
-          title="Wealth & Savings"
-          subtitle="We monitor your home's financial health to find hidden savings and protect your equity."
-          action={
-            <div className="rounded-xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700 hidden sm:block">
-              <DollarSign className="h-6 w-6" />
-            </div>
-          }
-        />
-
-        {/* 2. Financial KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <MobileKpiTile 
-            label="Total Potential" 
-            value={potentialSavings > 0 ? `$${potentialSavings}` : '$0'} 
-            hint="Annual savings found" 
-            tone={potentialSavings > 0 ? 'positive' : 'neutral'} 
-          />
-          <MobileKpiTile 
-            label="Equity Status" 
-            value="Tracked" 
-            hint="Value vs Mortgage" 
-            tone="neutral"
-          />
-          <MobileKpiTile 
-            label="Tax Audit" 
-            value="Next: Feb" 
-            hint="Property tax window" 
-          />
-        </div>
+        <PageHero
+          eyebrow="Save"
+          icon={<DollarSign className="h-5 w-5" />}
+          title="Wealth and savings signals, ranked like premium fintech."
+          description="CtC monitors recurring costs, equity momentum, insurance optimization, tax windows, and document-backed savings opportunities."
+          action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan Policy</SmartCTA>}
+          meta={<TrustMetaRow items={['Verified from property and document signals', 'Savings shown as annualized upside', 'Next tax audit window tracked']} />}
+        >
+          <div className="grid gap-3 md:grid-cols-3">
+            <MetricTile label="Total potential" value={potentialSavings > 0 ? `$${potentialSavings}` : '$0'} hint="Annual savings found" tone={potentialSavings > 0 ? 'success' : 'neutral'} />
+            <MetricTile label="Equity status" value="Tracked" hint="Value vs mortgage" tone="brand" />
+            <MetricTile label="Tax audit" value="Next: Feb" hint="Property tax window" tone="warning" />
+          </div>
+        </PageHero>
 
         {/* 3. The "Magic" Onboarding Wedge */}
         <MobileSection>

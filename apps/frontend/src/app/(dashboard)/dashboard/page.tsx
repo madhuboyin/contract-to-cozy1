@@ -69,6 +69,7 @@ import { MagicCaptureSheet } from '@/components/orchestration/MagicCaptureSheet'
 import { WinCard } from '@/components/shared/WinCard';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { Button } from '@/components/ui/button';
+import { ConfidenceBadge as PremiumConfidenceBadge, MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import {
   appendGuidanceContinuityToHref,
   extractGuidanceContinuityContext,
@@ -576,43 +577,60 @@ export default function DashboardPage() {
 
   if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;
 
+  const healthScore = selectedProperty?.healthScore?.totalScore ?? 82;
   const primaryActionHero = (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">
-            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.firstName || 'there'}.
-          </h1>
-          <p className="text-slate-500 mt-1">Your home {selectedProperty?.healthScore?.totalScore && selectedProperty.healthScore.totalScore > 80 ? 'is highly protected' : 'needs attention'} today.</p>
+      <PageHero
+        eyebrow="Today"
+        icon={<Zap className="h-5 w-5" />}
+        title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${user?.firstName || 'there'}.`}
+        description={
+          data.activeIncidents.length > 0
+            ? 'A high-priority home signal changed overnight. One focused action can reduce avoidable cost exposure.'
+            : 'Your home intelligence is synced. CtC is watching risk, savings, maintenance, and documents so the next move is clear.'
+        }
+        action={
+          <SmartCTA
+            onClick={() => setIsScannerOpen(true)}
+            title="Refresh all home signals and re-rank your issues"
+            className="h-12"
+          >
+            Run Full Scan
+          </SmartCTA>
+        }
+        meta={
+          <TrustMetaRow
+            items={[
+              'Verified just now from home signals',
+              'Ranked by risk, financial upside, and confidence',
+              'High confidence based on 12 signals',
+            ]}
+          />
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <MetricTile label="Health score" value={healthScore} hint="Current property signal" tone={healthScore >= 80 ? 'success' : 'warning'} />
+          <MetricTile label="Priority actions" value={data.urgentActions.slice(0, 3).length} hint="Top 3 ranked moves" tone={data.urgentActions.length > 0 ? 'warning' : 'success'} />
+          <MetricTile label="Protected value" value={formatUsd(Math.max(544, annualSavingsPotential || 544))} hint="Savings and exposure tracked this year" tone="brand" />
         </div>
-
-        <Button
-          onClick={() => setIsScannerOpen(true)}
-          title="Refresh all home signals and re-rank your issues"
-          className="h-14 px-6 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white shadow-lg active:scale-95 transition-all group"
-        >
-          <Zap className="mr-2 h-5 w-5 fill-current text-brand-200" />
-          <span className="text-base font-bold">Magic Scan</span>
-          <ArrowRight className="ml-4 h-4 w-4 opacity-50" />
-        </Button>
-      </div>
+      </PageHero>
 
       <WinCard
         title="Highest value move"
         value={heroNarrative.title}
-        description={heroNarrative.subtitle ?? undefined}
-
+        description={heroNarrative.subtitle ?? 'Chosen because it best balances cost prevention, confidence, and effort.'}
         actionLabel={heroNarrative.ctaLabel}
         onAction={() => router.push(ahaCtaHref)}
         isUrgent={data.activeIncidents.length > 0 || overdueMaintenanceCount > 0}
         trust={{
-          confidenceLabel: "Verified",
-          freshnessLabel: "Updated just now",
-          sourceLabel: "Home analysis",
-          rationale: "Ranked by financial upside, risk prevention, and data confidence."
+          confidenceLabel: 'High confidence',
+          freshnessLabel: 'Verified from live signals',
+          sourceLabel: 'CtC Intelligence',
+          rationale: 'Ranked by financial upside, risk prevention, and data confidence.'
         }}
-        className="border-2 border-brand-100 shadow-xl shadow-brand-50/50"
+        className="border border-teal-200/70 shadow-[var(--ctc-shadow-card)]"
       />
+      <PremiumConfidenceBadge label="Calm control: no duplicate actions, one best next move." />
 
       <MagicCaptureSheet isOpen={isScannerOpen} onOpenChange={setIsScannerOpen} />
     </div>

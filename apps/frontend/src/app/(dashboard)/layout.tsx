@@ -94,7 +94,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="h-[86px] flex items-center px-5 border-b border-gray-100 flex-shrink-0">
+      <div className="h-[88px] flex items-center px-5 border-b border-slate-200/70 flex-shrink-0">
         <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
           <Image
             src="/favicon.svg"
@@ -103,12 +103,12 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
             height={28}
             className="h-7 w-7 flex-shrink-0"
           />
-          <span className="text-[15px] font-bold text-gray-900 truncate">ContractToCozy</span>
+          <span className="text-[15px] font-semibold tracking-[-0.01em] text-slate-950 truncate">ContractToCozy</span>
         </Link>
       </div>
 
       {/* Primary nav */}
-      <nav className="flex-1 py-5 px-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 py-5 px-3 space-y-1 overflow-y-auto">
         {coreJobs.map((job) => {
           const Icon = job.icon;
           const href =
@@ -133,16 +133,16 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
               key={job.key}
               href={href}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group',
+                'group relative flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-semibold transition-all duration-[180ms] ease-out',
                 isActive
-                  ? 'bg-teal-50 text-brand-700 font-semibold'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-teal-50/90 text-teal-800 shadow-[inset_0_0_0_1px_rgba(20,184,166,0.22)]'
+                  : 'text-slate-600 hover:-translate-y-px hover:bg-white/80 hover:text-slate-950 hover:shadow-sm'
               )}
             >
               <Icon
                 className={cn(
                   'h-[18px] w-[18px] flex-shrink-0 transition-colors',
-                  isActive ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'
+                  isActive ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-600'
                 )}
               />
               <span>{job.name}</span>
@@ -156,16 +156,16 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
             <Link
               href={buildPropertyAwareHref(resolvedPropertyId, 'home-lab', labJob.key)}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group',
+                'group flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-semibold transition-all duration-[180ms]',
                 pathname?.startsWith('/dashboard/home-lab')
-                  ? 'bg-brand-50 text-brand-700 font-semibold'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-teal-50/90 text-teal-800 shadow-[inset_0_0_0_1px_rgba(20,184,166,0.22)]'
+                  : 'text-slate-600 hover:-translate-y-px hover:bg-white/80 hover:text-slate-950 hover:shadow-sm'
               )}
             >
               <labJob.icon
                 className={cn(
                   'h-[18px] w-[18px] flex-shrink-0 transition-colors',
-                  pathname?.startsWith('/dashboard/home-lab') ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'
+                  pathname?.startsWith('/dashboard/home-lab') ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-600'
                 )}
               />
               <span>{labJob.name}</span>
@@ -174,23 +174,23 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
         )}
 
         {/* Divider + secondary links */}
-        <div className="pt-3 mt-2 border-t border-gray-100">
+        <div className="pt-4 mt-3 border-t border-slate-200/70">
           <Link
             href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              'flex items-center gap-3 rounded-[14px] px-3 py-2 text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800'
             )}
           >
-            <BookOpen className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            <BookOpen className="h-4 w-4 text-slate-400 flex-shrink-0" />
             Knowledge
           </Link>
           <Link
             href="/dashboard/community-events"
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              'flex items-center gap-3 rounded-[14px] px-3 py-2 text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800'
             )}
           >
-            <Globe className="h-4 w-4 text-gray-400 flex-shrink-0" />
+            <Globe className="h-4 w-4 text-slate-400 flex-shrink-0" />
             Community
           </Link>
         </div>
@@ -227,21 +227,21 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
       </nav>
 
       {/* User actions at bottom */}
-      <div className="flex-shrink-0 border-t border-gray-100 p-3">
+      <div className="flex-shrink-0 border-t border-slate-200/70 p-3">
         <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              className="mt-2 flex w-full items-center gap-2.5 rounded-[16px] border border-slate-200/80 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-950"
             >
-              <div className="h-7 w-7 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-[11px] font-bold text-brand-700 uppercase">
+              <div className="h-8 w-8 rounded-full bg-teal-50 ring-1 ring-teal-200 flex items-center justify-center flex-shrink-0">
+                <span className="text-[11px] font-bold text-teal-800 uppercase">
                   {user?.firstName?.[0] ?? 'U'}
                 </span>
               </div>
               <span className="flex-1 text-left truncate">{user?.firstName ?? 'Account'}</span>
-              <ChevronDown className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-44">
@@ -505,12 +505,12 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       <PropertyProvider>
         <AppShell
           leftNav={
-            <aside className="hidden border-r border-gray-100 bg-white shadow-sm md:fixed md:inset-y-0 md:z-50 md:flex md:w-[246px] md:flex-col">
+            <aside className="hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl md:fixed md:inset-y-0 md:z-50 md:flex md:w-[246px] md:flex-col">
               <PersistentSidebarNav user={user} />
             </aside>
           }
           mobileHeader={
-            <header className="md:hidden sticky top-0 z-40 bg-white border-b border-gray-100 safe-area-inset-top">
+            <header className="md:hidden sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl safe-area-inset-top">
               <div
                 className="flex h-14 items-center justify-between px-4"
                 style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
@@ -569,7 +569,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                   'w-full py-5 md:py-8',
                   isResolutionCenterRoute
                     ? 'px-3 md:px-4 lg:px-5 xl:px-6'
-                    : 'mx-auto max-w-6xl px-4 md:px-8',
+                    : 'mx-auto max-w-[1180px] px-4 md:px-8',
                 )}
                 key={refreshKey}
               >

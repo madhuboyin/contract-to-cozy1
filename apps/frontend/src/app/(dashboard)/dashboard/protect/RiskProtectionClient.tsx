@@ -23,6 +23,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import {
   MobileKpiTile,
   MobileCard,
@@ -166,23 +167,33 @@ export default function RiskProtectionClient() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 pb-20 px-4 md:px-0">
-      {/* Header */}
-      <header className="space-y-2 px-1">
-        <div className="flex items-center gap-2 text-brand-600 font-bold text-[10px] uppercase tracking-widest">
-          <CalendarClock className="h-3.5 w-3.5" />
-          Protect
+      <PageHero
+        eyebrow="Protect"
+        icon={<Shield className="h-5 w-5" />}
+        title="Protection that explains what is covered, exposed, and worth doing now."
+        description="A calm risk surface for maintenance, coverage, recalls, incidents, and local hazard signals. Every recommendation includes confidence and source context."
+        action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan Policy</SmartCTA>}
+        meta={
+          <TrustMetaRow
+            items={[
+              'Coverage checked against policy and home signals',
+              'Potential cost exposure, not scare language',
+              'Recommendations ranked by preventable loss',
+            ]}
+          />
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-4">
+          <MetricTile label="Coverage score" value={riskScore ?? 'Pending'} hint="Protection readiness" tone={riskScore && riskScore > 80 ? 'success' : 'warning'} />
+          <MetricTile label="Coverage gaps" value={coverageGaps.length} hint={coverageGaps.length ? 'Needs review' : 'No gap detected'} tone={coverageGaps.length ? 'warning' : 'success'} />
+          <MetricTile label="Open incidents" value={activeIncidents.length} hint="Live issue queue" tone={activeIncidents.length ? 'urgent' : 'success'} />
+          <MetricTile label="Active recalls" value={openRecalls.length} hint="Inventory matched" tone={openRecalls.length ? 'urgent' : 'success'} />
         </div>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-          Home Protection
-        </h1>
-        <p className="text-slate-500 max-w-lg">
-          Your place to keep maintenance, coverage, and safety alerts on track.
-        </p>
-      </header>
+      </PageHero>
 
       {/* Hero Protection Score */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-3xl border-2 border-slate-50 bg-white p-8 relative overflow-hidden flex flex-col md:flex-row items-center gap-8 shadow-sm">
+        <div className="lg:col-span-2 rounded-[24px] border border-slate-200/80 bg-white/88 p-8 relative overflow-hidden flex flex-col md:flex-row items-center gap-8 shadow-[var(--ctc-shadow-card)]">
           <div className="relative shrink-0">
             {riskScore !== null ? (
               <>

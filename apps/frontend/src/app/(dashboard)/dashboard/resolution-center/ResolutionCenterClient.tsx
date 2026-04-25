@@ -37,6 +37,7 @@ import { listIncidents } from '../properties/[id]/incidents/incidentsApi';
 import { Booking, OrchestratedActionDTO } from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
 import { Button } from '@/components/ui/button';
+import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import { cn } from '@/lib/utils';
 import {
   SourceChip,
@@ -919,7 +920,7 @@ function TriageActionCard({
   return (
     <article
       className={cn(
-        'group relative overflow-hidden rounded-2xl border bg-white transition-colors',
+        'group relative overflow-hidden rounded-[24px] border bg-white/92 shadow-[var(--ctc-shadow-card)] transition-all duration-[240ms] ease-out hover:-translate-y-0.5 hover:shadow-[var(--ctc-shadow-hover)]',
         isUrgentJourney
           ? 'border-amber-200'
           : journey === 'cost-savings'
@@ -931,7 +932,7 @@ function TriageActionCard({
         {/* Left panel */}
         <div
           className={cn(
-            'flex h-full flex-col rounded-l-2xl border-r px-5 py-3',
+            'flex h-full flex-col border-r px-5 py-4',
             isUrgentJourney
               ? 'border-amber-100 bg-amber-50/30'
               : journey === 'cost-savings'
@@ -960,7 +961,7 @@ function TriageActionCard({
           </div>
 
           <div className="mt-3 text-center">
-            <h3 className="line-clamp-2 text-[18px] font-semibold leading-[1.2] tracking-[-0.01em] text-slate-900">
+            <h3 className="line-clamp-2 text-[18px] font-semibold leading-[1.2] tracking-[-0.01em] text-slate-950">
               {assetTitle}
             </h3>
             {displaySubtitle ? <p className="mt-1 text-[15px] text-slate-600">{displaySubtitle}</p> : null}
@@ -975,13 +976,13 @@ function TriageActionCard({
         </div>
 
         {/* Center panel */}
-        <div className="space-y-3 px-5 py-3">
+        <div className="space-y-4 px-5 py-4">
           <div>
-            <h4 className="text-[18px] font-semibold leading-[1.3] tracking-[-0.01em] text-slate-900">
+            <h4 className="text-[18px] font-semibold leading-[1.3] tracking-[-0.01em] text-slate-950">
               {issueHeadline}
             </h4>
-            <p className="mt-0.5 text-xs font-medium text-slate-400">{cardSubhead}</p>
-            <p className="mt-2 max-w-xl text-base leading-relaxed text-gray-600 font-normal">
+            <p className="mt-0.5 text-xs font-medium text-slate-500">{cardSubhead}</p>
+            <p className="mt-2 max-w-xl text-[15px] leading-6 text-slate-600 font-normal">
               {issueDescription}
             </p>
           </div>
@@ -1061,7 +1062,7 @@ function TriageActionCard({
         </div>
 
         {/* Right panel — action hierarchy */}
-        <div className="flex flex-col border-l border-slate-100 px-5 py-3">
+        <div className="flex flex-col border-l border-slate-100 px-5 py-4">
           <div className="flex-1 space-y-2.5">
             {/* Tier 1: Primary solid button */}
             <Button
@@ -1709,47 +1710,23 @@ export default function ResolutionCenterClient() {
     <>
       <div className="pb-20">
         <div className="space-y-6">
-          <header className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            {/* Left: page title */}
-            <h1 className="text-lg font-semibold text-slate-900 whitespace-nowrap">Resolution center</h1>
-
-            {/* Center: health ring */}
-            <div className="flex items-center gap-2.5 mx-auto">
-              <div className="relative h-10 w-10 rounded-full bg-[conic-gradient(#35bf82_290deg,#e6f4ec_0deg)] p-[4px]">
-                <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-sm font-semibold text-slate-900">
-                  {homeHealthScore}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">{homeHealthScore} · {homeHealthStatus}</p>
-                <p className="text-xs text-gray-400">{latestUpdateLabel}</p>
-              </div>
+          <PageHero
+            eyebrow="Fix"
+            icon={<Wrench className="h-5 w-5" />}
+            title="A resolution center that shows the cost of waiting."
+            description="Urgent issues, provider work, preventative maintenance, coverage gaps, and completed outcomes are ranked into one clear action queue."
+            action={<SmartCTA onClick={handleRunFullScan}>Run Full Scan</SmartCTA>}
+            meta={<TrustMetaRow items={[latestUpdateLabel, `${highConfidenceCount} high-confidence items`, 'Costs shown as potential exposure']} />}
+          >
+            <div className="grid gap-3 md:grid-cols-4">
+              <MetricTile label="Home health" value={`${homeHealthScore} · ${homeHealthStatus}`} hint="Current operating range" tone="success" />
+              <MetricTile label="Urgent" value={filterCounts.urgent} hint="Needs attention" tone={filterCounts.urgent ? 'urgent' : 'success'} />
+              <MetricTile label="Cost if delayed" value={formatCompactUsd(Math.round(totalAtRisk))} hint="Potential exposure" tone={totalAtRisk > 0 ? 'warning' : 'success'} />
+              <MetricTile label="Priority queue" value={filterCounts.all} hint="Active items" tone="brand" />
             </div>
+          </PageHero>
 
-            {/* Right: stat pills + scan button */}
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
-              {filterCounts.urgent > 0 && (
-                <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
-                  {filterCounts.urgent} urgent
-                </span>
-              )}
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                {formatCompactUsd(Math.round(totalAtRisk))} at risk
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                {highConfidenceCount} high confidence
-              </span>
-              <Button
-                variant="outline"
-                className="h-8 rounded-xl border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={handleRunFullScan}
-              >
-                Run full scan
-              </Button>
-            </div>
-          </header>
-
-          <section className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5">
+          <section className="rounded-[24px] border border-slate-200/80 bg-white/88 px-4 py-3 shadow-[var(--ctc-shadow-card)]">
             <div className="flex flex-wrap gap-2.5" role="tablist" aria-label="Resolution filters">
               {FILTER_OPTIONS.map((filterOption) => {
                 const active = normalizedFilter === filterOption.key;

@@ -12,12 +12,9 @@ import {
   BottomSafeAreaReserve,
   MobileCard,
   StatusChip,
-  MobilePageIntro,
-  MobileKpiStrip,
-  MobileKpiTile,
-  MobileSection,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { Button } from '@/components/ui/button';
+import { EmptyStatePremium, MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import { MOBILE_HOME_TOOL_LINKS } from '@/components/mobile/dashboard/mobileToolCatalog';
 import { cn } from '@/lib/utils';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -223,36 +220,34 @@ export default function PropertiesPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:px-8 lg:pb-12">
-      {/* 1. Page Header */}
-      <MobilePageIntro
-        title="My Home Portfolio"
-        subtitle="Manage your properties and their individual health records."
+      <PageHero
+        eyebrow="My Home"
+        icon={<Building2 className="h-5 w-5" />}
+        title="Your homes as protected assets, not static records."
+        description="Compare value, risk, savings, and maintenance load across every property in one calm portfolio view."
         action={
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
-            <Building2 className="h-5 w-5" />
-          </div>
+          canAddMore ? (
+            <SmartCTA asChild>
+              <Link href="/dashboard/properties/new">Add Property</Link>
+            </SmartCTA>
+          ) : null
         }
-      />
-
-      {/* 2. Portfolio KPIs */}
-      <MobileKpiStrip className="sm:grid-cols-3">
-        <MobileKpiTile 
-          label="Total Assets" 
-          value={properties.length} 
-          hint={`${primaryHomesCount} primary`} 
-          tone="neutral" 
-        />
-        <MobileKpiTile 
-          label="Available Slots" 
-          value={slotsAvailable} 
-          hint="Out of 10 max" 
-        />
-        <MobileKpiTile 
-          label="Portfolio Health" 
-          value="Tracked" 
-          hint="Aggregated score" 
-        />
-      </MobileKpiStrip>
+        meta={
+          <TrustMetaRow
+            items={[
+              `${properties.length} asset${properties.length === 1 ? '' : 's'} monitored`,
+              `${primaryHomesCount} primary residence${primaryHomesCount === 1 ? '' : 's'}`,
+              'Property changes reflected in your protection and savings engines',
+            ]}
+          />
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <MetricTile label="Total assets" value={properties.length} hint={`${primaryHomesCount} primary`} tone="brand" />
+          <MetricTile label="Available slots" value={slotsAvailable} hint="Out of 10 max" tone="neutral" />
+          <MetricTile label="Portfolio health" value="Tracked" hint="Aggregated signal layer" tone="success" />
+        </div>
+      </PageHero>
 
       <PortfolioListTemplate
         title="Active Properties"
@@ -410,25 +405,12 @@ export default function PropertiesPage() {
 
       <div className="hidden md:block">
         {properties.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
-            <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            <h3 className="mt-3 text-sm font-medium text-gray-900">No properties yet</h3>
-            <p className="mt-1 text-sm text-gray-500">Add your first property to get started.</p>
-            <div className="mt-6">
-              <Link
-                href="/dashboard/properties/new"
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Property
-              </Link>
-            </div>
-          </div>
+          <EmptyStatePremium
+            title="Add your first protected asset"
+            description="Start with one property to unlock health scoring, vault records, savings intelligence, and maintenance guidance."
+            action={<SmartCTA asChild><Link href="/dashboard/properties/new">Add Property</Link></SmartCTA>}
+            tone="brand"
+          />
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {properties.map((property) => {
@@ -441,17 +423,17 @@ export default function PropertiesPage() {
               return (
                 <div
                   key={property.id}
-                  className={`relative bg-white rounded-xl border transition-all duration-150 group
+                  className={`relative bg-white rounded-[24px] border shadow-[var(--ctc-shadow-card)] transition-all duration-[240ms] ease-out group hover:-translate-y-0.5 hover:shadow-[var(--ctc-shadow-hover)]
                     ${property.isPrimary
-                      ? 'border-blue-200 border-l-4 border-l-blue-500 shadow-sm hover:shadow-md'
-                      : 'border-gray-200 hover:border-gray-300 shadow-sm hover:shadow-md'
+                      ? 'border-teal-200 shadow-sm'
+                      : 'border-slate-200/80 hover:border-slate-300'
                     }`}
                 >
                   {/* Clickable main area */}
                   <Link
                     href={resolvePropertyHref(property.id)}
                     onClick={() => handlePropertySelect(property.id)}
-                    className="block p-6 pb-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset rounded-t-xl"
+                    className="block p-6 pb-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-inset rounded-t-[24px]"
                   >
                     {coverPhotoUrl ? (
                       <div className="mb-4 overflow-hidden rounded-lg border border-slate-200">

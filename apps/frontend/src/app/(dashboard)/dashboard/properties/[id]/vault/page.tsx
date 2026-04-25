@@ -45,6 +45,7 @@ import { useToast } from '@/components/ui/use-toast';
 import type { InventoryItem } from '@/types';
 import { getCoverageAnalysis } from '@/lib/api/coverageAnalysisApi';
 import { ConfidenceBadge, SourceChip, TrustMetadataBar, WhyThisMattersCard } from '@/components/trust';
+import { PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import { listIncidents } from '../incidents/incidentsApi';
 import {
   buildCoverageTrustMetadata,
@@ -1231,10 +1232,22 @@ export default function VaultPage() {
         onUploadClick={triggerUpload}
       />
 
-      <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-4">
-        <MobilePageIntro
-          title="Vault"
-          subtitle="Your home's secure memory layer — assets, documents, coverage, and history."
+      <div className="mx-auto w-full max-w-4xl space-y-5 px-4 py-4">
+        <PageHero
+          eyebrow="Vault"
+          icon={<ShieldCheck className="h-5 w-5" />}
+          title="A secure memory layer for everything your home knows."
+          description="Assets, documents, coverage, warranties, and proof-of-care history are organized into a searchable system you can trust."
+          action={<SmartCTA onClick={() => setScannerOpen(true)}>Scan Item</SmartCTA>}
+          meta={
+            <TrustMetaRow
+              items={[
+                'OCR and uploads tracked with status',
+                'Expiring warranties surfaced before they become exposure',
+                'Search spans assets, documents, coverage, and timeline',
+              ]}
+            />
+          }
         />
 
         <VaultKpiStrip propertyId={propertyId} />
