@@ -96,7 +96,7 @@ export function PageHero({
                 {icon}
               </span>
             ) : null}
-            <p className="mb-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-teal-700">
+            <p className="mb-0 text-[11px] font-semibold text-teal-700">
               {eyebrow}
             </p>
           </div>
@@ -130,7 +130,7 @@ export function MetricTile({
 }) {
   return (
     <PremiumCard tone={tone} className={cn('p-4', className)}>
-      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</p>
+      <p className="mb-1 text-[11px] font-semibold text-slate-500">{label}</p>
       <div className="text-2xl font-semibold tracking-[-0.02em] text-slate-950">{value}</div>
       {hint ? <p className="mb-0 mt-1 text-xs leading-5 text-slate-600">{hint}</p> : null}
     </PremiumCard>

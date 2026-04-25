@@ -354,14 +354,14 @@ export default function MobileHomeBuyerDashboard({
               <button
                 type="button"
                 onClick={() => setShowMoreModules((prev) => !prev)}
-                className="w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-3 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]"
+                className="flex w-full items-center justify-center gap-1 py-2 text-sm text-gray-400 transition-colors hover:text-gray-500"
               >
                 {showMoreModules ? 'Show less' : 'Show more'}
               </button>
             </MobileSection>
 
             {showMoreModules ? (
-              <>
+<>
                 {localUpdates.length > 0 ? (
                   <MobileSection>
                     <ExpandableSummaryCard

@@ -19,7 +19,6 @@ import {
   ShieldCheck,
   CircleDollarSign,
   User,
-  GitCompareArrows,
   X,
   Thermometer,
   Droplets,
@@ -377,10 +376,16 @@ function getCardSubhead(item: any, journey: JourneyType): string {
   return 'Schedule maintenance';
 }
 
+const GENERIC_SUBHEAD_PHRASES = new Set(['schedule maintenance', 'schedule maintenance task', 'maintenance task']);
+
 function resolveIssueDescription(item: any, headline: string): string {
   const candidate = [item?.description, item?.summary, item?.title]
     .map((value) => String(value ?? '').trim())
-    .find((value) => value && value !== headline && !isMachineToken(value));
+    .find((value) => {
+      if (!value || value === headline || isMachineToken(value)) return false;
+      if (GENERIC_SUBHEAD_PHRASES.has(value.toLowerCase())) return false;
+      return true;
+    });
 
   return candidate || 'Take action now to reduce avoidable cost and protect home performance.';
 }
@@ -1087,31 +1092,28 @@ function TriageActionCard({
             </Button>
           </div>
 
-          {/* Tier 3: Text-only footer links */}
-          <div className="mt-4 border-t border-slate-100 pt-3 space-y-1.5">
+          {/* Tier 3: Inline text links */}
+          <div className="mt-4 flex items-center gap-4 border-t border-gray-100 pt-2">
             <button
               type="button"
               onClick={onOpenService}
-              className="flex w-full items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+              className="text-xs text-gray-400 transition-colors hover:text-gray-600"
             >
-              <GitCompareArrows className="h-3.5 w-3.5" />
               Compare quotes
             </button>
             <button
               type="button"
               onClick={onAddCoverage}
-              className="flex w-full items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+              className="text-xs text-gray-400 transition-colors hover:text-gray-600"
             >
-              <ShieldCheck className="h-3.5 w-3.5" />
               Check warranty
             </button>
             <button
               type="button"
               onClick={handleDetails}
-              className="flex w-full items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+              className="ml-auto text-xs text-gray-400 transition-colors hover:text-gray-600"
             >
-              View details
-              <ChevronRight className="h-3.5 w-3.5" />
+              View details →
             </button>
           </div>
         </div>

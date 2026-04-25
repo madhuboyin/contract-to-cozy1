@@ -245,7 +245,7 @@ export default function PropertiesPage() {
         <div className="grid gap-3 md:grid-cols-3">
           <MetricTile label="Total assets" value={properties.length} hint={`${primaryHomesCount} primary`} tone="brand" />
           <MetricTile label="Available slots" value={slotsAvailable} hint="Out of 10 max" tone="neutral" />
-          <MetricTile label="Portfolio health" value="Tracked" hint="Aggregated signal layer" tone="success" />
+          <MetricTile label="Portfolio health" value="Tracked" hint={`Across all ${properties.length} ${properties.length === 1 ? 'property' : 'properties'}`} tone="success" />
         </div>
       </PageHero>
 
