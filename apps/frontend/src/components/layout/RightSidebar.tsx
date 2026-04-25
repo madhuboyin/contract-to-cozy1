@@ -359,6 +359,7 @@ function HealthScoreBlock({
 
   return (
     <section className="rounded-[22px] border border-slate-200/80 bg-white/88 px-3 py-4 shadow-[var(--ctc-shadow-card)]">
+      <h2 className="mb-3 text-[10px] font-semibold text-slate-400 tracking-normal">Health score</h2>
       <div className="flex flex-col items-center text-center">
         <svg width="80" height="80" viewBox="0 0 80 80" aria-label={`Home health score ${score}`}>
           <circle cx="40" cy="40" r={radius} stroke="#f3f4f6" strokeWidth="7" fill="none" />
@@ -666,6 +667,7 @@ export function RightSidebar() {
             updatedAt={data.health.updatedAt}
             trend={data.health.trend}
           />
+          <ViewReportLink propertyId={data.propertyId} />
           <SnapshotBlock
             urgentCount={data.snapshot.urgentCount}
             atRisk={data.snapshot.atRisk}
@@ -680,7 +682,6 @@ export function RightSidebar() {
         pathname={pathname}
         signals={data.snapshot}
       />
-      <ViewReportLink propertyId={data.propertyId} />
     </aside>
   );
 }
