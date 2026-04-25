@@ -134,7 +134,7 @@ export default function HomeToolsPage() {
             {backLabel}
           </Link>
         </Button>
-        <MobilePageIntro title="Home Tools" subtitle="Ownership planning tools for your property" />
+        <MobilePageIntro title="Home tools" subtitle="Ownership planning tools for your property" />
       </MobileSection>
 
       {groupedTools.map((group) => (

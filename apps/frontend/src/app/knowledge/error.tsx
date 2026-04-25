@@ -22,7 +22,7 @@ export default function KnowledgeError({
       <DashboardShell className="py-12">
         <Card className="mx-auto max-w-2xl rounded-[28px] border-slate-200 bg-white shadow-sm">
           <CardContent className="space-y-5 py-14 text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Knowledge Hub</p>
+            <p className="text-sm font-semibold tracking-normal text-slate-500">Knowledge Hub</p>
             <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Something went wrong</h1>
             <p className="mx-auto max-w-xl text-sm leading-6 text-slate-600">
               We couldn&apos;t load this page right now. Try again or return to the dashboard.

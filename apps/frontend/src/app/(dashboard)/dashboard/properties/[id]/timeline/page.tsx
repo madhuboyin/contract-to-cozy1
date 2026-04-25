@@ -405,7 +405,7 @@ export default function Page() {
             toolId="home-timeline"
             propertyId={propertyId}
             backHref={backHref}
-            backLabel="Back to Property"
+            backLabel="Back to property"
             showBackLink
           />
           <ResultHeroCard

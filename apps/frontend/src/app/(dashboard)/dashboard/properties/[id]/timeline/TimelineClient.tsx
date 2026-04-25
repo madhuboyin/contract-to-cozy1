@@ -290,7 +290,7 @@ export default function TimelineClient(props: TimelineClientProps = {}) {
         trust={{
           confidenceLabel: `${events.length} events from linked records and modeled timeline entries`,
           freshnessLabel: isFetching ? 'Refreshing now' : 'Updates when claims, repairs, docs, and value events are added',
-          sourceLabel: 'Home events API + timeline projections + attached document metadata',
+          sourceLabel: 'Home events API + timeline projections + attached document details',
           rationale: 'Events are grouped in one sequence to reduce report hunting and preserve decision context.',
         }}
       >

@@ -186,7 +186,7 @@
     color: hsl(var(--color-text-primary));
     font-weight: 650;
     line-height: 1.16;
-    letter-spacing: -0.015em;
+    letter-spacing: 0;
     margin-bottom: 0.75rem;
   }
   
@@ -331,7 +331,7 @@ html {
   
   /* Letter Spacing */
   .tracking-tight {
-    letter-spacing: -0.025em;
+    letter-spacing: 0;
   }
   
   .tracking-normal {
@@ -339,7 +339,7 @@ html {
   }
   
   .tracking-wide {
-    letter-spacing: 0.025em;
+    letter-spacing: 0;
   }
   
   /* === PHASE 1: BRAND COLOR UTILITIES === */
@@ -352,7 +352,7 @@ html {
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.2s ease;
-    letter-spacing: 0.3px;
+    letter-spacing: 0;
   }
   
   .btn-primary:hover {
@@ -547,14 +547,14 @@ html {
     font-size: 2rem;
     line-height: 1.05;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
   }
 
   .mobile-section-title {
     font-size: 1.375rem;
     line-height: 1.2;
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
 
   .mobile-card-title {

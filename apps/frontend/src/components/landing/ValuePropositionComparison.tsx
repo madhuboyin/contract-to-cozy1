@@ -72,7 +72,7 @@ export default function ValuePropositionComparison() {
         <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xl bg-white">
           
           {/* Table Header */}
-          <div className="grid grid-cols-3 font-bold text-sm sm:text-base bg-gray-100 text-gray-700 uppercase tracking-wider">
+          <div className="grid grid-cols-3 font-bold text-sm sm:text-base bg-gray-100 text-gray-700 tracking-normal">
             <div className="p-4 border-r border-gray-200">Key Feature</div>
             <div className="p-4 border-r border-gray-200 text-center text-blue-600">The Cozy Way</div>
             <div className="p-4 text-center text-red-600">The Old Way</div>

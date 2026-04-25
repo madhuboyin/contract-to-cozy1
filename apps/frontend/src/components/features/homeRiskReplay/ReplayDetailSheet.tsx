@@ -56,7 +56,7 @@ function DetailSection({
 }) {
   return (
     <section className="space-y-2.5">
-      <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+      <h3 className="text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
         {title}
       </h3>
       {children}

@@ -274,7 +274,7 @@ function CompactStatsRow({
         href={`/dashboard/maintenance?propertyId=${selectedPropertyId}`}
         className="group rounded-xl border border-gray-200 bg-white px-4 py-3 transition-all hover:border-gray-300 hover:shadow-sm"
       >
-        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+        <p className="text-[11px] font-medium text-gray-500 tracking-normal">
           Active
         </p>
         <p className="text-xl font-bold text-gray-900 mt-0.5">
@@ -289,7 +289,7 @@ function CompactStatsRow({
 
       {/* Estimated Costs */}
       <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+        <p className="text-[11px] font-medium text-gray-500 tracking-normal">
           Est. Costs
         </p>
         <p className="text-xl font-bold text-gray-900 mt-0.5">
@@ -302,7 +302,7 @@ function CompactStatsRow({
 
       {/* Completion */}
       <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+        <p className="text-[11px] font-medium text-gray-500 tracking-normal">
           Completed
         </p>
         <div className="flex items-baseline gap-1.5 mt-0.5">

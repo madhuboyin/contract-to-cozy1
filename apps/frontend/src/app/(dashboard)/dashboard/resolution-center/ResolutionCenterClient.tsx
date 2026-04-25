@@ -139,7 +139,7 @@ const SOURCE_LABEL_OVERRIDES: Record<string, string> = {
   riskassessmentreport: 'Risk Assessment Report',
   homesignaldata: 'Home Signal Data',
   providerbookingworkflow: 'Provider Booking Workflow',
-  ctcintelligence: 'CtC Intelligence',
+  ctcintelligence: 'Home signals',
 };
 
 function normalizeUpperText(value: string | null | undefined): string {
@@ -199,7 +199,7 @@ function formatLastUpdated(items: any[], fallbackTs?: number): string {
 
 function humanizeSourceLabel(source: string | null | undefined): string {
   const raw = String(source ?? '').trim();
-  if (!raw) return 'CtC Intelligence';
+  if (!raw) return 'Home signals';
   const normalizedKey = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (SOURCE_LABEL_OVERRIDES[normalizedKey]) return SOURCE_LABEL_OVERRIDES[normalizedKey];
 
@@ -743,7 +743,7 @@ function CompletionCelebration({
         </div>
 
         <div className="mt-6 rounded-2xl bg-slate-50 border border-slate-100 p-4 space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="text-[10px] font-bold tracking-normal text-slate-400">
             What this means
           </p>
           <p className="text-sm text-slate-700 flex items-center gap-2">
@@ -968,7 +968,7 @@ function TriageActionCard({
           </div>
 
           <div className="mt-3 text-center">
-            <h3 className="line-clamp-2 text-[18px] font-semibold leading-[1.2] tracking-[-0.01em] text-slate-950">
+            <h3 className="line-clamp-2 text-[18px] font-semibold leading-[1.2] tracking-normal text-slate-950">
               {assetTitle}
             </h3>
             {displaySubtitle ? <p className="mt-1 text-[15px] text-slate-600">{displaySubtitle}</p> : null}
@@ -985,7 +985,7 @@ function TriageActionCard({
         {/* Center panel */}
         <div className="space-y-4 px-5 py-4">
           <div>
-            <h4 className="text-[18px] font-semibold leading-[1.3] tracking-[-0.01em] text-slate-950">
+            <h4 className="text-[18px] font-semibold leading-[1.3] tracking-normal text-slate-950">
               {issueHeadline}
             </h4>
             <p className="mt-0.5 text-xs font-medium text-slate-500">{cardSubhead}</p>
@@ -1062,7 +1062,7 @@ function TriageActionCard({
           )}
 
           <div className="flex flex-wrap gap-2">
-            {(sourceLabels.length > 0 ? sourceLabels : ['CtC Intelligence']).map((source) => (
+            {(sourceLabels.length > 0 ? sourceLabels : ['Home signals']).map((source) => (
               <SourceChip key={source} source={source} className="bg-slate-100/80 text-slate-500" />
             ))}
           </div>
@@ -1140,7 +1140,7 @@ function EmptyQueueState({ isCompletedFilter }: { isCompletedFilter: boolean }) 
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
         <Button asChild variant="outline" className="border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50">
-          <Link href="/dashboard/oracle">Run Full Scan</Link>
+          <Link href="/dashboard/oracle">Run full scan</Link>
         </Button>
         <Button asChild variant="ghost" className="text-slate-600 hover:bg-white">
           <Link href="/dashboard/actions">Open Task List</Link>
@@ -1756,7 +1756,7 @@ export default function ResolutionCenterClient() {
             icon={<Wrench className="h-5 w-5" />}
             title="Resolution Center"
             description="See the cost of waiting across urgent issues, provider work, preventive maintenance, coverage gaps, and completed outcomes in one ranked action queue."
-            action={<SmartCTA onClick={handleRunFullScan}>Run Full Scan</SmartCTA>}
+            action={<SmartCTA onClick={handleRunFullScan}>Run full scan</SmartCTA>}
             meta={<TrustMetaRow items={[latestUpdateLabel, `${highConfidenceCount} high-confidence items`, 'Costs shown as potential exposure']} />}
           >
             <div className="grid gap-3 md:grid-cols-3">

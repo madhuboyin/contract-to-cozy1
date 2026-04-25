@@ -104,7 +104,7 @@ export default function InsuranceTrendClient() {
       title="Insurance Cost Trend"
       subtitle="Based on local trends — not your actual policy data."
       introAction={
-        /* Mobile-only Home Tools trigger — hidden on desktop */
+        /* Mobile-only Home tools trigger — hidden on desktop */
         <HomeToolsRail
           propertyId={propertyId}
           context="insurance-trend"
@@ -132,7 +132,7 @@ export default function InsuranceTrendClient() {
         </div>
       )}
 
-      {/* ── Tool identity + Related Tools — desktop only, above NBA ──── */}
+      {/* ── Tool identity + Related tools — desktop only, above NBA ──── */}
       <HomeToolHeader
         toolId="insurance-trend"
         propertyId={propertyId}
@@ -148,7 +148,7 @@ export default function InsuranceTrendClient() {
           aria-label="Next best action"
           className="rounded-[20px] border border-[hsl(var(--mobile-border-subtle))] bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.10),transparent_55%),white] p-5 shadow-[0_4px_20px_rgba(15,23,42,0.07)] dark:border-slate-700/70 dark:bg-slate-900/70 md:p-6"
         >
-          <p className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-teal-700 dark:text-teal-400">
+          <p className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold tracking-normal text-teal-700 dark:text-teal-400">
             <Sparkles className="h-3.5 w-3.5" />
             Next Best Action
           </p>
@@ -211,7 +211,7 @@ export default function InsuranceTrendClient() {
             {/* Right column — supporting panel, desktop only */}
             {isOverpaying ? (
               <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-emerald-200/60 lg:bg-emerald-50/40 lg:px-5 lg:py-5 dark:lg:border-emerald-700/40 dark:lg:bg-emerald-950/20">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                <div className="text-[10px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
                   Potential savings
                 </div>
                 <div className="mt-1.5 text-[2rem] font-bold leading-none text-slate-800 dark:text-slate-200">
@@ -223,7 +223,7 @@ export default function InsuranceTrendClient() {
               </div>
             ) : (
               <div className="hidden lg:flex lg:flex-col lg:justify-center lg:rounded-2xl lg:border lg:border-emerald-200/60 lg:bg-emerald-50/40 lg:px-5 lg:py-5 dark:lg:border-emerald-700/40 dark:lg:bg-emerald-950/20">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                <div className="text-[10px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
                   vs local average
                 </div>
                 <div className="mt-1.5 text-[1.75rem] font-semibold leading-none tabular-nums text-emerald-800 dark:text-emerald-300">
@@ -582,7 +582,7 @@ export default function InsuranceTrendClient() {
 
             {(data?.meta?.dataSources?.length ?? 0) > 0 && (
               <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/50 dark:bg-slate-900/48">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <p className="text-[10px] font-semibold tracking-normal text-slate-400 dark:text-slate-500">
                   Data sources
                 </p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">

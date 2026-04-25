@@ -118,7 +118,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             <div className="max-w-[60rem] space-y-5">
               <div className="flex flex-wrap items-center gap-2.5">
                 {article.featured ? (
-                  <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white hover:bg-slate-950">
+                  <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold tracking-normal text-white hover:bg-slate-950">
                     Featured article
                   </Badge>
                 ) : null}
@@ -126,7 +126,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                   <Badge
                     key={category.slug}
                     variant="outline"
-                    className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+                    className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-[9px] font-semibold tracking-normal text-slate-500"
                   >
                     {category.name}
                   </Badge>
@@ -164,7 +164,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                     <Badge
                       key={tag.slug}
                       variant="outline"
-                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.08em] text-slate-500"
+                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[9px] font-medium tracking-normal text-slate-500"
                     >
                       {tag.name}
                     </Badge>
@@ -179,7 +179,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
           <section className={articlePageFrameClass}>
             <div className="max-w-[58rem] space-y-3">
               <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start here</p>
+                <p className="text-[10px] font-semibold tracking-normal text-slate-500">Start here</p>
                 <h2 className="text-lg font-semibold tracking-tight text-slate-950">The clearest next step after reading</h2>
               </div>
               <KnowledgeToolCard toolLink={heroToolLink} propertyId={propertyId} variant="feature" />
@@ -215,7 +215,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             {primaryEndAction || secondaryEndActions.length > 0 ? (
               <section className="space-y-5 border-t border-slate-200/80 pt-10">
                 <div className="space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Put this into motion</p>
+                  <p className="text-[10px] font-semibold tracking-normal text-slate-500">Put this into motion</p>
                   <h2 className="text-[1.55rem] font-semibold tracking-tight text-slate-950 md:text-[1.75rem]">Turn the article into a useful next action</h2>
                   <p className="max-w-2xl text-sm leading-7 text-slate-600">
                     Contract-to-Cozy works best when guidance connects to a practical next step. Start with one action
@@ -230,7 +230,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                 ) : null}
                 {secondaryEndActions.length > 0 ? (
                   <div className="space-y-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Other ways to explore</p>
+                    <p className="text-[10px] font-semibold tracking-normal text-slate-500">Other ways to explore</p>
                     <div className="grid gap-4 md:grid-cols-2">
                       {secondaryEndActions.map((action) =>
                         action.kind === 'tool' ? (
@@ -256,7 +256,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             {nextRecommendedRead ? (
               <section className="space-y-4 border-t border-slate-200/80 pt-6">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Next recommended read</p>
+                  <p className="text-[10px] font-semibold tracking-normal text-slate-500">Next recommended read</p>
                   <h2 className="text-sm font-medium text-slate-900">Keep reading</h2>
                 </div>
                 <Link
@@ -276,7 +276,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
             {railTags.length > 0 ? (
               <section className="space-y-4 border-t border-slate-200/80 pt-6">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Topics</p>
+                  <p className="text-[10px] font-semibold tracking-normal text-slate-500">Topics</p>
                   <h2 className="text-sm font-medium text-slate-900">More in this article</h2>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -284,7 +284,7 @@ export default async function KnowledgeArticlePage({ params, searchParams }: Kno
                     <Badge
                       key={tag.slug}
                       variant="outline"
-                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500"
+                      className="rounded-full border-slate-200 bg-transparent px-2.5 py-1 text-[10px] font-medium tracking-normal text-slate-500"
                     >
                       {tag.name}
                     </Badge>

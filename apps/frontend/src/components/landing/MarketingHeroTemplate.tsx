@@ -32,7 +32,7 @@ export default function MarketingHeroTemplate({
     <section className="relative overflow-hidden border-b border-slate-200/70 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.14),transparent_45%),linear-gradient(175deg,#f8fafc,#ecfeff_52%,#ffffff)] px-4 pb-14 pt-10 sm:px-6 sm:pb-16 sm:pt-12 lg:px-8 lg:pb-20">
       <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-[1.02fr_1fr] lg:gap-12">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-brand-700">
+          <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50/80 px-3 py-1 text-xs font-semibold tracking-normal text-brand-700">
             <ShieldCheck className="h-3.5 w-3.5" />
             {eyebrow || 'Homeowner Intelligence'}
           </div>

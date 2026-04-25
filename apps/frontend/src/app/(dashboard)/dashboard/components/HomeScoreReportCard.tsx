@@ -17,7 +17,7 @@ const CARD_BASE =
   "score-card score-card-status-tinted score-card-status-amber score-card-status-animate flex h-full flex-col gap-[0.6rem] rounded-xl px-[0.9rem] py-[0.85rem] shadow-sm";
 const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
 const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
-const SUPPORT_LABEL = "mb-[2px] block text-[9px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
+const SUPPORT_LABEL = "mb-[2px] block text-[9px] font-medium tracking-normal text-muted-foreground";
 const META_VALUE = "text-[12px] font-medium text-foreground";
 const DESCRIPTION_CLASS =
   "text-[11.5px] text-muted-foreground leading-[1.55] line-clamp-2 min-h-[2.3rem]";
@@ -39,7 +39,7 @@ function getLabel(scoreBand: NormalizedScoreBand) {
   if (scoreBand === "EXCELLENT") return "Excellent";
   if (scoreBand === "GOOD") return "Good";
   if (scoreBand === "FAIR") return "Fair";
-  return "Needs Attention";
+  return "Needs attention";
 }
 
 function getScoreColor(scoreBand: NormalizedScoreBand) {
@@ -119,7 +119,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>Home Health Score</span>
+            <span className={TITLE_CLASS}>Home health score</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -134,7 +134,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>Home Health Score</span>
+            <span className={TITLE_CLASS}>Home health score</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -152,7 +152,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Activity className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>Home Health Score</span>
+            <span className={TITLE_CLASS}>Home health score</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -187,7 +187,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity className={HEADER_ICON} />
-          <span className={TITLE_CLASS}>Home Health Score</span>
+          <span className={TITLE_CLASS}>Home health score</span>
         </div>
         <StatusBadge status={badge.status} customLabel={badge.customLabel} />
       </div>
@@ -204,7 +204,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
           labelFontSize={14}
           labelFontWeight={600}
           labelY={37}
-          ariaLabel={`Home Health Score: ${score} out of 100, ${scoreLabel}`}
+          ariaLabel={`Home health score: ${score} out of 100, ${scoreLabel}`}
         />
         <div className="flex min-w-0 flex-col justify-center">
           <div className={cn("text-[20px] font-bold leading-none", scoreColor)}>{scoreLabel}</div>
@@ -217,7 +217,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
       <p className={DESCRIPTION_CLASS}>{description}</p>
 
       <div className="conf-wrap">
-        <div className="mb-[3px] text-[9px] uppercase tracking-[0.07em] text-muted-foreground">Confidence</div>
+        <div className="mb-[3px] text-[9px] tracking-normal text-muted-foreground">Confidence</div>
         <div className="h-[3px] overflow-hidden rounded bg-border">
           <div
             className={cn("h-full rounded transition-all duration-700", getConfidenceFillColor(confidence))}

@@ -432,7 +432,7 @@ export default function InspectionReportAnalyzer({ propertyId }: Props) {
                       </span>
                       {issue.needsImmediateAction && (
                         <span className="px-2 py-0.5 text-xs font-semibold rounded bg-red-100 text-red-800">
-                          IMMEDIATE ACTION
+                          Immediate action
                         </span>
                       )}
                     </div>

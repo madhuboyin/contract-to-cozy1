@@ -162,7 +162,7 @@ function KpiTile({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-400">
         {label}
       </p>
       <p className={`text-lg font-bold ${valueColor}`}>{value}</p>
@@ -179,7 +179,7 @@ function RadarStatusHero({ data }: { data: RadarStatusAvailable }) {
   return (
     <GlassCard>
       <div className="p-5 sm:p-6">
-        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+        <p className="mb-3 text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
           Refinance Decision
         </p>
 
@@ -248,7 +248,7 @@ function KeyMetricsCard({ data }: { data: RadarStatusAvailable }) {
             </p>
             {data.notQualifiedReasons.length > 0 && (
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <p className="mb-2 text-xs font-medium tracking-normal text-slate-500 dark:text-slate-400">
                   Why not yet
                 </p>
                 <ul className="space-y-1">
@@ -908,14 +908,14 @@ export default function MortgageRefinanceRadarClient() {
       ? `${available.confidenceLevel.toLowerCase()} fit from current loan context`
       : 'Model fit pending evaluation',
     freshnessLabel: trustDateLabel(available?.lastEvaluatedAt, 'Evaluate now to refresh'),
-    sourceLabel: 'Mortgage profile + market rate snapshots + CtC refinance model',
+    sourceLabel: 'Mortgage profile + market rate snapshots + refinance analysis',
   });
 
   return (
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Mortgage Refinance Radar"
       subtitle="Monitor rates and know when refinancing is likely worth the effort."
       trust={trust}
@@ -959,7 +959,7 @@ export default function MortgageRefinanceRadarClient() {
           ),
         } : {
           title: 'No refinance opportunity detected at current rates.',
-          description: 'The model does not see a compelling rate gap right now. Re-evaluate when rates shift for an updated read.',
+          description: 'The current analysis does not see a compelling rate gap right now. Re-evaluate when rates shift for an updated read.',
           impactLabel: 'Window currently closed',
           confidenceLabel: available.confidenceLevel ? `${available.confidenceLevel.toLowerCase()} confidence` : 'Medium confidence',
           primaryAction: (
@@ -1027,7 +1027,7 @@ export default function MortgageRefinanceRadarClient() {
           {available.radarState === 'OPEN' && (
             <div id="refinance-steps-to-act"><GlassCard>
               <div className="p-5 sm:p-6 space-y-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                <p className="text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
                   Steps to act today
                 </p>
                 <p className="text-sm text-slate-700 dark:text-slate-300">
@@ -1059,7 +1059,7 @@ export default function MortgageRefinanceRadarClient() {
           {/* 4. Market context */}
           <section aria-label="Market Context" className="space-y-4">
             <div className="px-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+              <p className="text-[11px] font-semibold tracking-normal text-slate-500 dark:text-slate-400">
                 Market Context
               </p>
             </div>

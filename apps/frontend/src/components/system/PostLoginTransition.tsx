@@ -122,7 +122,7 @@ export default function PostLoginTransition({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -3 }}
                 transition={{ duration: 0.28, ease: 'easeInOut' }}
-                className="text-[10.5px] font-medium tracking-wide text-teal-600/75 dark:text-teal-400/65"
+                className="text-[10.5px] font-medium tracking-normal text-teal-600/75 dark:text-teal-400/65"
               >
                 {ROTATING_MESSAGES[messageIndex]}
               </motion.p>

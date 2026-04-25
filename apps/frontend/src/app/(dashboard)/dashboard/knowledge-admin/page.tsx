@@ -52,7 +52,7 @@ export default function KnowledgeAdminPage() {
   }
 
   if (user.role !== 'ADMIN') {
-    return <AdminAccessState title="Admin access required" description="Only CtC admins can manage Knowledge Hub articles." />;
+    return <AdminAccessState title="Admin access required" description="Only platform admins can manage Knowledge Hub articles." />;
   }
 
   if (!isOnline) {
@@ -81,8 +81,8 @@ export default function KnowledgeAdminPage() {
       }
       chips={
         <>
-          <Badge className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]">Knowledge Admin</Badge>
-          <Badge variant="outline" className="rounded border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+          <Badge className="rounded px-2 py-0.5 text-[10px] font-semibold tracking-normal">Knowledge Admin</Badge>
+          <Badge variant="outline" className="rounded border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
             Internal
           </Badge>
           <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
@@ -146,7 +146,7 @@ export default function KnowledgeAdminPage() {
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-slate-900">{article.title}</span>
                               {article.featured ? (
-                                <Badge className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-700 hover:bg-sky-100">
+                                <Badge className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[10px] font-semibold tracking-normal text-sky-700 hover:bg-sky-100">
                                   Featured
                                 </Badge>
                               ) : null}
@@ -155,7 +155,7 @@ export default function KnowledgeAdminPage() {
                         </TableCell>
                         <TableCell className="font-mono text-xs text-slate-500">{article.slug}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                          <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
                             {article.status.replace(/_/g, ' ')}
                           </Badge>
                         </TableCell>

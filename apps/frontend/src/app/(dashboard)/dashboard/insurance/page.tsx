@@ -383,7 +383,7 @@ const PolicyForm = ({ initialData, properties, providerSuggestions, prefill, onS
         </div>
 
         <section className="space-y-2">
-          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Policy Details</h3>
+          <h3 className="text-[13px] font-semibold tracking-normal text-[#4B5563]">Policy Details</h3>
           <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
             <div className="grid gap-2">
               <Label htmlFor="carrierName" className={COVERAGE_MODAL_LABEL_CLASS}>
@@ -454,7 +454,7 @@ const PolicyForm = ({ initialData, properties, providerSuggestions, prefill, onS
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Coverage Period</h3>
+          <h3 className="text-[13px] font-semibold tracking-normal text-[#4B5563]">Coverage Period</h3>
           <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
             <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
               <div className="grid content-start gap-2">
@@ -499,7 +499,7 @@ const PolicyForm = ({ initialData, properties, providerSuggestions, prefill, onS
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Coverage Target</h3>
+          <h3 className="text-[13px] font-semibold tracking-normal text-[#4B5563]">Coverage Target</h3>
           <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
             <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
               <div className="grid content-start gap-2">
@@ -894,15 +894,15 @@ export default function InsurancePage() {
               </div>
               <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(135deg,rgba(37,99,235,0.06),rgba(245,158,11,0.08),rgba(239,68,68,0.06))]">
                 <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-indigo-700">Active</p>
+                  <p className="text-[11px] tracking-normal text-indigo-700">Active</p>
                   <p className="text-lg font-semibold text-slate-900">{activePolicyCount}</p>
                 </div>
                 <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-amber-700">Renewing</p>
+                  <p className="text-[11px] tracking-normal text-amber-700">Renewing</p>
                   <p className="text-lg font-semibold text-slate-900">{expiringSoonPolicyCount}</p>
                 </div>
                 <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">Expired</p>
+                  <p className="text-[11px] tracking-normal text-rose-700">Expired</p>
                   <p className="text-lg font-semibold text-slate-900">{expiredPolicyCount}</p>
                 </div>
               </div>
@@ -934,7 +934,7 @@ export default function InsurancePage() {
                     <div className="space-y-2.5 px-4 pt-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-[13px] font-semibold uppercase tracking-[0.06em] text-slate-800">
+                          <p className="truncate text-[13px] font-semibold tracking-normal text-slate-800">
                             {policy.carrierName}
                           </p>
                           <p className="mt-1 line-clamp-2 text-xl font-semibold leading-tight text-slate-900">
@@ -1039,7 +1039,7 @@ export default function InsurancePage() {
                         </div>
                         {meta.status !== 'active' ? (
                           <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Cozy Insight</p>
+                            <p className="text-[11px] tracking-normal text-slate-500">Cozy Insight</p>
                             <p className="mt-1 text-sm text-slate-700">
                               {meta.status === 'expired'
                                 ? 'This policy appears lapsed. Add a replacement policy to keep protection current.'

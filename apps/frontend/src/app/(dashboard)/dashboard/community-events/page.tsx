@@ -147,7 +147,7 @@ export default function CommunityPage() {
       summary={
         <MobileCard variant="compact" className="flex items-center justify-between gap-3">
           <div>
-            <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500">Coverage area</p>
+            <p className="mb-0 text-xs tracking-normal text-slate-500">Coverage area</p>
             <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">{locationLabel}</p>
           </div>
           <StatusChip tone="info">Live feed</StatusChip>
@@ -155,7 +155,7 @@ export default function CommunityPage() {
       }
       filters={
         <MobileFilterSurface className="space-y-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">Sections</p>
+          <p className="text-[11px] font-medium tracking-normal text-slate-500">Sections</p>
           <div className="inline-flex w-full gap-1 rounded-xl bg-slate-100 p-1">
             <TabButton label="Events" icon={<Calendar className="h-3.5 w-3.5" />} active={tab === 'events'} onClick={() => setTab('events')} />
             <TabButton label="Trash" icon={<Trash2 className="h-3.5 w-3.5" />} active={tab === 'trash'} onClick={() => setTab('trash')} />

@@ -172,7 +172,7 @@ export const HomeBuyerDashboard = ({
               
               <div className="absolute top-4 right-16">
                 <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
-                  NEW FOR HOME BUYERS
+                  New for home buyers
                 </span>
               </div>
               
@@ -216,7 +216,7 @@ export const HomeBuyerDashboard = ({
               
               <div className="absolute top-4 right-16">
                 <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
-                  NEW FOR HOME BUYERS
+                  New for home buyers
                 </span>
               </div>
               

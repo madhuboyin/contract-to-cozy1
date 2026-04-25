@@ -100,7 +100,7 @@ export function PageHero({
               {eyebrow}
             </p>
           </div>
-          <h1 className="mb-0 text-[2rem] font-semibold leading-[1.08] tracking-[-0.02em] text-slate-950 md:text-[2.4rem]">
+          <h1 className="mb-0 text-[2rem] font-semibold leading-[1.08] tracking-normal text-slate-950 md:text-[2.4rem]">
             {title}
           </h1>
           <p className="mb-0 mt-3 max-w-2xl text-[15px] leading-6 text-slate-600 md:text-base">
@@ -130,8 +130,8 @@ export function MetricTile({
 }) {
   return (
     <PremiumCard tone={tone} className={cn('p-4', className)}>
-      <p className="mb-1 text-[11px] font-semibold text-slate-500">{label}</p>
-      <div className="text-2xl font-semibold tracking-[-0.02em] text-slate-950">{value}</div>
+      <p className="mb-1 text-[11px] font-semibold tracking-normal text-slate-500">{label}</p>
+      <div className="text-2xl font-semibold tracking-normal text-slate-950">{value}</div>
       {hint ? <p className="mb-0 mt-1 text-xs leading-5 text-slate-600">{hint}</p> : null}
     </PremiumCard>
   );
@@ -222,7 +222,7 @@ export function EmptyStatePremium({
       <div className={cn('mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border', toneMap[tone].icon)}>
         <CheckCircle2 className="h-7 w-7" />
       </div>
-      <h3 className="mb-0 text-xl font-semibold tracking-[-0.01em] text-slate-950">{title}</h3>
+      <h3 className="mb-0 text-xl font-semibold tracking-normal text-slate-950">{title}</h3>
       <p className="mx-auto mb-0 mt-2 max-w-md text-sm leading-6 text-slate-600">{description}</p>
       {action ? <div className="mt-6">{action}</div> : null}
     </PremiumCard>

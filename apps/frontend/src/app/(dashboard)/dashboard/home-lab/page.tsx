@@ -269,7 +269,7 @@ export default function HomeLabPage() {
       {/* Header Section */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-brand-600 font-bold text-[10px] uppercase tracking-widest">
+          <div className="flex items-center gap-2 text-brand-600 font-bold text-[10px] tracking-normal">
             <LayoutGrid className="h-3.5 w-3.5" />
             Home Lab
           </div>
@@ -347,7 +347,7 @@ export default function HomeLabPage() {
       {/* Footer Note */}
       <div className="rounded-2xl bg-teal-50/50 border border-brand-100 p-6 text-center">
         <p className="text-sm text-brand-800 font-medium">
-          New expert tools are added monthly based on the latest data from the CtC intelligence engine.
+          New expert tools are added monthly based on the latest home data and product signals.
         </p>
       </div>
     </div>

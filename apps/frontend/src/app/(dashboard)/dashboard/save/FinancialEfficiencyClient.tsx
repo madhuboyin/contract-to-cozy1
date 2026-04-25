@@ -63,7 +63,7 @@ function StatusBadge({
   return (
     <div
       className={cn(
-        'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
+        'px-2 py-0.5 rounded-full text-[10px] font-bold tracking-normal',
         status === 'positive'
           ? 'bg-emerald-100 text-emerald-700'
           : status === 'warning'
@@ -175,7 +175,7 @@ export default function FinancialEfficiencyClient() {
         icon={<PieChart className="h-5 w-5" />}
         title={`${potentialSavings > 0 ? `$${potentialSavings.toLocaleString()}` : 'Elite'} annual savings intelligence for your home.`}
         description="A fintech-grade view of insurance optimization, hidden asset programs, refinance timing, energy waste, taxes, and equity momentum."
-        action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan Policy</SmartCTA>}
+        action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan policy</SmartCTA>}
         meta={
           <TrustMetaRow
             items={[
@@ -343,7 +343,7 @@ export default function FinancialEfficiencyClient() {
                   onClick={() => setIsScannerOpen(true)}
                   className="bg-white text-brand-900 hover:bg-brand-50 rounded-xl font-bold h-10 px-6 text-sm"
                 >
-                  Scan Policy
+                  Scan policy
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -487,7 +487,7 @@ export default function FinancialEfficiencyClient() {
             <div className="lg:col-span-2 rounded-2xl border-2 border-slate-50 bg-white p-6 space-y-6">
               <div className="flex items-end justify-between">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  <p className="text-[10px] font-bold tracking-normal text-slate-400">
                     Current Valuation
                   </p>
                   <div className="flex items-baseline gap-2">
@@ -507,7 +507,7 @@ export default function FinancialEfficiencyClient() {
               <div className="h-48 w-full bg-slate-50/50 rounded-xl border border-dashed border-slate-200 flex items-center justify-center">
                 <div className="flex flex-col items-center space-y-2 opacity-40">
                   <BarChart3 className="h-8 w-8" />
-                  <span className="text-[10px] font-bold uppercase tracking-tighter">
+                  <span className="text-[10px] font-bold tracking-tighter">
                     Market Trend Engine Active
                   </span>
                 </div>
@@ -522,7 +522,7 @@ export default function FinancialEfficiencyClient() {
             <div className="space-y-4">
               <div className="p-5 rounded-2xl bg-slate-900 text-white space-y-4">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-brand-400 uppercase tracking-tight">
+                  <h4 className="text-sm font-bold text-brand-400 tracking-tight">
                     Sell / Hold / Rent
                   </h4>
                   <p className="text-2xl font-bold">Analysis Ready</p>
@@ -545,7 +545,7 @@ export default function FinancialEfficiencyClient() {
               </div>
 
               <div className="p-5 rounded-2xl border-2 border-slate-50 bg-white space-y-4">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <h4 className="text-xs font-bold text-slate-400 tracking-normal">
                   Wealth Alerts
                 </h4>
                 <div className="space-y-3">

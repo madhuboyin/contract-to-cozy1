@@ -78,8 +78,8 @@ export default function ProviderDashboardLayout({
                 Contract to Cozy
               </Link>
               <div className="mt-0.5 flex items-center gap-1.5">
-                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">Provider Ops</p>
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                <p className="text-[10px] font-medium tracking-normal text-slate-500">Provider Ops</p>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600">
                   Dense Mode
                 </span>
               </div>
@@ -136,7 +136,7 @@ export default function ProviderDashboardLayout({
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold uppercase tracking-[0.08em] transition-colors ${
+                  className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold tracking-normal transition-colors ${
                     active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
@@ -158,7 +158,7 @@ export default function ProviderDashboardLayout({
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`inline-flex min-h-[40px] items-center gap-2 rounded-md px-3 text-xs font-semibold uppercase tracking-[0.08em] ${
+                    className={`inline-flex min-h-[40px] items-center gap-2 rounded-md px-3 text-xs font-semibold tracking-normal ${
                       active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
                     }`}
                   >

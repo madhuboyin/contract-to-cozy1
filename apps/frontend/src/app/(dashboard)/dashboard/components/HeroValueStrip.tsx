@@ -43,7 +43,7 @@ export function HeroValueStrip({ tiles, momentumLabel }: HeroValueStripProps) {
   return (
     <section className="mt-3 animate-fade-in-up rounded-2xl border border-slate-200/80 bg-white/90 p-2.5 shadow-sm sm:p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+        <p className="text-[11px] font-semibold tracking-normal text-slate-500">
           Home At A Glance
         </p>
         {momentumLabel ? (
@@ -66,7 +66,7 @@ export function HeroValueStrip({ tiles, momentumLabel }: HeroValueStripProps) {
                   <Icon className="h-3.5 w-3.5" />
                 </div>
                 {tile.delta ? (
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">
+                  <span className="text-[10px] font-semibold tracking-normal text-slate-600">
                     {tile.delta}
                   </span>
                 ) : null}

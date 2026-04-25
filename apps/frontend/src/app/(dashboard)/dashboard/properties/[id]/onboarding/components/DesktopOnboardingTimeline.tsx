@@ -36,7 +36,7 @@ export default function DesktopOnboardingTimeline({
   return (
     <aside className="hidden md:block md:sticky md:top-6 md:self-start">
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.11em] text-slate-500">
+        <p className="mb-3 text-xs font-semibold tracking-normal text-slate-500">
           Setup timeline
         </p>
         <ol className="space-y-0">
@@ -90,11 +90,11 @@ export default function DesktopOnboardingTimeline({
                   </span>
 
                   <div className="flex items-center justify-between gap-2">
-                    <p className={cn('text-xs font-semibold uppercase tracking-wide', isActive ? 'text-violet-700' : 'text-slate-500')}>
+                    <p className={cn('text-xs font-semibold tracking-normal', isActive ? 'text-violet-700' : 'text-slate-500')}>
                       Step {step.step}
                     </p>
                     {isComplete ? (
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-emerald-700">
                         Done
                       </span>
                     ) : null}

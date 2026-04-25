@@ -32,7 +32,7 @@ interface HomeHealthNudgeProps {
 }
 
 const HOME_NUDGE_QUERY_KEY = 'home-health-nudge';
-const INSURANCE_PROTECTION_GAP_QUERY_KEY = 'insurance-protection-gap';
+const INSURANCE_ProtectION_GAP_QUERY_KEY = 'insurance-protection-gap';
 const HOME_EQUITY_QUERY_KEY = 'home-equity-summary';
 const PROPERTY_QUERY_KEY = 'property';
 const PROPERTIES_QUERY_KEY = 'properties';
@@ -94,7 +94,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
 
     toast({
       title: 'Streak Milestone!',
-      description: `Your Home Health Multiplier is now ${multiplier.toFixed(2)}x.`,
+      description: `Your Home health Multiplier is now ${multiplier.toFixed(2)}x.`,
     });
   }, [toast]);
 
@@ -314,7 +314,7 @@ export function HomeHealthNudge({ propertyId }: HomeHealthNudgeProps) {
       await Promise.all([
         invalidateAfterNudgeAction(),
         queryClient.invalidateQueries({
-          queryKey: [INSURANCE_PROTECTION_GAP_QUERY_KEY, propertyId],
+          queryKey: [INSURANCE_ProtectION_GAP_QUERY_KEY, propertyId],
         }),
       ]);
     } catch (err) {

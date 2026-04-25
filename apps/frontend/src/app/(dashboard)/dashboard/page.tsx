@@ -176,8 +176,8 @@ const consolidateUrgentActions = (
         });
     });
 
-    // 2. Process Health Score Insights (Critical items only)
-    const CRITICAL_INSIGHT_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
+    // 2. Process Health score Insights (Critical items only)
+    const CRITICAL_INSIGHT_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
     
     properties.forEach(p => {
         p.healthScore?.insights
@@ -594,7 +594,7 @@ export default function DashboardPage() {
         description={
           data.activeIncidents.length > 0
             ? 'A high-priority home signal changed overnight. One focused action can reduce avoidable cost exposure.'
-            : 'Your home intelligence is synced. CtC is watching risk, savings, maintenance, and documents so the next move is clear.'
+            : 'Your home profile is synced. We are watching risk, savings, maintenance, and documents so the next move is clear.'
         }
         action={
           <SmartCTA
@@ -602,7 +602,7 @@ export default function DashboardPage() {
             title="Refresh all home signals and re-rank your issues"
             className="h-12"
           >
-            Run Full Scan
+            Run full scan
           </SmartCTA>
         }
         meta={
@@ -632,7 +632,7 @@ export default function DashboardPage() {
         trust={{
           confidenceLabel: 'High confidence',
           freshnessLabel: 'Verified from live signals',
-          sourceLabel: 'CtC Intelligence',
+          sourceLabel: 'Home signals',
           rationale: 'Ranked by financial upside, risk prevention, and data confidence.'
         }}
         className="border border-teal-200/70 shadow-[var(--ctc-shadow-card)]"

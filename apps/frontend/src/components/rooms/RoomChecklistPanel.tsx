@@ -413,7 +413,7 @@ export default function RoomChecklistPanel({ propertyId, roomId, roomType, bedro
             return (
               <div key={frequency} className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{FREQUENCY_LABELS[frequency]}</span>
+                  <span className="text-[10px] font-semibold tracking-normal text-gray-400">{FREQUENCY_LABELS[frequency]}</span>
                   <div className="h-px flex-1 bg-gray-100" />
                   <span className="text-[10px] text-gray-400">{tasks.length}</span>
                 </div>

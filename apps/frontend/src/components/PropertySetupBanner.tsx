@@ -77,7 +77,7 @@ export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProp
             href="/dashboard/properties/new"
             className="px-4 py-2.5 sm:py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors whitespace-nowrap min-h-[44px] sm:min-h-0 touch-manipulation"
           >
-            Add Property Now
+            Add property now
           </Link>
           
           <button

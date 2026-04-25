@@ -403,7 +403,7 @@ const MILESTONE_CONFIG: Record<
   },
   scan: {
     title: 'Room Scanned!',
-    subtitle: 'Your Room Health Score is ready to view.',
+    subtitle: 'Your Room Health score is ready to view.',
     accent: 'bg-blue-50 border-blue-100',
     ring: 'ring-blue-200',
   },

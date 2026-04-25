@@ -78,7 +78,7 @@ export default function ToolWorkspaceTemplate({
           {children}
         </div>
 
-        {/* Sidebar column: rail (HomeToolHeader + RelatedTools on desktop, Home Tools sheet trigger on mobile) */}
+        {/* Sidebar column: rail (HomeToolHeader + RelatedTools on desktop, Home tools sheet trigger on mobile) */}
         {rail ? (
           <aside>
             <MobileFilterSurface className="lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:rounded-none">

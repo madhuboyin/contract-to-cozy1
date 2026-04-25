@@ -617,7 +617,7 @@ function ScoreRing({ score, inverse = false }: { score: number; inverse?: boolea
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <div className={cx("text-5xl font-semibold leading-none tracking-tight tabular-nums", valueClass)}>{normalized}</div>
-        <div className={cx("mt-1 text-[11px] font-medium uppercase tracking-[0.1em]", labelClass)}>/100</div>
+        <div className={cx("mt-1 text-[11px] font-medium tracking-normal", labelClass)}>/100</div>
       </div>
     </div>
   );
@@ -1148,12 +1148,12 @@ export default function HomeScoreReportPage() {
 
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 p-3">
-              <p className="text-[11px] uppercase tracking-[0.09em] text-rose-700">Top risk</p>
+              <p className="text-[11px] tracking-normal text-rose-700">Top risk</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">{decisionRiskLabel}</p>
               <p className="mt-1 text-sm text-slate-700">{decisionRiskDetail}</p>
             </div>
             <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-3">
-              <p className="text-[11px] uppercase tracking-[0.09em] text-emerald-700">Top action</p>
+              <p className="text-[11px] tracking-normal text-emerald-700">Top action</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">{decisionActionTitle}</p>
               <p className="mt-1 text-sm text-slate-700">{decisionActionDetail}</p>
             </div>
@@ -1191,7 +1191,7 @@ export default function HomeScoreReportPage() {
           <summary className="list-none cursor-pointer px-5 py-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Full Report Mode</p>
+                <p className="text-[11px] tracking-normal text-slate-500">Full Report Mode</p>
                 <p className="mt-1 text-sm font-semibold text-slate-900">
                   Full report detail, methodology, and supporting evidence
                 </p>
@@ -1203,7 +1203,7 @@ export default function HomeScoreReportPage() {
           <div className="space-y-5 border-t border-slate-200 px-4 py-4 md:px-5 md:py-5">
         <section className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-6 py-4">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Report Header</p>
+            <p className="text-[10px] tracking-normal text-slate-500">Report Header</p>
             <h1 className="mt-2 text-[2rem] font-semibold tracking-tight text-slate-950">
               {meta?.reportTitle || "Contract-to-Cozy Certified HomeScore Report"}
             </h1>
@@ -1221,7 +1221,7 @@ export default function HomeScoreReportPage() {
               { label: "Year Built", value: meta?.yearBuilt || propertyQuery.data?.yearBuilt || "Not available" },
             ].map((item) => (
               <div key={item.label} className="border-t border-slate-200 px-6 py-3 sm:[&:nth-child(odd)]:border-r lg:[&:not(:nth-child(3n))]:border-r">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">{item.label}</p>
+                <p className="text-[10px] tracking-normal text-slate-500">{item.label}</p>
                 <p className="mt-1 text-sm font-medium text-slate-900">{item.value}</p>
               </div>
             ))}
@@ -1262,22 +1262,22 @@ export default function HomeScoreReportPage() {
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-300">Money at Risk (3 years)</p>
+                  <p className="text-[11px] tracking-normal text-slate-300">Money at Risk (3 years)</p>
                   <p className="mt-1 text-[2rem] font-semibold leading-none text-white">
                     {formatCurrency(executive?.moneyAtRiskHeadline ?? financialExposure?.headlineMoneyAtRisk)}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-300">Estimated repair exposure</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-300">Confidence</p>
+                  <p className="text-[11px] tracking-normal text-slate-300">Confidence</p>
                   <p className="mt-1 text-xl font-semibold leading-none text-white">{formatConstantLabel(executive?.confidenceLevel || report.confidence)}</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-300">Value Protection</p>
+                  <p className="text-[11px] tracking-normal text-slate-300">Value Protection</p>
                   <p className="mt-1 text-xl font-semibold leading-none text-white">{executive?.valueProtectionScore ?? report.homeScore}/100</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-white/5 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-300">Weekly Delta</p>
+                  <p className="text-[11px] tracking-normal text-slate-300">Weekly Delta</p>
                   <p className="mt-1 inline-flex items-center gap-1 text-xl font-semibold leading-none text-white">
                     <TrendingUp className="h-4 w-4" />
                     {report.deltaFromPreviousWeek === null ? "No change" : `${report.deltaFromPreviousWeek > 0 ? "+" : ""}${report.deltaFromPreviousWeek.toFixed(1)}`}
@@ -1329,7 +1329,7 @@ export default function HomeScoreReportPage() {
         <section className="border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">HomeScore Snapshot</p>
+              <p className="text-[10px] tracking-normal text-slate-500">HomeScore Snapshot</p>
               <p className="mt-1.5 text-sm text-slate-600">{meta?.propertyAddress || propertyQuery.data?.address}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge variant="outline" className={gradeBadgeClass(executive?.grade || "F")}>
@@ -1453,7 +1453,7 @@ export default function HomeScoreReportPage() {
               <div className="space-y-4">
                 {rankedNegativeDrivers.length > 0 ? (
                   <div className="space-y-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Top negative drivers</p>
+                    <p className="text-xs tracking-normal text-slate-500">Top negative drivers</p>
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {rankedNegativeDrivers.map((driver) => (
                         <div key={driver.id} className="border border-slate-200 bg-white p-4">
@@ -1491,7 +1491,7 @@ export default function HomeScoreReportPage() {
                 ) : null}
                 {rankedPositiveDrivers.length > 0 ? (
                   <div className="space-y-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Positive contributors</p>
+                    <p className="text-xs tracking-normal text-slate-500">Positive contributors</p>
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {rankedPositiveDrivers.slice(0, 3).map((driver) => (
                         <div key={driver.id} className="border border-slate-200 bg-slate-50 p-4">
@@ -1572,7 +1572,7 @@ export default function HomeScoreReportPage() {
                       onClick={() => trackEvent("TIMELINE_INTERACTION", "home-timeline", { eventId: event.id })}
                     >
                       {showYearAnchor ? (
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{yearAnchor}</p>
+                        <p className="mb-2 text-[11px] font-semibold tracking-normal text-slate-500">{yearAnchor}</p>
                       ) : null}
                       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-4">
                         <div className="min-w-0">
@@ -1621,7 +1621,7 @@ export default function HomeScoreReportPage() {
                       <div className="space-y-3">
                         {Object.entries(tieredTimeline.groupedTierTwo).map(([groupLabel, events]) => (
                           <div key={groupLabel} className="rounded-md border border-slate-200/70 bg-white px-3 py-2.5">
-                            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                            <p className="text-[11px] tracking-normal text-slate-500">
                               {groupLabel} ({events.length})
                             </p>
                             <ul className="mt-2 space-y-2">
@@ -1678,7 +1678,7 @@ export default function HomeScoreReportPage() {
               className="rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 print:break-inside-avoid"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">System Risk Overview</h3>
+                <h3 className="text-[11px] font-semibold tracking-normal text-slate-600">System Risk Overview</h3>
                 <p className="text-[11px] text-slate-500">{systemHealthRows.length} systems reviewed</p>
               </div>
               <p className="mt-1 text-[11px] text-slate-500">Based on lifecycle estimates and currently reported system data.</p>
@@ -1715,7 +1715,7 @@ export default function HomeScoreReportPage() {
                   const countLabel = `${group.summary.count} system${group.summary.count === 1 ? "" : "s"}`;
                   return (
                     <div key={group.key} role="listitem" className={cx("rounded-md border px-3 py-2", group.tone)}>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-700">{group.label}</p>
+                      <p className="text-[11px] font-semibold tracking-normal text-slate-700">{group.label}</p>
                       <p className="mt-1 text-base font-semibold leading-none text-slate-950 tabular-nums">{countLabel}</p>
                       <p className="mt-1 text-xs leading-5 text-slate-700">{formatSystemBucketNames(group.summary.systems)}</p>
                       <p className="sr-only">
@@ -1730,7 +1730,7 @@ export default function HomeScoreReportPage() {
               <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                  <tr className="border-b border-slate-200 text-left text-[11px] tracking-normal text-slate-500">
                     <th className="w-0 p-0" aria-hidden />
                     <th className="py-2.5 pr-4 pl-4">System</th>
                     <th className="py-2.5 pr-4">Health Status</th>
@@ -1838,7 +1838,7 @@ export default function HomeScoreReportPage() {
           <div className="grid gap-4 lg:grid-cols-[1.1fr,1fr]">
             <div className="space-y-3">
               <div className="rounded-lg border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Money at Risk (3 years)</p>
+                <p className="text-xs tracking-normal text-slate-500">Money at Risk (3 years)</p>
                 <p className="mt-1 text-3xl font-semibold text-slate-950">{formatCurrency(financialExposure.headlineMoneyAtRisk)}</p>
                 <p className="mt-1 text-xs text-slate-600">
                   Estimated exposure range: {formatCurrency(financialExposure.confidenceRangeLow)} - {formatCurrency(financialExposure.confidenceRangeHigh)}
@@ -1932,7 +1932,7 @@ export default function HomeScoreReportPage() {
             </div>
             <div className="space-y-3">
               <div className="rounded-lg border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Confidence score</p>
+                <p className="text-xs tracking-normal text-slate-500">Confidence score</p>
                 <p className="mt-1 text-2xl font-semibold text-slate-950">{report.trustAndVerification?.confidenceScore}/100</p>
                 <p className="mt-1 text-sm text-slate-600">{report.trustAndVerification?.explanation}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -2030,7 +2030,7 @@ export default function HomeScoreReportPage() {
                   className="border border-slate-200 bg-white p-4 text-left transition hover:bg-slate-50"
                   onClick={() => trackEvent("BENCHMARK_INTERACTION", "benchmark-comparison", { source: item.key, available: item.available })}
                 >
-                  <p className="text-xs uppercase tracking-wide text-slate-500">{item.label}</p>
+                  <p className="text-xs tracking-normal text-slate-500">{item.label}</p>
                   <p className="mt-1 text-2xl font-semibold text-slate-900">{item.score}</p>
                   <p className="mt-1 text-xs text-slate-600">
                     {benchmarkDeltaLabel(report.benchmarks.thisHomeScore, item.score)}
@@ -2081,7 +2081,7 @@ export default function HomeScoreReportPage() {
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                        <p className="text-[11px] tracking-normal text-slate-500">
                           Rank #{index + 1}{isTopAction ? " · Recommended" : ""}
                         </p>
                         <p className={cx("text-sm font-semibold text-slate-900", isTopAction && "text-slate-950")}>{action.title}</p>
@@ -2134,21 +2134,21 @@ export default function HomeScoreReportPage() {
             </div>
             <div className="space-y-3">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Score Projection</p>
+                <p className="text-xs tracking-normal text-slate-500">Score Projection</p>
                 <div className="mt-2 flex items-end gap-3">
                   <div>
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Current</p>
+                    <p className="text-[11px] tracking-normal text-slate-500">Current</p>
                     <p className="text-2xl font-semibold text-slate-900">{report.homeScore}</p>
                   </div>
                   <span className="pb-1 text-lg text-slate-400">→</span>
                   <div>
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Potential</p>
+                    <p className="text-[11px] tracking-normal text-slate-500">Potential</p>
                     <p className="text-3xl font-semibold text-slate-950">{potentialNewScore}</p>
                   </div>
                 </div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Potential Money At Risk Reduction</p>
+                <p className="text-xs tracking-normal text-slate-500">Potential Money Cost now Reduction</p>
                 <p className="mt-1 text-3xl font-semibold text-slate-950">
                   {formatCurrency(report.improvementPlan?.potentialMoneyAtRiskReduction)}
                 </p>

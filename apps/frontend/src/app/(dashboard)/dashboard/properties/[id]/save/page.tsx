@@ -77,8 +77,8 @@ export default function SaveHubPage() {
           eyebrow="Save"
           icon={<DollarSign className="h-5 w-5" />}
           title="Wealth and savings signals, ranked like premium fintech."
-          description="CtC monitors recurring costs, equity momentum, insurance optimization, tax windows, and document-backed savings opportunities."
-          action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan Policy</SmartCTA>}
+          description="We monitor recurring costs, equity momentum, insurance optimization, tax windows, and document-backed savings opportunities."
+          action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan policy</SmartCTA>}
           meta={<TrustMetaRow items={['Verified from property and document signals', 'Savings shown as annualized upside', 'Next tax audit window tracked']} />}
         >
           <div className="grid gap-3 md:grid-cols-3">
@@ -146,7 +146,7 @@ export default function SaveHubPage() {
                   </div>
                   <h4 className="text-lg font-bold text-slate-900">No Savings Found Yet</h4>
                   <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
-                    Our engines are ready to scan for tax appeals and insurance matches. 
+                    Our tools are ready to scan for tax appeals and insurance matches. 
                     Upload a document to unlock your first financial win.
                   </p>
                   <div className="pt-6 flex flex-col sm:flex-row gap-3 justify-center">
@@ -172,7 +172,7 @@ export default function SaveHubPage() {
                       <TrendingUp className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Equity Scan</p>
+                      <p className="text-xs font-bold text-slate-400 tracking-normal">Equity Scan</p>
                       <p className="text-sm font-semibold text-slate-700">Market trends active</p>
                     </div>
                   </div>
@@ -181,14 +181,14 @@ export default function SaveHubPage() {
                       <DollarSign className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tax Appeal</p>
+                      <p className="text-xs font-bold text-slate-400 tracking-normal">Tax Appeal</p>
                       <p className="text-sm font-semibold text-slate-700">Opens Feb 2026</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="pt-4 opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
-                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 px-1">
+                  <div className="flex items-center gap-2 text-[10px] font-bold tracking-normal text-slate-400 mb-3 px-1">
                     <Sparkles className="h-3 w-3" />
                     Potential Win in your area
                   </div>

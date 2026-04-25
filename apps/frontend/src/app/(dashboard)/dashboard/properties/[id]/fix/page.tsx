@@ -291,7 +291,7 @@ export default function ResolutionHubPage() {
                         <h4 className="font-bold text-slate-900">{booking.service?.name || 'Service Job'}</h4>
                         <p className="text-xs text-slate-500">{booking.provider?.businessName}</p>
                       </div>
-                      <div className="bg-brand-50 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      <div className="bg-brand-50 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-normal">
                         {booking.status}
                       </div>
                     </div>

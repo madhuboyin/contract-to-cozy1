@@ -371,8 +371,8 @@ export default function DoNothingSimulatorPanel({ propertyId }: DoNothingSimulat
 
       <ScenarioInputCard
         title="Scenario Input"
-        subtitle="Configure horizon, risk posture, and assumptions to model the cost of inaction."
-        badge={<StatusChip tone="elevated">Scenario model</StatusChip>}
+        subtitle="Configure horizon, risk posture, and assumptions to estimate the cost of inaction."
+        badge={<StatusChip tone="elevated">Scenario estimate</StatusChip>}
       >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label className="text-xs text-gray-600">

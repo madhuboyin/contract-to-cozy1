@@ -65,12 +65,12 @@ export function MaintenanceNudgeCard({
                 <div className="flex items-center gap-2.5">
                     <AlertTriangle className={`h-5 w-5 ${styles.icon} flex-shrink-0`} />
                     <span className="text-[15px] font-semibold text-gray-900">
-                        Property Attention Needed: Health Score {healthScore}/100
+                        Property Attention Needed: Health score {healthScore}/100
                     </span>
                 </div>
                 <div className={`
                     ${styles.badge} text-white
-                    text-[11px] font-bold uppercase tracking-wide
+                    text-[11px] font-bold tracking-normal
                     px-2.5 py-1 rounded-full
                     flex-shrink-0 self-start sm:self-auto
                 `}>

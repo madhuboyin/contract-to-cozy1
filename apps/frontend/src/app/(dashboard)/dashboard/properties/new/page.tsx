@@ -432,7 +432,7 @@ export default function NewPropertyPage() {
             required
             placeholder="NJ"
             maxLength={2}
-            className={`${inputBaseClass} uppercase`}
+            className={`${inputBaseClass} `}
           />
         </div>
       </div>
@@ -564,7 +564,7 @@ export default function NewPropertyPage() {
                   className="space-y-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 sm:grid sm:grid-cols-[minmax(0,1fr)_112px_auto] sm:items-end sm:gap-2.5 sm:space-y-0"
                 >
                     <div className="space-y-1.5">
-                        <label className="block text-xs font-medium uppercase tracking-[0.08em] text-slate-500">Appliance</label>
+                        <label className="block text-xs font-medium tracking-normal text-slate-500">Appliance</label>
                         <select
                             value={app.type}
                             onChange={(e) => handleApplianceChange(app.id, 'type', e.target.value)}
@@ -580,7 +580,7 @@ export default function NewPropertyPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="block text-xs font-medium uppercase tracking-[0.08em] text-slate-500">Install Year</label>
+                        <label className="block text-xs font-medium tracking-normal text-slate-500">Install Year</label>
                         <input
                             type="text"
                             value={app.installYear}
@@ -609,7 +609,7 @@ export default function NewPropertyPage() {
             onClick={addAppliance}
             className="w-full min-h-[42px] rounded-xl border border-dashed border-teal-300 bg-white px-3 py-2 text-sm font-medium text-teal-700 transition-colors hover:bg-teal-50"
         >
-            + Add Appliance
+            + Add appliance
         </button>
         <p className="text-xs text-slate-500">
             Optional, but helps improve home health and risk recommendations.
@@ -657,7 +657,7 @@ export default function NewPropertyPage() {
       </div>
 
       <MobilePageIntro
-        title="Add Property"
+        title="Add property"
         subtitle="Unlock insights and planning tools."
         className="mb-4"
       />
@@ -694,11 +694,11 @@ export default function NewPropertyPage() {
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-200/90 bg-white/80 px-3 py-2.5">
             <div>
-              <p className="mb-0 text-[11px] uppercase tracking-[0.08em] text-slate-500">Required info</p>
+              <p className="mb-0 text-[11px] tracking-normal text-slate-500">Required info</p>
               <p className="mb-0 mt-1 text-base font-semibold text-slate-900">{completedRequired} / {requiredProgress.length}</p>
             </div>
             <div className="border-l border-slate-200 pl-3">
-              <p className="mb-0 text-[11px] uppercase tracking-[0.08em] text-slate-500">Optional details</p>
+              <p className="mb-0 text-[11px] tracking-normal text-slate-500">Optional details</p>
               <p className="mb-0 mt-1 text-base font-semibold text-slate-900">{optionalSignalCount}</p>
             </div>
           </div>

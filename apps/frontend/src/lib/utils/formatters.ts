@@ -12,6 +12,23 @@ export function formatEnumLabel(value: string | null | undefined): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/**
+ * Converts backend enum strings to sentence-case display labels.
+ * Use this for ANY string that comes from the API that may contain
+ * underscores or ALL_CAPS formatting.
+ *
+ * @example
+ * formatStatusLabel("NEEDS_ATTENTION") // -> "Needs attention"
+ * formatStatusLabel("ACTION_NEEDED")   // -> "Action needed"
+ */
+export function formatStatusLabel(raw: string | null | undefined): string {
+  if (!raw) return '';
+  return raw
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
 export function formatPhoneNumber(raw: string | null | undefined): string {
   if (!raw) return '';
   const cleaned = raw.replace(/\D/g, '');

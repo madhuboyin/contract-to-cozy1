@@ -139,7 +139,7 @@ export default function ProviderCalendarPage() {
 
           <div className="grid grid-cols-7 gap-1.5">
             {WEEKDAY_LABELS.map((day) => (
-              <div key={day} className="py-1 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <div key={day} className="py-1 text-center text-[11px] font-semibold tracking-normal text-slate-500">
                 {day}
               </div>
             ))}

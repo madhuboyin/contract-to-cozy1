@@ -306,7 +306,7 @@ function WillEmptyState({
           </Link>
         </Button>
         <MobilePageIntro
-          eyebrow="Home Tool"
+          eyebrow="Home tool"
           title="Home Digital Will"
           subtitle="Capture the knowledge your home needs — emergency contacts, utility info, contractor preferences, and critical instructions."
          className="lg:hidden"/>
@@ -1203,7 +1203,7 @@ function ContactsDetailPanel({
         <p
           className={cn(
             MOBILE_TYPE_TOKENS.caption,
-            'font-semibold uppercase tracking-wider text-gray-400',
+            'font-semibold tracking-normal text-gray-400',
           )}
         >
           Access levels
@@ -1488,7 +1488,7 @@ function EmergencyView({
           <p
             className={cn(
               MOBILE_TYPE_TOKENS.caption,
-              'font-semibold uppercase tracking-wider text-gray-400',
+              'font-semibold tracking-normal text-gray-400',
             )}
           >
             Primary contact
@@ -1503,7 +1503,7 @@ function EmergencyView({
           <p
             className={cn(
               MOBILE_TYPE_TOKENS.caption,
-              'font-semibold uppercase tracking-wider text-gray-400',
+              'font-semibold tracking-normal text-gray-400',
             )}
           >
             Other trusted contacts
@@ -1555,7 +1555,7 @@ function EmergencyView({
           <p
             className={cn(
               MOBILE_TYPE_TOKENS.caption,
-              'font-semibold uppercase tracking-wider text-gray-400',
+              'font-semibold tracking-normal text-gray-400',
             )}
           >
             Other important notes
@@ -1696,7 +1696,7 @@ function EntryEditorSheet({
           <div className="flex flex-col gap-5 px-5 py-5">
             {/* Basics */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <h3 className="text-xs font-semibold tracking-normal text-gray-400">
                 Basics
               </h3>
 
@@ -1772,7 +1772,7 @@ function EntryEditorSheet({
 
             {/* Importance */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <h3 className="text-xs font-semibold tracking-normal text-gray-400">
                 Importance
               </h3>
 
@@ -1824,7 +1824,7 @@ function EntryEditorSheet({
 
             {/* Timing */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <h3 className="text-xs font-semibold tracking-normal text-gray-400">
                 Timing{' '}
                 <span className="font-normal normal-case text-gray-400">(optional)</span>
               </h3>
@@ -2094,7 +2094,7 @@ function ContactEditorSheet({
           <div className="flex flex-col gap-5 px-5 py-5">
             {/* Identity */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <h3 className="text-xs font-semibold tracking-normal text-gray-400">
                 Identity
               </h3>
 
@@ -2156,7 +2156,7 @@ function ContactEditorSheet({
 
             {/* Access */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <h3 className="text-xs font-semibold tracking-normal text-gray-400">
                 Access
               </h3>
 
@@ -2198,7 +2198,7 @@ function ContactEditorSheet({
 
             {/* Contact details */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <h3 className="text-xs font-semibold tracking-normal text-gray-400">
                 Contact details{' '}
                 <span className="font-normal normal-case text-gray-400">(optional)</span>
               </h3>
@@ -2232,7 +2232,7 @@ function ContactEditorSheet({
 
             {/* Notes */}
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <h3 className="text-xs font-semibold tracking-normal text-gray-400">
                 Notes{' '}
                 <span className="font-normal normal-case text-gray-400">(optional)</span>
               </h3>

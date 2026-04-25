@@ -235,7 +235,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
       <TrustStrip
         variant="footnote"
         confidenceLabel={`${counts.total ?? 0} gaps detected across tracked inventory`}
-        freshnessLabel="Live from coverage gap analysis and linked policy metadata"
+        freshnessLabel="Live from coverage gap analysis and linked policy details"
         sourceLabel="Inventory records + warranty links + insurance policy linkage"
       />
 

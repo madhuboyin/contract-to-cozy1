@@ -182,7 +182,7 @@ export default function ProviderJoinPage() {
             >
               {currentStep > 1 ? <Check className="h-3.5 w-3.5" /> : '1'}
             </span>
-            <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-slate-700">Account setup</p>
+            <p className="mb-0 text-xs font-semibold tracking-normal text-slate-700">Account setup</p>
           </div>
 
           <div className="h-px flex-1 bg-brand-200" />
@@ -195,7 +195,7 @@ export default function ProviderJoinPage() {
             >
               2
             </span>
-            <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-slate-700">Business profile</p>
+            <p className="mb-0 text-xs font-semibold tracking-normal text-slate-700">Business profile</p>
           </div>
         </div>
       </div>

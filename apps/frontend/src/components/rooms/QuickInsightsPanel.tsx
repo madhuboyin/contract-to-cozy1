@@ -159,7 +159,7 @@ export default function QuickInsightsPanel({ roomType, profileData, onAddInsight
 
       {hasProfileSnapshot ? (
         <div className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Your room</p>
+          <p className="text-[10px] font-semibold tracking-normal text-gray-400">Your room</p>
           <div className="flex flex-wrap gap-1.5">
             {snapshotItems.map(([field, value]) => (
               <span key={field} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
@@ -171,7 +171,7 @@ export default function QuickInsightsPanel({ roomType, profileData, onAddInsight
       ) : null}
 
       <div className="space-y-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+        <p className="text-[10px] font-semibold tracking-normal text-gray-400">
           {hasProfileSnapshot ? 'Personalized tips' : 'General tips for this room type'}
         </p>
 

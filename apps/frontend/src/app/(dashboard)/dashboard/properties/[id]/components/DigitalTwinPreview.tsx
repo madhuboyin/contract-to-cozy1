@@ -20,7 +20,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
     return (
       <div className="rounded-3xl border-2 border-slate-50 bg-white p-6 flex flex-col items-center justify-center min-h-[200px] space-y-3 shadow-sm">
         <Loader2 className="h-6 w-6 text-brand-400 animate-spin" />
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Loading Digital Twin...</p>
+        <p className="text-xs font-bold tracking-normal text-slate-400">Loading Digital Twin...</p>
       </div>
     );
   }
@@ -56,7 +56,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
 
       <div className="relative z-10 flex items-center justify-between">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-brand-600 font-bold text-[10px] uppercase tracking-widest">
+          <div className="flex items-center gap-2 text-brand-600 font-bold text-[10px] tracking-normal">
             <Box className="h-3.5 w-3.5" />
             Digital Twin Model
           </div>
@@ -64,14 +64,14 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
         </div>
         <div className="text-right hidden sm:block">
           <p className="text-2xl font-black text-slate-900 leading-none">{components.length}</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tracked Nodes</p>
+          <p className="text-[10px] font-bold tracking-normal text-slate-400">Tracked Nodes</p>
         </div>
       </div>
 
       {!twin ? (
         <div className="relative z-10 rounded-2xl bg-slate-50/50 border border-dashed border-slate-200 p-6 text-center space-y-3">
           <Box className="h-8 w-8 text-slate-300 mx-auto" />
-          <p className="text-sm font-medium text-slate-500">No Digital Twin model generated yet.</p>
+          <p className="text-sm font-medium text-slate-500">No Digital Twin view generated yet.</p>
           <Button asChild variant="outline" size="sm" className="h-8 text-xs font-bold">
             <Link href={`/dashboard/properties/${propertyId}/tools/home-digital-twin`}>
               Initialize Model
@@ -89,7 +89,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
               <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", getStatusColor(getSystemStatus(structural)))} />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Structural</p>
+              <p className="text-[10px] font-bold tracking-normal text-slate-400">Structural</p>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{structural.length} Assets</p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
               <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", getStatusColor(getSystemStatus(hvac)))} />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Climate</p>
+              <p className="text-[10px] font-bold tracking-normal text-slate-400">Climate</p>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{hvac.length} Assets</p>
             </div>
           </div>
@@ -117,7 +117,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
               <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", getStatusColor(getSystemStatus(plumbing)))} />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Water</p>
+              <p className="text-[10px] font-bold tracking-normal text-slate-400">Water</p>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{plumbing.length} Assets</p>
             </div>
           </div>
@@ -131,7 +131,7 @@ export function DigitalTwinPreview({ propertyId }: { propertyId: string }) {
               <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", getStatusColor(getSystemStatus(electrical)))} />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Power</p>
+              <p className="text-[10px] font-bold tracking-normal text-slate-400">Power</p>
               <p className="text-xs font-bold text-slate-900 mt-0.5">{electrical.length} Assets</p>
             </div>
           </div>

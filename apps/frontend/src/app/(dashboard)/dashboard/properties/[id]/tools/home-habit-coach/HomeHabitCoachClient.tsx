@@ -132,7 +132,7 @@ function SpotlightCard({
             <ListChecks className="h-4 w-4" />
           </IconBadge>
           <div className="min-w-0 flex-1">
-            <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+            <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
               Top habit for you
             </p>
             <h2 className="mb-0 mt-1 text-[1.25rem] leading-snug font-semibold text-[hsl(var(--mobile-text-primary))]">
@@ -522,7 +522,7 @@ function HabitCoachDesktopSidebar({
             <ListChecks className="h-4 w-4 text-[hsl(var(--mobile-text-primary))]" />
           </div>
           <div className="min-w-0">
-            <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+            <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
               Habit Summary
             </p>
             <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
@@ -677,7 +677,7 @@ export default function HomeHabitCoachClient() {
               <ArrowLeft className="h-4 w-4 text-[hsl(var(--mobile-text-primary))]" />
             </Link>
             <MobilePageIntro
-              eyebrow="Home Tools"
+              eyebrow="Home tools"
               title="Home Habit Coach"
               subtitle="Seasonal care routines and safety checks"
               className="flex-1 space-y-0 lg:hidden"

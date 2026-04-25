@@ -17,7 +17,7 @@ type Props = {
   strokeWidth?: number;
 
   /**
-   * Label is the small uppercase line (e.g. "Room health" or "At risk").
+   * Label is the small line (e.g. "Room health" or "At risk").
    * If label equals the computed rating, we auto-hide the rating line to avoid repetition.
    */
   label?: string;
@@ -212,7 +212,7 @@ export default function RoomHealthScoreRing({
       <div className="min-w-0">
         {/* top row: label + why */}
         <div className="flex items-center gap-2">
-          <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
+          <div className="text-xs tracking-normal text-gray-500">{label}</div>
 
           {hasWhy && (
             <div className="relative group">

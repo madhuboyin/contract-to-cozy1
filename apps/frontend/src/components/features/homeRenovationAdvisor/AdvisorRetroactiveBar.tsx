@@ -31,7 +31,7 @@ export function AdvisorRetroactiveBar({ renovationLabel }: AdvisorRetroactiveBar
         </p>
         <p className={cn('mb-0 mt-0.5 text-amber-700', MOBILE_TYPE_TOKENS.caption)}>
           {renovationLabel
-            ? `This ${renovationLabel} was already completed. CtC is helping you check for permit, tax, and licensing gaps that could matter at resale or during future inspections.`
+            ? `This ${renovationLabel} was already completed. We can help you check for permit, tax, and licensing gaps that could matter at resale or during future inspections.`
             : 'This renovation was already completed. Use this check to identify any compliance gaps that could matter at resale or during future inspections.'}
         </p>
       </div>

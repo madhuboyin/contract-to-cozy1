@@ -32,7 +32,7 @@ export default function HowItWorks() {
     <section id="how-it-works" className="bg-slate-50 px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
       <div className="mx-auto max-w-6xl">
         <div className="mb-7 text-center">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">How It Works</p>
+          <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">How It Works</p>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">From uncertainty to action in four steps</h2>
           <p className="mt-2 text-sm text-slate-600">Designed for busy homeowners, not internal tools teams.</p>
         </div>

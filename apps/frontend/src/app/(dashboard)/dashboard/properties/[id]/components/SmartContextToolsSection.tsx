@@ -109,7 +109,7 @@ export function SmartContextToolsSection({ propertyId }: SmartContextToolsSectio
   return (
     <section className="rounded-xl border border-border/60 bg-muted/20 px-3.5 py-3 sm:px-4">
       <div className="mb-2 space-y-1">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+        <p className="text-[11px] font-medium tracking-normal text-muted-foreground/70">
           Smart context tools
         </p>
         <p className="text-xs text-muted-foreground">

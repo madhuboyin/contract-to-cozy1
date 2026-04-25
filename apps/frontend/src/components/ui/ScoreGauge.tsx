@@ -234,7 +234,7 @@ export default function ScoreGauge({
               </CircularProgressbarWithChildren>
             </div>
             {showLabel ? (
-              <span className="mt-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+              <span className="mt-2 text-xs font-semibold tracking-normal text-gray-400">
                 {label}
               </span>
             ) : null}

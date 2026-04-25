@@ -161,7 +161,7 @@ export default function CostVolatilityClient() {
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Cost Volatility Index"
       subtitle="Measure how unpredictable your ownership costs are year to year."
       introAction={
@@ -176,7 +176,7 @@ export default function CostVolatilityClient() {
       priorityAction={volatilityPriorityAction}
     >
 
-      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      {/* Tool identity + Related tools — desktop only, above NBA */}
       <HomeToolHeader
         toolId="cost-volatility"
         propertyId={propertyId}
@@ -248,7 +248,7 @@ export default function CostVolatilityClient() {
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Index</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Index</div>
             <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{data?.index?.volatilityIndex ?? '—'}</div>
 
             <div className="mt-1 flex items-center gap-2">
@@ -276,7 +276,7 @@ export default function CostVolatilityClient() {
           </div>
 
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Insurance volatility</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Insurance volatility</div>
 
             {/* ✅ Patch: show "—" if insufficient history */}
             <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
@@ -289,14 +289,14 @@ export default function CostVolatilityClient() {
           </div>
 
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Tax volatility</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Tax volatility</div>
             <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{data?.index?.taxVolatility ?? '—'}</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">YoY variance + cadence pressure</div>
           </div>
 
           {/* ✅ Patch: rename ZIP proxy to Phase-2 meaning */}
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Regional sensitivity</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Regional sensitivity</div>
             <div className="text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">{data?.index?.zipVolatility ?? '—'}</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               Pricing environment modifier
@@ -386,7 +386,7 @@ export default function CostVolatilityClient() {
 
             {!!data.meta.aiSummary.whatToWatch?.length && (
               <div className="mt-2">
-                <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-300">What to watch</div>
+                <div className="text-[11px] tracking-normal text-slate-500 dark:text-slate-300">What to watch</div>
                 <div className="mt-1 space-y-1">
                   {data.meta.aiSummary.whatToWatch.slice(0, 3).map((w, i) => (
                     <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {w}</div>

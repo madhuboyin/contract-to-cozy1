@@ -194,7 +194,7 @@ export const ActionCenter: React.FC<Props> = ({
 
     return (
       <section className="space-y-2">
-        <div className={`text-xs font-semibold uppercase ${labelClass}`}>
+        <div className={`text-xs font-semibold ${labelClass}`}>
           {label} ({items.length})
         </div>
 
@@ -311,7 +311,7 @@ export const ActionCenter: React.FC<Props> = ({
                 className="text-sm font-medium text-muted-foreground hover:underline"
               >
                 {showSuppressed
-                  ? 'Hide suppressed actions'
+                  ? 'Show less'
                   : `Show suppressed actions (${suppressed.length})`}
               </button>
 

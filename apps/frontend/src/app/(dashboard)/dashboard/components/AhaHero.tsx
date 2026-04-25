@@ -148,7 +148,7 @@ export default function AhaHero({
   return (
     <section className="relative overflow-hidden rounded-2xl bg-[#0f1f2e] p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <span suppressHydrationWarning className="text-[10px] uppercase tracking-widest text-[#6ECFA8]">
+        <span suppressHydrationWarning className="text-[10px] tracking-normal text-[#6ECFA8]">
           {formattedDate} · {isReturningVisitor ? `${daypartLabel} Home Pulse` : 'Personalized Home Brief'}
         </span>
         {safeStreak > 0 && (

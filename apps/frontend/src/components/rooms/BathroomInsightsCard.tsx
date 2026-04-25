@@ -90,7 +90,7 @@ export default function BathroomInsightsCard({ profile }: Props) {
 
         <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] overflow-hidden">
           <div className="px-4 pt-3 pb-2">
-            <div className="text-[11px] font-semibold text-black/50 uppercase tracking-wide">Snapshot</div>
+            <div className="text-[11px] font-semibold text-black/50 tracking-normal">Snapshot</div>
           </div>
 
           {hasSnapshot ? (
@@ -109,7 +109,7 @@ export default function BathroomInsightsCard({ profile }: Props) {
 
           <Divider />
           <div className="px-4 pt-3 pb-2">
-            <div className="text-[11px] font-semibold text-black/50 uppercase tracking-wide">Quick wins</div>
+            <div className="text-[11px] font-semibold text-black/50 tracking-normal">Quick wins</div>
           </div>
 
           {quickWins.map((t, idx) => (

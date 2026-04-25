@@ -31,7 +31,7 @@ export default function ProofRow({
           key={item.label}
           className={cn('rounded-xl border border-slate-200/80 bg-white/90 p-3 shadow-sm', itemClassName)}
         >
-          <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+          <p className="mb-0 text-xs font-semibold tracking-normal text-slate-500">
             {item.label}
           </p>
           <p className="mt-1 mb-0 flex items-center gap-1.5 text-sm text-slate-700">

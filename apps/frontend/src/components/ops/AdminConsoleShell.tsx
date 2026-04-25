@@ -46,10 +46,10 @@ export function AdminConsoleShell({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <Badge className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
+              <Badge className="rounded px-2 py-0.5 text-[10px] font-semibold tracking-normal">
                 Admin
               </Badge>
-              <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-500">
                 <Shield className="h-3 w-3" />
                 Operations
               </span>
@@ -116,7 +116,7 @@ export function useAdminOnlineStatus() {
 
 export function AdminAccessState({ title, description }: { title: string; description: string }) {
   return (
-    <AdminConsoleShell title="Admin Console" subtitle="Operational surfaces for internal CtC teams." dense>
+    <AdminConsoleShell title="Admin Console" subtitle="Operational surfaces for internal operations teams." dense>
       <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
         <CardContent className="space-y-3 py-10 text-center">
           <h1 className="text-xl font-semibold tracking-tight text-slate-950">{title}</h1>

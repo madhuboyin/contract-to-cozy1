@@ -193,7 +193,7 @@ export default function ItemCard({
         </div>
 
         <div className="flex min-h-[26px] items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Replacement</span>
+          <span className="text-[10px] font-semibold tracking-normal text-gray-400">Replacement</span>
           {hasReplacementValue ? (
             <span className="text-sm font-bold text-gray-800">{formatCurrency(replacementValue)}</span>
           ) : (
@@ -265,7 +265,7 @@ export default function ItemCard({
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Documents</span>
+          <span className="text-[10px] font-semibold tracking-normal text-gray-400">Documents</span>
           {documentCount > 0 ? (
             <span className="text-xs font-semibold text-gray-700">{documentCount} attached</span>
           ) : (

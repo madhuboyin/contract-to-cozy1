@@ -246,7 +246,7 @@ export function BottomNav() {
               <div className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto pb-4">
                 {filteredSections.map((section) => (
                   <div key={section.group}>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                    <p className="mb-2 text-[10px] font-semibold tracking-normal text-gray-400">
                       {section.group}
                     </p>
                     <div className="space-y-1.5">

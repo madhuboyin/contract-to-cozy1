@@ -20,7 +20,7 @@ export default function RiskPremiumOptimizerToolClient() {
       trust={{
         confidenceLabel: 'Medium confidence, improves with current property and premium records',
         freshnessLabel: 'Updates whenever premium drivers or property context changes',
-        sourceLabel: 'Property profile + risk signals + modeled premium pressure factors',
+        sourceLabel: 'Property profile + risk signals + premium pressure factors',
         rationale: 'Optimizer prioritizes explainable actions that preserve protection while reducing premium pressure.',
       }}
       summary={<ToolExplainerSection toolKey="riskToPremiumOptimizer" id="how-it-works" />}

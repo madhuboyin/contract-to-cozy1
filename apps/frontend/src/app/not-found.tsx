@@ -19,7 +19,7 @@ export default function NotFound() {
                 height={20}
                 className="h-5 w-5"
               />
-              <p className="mb-0 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
+              <p className="mb-0 text-sm font-semibold tracking-normal text-slate-500">
                 ContractToCozy
               </p>
             </div>

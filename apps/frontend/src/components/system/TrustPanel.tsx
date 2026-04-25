@@ -13,7 +13,7 @@ interface TrustPanelRowProps {
 function TrustPanelRow({ label, value }: TrustPanelRowProps) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
+      <p className="mb-1 text-xs font-semibold tracking-normal text-slate-500">{label}</p>
       <div className="text-sm text-slate-700">{value}</div>
     </div>
   );
@@ -43,7 +43,7 @@ export default function TrustPanel({
   return (
     <section className={cn(CTC_TEMPLATE_SURFACES_V1.trustCard, 'space-y-3 p-4', className)}>
       <div>
-        <p className="mb-0 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-800">
+        <p className="mb-0 inline-flex items-center gap-2 text-xs font-semibold tracking-normal text-emerald-800">
           <ShieldCheck className="h-4 w-4" />
           {title}
         </p>

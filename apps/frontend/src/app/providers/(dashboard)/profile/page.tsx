@@ -36,7 +36,7 @@ interface ContactInfo {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1 block text-xs font-medium uppercase tracking-[0.1em] text-slate-500">{children}</label>;
+  return <label className="mb-1 block text-xs font-medium tracking-normal text-slate-500">{children}</label>;
 }
 
 function TextField({
@@ -280,7 +280,7 @@ export default function ProviderProfilePage() {
       }
       filters={
         <MobileFilterSurface className="space-y-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">Sections</p>
+          <p className="text-[11px] font-medium tracking-normal text-slate-500">Sections</p>
           <div className="inline-flex w-full gap-1 rounded-xl bg-slate-100 p-1">
             {TABS.map((tab) => {
               const active = tab.key === activeTab;

@@ -224,7 +224,7 @@ export function MaintenanceTaskCard({
                   {format(parseISO(task.nextDueDate), 'MMM d, yyyy')}
                 </span>
                 {dueDateStatus && dueDateStatus.type !== 'upcoming' && (
-                  <span className="text-[10px] px-1 bg-current/10 rounded uppercase font-bold">{dueDateStatus.label}</span>
+                  <span className="text-[10px] px-1 bg-current/10 rounded font-bold">{dueDateStatus.label}</span>
                 )}
               </div>
             )}

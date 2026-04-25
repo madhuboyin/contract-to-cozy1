@@ -12,7 +12,7 @@ export const CTC_TOKEN_GOVERNANCE_V1 = {
     trustSurface: 'border-emerald-200/70 bg-emerald-50/75',
   },
   typography: {
-    eyebrow: 'text-xs font-semibold uppercase tracking-[0.1em]',
+    eyebrow: 'text-xs font-semibold tracking-normal',
     titleLg: 'text-2xl font-semibold tracking-tight md:text-3xl',
     titleMd: 'text-xl font-semibold md:text-2xl',
     titleSm: 'text-lg font-semibold',
@@ -59,4 +59,3 @@ export const CTC_MOBILE_SHELL_RULES_V1 = {
   chatAwareReserve: 'h-[calc(8rem+env(safe-area-inset-bottom))]',
   compactReserve: 'h-[calc(5.5rem+env(safe-area-inset-bottom))]',
 } as const;
-

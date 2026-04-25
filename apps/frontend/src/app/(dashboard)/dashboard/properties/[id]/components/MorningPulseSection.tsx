@@ -204,7 +204,7 @@ function PulseRowItem({ row }: { row: PulseRow }) {
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', pulseDotClass(row.severity))} />
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          <span className="text-[10px] font-medium tracking-normal text-muted-foreground/70">
             {row.label}
           </span>
         </div>
@@ -256,7 +256,7 @@ export function MorningPulseSection({ propertyId, maxRows = 3 }: MorningPulseSec
     return (
       <section className="rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
         <div className="mb-2.5 flex items-center justify-between gap-2">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          <p className="text-[10px] font-medium tracking-normal text-muted-foreground/70">
             Morning pulse
           </p>
           <p className="text-[11px] text-muted-foreground/75">Loading…</p>
@@ -273,7 +273,7 @@ export function MorningPulseSection({ propertyId, maxRows = 3 }: MorningPulseSec
     return (
       <section className="rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
         <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          <p className="text-[10px] font-medium tracking-normal text-muted-foreground/70">
             Morning pulse
           </p>
           <p className="text-xs text-muted-foreground">
@@ -295,7 +295,7 @@ export function MorningPulseSection({ propertyId, maxRows = 3 }: MorningPulseSec
     return (
       <section className="rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
         <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+          <p className="text-[10px] font-medium tracking-normal text-muted-foreground/70">
             Morning pulse
           </p>
           <p className="text-xs text-muted-foreground">
@@ -309,7 +309,7 @@ export function MorningPulseSection({ propertyId, maxRows = 3 }: MorningPulseSec
   return (
     <section className="rounded-xl border border-border/60 bg-background px-3.5 py-3 sm:px-4 sm:py-3.5">
       <div className="mb-2.5 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
+        <p className="text-[10px] font-medium tracking-normal text-muted-foreground/70 ">
           Morning pulse
         </p>
         <p className="text-[11px] text-muted-foreground/75">

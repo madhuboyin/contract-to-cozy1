@@ -147,13 +147,13 @@ export default function HomeToolsRail({
               className="gap-2 rounded-full border border-black/10 bg-white"
             >
               <PanelBottomOpen className="h-4 w-4" />
-              Home Tools
+              Home tools
             </Button>
           </SheetTrigger>
 
           <SheetContent side="bottom" className="rounded-t-2xl">
             <SheetHeader>
-              <SheetTitle>Home Tools</SheetTitle>
+              <SheetTitle>Home tools</SheetTitle>
             </SheetHeader>
 
             <div className="mt-4 space-y-2">

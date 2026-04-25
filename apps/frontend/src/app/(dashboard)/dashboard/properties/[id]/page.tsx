@@ -88,7 +88,7 @@ interface HealthScoreResult {
 // Using an intersection type to define the expected structure of the fetched property
 type ScoredProperty = Property & { healthScore?: HealthScoreResult };
 
-const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
+const HIGH_PRIORITY_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
 /**
  * Helper function to render a button based on the insight factor/status
@@ -206,7 +206,7 @@ const renderContextualButton = (insight: any, propertyId: string) => {
 
 
 /**
- * Displays a filtered list of Health Score insights with proactive maintenance recommendations.
+ * Displays a filtered list of Health score insights with proactive maintenance recommendations.
  * UPDATED: Softer messaging to match dashboard MaintenanceNudgeCard
  * Inlined component for properties/[id]/page.tsx
  */
@@ -231,7 +231,7 @@ function HealthInsightList({ property }: { property: ScoredProperty }) {
           Proactive Maintenance Recommended ({criticalInsights.length} Items)
         </h2>
         <p className="text-sm text-blue-700 mb-4">
-          These maintenance actions will directly increase your Health Score and reduce risk.
+          These maintenance actions will directly increase your Health score and reduce risk.
         </p>
 
         <ul className="space-y-3">
@@ -405,7 +405,7 @@ const PropertyOverview = ({ property }: { property: Property }) => {
         <div className="space-y-4">
           <MobileCard className="bg-white border-2 border-slate-50 shadow-sm p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
+              <h4 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
                 <Home className="h-4 w-4 text-brand-600" />
                 Property Snapshot
               </h4>
@@ -1006,7 +1006,7 @@ export default function PropertyDetailPage() {
           meta={propertyHubMeta}
           primaryAction={
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-              <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+              <p className="mb-0 text-xs font-semibold tracking-normal text-slate-500">
                 Next Best Action
               </p>
               <p className="mt-1 mb-0 text-sm text-slate-700">
@@ -1048,7 +1048,7 @@ export default function PropertyDetailPage() {
             <Button variant="outline" className="min-h-[44px] w-full justify-start gap-2" asChild>
               <Link href={withBackToPropertyHub(`/dashboard/home-tools?propertyId=${property.id}`)}>
                 <Wrench className="h-4 w-4" />
-                Open Home Tools
+                Open Home tools
               </Link>
             </Button>
           }
@@ -1066,7 +1066,7 @@ export default function PropertyDetailPage() {
           tabs={
             <MobileFilterSurface className="border-slate-200/80 bg-white/95 p-2.5 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.5)] md:border-0 md:bg-transparent md:p-0 md:shadow-none">
               <div className="md:hidden px-1">
-                <p className="text-xs uppercase tracking-[0.09em] text-slate-500">Core Sections</p>
+                <p className="text-xs tracking-normal text-slate-500">Core Sections</p>
               </div>
               <div className="relative">
                 <div className="absolute left-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-r from-background to-transparent pointer-events-none md:hidden" />
@@ -1110,7 +1110,7 @@ export default function PropertyDetailPage() {
           }
           secondaryNav={
             <MobileFilterSurface className="border-slate-200/80 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.09em] text-slate-500">
+              <p className="mb-2 text-xs font-semibold tracking-normal text-slate-500">
                 More Sections
               </p>
               <div className="flex flex-wrap gap-2">

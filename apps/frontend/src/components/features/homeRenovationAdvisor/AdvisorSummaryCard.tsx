@@ -41,7 +41,7 @@ export function AdvisorSummaryCard({ session, onRerun, isRerunning }: AdvisorSum
       {/* Header row */}
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className={cn('mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]')}>
+          <p className={cn('mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]')}>
             Renovation check
           </p>
           <h2 className="mb-0 mt-0.5 text-base font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">

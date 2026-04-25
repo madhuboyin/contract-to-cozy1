@@ -108,7 +108,7 @@ export default function RoomListCard({
 
         <div className="mb-3">
           <div className="mb-1.5 flex items-center justify-between text-[10px] text-gray-400">
-            <span className="uppercase tracking-wider">Completeness</span>
+            <span className="tracking-normal">Completeness</span>
             <span className="font-semibold text-gray-600">{completenessPercent}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">

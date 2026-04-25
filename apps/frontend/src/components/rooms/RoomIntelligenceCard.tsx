@@ -218,7 +218,7 @@ export default function RoomIntelligenceCard({
                 />
               </div>
 
-              <div className={`mt-2 text-center text-xs font-bold uppercase tracking-wider ${statusColor}`}>{statusLabel}</div>
+              <div className={`mt-2 text-center text-xs font-bold tracking-normal ${statusColor}`}>{statusLabel}</div>
             </div>
 
             <div className="flex-1 pt-1">
@@ -232,7 +232,7 @@ export default function RoomIntelligenceCard({
               <p className="text-sm leading-relaxed text-gray-600">{generateRoomSummary(itemCount, docCount, gapCount)}</p>
 
               <div className="mt-3 flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-gray-400">30-day trend</span>
+                <span className="text-[10px] tracking-normal text-gray-400">30-day trend</span>
                 <div className="h-8 w-24">
                   <Sparkline values={chartData} color={scoreColor} />
                 </div>
@@ -242,7 +242,7 @@ export default function RoomIntelligenceCard({
         </div>
 
         <div className={`p-5 lg:col-span-2 ${priorityBg}`}>
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Top Priority</p>
+          <p className="mb-3 text-[10px] font-semibold tracking-normal text-gray-400">Top Priority</p>
 
           {topPriorityTip ? (
             <div className="space-y-2.5">
@@ -309,7 +309,7 @@ export default function RoomIntelligenceCard({
           className="p-4 text-center transition-colors hover:bg-gray-50"
         >
           <p className="text-2xl font-display font-bold text-gray-900">{animatedItemCount}</p>
-          <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-400">Items</p>
+          <p className="mt-0.5 text-[10px] font-medium tracking-normal text-gray-400">Items</p>
         </button>
 
         <button
@@ -318,7 +318,7 @@ export default function RoomIntelligenceCard({
           className={`group p-4 text-center transition-colors ${docCount === 0 ? 'hover:bg-amber-50' : 'hover:bg-gray-50'}`}
         >
           <p className={`text-2xl font-display font-bold ${docCount === 0 ? 'text-amber-500' : 'text-gray-900'}`}>{animatedDocCount}</p>
-          <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-400">Documents</p>
+          <p className="mt-0.5 text-[10px] font-medium tracking-normal text-gray-400">Documents</p>
           {docCount === 0 ? (
             <p className="mt-1 text-[10px] text-amber-500 opacity-0 transition-opacity group-hover:opacity-100">{'Add docs ->'}</p>
           ) : null}
@@ -330,7 +330,7 @@ export default function RoomIntelligenceCard({
           className={`group p-4 text-center transition-colors ${gapCount > 0 ? 'hover:bg-red-50' : 'hover:bg-gray-50'}`}
         >
           <p className={`text-2xl font-display font-bold ${gapCount > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{animatedGapCount}</p>
-          <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-400">Coverage Gaps</p>
+          <p className="mt-0.5 text-[10px] font-medium tracking-normal text-gray-400">Coverage Gaps</p>
           {gapCount > 0 ? (
             <p className="mt-1 text-[10px] text-red-500 opacity-0 transition-opacity group-hover:opacity-100">{'Review ->'}</p>
           ) : null}
@@ -351,7 +351,7 @@ export default function RoomIntelligenceCard({
               <p className="mt-0.5 text-[9px] text-gray-300">No data yet</p>
             </>
           )}
-          <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-400">Weekly Change</p>
+          <p className="mt-0.5 text-[10px] font-medium tracking-normal text-gray-400">Weekly Change</p>
         </div>
       </div>
     </section>

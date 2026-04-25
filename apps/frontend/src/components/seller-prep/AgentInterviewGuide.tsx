@@ -133,7 +133,7 @@ export function AgentInterviewGuide({ propertyId, interviews, onInterviewsChange
                 {DEFAULT_QUESTIONS.map(q => (
                   <div key={q.id} className="group relative space-y-1">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground">{q.label}</label>
+                      <label className="text-[10px] font-bold text-muted-foreground">{q.label}</label>
                       {agent.isDefault && !agent.isDefault[q.id] && (
                         <button 
                           onClick={() => resetToDefault(agent.id, q.id)} 

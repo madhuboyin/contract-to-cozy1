@@ -328,7 +328,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                   <div className="divide-y divide-black/10">
                     {grouped.map((g) => (
                       <div key={g.label}>
-                        <div className="px-3 py-2 text-xs uppercase tracking-wide opacity-60 bg-black/[0.02] border-b border-black/10">
+                        <div className="px-3 py-2 text-xs tracking-normal opacity-60 bg-black/[0.02] border-b border-black/10">
                           {g.label} · {g.items.length}
                         </div>
 
@@ -392,7 +392,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                                       <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-                                            <div className="text-xs uppercase tracking-wide opacity-60">Name</div>
+                                            <div className="text-xs tracking-normal opacity-60">Name</div>
                                             <input
                                               value={editName}
                                               onChange={(e) => setEditName(e.target.value)}
@@ -401,7 +401,7 @@ export default function RoomScanModal({ open, onClose, propertyId, roomId, roomN
                                           </div>
 
                                           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-                                            <div className="text-xs uppercase tracking-wide opacity-60">Category</div>
+                                            <div className="text-xs tracking-normal opacity-60">Category</div>
                                             <select
                                               value={editCategory}
                                               onChange={(e) => setEditCategory(e.target.value as RoomScanCategoryOption)}

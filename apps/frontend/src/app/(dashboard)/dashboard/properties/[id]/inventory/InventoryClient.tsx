@@ -491,7 +491,7 @@ export default function InventoryClient() {
             ) : (
               <div className="space-y-2.5">
                 <MobileSectionHeader
-                  title={filteredGapCount > 0 ? 'Needs Attention' : 'Inventory List'}
+                  title={filteredGapCount > 0 ? 'Needs attention' : 'Inventory List'}
                   subtitle={`${filteredItems.length} items`}
                 />
                 <AnimatePresence mode="popLayout">
@@ -561,7 +561,7 @@ export default function InventoryClient() {
             variant="footnote"
             confidenceLabel={`${Math.round(portfolioStats.coverageRate)}% coverage confidence across ${portfolioStats.totalItems} items`}
             freshnessLabel="Live from inventory updates, coverage links, and recall scans"
-            sourceLabel="CtC inventory graph + documents + policy associations"
+            sourceLabel="Inventory graph + documents + policy associations"
           />
 
           <InventoryFilterBar

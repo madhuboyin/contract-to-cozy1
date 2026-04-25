@@ -52,7 +52,7 @@ export default function RoomAtAGlance({
         ].map((stat) => (
           <div key={stat.label} className="rounded-lg bg-gray-50 p-2.5 text-center">
             <p className={`text-xl font-display font-bold ${stat.color}`}>{stat.value}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-wide text-gray-400">{stat.label}</p>
+            <p className="mt-0.5 text-[10px] tracking-normal text-gray-400">{stat.label}</p>
           </div>
         ))}
       </div>

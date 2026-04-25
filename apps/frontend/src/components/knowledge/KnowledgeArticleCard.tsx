@@ -20,7 +20,7 @@ export function KnowledgeArticleCard({ article, featured = false, propertyId }: 
     return (
       <article className="grid gap-8 border-y border-slate-200/80 py-8 lg:grid-cols-[minmax(0,1fr)_200px] lg:items-start lg:gap-8">
         <div className="space-y-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Featured insight</p>
+          <p className="text-[10px] font-semibold tracking-normal text-slate-500">Featured insight</p>
           <div className="space-y-3">
             <h2 className="max-w-3xl text-[2rem] font-semibold leading-[1.08] tracking-tight text-slate-950 md:text-[2.35rem]">
               <Link href={articleHref} className="transition-colors hover:text-slate-700">
@@ -50,7 +50,7 @@ export function KnowledgeArticleCard({ article, featured = false, propertyId }: 
 
         {article.categories.length > 0 ? (
           <aside className="space-y-3 border-t border-slate-200/70 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Topics</p>
+            <p className="text-[10px] font-semibold tracking-normal text-slate-500">Topics</p>
             <div className="space-y-2 text-sm leading-6 text-slate-600">
               {article.categories.slice(0, 4).map((category) => (
                 <p key={category.slug}>{category.name}</p>

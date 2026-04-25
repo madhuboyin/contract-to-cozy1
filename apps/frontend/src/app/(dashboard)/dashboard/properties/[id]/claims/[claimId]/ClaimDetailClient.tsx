@@ -143,7 +143,7 @@ export default function ClaimDetailClient() {
             ? `${Math.round(insights.recommendation.confidence * 100)}% recommendation confidence`
             : 'Confidence increases with complete checklist and timeline updates',
           freshnessLabel: loading ? 'Refreshing claim detail' : 'Live from claim and timeline updates',
-          sourceLabel: 'Claim record + checklist progress + claim insights model',
+          sourceLabel: 'Claim record + checklist progress + claim insights',
           rationale: 'Shows next-best claim actions and blocker risk before settlement timelines slip.',
         }}
       >

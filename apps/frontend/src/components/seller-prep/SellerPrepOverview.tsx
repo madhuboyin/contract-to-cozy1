@@ -307,7 +307,7 @@ export default function SellerPrepOverview({
             )}
 
             <div className="pt-4 border-t space-y-3">
-              <h4 className="text-xs font-bold uppercase text-gray-500 tracking-wider">Expert Assistance</h4>
+              <h4 className="text-xs font-bold text-gray-500 tracking-normal">Expert Assistance</h4>
               <p className="text-xs text-gray-600">Need help with repairs or staging?</p>
               <Button 
                 onClick={() => setShowLeadModal(true)} 
@@ -343,7 +343,7 @@ function TaskItem({ item, onUpdate, isUpdating }: any) {
             <p className={`text-sm font-medium ${isDone ? 'line-through text-gray-500' : ''}`}>{item.title}</p>
           </div>
           <div className="flex gap-2 items-center">
-            <Badge variant={item.priority === 'HIGH' ? 'destructive' : 'secondary'} className="text-xs px-1.5 h-5 uppercase">{item.priority}</Badge>
+            <Badge variant={item.priority === 'HIGH' ? 'destructive' : 'secondary'} className="text-xs px-1.5 h-5 ">{item.priority}</Badge>
             <span className="text-xs text-gray-500">ROI: {item.roiRange} • {item.costBucket}</span>
           </div>
         </div>

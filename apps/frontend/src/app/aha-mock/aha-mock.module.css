@@ -80,9 +80,7 @@
 
 .brandText {
   font-size: 0.78rem;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  font-weight: 700;
+  letter-spacing: 0;  font-weight: 700;
   color: #b7c8eb;
 }
 
@@ -126,9 +124,7 @@
 .eyebrow {
   margin: 0;
   font-size: 0.77rem;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: #8fabe2;
+  letter-spacing: 0;  color: #8fabe2;
   font-weight: 700;
 }
 
@@ -137,7 +133,7 @@
   font-family: var(--font-heading);
   font-size: clamp(1.75rem, 3.85vw, 3.35rem);
   line-height: 1.02;
-  letter-spacing: -0.018em;
+  letter-spacing: 0;
   max-width: 15ch;
   color: #f2f7ff;
   text-wrap: balance;
@@ -196,9 +192,7 @@
 
 .briefHeader {
   margin: 0;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.13em;
+  font-size: 0.75rem;  letter-spacing: 0;
   color: #9db5e5;
   font-weight: 700;
 }
@@ -258,9 +252,7 @@
 }
 
 .metricLabel {
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  margin: 0;  letter-spacing: 0;
   font-size: 0.68rem;
   color: #88a2d6;
   font-weight: 700;
@@ -296,9 +288,7 @@
 
 .feedTitle {
   margin: 0;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
+  font-size: 0.78rem;  letter-spacing: 0;
   color: #9db4e4;
   font-weight: 700;
 }
@@ -330,9 +320,7 @@
 
 .storyboardTitle {
   margin: 0;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
+  font-size: 0.78rem;  letter-spacing: 0;
   color: #9eb8ec;
   font-weight: 700;
 }

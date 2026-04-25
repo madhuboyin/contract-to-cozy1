@@ -20,13 +20,13 @@ export default function HomeSavingsToolClient() {
     <ToolWorkspaceTemplate
       backHref={backHref}
       backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Home Savings Check"
       subtitle="See where you may be overpaying and compare practical savings opportunities."
       trust={{
         confidenceLabel: 'Medium, based on linked utility, service, and maintenance context',
         freshnessLabel: 'Updated when cost inputs or service recommendations change',
-        sourceLabel: 'CtC savings model + property profile + tool-derived spend patterns',
+        sourceLabel: 'Savings analysis + property profile + tool-derived spend patterns',
         rationale: 'Savings recommendations prioritize realistic, actionable changes with measurable downside protection.',
       }}
       introAction={

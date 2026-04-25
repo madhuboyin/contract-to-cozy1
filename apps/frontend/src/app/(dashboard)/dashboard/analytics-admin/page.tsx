@@ -143,7 +143,7 @@ function OverviewCard({
 }) {
   return (
     <div className="rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-sm">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+      <p className="text-[11px] font-semibold tracking-normal text-slate-400">
         {label}
       </p>
       <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
@@ -252,7 +252,7 @@ function FilterBar({
       {filters.moduleKey && (
         <Badge
           variant="outline"
-          className="cursor-pointer rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600 hover:bg-slate-100"
+          className="cursor-pointer rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 hover:bg-slate-100"
           onClick={() => onChange({ ...filters, moduleKey: undefined })}
         >
           {filters.moduleKey} ×
@@ -300,7 +300,7 @@ function FunnelSection({ filters, enabled }: { filters: AdminAnalyticsFilters; e
   return (
     <Section
       title="Activation Funnel"
-      description="Users progressing through the CtC activation journey."
+      description="Users progressing through the activation journey."
       icon={Layers}
     >
       <div className="space-y-2.5">
@@ -387,7 +387,7 @@ function EngagementBreakdown({
   return (
     <Section
       title="Engagement by Module"
-      description="Where users spend time across CtC features."
+      description="Where users spend time across product features."
       icon={BarChart2}
     >
       <div className="space-y-2">
@@ -446,7 +446,7 @@ function DecisionGuidedSection({
   return (
     <Section
       title="Decisions Guided"
-      description="Moments where CtC actively drove a homeowner decision."
+      description="Moments where the product supported a homeowner decision."
       icon={Zap}
     >
       <div className="mb-4 flex items-center gap-4">
@@ -1094,7 +1094,7 @@ export default function AnalyticsAdminPage() {
     return (
       <AdminAccessState
         title="Admin access required"
-        description="Only CtC admins can view the product analytics dashboard."
+        description="Only platform admins can view the product analytics dashboard."
       />
     );
   }
@@ -1129,12 +1129,12 @@ export default function AnalyticsAdminPage() {
       }
       chips={
         <>
-          <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-900">
+          <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold tracking-normal text-white hover:bg-slate-900">
             Platform Analytics
           </Badge>
           <Badge
             variant="outline"
-            className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
+            className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold tracking-normal text-slate-600"
           >
             Internal
           </Badge>
@@ -1149,7 +1149,7 @@ export default function AnalyticsAdminPage() {
 
         {/* ── Header ── */}
         <div className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Operational View</p>
+          <p className="text-xs tracking-normal text-slate-500">Operational View</p>
           <p className="max-w-3xl text-sm leading-6 text-slate-600">
             Dense metrics for activation, engagement, adoption, and value delivery, with refresh controls for rapid ops review.
           </p>

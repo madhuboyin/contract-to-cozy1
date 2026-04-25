@@ -116,7 +116,7 @@ export function KnowledgeSectionRenderer({
       >
         <div className="space-y-6">
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="rounded-full border-slate-200 bg-white px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+            <Badge variant="outline" className="rounded-full border-slate-200 bg-white px-2.5 py-1 text-[9px] font-semibold tracking-normal text-slate-600">
               {section.sectionType === 'CALLOUT' ? 'Insight' : section.sectionType.replace(/_/g, ' ')}
             </Badge>
           </div>

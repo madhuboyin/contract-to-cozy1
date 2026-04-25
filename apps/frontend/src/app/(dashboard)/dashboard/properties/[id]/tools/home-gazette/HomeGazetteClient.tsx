@@ -149,7 +149,7 @@ function TickerStrip({ items }: { items: string[] }) {
     <div className="overflow-hidden rounded-xl border border-slate-200/70 bg-slate-900/92 backdrop-blur dark:border-slate-700/70">
       <div className="flex items-center gap-0">
         <div className="shrink-0 border-r border-slate-700/80 px-3 py-2.5">
-          <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Updates</span>
+          <span className="text-xs font-bold tracking-normal text-slate-400">Updates</span>
         </div>
         <div className="min-w-0 flex-1 overflow-x-auto px-4 py-2.5 scrollbar-none">
           <div className="flex items-center gap-6 whitespace-nowrap">
@@ -184,7 +184,7 @@ function HeroCard({
       <div className="p-5 sm:p-6">
         {/* Category + Hero label */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center rounded-full border border-slate-900/20 bg-slate-900 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white dark:border-white/20 dark:bg-white dark:text-slate-900">
+          <span className="inline-flex items-center rounded-full border border-slate-900/20 bg-slate-900 px-2.5 py-0.5 text-xs font-bold tracking-normal text-white dark:border-white/20 dark:bg-white dark:text-slate-900">
             Top Story
           </span>
           <CategoryBadge category={story.storyCategory} />
@@ -748,7 +748,7 @@ function EditionDetailPanel({
 
               {otherStories.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <h3 className="px-1 text-xs font-semibold tracking-normal text-slate-400 dark:text-slate-500">
                     More This Week
                   </h3>
                   {otherStories.map((story) => (
@@ -906,7 +906,7 @@ export default function HomeGazetteClient() {
 
       {/* Page intro */}
       <MobilePageIntro
-        eyebrow="Home Tool"
+        eyebrow="Home tool"
         title="Home Gazette"
         subtitle="Your weekly home intelligence briefing — risks, maintenance, finances, and more."
        className="lg:hidden"/>
@@ -1041,7 +1041,7 @@ export default function HomeGazetteClient() {
               {/* Other stories */}
               {otherStories.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <h3 className="px-1 text-xs font-semibold tracking-normal text-slate-400 dark:text-slate-500">
                     Also This Week
                   </h3>
                   <InnerCard>

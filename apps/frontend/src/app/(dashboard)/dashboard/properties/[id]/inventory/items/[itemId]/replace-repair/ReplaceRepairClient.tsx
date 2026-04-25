@@ -320,7 +320,7 @@ export default function ReplaceRepairClient() {
 
       <ScenarioInputCard
         title="Scenario Inputs"
-        subtitle="Optional overrides for item-level replace-or-repair modeling."
+        subtitle="Optional overrides for item-level replace-or-repair estimate."
         actions={
           <ActionPriorityRow
             primaryAction={

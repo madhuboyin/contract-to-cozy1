@@ -94,26 +94,26 @@ function computeHealthScore(insights: any): number {
 function deriveLabel(score: number): string {
   if (score > 75) return 'HEALTHY';
   if (score >= 60) return 'WATCH';
-  if (score >= 40) return 'NEEDS ATTENTION';
-  return 'AT RISK';
+  if (score >= 40) return 'Needs attention';
+  return 'Cost now';
 }
 
-function normalizeStatusLabel(label: string): 'HEALTHY' | 'WATCH' | 'NEEDS ATTENTION' | 'AT RISK' {
+function normalizeStatusLabel(label: string): 'HEALTHY' | 'WATCH' | 'Needs attention' | 'Cost now' {
   const normalized = String(label || '')
     .toUpperCase()
     .replace(/_/g, ' ')
     .trim();
   if (normalized === 'HEALTHY') return 'HEALTHY';
   if (normalized === 'WATCH') return 'WATCH';
-  if (normalized === 'NEEDS ATTENTION') return 'NEEDS ATTENTION';
-  return 'AT RISK';
+  if (normalized === 'Needs attention') return 'Needs attention';
+  return 'Cost now';
 }
 
 function statusPillLabel(label: string): string {
   const normalized = normalizeStatusLabel(label);
   if (normalized === 'HEALTHY') return 'Healthy';
   if (normalized === 'WATCH') return 'Watch';
-  if (normalized === 'NEEDS ATTENTION') return 'Needs attention';
+  if (normalized === 'Needs attention') return 'Needs attention';
   return 'At risk';
 }
 
@@ -121,7 +121,7 @@ function roomStatusBadge(label: string): { status: BadgeStatus; customLabel: str
   const normalized = normalizeStatusLabel(label);
   if (normalized === 'HEALTHY') return { status: 'good', customLabel: 'Healthy' };
   if (normalized === 'WATCH') return { status: 'watch', customLabel: 'Watch' };
-  if (normalized === 'NEEDS ATTENTION') return { status: 'action', customLabel: 'Needs attention' };
+  if (normalized === 'Needs attention') return { status: 'action', customLabel: 'Needs attention' };
   return { status: 'critical', customLabel: 'At risk' };
 }
 
@@ -431,7 +431,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
               const gapsMetric = hasInsights ? String(gapCount) : '—';
               const metadataValueClass =
                 hasInsights && gapCount > 0
-                  ? statusKey === 'AT RISK'
+                  ? statusKey === 'Cost now'
                     ? 'text-rose-700'
                     : 'text-amber-700'
                   : 'text-gray-900';
@@ -490,7 +490,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
 
                   <div className="mt-3 grid grid-cols-3 gap-3 border-t border-gray-200/80 pt-3">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500">
+                      <p className="text-[10px] font-medium tracking-normal text-gray-500">
                         Items
                       </p>
                       <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
@@ -499,7 +499,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500">
+                      <p className="text-[10px] font-medium tracking-normal text-gray-500">
                         Docs
                       </p>
                       <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
@@ -508,7 +508,7 @@ export function RoomsSnapshotSection({ propertyId }: RoomsSnapshotSectionProps) 
                       </p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-gray-500">
+                      <p className="text-[10px] font-medium tracking-normal text-gray-500">
                         Gaps
                       </p>
                       <p className={cn('inline-flex items-center gap-1 text-sm font-semibold', metadataValueClass)}>

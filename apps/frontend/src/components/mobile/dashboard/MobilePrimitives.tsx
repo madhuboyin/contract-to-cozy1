@@ -8,6 +8,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { STATUS_CHIP, type StatusChipLevel } from '@/lib/utils/chipTokens';
+import { formatStatusLabel } from '@/lib/utils/formatters';
 import {
   MOBILE_CARD_RADIUS,
   MOBILE_LAYOUT_TOKENS,
@@ -153,6 +154,11 @@ export function StatusChip({
   children: React.ReactNode;
   className?: string;
 }) {
+  const displayChildren =
+    typeof children === 'string' && /_|^[A-Z][A-Z\s]+$/.test(children)
+      ? formatStatusLabel(children)
+      : children;
+
   return (
     <span
       className={cn(
@@ -162,7 +168,7 @@ export function StatusChip({
         className
       )}
     >
-      {children}
+      {displayChildren}
     </span>
   );
 }
@@ -311,7 +317,7 @@ export function QuickActionTile({
         <div className="flex items-start gap-2.5">
           <div className="min-w-0 flex-1">
             {showBadge ? (
-              <p className="mb-0 flex items-center gap-1 text-[11px] font-medium tracking-wide text-amber-700">
+              <p className="mb-0 flex items-center gap-1 text-[11px] font-medium tracking-normal text-amber-700">
                 <Sparkles className="h-3.5 w-3.5" />
                 {normalizedBadgeLabel ? <span>{normalizedBadgeLabel}</span> : null}
               </p>
@@ -466,7 +472,7 @@ export function HeroSummaryCard({
     <MobileCard variant="hero" className="bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-1 text-xs font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
             {eyebrow}
           </p>
           <h2 className="mb-0 text-[1.375rem] leading-[1.2] font-semibold text-[hsl(var(--mobile-text-primary))]">
@@ -575,12 +581,12 @@ export function MobilePageIntro({
   action?: React.ReactNode;
   className?: string;
 }) {
-  const hideOnDesktop = eyebrow === 'Home Tool' || eyebrow === 'Home Tools';
+  const hideOnDesktop = eyebrow === 'Home tool' || eyebrow === 'Home tools';
 
   return (
     <MobileSection className={cn('space-y-2', hideOnDesktop && 'lg:hidden', className)}>
       {eyebrow ? (
-        <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+        <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
           {eyebrow}
         </p>
       ) : null}
@@ -721,7 +727,7 @@ export function ResultHeroCard({
       className={cn('bg-[linear-gradient(145deg,#ffffff,hsl(var(--mobile-brand-soft)))]', className)}
     >
       {eyebrow ? (
-        <p className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+        <p className="mb-1 text-xs font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
           {eyebrow}
         </p>
       ) : null}
@@ -1112,7 +1118,7 @@ export function MobileStickyActionBar({
           {(label || helpText) ? (
             <div className="mb-2">
               {label ? (
-                <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                <p className="mb-0 text-xs font-semibold tracking-normal text-slate-500">
                   {label}
                 </p>
               ) : null}

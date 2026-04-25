@@ -254,7 +254,7 @@ export default function RoomsHubClient() {
               className="no-brand-style inline-flex min-h-[40px] w-fit items-center gap-2 rounded-lg border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Property
+              Back to property
             </Link>
           </MobileSection>
 
@@ -365,8 +365,8 @@ export default function RoomsHubClient() {
               <TrustStrip
                 variant="footnote"
                 confidenceLabel={overallHealth != null ? `Room health score ${overallHealth}/100 from loaded room insights` : 'Insight confidence increases as room data loads'}
-                freshnessLabel="Live from room scans, inventory updates, and coverage metadata"
-                sourceLabel="CtC room insight model + room-level inventory statistics"
+                freshnessLabel="Live from room scans, inventory details, and coverage details"
+                sourceLabel="Room insight analysis + room-level inventory statistics"
               />
             </div>
           </div>
@@ -375,7 +375,7 @@ export default function RoomsHubClient() {
             <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/75 via-amber-50/55 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-amber-950/20 dark:to-teal-950/20">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">Home Rooms Health</p>
+                  <p className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Home Rooms Health</p>
                   <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-slate-100">{overallHealth}% cozy</p>
                 </div>
                 <p className="text-sm text-slate-600 dark:text-slate-300">

@@ -41,7 +41,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [pathname, searchParams, selectedPropertyId]);
 
-  // Persist across pages/refresh so Home Tools can always default to the last selected property.
+  // Persist across pages/refresh so Home tools can always default to the last selected property.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (selectedPropertyId) {

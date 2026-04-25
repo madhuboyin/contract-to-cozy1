@@ -55,8 +55,8 @@ function AdvisorHero({ propertyAddress }: { propertyAddress?: string }) {
           <Hammer className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />
         </div>
         <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
-            Home Tool
+          <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
+            Home tool
           </p>
           <h1 className="mb-0 text-base font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
             Renovation Risk Advisor

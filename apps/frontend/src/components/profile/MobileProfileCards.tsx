@@ -117,7 +117,7 @@ export function ProfileHeroCard({
               </IconBadge>
               <div className="min-w-0 flex-1">
                 <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">Password</p>
-                <p className="mb-0 mt-0.5 text-sm tracking-[0.14em] text-[hsl(var(--mobile-text-primary))]">••••••••••••</p>
+                <p className="mb-0 mt-0.5 text-sm tracking-normal text-[hsl(var(--mobile-text-primary))]">••••••••••••</p>
               </div>
               <button
                 type="button"
@@ -206,7 +206,7 @@ export function SecuritySummaryCard({
         <p className="mb-0 text-[1.05rem] font-semibold text-[hsl(var(--mobile-text-primary))]">Security</p>
         <div className="mt-3 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
           <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">Password</p>
-          <p className="mb-0 mt-1 text-sm tracking-[0.14em] text-[hsl(var(--mobile-text-primary))]">••••••••••••</p>
+          <p className="mb-0 mt-1 text-sm tracking-normal text-[hsl(var(--mobile-text-primary))]">••••••••••••</p>
         </div>
         <div className="mt-3 border-t border-[hsl(var(--mobile-border-subtle))] pt-3">
           <button
@@ -241,8 +241,8 @@ export function SecuritySummaryCard({
           <Lock className="h-4 w-4" />
         </IconBadge>
         <div className="min-w-0 flex-1">
-          <p className="mb-0 text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--mobile-text-muted))]">Password</p>
-          <p className="mb-0 mt-1 text-sm tracking-[0.14em] text-[hsl(var(--mobile-text-primary))]">••••••••••••</p>
+          <p className="mb-0 text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">Password</p>
+          <p className="mb-0 mt-1 text-sm tracking-normal text-[hsl(var(--mobile-text-primary))]">••••••••••••</p>
         </div>
         <StatusChip tone="protected">Protected</StatusChip>
       </div>

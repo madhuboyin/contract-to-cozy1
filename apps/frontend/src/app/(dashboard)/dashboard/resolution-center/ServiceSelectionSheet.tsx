@@ -109,7 +109,7 @@ export function ServiceSelectionSheet({
         <div className="mx-auto w-12 h-1.5 bg-slate-200 rounded-full my-3 shrink-0" />
 
         <SheetHeader className="px-6 border-b border-slate-50 pb-4 shrink-0">
-          <SheetTitle className="text-base font-semibold text-slate-400 uppercase tracking-widest text-left">
+          <SheetTitle className="text-base font-semibold text-slate-400 tracking-normal text-left">
             Service Selection
           </SheetTitle>
         </SheetHeader>
@@ -128,7 +128,7 @@ export function ServiceSelectionSheet({
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-brand-600" />
-                  <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">
+                  <h4 className="text-sm font-bold text-slate-900 tracking-tight">
                     AI Price Check
                   </h4>
                 </div>
@@ -138,7 +138,7 @@ export function ServiceSelectionSheet({
                     <div className="space-y-2">
                       <Label
                         htmlFor="quoteAmount"
-                        className="text-[10px] font-bold uppercase tracking-widest text-slate-400"
+                        className="text-[10px] font-bold tracking-normal text-slate-400"
                       >
                         Quote Amount ($)
                       </Label>
@@ -158,7 +158,7 @@ export function ServiceSelectionSheet({
                     <div className="space-y-2">
                       <Label
                         htmlFor="vendorName"
-                        className="text-[10px] font-bold uppercase tracking-widest text-slate-400"
+                        className="text-[10px] font-bold tracking-normal text-slate-400"
                       >
                         Provider Name (Optional)
                       </Label>
@@ -191,7 +191,7 @@ export function ServiceSelectionSheet({
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Search className="h-4 w-4 text-slate-400" />
-                  <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">
+                  <h4 className="text-sm font-bold text-slate-900 tracking-tight">
                     C2C Marketplace
                   </h4>
                 </div>
@@ -236,7 +236,7 @@ export function ServiceSelectionSheet({
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                    <p className="text-[10px] font-bold tracking-normal text-slate-400 mb-1">
                       Your Quote
                     </p>
                     <p className="text-lg font-bold text-slate-900">
@@ -244,7 +244,7 @@ export function ServiceSelectionSheet({
                     </p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                    <p className="text-[10px] font-bold tracking-normal text-slate-400 mb-1">
                       Market Median
                     </p>
                     <p className="text-lg font-bold text-slate-900">

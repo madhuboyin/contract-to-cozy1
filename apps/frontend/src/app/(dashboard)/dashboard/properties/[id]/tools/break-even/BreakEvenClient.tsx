@@ -157,7 +157,7 @@ export default function BreakEvenClient() {
     if (data.breakEven.status === 'PROJECTED') {
       return {
         title: `Projected break-even arrives in year ${data.breakEven.breakEvenYearIndex}`,
-        description: `At the current model rate, ownership costs are projected to be outweighed by appreciation in ${data.breakEven.breakEvenCalendarYear}. Stress-test the horizon below before making a sell, hold, or capital plan.`,
+        description: `At the current estimated rate, ownership costs are projected to be outweighed by appreciation in ${data.breakEven.breakEvenCalendarYear}. Stress-test the horizon below before making a sell, hold, or capital plan.`,
         impactLabel: `Year ${data.breakEven.breakEvenYearIndex}`,
         confidenceLabel,
         primaryAction: nextAction,
@@ -177,13 +177,13 @@ export default function BreakEvenClient() {
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Break-Even Ownership Year"
       subtitle="See when appreciation is projected to outweigh cumulative ownership costs."
       trust={{
         confidenceLabel: data?.meta?.confidence ? `${data.meta.confidence.toLowerCase()} projection confidence` : 'Model confidence pending',
         freshnessLabel: 'Refreshes when assumption sets or horizon settings change',
-        sourceLabel: 'CtC ownership model + appreciation scenarios + expense projections',
+        sourceLabel: 'Ownership analysis + appreciation scenarios + expense projections',
         rationale: 'Balances cumulative costs and projected appreciation so ownership timing decisions stay explicit.',
       }}
       introAction={
@@ -261,13 +261,13 @@ export default function BreakEvenClient() {
           {/* Left */}
           <div className="space-y-3 lg:col-span-4">
             <div className={`rounded-xl border p-3 ${statusTone}`}>
-              <div className="text-xs uppercase tracking-[0.12em] opacity-80">Break-even</div>
+              <div className="text-xs tracking-normal opacity-80">Break-even</div>
               <div className="mt-1 text-base font-semibold">{breakEvenHeadline(data)}</div>
               <div className="mt-2 text-xs opacity-70">
                 Net at horizon: <span className="font-medium">{money(data?.rollup?.netAtHorizon)}</span>
               </div>
               <div className="mt-2 text-xs opacity-70">
-                Debt model:{' '}
+                Debt estimate:{' '}
                 <span className="font-medium">
                   {data?.current?.debtMode === 'ON' ? 'On (snapshot-backed)' : 'Off (snapshot missing)'}
                 </span>
@@ -279,21 +279,21 @@ export default function BreakEvenClient() {
             </div>
 
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Current home value</div>
+              <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Current home value</div>
               <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{money(data?.current?.homeValueNow)}</div>
-              <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual expenses now</div>
+              <div className="mt-2 text-xs tracking-normal text-slate-500 dark:text-slate-300">Annual expenses now</div>
               <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualExpensesNow)}</div>
             </div>
 
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Cumulative ownership costs ({years}y)</div>
+              <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Cumulative ownership costs ({years}y)</div>
               <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{money(data?.rollup?.cumulativeExpensesAtHorizon)}</div>
-              <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Cumulative appreciation gain ({years}y)</div>
+              <div className="mt-2 text-xs tracking-normal text-slate-500 dark:text-slate-300">Cumulative appreciation gain ({years}y)</div>
               <div className="text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.rollup?.cumulativeAppreciationAtHorizon)}</div>
             </div>
 
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Sensitivity</div>
+              <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Sensitivity</div>
 
               <div className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-100">
                 Optimistic break-even:{' '}
@@ -408,7 +408,7 @@ export default function BreakEvenClient() {
 
           {data?.nextAction ? (
             <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Next action</div>
+              <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Next action</div>
               <div className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
                 {data.nextAction.reason}
               </div>

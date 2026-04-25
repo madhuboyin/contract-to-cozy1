@@ -387,7 +387,7 @@ export default function HomeownerBookingsPage() {
 
       <div className="sticky top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 -mx-2 bg-white/90 px-2 py-2 backdrop-blur-sm supports-[backdrop-filter]:bg-white/70 md:static md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
         <MobileFilterSurface className="space-y-2 border border-slate-200/80 bg-white p-2.5">
-          <p className="px-1 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+          <p className="px-1 text-[11px] font-medium tracking-normal text-slate-500">
             Filter Bookings
           </p>
           <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-none">
@@ -467,7 +467,7 @@ export default function HomeownerBookingsPage() {
 
                   <div className="mt-3 grid gap-2.5 text-sm text-muted-foreground">
                     <div className="flex flex-wrap justify-between gap-2">
-                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Date</span>
+                      <span className="text-xs tracking-normal text-muted-foreground/70">Date</span>
                       <span className="inline-flex items-center gap-1.5 text-foreground">
                         <CalendarClock className="h-3.5 w-3.5 text-gray-500" />
                         <span className="font-medium">{formatDate(booking.scheduledDate)}</span>
@@ -479,15 +479,15 @@ export default function HomeownerBookingsPage() {
                       </span>
                     </div>
                     <div className="flex flex-wrap justify-between gap-2">
-                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Time</span>
+                      <span className="text-xs tracking-normal text-muted-foreground/70">Time</span>
                       <span className="text-foreground">{formatTime(booking.scheduledDate)}</span>
                     </div>
                     <div className="flex flex-wrap justify-between gap-2">
-                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Price</span>
+                      <span className="text-xs tracking-normal text-muted-foreground/70">Price</span>
                       <span className="font-semibold text-foreground">${Number(booking.estimatedPrice || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex flex-wrap justify-between gap-2">
-                      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">Property</span>
+                      <span className="text-xs tracking-normal text-muted-foreground/70">Property</span>
                       <span className="text-right text-foreground">{formatProperty(booking.property)}</span>
                     </div>
                   </div>
@@ -540,7 +540,7 @@ export default function HomeownerBookingsPage() {
                 {groupedBookings.upcoming.length > 0 && (
                   <>
                     <div className="mb-2 mt-1 flex items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-teal-600">Upcoming</span>
+                      <span className="text-xs font-semibold tracking-normal text-teal-600">Upcoming</span>
                       <div className="h-px flex-1 bg-teal-100" />
                     </div>
                     <div className="space-y-3">{groupedBookings.upcoming.map((booking) => renderDesktopRow(booking))}</div>
@@ -550,7 +550,7 @@ export default function HomeownerBookingsPage() {
                 {groupedBookings.recent.length > 0 && (
                   <>
                     <div className="mb-2 mt-4 flex items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Recent</span>
+                      <span className="text-xs font-semibold tracking-normal text-gray-600">Recent</span>
                       <div className="h-px flex-1 bg-gray-200" />
                     </div>
                     <div className="space-y-3">{groupedBookings.recent.map((booking) => renderDesktopRow(booking))}</div>
@@ -560,7 +560,7 @@ export default function HomeownerBookingsPage() {
                 {groupedBookings.past.length > 0 && (
                   <>
                     <div className="mb-2 mt-4 flex items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Past</span>
+                      <span className="text-xs font-semibold tracking-normal text-gray-500">Past</span>
                       <div className="h-px flex-1 bg-gray-200" />
                     </div>
                     <div className="space-y-3">{groupedBookings.past.map((booking) => renderDesktopRow(booking))}</div>
@@ -597,7 +597,7 @@ export default function HomeownerBookingsPage() {
               <form onSubmit={handleEditSubmit}>
                 <div className="mb-5 flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Editing Booking</p>
+                    <p className="text-xs font-medium tracking-normal text-gray-400">Editing Booking</p>
                     <p className="truncate text-sm font-semibold text-gray-900">{editingBooking?.service?.name}</p>
                     <p className="text-xs text-gray-500">
                       {editingBooking?.provider?.businessName} · {editingBooking?.bookingNumber}

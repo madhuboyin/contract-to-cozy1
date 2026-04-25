@@ -337,7 +337,7 @@ export default function ExpensesPage() {
         <MobileFilterStack
           primaryFilters={
             <div className="space-y-1.5">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Property filter</p>
+              <p className="text-xs font-medium tracking-normal text-slate-500">Property filter</p>
               <Select value={filterPropertyId} onValueChange={setFilterPropertyId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Filter by Property" />
@@ -475,11 +475,11 @@ export default function ExpensesPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Property</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal">Description</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal">Category</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 tracking-normal">Amount</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal hidden sm:table-cell">Property</th>
                     <th className="relative px-6 py-3"></th>
                   </tr>
                 </thead>

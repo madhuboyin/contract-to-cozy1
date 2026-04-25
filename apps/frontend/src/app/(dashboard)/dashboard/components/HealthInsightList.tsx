@@ -8,14 +8,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 
-const HIGH_PRIORITY_STATUSES = ['Needs Attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
+const HIGH_PRIORITY_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
 interface HealthInsightListProps {
     property: ScoredProperty;
 }
 
 /**
- * Displays a filtered list of Health Score insights with proactive maintenance recommendations.
+ * Displays a filtered list of Health score insights with proactive maintenance recommendations.
  * UPDATED: Changed from urgent "IMMEDIATE ACTION" to softer "Proactive Maintenance" messaging
  */
 export function HealthInsightList({ property }: HealthInsightListProps) {
@@ -40,7 +40,7 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
                     Proactive Maintenance Recommended ({criticalInsights.length} Items)
                 </h2>
                 <p className="text-sm text-blue-700 mb-4">
-                    These maintenance actions will directly increase your Health Score and reduce risk.
+                    These maintenance actions will directly increase your Health score and reduce risk.
                 </p>
                 
                 <ul className="space-y-3">
@@ -95,7 +95,7 @@ const renderContextualButton = (insight: { factor: string; status: string; score
                             insight.factor.includes('Roof') ||
                             insight.factor.includes('Water Heater');
 
-    const requiresAttention = insight.status === 'Needs Attention' && insight.factor === 'Exterior';
+    const requiresAttention = insight.status === 'Needs attention' && insight.factor === 'Exterior';
     
     if (requiresService || requiresAttention) {
         let category: string;

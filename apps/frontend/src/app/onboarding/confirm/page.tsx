@@ -127,7 +127,7 @@ export default function ConfirmOnboardingPage() {
             </div>
 
             <div className="bg-slate-50 rounded-2xl p-4 text-left border border-slate-100">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Property Address</p>
+              <p className="text-xs font-bold text-slate-400 tracking-normal mb-1">Property Address</p>
               <p className="font-bold text-slate-900">{data.address}</p>
               <p className="text-sm text-slate-600">{data.city}, {data.state} {data.zipCode}</p>
             </div>

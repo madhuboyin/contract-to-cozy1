@@ -160,7 +160,7 @@ export default function ToolExplainerSection({
           <div className="overflow-hidden">
             <div className="space-y-6 p-5 sm:p-6">
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                <h3 className="text-sm font-semibold tracking-normal text-gray-500">
                   What it does
                 </h3>
                 <p className="mt-2 text-sm font-medium text-gray-900">
@@ -174,7 +174,7 @@ export default function ToolExplainerSection({
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                <h3 className="text-sm font-semibold tracking-normal text-gray-500">
                   How it works
                 </h3>
                 <ol className="mt-3 space-y-3">
@@ -200,7 +200,7 @@ export default function ToolExplainerSection({
 
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div>
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  <h3 className="text-sm font-semibold tracking-normal text-gray-500">
                     Why it&apos;s smart
                   </h3>
                   <ul className="mt-2 space-y-2">
@@ -214,7 +214,7 @@ export default function ToolExplainerSection({
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  <h3 className="text-sm font-semibold tracking-normal text-gray-500">
                     When to use it
                   </h3>
                   <ul className="mt-2 space-y-2">

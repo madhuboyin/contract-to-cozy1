@@ -440,7 +440,7 @@ function EventDetailContent({
       {/* Possible positive impacts */}
       {positives.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
+          <p className="text-[11px] font-semibold tracking-normal text-emerald-700">
             Possible Upside
           </p>
           <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
@@ -448,7 +448,7 @@ function EventDetailContent({
               <div key={imp.category} className="flex items-start gap-2">
                 <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
                 <div>
-                  <p className="mb-0 text-[11px] font-medium uppercase tracking-wide text-emerald-700">
+                  <p className="mb-0 text-[11px] font-medium tracking-normal text-emerald-700">
                     {IMPACT_CATEGORY_LABEL[imp.category]}
                   </p>
                   <p className="mb-0 text-[13px] leading-snug text-slate-700">
@@ -464,7 +464,7 @@ function EventDetailContent({
       {/* Possible negative impacts */}
       {negatives.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-700">
+          <p className="text-[11px] font-semibold tracking-normal text-rose-700">
             Possible Downside
           </p>
           <div className="space-y-2 rounded-xl border border-rose-100 bg-rose-50/60 p-3">
@@ -472,7 +472,7 @@ function EventDetailContent({
               <div key={imp.category} className="flex items-start gap-2">
                 <TrendingDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" aria-hidden="true" />
                 <div>
-                  <p className="mb-0 text-[11px] font-medium uppercase tracking-wide text-rose-700">
+                  <p className="mb-0 text-[11px] font-medium tracking-normal text-rose-700">
                     {IMPACT_CATEGORY_LABEL[imp.category]}
                   </p>
                   <p className="mb-0 text-[13px] leading-snug text-slate-700">
@@ -488,7 +488,7 @@ function EventDetailContent({
       {/* Demographic signals */}
       {detail.allDemographics.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+          <p className="text-[11px] font-semibold tracking-normal text-slate-500">
             Neighborhood Evolution
           </p>
           <div className="space-y-2 rounded-xl border border-sky-100 bg-sky-50/50 p-3">
@@ -508,7 +508,7 @@ function EventDetailContent({
       {/* Timeline */}
       {(detail.announcedDate || detail.expectedStartDate || detail.expectedEndDate) && (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+          <p className="text-[11px] font-semibold tracking-normal text-slate-500">
             Timeline
           </p>
           <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3 space-y-1.5">
@@ -528,8 +528,8 @@ function EventDetailContent({
       {/* Why CtC flagged this */}
       {detail.whyThisMatters && detail.whyThisMatters.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-            Why CtC Flagged This
+          <p className="text-[11px] font-semibold tracking-normal text-slate-500">
+            Why this matters
           </p>
           <div className="space-y-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
             {detail.whyThisMatters.map((reason, i) => (
@@ -550,7 +550,7 @@ function EventDetailContent({
       {/* Source */}
       {(detail.sourceName || detail.sourceUrl) && (
         <div className="space-y-1.5 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
-          <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
             Data Source
           </p>
           {detail.sourceName && (
@@ -616,7 +616,7 @@ function SummaryStrip({ propertyId }: { propertyId: string }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-1 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
             Neighborhood Signals
           </p>
           <p className="mb-0 text-[1.3rem] font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
@@ -684,7 +684,7 @@ function TrendStrip({ propertyId }: { propertyId: string }) {
 
   return (
     <MobileCard variant="compact" className="space-y-2">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+      <p className="text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
         Neighborhood Trend
       </p>
       <p className="mb-0 text-[13px] leading-snug text-[hsl(var(--mobile-text-secondary))]">
@@ -785,7 +785,7 @@ export default function NeighborhoodChangeRadarClient() {
         {/* Page intro — full width on desktop */}
         <div className="lg:col-span-2">
           <MobilePageIntro
-            eyebrow="Home Tools"
+            eyebrow="Home tools"
             title="Neighborhood Change Radar"
             subtitle="Track major external changes near your home and understand how they may affect value, demand, and livability."
            className="lg:hidden"/>
@@ -828,7 +828,7 @@ export default function NeighborhoodChangeRadarClient() {
             ) : events.length === 0 ? (
               <EmptyStateCard
                 title="No major changes detected"
-                description="CtC will continue monitoring meaningful external changes near this property."
+                description="We will continue monitoring meaningful external changes near this property."
               />
             ) : (
               <div className="space-y-3">

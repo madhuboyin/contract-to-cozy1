@@ -305,7 +305,7 @@ const ApplianceBentoGrid = () => {
   return (
     <div className="space-y-3">
       <div className="space-y-3">
-        <div className="hidden md:grid md:grid-cols-[35%_15%_38%_12%] md:gap-4 md:px-3 md:text-xs md:font-semibold md:uppercase md:tracking-wide md:text-gray-500 md:dark:text-slate-400">
+        <div className="hidden md:grid md:grid-cols-[35%_15%_38%_12%] md:gap-4 md:px-3 md:text-xs md:font-semibold md:md:tracking-normal md:text-gray-500 md:dark:text-slate-400">
           <span>Appliance</span>
           <span>Year</span>
           <span>Status</span>
@@ -427,7 +427,7 @@ const ApplianceBentoGrid = () => {
         className="btn-add-appliance mt-2 w-full border border-dashed border-teal-300/80 bg-transparent px-2.5 py-2.5 text-[13px] font-medium text-teal-700 hover:bg-teal-50/80 hover:text-teal-900 dark:border-teal-700/60 dark:text-teal-300 dark:hover:text-teal-200"
       >
         <Plus className="mr-2 h-4 w-4" />
-        Add Appliance
+        Add appliance
       </Button>
     </div>
   );
@@ -1221,7 +1221,7 @@ export default function EditPropertyPage() {
                     render={({ field }) => (
                       <FormItem className="field-state w-full sm:w-[80px]">
                         <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">State</FormLabel>
-                        <FormControl><Input id="field-state" className="h-9 text-center text-sm tracking-[0.05em] focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="NJ" {...field} maxLength={2} /></FormControl>
+                        <FormControl><Input id="field-state" className="h-9 text-center text-sm tracking-normal focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="NJ" {...field} maxLength={2} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1232,7 +1232,7 @@ export default function EditPropertyPage() {
                     render={({ field }) => (
                       <FormItem className="field-zip w-full sm:w-[100px]">
                         <FormLabel className="mb-1 block text-xs text-gray-500 dark:text-slate-400">Zip</FormLabel>
-                        <FormControl><Input id="field-zipCode" className="h-9 text-sm tracking-[0.05em] focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="08540" {...field} /></FormControl>
+                        <FormControl><Input id="field-zipCode" className="h-9 text-sm tracking-normal focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:border-emerald-500/40" placeholder="08540" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1848,7 +1848,7 @@ export default function EditPropertyPage() {
                       )}
                     </div>
                     <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => setAppliancesExpanded((prev) => !prev)}>
-                      {appliancesExpanded ? "Collapse" : "Expand"}
+                      {appliancesExpanded ? "Show less" : "Show more"}
                       <ChevronDown className={cn("ml-1.5 h-4 w-4 transition-transform", appliancesExpanded && "rotate-180")} />
                     </Button>
                   </div>

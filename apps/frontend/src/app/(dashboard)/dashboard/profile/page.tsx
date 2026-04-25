@@ -77,7 +77,7 @@ function FieldRow({
 }) {
   return (
     <div className={`flex flex-col gap-0.5 border-b border-gray-50 py-2.5 last:border-b-0 ${className || ''}`}>
-      <div className="text-[11px] font-medium tracking-[0.02em] text-gray-500">{label}</div>
+      <div className="text-[11px] font-medium tracking-normal text-gray-500">{label}</div>
       <div className="text-sm font-normal break-words text-gray-900">{value}</div>
     </div>
   );
@@ -470,7 +470,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex flex-1 flex-col gap-0.5">
                   <span className="text-[11px] text-gray-500">Password</span>
-                  <span className="text-sm tracking-[0.15em] text-gray-900">••••••••••••</span>
+                  <span className="text-sm tracking-normal text-gray-900">••••••••••••</span>
                 </div>
                 <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700">
                   Protected

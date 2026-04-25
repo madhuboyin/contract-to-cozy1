@@ -327,7 +327,7 @@ export default function ProviderServicesPage() {
         trust={{
           confidenceLabel: 'Catalog quality is scored from service detail completeness, pricing clarity, and active status.',
           freshnessLabel: 'Trust signals refresh each time service details, pricing, or status changes.',
-          sourceLabel: 'Provider service records, pricing metadata, and activity timestamps.',
+          sourceLabel: 'Provider service records, pricing details, and activity timestamps.',
           rationale: 'Clear service definitions and current pricing reduce homeowner decision friction.',
         }}
         summary={

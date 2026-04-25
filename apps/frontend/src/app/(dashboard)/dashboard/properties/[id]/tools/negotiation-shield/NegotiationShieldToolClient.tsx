@@ -1759,7 +1759,7 @@ function AnalysisResultsSection({
           </div>
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
             <div className="rounded-2xl border border-border bg-accent/40 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assessment</p>
+              <p className="text-xs font-semibold tracking-normal text-muted-foreground">Assessment</p>
               <p className="mt-2 text-lg font-semibold text-foreground">{assessmentLabel}</p>
               {pricingAssessment.summary ? (
                 <p className="mt-2 text-sm leading-6 text-foreground/85">{pricingAssessment.summary}</p>
@@ -1767,13 +1767,13 @@ function AnalysisResultsSection({
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Confidence</p>
+                <p className="text-xs font-semibold tracking-normal text-muted-foreground">Confidence</p>
                 <p className="mt-2 text-base font-semibold text-foreground">{confidenceDescriptor ?? 'Pending'}</p>
                 {confidenceLabel ? <p className="mt-1 text-sm text-muted-foreground">{confidenceLabel}</p> : null}
               </div>
               {analysis.generatedAt ? (
                 <div className="rounded-2xl border border-border bg-background p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Updated</p>
+                  <p className="text-xs font-semibold tracking-normal text-muted-foreground">Updated</p>
                   <p className="mt-2 text-base font-semibold text-foreground">{formatDateTime(analysis.generatedAt)}</p>
                   <p className="mt-1 text-sm text-muted-foreground">Based on the latest saved case input.</p>
                 </div>
@@ -1933,14 +1933,14 @@ function ResultList({
                 <div className="space-y-3">
                   <div className={cn('flex flex-wrap gap-2', ordered ? 'justify-between' : 'justify-end')}>
                     {ordered ? (
-                      <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
+                      <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold tracking-normal text-teal-700">
                         Step {index + 1}
                       </span>
                     ) : null}
                     {itemMeta ? (
                       <div className="flex flex-wrap items-center gap-1">
                         {metaLabel ? (
-                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold tracking-normal text-slate-600">
                             {metaLabel}
                           </span>
                         ) : null}
@@ -2030,13 +2030,13 @@ function DraftSection({
           <div className="space-y-3 rounded-2xl border border-border bg-background p-3.5 sm:space-y-4 sm:p-4">
             {draft.subject ? (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Subject</p>
+                <p className="text-xs font-semibold tracking-normal text-muted-foreground">Subject</p>
                 <p className="mt-1 text-sm font-medium text-foreground">{draft.subject}</p>
               </div>
             ) : null}
 
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ready-to-send message</p>
+              <p className="text-xs font-semibold tracking-normal text-muted-foreground">Ready-to-send message</p>
               <div className="mt-2 whitespace-pre-wrap rounded-xl border border-border bg-white p-3.5 text-sm leading-6 text-foreground/90 sm:p-4 sm:leading-7">
                 {draft.body}
               </div>
@@ -2977,7 +2977,7 @@ export default function NegotiationShieldToolClient() {
     return (
       <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
         <MobilePageIntro
-          eyebrow="Home Tool"
+          eyebrow="Home tool"
           title="Negotiation Shield"
           subtitle="This route is missing the property context Negotiation Shield needs."
          className="lg:hidden"/>
@@ -3007,7 +3007,7 @@ export default function NegotiationShieldToolClient() {
       <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
         <HomeToolsRail propertyId={propertyId} context="negotiation-shield" currentToolId="negotiation-shield" />
         <MobilePageIntro
-          eyebrow="Home Tool"
+          eyebrow="Home tool"
           title="Negotiation Shield"
           subtitle="Loading the property context for this review..."
          className="lg:hidden"/>
@@ -3027,7 +3027,7 @@ export default function NegotiationShieldToolClient() {
       <MobilePageContainer className="space-y-4 sm:space-y-5 lg:max-w-7xl lg:px-8 lg:pb-10">
         <HomeToolsRail propertyId={propertyId} context="negotiation-shield" currentToolId="negotiation-shield" />
         <MobilePageIntro
-          eyebrow="Home Tool"
+          eyebrow="Home tool"
           title="Negotiation Shield"
           subtitle="We could not load the property context for this tool."
          className="lg:hidden"/>
@@ -3062,7 +3062,7 @@ export default function NegotiationShieldToolClient() {
       <HomeToolsRail propertyId={propertyId} context="negotiation-shield" currentToolId="negotiation-shield" />
 
       <MobilePageIntro
-        eyebrow="Home Tool"
+        eyebrow="Home tool"
         title="Negotiation Shield"
         subtitle="Review quotes, insurance disputes, and buyer requests, then get a message you can actually send."
         action={introAction}

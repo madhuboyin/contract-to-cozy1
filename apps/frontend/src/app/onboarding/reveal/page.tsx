@@ -111,7 +111,7 @@ export default function RevealOnboardingPage() {
         trust: {
           confidenceLabel: 'Low confidence (fallback)',
           freshnessLabel: 'Template baseline',
-          sourceLabel: 'CtC starter guidance',
+          sourceLabel: 'Starter guidance',
           rationale: 'AI/local data inputs were incomplete, so this uses deterministic homeowner baseline guidance.',
         },
       };
@@ -136,7 +136,7 @@ export default function RevealOnboardingPage() {
         trust: {
           confidenceLabel: 'Low confidence (fallback)',
           freshnessLabel: 'Template baseline',
-          sourceLabel: 'CtC starter guidance',
+          sourceLabel: 'Starter guidance',
           rationale: 'Shown because full valuation/trend inputs were unavailable during onboarding reveal.',
         },
       };
@@ -229,7 +229,7 @@ export default function RevealOnboardingPage() {
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
                   className={cn(
-                    "inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(16,185,129,0.1)]",
+                    "inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold tracking-normal shadow-[0_0_15px_rgba(16,185,129,0.1)]",
                     hasStructuredLookup
                       ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
                       : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
@@ -271,7 +271,7 @@ export default function RevealOnboardingPage() {
                     className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center hover:bg-white/10 transition-colors cursor-default"
                   >
                     <stat.icon className="h-4 w-4 text-slate-500 mx-auto mb-2" />
-                    <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">{stat.label}</p>
+                    <p className="text-[10px] font-bold text-slate-500 tracking-normal">{stat.label}</p>
                     <p className="text-lg font-black text-white">{stat.value}</p>
                   </motion.div>
                 ))}

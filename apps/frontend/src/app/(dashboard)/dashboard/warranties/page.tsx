@@ -460,7 +460,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
         </div>
 
         <section className="space-y-2">
-          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Warranty Details</h3>
+          <h3 className="text-[13px] font-semibold tracking-normal text-[#4B5563]">Warranty Details</h3>
           <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
             <div className="grid content-start gap-2">
               <Label htmlFor="providerName" className={COVERAGE_MODAL_LABEL_CLASS}>
@@ -547,7 +547,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Coverage Period</h3>
+          <h3 className="text-[13px] font-semibold tracking-normal text-[#4B5563]">Coverage Period</h3>
           <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
             <div className={COVERAGE_MODAL_TWO_COL_GRID_CLASS}>
               <div className="grid content-start gap-2">
@@ -592,7 +592,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Coverage Target</h3>
+          <h3 className="text-[13px] font-semibold tracking-normal text-[#4B5563]">Coverage Target</h3>
           <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
             <div className="grid content-start gap-2">
               <Label htmlFor="propertyId" className={COVERAGE_MODAL_LABEL_CLASS}>
@@ -682,7 +682,7 @@ const WarrantyForm = ({ initialData, properties, homeAssets, providerSuggestions
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#4B5563]">Additional Notes</h3>
+          <h3 className="text-[13px] font-semibold tracking-normal text-[#4B5563]">Additional Notes</h3>
           <div className="space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5">
             <div className="grid content-start gap-2">
               <Label htmlFor="coverageDetails" className={COVERAGE_MODAL_LABEL_CLASS}>
@@ -1284,15 +1284,15 @@ export default function WarrantiesPage() {
               </div>
               <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200/90 bg-[linear-gradient(135deg,rgba(15,118,110,0.06),rgba(245,158,11,0.08),rgba(239,68,68,0.06))]">
                 <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-teal-700">Active</p>
+                  <p className="text-[11px] tracking-normal text-teal-700">Active</p>
                   <p className="text-lg font-semibold text-slate-900">{activeWarrantyCount}</p>
                 </div>
                 <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-amber-700">Expiring</p>
+                  <p className="text-[11px] tracking-normal text-amber-700">Expiring</p>
                   <p className="text-lg font-semibold text-slate-900">{expiringSoonWarrantyCount}</p>
                 </div>
                 <div className="px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">Expired</p>
+                  <p className="text-[11px] tracking-normal text-rose-700">Expired</p>
                   <p className="text-lg font-semibold text-slate-900">{expiredWarrantyCount}</p>
                 </div>
               </div>
@@ -1329,7 +1329,7 @@ export default function WarrantiesPage() {
                     <div className="space-y-2.5 px-4 pt-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-[13px] font-semibold uppercase tracking-[0.06em] text-slate-800">
+                          <p className="truncate text-[13px] font-semibold tracking-normal text-slate-800">
                             {warranty.providerName}
                           </p>
                           <p className="mt-1 line-clamp-2 text-xl font-semibold leading-tight text-slate-900">
@@ -1430,13 +1430,13 @@ export default function WarrantiesPage() {
                         </div>
                         {coveragePreview ? (
                           <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Coverage Details</p>
+                            <p className="text-[11px] tracking-normal text-slate-500">Coverage Details</p>
                             <p className="mt-1 text-sm text-slate-700">{coveragePreview}</p>
                           </div>
                         ) : null}
                         {meta.status !== 'active' ? (
                           <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Cozy Insight</p>
+                            <p className="text-[11px] tracking-normal text-slate-500">Cozy Insight</p>
                             <p className="mt-1 text-sm text-slate-700">
                               {meta.status === 'expired'
                                 ? 'Coverage has lapsed. Review this plan and upload any replacement policy.'

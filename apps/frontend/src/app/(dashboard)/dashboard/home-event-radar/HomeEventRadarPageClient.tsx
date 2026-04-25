@@ -74,8 +74,8 @@ function RadarHero({ propertyAddress }: { propertyAddress?: string }) {
           <Radio className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />
         </div>
         <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
-            Home Tool
+          <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
+            Home tool
           </p>
           <h1 className="mb-0 text-base font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
             Home Event Radar
@@ -128,7 +128,7 @@ function RadarDesktopSidebar({
             <Building2 className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className={cn('mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]')}>
+            <p className={cn('mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]')}>
               Monitoring
             </p>
             <p className="mb-0 mt-1 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">

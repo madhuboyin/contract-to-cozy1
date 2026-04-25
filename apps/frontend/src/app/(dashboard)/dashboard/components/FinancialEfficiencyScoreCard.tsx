@@ -25,7 +25,7 @@ const CARD_BASE =
   "score-card score-card-status-tinted score-card-status-teal score-card-status-animate flex h-full flex-col gap-[0.6rem] rounded-xl px-[0.9rem] py-[0.85rem] shadow-sm";
 const HEADER_ICON = "h-4 w-4 flex-shrink-0 text-muted-foreground";
 const TITLE_CLASS = "truncate whitespace-nowrap text-xs font-medium text-muted-foreground";
-const SUPPORT_LABEL = "mb-[2px] block text-[9px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
+const SUPPORT_LABEL = "mb-[2px] block text-[9px] font-medium tracking-normal text-muted-foreground";
 const META_VALUE = "text-[12px] font-medium text-foreground";
 const DESCRIPTION_CLASS =
   "text-[11.5px] text-muted-foreground leading-[1.55] line-clamp-2 min-h-[2.3rem]";

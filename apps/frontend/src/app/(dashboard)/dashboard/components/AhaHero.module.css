@@ -32,9 +32,7 @@
 .eyebrow {
   margin: 0;
   font-size: 0.72rem;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: #99b5eb;
+  letter-spacing: 0;  color: #99b5eb;
   font-weight: 700;
 }
 
@@ -45,7 +43,7 @@
   font-family: var(--font-heading);
   font-size: clamp(1.2rem, 2vw, 1.82rem);
   line-height: 1.08;
-  letter-spacing: -0.012em;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
@@ -97,7 +95,7 @@
   color: #c8dcff;
   font-size: 0.67rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0;
   cursor: pointer;
 }
 
@@ -125,9 +123,7 @@
 
 .briefLabel {
   margin: 0;
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  font-size: 0.68rem;  letter-spacing: 0;
   color: #9eb8e7;
   font-weight: 700;
 }
@@ -164,9 +160,7 @@
 
 .deltaTitle {
   flex-shrink: 0;
-  color: #80f2e0;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: #80f2e0;  letter-spacing: 0;
   font-size: 0.59rem;
   font-weight: 700;
   padding-top: 0.05rem;
@@ -187,9 +181,7 @@
 
 .feedTitle {
   margin: 0;
-  color: #96b3e6;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  color: #96b3e6;  letter-spacing: 0;
   font-size: 0.67rem;
   font-weight: 700;
 }

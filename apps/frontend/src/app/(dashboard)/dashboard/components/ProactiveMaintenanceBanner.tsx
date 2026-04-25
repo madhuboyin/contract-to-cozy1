@@ -30,10 +30,10 @@ export function ProactiveMaintenanceBanner({
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
           <span className="text-[15px] font-semibold text-gray-900">
-            Maintenance Needed: Health Score {healthScore}/100
+            Maintenance Needed: Health score {healthScore}/100
           </span>
         </div>
-        <Badge className="bg-orange-600 text-white text-xs font-bold tracking-wide uppercase flex-shrink-0">
+        <Badge className="bg-orange-600 text-white text-xs font-bold tracking-normal flex-shrink-0">
           {actionCount} PENDING
         </Badge>
       </div>

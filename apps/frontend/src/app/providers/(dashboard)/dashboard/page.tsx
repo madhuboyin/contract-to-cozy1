@@ -206,7 +206,7 @@ export default function ProviderDashboardPage() {
 
       {!isLoading && pending.length === 0 && (
         <MobileCard variant="compact" className="bg-[linear-gradient(145deg,#ecfeff,#eef2ff)]">
-          <p className="mb-0 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Performance tip</p>
+          <p className="mb-0 text-xs font-medium tracking-normal text-slate-500">Performance tip</p>
           <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">Responding within 2 hours drives repeat bookings.</p>
           <p className="mb-0 mt-1 text-xs text-slate-600">Fast responses consistently improve conversion and review quality.</p>
         </MobileCard>

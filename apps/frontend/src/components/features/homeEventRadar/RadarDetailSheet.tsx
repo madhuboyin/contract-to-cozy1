@@ -83,7 +83,7 @@ function Chip({ children, className }: { children: React.ReactNode; className?: 
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-[hsl(var(--mobile-text-muted))]">
+      <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
         {title}
       </h3>
       {children}

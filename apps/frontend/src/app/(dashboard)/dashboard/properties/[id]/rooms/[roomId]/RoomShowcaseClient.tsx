@@ -619,7 +619,7 @@ export default function RoomShowcaseClient() {
                         <p className="mb-0 truncate text-xs font-medium text-gray-800">
                           {recommendation.plantName}
                         </p>
-                        <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                        <span className="text-[10px] tracking-normal text-gray-500">
                           {recommendation.status}
                         </span>
                       </div>

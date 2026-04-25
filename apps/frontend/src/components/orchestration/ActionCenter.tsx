@@ -505,7 +505,7 @@ export const ActionCenter: React.FC<Props> = ({
   
     return (
       <section className="space-y-2">
-        <div className={`text-xs font-semibold uppercase ${labelClass}`}>
+        <div className={`text-xs font-semibold ${labelClass}`}>
           {label} ({items.length})
         </div>
   
@@ -599,7 +599,7 @@ export const ActionCenter: React.FC<Props> = ({
       <div className="space-y-6">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Active</p>
+            <p className="text-[11px] font-medium tracking-normal text-gray-500">Active</p>
             <p className="mt-0.5 text-xl font-bold text-gray-900">{actions.length}</p>
             <p className={suppressedActions.length > 0 ? 'mt-0.5 text-[11px] text-amber-600' : 'mt-0.5 text-[11px] text-gray-400'}>
               {suppressedActions.length > 0
@@ -608,14 +608,14 @@ export const ActionCenter: React.FC<Props> = ({
             </p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Est. Costs</p>
+            <p className="text-[11px] font-medium tracking-normal text-gray-500">Est. Costs</p>
             <p className="mt-0.5 text-xl font-bold text-gray-900">{formatCurrency(totalEstCost)}</p>
             <p className="mt-0.5 text-[11px] text-gray-400">
               {suppressedActions.length > 0 ? 'Includes suppressed items' : 'for active tasks'}
             </p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Completed</p>
+            <p className="text-[11px] font-medium tracking-normal text-gray-500">Completed</p>
             <p className="mt-0.5 text-xl font-bold text-gray-900">{completedPct}%</p>
             <p className="mt-0.5 text-[11px] text-gray-400">
               {completedCount} recently completed
@@ -656,7 +656,7 @@ export const ActionCenter: React.FC<Props> = ({
         {otherStale.length > 0 && (
           <section className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase text-gray-400">
+              <span className="text-xs font-semibold text-gray-400">
                 Aging Actions ({otherStale.length})
               </span>
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
@@ -704,7 +704,7 @@ export const ActionCenter: React.FC<Props> = ({
               {showSuppressed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               <span>
                 {showSuppressed
-                ? 'Hide suppressed actions'
+                ? 'Show less'
                 : actions.length === 0
                   ? `↓ ${suppressedActions.length} suppressed actions — snoozed or auto-filtered`
                   : `↓ Show ${suppressedActions.length} lower-priority items`}
@@ -750,7 +750,7 @@ export const ActionCenter: React.FC<Props> = ({
             >
               {showSnoozed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               {showSnoozed
-                ? 'Hide snoozed actions'
+                ? 'Show less'
                 : `Show snoozed actions (${snoozedActions.length})`}
             </button>
 

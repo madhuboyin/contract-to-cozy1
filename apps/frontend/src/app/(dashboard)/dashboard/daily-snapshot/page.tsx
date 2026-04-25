@@ -155,7 +155,7 @@ export default function DailySnapshotPage() {
           <MobileSection>
             <SummaryCard
               title="Score Movement"
-              subtitle="Latest model deltas"
+              subtitle="Latest changes"
               action={<Sparkles className="h-4 w-4 text-[hsl(var(--mobile-brand-strong))]" />}
             >
               {summary.map((item) => (

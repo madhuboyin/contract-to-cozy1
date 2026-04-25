@@ -731,7 +731,7 @@ export default function MaintenancePage() {
 
                 <div className="flex justify-between items-center text-sm border-t pt-3">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase text-muted-foreground">Next Due</span>
+                    <span className="text-[10px] text-muted-foreground">Next Due</span>
                     <span className={cn("font-semibold", dueDateInfo.color)}>{dueDateInfo.text}</span>
                   </div>
                   
@@ -769,7 +769,7 @@ export default function MaintenancePage() {
           {/* Open section */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900">OPEN TASKS</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Open tasks</h3>
               <span className="text-xs text-gray-500">{openTasks.length} items</span>
             </div>
 
@@ -789,8 +789,8 @@ export default function MaintenancePage() {
                       <TableHead>Priority</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead className="hidden sm:table-cell">Frequency</TableHead>
-                      <TableHead>Last Completed</TableHead>
-                      <TableHead className="text-center">Next Due</TableHead>
+                      <TableHead>Last completed</TableHead>
+                      <TableHead className="text-center">Next due</TableHead>
                       <TableHead className="text-center">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -842,7 +842,7 @@ export default function MaintenancePage() {
                                 size="icon"
                                 className="h-8 w-8 text-gray-500 hover:text-green-600"
                                 onClick={() => handleMarkComplete.mutate(task)}
-                                title="Mark Complete"
+                                title="Mark complete"
                               >
                                 <CheckCircle className="w-4 h-4" />
                               </Button>
@@ -852,7 +852,7 @@ export default function MaintenancePage() {
                                 size="icon"
                                 className="h-8 w-8 text-gray-500 hover:text-blue-600"
                                 onClick={() => handleOpenModal(task)}
-                                title="Edit Task"
+                                title="Edit task"
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
@@ -892,7 +892,7 @@ export default function MaintenancePage() {
 
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <div className="flex flex-col">
-                          <span className="text-[10px] uppercase text-muted-foreground">Next Due</span>
+                          <span className="text-[10px] text-muted-foreground">Next due</span>
                           <span className={cn('font-semibold', dueDateInfo.color)}>{dueDateInfo.text}</span>
                         </div>
 
@@ -902,7 +902,7 @@ export default function MaintenancePage() {
                             size="sm"
                             className="h-11 w-11 text-green-600"
                             onClick={() => handleMarkComplete.mutate(task)}
-                            title="Mark Complete"
+                            title="Mark complete"
                           >
                             <CheckCircle className="w-5 h-5" />
                           </Button>
@@ -911,7 +911,7 @@ export default function MaintenancePage() {
                             size="sm"
                             className="h-11 w-11"
                             onClick={() => handleOpenModal(task)}
-                            title="Edit Task"
+                            title="Edit task"
                           >
                             <Edit className="w-5 h-5" />
                           </Button>
@@ -928,7 +928,7 @@ export default function MaintenancePage() {
           {/* Completed section */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-900">COMPLETED TASKS</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Completed tasks</h3>
               <span className="text-xs text-gray-500">{completedTasks.length} items</span>
             </div>
 
@@ -1042,7 +1042,7 @@ export default function MaintenancePage() {
 
                       <div className="flex justify-between items-center text-sm border-t pt-3">
                         <div className="flex flex-col">
-                          <span className="text-[10px] uppercase text-muted-foreground">Next Due</span>
+                          <span className="text-[10px] text-muted-foreground">Next Due</span>
                           <span className={cn('font-semibold', dueDateInfo.color)}>{dueDateInfo.text}</span>
                         </div>
 

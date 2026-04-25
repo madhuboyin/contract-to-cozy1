@@ -62,7 +62,7 @@ function verdictLabel(verdict: string | null | undefined) {
   if (verdict === 'UNDERPRICED') return 'Below market';
   if (verdict === 'HIGH') return 'Above market';
   if (verdict === 'VERY_HIGH') return 'Well above market';
-  if (verdict === 'INSUFFICIENT_DATA') return 'Limited data';
+  if (verdict === 'INSUFFICIENT_DATA') return '';
   return 'Pending';
 }
 
@@ -195,7 +195,7 @@ export default function QuoteComparisonPage() {
           {quotes.map((q, idx) => (
             <MobileCard key={q.id} variant="compact" className="space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                <p className="text-xs font-bold tracking-normal text-slate-400">
                   Quote {idx + 1}
                 </p>
                 {quotes.length > 1 && (
@@ -211,7 +211,7 @@ export default function QuoteComparisonPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  <Label className="text-[10px] font-bold tracking-normal text-slate-400">
                     Vendor Name (optional)
                   </Label>
                   <Input
@@ -222,7 +222,7 @@ export default function QuoteComparisonPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  <Label className="text-[10px] font-bold tracking-normal text-slate-400">
                     Quote Amount ($)
                   </Label>
                   <div className="relative">
@@ -291,7 +291,7 @@ export default function QuoteComparisonPage() {
                   variant="compact"
                   className="border-emerald-200 bg-emerald-50 space-y-1"
                 >
-                  <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">
+                  <p className="text-xs font-bold tracking-normal text-emerald-600">
                     Best Pick
                   </p>
                   <p className="text-sm font-semibold text-emerald-900">

@@ -966,7 +966,7 @@ export default function CoverageIntelligencePanel({
 
                 {/* LEFT: Primary Verdict Card */}
                 <section className={cn('rounded-2xl border p-6 md:px-6 md:py-5', verdictHeroClass(analysis.overallVerdict))}>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                  <p className="text-[11px] font-semibold tracking-normal text-slate-400">
                     Coverage Insight
                   </p>
 
@@ -983,7 +983,7 @@ export default function CoverageIntelligencePanel({
                       <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={cn(
-                            'rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                            'rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-normal',
                             verdictBadgeClass(analysis.overallVerdict)
                           )}
                         >
@@ -1037,7 +1037,7 @@ export default function CoverageIntelligencePanel({
                   {/* Recommendation Callout */}
                   <div className="mt-4 flex items-center gap-3 rounded-xl border border-black/[0.07] bg-white/60 px-4 py-3">
                     <Shield className="h-4 w-4 flex-shrink-0 text-slate-400" />
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="text-[11px] font-semibold tracking-normal text-slate-400">
                       Recommendation
                     </span>
                     <span className="mx-0.5 h-3.5 w-px flex-shrink-0 bg-slate-200" />
@@ -1089,7 +1089,7 @@ export default function CoverageIntelligencePanel({
                       if (!risk) return null;
                       return (
                         <div className="mt-4 rounded-xl border border-rose-100 bg-rose-50/60 p-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-400">
+                          <p className="text-[10px] font-semibold tracking-normal text-rose-400">
                             Biggest risk · {risk.label}
                           </p>
                           <p className="mt-1 text-xs font-semibold leading-snug text-slate-800">
@@ -1110,7 +1110,7 @@ export default function CoverageIntelligencePanel({
                   {/* Next Steps card */}
                   {analysis.nextSteps && analysis.nextSteps.length > 0 && (
                     <div className="rounded-2xl border border-black/[0.07] bg-white p-4 shadow-sm">
-                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      <p className="mb-3 text-[11px] font-semibold tracking-normal text-slate-400">
                         Next Steps
                       </p>
                       <div className="space-y-3">
@@ -1341,12 +1341,12 @@ export default function CoverageIntelligencePanel({
               {hasSimulated && (
                 <div className={cn('mt-4 rounded-xl border p-3.5', verdictPanelClass(analysis.overallVerdict))}>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <p className="text-[10px] font-semibold tracking-normal text-slate-500">
                       Simulation result
                     </p>
                     <span
                       className={cn(
-                        'rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                        'rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-normal',
                         verdictBadgeClass(analysis.overallVerdict)
                       )}
                     >
@@ -1373,7 +1373,7 @@ export default function CoverageIntelligencePanel({
               <div className="mt-5">
                 <div className="mb-3 flex items-center gap-2">
                   <AlertTriangle className="h-3.5 w-3.5 text-slate-400" />
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  <p className="text-[11px] font-semibold tracking-normal text-slate-400">
                     Policy Signals
                   </p>
                 </div>
@@ -1408,7 +1408,7 @@ export default function CoverageIntelligencePanel({
               <div className="mt-5">
                 <div className="mb-3 flex items-center gap-2">
                   <Shield className="h-3.5 w-3.5 text-slate-400" />
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  <p className="text-[11px] font-semibold tracking-normal text-slate-400">
                     Recommended Protection
                   </p>
                 </div>

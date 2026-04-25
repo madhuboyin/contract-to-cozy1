@@ -223,7 +223,7 @@ export function CoverageSnapshotCard({
       <MetricRow
         label="Coverage Rate"
         value={`${roundedCoverage}%`}
-        trend={<StatusChip tone={rateTone}>{roundedCoverage >= 80 ? 'Healthy' : roundedCoverage >= 50 ? 'Watch' : 'At Risk'}</StatusChip>}
+        trend={<StatusChip tone={rateTone}>{roundedCoverage >= 80 ? 'Healthy' : roundedCoverage >= 50 ? 'Watch' : 'Cost now'}</StatusChip>}
       />
 
       <div className="grid grid-cols-2 gap-2">
@@ -650,7 +650,7 @@ export function MobileInventoryItemCard({
 
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2">
-            <p className="mb-0 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--mobile-text-muted))]">
+            <p className="mb-0 text-[10px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
               Replacement Value
             </p>
             {hasValue ? (
@@ -672,7 +672,7 @@ export function MobileInventoryItemCard({
           </div>
 
           <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2">
-            <p className="mb-0 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--mobile-text-muted))]">
+            <p className="mb-0 text-[10px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
               Coverage
             </p>
             <p className="mb-0 mt-1 text-lg font-semibold text-[hsl(var(--mobile-text-primary))]">

@@ -79,7 +79,7 @@ export default function ProviderBookingQueueTemplate({
       }
       filters={
         <MobileFilterSurface className="space-y-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">Queue</p>
+          <p className="text-[11px] font-medium tracking-normal text-slate-500">Queue</p>
           <div className="inline-flex w-full gap-1 rounded-xl bg-slate-100 p-1">
             {tabs.map((tab) => {
               const active = tab.key === activeTab;

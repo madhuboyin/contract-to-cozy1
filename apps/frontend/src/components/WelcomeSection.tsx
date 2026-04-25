@@ -68,8 +68,8 @@ export function WelcomeSection({
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full pt-3 md:pt-4 pb-2">
         <div className="rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-sm md:px-4 md:py-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-medium text-gray-400 tracking-[0.14em]">
-              Property Workspace
+            <p className="text-[10px] font-medium text-gray-400 tracking-normal">
+              Property workspace
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {properties.map((property) => {
@@ -110,8 +110,8 @@ export function WelcomeSection({
           <div className="flex-1 min-w-0">
             {compact ? (
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-[0.14em]">
-                  Property Workspace
+                <p className="text-xs font-semibold text-gray-500 tracking-normal">
+                  Property workspace
                 </p>
                 <p className="mt-1 text-sm text-gray-600">
                   Viewing context for scores, alerts, and recommendations.
@@ -124,7 +124,7 @@ export function WelcomeSection({
             )}
             
             <div className={`flex items-center gap-2 ${compact ? 'mt-2' : 'mt-4'}`}>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+              <span className="text-xs font-bold text-gray-400 tracking-normal">
                 Viewing:
               </span>
               

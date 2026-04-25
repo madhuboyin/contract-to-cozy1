@@ -78,7 +78,7 @@ export default function ProviderShellTemplate({
             supportingAction={primaryAction.supportingAction}
             impactLabel={primaryAction.impactLabel}
             confidenceLabel={primaryAction.confidenceLabel}
-            eyebrow={primaryAction.eyebrow || 'Priority Action'}
+            eyebrow={primaryAction.eyebrow || 'Priority action'}
           />
 
           {summary}

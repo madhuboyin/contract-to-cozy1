@@ -28,7 +28,7 @@ export function SignatureRecommendationCard({
     <section className="mt-3 animate-fade-in-up rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50/85 via-white to-teal-50/60 p-4 shadow-sm sm:p-5">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-600">
+          <p className="text-[11px] font-semibold tracking-normal text-indigo-600">
             If This Were My Home
           </p>
           <h3 className="mt-1 text-lg font-semibold leading-tight text-slate-900">

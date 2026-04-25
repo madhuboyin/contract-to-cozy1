@@ -423,7 +423,7 @@ function SnapshotBlock({
 
   return (
     <section className="rounded-[22px] border border-slate-200/80 bg-white/88 px-3 py-3 shadow-[var(--ctc-shadow-card)]">
-      <h2 className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">Intelligence brief</h2>
+      <h2 className="text-[10px] font-semibold text-slate-400 tracking-normal">Intelligence brief</h2>
       <div className="mt-2">
         <SnapshotRow label="Total at risk" value={formatCompactUsd(Math.round(atRisk))} className="text-amber-600" />
         <SnapshotRow
@@ -492,7 +492,7 @@ function QuickActionsBlock({ propertyId }: { propertyId: string | undefined }) {
 
   return (
     <section className="rounded-[22px] border border-slate-200/80 bg-white/88 px-3 py-3 shadow-[var(--ctc-shadow-card)]">
-      <h2 className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.12em]">Contextual actions</h2>
+      <h2 className="text-[10px] font-semibold text-slate-400 tracking-normal">Contextual actions</h2>
       <div className="mt-2">
         {actions.map((action) => {
           const Icon = action.icon;
@@ -583,7 +583,7 @@ export function RightSidebar() {
   return (
     <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-slate-200/70 bg-white/70 px-3 py-4 backdrop-blur-xl lg:flex">
       <section className="rounded-[22px] border border-slate-200/80 bg-white/88 p-3 shadow-[var(--ctc-shadow-card)]">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">{routeLabel}</p>
+        <p className="mb-2 text-[10px] font-semibold tracking-normal text-slate-400">{routeLabel}</p>
         <div className="flex items-start gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 ring-1 ring-teal-200">
             <RouteIcon className="h-4 w-4" />

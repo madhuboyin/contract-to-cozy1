@@ -60,7 +60,7 @@ export function ConfirmationForm({
 
       <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
         <div className="space-y-2">
-          <Label htmlFor="productName" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Item Name</Label>
+          <Label htmlFor="productName" className="text-[10px] font-bold tracking-normal text-slate-400">Item Name</Label>
           <Input 
             id="productName" 
             name="productName" 
@@ -73,7 +73,7 @@ export function ConfirmationForm({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="manufacturer" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Brand</Label>
+            <Label htmlFor="manufacturer" className="text-[10px] font-bold tracking-normal text-slate-400">Brand</Label>
             <Input 
               id="manufacturer" 
               name="manufacturer" 
@@ -84,7 +84,7 @@ export function ConfirmationForm({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="modelNumber" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Model #</Label>
+            <Label htmlFor="modelNumber" className="text-[10px] font-bold tracking-normal text-slate-400">Model #</Label>
             <Input 
               id="modelNumber" 
               name="modelNumber" 
@@ -97,7 +97,7 @@ export function ConfirmationForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="serialNumber" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Serial #</Label>
+          <Label htmlFor="serialNumber" className="text-[10px] font-bold tracking-normal text-slate-400">Serial #</Label>
           <Input 
             id="serialNumber" 
             name="serialNumber" 

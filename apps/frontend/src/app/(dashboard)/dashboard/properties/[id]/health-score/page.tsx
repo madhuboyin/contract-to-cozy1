@@ -28,7 +28,7 @@ import {
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
-const REQUIRED_ACTION_STATUSES = ["Needs Attention", "Needs Review", "Needs Inspection", "Missing Data", "Needs Warranty"];
+const REQUIRED_ACTION_STATUSES = ["Needs attention", "Needs Review", "Needs Inspection", "Missing Data", "Needs Warranty"];
 const IN_PROGRESS_STATUSES = ["Action Pending"];
 const WATCH_STATUSES = ["Aging", "Incomplete", "Partial", "Average", "Standard"];
 const POSITIVE_STATUSES = ["Excellent", "Good", "Modern", "Optimal", "Complete", "Low Density"];
@@ -62,7 +62,7 @@ const getHealthDetails = (score: number) => {
   if (score >= 85) return { level: "Excellent", color: "text-green-600", progressColor: "bg-green-500" };
   if (score >= 70) return { level: "Good", color: "text-blue-600", progressColor: "bg-blue-500" };
   if (score >= 50) return { level: "Fair", color: "text-yellow-600", progressColor: "bg-yellow-500" };
-  return { level: "Needs Attention", color: "text-red-600", progressColor: "bg-red-500" };
+  return { level: "Needs attention", color: "text-red-600", progressColor: "bg-red-500" };
 };
 
 function healthTone(level: string): "good" | "info" | "elevated" | "danger" {
@@ -233,20 +233,20 @@ function getFactorDescription(factorName: string | undefined, condition: string 
   const map: Record<string, Record<string, string>> = {
     'Water Heater Age': {
       'Needs Review': 'Approaching end of typical lifespan — review recommended',
-      'Needs Attention': 'Past typical lifespan — replacement evaluation recommended',
+      'Needs attention': 'Past typical lifespan — replacement evaluation recommended',
       'Aging': 'Getting older — monitor for performance issues',
       'Modern': 'Recently installed — no action needed',
     },
     'Roof Age': {
       'Aging': 'Mid-life — inspect after next major storm',
       'Needs Review': 'Past typical replacement window — inspection recommended',
-      'Needs Attention': 'Past replacement window — inspection recommended',
+      'Needs attention': 'Past replacement window — inspection recommended',
       'Modern': 'Recently replaced — no action needed',
     },
     'HVAC Age': {
       'Aging': 'Aging system — schedule annual maintenance',
       'Needs Review': 'Nearing end of service life — start planning replacement',
-      'Needs Attention': 'Past typical service life — plan replacement',
+      'Needs attention': 'Past typical service life — plan replacement',
       'Modern': 'Recently serviced — maintain current schedule',
     },
     'Usage/Wear Factor': {
@@ -507,8 +507,8 @@ export default function PropertyHealthDetailPage() {
   const topNegativeInsight = negativeInsights[0];
   const topPositiveInsight = positiveInsights[0];
   const healthDetails = getHealthDetails(latestScore);
-  const scoreRingColor = { Excellent: "#16a34a", Good: "#2563eb", Fair: "#d97706", "Needs Attention": "#dc2626" }[healthDetails.level] ?? "#d97706";
-  const scoreStatusPill = { Excellent: "bg-green-100 text-green-700", Good: "bg-blue-100 text-blue-700", Fair: "bg-amber-100 text-amber-700", "Needs Attention": "bg-red-100 text-red-700" }[healthDetails.level] ?? "bg-amber-100 text-amber-700";
+  const scoreRingColor = { Excellent: "#16a34a", Good: "#2563eb", Fair: "#d97706", "Needs attention": "#dc2626" }[healthDetails.level] ?? "#d97706";
+  const scoreStatusDot = { Excellent: "bg-green-500", Good: "bg-blue-500", Fair: "bg-amber-500", "Needs attention": "bg-red-500" }[healthDetails.level] ?? "bg-amber-500";
   const changes = buildHealthChangeItems(series, sortedInsights);
 
   const previousInsights = getSnapshotInsights(series?.previous);
@@ -559,7 +559,7 @@ export default function PropertyHealthDetailPage() {
         <div className="border-t border-black/10 px-3 py-2 space-y-2 text-xs text-muted-foreground">
           <p>
             This factor currently contributes{" "}
-            <span className="font-semibold text-foreground">{formatSignedPoints(scoreValue)} points</span> to your overall Health Score (0-100).
+            <span className="font-semibold text-foreground">{formatSignedPoints(scoreValue)} points</span> to your overall Health score (0-100).
           </p>
           <p>{getInsightStatusExplanation(insight.status)}</p>
           {detailLines.length > 0 ? (
@@ -602,7 +602,7 @@ export default function PropertyHealthDetailPage() {
           }
           summary={
             <ResultHeroCard
-              title="Health Score"
+              title="Health score"
               value={`${latestScore.toFixed(0)}/${scoreMax}`}
               status={<StatusChip tone={healthTone(healthDetails.level)}>{healthDetails.level}</StatusChip>}
               summary={`${latestScore.toFixed(0)} / ${scoreMax} · ${healthDetails.level}`}
@@ -761,63 +761,64 @@ export default function PropertyHealthDetailPage() {
       <div className="hidden md:block">
         <div className="grid gap-4 grid-cols-1 lg:grid-cols-[1fr_2fr_1fr]">
 
-          {/* ── Card 1: Health Score Ring ── */}
-          <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 shadow-sm overflow-hidden flex flex-col">
+          {/* ── Card 1: Health score ── */}
+          <div className="rounded-2xl border border-slate-200/50 bg-gradient-to-br from-white via-white to-slate-50/60 shadow-[0_1px_4px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
             <div className="px-5 pt-4 pb-0">
-              <p className="text-[11px] font-semibold tracking-widest uppercase text-slate-400">Health Score</p>
+              <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Health score</p>
             </div>
-            <div className="flex flex-col items-center justify-center flex-1 px-5 py-2">
-              <div className="relative my-2">
-                <svg width="120" height="120" className="-rotate-90" aria-hidden="true">
-                  <circle cx="60" cy="60" r="50" fill="none" strokeWidth="8" stroke="currentColor" strokeOpacity="0.08" />
+            <div className="flex flex-col items-center justify-center flex-1 px-5 py-1">
+              <div className="relative my-1">
+                <svg width="128" height="128" className="-rotate-90" aria-hidden="true">
+                  <circle cx="64" cy="64" r="54" fill="none" stroke="#e2e8f0" strokeWidth="7" />
                   <circle
-                    cx="60" cy="60" r="50"
+                    cx="64" cy="64" r="54"
                     fill="none"
-                    strokeWidth="8"
                     stroke={scoreRingColor}
-                    strokeDasharray={`${(2 * Math.PI * 50).toFixed(2)} ${(2 * Math.PI * 50).toFixed(2)}`}
-                    strokeDashoffset={(2 * Math.PI * 50 * (1 - latestScore / 100)).toFixed(2)}
+                    strokeWidth="7"
+                    strokeDasharray={`${(2 * Math.PI * 54).toFixed(2)} ${(2 * Math.PI * 54).toFixed(2)}`}
+                    strokeDashoffset={(2 * Math.PI * 54 * (1 - latestScore / 100)).toFixed(2)}
                     strokeLinecap="round"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <div className="flex items-baseline leading-none">
-                    <span className={`text-4xl font-black tabular-nums ${healthDetails.color}`}>{latestScore.toFixed(0)}</span>
-                    <span className="text-sm font-medium text-slate-400 ml-0.5">/100</span>
+                  <div className="flex items-end gap-0.5 leading-none">
+                    <span className={`text-[40px] font-black tabular-nums leading-none tracking-tight ${healthDetails.color}`}>{latestScore.toFixed(0)}</span>
+                    <span className="text-[11px] font-semibold text-slate-400 mb-1.5 ml-0.5">/100</span>
                   </div>
-                  <span className={`mt-2 text-[10px] font-bold px-2.5 py-0.5 rounded-full ${scoreStatusPill}`}>
-                    {healthDetails.level}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className={`h-[5px] w-[5px] rounded-full shrink-0 ${scoreStatusDot}`} />
+                    <span className="text-[11px] font-semibold text-slate-500 tracking-normal">{healthDetails.level}</span>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center justify-center mt-1">
+              <div className="flex items-center justify-center mt-0.5">
                 <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
               </div>
             </div>
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/80">
+            <div className="px-5 py-2.5 border-t border-slate-100/80 bg-slate-50/60">
               <button
                 onClick={() => setShowScoreModal(true)}
-                className="text-xs text-teal-600 hover:text-teal-700 transition-colors font-medium"
+                className="text-[11px] font-semibold text-teal-600 hover:text-teal-500 transition-colors"
               >
                 How is this calculated? →
               </button>
             </div>
           </div>
 
-          {/* ── Card 2: Health Snapshot (primary, elevated) ── */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden flex flex-col">
-            <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-slate-100">
+          {/* ── Card 2: Health Snapshot (primary surface) ── */}
+          <div className="rounded-2xl border border-slate-200/70 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
+            <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-slate-100/80">
               <div>
-                <p className="text-sm font-semibold text-slate-800">Health Snapshot</p>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-[13px] font-semibold text-slate-900 tracking-normal">Health Snapshot</p>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
                   {usingSnapshotInsights ? "Latest weekly snapshot" : "From current property profile"}
                 </p>
               </div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full shrink-0 ml-3">
+              <span className="text-[9px] font-bold tracking-normal bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full shrink-0 ml-3 mt-0.5">
                 {usingSnapshotInsights ? "Weekly" : "Live"}
               </span>
             </div>
-            <div className="px-5 py-4 flex-1">
+            <div className="px-5 py-3 flex-1">
               {sortedInsights.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-8 text-center space-y-1.5">
                   <p className="text-sm font-medium text-slate-500">No signals available yet</p>
@@ -827,45 +828,45 @@ export default function PropertyHealthDetailPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-xl bg-red-50 border border-red-100/80 p-3 text-center">
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <div className="rounded-[10px] bg-red-50 border border-red-100/60 p-2.5 text-center">
                       <p className="text-3xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
-                      <p className="text-[11px] font-semibold text-red-500 mt-1.5 leading-tight">Needs attention</p>
-                      <p className="text-[10px] text-slate-400 mt-1 tabular-nums">
+                      <p className="text-[10px] font-semibold text-red-500/90 mt-1.5 leading-tight tracking-normal">Needs attention</p>
+                      <p className="text-[9px] text-slate-400 mt-1 tabular-nums">
                         {negDelta === null ? "First check" : negDelta === 0 ? "No change" : negDelta > 0 ? `↑ ${negDelta} more` : `↓ ${Math.abs(negDelta)} fewer`}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-amber-50 border border-amber-100/80 p-3 text-center">
-                      <p className="text-3xl font-black text-amber-600 tabular-nums leading-none">{neutralInsights.length}</p>
-                      <p className="text-[11px] font-semibold text-amber-600 mt-1.5 leading-tight">Monitor closely</p>
-                      <p className="text-[10px] text-slate-400 mt-1 tabular-nums">
+                    <div className="rounded-[10px] bg-amber-50 border border-amber-100/60 p-2.5 text-center">
+                      <p className="text-3xl font-black text-amber-500 tabular-nums leading-none">{neutralInsights.length}</p>
+                      <p className="text-[10px] font-semibold text-amber-600/90 mt-1.5 leading-tight tracking-normal">Monitor closely</p>
+                      <p className="text-[9px] text-slate-400 mt-1 tabular-nums">
                         {neutralDelta === null ? "First check" : neutralDelta === 0 ? "No change" : neutralDelta > 0 ? `↑ ${neutralDelta} more` : `↓ ${Math.abs(neutralDelta)} fewer`}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-100/80 p-3 text-center">
+                    <div className="rounded-[10px] bg-emerald-50 border border-emerald-100/60 p-2.5 text-center">
                       <p className="text-3xl font-black text-emerald-600 tabular-nums leading-none">{positiveInsights.length}</p>
-                      <p className="text-[11px] font-semibold text-emerald-600 mt-1.5 leading-tight">Healthy signals</p>
-                      <p className="text-[10px] text-slate-400 mt-1 tabular-nums">
+                      <p className="text-[10px] font-semibold text-emerald-600/90 mt-1.5 leading-tight tracking-normal">Healthy signals</p>
+                      <p className="text-[9px] text-slate-400 mt-1 tabular-nums">
                         {positiveDelta === null ? "First check" : positiveDelta === 0 ? "No change" : positiveDelta > 0 ? `↑ ${positiveDelta} more` : `↓ ${Math.abs(positiveDelta)} fewer`}
                       </p>
                     </div>
                   </div>
-                  <div className="space-y-2 pt-1">
-                    <div className="flex items-center gap-2.5 rounded-lg bg-red-50/60 border border-red-100/60 px-3 py-2.5">
-                      <span className="h-2 w-2 rounded-full bg-red-400 shrink-0" />
-                      <span className="text-[11px] font-bold text-red-600 shrink-0 w-[86px]">Biggest risk</span>
-                      <span className="text-xs font-medium text-slate-700 truncate flex-1">{topNegativeInsight?.factor || "None currently"}</span>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2.5 rounded-lg bg-red-50/50 border border-red-100/50 px-3 py-2">
+                      <span className="h-[7px] w-[7px] rounded-full bg-red-400/80 shrink-0" />
+                      <span className="text-[10px] font-bold text-red-600 shrink-0 w-[82px] tracking-normal">Biggest risk</span>
+                      <span className="text-[12px] font-medium text-slate-700 truncate flex-1">{topNegativeInsight?.factor || "None currently"}</span>
                       {topNegativeInsight && (
-                        <span className="text-[10px] text-slate-400 shrink-0 ml-auto">{topNegativeInsight.status}</span>
+                        <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{topNegativeInsight.status}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2.5 rounded-lg bg-teal-50/60 border border-teal-100/60 px-3 py-2.5">
-                      <span className="h-2 w-2 rounded-full bg-teal-400 shrink-0" />
-                      <span className="text-[11px] font-bold text-teal-600 shrink-0 w-[86px]">Best performing</span>
-                      <span className="text-xs font-medium text-slate-700 truncate flex-1">{topPositiveInsight?.factor || "Building signal"}</span>
+                    <div className="flex items-center gap-2.5 rounded-lg bg-teal-50/50 border border-teal-100/50 px-3 py-2">
+                      <span className="h-[7px] w-[7px] rounded-full bg-teal-400/80 shrink-0" />
+                      <span className="text-[10px] font-bold text-teal-600 shrink-0 w-[82px] tracking-normal">Best performing</span>
+                      <span className="text-[12px] font-medium text-slate-700 truncate flex-1">{topPositiveInsight?.factor || "Building signal"}</span>
                       {topPositiveInsight && (
-                        <span className="text-[10px] text-slate-400 shrink-0 ml-auto">{topPositiveInsight.status}</span>
+                        <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{topPositiveInsight.status}</span>
                       )}
                     </div>
                   </div>
@@ -875,15 +876,15 @@ export default function PropertyHealthDetailPage() {
           </div>
 
           {/* ── Card 3: Next Steps ── */}
-          <div className="rounded-2xl border border-slate-200/80 bg-slate-50 shadow-sm overflow-hidden flex flex-col">
+          <div className="rounded-2xl border border-slate-200/50 bg-slate-50/80 shadow-[0_1px_4px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
             <div className="px-5 pt-4 pb-0">
-              <p className="text-[11px] font-semibold tracking-widest uppercase text-slate-400">Next Steps</p>
+              <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Next Steps</p>
             </div>
-            <div className="px-5 py-4 flex-1 space-y-2.5">
+            <div className="px-4 py-3.5 flex-1 space-y-2">
               <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`} className="block">
-                <div className="rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] transition-all px-4 py-3.5 cursor-pointer group">
-                  <p className="text-sm font-semibold text-white">View maintenance actions</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5 group-hover:text-slate-300 transition-colors">
+                <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-4 py-3.5 cursor-pointer group">
+                  <p className="text-[13px] font-semibold text-white tracking-normal">View maintenance actions</p>
+                  <p className="text-[10px] text-teal-200/80 mt-0.5 group-hover:text-teal-100/80 transition-colors">
                     {negativeInsights.length > 0
                       ? `${negativeInsights.length} item${negativeInsights.length > 1 ? "s" : ""} need attention`
                       : "All clear — check for opportunities"}
@@ -891,14 +892,17 @@ export default function PropertyHealthDetailPage() {
                 </div>
               </Link>
               <Link href={`/dashboard/properties/${propertyId}/edit`} className="block">
-                <div className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-4 py-3 cursor-pointer">
-                  <p className="text-sm font-medium text-slate-700">Edit property details</p>
+                <div className="rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-4 py-2.5 cursor-pointer">
+                  <p className="text-[13px] font-medium text-slate-600">Edit property details</p>
                 </div>
               </Link>
             </div>
-            <div className="px-5 py-3 border-t border-slate-200">
-              <p className="text-[10px] text-slate-400">
-                {usingSnapshotInsights ? "Based on latest weekly snapshot" : "Based on current property profile"}
+            <div className="px-5 pt-2.5 pb-3 border-t border-slate-200/70">
+              <p className="text-[9px] font-semibold tracking-normal text-slate-400/80">
+                {sortedInsights.length > 0 ? `${sortedInsights.length} factors tracked` : "Awaiting data"}
+              </p>
+              <p className="text-[9px] text-slate-400 mt-0.5">
+                {usingSnapshotInsights ? "Latest weekly snapshot" : "Current property profile"}
               </p>
             </div>
           </div>
@@ -908,7 +912,7 @@ export default function PropertyHealthDetailPage() {
           <div className="space-y-2">
             <h3 className="text-lg md:text-xl font-semibold">Overall Health Gauge: {healthDetails.level}</h3>
             <div className="flex justify-between text-xs font-medium text-muted-foreground">
-              <span>Needs Attention (0)</span>
+              <span>Needs attention (0)</span>
               <span>Excellent (100)</span>
             </div>
             <Progress value={percentage} className="h-4" indicatorClassName={healthDetails.progressColor} />
@@ -919,7 +923,7 @@ export default function PropertyHealthDetailPage() {
               <CardHeader className="pb-2">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <CardTitle className="text-base font-medium">Health Score Trend</CardTitle>
+                    <CardTitle className="text-base font-medium">Health score Trend</CardTitle>
                     <CardDescription>Weekly snapshots for the last 6 months or 1 year.</CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
@@ -978,7 +982,7 @@ export default function PropertyHealthDetailPage() {
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p>No factor details are available yet for this property.</p>
                   <p>
-                    Add property profile fields and service records to unlock full health derivation:
+                    Add property profile fields and service records to unlock full health summary:
                     {" "}
                     <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
                     {" "}

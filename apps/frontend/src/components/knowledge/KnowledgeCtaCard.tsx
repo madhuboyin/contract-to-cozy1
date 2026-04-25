@@ -39,14 +39,14 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
           <Badge
             variant="outline"
             className={cn(
-              'rounded-full border-slate-200 bg-white/80 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-600',
+              'rounded-full border-slate-200 bg-white/80 px-2.5 py-1 text-[9px] font-semibold tracking-normal text-slate-600',
               isFeature && 'bg-white/80'
             )}
           >
             {eyebrow}
           </Badge>
           {cta.dataPromptKey ? (
-            <Badge className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700 hover:bg-amber-100">
+            <Badge className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold tracking-normal text-amber-700 hover:bg-amber-100">
               Guided
             </Badge>
           ) : null}
@@ -62,7 +62,7 @@ export function KnowledgeCtaCard({ cta, propertyId, variant = 'compact' }: Knowl
           ) : null}
         </div>
         {action.requiresProperty ? (
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+          <p className="text-[11px] font-medium tracking-normal text-slate-500">
             Choose a property to continue this action.
           </p>
         ) : null}

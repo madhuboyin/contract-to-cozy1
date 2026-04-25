@@ -421,7 +421,7 @@ const DocumentUploadModal = ({ properties, warranties, policies, onUploadSuccess
     <form onSubmit={handleSubmit} className="space-y-4">
       <DialogHeader>
         <DialogTitle>Standard Upload</DialogTitle>
-        <CardDescription>Upload a file with manual metadata entry</CardDescription>
+        <CardDescription>Upload a file with manual detail entry</CardDescription>
       </DialogHeader>
       
       <div className="grid gap-2">
@@ -654,7 +654,7 @@ export default function DocumentsPage() {
           primaryFilters={
             <div className="space-y-2">
               <div className="space-y-1.5">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Document type</p>
+                <p className="text-xs font-medium tracking-normal text-slate-500">Document type</p>
                 <Select value={filterType} onValueChange={setFilterType}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Filter by Document Type" />
@@ -670,7 +670,7 @@ export default function DocumentsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Associated entity</p>
+                <p className="text-xs font-medium tracking-normal text-slate-500">Associated entity</p>
                 <Select value={filterParentType} onValueChange={setFilterParentType}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Filter by Parent Entity" />
@@ -806,11 +806,11 @@ export default function DocumentsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">AI Analysis</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Associated With</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal hidden md:table-cell">AI Analysis</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal hidden sm:table-cell">Associated With</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 tracking-normal">Uploaded</th>
                     <th className="relative px-6 py-3"></th>
                   </tr>
                 </thead>

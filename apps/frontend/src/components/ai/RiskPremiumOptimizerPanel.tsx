@@ -423,7 +423,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
                 className="mt-2"
                 onClick={() => setShowAllDrivers((prev) => !prev)}
               >
-                {showAllDrivers ? 'Show fewer drivers' : `Show all ${analysis.premiumDrivers.length} drivers`}
+                {showAllDrivers ? 'Show less' : 'Show more'}
               </Button>
             )}
           </section>
@@ -460,7 +460,7 @@ export default function RiskPremiumOptimizerPanel({ propertyId }: RiskPremiumOpt
               >
                 {showAllRecommendations
                   ? 'Show fewer recommendations'
-                  : `Show all ${analysis.recommendations.length} recommendations`}
+                  : 'Show more'}
               </Button>
             )}
           </section>

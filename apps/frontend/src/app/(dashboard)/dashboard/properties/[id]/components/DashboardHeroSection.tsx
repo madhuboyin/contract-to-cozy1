@@ -286,7 +286,7 @@ function HeroFallbackCard({
 
         {observations.length > 0 ? (
           <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-[11px] font-medium tracking-normal text-muted-foreground">
               Light opportunities
             </p>
             <ul className="mt-2 space-y-1.5">
@@ -380,7 +380,7 @@ function buildHeroImpactSummary(action: GuidanceActionModel): string | null {
 }
 
 function HeroActionCard({ action, onOpenJourney }: HeroActionCardProps) {
-  const safeTitle = action.title?.trim() || 'Priority Action';
+  const safeTitle = action.title?.trim() || 'Priority action';
   const safeWhy =
     action.explanation?.why?.trim() ||
     action.subtitle?.trim() ||
@@ -421,7 +421,7 @@ function HeroActionCard({ action, onOpenJourney }: HeroActionCardProps) {
           ) : null}
           {impactSummary ? (
             <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="text-[11px] font-medium tracking-normal text-muted-foreground">
                 Impact
               </p>
               <p className="mt-1 text-xs text-muted-foreground">{impactSummary}</p>
@@ -486,7 +486,7 @@ function AttentionItemRow({
   action: GuidanceActionModel;
   onOpenJourney?: (a: GuidanceActionModel) => void;
 }) {
-  const safeTitle = action.title?.trim() || 'Needs Attention';
+  const safeTitle = action.title?.trim() || 'Needs attention';
   const safeWhy = action.explanation?.why?.trim() || action.subtitle?.trim() || null;
   const safeRisk = action.explanation?.risk?.trim() || null;
   const urgency = urgencyLabel(action);

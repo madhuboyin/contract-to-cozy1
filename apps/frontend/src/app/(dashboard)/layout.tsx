@@ -103,7 +103,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
             height={28}
             className="h-7 w-7 flex-shrink-0"
           />
-          <span className="text-[15px] font-semibold tracking-[-0.01em] text-slate-950 truncate">ContractToCozy</span>
+          <span className="text-[15px] font-semibold tracking-normal text-slate-950 truncate">ContractToCozy</span>
         </Link>
       </div>
 
@@ -198,7 +198,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
         {/* Admin links (ADMIN role only) */}
         {user?.role === 'ADMIN' && (
           <div className="pt-2 border-t border-gray-100 space-y-0.5">
-            <p className="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+            <p className="px-3 pt-1 pb-0.5 text-[10px] tracking-normal text-gray-400 font-semibold">
               Admin
             </p>
             <Link
@@ -236,7 +236,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
               className="mt-2 flex w-full items-center gap-2.5 rounded-[16px] border border-slate-200/80 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-950"
             >
               <div className="h-8 w-8 rounded-full bg-teal-50 ring-1 ring-teal-200 flex items-center justify-center flex-shrink-0">
-                <span className="text-[11px] font-bold text-teal-800 uppercase">
+                <span className="text-[11px] font-bold text-teal-800 ">
                   {user?.firstName?.[0] ?? 'U'}
                 </span>
               </div>

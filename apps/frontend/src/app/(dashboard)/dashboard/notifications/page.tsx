@@ -81,7 +81,7 @@ function renderSignalBadge(n: Notification) {
   const title = n?.signalSource?.summary ? `${meta.label}: ${n.signalSource.summary}` : meta.label;
 
   return (
-    <StatusChip tone="info" className="text-[10px] uppercase tracking-wide" >
+    <StatusChip tone="info" className="text-[10px] tracking-normal" >
       <span title={title}>{meta.label}</span>
     </StatusChip>
   );

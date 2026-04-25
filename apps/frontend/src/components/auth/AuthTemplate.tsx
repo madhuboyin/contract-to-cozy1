@@ -67,7 +67,7 @@ export default function AuthTemplate({ title, subtitle, activeRoute, children, f
       <main className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-12 lg:px-8">
         <section className="hidden lg:block">
           <div className={`${CTC_TEMPLATE_SURFACES_V1.elevatedCard} bg-white/90 p-8`}>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Homeowner Intelligence Platform</p>
+            <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">Homeowner Intelligence Platform</p>
             <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-950">
               Run your home with less stress and more confidence.
             </h1>
@@ -100,7 +100,7 @@ export default function AuthTemplate({ title, subtitle, activeRoute, children, f
         <section className="w-full">
           <div className={`${CTC_TEMPLATE_SURFACES_V1.elevatedCard} p-5 sm:p-8`}>
             <header className="mb-6 text-center sm:text-left">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Welcome Home</p>
+              <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">Welcome Home</p>
               <h2 className="text-3xl font-semibold tracking-tight text-slate-950">{title}</h2>
               <p className="mt-2 text-sm text-slate-600">{subtitle}</p>
             </header>

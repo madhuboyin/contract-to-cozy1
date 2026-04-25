@@ -35,7 +35,7 @@ export default function PropertyHubTemplate({
       <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.11em] text-slate-500">
+            <p className="mb-1 text-xs font-semibold tracking-normal text-slate-500">
               Property Hub
             </p>
             <h1 className="mb-0 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">

@@ -44,10 +44,10 @@ export default async function KnowledgeHubPage({
           </Link>
           <div className="max-w-[56rem] space-y-4">
             <div className="flex flex-wrap items-center gap-2.5">
-              <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white hover:bg-slate-950">
+              <Badge className="rounded-full bg-slate-950 px-3 py-1 text-[9px] font-semibold tracking-normal text-white hover:bg-slate-950">
                 Knowledge Hub
               </Badge>
-              <Badge variant="outline" className="rounded-full border-slate-200 bg-white/70 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <Badge variant="outline" className="rounded-full border-slate-200 bg-white/70 px-3 py-1 text-[9px] font-semibold tracking-normal text-slate-500">
                 Homeowner guidance
               </Badge>
             </div>
@@ -102,7 +102,7 @@ export default async function KnowledgeHubPage({
             {remainingArticles.length > 0 ? (
               <section className="space-y-5">
                 <div className="space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Latest articles</p>
+                  <p className="text-[10px] font-semibold tracking-normal text-slate-500">Latest articles</p>
                   <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Practical reads for the next home decision</h2>
                 </div>
                 <div className="grid gap-5 lg:grid-cols-2">

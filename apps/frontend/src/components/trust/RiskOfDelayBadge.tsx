@@ -19,8 +19,8 @@ export function RiskOfDelayBadge({ riskText, className }: RiskOfDelayBadgeProps)
         <div className="rounded-full bg-amber-100 p-1">
           <Clock className="h-3.5 w-3.5 text-amber-700" />
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">
-          Risk of Delay
+        <span className="text-[10px] font-bold tracking-normal text-amber-800">
+          Delay adds
         </span>
       </div>
       <div className="mt-1 flex items-start gap-2">

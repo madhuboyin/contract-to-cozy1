@@ -15,7 +15,7 @@ export default function SupportingActionCard({ title, detail, href, impact }: Su
     <>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.11em] text-indigo-700">Supporting Move</p>
+          <p className="mb-1 text-[11px] font-semibold tracking-normal text-indigo-700">Supporting Move</p>
           <h3 className="mb-0 text-base font-semibold text-slate-900">{title}</h3>
         </div>
         <ArrowRight className="mt-1 h-4 w-4 text-slate-500" />

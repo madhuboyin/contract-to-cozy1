@@ -59,8 +59,8 @@ export function WinCard({
     : {
         confidenceLabel: 'Low confidence (fallback)',
         freshnessLabel: 'Template fallback',
-        sourceLabel: 'CtC baseline guidance',
-        rationale: 'Primary AI-derived trust metadata was unavailable, so this card uses a deterministic fallback template.',
+        sourceLabel: 'Baseline guidance',
+        rationale: 'Primary AI-derived trust details was unavailable, so this card uses a deterministic fallback template.',
       };
 
   const handleActionClick = () => {

@@ -21,13 +21,13 @@ export default function DoNothingToolClient() {
     <ToolWorkspaceTemplate
       backHref={backHref}
       backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Do-Nothing Simulator"
       subtitle="See risk and cost impact if you delay action for 6, 12, 24, or 36 months."
       trust={{
         confidenceLabel: 'Medium, scenario-based cost and risk projections',
         freshnessLabel: 'Updates when property risk or maintenance context changes',
-        sourceLabel: 'CtC delay-impact model + property system context + risk signals',
+        sourceLabel: 'Delay-impact analysis + property context + risk signals',
         rationale: 'Shows likely cost escalation and risk compounding when recommended actions are deferred.',
       }}
       introAction={

@@ -154,7 +154,7 @@ export default function PropertyOrchestrationStrip({
     <section className={cn('rounded-2xl border border-black/10 bg-white/80 p-3 shadow-sm', className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Next Best Move</p>
+          <p className="mb-0 text-[11px] font-semibold tracking-normal text-slate-500">Next Best Move</p>
           <p className="mb-0 mt-1 text-sm font-semibold text-slate-900">
             {nextBestMove?.title ?? 'Review current property priorities'}
           </p>

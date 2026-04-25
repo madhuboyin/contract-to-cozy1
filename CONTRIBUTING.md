@@ -42,6 +42,14 @@ feat(frontend): add provider search functionality
 - Write meaningful comments
 - Add tests for new features
 
+## UI copy standards
+
+- **Sentence case** for all labels, badges, section headers, button labels, and metadata text.
+- **Title Case** only for page h1 headings and navigation items.
+- **Never** render raw API/backend enum strings directly in the UI. Always pass through `formatStatusLabel()` or an equivalent formatter.
+- **Never** expose internal model names, engine names, confidence percentages, or system architecture descriptions in user-facing UI.
+- **Never** use `text-transform: uppercase` or the Tailwind `uppercase` class on label elements.
+
 ## Pull Request Process
 
 1. Update README.md if needed

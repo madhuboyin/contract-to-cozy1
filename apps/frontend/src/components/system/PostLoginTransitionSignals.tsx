@@ -38,7 +38,7 @@ export function SignalChip({
           className="h-3 w-3 flex-shrink-0 text-teal-500 dark:text-teal-400"
           strokeWidth={2.5}
         />
-        <span className="text-[10.5px] font-semibold tracking-wide whitespace-nowrap text-slate-600 dark:text-slate-300">
+        <span className="text-[10.5px] font-semibold tracking-normal whitespace-nowrap text-slate-600 dark:text-slate-300">
           {label}
         </span>
       </motion.div>

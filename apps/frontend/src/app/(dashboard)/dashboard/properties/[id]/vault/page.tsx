@@ -943,7 +943,7 @@ function AssetDetailSheet({
               <SheetTitle className="text-left text-xl font-bold text-slate-900">{item.name}</SheetTitle>
               <div className="flex items-center gap-2">
                 <ConfidenceBadge level={item.brand && item.model ? 'high' : 'medium'} />
-                {item.category && <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{item.category}</span>}
+                {item.category && <span className="text-[10px] font-bold tracking-normal text-slate-400">{item.category}</span>}
               </div>
             </div>
           </div>
@@ -953,12 +953,12 @@ function AssetDetailSheet({
           {/* Quick Stats Grid */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Make & Model</p>
+              <p className="text-[10px] font-bold tracking-normal text-slate-400 mb-1">Make & Model</p>
               <p className="text-sm font-bold text-slate-900 truncate">{item.brand || 'Unknown'} {item.model || ''}</p>
               <p className="text-[11px] text-slate-500 mt-0.5 truncate">{item.serialNo || 'No serial recorded'}</p>
             </div>
             <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Age & Status</p>
+              <p className="text-[10px] font-bold tracking-normal text-slate-400 mb-1">Age & Status</p>
               <p className="text-sm font-bold text-slate-900">
                 {item.purchasedOn ? `${differenceInCalendarDays(new Date(), parseISO(item.purchasedOn)) / 365 > 1 ? Math.floor(differenceInCalendarDays(new Date(), parseISO(item.purchasedOn)) / 365) + ' years old' : 'New'}` : 'Age unknown'}
               </p>
@@ -974,7 +974,7 @@ function AssetDetailSheet({
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-brand-600" />
-                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">AI Recommendation</h4>
+                <h4 className="text-sm font-bold text-slate-900 tracking-tight">AI Recommendation</h4>
               </div>
               <div className="rounded-2xl border-2 border-brand-100 bg-brand-50/30 p-5 space-y-4">
                 <div className="flex items-start justify-between gap-4">
@@ -989,7 +989,7 @@ function AssetDetailSheet({
                     </p>
                   </div>
                   {assetRiskDetail.riskLevel === 'HIGH' && (
-                    <div className="shrink-0 bg-red-100 text-red-700 text-[10px] font-bold px-2 py-1 rounded-lg uppercase">High Risk</div>
+                    <div className="shrink-0 bg-red-100 text-red-700 text-[10px] font-bold px-2 py-1 rounded-lg ">High Risk</div>
                   )}
                 </div>
                 
@@ -1012,9 +1012,9 @@ function AssetDetailSheet({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-slate-400" />
-                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Care History</h4>
+                <h4 className="text-sm font-bold text-slate-900 tracking-tight">Care History</h4>
               </div>
-              <span className="text-[11px] font-bold text-brand-600 uppercase tracking-widest">{assetHistory.length} Events</span>
+              <span className="text-[11px] font-bold text-brand-600 tracking-normal">{assetHistory.length} Events</span>
             </div>
             
             {assetHistory.length > 0 ? (
@@ -1039,7 +1039,7 @@ function AssetDetailSheet({
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-slate-400" />
-              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Linked Documents</h4>
+              <h4 className="text-sm font-bold text-slate-900 tracking-tight">Linked Documents</h4>
             </div>
             
             {linkedDocs.length > 0 ? (
@@ -1057,7 +1057,7 @@ function AssetDetailSheet({
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-900 truncate">{doc.name}</p>
-                        <p className="text-[10px] text-slate-500 uppercase font-medium">{doc.type}</p>
+                        <p className="text-[10px] text-slate-500 font-medium">{doc.type}</p>
                       </div>
                     </div>
                     <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-brand-600" />

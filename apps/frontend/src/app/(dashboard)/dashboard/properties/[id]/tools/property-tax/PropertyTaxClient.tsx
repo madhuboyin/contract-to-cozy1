@@ -213,7 +213,7 @@ export default function PropertyTaxClient() {
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Property Tax Intelligence"
       subtitle="Review tax estimates, trend projection, and key drivers behind changes."
       introAction={
@@ -221,7 +221,7 @@ export default function PropertyTaxClient() {
       }
       trust={propertyTaxTrust({
         confidenceLabel: estimate?.current?.confidence ?? 'Heuristic estimate — confidence reflects local rate data availability.',
-        freshnessLabel: estimate?.meta?.generatedAt ? 'Updated with latest tax model run' : 'Run estimate to refresh',
+        freshnessLabel: estimate?.meta?.generatedAt ? 'Updated with latest tax estimate' : 'Run estimate to refresh',
       })}
       priorityAction={(() => {
         if (!estimate || loading) return undefined;
@@ -259,7 +259,7 @@ export default function PropertyTaxClient() {
       })()}
     >
 
-      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      {/* Tool identity + Related tools — desktop only, above NBA */}
       <HomeToolHeader
         toolId="property-tax"
         propertyId={propertyId}

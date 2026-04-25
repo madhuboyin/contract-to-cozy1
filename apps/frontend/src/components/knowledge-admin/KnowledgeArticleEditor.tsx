@@ -90,7 +90,7 @@ function getNumberInputValue(value: unknown): number | '' {
 
 function SectionSummaryBadge({ label }: { label: string }) {
   return (
-    <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+    <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold tracking-normal text-slate-600">
       {label}
     </Badge>
   );
@@ -261,7 +261,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
     return (
       <AdminConsoleShell
         title={isEditMode ? 'Edit Knowledge Article' : 'Create Knowledge Article'}
-        subtitle="Loading editor permissions and content metadata."
+        subtitle="Loading editor permissions and content details."
         backHref="/dashboard/knowledge-admin"
         backLabel="Back to article list"
       >
@@ -287,7 +287,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
     return (
       <AdminAccessState
         title="Admin access required"
-        description="The Knowledge Hub editor is restricted to CtC admins so article publishing stays controlled."
+        description="The Knowledge Hub editor is restricted to platform admins so article publishing stays controlled."
       />
     );
   }
@@ -388,7 +388,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
   return (
     <AdminConsoleShell
       title={isEditMode ? 'Edit Knowledge Article' : 'Create Knowledge Article'}
-      subtitle="Manage article metadata, taxonomy, sections, linked tools, and CTA modules."
+      subtitle="Manage article details, taxonomy, sections, linked tools, and CTA modules."
       backHref="/dashboard/knowledge-admin"
       backLabel="Back to article list"
       actions={
@@ -403,13 +403,13 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
       }
       chips={
         <>
-          <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-900">
+          <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold tracking-normal text-white hover:bg-slate-900">
             Knowledge Admin
           </Badge>
           {currentArticle?.status ? (
             <Badge
               variant="outline"
-              className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
+              className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold tracking-normal text-slate-600"
             >
               {currentArticle.status.replace(/_/g, ' ')}
             </Badge>
@@ -429,13 +429,13 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
               </Link>
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white hover:bg-slate-900">
+                  <Badge className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold tracking-normal text-white hover:bg-slate-900">
                     Knowledge Admin
                   </Badge>
                   {currentArticle?.status ? (
                     <Badge
                       variant="outline"
-                      className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600"
+                      className="rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold tracking-normal text-slate-600"
                     >
                       {currentArticle.status.replace(/_/g, ' ')}
                     </Badge>
@@ -445,7 +445,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
                   {isEditMode ? 'Edit Knowledge Article' : 'Create Knowledge Article'}
                 </h1>
                 <p className="max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-                  Manage article metadata, taxonomy, sections, linked tools, and CTA modules without touching Prisma
+                  Manage article details, taxonomy, sections, linked tools, and CTA modules without touching Prisma
                   seed files.
                 </p>
               </div>
@@ -507,7 +507,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
               <Card className="rounded-[28px] border-slate-200/80 bg-white shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-xl text-slate-950">Article Basics</CardTitle>
-                  <CardDescription>Core metadata used by the listing page and article header.</CardDescription>
+                  <CardDescription>Core details used by the listing page and article header.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-5 md:grid-cols-2">
                   <FormField
@@ -612,7 +612,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
               <Card className="rounded-[28px] border-slate-200/80 bg-white shadow-sm">
                 <CardHeader>
                   <CardTitle className="text-xl text-slate-950">SEO & Publish Settings</CardTitle>
-                  <CardDescription>Editorial state, discovery metadata, and publish timing.</CardDescription>
+                  <CardDescription>Editorial state, discovery details, and publish timing.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-5 md:grid-cols-2">
                   <FormField
@@ -713,7 +713,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
                         <FormControl>
                           <Input type="datetime-local" {...field} value={field.value ?? ''} />
                         </FormControl>
-                        <FormDescription>Leave blank to let CtC stamp publish time on first publish.</FormDescription>
+                        <FormDescription>Leave blank to stamp the publish time on first publish.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1387,7 +1387,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-3">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Categories</h3>
+                    <h3 className="text-sm font-semibold tracking-normal text-slate-500">Categories</h3>
                     <div className="space-y-3">
                       {options.categories.map((category) => (
                         <label
@@ -1410,7 +1410,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
                   <Separator />
 
                   <div className="space-y-3">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Tags</h3>
+                    <h3 className="text-sm font-semibold tracking-normal text-slate-500">Tags</h3>
                     <div className="space-y-3">
                       {options.tags.map((tag) => (
                         <label
@@ -1425,7 +1425,7 @@ export function KnowledgeArticleEditor({ articleId }: KnowledgeArticleEditorProp
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-medium text-slate-900">{tag.name}</p>
                               {tag.tagGroup ? (
-                                <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                                <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-medium tracking-normal text-slate-500">
                                   {tag.tagGroup.replace(/_/g, ' ')}
                                 </Badge>
                               ) : null}

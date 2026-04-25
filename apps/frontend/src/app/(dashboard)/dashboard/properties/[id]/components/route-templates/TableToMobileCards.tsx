@@ -29,9 +29,9 @@ export default function TableToMobileCards<Row>({
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Item</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold tracking-normal text-slate-500">Item</th>
               {columns.map((column) => (
-                <th key={column.key} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                <th key={column.key} className="px-4 py-3 text-left text-xs font-semibold tracking-normal text-slate-500">
                   {column.label}
                 </th>
               ))}
@@ -63,7 +63,7 @@ export default function TableToMobileCards<Row>({
             <div className="mt-3 space-y-2">
               {columns.map((column) => (
                 <div key={`${getRowKey(row)}-mobile-${column.key}`} className="rounded-xl bg-slate-50 px-3 py-2">
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{column.label}</p>
+                  <p className="mb-1 text-[11px] font-semibold tracking-normal text-slate-500">{column.label}</p>
                   <div className="text-sm text-slate-800">{column.render(row)}</div>
                 </div>
               ))}

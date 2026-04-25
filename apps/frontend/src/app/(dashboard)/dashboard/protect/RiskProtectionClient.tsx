@@ -172,7 +172,7 @@ export default function RiskProtectionClient() {
         icon={<Shield className="h-5 w-5" />}
         title="Protection that explains what is covered, exposed, and worth doing now."
         description="A calm risk surface for maintenance, coverage, recalls, incidents, and local hazard signals. Every recommendation includes confidence and source context."
-        action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan Policy</SmartCTA>}
+        action={<SmartCTA onClick={() => setIsScannerOpen(true)}>Scan policy</SmartCTA>}
         meta={
           <TrustMetaRow
             items={[
@@ -216,7 +216,7 @@ export default function RiskProtectionClient() {
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-3xl font-black text-slate-900 leading-none">{riskScore}</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                  <span className="text-[10px] font-bold text-slate-400 tracking-tighter">
                     Protection
                   </span>
                 </div>
@@ -224,7 +224,7 @@ export default function RiskProtectionClient() {
             ) : (
               <div className="w-32 h-32 flex flex-col items-center justify-center rounded-full border-4 border-dashed border-slate-200 bg-slate-50 gap-1">
                 <Loader2 className="h-6 w-6 text-slate-300 animate-spin" />
-                <span className="text-[9px] text-slate-400 uppercase tracking-tight">Calculating</span>
+                <span className="text-[9px] text-slate-400 tracking-tight">Calculating</span>
               </div>
             )}
           </div>
@@ -307,7 +307,7 @@ export default function RiskProtectionClient() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span
                             className={cn(
-                              'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                              'px-2 py-0.5 rounded-full text-[10px] font-bold tracking-normal',
                               incident.severity === 'CRITICAL'
                                 ? 'bg-red-100 text-red-700'
                                 : 'bg-orange-100 text-orange-700',
@@ -387,7 +387,7 @@ export default function RiskProtectionClient() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wider">
+                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold tracking-normal">
                           Active Recall
                         </span>
                         <span className="text-[11px] font-medium text-slate-400">
@@ -460,7 +460,7 @@ export default function RiskProtectionClient() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                    <p className="text-[10px] font-bold tracking-normal text-slate-400 mb-1">
                       Coverage Intelligence
                     </p>
                     <h3 className="text-base font-bold text-slate-900">
@@ -471,7 +471,7 @@ export default function RiskProtectionClient() {
                   </div>
                   <span
                     className={cn(
-                      'shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                      'shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-normal',
                       cvVerdict.cls,
                     )}
                   >
@@ -616,7 +616,7 @@ export default function RiskProtectionClient() {
                 <Flame className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <p className="text-xs font-bold text-slate-400 tracking-normal">
                   Fire Risk
                 </p>
                 <p className="text-sm font-bold text-slate-900">Moderate</p>
@@ -630,7 +630,7 @@ export default function RiskProtectionClient() {
                 <Waves className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <p className="text-xs font-bold text-slate-400 tracking-normal">
                   Flood Zone
                 </p>
                 <p className="text-sm font-bold text-slate-900">Zone X (Low)</p>
@@ -644,7 +644,7 @@ export default function RiskProtectionClient() {
                 <Info className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <p className="text-xs font-bold text-slate-400 tracking-normal">
                   Pollen Spike
                 </p>
                 <p className="text-sm font-bold text-slate-900">High</p>
@@ -663,7 +663,7 @@ export default function RiskProtectionClient() {
               className="h-auto p-5 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-slate-100 hover:border-slate-400 transition-all text-center"
             >
               <ExternalLink className="h-5 w-5 text-slate-400" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+              <span className="text-[11px] font-bold text-slate-500 tracking-normal">
                 View Full Local Radar
               </span>
             </button>

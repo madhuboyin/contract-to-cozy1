@@ -196,7 +196,7 @@ function ChipSelector({
   return (
     <div className="space-y-0">
       <div className="mb-3 flex items-center gap-3">
-        <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-widest text-gray-500">{label}</span>
+        <span className="whitespace-nowrap text-[11px] font-bold tracking-normal text-gray-500">{label}</span>
         <div className="h-px flex-1 bg-gray-100" />
       </div>
 

@@ -440,11 +440,11 @@ export default function BudgetForecaster({ propertyId }: BudgetForecasterProps) 
                   <div className="space-y-2.5">
                     <p className="mb-0 font-medium text-gray-900">{recommendation.title}</p>
                     <div className="rounded-lg border border-teal-200 bg-teal-50 p-2.5">
-                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-teal-800">Why this matters</p>
+                      <p className="mb-1 text-[11px] font-semibold tracking-normal text-teal-800">Why this matters</p>
                       <p className="mb-0 text-sm text-teal-900">{recommendation.why}</p>
                     </div>
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
-                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">Cost of delay</p>
+                      <p className="mb-1 text-[11px] font-semibold tracking-normal text-amber-800">Cost of delay</p>
                       <p className="mb-0 text-sm text-amber-900">{recommendation.costOfDelay}</p>
                     </div>
                   </div>

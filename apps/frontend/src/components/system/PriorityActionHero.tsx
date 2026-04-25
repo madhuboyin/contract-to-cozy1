@@ -23,7 +23,7 @@ export default function PriorityActionHero({
   supportingAction,
   impactLabel,
   confidenceLabel,
-  eyebrow = 'Priority Action',
+  eyebrow = 'Priority action',
   className,
 }: PriorityActionHeroProps) {
   return (
@@ -34,7 +34,7 @@ export default function PriorityActionHero({
         className
       )}
     >
-      <p className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-brand-700">
+      <p className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold tracking-normal text-brand-700">
         <Sparkles className="h-3.5 w-3.5" />
         {eyebrow}
       </p>

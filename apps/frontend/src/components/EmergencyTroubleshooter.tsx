@@ -103,7 +103,7 @@ export default function EmergencyTroubleshooter({ propertyId }: EmergencyTrouble
     const badges = {
       'DIY': { color: 'bg-green-100 text-green-800 border-green-300', text: '✓ You Can Fix This' },
       'CALL_PRO': { color: 'bg-orange-100 text-orange-800 border-orange-300', text: '☎ Call Professional' },
-      'IMMEDIATE_DANGER': { color: 'bg-red-100 text-red-800 border-red-300', text: '⚠ IMMEDIATE ACTION REQUIRED' }
+      'IMMEDIATE_DANGER': { color: 'bg-red-100 text-red-800 border-red-300', text: 'Immediate action required' }
     };
     
     const badge = badges[resolution as keyof typeof badges];

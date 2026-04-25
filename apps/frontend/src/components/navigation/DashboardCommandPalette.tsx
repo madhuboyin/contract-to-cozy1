@@ -222,7 +222,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
             </div>
           </div>
 
-          <Command.List className="max-h-[420px] overflow-y-auto px-3 pb-3 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-gray-400">
+          <Command.List className="max-h-[420px] overflow-y-auto px-3 pb-3 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:[&_[cmdk-group-heading]]:tracking-normal [&_[cmdk-group-heading]]:text-gray-400">
             <Command.Empty className="px-2 py-8 text-center text-sm text-gray-500">
               No matching commands.
             </Command.Empty>

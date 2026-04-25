@@ -91,7 +91,7 @@ export default function AddressOnboardingPage() {
             <div className="w-16 h-16 bg-brand-600 rounded-3xl shadow-xl shadow-brand-200 flex items-center justify-center rotate-3">
               <Home className="h-8 w-8 text-white" />
             </div>
-            <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-brand-600">
+            <h2 className="text-sm font-bold tracking-normal text-brand-600">
               Contract to Cozy
             </h2>
           </div>

@@ -266,13 +266,13 @@ export default function CapitalTimelineClient() {
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Capital Timeline"
       subtitle={`Predicted major expenses over the next ${horizonYears} years.`}
       trust={{
         confidenceLabel: data?.confidence ? `${data.confidence.toLowerCase()} confidence across projected line items` : 'Confidence updates after analysis run',
-        freshnessLabel: 'Recomputed from latest property context and selected horizon',
-        sourceLabel: 'CtC capital timeline model + inventory/home asset state + planning assumptions',
+        freshnessLabel: 'Updated from latest property context and selected horizon',
+        sourceLabel: 'Capital timeline analysis + inventory/home asset state + planning assumptions',
         rationale: 'Prioritizes high-cost, high-likelihood capital events so homeowners can sequence budget and action timing.',
       }}
       rail={(
@@ -338,17 +338,17 @@ export default function CapitalTimelineClient() {
           <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 sm:p-6 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-300">Total Range</p>
+                <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-300">Total Range</p>
                 <p className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
                   {money(totalMin)} &ndash; {money(totalMax)}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-300">Items</p>
+                <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-300">Items</p>
                 <p className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">{items.length}</p>
               </div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-300">High Priority</p>
+                <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-300">High Priority</p>
                 <p className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
                   {highPriorityCount > 0 ? (
                     <span className="text-red-600">{highPriorityCount}</span>
@@ -358,7 +358,7 @@ export default function CapitalTimelineClient() {
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-300">Confidence</p>
+                <p className="text-xs font-medium tracking-normal text-slate-500 dark:text-slate-300">Confidence</p>
                 <div className="mt-1">{confidenceBadge(data.confidence)}</div>
               </div>
             </div>
@@ -369,7 +369,7 @@ export default function CapitalTimelineClient() {
             )}
             {nextAction && (
               <div className="mt-4 rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/55">
-                <p className="mb-0 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Next action</p>
+                <p className="mb-0 text-xs tracking-normal text-slate-500 dark:text-slate-300">Next action</p>
                 <p className="mt-1 mb-0 text-sm font-medium text-slate-900 dark:text-slate-100">{nextAction.reason}</p>
                 <Button asChild className="mt-3 h-9 rounded-xl text-sm">
                   <Link href={nextAction.href}>{nextAction.label}</Link>

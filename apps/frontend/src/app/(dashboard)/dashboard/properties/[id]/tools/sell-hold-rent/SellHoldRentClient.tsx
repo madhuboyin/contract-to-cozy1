@@ -170,7 +170,7 @@ export default function SellHoldRentClient() {
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Sell vs Hold vs Rent"
       subtitle="Compare outcomes using appreciation, ownership costs, and rental income assumptions."
       trust={{
@@ -276,10 +276,10 @@ export default function SellHoldRentClient() {
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-12 md:grid-cols-12 gap-4">
           <div className="space-y-3 sm:col-span-4 md:col-span-4">
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Winner</div>
+              <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Winner</div>
               <div className="mt-1 text-[1.7rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{winnerLabel}</div>
 
-              <div className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Net outcome ({years}y)</div>
+              <div className="mt-2 text-xs tracking-normal text-slate-500 dark:text-slate-300">Net outcome ({years}y)</div>
               <div className="text-base font-semibold text-slate-800 dark:text-slate-100">
                 {loading && !hasScenarioData ? '—' : money(winnerNet)}
               </div>
@@ -289,7 +289,7 @@ export default function SellHoldRentClient() {
               </div>
 
               <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-                Debt model{' '}
+                Debt estimate{' '}
                 <span className="font-medium">
                   {data?.current?.mortgage ? 'On' : 'Unknown'}
                 </span>
@@ -297,7 +297,7 @@ export default function SellHoldRentClient() {
             </div>
 
             <div className="rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Rationale</div>
+              <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Rationale</div>
               <div className="mt-2 space-y-1">
                 {(data?.recommendation?.rationale || []).slice(0, 3).map((r, i) => (
                   <div key={i} className="text-xs text-slate-600 dark:text-slate-300">• {r}</div>
@@ -408,7 +408,7 @@ export default function SellHoldRentClient() {
       {/* Key drivers */}
       <div className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 via-slate-50/72 to-teal-50/45 p-4 shadow-[0_16px_30px_-24px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:from-slate-900/55 dark:via-slate-900/48 dark:to-slate-900/38">
         <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Key drivers</div>
-        <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">What is influencing the result in this model</div>
+        <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">What is influencing the result in this estimate</div>
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           {(data?.drivers || []).map((d, idx) => (
@@ -457,7 +457,7 @@ export default function SellHoldRentClient() {
           {/* Overrides */}
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48 lg:col-span-7">
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Overrides</div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Leave blank to use the model default.</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Leave blank to use the default estimate.</div>
 
             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
               <InputField

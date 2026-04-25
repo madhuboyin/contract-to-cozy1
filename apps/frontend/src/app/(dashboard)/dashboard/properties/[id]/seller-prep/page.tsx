@@ -180,7 +180,7 @@ export default function SellerPrepPage() {
           className="text-xs font-medium text-muted-foreground hover:text-blue-600 inline-flex items-center transition-colors min-h-[44px]"
         >
           <ArrowLeft className="h-3 w-3 mr-1" />
-          Back to Property
+          Back to property
         </Link>
 
         <MobilePageIntro
@@ -207,7 +207,7 @@ export default function SellerPrepPage() {
           className="text-xs font-medium text-muted-foreground hover:text-blue-600 inline-flex items-center transition-colors"
         >
           <ArrowLeft className="h-3 w-3 mr-1" />
-          Back to Property
+          Back to property
         </Link>
 
         <HomeToolHeader toolId="seller-prep" propertyId={propertyId as string} />

@@ -130,7 +130,7 @@ export default function TrueCostClient() {
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="True Cost of Home Ownership"
       subtitle={`A ${years}-year reality check including taxes, insurance, maintenance, and utilities.`}
       trust={{
@@ -138,7 +138,7 @@ export default function TrueCostClient() {
           ? `${data.meta.confidence.charAt(0) + data.meta.confidence.slice(1).toLowerCase()} confidence — localized tax, insurance, and maintenance assumptions`
           : 'Localized tax, insurance, and maintenance assumptions',
         freshnessLabel: data?.meta?.generatedAt ? 'Updated with latest cost inputs' : 'Analyzing your property…',
-        sourceLabel: 'CtC cost model + property profile + localized trend assumptions',
+        sourceLabel: 'Cost analysis + property profile + localized trend assumptions',
         rationale: 'Bundles recurring and structural cost drivers into one ownership view to reduce hidden-spend blind spots.',
       }}
       introAction={
@@ -147,7 +147,7 @@ export default function TrueCostClient() {
       priorityAction={trueCostPriorityAction}
     >
 
-      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      {/* Tool identity + Related tools — desktop only, above NBA */}
       <HomeToolHeader
         toolId="true-cost"
         propertyId={propertyId}
@@ -203,29 +203,29 @@ export default function TrueCostClient() {
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Total ({years}y)</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Total ({years}y)</div>
             <div className="mt-1 text-[1.7rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.rollup?.totalCost)}</div>
-            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual (now)</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Annual (now)</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualTotalNow)}</div>
           </div>
 
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Taxes ({years}y)</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Taxes ({years}y)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.rollup?.breakdown?.taxes)}</div>
-            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual (now)</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Annual (now)</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualTaxNow)}</div>
           </div>
 
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Insurance ({years}y)</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Insurance ({years}y)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.rollup?.breakdown?.insurance)}</div>
-            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual (now)</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Annual (now)</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualInsuranceNow)}</div>
           </div>
 
           <div className="rounded-2xl border border-teal-200/60 bg-teal-50/60 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-teal-700/50 dark:bg-teal-950/30">
             <div className="flex items-center gap-2">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Maintenance + Utilities ({years}y)</div>
+              <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Maintenance + Utilities ({years}y)</div>
               <span className="rounded-full border border-teal-300/70 bg-teal-100/80 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:border-teal-600/60 dark:bg-teal-900/50 dark:text-teal-300">Includes utilities</span>
             </div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">
@@ -234,7 +234,7 @@ export default function TrueCostClient() {
                   (data?.rollup?.breakdown?.utilities ?? 0)
               )}
             </div>
-            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual (now)</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Annual (now)</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               {money((data?.current?.annualMaintenanceNow ?? 0) + (data?.current?.annualUtilitiesNow ?? 0))}
             </div>
@@ -252,7 +252,7 @@ export default function TrueCostClient() {
               onClick={() => setChartExpanded((v) => !v)}
               className="rounded-full border border-slate-200/80 bg-white/75 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/55 dark:text-slate-300 dark:hover:bg-slate-900/80"
             >
-              {chartExpanded ? 'Show less' : 'Show all 5 lines'}
+              {chartExpanded ? 'Show less' : 'Show more'}
             </button>
           </div>
           <MultiLineChart xLabels={chartModel.x} series={chartModel.series} ariaLabel="True cost trend chart" />

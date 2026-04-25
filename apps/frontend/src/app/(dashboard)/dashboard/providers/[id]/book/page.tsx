@@ -582,7 +582,7 @@ export default function BookProviderPage() {
                   href="/dashboard/properties/new"
                   className="mt-2 inline-flex min-h-[40px] items-center rounded-lg border border-amber-200 bg-white px-3 text-sm font-medium text-amber-700"
                 >
-                  Add Property
+                  Add property
                 </Link>
               </div>
             ) : (

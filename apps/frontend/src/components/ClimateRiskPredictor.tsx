@@ -124,7 +124,7 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
     return (
       <ScenarioInputCard
         title="Analyzing climate risks"
-        subtitle="Running hazard and trend models for this location."
+        subtitle="Checking hazard and trend signals for this location."
         badge={<StatusChip tone="info">In progress</StatusChip>}
       >
         <div className="flex items-center gap-3 text-sm text-gray-600">
@@ -219,10 +219,10 @@ export default function ClimateRiskPredictor({ propertyId }: ClimateRiskPredicto
                         <div className={`text-xs font-semibold px-2 py-1 rounded ${getRiskColor(risk.riskLevel)}`}>
                           {risk.riskLevel}
                         </div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-500">
+                        <div className="mt-1 text-[10px] tracking-normal text-gray-500">
                           {risk.source === 'AI_ESTIMATE' ? 'AI estimate' : 'State heuristic'}
                         </div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-gray-500">
+                        <div className="mt-1 text-[10px] tracking-normal text-gray-500">
                           Confidence {Math.round((risk.confidenceScore || 0) * 100)}%
                         </div>
                       </div>

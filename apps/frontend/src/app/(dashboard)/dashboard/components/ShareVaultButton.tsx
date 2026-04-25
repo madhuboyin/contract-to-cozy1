@@ -147,7 +147,7 @@ export function ShareVaultButton({ propertyId, propertyAddress }: ShareVaultButt
 
                   <form onSubmit={handleSetPassword} className="space-y-3">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <label className="text-xs font-semibold tracking-normal text-slate-500">
                         Vault Password
                       </label>
                       <div className="relative">
@@ -285,7 +285,7 @@ function VaultLinkBlock({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <label className="text-xs font-semibold tracking-normal text-slate-500">
         Shareable Link
       </label>
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">

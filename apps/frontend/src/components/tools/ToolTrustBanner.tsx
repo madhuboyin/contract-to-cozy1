@@ -99,7 +99,7 @@ export function ToolTrustBanner({
             <Database className={cn('h-3.5 w-3.5', t.icon)} />
           </div>
           <div className="min-w-0">
-            <p className={cn('text-[11px] font-semibold uppercase tracking-wider', t.label)}>
+            <p className={cn('text-[11px] font-semibold tracking-normal', t.label)}>
               Uses your data
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -132,7 +132,7 @@ export function ToolTrustBanner({
             <Zap className={cn('h-3.5 w-3.5', t.icon)} />
           </div>
           <div className="min-w-0">
-            <p className={cn('text-[11px] font-semibold uppercase tracking-wider', t.label)}>
+            <p className={cn('text-[11px] font-semibold tracking-normal', t.label)}>
               How it calculates
             </p>
             <p className={cn('mt-1.5 text-xs leading-relaxed', t.body)}>{calculationMethod}</p>

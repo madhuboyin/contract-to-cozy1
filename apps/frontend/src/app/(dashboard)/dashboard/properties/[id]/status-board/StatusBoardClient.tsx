@@ -108,7 +108,7 @@ const CONDITION_COLORS: Record<StatusBoardCondition, string> = {
 const CONDITION_LABELS: Record<StatusBoardCondition, string> = {
   GOOD: "Good",
   MONITOR: "Monitor",
-  ACTION_NEEDED: "Action Needed",
+  ACTION_NEEDED: "Action needed",
 };
 
 const CONDITION_ROW_BORDER: Record<StatusBoardCondition, string> = {
@@ -157,7 +157,7 @@ const WARRANTY_LABELS: Record<WarrantyBadge, string> = {
 };
 
 const HEADER_CELL_CLASS =
-  "h-12 px-3 text-[13px] font-semibold tracking-wide text-slate-700 dark:text-slate-200";
+  "h-12 px-3 text-[13px] font-semibold tracking-normal text-slate-700 dark:text-slate-200";
 
 const GLASS_PANEL_CLASS =
   "rounded-[26px] border border-white/60 bg-white/50 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/40";
@@ -715,7 +715,7 @@ export default function StatusBoardClient() {
                   >
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Clock className="h-3 w-3" />
                           Installed
                         </span>
@@ -727,7 +727,7 @@ export default function StatusBoardClient() {
                   <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <RefreshCw className="h-3 w-3" />
                           Last Computed
                         </span>
@@ -739,7 +739,7 @@ export default function StatusBoardClient() {
                   <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Shield className="h-3 w-3" />
                           Warranty
                         </span>
@@ -753,7 +753,7 @@ export default function StatusBoardClient() {
                   <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Wrench className="h-3 w-3" />
                           Pending Tasks
                         </span>
@@ -765,7 +765,7 @@ export default function StatusBoardClient() {
                   <div className={DETAIL_BENTO_TILE_CLASS}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
                           <Home className="h-3 w-3" />
                           Room
                         </span>
@@ -815,7 +815,7 @@ export default function StatusBoardClient() {
                   </div>
                 )}
 
-                <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                <p className="mt-1 text-[11px] font-semibold tracking-normal text-slate-400 dark:text-slate-500">
                   Actions
                 </p>
                 {/* Deep links */}
@@ -978,7 +978,7 @@ export default function StatusBoardClient() {
                           <SelectItem value="clear">Use computed</SelectItem>
                           <SelectItem value="GOOD">Good</SelectItem>
                           <SelectItem value="MONITOR">Monitor</SelectItem>
-                          <SelectItem value="ACTION_NEEDED">Action Needed</SelectItem>
+                          <SelectItem value="ACTION_NEEDED">Action needed</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1179,7 +1179,7 @@ export default function StatusBoardClient() {
                       <SelectItem value="clear">Use computed</SelectItem>
                       <SelectItem value="GOOD">Good</SelectItem>
                       <SelectItem value="MONITOR">Monitor</SelectItem>
-                      <SelectItem value="ACTION_NEEDED">Action Needed</SelectItem>
+                      <SelectItem value="ACTION_NEEDED">Action needed</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1246,7 +1246,7 @@ export default function StatusBoardClient() {
                     onClick={() => recomputeMutation.mutate()}
                   >
                     <RefreshCw className={cn("mr-1 h-3.5 w-3.5", recomputeMutation.isPending && "animate-spin")} />
-                    {recomputeMutation.isPending ? "Recomputing..." : "Recompute"}
+                    {recomputeMutation.isPending ? "Refreshing..." : "Refresh"}
                   </Button>
                 </div>
               }
@@ -1271,9 +1271,9 @@ export default function StatusBoardClient() {
                     `${summary.actionNeeded} action needed`,
                     ...(signalSummary
                       ? [
-                          `Risk: ${signalSummary.riskLevel}${signalSummary.signalBacked.riskLevel ? ' (signal)' : ''}`,
-                          `Cost: ${signalSummary.costPressure}${signalSummary.signalBacked.costPressure ? ' (signal)' : ''}`,
-                          `Maintenance: ${signalSummary.maintenanceStatus}${signalSummary.signalBacked.maintenanceStatus ? ' (signal)' : ''}`,
+                          `Risk: ${signalSummary.riskLevel}${signalSummary.signalBacked.riskLevel ? ' ' : ''}`,
+                          `Cost: ${signalSummary.costPressure}${signalSummary.signalBacked.costPressure ? ' ' : ''}`,
+                          `Maintenance: ${signalSummary.maintenanceStatus}${signalSummary.signalBacked.maintenanceStatus ? ' ' : ''}`,
                         ]
                       : []),
                   ]}
@@ -1281,8 +1281,8 @@ export default function StatusBoardClient() {
                 <TrustStrip
                   variant="footnote"
                   confidenceLabel={`${summary.total} items evaluated; ${summary.actionNeeded} currently need action`}
-                  freshnessLabel="Recomputes when inventory details, install dates, or maintenance signals change"
-                  sourceLabel="Status board engine + inventory metadata + guidance continuity context"
+                  freshnessLabel="Updates when inventory details, install dates, or maintenance signals change"
+                  sourceLabel="Status board + inventory details + guidance context"
                 />
               </>
             ) : undefined
@@ -1317,7 +1317,7 @@ export default function StatusBoardClient() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Conditions</SelectItem>
-                      <SelectItem value="ACTION_NEEDED">Action Needed</SelectItem>
+                      <SelectItem value="ACTION_NEEDED">Action needed</SelectItem>
                       <SelectItem value="MONITOR">Monitor</SelectItem>
                       <SelectItem value="GOOD">Good</SelectItem>
                     </SelectContent>
@@ -1534,28 +1534,28 @@ export default function StatusBoardClient() {
           toolId="status-board"
           propertyId={propertyId}
           backHref={backHref}
-          backLabel="Back to Property"
+          backLabel="Back to property"
           showBackLink
         />
         {summary ? (
           <TrustStrip
             variant="footnote"
             confidenceLabel={`${summary.total} items evaluated with ${summary.actionNeeded} flagged as action needed`}
-            freshnessLabel="Live after recompute and inventory updates"
-            sourceLabel="CtC status prediction model + asset metadata + maintenance signals"
+            freshnessLabel="Updated automatically"
+            sourceLabel=""
           />
         ) : null}
         {signalSummary ? (
           <div className={`rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-xs text-slate-600 shadow-sm ${GLASS_CARD_CLASS}`}>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full border border-slate-200/70 bg-white/80 px-2.5 py-1">
-                Risk: {signalSummary.riskLevel}{signalSummary.signalBacked.riskLevel ? ' (signal)' : ''}
+                Risk: {signalSummary.riskLevel}{signalSummary.signalBacked.riskLevel ? ' ' : ''}
               </span>
               <span className="rounded-full border border-slate-200/70 bg-white/80 px-2.5 py-1">
-                Cost: {signalSummary.costPressure}{signalSummary.signalBacked.costPressure ? ' (signal)' : ''}
+                Cost: {signalSummary.costPressure}{signalSummary.signalBacked.costPressure ? ' ' : ''}
               </span>
               <span className="rounded-full border border-slate-200/70 bg-white/80 px-2.5 py-1">
-                Maintenance: {signalSummary.maintenanceStatus}{signalSummary.signalBacked.maintenanceStatus ? ' (signal)' : ''}
+                Maintenance: {signalSummary.maintenanceStatus}{signalSummary.signalBacked.maintenanceStatus ? ' ' : ''}
               </span>
             </div>
           </div>
@@ -1580,7 +1580,7 @@ export default function StatusBoardClient() {
                 onClick={() => recomputeMutation.mutate()}
               >
                 <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", recomputeMutation.isPending && "animate-spin")} />
-                {recomputeMutation.isPending ? "Recomputing..." : "Recompute board"}
+                {recomputeMutation.isPending ? "Refreshing..." : "Recompute board"}
               </Button>
             )}
           />
@@ -1601,7 +1601,7 @@ export default function StatusBoardClient() {
               <div className="flex items-center gap-3">
                 <Box className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
                 <div className="text-left">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">All</p>
+                  <p className="text-[10px] tracking-normal text-slate-400 dark:text-slate-500">All</p>
                   <p className="mt-0.5 text-xl font-bold leading-none text-slate-800 dark:text-slate-100">
                     {summary.total}
                   </p>
@@ -1624,7 +1624,7 @@ export default function StatusBoardClient() {
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
                 <div className="text-left">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-500 dark:text-emerald-400">Good</p>
+                  <p className="text-[10px] tracking-normal text-emerald-500 dark:text-emerald-400">Good</p>
                   <p className="mt-0.5 text-xl font-bold leading-none text-emerald-700 dark:text-emerald-300">
                     {summary.good}
                   </p>
@@ -1647,7 +1647,7 @@ export default function StatusBoardClient() {
               <div className="flex items-center gap-3">
                 <Clock className="h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
                 <div className="text-left">
-                  <p className="text-[10px] uppercase tracking-wider text-amber-500 dark:text-amber-400">Monitor</p>
+                  <p className="text-[10px] tracking-normal text-amber-500 dark:text-amber-400">Monitor</p>
                   <p className="mt-0.5 text-xl font-bold leading-none text-amber-700 dark:text-amber-300">
                     {summary.monitor}
                   </p>
@@ -1683,11 +1683,11 @@ export default function StatusBoardClient() {
                 <div className="text-left">
                   <p
                     className={cn(
-                      "text-[10px] uppercase tracking-wider",
+                      "text-[10px] tracking-normal",
                       summary.actionNeeded > 0 ? "text-white/80" : "text-emerald-500 dark:text-emerald-400",
                     )}
                   >
-                    Action Needed
+                    Action needed
                   </p>
                   <p
                     className={cn(
@@ -1771,7 +1771,7 @@ export default function StatusBoardClient() {
           {[
             { label: "All", value: "all", count: summary.total, color: "border-slate-200 text-slate-700 bg-white/80" },
             {
-              label: "Action Needed",
+              label: "Action needed",
               value: "ACTION_NEEDED",
               count: summary.actionNeeded,
               color: "border-rose-200 text-rose-700 bg-rose-50/80 dark:border-rose-800/60 dark:text-rose-300 dark:bg-rose-950/40",
@@ -1814,7 +1814,7 @@ export default function StatusBoardClient() {
             Showing:{" "}
             <strong className="text-slate-700 dark:text-slate-200">
               {conditionFilter === "ACTION_NEEDED"
-                ? "Action Needed"
+                ? "Action needed"
                 : conditionFilter === "MONITOR"
                 ? "Monitor"
                 : "Good"}{" "}

@@ -203,8 +203,8 @@ function ReplayIntroCard({
           <History className="h-4 w-4" />
         </IconBadge>
         <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
-            Home Tool
+          <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
+            Home tool
           </p>
           <h1 className="mb-0 mt-1 text-[1.1rem] font-semibold leading-tight text-[hsl(var(--mobile-text-primary))]">
             Home Risk Replay
@@ -323,7 +323,7 @@ function SummaryCard({
     <MobileCard className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="mb-0 text-[11px] font-medium uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
             Replay summary
           </p>
           <h2 className={cn('mb-0 mt-1 text-[hsl(var(--mobile-text-primary))]', MOBILE_TYPE_TOKENS.cardTitle)}>
@@ -1025,7 +1025,7 @@ export default function HomeRiskReplayClient() {
                 action={
                   <StatusChip tone="info">
                     <Clock3 className="mr-1 h-3.5 w-3.5" />
-                    {currentReplay.engineVersion || 'MVP engine'}
+                    {currentReplay.engineVersion || 'Current version'}
                   </StatusChip>
                 }
               />

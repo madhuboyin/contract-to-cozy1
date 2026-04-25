@@ -11,17 +11,17 @@ const PRICING_LOOP_BASE: TrustContract = {
 
 const COVERAGE_LOOP_BASE: TrustContract = {
   confidenceLabel: 'Confidence improves as policy details and inventory coverage state stay current.',
-  freshnessLabel: 'Updates when inventory coverage, warranty state, or policy metadata changes.',
-  sourceLabel: 'Coverage graph + inventory metadata + policy/warranty records.',
+  freshnessLabel: 'Updates when inventory coverage, warranty state, or policy details change.',
+  sourceLabel: 'Coverage graph + inventory details + policy/warranty records.',
   rationale:
     'Coverage recommendations prioritize uncovered and expiring items before lower-risk gaps.',
   sourceKind: 'coverage_loop',
 };
 
 const REFINANCE_LOOP_BASE: TrustContract = {
-  confidenceLabel: 'Model confidence improves with complete mortgage profile inputs.',
+  confidenceLabel: 'Confidence improves with complete mortgage profile inputs.',
   freshnessLabel: 'Re-evaluate to refresh against current market-rate data.',
-  sourceLabel: 'Mortgage profile + market rate history + CtC refinance opportunity model.',
+  sourceLabel: 'Mortgage profile + market rate history + refinance opportunity analysis.',
   rationale:
     'Refinance opportunity scoring weighs rate spread, break-even timing, and closing-cost impact.',
   sourceKind: 'refinance_loop',
@@ -30,7 +30,7 @@ const REFINANCE_LOOP_BASE: TrustContract = {
 const NEGOTIATION_LOOP_BASE: TrustContract = {
   confidenceLabel: 'Confidence improves with complete case inputs and evidence documents.',
   freshnessLabel: 'Updates with each saved case input, parsed document, and analysis run.',
-  sourceLabel: 'Negotiation case context + uploaded evidence + CtC negotiation analysis engine.',
+  sourceLabel: 'Negotiation case context + uploaded evidence + negotiation analysis.',
   rationale:
     'Negotiation recommendations tie evidence-backed findings directly to draftable actions.',
   sourceKind: 'negotiation_loop',
@@ -39,7 +39,7 @@ const NEGOTIATION_LOOP_BASE: TrustContract = {
 const HIDDEN_ASSET_BASE: TrustContract = {
   confidenceLabel: 'Eligibility confidence varies by program — HIGH means strong match, LOW means worth verifying.',
   freshnessLabel: 'Program database refreshed periodically; verify eligibility directly with the program source.',
-  sourceLabel: 'CtC benefit and program database + property profile + location signals.',
+  sourceLabel: 'Benefit and program database + property profile + location signals.',
   rationale:
     'Matches are ranked by estimated value and eligibility confidence. Always verify with the official program source before applying.',
   sourceKind: 'hidden_asset',
@@ -47,26 +47,26 @@ const HIDDEN_ASSET_BASE: TrustContract = {
 
 const INSURANCE_TREND_BASE: TrustContract = {
   confidenceLabel: 'Heuristic estimate — not derived from your actual policy. Confidence reflects local trend data quality.',
-  freshnessLabel: 'Updates with each model run using the latest local premium benchmarks.',
+  freshnessLabel: 'Updates with the latest local premium benchmarks.',
   sourceLabel: 'Property profile · State premium data · Local area benchmarks.',
   rationale:
-    'This is a model estimate, not a quote or policy figure. Use it to understand trend direction and compare to similar homes — verify any significant change with your insurer.',
+    'This is an estimate, not a quote or policy figure. Use it to understand trend direction and compare to similar homes — verify any significant change with your insurer.',
   sourceKind: 'coverage_loop',
 };
 
 const PROPERTY_TAX_BASE: TrustContract = {
   confidenceLabel: 'Heuristic estimate — not your official assessed value. Confidence reflects local rate data availability.',
-  freshnessLabel: 'Updates each time the estimate model runs against current local rate inputs.',
+  freshnessLabel: 'Updates against current local rate inputs.',
   sourceLabel: 'Property value assumptions · Local rate estimates · Historical trend projection.',
   rationale:
-    'This is a modeled estimate, not an official tax bill or assessed value. Use it to anticipate direction and plan ahead — verify with your local tax authority before acting.',
+    'This is an estimate, not an official tax bill or assessed value. Use it to anticipate direction and plan ahead — verify with your local tax authority before acting.',
   sourceKind: 'coverage_loop',
 };
 
 const GUIDANCE_ENGINE_BASE: TrustContract = {
   confidenceLabel: 'Journey confidence improves as more property, asset, and signal context is provided.',
   freshnessLabel: 'Updates when property data, linked assets, or issue signals change.',
-  sourceLabel: 'CtC guidance engine + property context + linked asset and coverage signals.',
+  sourceLabel: 'Guidance tools + property context + linked asset and coverage signals.',
   rationale:
     'Guidance journeys order steps by impact and dependency — completing earlier steps improves the quality of later recommendations.',
   sourceKind: 'guidance_engine',

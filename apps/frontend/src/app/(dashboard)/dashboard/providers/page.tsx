@@ -96,7 +96,7 @@ const ServiceFilter = React.memo(
         <MobileFilterStack
           search={
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.1em] text-slate-500">Service category</label>
+              <label className="mb-1 block text-xs font-medium tracking-normal text-slate-500">Service category</label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="h-11 w-full text-sm">
                   <SelectValue placeholder={isHomeBuyer ? 'Inspection (recommended)' : 'Select a category'} />
@@ -117,7 +117,7 @@ const ServiceFilter = React.memo(
           }
           primaryFilters={
             <div>
-              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.1em] text-slate-500">ZIP code</label>
+              <label className="mb-1 block text-xs font-medium tracking-normal text-slate-500">ZIP code</label>
               <Input
                 type="text"
                 placeholder="e.g., 78701"

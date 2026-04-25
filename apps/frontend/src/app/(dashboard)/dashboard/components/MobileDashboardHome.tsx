@@ -710,12 +710,12 @@ export default function MobileDashboardHome({
                     <MetricRow
                       label="Health"
                       value={`${healthScore}/100`}
-                      trend={<StatusChip tone={scoreChipTone(healthScore)}>{healthScore >= 80 ? 'Good' : healthScore >= 60 ? 'Elevated' : 'At Risk'}</StatusChip>}
+                      trend={<StatusChip tone={scoreChipTone(healthScore)}>{healthScore >= 80 ? 'Good' : healthScore >= 60 ? 'Elevated' : 'Cost now'}</StatusChip>}
                     />
                     <MetricRow
                       label="Risk"
                       value={`${riskScore}/100`}
-                      trend={<StatusChip tone={riskChipTone(riskScore)}>{riskScore >= 80 ? 'Protected' : riskScore >= 60 ? 'Elevated' : 'At Risk'}</StatusChip>}
+                      trend={<StatusChip tone={riskChipTone(riskScore)}>{riskScore >= 80 ? 'Protected' : riskScore >= 60 ? 'Elevated' : 'Cost now'}</StatusChip>}
                     />
                     <MetricRow
                       label="Financial"
@@ -952,7 +952,7 @@ export default function MobileDashboardHome({
 
                 <MobileSection>
                   <MobileSectionHeader
-                    title="Home Tools"
+                    title="Home tools"
                     subtitle="Ownership planning tools at a glance"
                     action={
                       <Link href={homeToolsPageHref} className="no-brand-style text-sm font-semibold text-[hsl(var(--mobile-brand-strong))]">

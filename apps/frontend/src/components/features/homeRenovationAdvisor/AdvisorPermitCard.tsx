@@ -83,7 +83,7 @@ export function AdvisorPermitCard({ permit }: AdvisorPermitCardProps) {
             onClick={() => setExpanded((v) => !v)}
             className={cn('mb-2 text-[hsl(var(--mobile-brand-strong))]', MOBILE_TYPE_TOKENS.caption)}
           >
-            {expanded ? 'Hide details ↑' : 'Show permit types + inspection stages ↓'}
+            {expanded ? 'Show less' : 'Show more'}
           </button>
 
           {expanded && (

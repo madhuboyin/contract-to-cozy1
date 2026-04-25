@@ -213,7 +213,7 @@ function HiddenAssetSummaryCard({
     <MobileCard variant="standard">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-secondary))]">
+          <p className="text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
             Benefits Overview
           </p>
           <MetricRow
@@ -382,7 +382,7 @@ function HiddenAssetDetailSheet({
           {/* Description */}
           {match.description && (
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 About this program
               </h3>
               <p className="text-sm leading-[1.5] text-[hsl(var(--foreground))]">
@@ -394,7 +394,7 @@ function HiddenAssetDetailSheet({
           {/* Why this may apply */}
           {match.matchReasons && match.matchReasons.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Why this may apply to your home
               </h3>
               <ul className="space-y-1.5">
@@ -414,7 +414,7 @@ function HiddenAssetDetailSheet({
           {/* Estimated value */}
           {valueStr && (
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Estimated potential value
               </h3>
               <p className="text-sm font-semibold">{valueStr}</p>
@@ -426,7 +426,7 @@ function HiddenAssetDetailSheet({
 
           {/* Dates */}
           <div className="space-y-1.5">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
               Program dates
             </h3>
             <div className="space-y-1 text-sm">
@@ -453,7 +453,7 @@ function HiddenAssetDetailSheet({
           {/* Eligibility notes */}
           {match.eligibilityNotes && (
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Eligibility notes
               </h3>
               <p className="text-sm leading-[1.5] text-[hsl(var(--foreground))]">
@@ -545,7 +545,7 @@ function HiddenAssetDetailSheet({
             <p className="text-xs font-semibold text-green-700">
               Pursuing{match.claimedAt ? ` — started ${formatDate(match.claimedAt)}` : ''}.
             </p>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+            <p className="text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
               Steps to apply
             </p>
             <ol className="space-y-2">
@@ -758,7 +758,7 @@ export default function HiddenAssetFinderClient() {
 
       {/* Page intro */}
       <MobilePageIntro
-        eyebrow="Home Tool"
+        eyebrow="Home tool"
         title="Hidden Asset Finder"
         subtitle="Discover potential rebates, tax benefits, discounts, and grants that may apply to your home. All results are potential matches — verify eligibility with each program's official source."
        className="lg:hidden"/>

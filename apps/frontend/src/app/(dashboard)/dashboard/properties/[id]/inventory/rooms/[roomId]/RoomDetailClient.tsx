@@ -218,9 +218,9 @@ function formatRelativeDate(dateString?: string | null): string {
 const STATUS_LABELS: Record<string, string> = {
   HEALTHY: 'Healthy',
   GOOD: 'Good',
-  'NEEDS ATTENTION': 'Needs attention',
+  'Needs attention': 'Needs attention',
   NEEDS_ATTENTION: 'Needs attention',
-  'AT RISK': 'At risk',
+  'Cost now': 'At risk',
   AT_RISK: 'At risk',
   CRITICAL: 'Critical',
 };
@@ -549,7 +549,7 @@ export default function RoomDetailClient() {
 
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Room Health</span>
+                <span className="text-xs font-semibold tracking-normal text-gray-400">Room Health</span>
                 <span className={`text-sm font-bold ${statusColor}`}>{statusLabel}</span>
               </div>
               <p className="mt-0.5 text-xs text-gray-400">
@@ -636,7 +636,7 @@ export default function RoomDetailClient() {
                             <p className="mb-0 truncate text-xs font-medium text-gray-800">
                               {recommendation.plantName}
                             </p>
-                            <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                            <span className="text-[10px] tracking-normal text-gray-500">
                               {recommendation.status}
                             </span>
                           </div>

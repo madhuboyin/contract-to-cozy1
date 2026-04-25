@@ -46,7 +46,7 @@ export function KnowledgeMetaRow({
             <Badge
               key={category.slug}
               variant="outline"
-              className="rounded-full border-slate-200/80 bg-transparent px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+              className="rounded-full border-slate-200/80 bg-transparent px-2.5 py-1 text-[10px] font-semibold tracking-normal text-slate-500"
             >
               {category.name}
             </Badge>

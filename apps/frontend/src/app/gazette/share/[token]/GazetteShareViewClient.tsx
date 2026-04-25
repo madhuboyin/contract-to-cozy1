@@ -240,7 +240,7 @@ export default function GazetteShareViewClient() {
         {heroStory && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-slate-900 bg-slate-900 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
+              <span className="rounded-full border border-slate-900 bg-slate-900 px-2.5 py-0.5 text-xs font-bold tracking-normal text-white">
                 Top Story
               </span>
               {(() => {

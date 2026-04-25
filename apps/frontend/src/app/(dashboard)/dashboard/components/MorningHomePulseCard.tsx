@@ -369,7 +369,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
           </div>
           <div className="min-w-0">
             <h2 className="text-xl font-semibold text-gray-900 md:text-2xl">{payload.title}</h2>
-            <p className="mt-0.5 text-xs font-medium uppercase tracking-wide text-gray-400">{payload.dateLabel}</p>
+            <p className="mt-0.5 text-xs font-medium tracking-normal text-gray-400">{payload.dateLabel}</p>
           </div>
         </div>
       </div>
@@ -401,7 +401,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
       <div className="grid items-stretch gap-3 md:grid-cols-3">
         {payload.summary.map((row) => {
           const label = getMetricLabel(row.kind, row.value);
-          const gaugeLabel = row.kind === 'RISK' ? 'RISK LEVEL' : row.label.toUpperCase();
+          const gaugeLabel = row.kind === 'RISK' ? 'Risk level' : row.label;
           const riskExposurePct =
             row.kind === 'RISK'
               ? Math.round(getMetricPosition('RISK', row.value) * 100)
@@ -529,7 +529,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               className={`rounded-xl border p-4 ${getPulseCardStyle(row.kind, scoreValue)} flex flex-col`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                <span className="text-xs font-semibold tracking-normal text-gray-400">
                   {gaugeLabel}
                 </span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${weeklyBadge.className}`}>

@@ -23,7 +23,7 @@ export function BookingTimeline({ currentStatus, timeline }: BookingTimelineProp
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <h2 className="mb-5 text-sm font-semibold uppercase tracking-wide text-gray-400">Booking Progress</h2>
+      <h2 className="mb-5 text-sm font-semibold tracking-normal text-gray-400">Booking Progress</h2>
 
       {isCancelled ? (
         <div className="flex items-center gap-2 text-sm font-medium text-red-600">

@@ -55,7 +55,7 @@ export default function CoverageIntelligenceToolClient() {
   const trust = coverageLoopTrust({
     confidenceLabel: 'Medium-High, based on linked policy and inventory signals',
     freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',
-    sourceLabel: 'CtC coverage graph + property inventory + policy metadata',
+    sourceLabel: 'Coverage graph + property inventory + policy details',
   });
 
   const tabNav = (
@@ -82,7 +82,7 @@ export default function CoverageIntelligenceToolClient() {
     <ToolWorkspaceTemplate
       backHref={backHref}
       backLabel={isGuidanceContext ? 'Back to guidance' : 'Back to property'}
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Coverage Intelligence"
       subtitle="Insurance and warranty coverage assessment for this property."
       trust={trust}

@@ -249,7 +249,7 @@ function RecommendationCard({
 
       {recommendation.reason.fitSignals.length > 0 ? (
         <div className="space-y-1">
-          <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-0 text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
             Why this fits
           </p>
           <MobileActionRow>
@@ -268,7 +268,7 @@ function RecommendationCard({
 
       {recommendation.careSummary ? (
         <div>
-          <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-0 text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
             Care summary
           </p>
           <p className="mb-0 mt-1 text-sm text-[hsl(var(--mobile-text-secondary))]">
@@ -279,7 +279,7 @@ function RecommendationCard({
 
       {recommendation.placementTip ? (
         <div>
-          <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-0 text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
             Placement tip
           </p>
           <p className="mb-0 mt-1 text-sm text-[hsl(var(--mobile-text-secondary))]">
@@ -290,7 +290,7 @@ function RecommendationCard({
 
       {recommendation.warningFlags.length > 0 ? (
         <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50 p-2.5">
-          <p className="mb-0 text-xs font-semibold uppercase tracking-[0.08em] text-amber-800">
+          <p className="mb-0 text-xs font-semibold tracking-normal text-amber-800">
             Warnings
           </p>
           <div className="space-y-1">
@@ -694,7 +694,7 @@ export default function PlantAdvisorClient() {
             <ArrowLeft className="h-4 w-4 text-[hsl(var(--mobile-text-primary))]" />
           </Link>
           <MobilePageIntro
-            eyebrow="Home Tools"
+            eyebrow="Home tools"
             title="Plant Advisor"
             subtitle="Deterministic room-aware plant recommendations"
             className="flex-1 space-y-0 lg:hidden"

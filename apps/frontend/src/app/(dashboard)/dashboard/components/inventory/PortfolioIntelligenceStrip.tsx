@@ -73,7 +73,7 @@ export default function PortfolioIntelligenceStrip({
         transition={{ duration: 0.3, delay: 0.0 }}
         className="cursor-default rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-teal-200 hover:bg-teal-50/30"
       >
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Portfolio Value</p>
+        <p className="mb-1 text-[10px] font-semibold tracking-normal text-gray-400">Portfolio Value</p>
         <p className="text-2xl font-display font-bold text-gray-900">{formatCurrency(Math.round(animatedTotalValue))}</p>
         <p className="mt-0.5 text-xs text-gray-400">{stats.totalItems} items tracked</p>
       </motion.div>
@@ -84,7 +84,7 @@ export default function PortfolioIntelligenceStrip({
         transition={{ duration: 0.3, delay: 0.06 }}
         className="cursor-default rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-emerald-200 hover:bg-emerald-50/30"
       >
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Coverage Rate</p>
+        <p className="mb-1 text-[10px] font-semibold tracking-normal text-gray-400">Coverage Rate</p>
         <p
           className={`text-2xl font-display font-bold ${
             stats.coverageRate >= 80 ? 'text-emerald-600' : stats.coverageRate >= 50 ? 'text-amber-500' : 'text-red-500'
@@ -110,7 +110,7 @@ export default function PortfolioIntelligenceStrip({
               : 'border-gray-200 hover:border-red-200 hover:bg-red-50/30',
           ].join(' ')}
         >
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Coverage Gaps</p>
+          <p className="mb-1 text-[10px] font-semibold tracking-normal text-gray-400">Coverage Gaps</p>
           <p className={`text-2xl font-display font-bold ${stats.gapCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
             {Math.round(animatedGapCount)}
           </p>
@@ -135,7 +135,7 @@ export default function PortfolioIntelligenceStrip({
               : 'border-gray-200 hover:border-amber-200 hover:bg-amber-50/30',
           ].join(' ')}
         >
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Missing Values</p>
+          <p className="mb-1 text-[10px] font-semibold tracking-normal text-gray-400">Missing Values</p>
           <p
             className={`text-2xl font-display font-bold ${
               stats.missingValueCount > 0 ? 'text-amber-500' : 'text-emerald-600'
@@ -155,7 +155,7 @@ export default function PortfolioIntelligenceStrip({
         transition={{ duration: 0.3, delay: 0.24 }}
         className="cursor-default rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300"
       >
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Documents</p>
+        <p className="mb-1 text-[10px] font-semibold tracking-normal text-gray-400">Documents</p>
         <p className="text-2xl font-display font-bold text-gray-900">{stats.docCount}</p>
         <p className="mt-0.5 text-xs text-gray-400">receipts and warranties</p>
       </motion.div>

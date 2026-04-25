@@ -56,7 +56,7 @@ export function ToolMethodologyAccordion({
       {open && (
         <div className="space-y-6 border-t border-gray-100 px-5 py-5">
           <div>
-            <p className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            <p className="mb-4 text-[11px] font-semibold tracking-normal text-gray-400">
               How it works
             </p>
             <ol className="space-y-4">
@@ -78,7 +78,7 @@ export function ToolMethodologyAccordion({
             <div className="grid grid-cols-1 gap-5 border-t border-gray-100 pt-1 sm:grid-cols-2">
               {columns.map((col) => (
                 <div key={col.heading}>
-                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  <p className="mb-3 text-[11px] font-semibold tracking-normal text-gray-400">
                     {col.heading}
                   </p>
                   <ul className="space-y-2">

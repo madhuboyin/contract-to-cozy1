@@ -311,7 +311,7 @@ export default function VisualInspector({ propertyId }: VisualInspectorProps) {
 
         {/* Prioritized Actions */}
         <div>
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Priority Action Items</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Priority action Items</h3>
           <div className="space-y-4">
             {report.prioritizedActions.map((issue, index) => (
               <Card key={index} className={`border-l-4 ${getSeverityColor(issue.severity)}`}>

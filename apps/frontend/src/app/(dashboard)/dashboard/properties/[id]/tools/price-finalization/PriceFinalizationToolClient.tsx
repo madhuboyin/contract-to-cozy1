@@ -363,7 +363,7 @@ export default function PriceFinalizationToolClient() {
       ? 'High for finalized records; medium for draft entries'
       : 'Medium while drafting',
     freshnessLabel: 'Updates with every draft save and finalization action',
-    sourceLabel: 'Quote context + selected vendor terms + guidance continuity metadata',
+    sourceLabel: 'Quote context + selected vendor terms + guidance context',
   });
 
   return (

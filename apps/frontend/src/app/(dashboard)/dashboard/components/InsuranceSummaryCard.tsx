@@ -10,7 +10,7 @@ interface InsuranceSummaryCardProps {
   propertyId: string | undefined;
 }
 
-const INSURANCE_PROTECTION_GAP_QUERY_KEY = 'insurance-protection-gap';
+const INSURANCE_ProtectION_GAP_QUERY_KEY = 'insurance-protection-gap';
 
 function formatCents(cents: number | null | undefined) {
   const safe = typeof cents === 'number' && Number.isFinite(cents) ? cents : 0;
@@ -23,7 +23,7 @@ function formatCents(cents: number | null | undefined) {
 
 export function InsuranceSummaryCard({ propertyId }: InsuranceSummaryCardProps) {
   const { data } = useQuery({
-    queryKey: [INSURANCE_PROTECTION_GAP_QUERY_KEY, propertyId],
+    queryKey: [INSURANCE_ProtectION_GAP_QUERY_KEY, propertyId],
     enabled: !!propertyId,
     staleTime: 60 * 1000,
     queryFn: async () => {

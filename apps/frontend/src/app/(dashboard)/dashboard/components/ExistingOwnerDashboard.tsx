@@ -130,19 +130,19 @@ export const ExistingOwnerDashboard = ({
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-3 py-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700">Estimated impact</p>
+              <p className="text-[11px] font-semibold tracking-normal text-emerald-700">Estimated impact</p>
               <p className="text-base font-semibold text-emerald-900">
                 {estimatedImpact > 0 ? formatUsd(estimatedImpact) : 'No major cost risk'}
               </p>
             </div>
             <div className="rounded-xl border border-amber-200/80 bg-amber-50/75 px-3 py-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-700">Delay risk</p>
+              <p className="text-[11px] font-semibold tracking-normal text-amber-700">Delay risk</p>
               <p className="text-base font-semibold text-amber-900">
                 {totalAttentionItems > 0 ? `${totalAttentionItems} priority item${totalAttentionItems === 1 ? '' : 's'}` : 'Low'}
               </p>
             </div>
             <div className="rounded-xl border border-blue-200/80 bg-blue-50/70 px-3 py-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-700">Momentum</p>
+              <p className="text-[11px] font-semibold tracking-normal text-blue-700">Momentum</p>
               <p className="text-base font-semibold text-blue-900">
                 {completionRate > 0 ? `${completionRate}% completion` : 'Build today'}
               </p>

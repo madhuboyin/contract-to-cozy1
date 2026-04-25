@@ -366,27 +366,27 @@ const RiskCategorySummaryCard = ({
         
         if (allAssets.length === 0) {
             // No assets at all - need property data
-            title = 'FINANCIAL GAP Data Missing';
+            title = 'Financial gap data missing';
             description = 'Add property details to analyze coverage gaps.';
-            badgeStatus = 'INFO';
+            badgeStatus = 'Info';
             badgeColor = 'default';
         } else if (highExposureAssets.length === 0) {
             // Great coverage!
-            title = 'FINANCIAL GAP Analysis';
+            title = 'Financial gap analysis';
             description = 'Good warranty and insurance coverage detected.';
-            badgeStatus = 'GOOD';
+            badgeStatus = 'Good';
             badgeColor = 'success';
         } else if (highExposureAssets.length >= 3 || totalGapExposure > 5000) {
             // High exposure - multiple items or high dollar amount
-            title = 'FINANCIAL GAP Analysis';
+            title = 'Financial gap analysis';
             description = `High unprotected exposure detected. Consider comprehensive warranty coverage.`;
-            badgeStatus = 'HIGH';
+            badgeStatus = 'High';
             badgeColor = 'destructive';
         } else {
             // Moderate exposure
-            title = 'FINANCIAL GAP Analysis';
+            title = 'Financial gap analysis';
             description = `Some items lack adequate coverage. Review warranty options.`;
-            badgeStatus = 'MODERATE';
+            badgeStatus = 'Moderate';
             badgeColor = 'warning';
         }
         
@@ -571,7 +571,7 @@ const AssetMatrixTable = ({
                 ctaText = item.actionCta;
                 ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
             } else {
-                ctaText = 'Schedule Maintenance';
+                ctaText = 'Schedule maintenance';
                 ctaVariant = item.riskLevel === 'HIGH' ? 'destructive' : 'secondary';
             }
         }

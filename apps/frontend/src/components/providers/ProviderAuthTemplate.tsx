@@ -71,7 +71,7 @@ export default function ProviderAuthTemplate({
       <main className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[1.04fr_1fr] lg:items-center lg:gap-12 lg:px-8">
         <section className="hidden lg:block">
           <div className={`${CTC_TEMPLATE_SURFACES_V1.elevatedCard} bg-white/95 p-8`}>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Provider Workspace</p>
+            <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">Provider Workspace</p>
             <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-950">
               Build homeowner trust before the first visit.
             </h1>
@@ -100,7 +100,7 @@ export default function ProviderAuthTemplate({
         <section className="w-full">
           <div className={`${CTC_TEMPLATE_SURFACES_V1.elevatedCard} p-5 sm:p-8`}>
             <header className="mb-5 text-center sm:text-left">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Provider Access</p>
+              <p className="mb-2 text-xs font-semibold tracking-normal text-brand-700">Provider Access</p>
               <h2 className="text-3xl font-semibold tracking-tight text-slate-950">{title}</h2>
               <p className="mt-2 text-sm text-slate-600">{subtitle}</p>
             </header>

@@ -134,7 +134,7 @@ export default function CostExplainerClient() {
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Why Is My Home Cost Increasing?"
       subtitle="Plain-English breakdown of higher taxes, insurance, and maintenance drivers."
       introAction={
@@ -148,7 +148,7 @@ export default function CostExplainerClient() {
       }}
       priorityAction={costExplainerPriorityAction}
     >
-      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      {/* Tool identity + Related tools — desktop only, above NBA */}
       <HomeToolHeader
         toolId="cost-explainer"
         propertyId={propertyId}
@@ -209,27 +209,27 @@ export default function CostExplainerClient() {
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Total annual (now)</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Total annual (now)</div>
             <div className="mt-1 text-[1.7rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.snapshot?.annualTotalNow)}</div>
-            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Δ vs last year</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Δ vs last year</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.deltaVsPriorYear?.total)}</div>
           </div>
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Taxes (now)</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Taxes (now)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.annualTaxNow)}</div>
-            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Δ</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Δ</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.deltaVsPriorYear?.tax)}</div>
           </div>
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Insurance (now)</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Insurance (now)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.annualInsuranceNow)}</div>
-            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Δ</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Δ</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.deltaVsPriorYear?.insurance)}</div>
           </div>
           <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-            <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Maintenance (now)</div>
+            <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Maintenance (now)</div>
             <div className="mt-1 text-base font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.annualMaintenanceNow)}</div>
-            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Δ</div>
+            <div className="mt-1 text-xs tracking-normal text-slate-500 dark:text-slate-300">Δ</div>
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.snapshot?.deltaVsPriorYear?.maintenance)}</div>
           </div>
         </div>
@@ -282,7 +282,7 @@ export default function CostExplainerClient() {
               key={e.category}
               className={`rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48${arr.length % 2 !== 0 && _idx === arr.length - 1 ? ' md:col-span-2' : ''}`}
             >
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+              <div className="mb-1 text-[10px] font-semibold tracking-normal text-slate-400 dark:text-slate-500">
                 {e.category === 'TAXES' ? 'Property Tax' : e.category === 'INSURANCE' ? 'Insurance' : e.category === 'MAINTENANCE' ? 'Maintenance' : 'Total Cost'}
               </div>
               <div className="flex items-start justify-between gap-2">
@@ -299,7 +299,7 @@ export default function CostExplainerClient() {
         </div>
 
         <div className="mt-4 rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-          <div className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-300">Assumptions</div>
+          <div className="text-xs font-semibold tracking-normal text-slate-500 dark:text-slate-300">Assumptions</div>
           <div className="mt-2 space-y-1">
             {(data?.meta?.notes || []).length > 0 ? (
               (data?.meta?.notes || []).map((n, i) => (
@@ -311,7 +311,7 @@ export default function CostExplainerClient() {
           </div>
           {(data?.meta?.dataSources || []).length > 0 && (
             <div className="mt-3 border-t border-slate-200/60 pt-2 dark:border-slate-700/50">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">Data sources</div>
+              <div className="text-[10px] font-semibold tracking-normal text-slate-400 dark:text-slate-500">Data sources</div>
               <div className="mt-1 space-y-0.5">
                 {(data?.meta?.dataSources ?? []).map((s, i) => (
                   <div key={i} className="text-xs text-slate-500 dark:text-slate-400">• {s}</div>

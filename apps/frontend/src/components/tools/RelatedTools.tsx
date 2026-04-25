@@ -121,7 +121,7 @@ export default function RelatedTools({
       <div className="min-w-0">
         <h2
           id={titleId}
-          className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500"
+          className="text-[11px] font-semibold tracking-normal text-slate-500"
         >
           {title}
         </h2>

@@ -109,7 +109,7 @@ export default function CoverageOptionsClient() {
   const trust = coverageLoopTrust({
     confidenceLabel: 'Medium, based on current item coverage states',
     freshnessLabel: 'Real-time when coverage records are updated',
-    sourceLabel: 'Inventory coverage gaps + linked warranty/insurance metadata',
+    sourceLabel: 'Inventory coverage gaps + linked warranty/insurance details',
   });
 
   React.useEffect(() => {

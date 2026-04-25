@@ -34,7 +34,7 @@ export function EstimatedSavingsBadge({ upside, className }: EstimatedSavingsBad
         <div className="rounded-full bg-emerald-100 p-1">
           <PiggyBank className="h-3.5 w-3.5 text-emerald-700" />
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+        <span className="text-[10px] font-bold tracking-normal text-emerald-800">
           Estimated Savings
         </span>
       </div>

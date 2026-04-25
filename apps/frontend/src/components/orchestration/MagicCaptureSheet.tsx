@@ -311,7 +311,7 @@ export function MagicCaptureSheet({
         return (
           <div className="space-y-4 py-6 px-4">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-              <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">High Confidence</p>
+              <p className="text-xs font-bold tracking-normal text-emerald-700">High Confidence</p>
               <h3 className="mt-1 text-lg font-bold text-emerald-900">{itemName}</h3>
               <p className="mt-1 text-sm text-emerald-800">
                 We captured this label with {confidenceScore}% confidence.
@@ -319,7 +319,7 @@ export function MagicCaptureSheet({
             </div>
 
             <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Captured details</p>
+              <p className="text-xs font-bold tracking-normal text-slate-400">Captured details</p>
               <p className="text-sm text-slate-700">Brand: {extracted.manufacturer || 'Not detected'}</p>
               <p className="text-sm text-slate-700">Model: {extracted.modelNumber || 'Not detected'}</p>
               <p className="text-sm text-slate-700">Serial: {extracted.serialNumber || 'Not detected'}</p>
@@ -353,7 +353,7 @@ export function MagicCaptureSheet({
                   : 'mx-6 rounded-xl border border-yellow-200 bg-yellow-50 p-3'
               }
             >
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+              <p className="text-xs font-semibold tracking-normal text-slate-500">
                 {isLow ? 'Low confidence capture' : 'Medium confidence capture'}
               </p>
               <p className="mt-1 text-sm text-slate-700">
@@ -495,7 +495,7 @@ export function MagicCaptureSheet({
 
         <SheetHeader className="px-6 border-b border-slate-50 pb-4">
           <div className="flex items-center justify-between">
-            <SheetTitle className="text-base font-semibold text-slate-400 uppercase tracking-widest">
+            <SheetTitle className="text-base font-semibold text-slate-400 tracking-normal">
               Command Center
             </SheetTitle>
           </div>

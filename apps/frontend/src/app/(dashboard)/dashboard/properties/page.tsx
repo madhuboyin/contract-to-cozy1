@@ -33,7 +33,7 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
 
 const MAX_PROPERTIES = 10;
 const HOME_TOOL_NAV_LABELS = Object.fromEntries(
-  MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.navTarget, `Home Tools > ${tool.name}`])
+  MOBILE_HOME_TOOL_LINKS.map((tool) => [tool.navTarget, `Home tools > ${tool.name}`])
 );
 
 function openCozyChat() {
@@ -96,9 +96,9 @@ export default function PropertiesPage() {
     save: 'Wealth & Savings',
     fix: 'Resolution Center',
     vault: 'Home History',
-    'seller-prep': 'Home Tools > Seller Prep',
-    'home-timeline': 'Home Tools > Home Timeline',
-    'status-board': 'Home Tools > Status Board',
+    'seller-prep': 'Home tools > Seller Prep',
+    'home-timeline': 'Home tools > Home Timeline',
+    'status-board': 'Home tools > Status Board',
     'home-score': 'Reports > Home Score Report',
     reports: 'Home Admin > Reports',
     ...HOME_TOOL_NAV_LABELS,
@@ -228,7 +228,7 @@ export default function PropertiesPage() {
         action={
           canAddMore ? (
             <SmartCTA asChild>
-              <Link href="/dashboard/properties/new">Add Property</Link>
+              <Link href="/dashboard/properties/new">Add property</Link>
             </SmartCTA>
           ) : null
         }
@@ -237,7 +237,7 @@ export default function PropertiesPage() {
             items={[
               `${properties.length} asset${properties.length === 1 ? '' : 's'} monitored`,
               `${primaryHomesCount} primary residence${primaryHomesCount === 1 ? '' : 's'}`,
-              'Property changes reflected in your protection and savings engines',
+              'Property changes reflected in your protection and savings tools',
             ]}
           />
         }
@@ -259,7 +259,7 @@ export default function PropertiesPage() {
             <Button asChild className="bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm">
               <Link href="/dashboard/properties/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Property
+                Add property
               </Link>
             </Button>
           ) : null
@@ -280,7 +280,7 @@ export default function PropertiesPage() {
                 className="inline-flex min-h-[44px] items-center rounded-xl bg-[#0D9488] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0F766E]"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Add Property
+                Add property
               </Link>
             </div>
           </MobileCard>
@@ -392,7 +392,7 @@ export default function PropertiesPage() {
                     <Plus className="h-8 w-8" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[1.1rem] font-semibold leading-tight text-slate-900">Add Property</p>
+                    <p className="text-[1.1rem] font-semibold leading-tight text-slate-900">Add property</p>
                     <p className="mt-1 text-sm text-slate-600">Track systems, warranties, and maintenance.</p>
                   </div>
                   <ChevronRight className="h-5 w-5 text-slate-400 transition-colors group-hover:text-slate-600" />
@@ -408,7 +408,7 @@ export default function PropertiesPage() {
           <EmptyStatePremium
             title="Add your first protected asset"
             description="Start with one property to unlock health scoring, vault records, savings intelligence, and maintenance guidance."
-            action={<SmartCTA asChild><Link href="/dashboard/properties/new">Add Property</Link></SmartCTA>}
+            action={<SmartCTA asChild><Link href="/dashboard/properties/new">Add property</Link></SmartCTA>}
             tone="brand"
           />
         ) : (
@@ -562,7 +562,7 @@ export default function PropertiesPage() {
               );
             })}
 
-            {/* Inline Add Property card */}
+            {/* Inline Add property card */}
             {canAddMore && (
               <Link
                 href="/dashboard/properties/new"

@@ -71,7 +71,7 @@ export default function CompareTemplate({
           />
         ) : decisionContext ? (
           <article className="rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.09em] text-brand-700">Decision Context</p>
+            <p className="mb-1 text-xs font-semibold tracking-normal text-brand-700">Decision Context</p>
             {decisionContext}
           </article>
         ) : null}

@@ -117,7 +117,7 @@ function TimelineCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-gray-600">
-          {prediction.reasoning ?? 'Predicted by your maintenance intelligence engine.'}
+          {prediction.reasoning ?? 'Estimated from your maintenance history.'}
         </p>
         <ConfidenceBadge score={prediction.confidenceScore} />
         <Button

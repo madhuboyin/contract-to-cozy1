@@ -32,7 +32,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'financial-efficiency': 'Financial Efficiency',
   'risk-assessment': 'Risk Assessment',
   'home-score': 'Home Score',
-  'health-score': 'Health Score',
+  'health-score': 'Health score',
   onboarding: 'Onboarding',
   edit: 'Edit',
   tools: 'Tools',

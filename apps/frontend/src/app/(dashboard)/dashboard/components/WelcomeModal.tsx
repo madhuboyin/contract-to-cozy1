@@ -70,7 +70,7 @@ export function WelcomeModal({ userFirstName }: WelcomeModalProps) {
                     <div className="grid grid-cols-3 gap-4 border-t pt-4">
                         <FeatureBlock
                             icon={Shield}
-                            title="Property Health Score"
+                            title="Property Health score"
                             description="Evaluate the overall condition of your systems."
                         />
                         <FeatureBlock

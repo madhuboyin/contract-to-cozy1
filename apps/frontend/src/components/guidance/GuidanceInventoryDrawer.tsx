@@ -55,7 +55,7 @@ function fmtDate(iso: string | null | undefined): string {
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="mb-3 text-xs font-semibold tracking-wide text-slate-400">{children}</p>
+    <p className="mb-3 text-xs font-semibold tracking-normal text-slate-400">{children}</p>
   );
 }
 

@@ -287,7 +287,7 @@ function JobCard({
 
         {/* ── Row 5: recent runs (secondary) ── */}
         <div className="mt-3 border-t border-slate-100 pt-2.5">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+          <p className="mb-1 text-[10px] font-semibold tracking-normal text-slate-300">
             Recent runs
           </p>
           {job.recentRuns.length === 0 ? (
@@ -346,7 +346,7 @@ function CategorySection({
 }) {
   return (
     <div>
-      <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+      <h2 className="mb-2 text-[10px] font-semibold tracking-normal text-slate-400">
         {CATEGORY_LABELS[category]}
       </h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

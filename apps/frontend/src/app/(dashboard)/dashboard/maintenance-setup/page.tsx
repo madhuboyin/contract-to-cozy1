@@ -364,7 +364,7 @@ export default function MaintenanceSetupPage() {
 
         <section className="hidden space-y-6 lg:block">
           <header className="space-y-2 px-1 pt-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Maintenance</p>
+            <p className="text-xs font-semibold tracking-normal text-slate-500">Maintenance</p>
             <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Maintenance Setup</h1>
             <p className="max-w-3xl text-sm text-slate-600">
               Select templates to build your recurring home maintenance plan.

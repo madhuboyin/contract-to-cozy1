@@ -90,7 +90,7 @@ export function MoneyImpactTrackerCard({
 
       {financialTrend.length > 0 ? (
         <div className="space-y-1">
-          <p className="mb-0 text-[11px] font-medium uppercase tracking-wide text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-0 text-[11px] font-medium tracking-normal text-[hsl(var(--mobile-text-muted))]">
             8-week score trend
           </p>
           <div className="flex h-10 items-end gap-1">

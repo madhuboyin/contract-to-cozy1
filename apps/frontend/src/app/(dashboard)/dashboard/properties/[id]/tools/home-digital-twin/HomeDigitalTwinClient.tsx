@@ -309,7 +309,7 @@ function TwinStatusCard({
     <MobileCard variant="standard">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-secondary))]">
+          <p className="text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
             Your Home Model
           </p>
           <MetricRow
@@ -328,7 +328,7 @@ function TwinStatusCard({
             }
           />
           <MetricRow
-            label="Systems modeled"
+            label="Systems tracked"
             value={String(twin.components.length)}
           />
           <MetricRow
@@ -341,7 +341,7 @@ function TwinStatusCard({
           size="sm"
           onClick={onRefresh}
           disabled={isRefreshing}
-          aria-label={isRefreshing ? 'Refreshing model…' : 'Refresh model'}
+          aria-label={isRefreshing ? 'Refreshing view...' : 'Refresh view'}
           className="shrink-0 gap-1.5 rounded-full"
         >
           {isRefreshing ? (
@@ -474,7 +474,7 @@ function ComponentDetailSheet({
 
           {/* Age & Lifespan */}
           <div className="space-y-1.5">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
               Age &amp; Lifespan
             </h3>
             <div className="space-y-1 text-sm">
@@ -507,7 +507,7 @@ function ComponentDetailSheet({
           {/* Risk */}
           {component.failureRiskScore != null && (
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Failure Risk
               </h3>
               <p className="text-sm font-semibold">
@@ -521,7 +521,7 @@ function ComponentDetailSheet({
 
           {/* Cost estimates */}
           <div className="space-y-1.5">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
               Cost Estimates
             </h3>
             <div className="space-y-1 text-sm">
@@ -660,7 +660,7 @@ function SuggestionDetailSheet({
 
           {/* Description */}
           <div className="space-y-1">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+            <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
               Why this matters
             </h3>
             <p className="text-sm leading-[1.5]">{suggestion.description}</p>
@@ -669,7 +669,7 @@ function SuggestionDetailSheet({
           {/* Reason */}
           {suggestion.reason && (
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Based on your home data
               </h3>
               <p className="text-sm leading-[1.5] text-[hsl(var(--foreground))]">
@@ -681,7 +681,7 @@ function SuggestionDetailSheet({
           {/* Estimated cost */}
           {suggestion.estimatedUpfrontCost != null && (
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Estimated upfront cost
               </h3>
               <p className="text-sm font-semibold">{formatUSD(suggestion.estimatedUpfrontCost)}</p>
@@ -837,7 +837,7 @@ function ScenarioDetailSheet({
           {/* Description */}
           {scenario.description && (
             <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+              <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                 Description
               </h3>
               <DescriptionPointList description={scenario.description} />
@@ -853,7 +853,7 @@ function ScenarioDetailSheet({
                 {/* Takeaway banner */}
                 {takeaway?.valueText && (
                   <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))] mb-1">
+                    <p className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))] mb-1">
                       Bottom line
                     </p>
                     <p
@@ -870,7 +870,7 @@ function ScenarioDetailSheet({
                 )}
 
                 <div className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--mobile-text-secondary))]">
+                  <h3 className="text-xs font-semibold tracking-normal text-[hsl(var(--mobile-text-secondary))]">
                     Projected impacts
                   </h3>
                   <div className="space-y-1.5">
@@ -954,7 +954,7 @@ function ScenarioDetailSheet({
               className="w-full gap-2"
               onClick={() => onCompute(scenario.id)}
               disabled={isComputing}
-              aria-label="Run compute engine for this scenario"
+              aria-label="Run analysis for this scenario"
             >
               {isComputing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -1047,11 +1047,11 @@ export default function HomeDigitalTwinClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['home-digital-twin-recommendations', propertyId] });
-      toast({ title: 'Home model ready', description: 'Your digital twin has been built.' });
+      toast({ title: 'Home view ready', description: 'Your digital twin has been built.' });
     },
     onError: (error) =>
       toast({
-        title: 'Could not build model',
+        title: 'Could not build view',
         description:
           error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
@@ -1143,9 +1143,9 @@ export default function HomeDigitalTwinClient() {
 
       {/* Page intro */}
       <MobilePageIntro
-        eyebrow="Home Tool"
+        eyebrow="Home tool"
         title="Home Digital Twin"
-        subtitle="A living model of your home — systems, age, risk, and what-if scenarios. Data is derived from your property profile and inventory."
+        subtitle="A living view of your home — systems, age, risk, and what-if scenarios. Data is derived from your property profile and inventory."
        className="lg:hidden"/>
 
       {/* Tool rail */}
@@ -1159,14 +1159,14 @@ export default function HomeDigitalTwinClient() {
       ) : twinLoadError ? (
         /* ── LOAD ERROR ─────────────────────────────────────────────────────── */
         <EmptyStateCard
-          title="Couldn't load your home model"
+          title="Couldn't load your home view"
           description="There was a problem loading your digital twin. This is usually temporary."
           action={
             <Button
               variant="outline"
               onClick={() => refetchTwin()}
               className="gap-2"
-              aria-label="Retry loading home model"
+              aria-label="Retry loading home view"
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
               Try Again
@@ -1176,8 +1176,8 @@ export default function HomeDigitalTwinClient() {
       ) : twinNotFound || !twin ? (
         /* ── NOT YET BUILT ──────────────────────────────────────────────────── */
         <EmptyStateCard
-          title="Your home model isn't built yet"
-          description="Build your digital twin to see a living model of your home's systems, age estimates, and what-if scenarios. Takes just a moment."
+          title="Your home view isn't built yet"
+          description="Build your digital twin to see a living view of your home's systems, age estimates, and what-if scenarios. Takes just a moment."
           action={
             <Button
               onClick={() => initMutation.mutate()}
@@ -1190,7 +1190,7 @@ export default function HomeDigitalTwinClient() {
               ) : (
                 <Zap className="h-4 w-4" aria-hidden="true" />
               )}
-              {initMutation.isPending ? 'Building model…' : 'Build My Home Model'}
+              {initMutation.isPending ? 'Building view...' : 'Build my home view'}
             </Button>
           }
         />
@@ -1290,7 +1290,7 @@ export default function HomeDigitalTwinClient() {
           {twin.recentScenarios.length === 0 && !recLoading && recommendations && recommendations.length === 0 && (
             <EmptyStateCard
               title="No what-if scenarios yet"
-              description="Refresh your model to generate suggestions, or add more details to your property profile to improve the analysis."
+              description="Refresh your view to generate suggestions, or add more details to your property profile to improve the analysis."
             />
           )}
         </>

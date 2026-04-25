@@ -77,7 +77,7 @@ function healthLabel(score: number): { text: string; cls: string } {
   if (score >= 85) return { text: 'Excellent', cls: 'text-emerald-600' };
   if (score >= 70) return { text: 'Good', cls: 'text-blue-600' };
   if (score >= 50) return { text: 'Fair', cls: 'text-amber-600' };
-  return { text: 'Needs Attention', cls: 'text-red-600' };
+  return { text: 'Needs attention', cls: 'text-red-600' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

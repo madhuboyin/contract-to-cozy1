@@ -574,7 +574,7 @@ function RecentCheckRow({
       </div>
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
-          <p className="mb-0 text-[11px] uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-0 text-[11px] tracking-normal text-[hsl(var(--mobile-text-muted))]">
             Quote
           </p>
           <p className="mb-0 text-sm font-semibold tabular-nums text-[hsl(var(--mobile-text-primary))]">
@@ -582,7 +582,7 @@ function RecentCheckRow({
           </p>
         </div>
         <div className="text-right">
-          <p className="mb-0 text-[11px] uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+          <p className="mb-0 text-[11px] tracking-normal text-[hsl(var(--mobile-text-muted))]">
             Expected
           </p>
           <p className="mb-0 text-sm tabular-nums text-[hsl(var(--mobile-text-primary))]">{rangeLabel}</p>
@@ -1136,7 +1136,7 @@ export default function ServicePriceRadarClient() {
     return (
       <MobileToolWorkspace
         className="lg:max-w-7xl lg:px-8 lg:pb-10"
-        intro={<MobilePageIntro eyebrow="Home Tool" title="Service Price Radar" subtitle="Choose a property first."  className="lg:hidden"/>}
+        intro={<MobilePageIntro eyebrow="Home tool" title="Service Price Radar" subtitle="Choose a property first."  className="lg:hidden"/>}
       >
         <EmptyStateCard
           title="Property context required"
@@ -1169,7 +1169,7 @@ export default function ServicePriceRadarClient() {
             </Link>
           </Button>
           <MobilePageIntro
-            eyebrow="Home Tool"
+            eyebrow="Home tool"
             title="Service Price Radar"
             subtitle="Know if a quote is fair for your home before you book the work."
             action={<Radar className="h-5 w-5 text-[hsl(var(--mobile-brand-strong))] lg:hidden" />}
@@ -1586,14 +1586,14 @@ export default function ServicePriceRadarClient() {
                     badge={
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" className="h-9 rounded-full px-3 text-xs">
-                          {explanationOpen ? 'Hide details' : 'Expand details'}
+                          {explanationOpen ? 'Show less' : 'Show more'}
                         </Button>
                       </CollapsibleTrigger>
                     }
                   >
                     {currentReasons.length > 0 ? (
                       <div className="space-y-2">
-                        <p className="mb-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+                        <p className="mb-0 text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
                           Signals used
                         </p>
                         <div className="flex flex-wrap gap-2">
@@ -1613,7 +1613,7 @@ export default function ServicePriceRadarClient() {
                     <CollapsibleContent className="space-y-4 pt-1">
                       {factorChips.length > 0 ? (
                         <div className="space-y-2">
-                          <p className="mb-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+                          <p className="mb-0 text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
                             Property factors
                           </p>
                           <div className="flex flex-wrap gap-2">
@@ -1669,7 +1669,7 @@ export default function ServicePriceRadarClient() {
 
                       {currentLinkedEntities.length > 0 ? (
                         <div className="space-y-2">
-                          <p className="mb-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+                          <p className="mb-0 text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
                             Linked context
                           </p>
                           <div className="space-y-2">
@@ -1702,7 +1702,7 @@ export default function ServicePriceRadarClient() {
 
                       {adjustmentRows.length > 0 ? (
                         <div className="space-y-2">
-                          <p className="mb-0 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--mobile-text-muted))]">
+                          <p className="mb-0 text-[11px] font-semibold tracking-normal text-[hsl(var(--mobile-text-muted))]">
                             Estimate adjustments
                           </p>
                           <div className="space-y-2">

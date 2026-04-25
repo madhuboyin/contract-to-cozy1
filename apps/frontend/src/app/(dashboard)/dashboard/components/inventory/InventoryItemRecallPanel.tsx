@@ -118,7 +118,7 @@ export default function InventoryItemRecallPanel(props: {
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-900 text-sm">Safety / Recall Alerts</h3>
         {loading && (
-          <span className="text-[10px] text-slate-400 animate-pulse font-medium uppercase tracking-wider">
+          <span className="text-[10px] text-slate-400 animate-pulse font-medium tracking-normal">
             Scanning...
           </span>
         )}
@@ -143,7 +143,7 @@ export default function InventoryItemRecallPanel(props: {
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Recall Alert</span>
+                    <span className="text-[10px] font-bold text-red-600 tracking-normal">Recall Alert</span>
                     <RecallStatusBadge status={m.status} />
                   </div>
                   <TooltipProvider delayDuration={200}>
@@ -218,7 +218,7 @@ export default function InventoryItemRecallPanel(props: {
                 ) : null}
 
                 {m.maintenanceTaskId && (
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">• Linked to Task</div>
+                  <div className="text-[10px] font-bold text-slate-400 tracking-tight">• Linked to Task</div>
                 )}
               </div>
             </div>

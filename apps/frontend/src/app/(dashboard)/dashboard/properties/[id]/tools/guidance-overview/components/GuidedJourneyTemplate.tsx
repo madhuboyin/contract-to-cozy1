@@ -35,7 +35,7 @@ export function GuidedJourneyTemplate({
       <section className={cn('space-y-4', hasStickyAction ? 'pb-[calc(9rem+env(safe-area-inset-bottom))] lg:pb-10' : 'pb-6')}>
         <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="mb-0 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+            <p className="mb-0 text-xs font-semibold tracking-normal text-slate-500">
               Guided Journey · Phase {phase}
             </p>
             {progressLabel && progressValue ? (

@@ -49,7 +49,7 @@ export function WhyThisMattersCard({
           
           {assumptions && assumptions.length > 0 && (
             <div className="space-y-2 mt-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-600/70">
+              <p className="text-[10px] font-bold tracking-normal text-teal-600/70">
                 Verifiable Assumptions:
               </p>
               <ul className="space-y-1.5">

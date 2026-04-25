@@ -25,7 +25,7 @@ export default function HomeCostGrowthClient() {
   const [error, setError] = useState<string | null>(null);
 
   const [trendYears, setTrendYears] = useState<5 | 10>(5);
-  // null = use server model rate; number = user override (percentage, e.g. 3.5 = 3.5%)
+  // null = use server estimated rate; number = user override (percentage, e.g. 3.5 = 3.5%)
   const [appreciationOverridePct, setAppreciationOverridePct] = useState<number | null>(null);
   const reqRef = React.useRef(0);
 
@@ -56,7 +56,7 @@ export default function HomeCostGrowthClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
-  // Slider display value: override if set, else server model rate, else 3.0 as pre-load placeholder
+  // Slider display value: override if set, else server estimated rate, else 3.0 as pre-load placeholder
   const modelRatePct = data?.current?.appreciationRate != null
     ? Math.round(data.current.appreciationRate * 1000) / 10
     : 3.0;
@@ -140,7 +140,7 @@ export default function HomeCostGrowthClient() {
     <ToolWorkspaceTemplate
       backHref={`/dashboard/properties/${propertyId}`}
       backLabel="Back to property"
-      eyebrow="Home Tool"
+      eyebrow="Home tool"
       title="Home Cost Growth Analyzer"
       subtitle="Compare appreciation vs ownership expense growth to understand net cost trend."
       introAction={
@@ -155,7 +155,7 @@ export default function HomeCostGrowthClient() {
       priorityAction={costGrowthPriorityAction}
     >
 
-      {/* Tool identity + Related Tools — desktop only, above NBA */}
+      {/* Tool identity + Related tools — desktop only, above NBA */}
       <HomeToolHeader
         toolId="cost-growth"
         propertyId={propertyId}
@@ -218,7 +218,7 @@ export default function HomeCostGrowthClient() {
           {/* Left: summary */}
           <div className="space-y-3 lg:col-span-4">
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
-              <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Current estimated home value</div>
+              <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Current estimated home value</div>
               <div className="mt-1 text-[1.75rem] font-semibold leading-tight text-slate-900 dark:text-slate-100">{money(data?.current?.homeValueNow)}</div>
               <div className="mt-2 flex items-center gap-2">
                 <div className="text-xs text-slate-500 dark:text-slate-300">Confidence</div>
@@ -228,7 +228,7 @@ export default function HomeCostGrowthClient() {
 
             <div className="rounded-2xl border border-white/70 bg-white/72 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Appreciation rate</div>
+                <div className="text-xs tracking-normal text-slate-500 dark:text-slate-300">Appreciation rate</div>
                 {appreciationOverridePct !== null && (
                   <button
                     type="button"
@@ -250,7 +250,7 @@ export default function HomeCostGrowthClient() {
                 {appreciationOverridePct !== null ? (
                   <span className="text-[10px] text-amber-600 dark:text-amber-400">custom</span>
                 ) : (
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500">model rate</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">estimated rate</span>
                 )}
               </div>
 
@@ -279,12 +279,12 @@ export default function HomeCostGrowthClient() {
                 <span>10%</span>
               </div>
 
-              <div className="mt-3 text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">Annual expenses (now)</div>
+              <div className="mt-3 text-xs tracking-normal text-slate-500 dark:text-slate-300">Annual expenses (now)</div>
               <div className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{money(data?.current?.annualExpensesNow)}</div>
             </div>
 
             <div className={`rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur ${netTone}`}>
-              <div className="text-xs uppercase tracking-[0.12em] opacity-80">Net impact ({trendYears}y)</div>
+              <div className="text-xs tracking-normal opacity-80">Net impact ({trendYears}y)</div>
               <div className="mt-1 text-2xl font-semibold leading-tight">{money(data?.rollup?.totalNet)}</div>
               <div className="mt-1 text-xs opacity-70">
                 Appreciation gain <span className="font-medium">{money(data?.rollup?.totalAppreciationGain)}</span> minus expenses{' '}
