@@ -409,7 +409,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth() as { user: User | null; loading: boolean };
   const router = useRouter();
   const pathname = usePathname();
-  const isResolutionCenterRoute = pathname?.startsWith('/dashboard/resolution-center');
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const bannerFetchedRef = React.useRef(false);
@@ -565,12 +564,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           <main className="min-w-0 flex-1 pb-20 md:pb-8">
             <PullToRefresh onRefresh={handleRefresh}>
               <div
-                className={cn(
-                  'w-full py-5 md:py-8',
-                  isResolutionCenterRoute
-                    ? 'px-3 md:px-4 lg:px-5 xl:px-6'
-                    : 'mx-auto max-w-[1180px] px-4 md:px-8',
-                )}
+                className="mx-auto w-full max-w-[1180px] px-4 py-5 md:px-8 md:py-8"
                 key={refreshKey}
               >
                 <DashboardBreadcrumbs />

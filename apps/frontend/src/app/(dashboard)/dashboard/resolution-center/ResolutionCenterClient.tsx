@@ -34,9 +34,11 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { api } from '@/lib/api/client';
 import { listIncidents } from '../properties/[id]/incidents/incidentsApi';
 import { Booking, OrchestratedActionDTO } from '@/types';
+import type { Property } from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
 import { Button } from '@/components/ui/button';
 import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
+import { WelcomeSection } from '@/components/WelcomeSection';
 import { cn } from '@/lib/utils';
 import {
   SourceChip,
@@ -1181,7 +1183,7 @@ export default function ResolutionCenterClient() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { selectedPropertyId } = usePropertyContext();
+  const { selectedPropertyId: contextSelectedPropertyId, setSelectedPropertyId } = usePropertyContext();
 
   const normalizedFilter = normalizeFilterParam(searchParams.get('filter'));
   const shouldLoadCompletedIncidents = normalizedFilter === 'completed';
@@ -1190,6 +1192,32 @@ export default function ResolutionCenterClient() {
   const [isServiceSheetOpen, setIsServiceSheetOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<any>(null);
   const [celebratingItem, setCelebratingItem] = useState<any>(null);
+
+  const {
+    data: properties = [],
+    isLoading: propertiesLoading,
+  } = useQuery({
+    queryKey: ['dashboard-properties'],
+    queryFn: async (): Promise<Property[]> => {
+      const response = await api.getProperties();
+      return response.success ? response.data.properties : [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const selectedPropertyId =
+    contextSelectedPropertyId &&
+    (propertiesLoading ||
+      properties.length === 0 ||
+      properties.some((property) => property.id === contextSelectedPropertyId))
+      ? contextSelectedPropertyId
+      : properties[0]?.id;
+
+  React.useEffect(() => {
+    if (!contextSelectedPropertyId && selectedPropertyId) {
+      setSelectedPropertyId(selectedPropertyId);
+    }
+  }, [contextSelectedPropertyId, selectedPropertyId, setSelectedPropertyId]);
 
   const {
     data: orchestrationData,
@@ -1280,6 +1308,7 @@ export default function ResolutionCenterClient() {
   });
 
   const isLoading =
+    propertiesLoading ||
     orchestrationLoading ||
     incidentsLoading ||
     resolutionsLoading ||
@@ -1711,20 +1740,29 @@ export default function ResolutionCenterClient() {
   return (
     <>
       <div className="pb-20">
+        {selectedPropertyId && properties.length > 0 && (
+          <WelcomeSection
+            userName="there"
+            properties={properties}
+            selectedPropertyId={selectedPropertyId}
+            onPropertyChange={setSelectedPropertyId}
+            compact
+          />
+        )}
+
         <div className="space-y-6">
           <PageHero
             eyebrow="Fix"
             icon={<Wrench className="h-5 w-5" />}
-            title="A resolution center that shows the cost of waiting."
-            description="Urgent issues, provider work, preventative maintenance, coverage gaps, and completed outcomes are ranked into one clear action queue."
+            title="Resolution Center"
+            description="See the cost of waiting across urgent issues, provider work, preventive maintenance, coverage gaps, and completed outcomes in one ranked action queue."
             action={<SmartCTA onClick={handleRunFullScan}>Run Full Scan</SmartCTA>}
             meta={<TrustMetaRow items={[latestUpdateLabel, `${highConfidenceCount} high-confidence items`, 'Costs shown as potential exposure']} />}
           >
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-3">
               <MetricTile label="Home health" value={`${homeHealthScore} · ${homeHealthStatus}`} hint="Current operating range" tone="success" />
               <MetricTile label="Urgent" value={filterCounts.urgent} hint="Needs attention" tone={filterCounts.urgent ? 'urgent' : 'success'} />
               <MetricTile label="Cost if delayed" value={formatCompactUsd(Math.round(totalAtRisk))} hint="Potential exposure" tone={totalAtRisk > 0 ? 'warning' : 'success'} />
-              <MetricTile label="Priority queue" value={filterCounts.all} hint="Active items" tone="brand" />
             </div>
           </PageHero>
 
