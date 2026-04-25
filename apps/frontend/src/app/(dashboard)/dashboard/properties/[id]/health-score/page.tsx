@@ -11,6 +11,7 @@ import { api } from "@/lib/api/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import { PropertyScoreSeries, PropertyScoreTrendPoint } from "@/types";
@@ -159,11 +160,6 @@ function formatSignedPoints(value: number): string {
   return value > 0 ? `+${abs}` : `-${abs}`;
 }
 
-function getInsightContributionLabel(insight: HealthInsight): string {
-  const score = asNumber(insight.score) ?? 0;
-  return `Contributes ${formatSignedPoints(score)} points`;
-}
-
 function getInsightStatusExplanation(statusValue: string | undefined): string {
   const status = String(statusValue || "");
   if (REQUIRED_ACTION_STATUSES.includes(status)) {
@@ -231,6 +227,71 @@ function getInsightFactorIcon(factorValue: string | undefined, statusValue: stri
   );
 }
 
+function getFactorDescription(factorName: string | undefined, condition: string | undefined): string {
+  const factor = String(factorName || "");
+  const cond = String(condition || "");
+  const map: Record<string, Record<string, string>> = {
+    'Water Heater Age': {
+      'Needs Review': 'Approaching end of typical lifespan — review recommended',
+      'Needs Attention': 'Past typical lifespan — replacement evaluation recommended',
+      'Aging': 'Getting older — monitor for performance issues',
+      'Modern': 'Recently installed — no action needed',
+    },
+    'Roof Age': {
+      'Aging': 'Mid-life — inspect after next major storm',
+      'Needs Review': 'Past typical replacement window — inspection recommended',
+      'Needs Attention': 'Past replacement window — inspection recommended',
+      'Modern': 'Recently replaced — no action needed',
+    },
+    'HVAC Age': {
+      'Aging': 'Aging system — schedule annual maintenance',
+      'Needs Review': 'Nearing end of service life — start planning replacement',
+      'Needs Attention': 'Past typical service life — plan replacement',
+      'Modern': 'Recently serviced — maintain current schedule',
+    },
+    'Usage/Wear Factor': {
+      'High Density': 'High usage pattern — more frequent maintenance recommended',
+      'Average': 'Normal usage — standard maintenance schedule applies',
+      'Low Density': 'Light usage — lower wear risk',
+    },
+    'Systems Factor': {
+      'Modern': 'All major systems up to date — strong positive signal',
+      'Mixed': 'Some systems may need attention',
+      'Aging': 'Systems showing age — review recommended',
+      'Good': 'Systems in good condition',
+    },
+    'Structure Factor': {
+      'Good': 'Structural elements in good condition',
+      'Excellent': 'Structural elements in excellent condition',
+      'Fair': 'Minor structural items to monitor',
+      'Needs Review': 'Structural review recommended',
+    },
+    'Roof Condition': {
+      'Good': 'Roof in good condition',
+      'Aging': 'Roof showing wear — inspection recommended',
+      'Needs Review': 'Roof inspection recommended',
+    },
+    'Safety Factor': {
+      'Complete': 'Safety systems up to date',
+      'Incomplete': 'Some safety items need attention',
+      'Needs Review': 'Safety review recommended',
+    },
+    'Documents Factor': {
+      'Complete': 'Property documents are up to date',
+      'Incomplete': 'Some documents are missing',
+      'Missing Data': 'Property documentation needed',
+    },
+  };
+  return map[factor]?.[cond] ?? `${cond || 'Status unavailable'} — review recommended`;
+}
+
+function getInsightLeftBorderColor(statusValue: string | undefined): string {
+  const impact = getInsightImpact(statusValue);
+  if (impact === "negative") return "border-l-red-400";
+  if (impact === "positive") return "border-l-teal-400";
+  return "border-l-amber-400";
+}
+
 function sortInsightsForDisplay(insights: HealthInsight[]): HealthInsight[] {
   return [...insights].sort((a, b) => {
     const impactA = INSIGHT_IMPACT_ORDER[getInsightImpact(a.status)];
@@ -248,9 +309,9 @@ const LEDGER_GROUPS: Array<{
   title: string;
   tone: "good" | "elevated" | "danger";
 }> = [
-  { key: "negative", title: "Needs Attention", tone: "danger" as const },
-  { key: "neutral", title: "Monitor Closely", tone: "elevated" as const },
-  { key: "positive", title: "Healthy Signals", tone: "good" as const },
+  { key: "negative", title: "Needs attention", tone: "danger" as const },
+  { key: "neutral", title: "Monitor closely", tone: "elevated" as const },
+  { key: "positive", title: "Healthy signals", tone: "good" as const },
 ];
 
 function getLedgerInsights(
@@ -385,6 +446,7 @@ export default function PropertyHealthDetailPage() {
   const router = useRouter();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
+  const [showScoreModal, setShowScoreModal] = useState(false);
 
   const { data: property, isLoading: isLoadingProperty } = useQuery({
     queryKey: ["property", propertyId],
@@ -446,12 +508,18 @@ export default function PropertyHealthDetailPage() {
   const topPositiveInsight = positiveInsights[0];
   const healthDetails = getHealthDetails(latestScore);
   const changes = buildHealthChangeItems(series, sortedInsights);
-  const focusPointsExplainer = "Points show each factor's current contribution to your 0-100 Health Score.";
+
+  const previousInsights = getSnapshotInsights(series?.previous);
+  const hasPreviousSnapshot = !!series?.previous;
+  const previousNegativeCount = previousInsights.filter((i) => getInsightImpact(i.status) === "negative").length;
+  const previousNeutralCount = previousInsights.filter((i) => getInsightImpact(i.status) === "neutral").length;
+  const previousPositiveCount = previousInsights.filter((i) => getInsightImpact(i.status) === "positive").length;
+  const negDelta = hasPreviousSnapshot ? negativeInsights.length - previousNegativeCount : null;
+  const neutralDelta = hasPreviousSnapshot ? neutralInsights.length - previousNeutralCount : null;
+  const positiveDelta = hasPreviousSnapshot ? positiveInsights.length - previousPositiveCount : null;
 
   const renderFocusInsightAccordionRow = (insight: HealthInsight, idx: number, useStatusChip: boolean) => {
-    const contributionLabel = getInsightContributionLabel(insight);
     const scoreValue = asNumber(insight.score) ?? 0;
-    const statusCopy = insight.status || "Status unavailable";
     const detailLines = insight.details?.length ? insight.details.slice(0, 6) : [];
     const statusBadge = useStatusChip ? (
       <StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>
@@ -470,14 +538,14 @@ export default function PropertyHealthDetailPage() {
     );
 
     return (
-      <details key={`${insight.factor || "insight"}-${idx}`} className="rounded-lg border border-black/10 bg-white">
+      <details key={`${insight.factor || "insight"}-${idx}`} className={`rounded-lg border border-black/10 bg-white border-l-[3px] ${getInsightLeftBorderColor(insight.status)}`}>
         <summary className="list-none cursor-pointer px-3 py-2">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-2">
               {getInsightFactorIcon(insight.factor, insight.status)}
               <div>
                 <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
-                <p className="text-xs text-muted-foreground">{statusCopy} • {contributionLabel}</p>
+                <p className="text-xs text-muted-foreground">{getFactorDescription(insight.factor, insight.status)}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -521,7 +589,7 @@ export default function PropertyHealthDetailPage() {
               <MobilePageIntro
                 eyebrow="Property Score"
                 title="Property Health Report"
-                subtitle={`Track weekly health movement for ${property?.name || "this property"}.`}
+                subtitle={`Weekly health summary for ${property?.name || "this property"} — what changed, what needs attention, and what's working.`}
                 action={
                   <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
                     <Activity className="h-5 w-5" />
@@ -535,7 +603,7 @@ export default function PropertyHealthDetailPage() {
               title="Health Score"
               value={`${latestScore.toFixed(0)}/${scoreMax}`}
               status={<StatusChip tone={healthTone(healthDetails.level)}>{healthDetails.level}</StatusChip>}
-              summary="Transparent 0-100 score with full factor-level derivation."
+              summary={`${latestScore.toFixed(0)} / ${scoreMax} · ${healthDetails.level}`}
             />
           }
           footer={<BottomSafeAreaReserve size="chatAware" />}
@@ -544,15 +612,7 @@ export default function PropertyHealthDetailPage() {
             title="Snapshot"
             items={[
               { label: "Week delta", value: <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} /> },
-              {
-                label: "Base factors",
-                value: baseScore !== null ? `${baseScore.toFixed(1)}/${maxBaseScore}` : "Missing inputs",
-              },
-              {
-                label: "Extended factors",
-                value: unlockedScore !== null ? `${unlockedScore.toFixed(1)}/${maxExtraScore}` : "Missing inputs",
-              },
-              { label: "Potential ceiling", value: `${potentialScore.toFixed(0)}/100`, emphasize: true },
+              { label: "Status", value: healthDetails.level },
             ]}
             columns={2}
           />
@@ -574,7 +634,6 @@ export default function PropertyHealthDetailPage() {
               />
             }
           >
-            <p className="mb-2 text-xs text-muted-foreground">{focusPointsExplainer}</p>
             {focusInsights.length === 0 ? (
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>No factor details are available yet for this property.</p>
@@ -617,6 +676,9 @@ export default function PropertyHealthDetailPage() {
           </ScenarioInputCard>
 
           <ScenarioInputCard title="Changes Impacting Score" subtitle="What moved the score since the previous weekly snapshot.">
+            {changes.every((c) => c.impact === "neutral") && (
+              <p className="text-sm text-gray-500 mb-2">No significant changes since last week.</p>
+            )}
             <div className="space-y-2">
               {changes.map((change, idx) => (
                 <CompactEntityRow
@@ -624,28 +686,14 @@ export default function PropertyHealthDetailPage() {
                   title={change.title}
                   subtitle={change.detail}
                   status={
-                    <StatusChip tone={change.impact === "positive" ? "good" : change.impact === "negative" ? "danger" : "info"}>
-                      {change.impact === "positive" ? "Positive" : change.impact === "negative" ? "Negative" : "Neutral"}
-                    </StatusChip>
+                    change.impact !== "neutral" ? (
+                      <StatusChip tone={change.impact === "positive" ? "good" : "danger"}>
+                        {change.impact === "positive" ? "↑ Improved" : "↓ Declined"}
+                      </StatusChip>
+                    ) : undefined
                   }
                 />
               ))}
-            </div>
-          </ScenarioInputCard>
-
-          <ScenarioInputCard
-            title="How Score Is Derived"
-            subtitle="Health score is always shown on a 0-100 scale."
-          >
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Base profile factors (up to {maxBaseScore} pts): Age, Structure, Systems, Usage/Wear, and Size.</p>
-              <p>Extended factors (up to {maxExtraScore} pts): HVAC, Water Heater, Roof, Safety, Exterior, Documents, and Appliances.</p>
-              <p>
-                Current composition: Base {baseScore !== null ? baseScore.toFixed(1) : "0.0"} + Extended{" "}
-                {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"} = {latestScore.toFixed(1)} / 100
-                {" "}
-                (potential ceiling {potentialScore.toFixed(0)} / 100).
-              </p>
             </div>
           </ScenarioInputCard>
 
@@ -664,20 +712,27 @@ export default function PropertyHealthDetailPage() {
                   const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
                   return (
                     <div key={group.title} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</p>
-                        <StatusChip tone={group.tone}>{groupInsights.length}</StatusChip>
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          {group.title}
+                          <span className={`ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                            group.tone === 'danger' ? 'bg-red-100 text-red-600' :
+                            group.tone === 'elevated' ? 'bg-amber-100 text-amber-700' :
+                            'bg-teal-100 text-teal-700'
+                          }`}>{groupInsights.length}</span>
+                        </p>
                       </div>
                       {groupInsights.length === 0 ? (
                         <p className="text-xs text-muted-foreground">No factors in this category.</p>
                       ) : (
                         groupInsights.map((insight, idx) => (
-                          <CompactEntityRow
-                            key={`${group.title}-${insight.factor || "insight"}-${idx}`}
-                            title={insight.factor || "Health insight"}
-                            subtitle={`${insight.status || "Status unavailable"} • ${(asNumber(insight.score) ?? 0).toFixed(1)} pts${getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}`}
-                            status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>}
-                          />
+                          <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className={`border-l-[3px] ${getInsightLeftBorderColor(insight.status)} pl-2`}>
+                            <CompactEntityRow
+                              title={insight.factor || "Health insight"}
+                              subtitle={getFactorDescription(insight.factor, insight.status)}
+                              status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>}
+                            />
+                          </div>
                         ))
                       )}
                     </div>
@@ -697,7 +752,7 @@ export default function PropertyHealthDetailPage() {
           <Activity className="h-6 w-6 md:h-8 md:w-8 text-primary" /> Property Health Report
         </PageHeaderHeading>
         <p className="text-muted-foreground text-sm md:text-base">
-          Track weekly movement and full factor-level derivation for {property?.name || "this property"}.
+          Weekly health summary for {property?.name || "this property"} — what changed, what needs attention, and what&apos;s working.
         </p>
       </PageHeader>
 
@@ -712,15 +767,16 @@ export default function PropertyHealthDetailPage() {
                 <span className={healthDetails.color}>{latestScore.toFixed(0)}</span>
                 <span className="text-xl font-semibold text-muted-foreground ml-1">/{scoreMax}</span>
               </div>
-              <div className="mt-2 text-sm text-muted-foreground">Status: {healthDetails.level}</div>
+              <div className="mt-2 text-sm text-muted-foreground">{healthDetails.level}</div>
               <div className="mt-2">
                 <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
               </div>
-              <div className="mt-2 text-xs text-muted-foreground">
-                Base: {baseScore !== null ? baseScore.toFixed(1) : "0.0"}/{maxBaseScore} • Extended:{" "}
-                {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"}/{maxExtraScore}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">Potential ceiling: {potentialScore.toFixed(0)}/100</div>
+              <button
+                onClick={() => setShowScoreModal(true)}
+                className="text-xs text-teal-600 hover:text-teal-700 underline underline-offset-2 mt-2 block"
+              >
+                How is this score calculated? →
+              </button>
             </CardContent>
           </Card>
 
@@ -751,32 +807,37 @@ export default function PropertyHealthDetailPage() {
                 <>
                   <div className="grid gap-2 sm:grid-cols-3">
                     <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
-                      <p className="text-xs uppercase tracking-wide text-red-700">Needs Attention</p>
+                      <p className="text-xs font-medium text-red-700">Needs attention</p>
                       <p className="text-lg font-semibold text-red-700">{negativeInsights.length}</p>
+                      <div className="mt-1 text-xs text-gray-400">
+                        {negDelta === null ? "First snapshot" : negDelta === 0 ? "Same as last week" : negDelta > 0 ? <span className="text-red-500">↑ {negDelta} from last week</span> : <span className="text-teal-500">↓ {Math.abs(negDelta)} from last week</span>}
+                      </div>
                     </div>
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                      <p className="text-xs uppercase tracking-wide text-amber-700">Monitor Closely</p>
+                      <p className="text-xs font-medium text-amber-700">Monitor closely</p>
                       <p className="text-lg font-semibold text-amber-700">{neutralInsights.length}</p>
+                      <div className="mt-1 text-xs text-gray-400">
+                        {neutralDelta === null ? "First snapshot" : neutralDelta === 0 ? "Same as last week" : neutralDelta > 0 ? <span className="text-red-500">↑ {neutralDelta} from last week</span> : <span className="text-teal-500">↓ {Math.abs(neutralDelta)} from last week</span>}
+                      </div>
                     </div>
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                      <p className="text-xs uppercase tracking-wide text-emerald-700">Healthy Signals</p>
+                      <p className="text-xs font-medium text-emerald-700">Healthy signals</p>
                       <p className="text-lg font-semibold text-emerald-700">{positiveInsights.length}</p>
+                      <div className="mt-1 text-xs text-gray-400">
+                        {positiveDelta === null ? "First snapshot" : positiveDelta === 0 ? "Same as last week" : positiveDelta > 0 ? <span className="text-teal-500">↑ {positiveDelta} from last week</span> : <span className="text-red-500">↓ {Math.abs(positiveDelta)} from last week</span>}
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1 text-xs text-muted-foreground">
+                  <div className="space-y-1">
                     <p>
-                      Top drag:{" "}
-                      <span className="font-medium text-foreground">
-                        {topNegativeInsight?.factor || "No critical drag currently"}
-                      </span>
-                      {topNegativeInsight ? ` (${topNegativeInsight.status || "Review"})` : ""}
+                      <span className="text-xs font-medium text-red-600 mr-1">Biggest risk</span>
+                      <span className="text-sm text-gray-700">{topNegativeInsight?.factor || "No critical drag currently"}</span>
+                      {topNegativeInsight && <span className="text-xs text-gray-400 ml-1">· {topNegativeInsight.status || "Review"}</span>}
                     </p>
-                    <p>
-                      Strongest signal:{" "}
-                      <span className="font-medium text-foreground">
-                        {topPositiveInsight?.factor || "No strong positive signal yet"}
-                      </span>
-                      {topPositiveInsight ? ` (${topPositiveInsight.status || "Review"})` : ""}
+                    <p className="mt-1">
+                      <span className="text-xs font-medium text-teal-600 mr-1">Best performing</span>
+                      <span className="text-sm text-gray-700">{topPositiveInsight?.factor || "No strong positive signal yet"}</span>
+                      {topPositiveInsight && <span className="text-xs text-gray-400 ml-1">· {topPositiveInsight.status || "Review"}</span>}
                     </p>
                   </div>
                 </>
@@ -844,21 +905,18 @@ export default function PropertyHealthDetailPage() {
                 <CardDescription>What moved the score since the previous weekly snapshot.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                {changes.every((c) => c.impact === "neutral") && (
+                  <p className="text-sm text-gray-500 mb-2">No significant changes since last week.</p>
+                )}
                 {changes.map((change, idx) => (
                   <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium">{change.title}</p>
-                      <Badge
-                        variant={
-                          change.impact === "positive"
-                            ? "success"
-                            : change.impact === "negative"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                      >
-                        {change.impact === "positive" ? "Positive" : change.impact === "negative" ? "Negative" : "Neutral"}
-                      </Badge>
+                      {change.impact !== "neutral" && (
+                        <Badge variant={change.impact === "positive" ? "success" : "destructive"}>
+                          {change.impact === "positive" ? "↑ Improved" : "↓ Declined"}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
                   </div>
@@ -877,8 +935,7 @@ export default function PropertyHealthDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="mb-2 text-xs text-muted-foreground">{focusPointsExplainer}</p>
-              {focusInsights.length === 0 ? (
+                {focusInsights.length === 0 ? (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p>No factor details are available yet for this property.</p>
                   <p>
@@ -904,24 +961,8 @@ export default function PropertyHealthDetailPage() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div>
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-medium">How Score Is Calculated</CardTitle>
-                <CardDescription>Transparent base + extended factor model on a fixed 0-100 scale.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>Base profile factors (up to {maxBaseScore} pts): Age, Structure, Systems, Usage/Wear, and Size.</p>
-                <p>Extended factors (up to {maxExtraScore} pts): HVAC, Water Heater, Roof, Safety, Exterior, Documents, and Appliances.</p>
-                <p>
-                  Current: Base {baseScore !== null ? baseScore.toFixed(1) : "0.0"} + Extended{" "}
-                  {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"} = {latestScore.toFixed(1)} / 100.
-                </p>
-                <p>Potential ceiling: {potentialScore.toFixed(0)} / 100.</p>
-              </CardContent>
-            </Card>
-
-            <Card className="lg:col-span-2">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-medium">Health Factor Ledger</CardTitle>
                 <CardDescription>Full factor-by-factor contributions grouped by negative, watch, and positive impact.</CardDescription>
@@ -937,15 +978,21 @@ export default function PropertyHealthDetailPage() {
                       const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
                       return (
                         <div key={group.title} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</p>
-                            <StatusChip tone={group.tone}>{groupInsights.length}</StatusChip>
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground">
+                              {group.title}
+                              <span className={`ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                                group.tone === 'danger' ? 'bg-red-100 text-red-600' :
+                                group.tone === 'elevated' ? 'bg-amber-100 text-amber-700' :
+                                'bg-teal-100 text-teal-700'
+                              }`}>{groupInsights.length}</span>
+                            </p>
                           </div>
                           {groupInsights.length === 0 ? (
                             <p className="text-xs text-muted-foreground">No factors in this category.</p>
                           ) : (
                             groupInsights.map((insight, idx) => (
-                              <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
+                              <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className={`rounded-lg border border-black/10 border-l-[3px] ${getInsightLeftBorderColor(insight.status)} px-3 py-2`}>
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
                                   <Badge
@@ -961,7 +1008,7 @@ export default function PropertyHealthDetailPage() {
                                   </Badge>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  {(insight.status || "Status unavailable")} • {(asNumber(insight.score) ?? 0).toFixed(1)} pts
+                                  {getFactorDescription(insight.factor, insight.status)}
                                   {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
                                 </p>
                               </div>
@@ -977,6 +1024,19 @@ export default function PropertyHealthDetailPage() {
           </div>
         </div>
       </div>
+      <Dialog open={showScoreModal} onOpenChange={setShowScoreModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>How your health score is calculated</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Your home health score combines two groups of signals, rated on a 0–100 scale. Base factors (age, structure, systems, usage, and size) contribute up to {maxBaseScore} points. Extended factors like your HVAC, water heater, roof, and appliances contribute up to {maxExtraScore} additional points.
+          </p>
+          <p className="text-sm text-gray-500 mt-3">
+            Your current score: {baseScore !== null ? baseScore.toFixed(1) : "0.0"} (base) + {unlockedScore !== null ? unlockedScore.toFixed(1) : "0.0"} (extended) = {latestScore.toFixed(1)} / 100
+          </p>
+        </DialogContent>
+      </Dialog>
     </DashboardShell>
   );
 }

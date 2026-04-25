@@ -11,7 +11,7 @@ function clamp(n: number, min: number, max: number) {
 function fmtTick(dateIso: string) {
   const dt = new Date(dateIso);
   if (Number.isNaN(dt.getTime())) return "—";
-  return dt.toLocaleDateString("en-US", { month: "short" });
+  return dt.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 }
 
 interface ScoreTrendChartProps {
@@ -70,8 +70,10 @@ export function ScoreTrendChart({ points, ariaLabel }: ScoreTrendChartProps) {
 
   if (sorted.length < 2) {
     return (
-      <div className="h-[220px] rounded-xl border border-dashed border-black/15 bg-black/[0.02] text-sm text-muted-foreground flex items-center justify-center">
-        Not enough history yet. Weekly snapshots will appear as they are collected.
+      <div className="flex flex-col items-center justify-center h-48 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+        <div className="text-2xl mb-2">📈</div>
+        <p className="text-sm font-medium text-gray-600">Score history will appear here</p>
+        <p className="text-xs text-gray-400 mt-1">Check back after your next weekly snapshot</p>
       </div>
     );
   }
@@ -127,8 +129,16 @@ export function ScoreTrendChart({ points, ariaLabel }: ScoreTrendChartProps) {
       <path d={path} fill="none" stroke="currentColor" strokeWidth={3} strokeOpacity="0.85" />
 
       {sorted.map((p, i) => {
-        if (i !== sorted.length - 1) return null;
-        return <circle key={p.weekStart} cx={xFor(i)} cy={yFor(p.score)} r={4.5} fill="currentColor" />;
+        const isLast = i === sorted.length - 1;
+        const dt = new Date(p.weekStart);
+        const label = Number.isNaN(dt.getTime()) ? p.weekStart : dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        return (
+          <g key={p.weekStart}>
+            <circle cx={xFor(i)} cy={yFor(p.score)} r={isLast ? 4.5 : 3} fill="currentColor" fillOpacity={isLast ? 1 : 0.5}>
+              <title>{`Week of ${label} · Score: ${Math.round(p.score)}`}</title>
+            </circle>
+          </g>
+        );
       })}
 
       {xTicks.map((tick, idx) => (
