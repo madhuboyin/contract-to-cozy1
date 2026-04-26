@@ -31,14 +31,22 @@ type ChecklistEntry = {
 export function getChecklistEntries(checklist: HomeBuyerChecklist | null | undefined): ChecklistEntry[] {
   if (!checklist?.tasks) return [];
 
-  return checklist.tasks.map((task) => ({
+  return checklist.tasks.map((task) => {
+    const runtimeTask = task as unknown as Record<string, unknown>;
+    const nextDueDate =
+      typeof runtimeTask.nextDueDate === 'string' ? runtimeTask.nextDueDate : null;
+    const propertyId =
+      typeof runtimeTask.propertyId === 'string' ? runtimeTask.propertyId : null;
+
+    return {
     id: task.id,
     status: task.status,
-    nextDueDate: task.nextDueDate ?? null,
+    nextDueDate,
     title: task.title,
     description: task.description ?? null,
-    propertyId: task.propertyId ?? null,
-  }));
+    propertyId,
+  };
+  });
 }
 
 export function consolidateUrgentActions(
