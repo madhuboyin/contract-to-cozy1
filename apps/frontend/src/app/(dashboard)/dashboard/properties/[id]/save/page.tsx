@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { 
   DollarSign, 
   TrendingUp,
@@ -28,6 +28,15 @@ import { useQuery } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 
+function rankedCount(
+  categories:
+    | Array<{ topOpportunity: unknown | null }>
+    | null
+    | undefined,
+): number {
+  return (categories ?? []).filter((category) => category.topOpportunity).length;
+}
+
 /**
  * SaveHubPage is the "Financial Job" surface.
  * It curates wins from:
@@ -37,22 +46,25 @@ import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/syste
  * 4. Equity growth
  */
 export default function SaveHubPage() {
+  const params = useParams<{ id: string | string[] }>();
   const { selectedPropertyId } = usePropertyContext();
+  const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
   const searchParams = useSearchParams();
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const focusSection = searchParams.get('focus');
 
   const homeSavingsQuery = useQuery({
-    queryKey: ['home-savings-summary', selectedPropertyId],
+    queryKey: ['home-savings-summary', propertyId],
     queryFn: async () => {
-      if (!selectedPropertyId) return null;
-      return await getHomeSavingsSummary(selectedPropertyId);
+      if (!propertyId) return null;
+      return await getHomeSavingsSummary(propertyId);
     },
-    enabled: Boolean(selectedPropertyId),
+    enabled: Boolean(propertyId),
   });
 
   const potentialSavings = homeSavingsQuery.data?.potentialAnnualSavings || 0;
-  const protectedValue = Math.max(544, potentialSavings || 544);
+  const monthlySavings = homeSavingsQuery.data?.potentialMonthlySavings || 0;
+  const opportunityCount = rankedCount(homeSavingsQuery.data?.categories);
   const rankedCategories = [...(homeSavingsQuery.data?.categories ?? [])]
     .filter((category) => category.topOpportunity)
     .sort(
@@ -88,29 +100,29 @@ export default function SaveHubPage() {
           meta={<TrustMetaRow items={['Verified from property and document signals', 'Savings shown as annualized upside', 'Next tax audit window tracked']} />}
         >
           <div className="grid gap-3 md:grid-cols-3">
-            <MetricTile label="Protected value" value={`$${protectedValue}`} hint="Savings and exposure tracked this year" tone="brand" />
-            <MetricTile label="Total potential" value={potentialSavings > 0 ? `$${potentialSavings}` : '$0'} hint="Annual savings found" tone={potentialSavings > 0 ? 'success' : 'neutral'} />
+            <MetricTile label="Annual savings found" value={`$${potentialSavings}`} hint="Verified annual opportunities" tone={potentialSavings > 0 ? 'success' : 'neutral'} />
+            <MetricTile label="Monthly potential" value={`$${monthlySavings}`} hint="Recurring monthly upside" tone={monthlySavings > 0 ? 'brand' : 'neutral'} />
             <MetricTile label="Equity status" value="Tracked" hint="Value vs mortgage" tone="brand" />
           </div>
         </PageHero>
 
-        <MobileSection className={focusSection === 'protected-value' ? 'scroll-mt-24' : undefined}>
+        <MobileSection className={focusSection === 'annual-savings' ? 'scroll-mt-24' : undefined}>
           <MobileSectionHeader
-            title="Protected Value Details"
-            subtitle="This is the exact dollar figure shown on the dashboard tile, with the savings signals behind it."
+            title="Annual Savings Details"
+            subtitle="This is the exact savings amount shown on the dashboard tile, backed by property-specific opportunities."
             className="mb-6"
           />
           <div className="grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-            <MobileCard className={focusSection === 'protected-value' ? 'border-brand-200 ring-2 ring-brand-100 p-6' : 'p-6'}>
+            <MobileCard className={focusSection === 'annual-savings' ? 'border-brand-200 ring-2 ring-brand-100 p-6' : 'p-6'}>
               <div className="flex items-start gap-4">
                 <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3 text-brand-700">
                   <ShieldAlert className="h-6 w-6" />
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-500">Protected value on dashboard</p>
-                  <h3 className="text-3xl font-bold text-slate-950">${protectedValue}</h3>
+                  <p className="text-sm font-semibold text-slate-500">Annual savings found on dashboard</p>
+                  <h3 className="text-3xl font-bold text-slate-950">${potentialSavings}</h3>
                   <p className="text-sm leading-6 text-slate-600">
-                    This combines verified savings opportunities with a baseline exposure benchmark so the Today card always reflects value we&apos;re actively watching for this property.
+                    This is calculated directly from the verified savings opportunities currently matched to this property.
                   </p>
                 </div>
               </div>
@@ -122,8 +134,12 @@ export default function SaveHubPage() {
                   <span className="font-semibold text-slate-950">${potentialSavings}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">Tracked baseline exposure</span>
-                  <span className="font-semibold text-slate-950">${Math.max(0, protectedValue - potentialSavings)}</span>
+                  <span className="text-slate-500">Verified monthly savings</span>
+                  <span className="font-semibold text-slate-950">${monthlySavings}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Matched opportunity categories</span>
+                  <span className="font-semibold text-slate-950">{opportunityCount}</span>
                 </div>
                 <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
                   Updated from {homeSavingsQuery.data?.updatedAt ? new Date(homeSavingsQuery.data.updatedAt).toLocaleString() : 'live property signals'}.
@@ -185,8 +201,8 @@ export default function SaveHubPage() {
                       window.location.href = category.topOpportunity.actionUrl;
                       return;
                     }
-                    if (selectedPropertyId) {
-                      window.location.href = `/dashboard/properties/${selectedPropertyId}/tools/home-savings`;
+                    if (propertyId || selectedPropertyId) {
+                      window.location.href = `/dashboard/properties/${propertyId || selectedPropertyId}/tools/home-savings`;
                     }
                   }}
                   trust={{
@@ -233,7 +249,7 @@ export default function SaveHubPage() {
                       Scan My Policy
                     </Button>
                     <Button variant="outline" className="rounded-xl border-slate-200 h-12 px-6" asChild>
-                      <Link href={selectedPropertyId ? `/dashboard/documents?propertyId=${selectedPropertyId}` : '/dashboard/documents'}>
+                      <Link href={propertyId || selectedPropertyId ? `/dashboard/documents?propertyId=${propertyId || selectedPropertyId}` : '/dashboard/documents'}>
                         <FileText className="mr-2 h-4 w-4" />
                         Browse Documents
                       </Link>

@@ -591,7 +591,7 @@ export default function DashboardPage() {
   );
   const protectedValueHref = buildPropertyAwareDashboardHref(
     effectiveSelectedPropertyId,
-    '/dashboard/save?focus=protected-value',
+    '/dashboard/save?focus=annual-savings',
   );
   const primaryActionHero = (
     <div className="space-y-6">
@@ -644,9 +644,9 @@ export default function DashboardPage() {
           </Link>
           <Link href={protectedValueHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
             <MetricTile
-              label="Protected value"
-              value={formatUsd(Math.max(544, annualSavingsPotential || 544))}
-              hint="Savings and exposure tracked this year"
+              label="Annual savings found"
+              value={formatUsd(annualSavingsPotential)}
+              hint="Verified savings opportunities"
               tone="brand"
               className="h-full cursor-pointer"
             />
