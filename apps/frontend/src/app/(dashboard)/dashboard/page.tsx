@@ -119,6 +119,17 @@ function resolvePriorityAlertSavings(
   return 0;
 }
 
+function buildTopCardActionMeta(
+  impactLabel: string,
+  etaLabel: string,
+): { actionMetaLabel: string; actionMetaValue: string; compactActionLayout: true } {
+  return {
+    actionMetaLabel: etaLabel,
+    actionMetaValue: impactLabel,
+    compactActionLayout: true,
+  };
+}
+
 function isRateLimitedError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const status = (error as Error & { status?: number | string }).status;
@@ -546,70 +557,70 @@ export default function DashboardPage() {
     // 2. Top health insight
     const topHealthInsight = scopedUrgentActions.find(a => a.type === 'HEALTH_INSIGHT');
     if (topHealthInsight) {
+      const impactLabel = 'Top risk signal';
+      const etaLabel = 'ETA 2 min';
       return {
         title: `${topHealthInsight.title} needs attention — your top priority this week.`,
         subtitle: null,
         ctaLabel: `Review ${topHealthInsight.title.toLowerCase()}`,
-        impactLabel: 'Top risk signal',
-        etaLabel: 'ETA 2 min',
-        actionMetaLabel: undefined,
-        actionMetaValue: undefined,
-        compactActionLayout: false,
+        impactLabel,
+        etaLabel,
+        ...buildTopCardActionMeta(impactLabel, etaLabel),
       };
     }
 
     // 3. Savings > $200
     if (annualSavingsPotential >= 200) {
+      const impactLabel = `${formatUsd(annualSavingsPotential)}/yr potential`;
+      const etaLabel = 'ETA 3 min';
       return {
         title: `We found ${formatUsd(annualSavingsPotential)} in potential annual savings.`,
         subtitle: null,
         ctaLabel: 'See your savings',
-        impactLabel: `${formatUsd(annualSavingsPotential)}/yr potential`,
-        etaLabel: 'ETA 3 min',
-        actionMetaLabel: undefined,
-        actionMetaValue: undefined,
-        compactActionLayout: false,
+        impactLabel,
+        etaLabel,
+        ...buildTopCardActionMeta(impactLabel, etaLabel),
       };
     }
 
     // 4. Vault Onboarding (Empty state: < 3 items)
     if (data.inventoryCount < 3) {
+      const impactLabel = 'Unlock intelligence';
+      const etaLabel = 'ETA 90 sec';
       return {
         title: 'Start building your Home Vault for full intelligence.',
         subtitle: null,
         ctaLabel: 'Add your first item',
-        impactLabel: 'Unlock intelligence',
-        etaLabel: 'ETA 90 sec',
-        actionMetaLabel: undefined,
-        actionMetaValue: undefined,
-        compactActionLayout: false,
+        impactLabel,
+        etaLabel,
+        ...buildTopCardActionMeta(impactLabel, etaLabel),
       };
     }
 
     // 5. Maintenance Overdue
     if (overdueMaintenanceCount > 0) {
+      const impactLabel = 'Preventative win';
+      const etaLabel = 'ETA 2 min';
       return {
         title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need${overdueMaintenanceCount === 1 ? 's' : ''} attention.`,
         subtitle: null,
         ctaLabel: 'Fix overdue tasks',
-        impactLabel: 'Preventative win',
-        etaLabel: 'ETA 2 min',
-        actionMetaLabel: undefined,
-        actionMetaValue: undefined,
-        compactActionLayout: false,
+        impactLabel,
+        etaLabel,
+        ...buildTopCardActionMeta(impactLabel, etaLabel),
       };
     }
 
     // 6. Default: All clear
+    const impactLabel = 'HomeScore up to date';
+    const etaLabel = 'ETA 1 min';
     return {
       title: 'All systems healthy — schedule your next maintenance check.',
       subtitle: null,
       ctaLabel: 'View full report',
-      impactLabel: 'HomeScore up to date',
-      etaLabel: 'ETA 1 min',
-      actionMetaLabel: undefined,
-      actionMetaValue: undefined,
-      compactActionLayout: false,
+      impactLabel,
+      etaLabel,
+      ...buildTopCardActionMeta(impactLabel, etaLabel),
     };
   })();
 
