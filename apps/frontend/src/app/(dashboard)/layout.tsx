@@ -469,7 +469,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const bannerFetchedRef = React.useRef(false);
   
   // Collapsible sidebar state
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -504,8 +503,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   }, [loading, transitionVisible]);
 
   useEffect(() => {
-    if (bannerFetchedRef.current) return;
-    if (pathname === '/dashboard') {
+    if (
+      pathname === '/dashboard' ||
+      pathname === '/dashboard/properties/new'
+    ) {
       setShowBanner(false);
       return;
     }
@@ -513,8 +514,6 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
     const fetchPropertyCount = async () => {
       if (!user) { setShowBanner(false); return; }
       if (user.segment !== 'EXISTING_OWNER') { setShowBanner(false); return; }
-
-      bannerFetchedRef.current = true;
 
       try {
         const response = await api.getProperties();
@@ -530,7 +529,9 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       }
     };
 
-    if (!loading && user) fetchPropertyCount();
+    if (!loading && user) {
+      void fetchPropertyCount();
+    }
   }, [user, loading, pathname]);
 
   useEffect(() => {

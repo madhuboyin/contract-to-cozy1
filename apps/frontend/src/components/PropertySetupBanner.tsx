@@ -64,10 +64,10 @@ export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProp
           <Home className="h-5 w-5 text-orange-600 flex-shrink-0" />
           <div>
             <p className="text-sm font-semibold text-gray-900">
-              Complete Your Property Profile
+              Add your first property
             </p>
             <p className="text-xs text-gray-600">
-              Add your property details to unlock personalized maintenance insights and property health scores.
+              Add a property to unlock personalized maintenance insights, risk guidance, and home health scores.
             </p>
           </div>
         </div>
@@ -77,7 +77,7 @@ export function PropertySetupBanner({ show, onDismiss }: PropertySetupBannerProp
             href="/dashboard/properties/new"
             className="px-4 py-2.5 sm:py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors whitespace-nowrap min-h-[44px] sm:min-h-0 touch-manipulation"
           >
-            Add property now
+            Add property
           </Link>
           
           <button
