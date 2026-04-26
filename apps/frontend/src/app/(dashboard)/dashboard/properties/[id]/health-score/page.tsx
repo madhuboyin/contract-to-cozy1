@@ -863,7 +863,7 @@ export default function PropertyHealthDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 rounded-lg bg-teal-50/50 border border-teal-100/50 px-2.5 py-1.5">
                       <span className="h-[6px] w-[6px] rounded-full bg-teal-400/80 shrink-0" />
-                      <span className="text-[10px] font-bold text-teal-600 shrink-0 w-[78px] tracking-normal">Best performing</span>
+                      <span className="text-[10px] font-bold text-teal-600 shrink-0 whitespace-nowrap tracking-normal">Best performing</span>
                       <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topPositiveInsight?.factor || "Building signal"}</span>
                       {topPositiveInsight && (
                         <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{topPositiveInsight.status}</span>
@@ -882,13 +882,13 @@ export default function PropertyHealthDetailPage() {
             </div>
             <div className="px-3 py-3 space-y-2">
               <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`} className="block">
-                <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-3 py-2.5 cursor-pointer group">
+                <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-3 py-2 cursor-pointer flex items-center justify-between gap-2">
                   <p className="text-[12px] font-semibold text-white tracking-normal">View maintenance actions</p>
-                  <p className="text-[10px] text-teal-200/80 mt-0.5 group-hover:text-teal-100/80 transition-colors">
-                    {negativeInsights.length > 0
-                      ? `${negativeInsights.length} item${negativeInsights.length > 1 ? "s" : ""} need attention`
-                      : "All clear — check for opportunities"}
-                  </p>
+                  {negativeInsights.length > 0 && (
+                    <span className="shrink-0 text-[9px] font-bold bg-red-500/90 text-white px-1.5 py-0.5 rounded-full tabular-nums">
+                      {negativeInsights.length}
+                    </span>
+                  )}
                 </div>
               </Link>
               <Link href={`/dashboard/properties/${propertyId}/edit`} className="block">
@@ -900,9 +900,6 @@ export default function PropertyHealthDetailPage() {
             <div className="px-4 pt-2 pb-2.5 border-t border-slate-200/70 mt-auto">
               <p className="text-[9px] font-semibold tracking-normal text-slate-400/80">
                 {sortedInsights.length > 0 ? `${sortedInsights.length} factors tracked` : "Awaiting data"}
-              </p>
-              <p className="text-[9px] text-slate-400 mt-0.5">
-                {usingSnapshotInsights ? "Latest weekly snapshot" : "Current property profile"}
               </p>
             </div>
           </div>
