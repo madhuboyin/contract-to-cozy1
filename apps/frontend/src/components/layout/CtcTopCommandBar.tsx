@@ -30,7 +30,7 @@ function usePropertyData() {
   });
 
   // Extract first line of address (street address)
-  const address = property?.address || property?.street || 'Main Home';
+  const address = property?.address || 'Main Home';
 
   return {
     propertyId: selectedPropertyId,
