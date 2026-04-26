@@ -36,6 +36,20 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 
+function formatUsd(value: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+}
+
+function extractPotentialSavings(details: unknown): number {
+  if (!details || typeof details !== 'object') return 0;
+  const d = details as Record<string, unknown>;
+  for (const key of ['potentialSavingsUsd', 'estimatedSavingsUsd', 'recommendedSavingsUsd']) {
+    const val = typeof d[key] === 'number' ? d[key] as number : Number(d[key]);
+    if (Number.isFinite(val) && val > 0) return Math.round(val);
+  }
+  return 0;
+}
+
 export default function IncidentDetailClient() {
   const params = useParams<{ id: string; incidentId: string }>();
   const propertyId = params.id;
@@ -193,10 +207,19 @@ export default function IncidentDetailClient() {
               <IncidentSeverityExplainPanel incident={incident} decisionTrace={decisionTrace} />
 
               {incident.details ? (
-                <div className="rounded-lg border bg-white p-3">
-                  <p className="text-xs font-semibold text-slate-700">Details</p>
-                  <pre className="mt-2 overflow-auto text-xs text-slate-700">{JSON.stringify(incident.details, null, 2)}</pre>
-                </div>
+                <>
+                  {extractPotentialSavings(incident.details) > 0 && (
+                    <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+                      <p className="text-xs font-semibold text-teal-800">Financial Impact</p>
+                      <p className="mt-0.5 text-2xl font-black text-teal-700">{formatUsd(extractPotentialSavings(incident.details))}</p>
+                      <p className="mt-0.5 text-xs text-teal-700">Potential savings if handled now</p>
+                    </div>
+                  )}
+                  <div className="rounded-lg border bg-white p-3">
+                    <p className="text-xs font-semibold text-slate-700">Details</p>
+                    <pre className="mt-2 overflow-auto text-xs text-slate-700">{JSON.stringify(incident.details, null, 2)}</pre>
+                  </div>
+                </>
               ) : null}
             </div>
           </MobileCard>

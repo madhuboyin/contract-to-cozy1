@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DollarSign,
   TrendingUp,
@@ -80,6 +80,8 @@ function StatusBadge({
 
 export default function FinancialEfficiencyClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusSection = searchParams.get('focus');
   const { selectedPropertyId } = usePropertyContext();
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
@@ -119,6 +121,12 @@ export default function FinancialEfficiencyClient() {
     enabled: !!selectedPropertyId,
     staleTime: 10 * 60 * 1000,
   });
+
+  useEffect(() => {
+    if (focusSection !== 'annual-savings') return;
+    const el = document.querySelector<HTMLElement>('[data-section="annual-savings"]');
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 350);
+  }, [focusSection]);
 
   const potentialSavings = homeSavingsQuery.data?.potentialAnnualSavings || 0;
   const isLoading =
@@ -399,7 +407,7 @@ export default function FinancialEfficiencyClient() {
         </section>
 
         {/* ── Pillar 3: Recurring Savings (ranked by potentialSavingsUsd) ── */}
-        <section className="space-y-5">
+        <section data-section="annual-savings" className={cn('space-y-5', focusSection === 'annual-savings' ? 'scroll-mt-24 rounded-2xl border-2 border-brand-200 ring-2 ring-brand-100 p-4 -mx-4' : undefined)}>
           <div className="flex items-start gap-4 px-1">
             <div className="mt-1 p-2 rounded-xl bg-emerald-50 border-2 border-emerald-100 text-emerald-600">
               <PiggyBank className="h-5 w-5" />

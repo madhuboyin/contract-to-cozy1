@@ -8,6 +8,7 @@ import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 import { cn } from "@/lib/utils";
 import { ScoreRing } from "@/components/dashboard/ScoreRing";
 import { BadgeStatus, StatusBadge } from "@/components/ui/StatusBadge";
+import { buildPropertyAwareDashboardHref } from "@/lib/routes/dashboardPropertyAwareHref";
 
 interface PropertyHealthScoreCardProps {
   property?: ScoredProperty;
@@ -153,7 +154,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
       </div>
 
       <Link
-        href={`/dashboard/properties/${property.id}/health-score`}
+        href={buildPropertyAwareDashboardHref(property.id, '/dashboard/health-score')}
         className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
         Open health details

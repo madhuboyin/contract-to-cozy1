@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Activity, ArrowLeft, ChevronDown, Clock3, FileText, Flame, Gauge, Home, Loader2, ShieldCheck, Wind, Wrench } from "lucide-react";
@@ -444,7 +444,9 @@ function buildHealthChangeItems(series: PropertyScoreSeries | undefined, latestI
 export default function PropertyHealthDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
+  const focusedFactor = searchParams.get('focus')?.toLowerCase() ?? null;
   const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
   const [showScoreModal, setShowScoreModal] = useState(false);
 
@@ -520,7 +522,15 @@ export default function PropertyHealthDetailPage() {
   const neutralDelta = hasPreviousSnapshot ? neutralInsights.length - previousNeutralCount : null;
   const positiveDelta = hasPreviousSnapshot ? positiveInsights.length - previousPositiveCount : null;
 
-  const renderFocusInsightAccordionRow = (insight: HealthInsight, idx: number, useStatusChip: boolean) => {
+  useEffect(() => {
+    if (!focusedFactor) return;
+    const el = document.querySelector<HTMLElement>(`[data-insight-key="${focusedFactor}"]`);
+    if (el) {
+      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
+    }
+  }, [focusedFactor]);
+
+  const renderFocusInsightAccordionRow = (insight: HealthInsight, idx: number, useStatusChip: boolean, isFocused = false) => {
     const scoreValue = asNumber(insight.score) ?? 0;
     const detailLines = insight.details?.length ? insight.details.slice(0, 6) : [];
     const statusBadge = useStatusChip ? (
@@ -540,7 +550,12 @@ export default function PropertyHealthDetailPage() {
     );
 
     return (
-      <details key={`${insight.factor || "insight"}-${idx}`} className={`rounded-lg border border-black/10 bg-white border-l-[3px] ${getInsightLeftBorderColor(insight.status)}`}>
+      <details
+        key={`${insight.factor || "insight"}-${idx}`}
+        className={`rounded-lg border border-black/10 bg-white border-l-[3px] ${getInsightLeftBorderColor(insight.status)}${isFocused ? ' ring-2 ring-teal-400 ring-offset-1' : ''}`}
+        data-insight-key={insight.factor?.toLowerCase() ?? ''}
+        open={isFocused || undefined}
+      >
         <summary className="list-none cursor-pointer px-3 py-2">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-2">
@@ -651,7 +666,7 @@ export default function PropertyHealthDetailPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, true))}
+                {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, true, insight.factor?.toLowerCase() === focusedFactor))}
               </div>
             )}
           </ScenarioInputCard>
@@ -987,7 +1002,7 @@ export default function PropertyHealthDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, false))}
+                  {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, false, insight.factor?.toLowerCase() === focusedFactor))}
                 </div>
               )}
               <div className="mt-4">

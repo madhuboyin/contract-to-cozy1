@@ -420,7 +420,7 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
     return `/dashboard/properties/${actionPropertyId}/incidents/${action.id}`;
   }
   if (action.type === 'HEALTH_INSIGHT' && actionPropertyId) {
-    return `/dashboard/properties/${actionPropertyId}/health-score`;
+    return `/dashboard/properties/${actionPropertyId}/health-score?focus=${encodeURIComponent(action.title.toLowerCase())}`;
   }
   if (action.type === 'MAINTENANCE_OVERDUE') {
     return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=overdue` : '?filter=overdue'}`;
@@ -645,7 +645,9 @@ export default function DashboardPage() {
   const annualSavingsPotential = Math.max(0, Math.round(homeSavingsSummaryQuery.data?.potentialAnnualSavings ?? 0));
   const riskExposureGap = Math.max(0, Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0));
   const overdueMaintenanceCount = scopedUrgentActions.filter(a => a.type === 'MAINTENANCE_OVERDUE').length;
-  const healthScore = selectedProperty?.healthScore?.totalScore ?? 82;
+  const healthScore = typeof selectedProperty?.healthScore?.totalScore === 'number'
+    ? selectedProperty.healthScore.totalScore
+    : null;
   const hasCompletionState =
     Boolean(selectedProperty) &&
     scopedUrgentActions.length === 0 &&
@@ -690,7 +692,7 @@ export default function DashboardPage() {
         href: resolveUrgentActionHref(topHealthInsight, effectiveSelectedPropertyId),
         impactLabel,
         etaLabel,
-        ...buildHealthInsightActionMeta(topHealthInsight.title, healthScore),
+        ...buildHealthInsightActionMeta(topHealthInsight.title, healthScore ?? 0),
       };
     }
 
@@ -756,7 +758,7 @@ export default function DashboardPage() {
       href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
       impactLabel,
       etaLabel,
-        ...buildDefaultActionMeta(healthScore),
+        ...buildDefaultActionMeta(healthScore ?? 0),
       };
   })();
 
@@ -813,9 +815,9 @@ export default function DashboardPage() {
           <Link href={healthScoreHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
             <MetricTile
               label="Health score"
-              value={healthScore}
+              value={healthScore !== null ? healthScore : '—'}
               hint="Current property signal"
-              tone={healthScore >= 80 ? 'success' : 'warning'}
+              tone={healthScore !== null && healthScore >= 80 ? 'success' : healthScore !== null ? 'warning' : 'neutral'}
               className="h-full cursor-pointer"
             />
           </Link>

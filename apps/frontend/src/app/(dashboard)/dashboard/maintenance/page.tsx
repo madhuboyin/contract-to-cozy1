@@ -166,6 +166,7 @@ export default function MaintenancePage() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
   const priority = searchParams.get('priority') === 'true';
+  const filterOverdue = searchParams.get('filter') === 'overdue';
   const from = searchParams.get('from');
 
   const view: ViewMode = normalizeView(searchParams.get('view'));
@@ -286,7 +287,9 @@ export default function MaintenancePage() {
     }
 
     const openSorted = (() => {
-      let items = open;
+      let items = filterOverdue
+        ? open.filter((t) => t.nextDueDate && new Date(t.nextDueDate) < new Date())
+        : open;
 
       if (priority) {
         const priorityItems = items
@@ -587,6 +590,12 @@ export default function MaintenancePage() {
           </Label>
         </div>
       </MobileFilterSurface>
+
+      {filterOverdue && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+          Showing overdue tasks only — <button className="underline" onClick={() => router.replace(`/dashboard/maintenance${selectedPropertyId ? `?propertyId=${selectedPropertyId}` : ''}`)}>Clear filter</button>
+        </div>
+      )}
 
       {view === 'open' && openTasks.length === 0 && (
         <EmptyStateCard
