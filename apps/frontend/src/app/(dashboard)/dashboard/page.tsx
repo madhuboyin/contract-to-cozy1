@@ -139,57 +139,81 @@ function buildTopCardActionMeta(
 
 function buildHealthInsightActionMeta(factorTitle: string) {
   return buildTopCardActionMeta(
-    'Review in Health Score',
-    factorTitle,
-    'Check Current Health Focus and the factor ledger for what needs attention.',
+    `Health Score · ${factorTitle}`,
+    'Review target: this factor is currently the highest-priority health driver.',
+    'Open Health Score and review Current Health Focus plus the factor ledger for what needs attention.',
   );
+}
+
+function buildHealthInsightBadgeLabel() {
+  return 'Top priority this week';
+}
+
+function buildIncidentBadgeLabel() {
+  return 'Priority alert';
+}
+
+function buildSavingsBadgeLabel() {
+  return 'Best savings move';
+}
+
+function buildVaultBadgeLabel() {
+  return 'Unlock more intelligence';
+}
+
+function buildMaintenanceBadgeLabel() {
+  return 'Action to take now';
+}
+
+function buildDefaultBadgeLabel() {
+  return 'Next best move';
 }
 
 function buildIncidentActionMeta(incidentTitle: string, potentialSavings: number) {
   if (potentialSavings > 0) {
     return buildTopCardActionMeta(
-      'Potential savings',
-      formatUsd(potentialSavings),
-      `Open ${incidentTitle} details to review the risk summary and recommended actions.`,
+      `Incident Detail · ${incidentTitle}`,
+      `Potential savings: ${formatUsd(potentialSavings)}`,
+      `Open ${incidentTitle} to review the risk summary, timeline, and recommended actions.`,
     );
   }
 
   return buildTopCardActionMeta(
-    'Open incident detail',
-    incidentTitle,
-    'Review the risk summary, timeline, and next recommended actions.',
+    `Incident Detail · ${incidentTitle}`,
+    'Review the incident timeline and next recommended actions.',
+    `Open ${incidentTitle} details to review the risk summary and mitigation steps.`,
   );
 }
 
 function buildSavingsActionMeta(amount: number) {
   return buildTopCardActionMeta(
-    'Verified annual savings',
-    `${formatUsd(amount)}/yr`,
-    'Open Home Savings to review matched opportunities and compare next steps.',
+    'Home Savings',
+    `Verified annual opportunity: ${formatUsd(amount)}/yr`,
+    'Open Home Savings to review matched opportunities, compare next steps, and lock in the best savings move.',
   );
 }
 
 function buildVaultActionMeta() {
   return buildTopCardActionMeta(
-    'Start in Home Vault',
-    'Add your first record',
-    'Upload a receipt, appliance, or service document to unlock fuller guidance.',
+    'Home Vault',
+    'Start with one receipt, appliance, or service record.',
+    'Add your first record to unlock richer guidance, better maintenance context, and stronger trust signals.',
   );
 }
 
 function buildMaintenanceActionMeta(overdueCount: number) {
   return buildTopCardActionMeta(
-    'Review in Fix',
-    `${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}`,
-    'Open the priority actions list to see what is overdue and what to do next.',
+    'Fix · Priority actions',
+    `${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} ranked for review.`,
+    'Open the priority actions list to see what is overdue first and what to do next.',
   );
 }
 
 function buildDefaultActionMeta() {
   return buildTopCardActionMeta(
-    'Open Health Score',
-    'Review your score drivers',
-    'Check current health focus and recent changes affecting the property score.',
+    'Health Score overview',
+    'Review score drivers, recent changes, and current health focus.',
+    'Open Health Score to understand what is helping, what is dragging the score down, and where to act next.',
   );
 }
 
@@ -613,6 +637,7 @@ export default function DashboardPage() {
     if (highSeverityIncident) {
       const potentialSavings = resolvePriorityAlertSavings(highSeverityIncident, annualSavingsPotential);
       return {
+        badgeLabel: buildIncidentBadgeLabel(),
         title: `Priority alert: ${highSeverityIncident.title}`,
         subtitle: highSeverityIncident.summary || 'A critical home event requires your review to prevent escalation.',
         ctaLabel: 'Review incident',
@@ -629,6 +654,7 @@ export default function DashboardPage() {
       const impactLabel = 'Top risk signal';
       const etaLabel = 'ETA 2 min';
       return {
+        badgeLabel: buildHealthInsightBadgeLabel(),
         title: `${topHealthInsight.title} needs attention — your top priority this week.`,
         subtitle: null,
         ctaLabel: `Review ${topHealthInsight.title.toLowerCase()}`,
@@ -644,6 +670,7 @@ export default function DashboardPage() {
       const impactLabel = `${formatUsd(annualSavingsPotential)}/yr potential`;
       const etaLabel = 'ETA 3 min';
       return {
+        badgeLabel: buildSavingsBadgeLabel(),
         title: `We found ${formatUsd(annualSavingsPotential)} in potential annual savings.`,
         subtitle: null,
         ctaLabel: 'See your savings',
@@ -659,6 +686,7 @@ export default function DashboardPage() {
       const impactLabel = 'Unlock intelligence';
       const etaLabel = 'ETA 90 sec';
       return {
+        badgeLabel: buildVaultBadgeLabel(),
         title: 'Start building your Home Vault for full intelligence.',
         subtitle: null,
         ctaLabel: 'Add your first item',
@@ -675,6 +703,7 @@ export default function DashboardPage() {
       const impactLabel = 'Preventative win';
       const etaLabel = 'ETA 2 min';
       return {
+        badgeLabel: buildMaintenanceBadgeLabel(),
         title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need${overdueMaintenanceCount === 1 ? 's' : ''} attention.`,
         subtitle: null,
         ctaLabel: 'Fix overdue tasks',
@@ -691,6 +720,7 @@ export default function DashboardPage() {
     const impactLabel = 'HomeScore up to date';
     const etaLabel = 'ETA 1 min';
     return {
+      badgeLabel: buildDefaultBadgeLabel(),
       title: 'All systems healthy — schedule your next maintenance check.',
       subtitle: null,
       ctaLabel: 'View full report',
@@ -783,7 +813,7 @@ export default function DashboardPage() {
       </PageHero>
 
       <WinCard
-        title="Highest value move"
+        title={heroNarrative.badgeLabel}
         value={heroNarrative.title}
         description={heroNarrative.subtitle ?? 'Chosen because it best balances cost prevention, confidence, and effort.'}
         actionLabel={heroNarrative.ctaLabel}
