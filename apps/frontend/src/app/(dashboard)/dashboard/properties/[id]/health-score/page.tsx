@@ -830,26 +830,26 @@ export default function PropertyHealthDetailPage() {
               ) : (
                 <div className="space-y-2">
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-[10px] bg-red-50 border border-red-100/60 p-2 text-center">
+                    <div className="rounded-[10px] bg-red-50 border border-red-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-red-500/90 mt-1 leading-tight tracking-normal">Needs attention</p>
-                      <p className="text-[9px] text-slate-400 mt-0.5 tabular-nums">
-                        {negDelta === null ? "First check" : negDelta === 0 ? "No change" : negDelta > 0 ? `↑ ${negDelta} more` : `↓ ${Math.abs(negDelta)} fewer`}
-                      </p>
+                      <p className="text-[10px] font-semibold text-red-500/90 mt-1 leading-tight">Needs attention</p>
+                      {negDelta !== null && negDelta !== 0 && (
+                        <p className="text-[9px] font-medium tabular-nums mt-0.5 text-red-500">{negDelta > 0 ? `↑ ${negDelta}` : `↓ ${Math.abs(negDelta)}`}</p>
+                      )}
                     </div>
-                    <div className="rounded-[10px] bg-amber-50 border border-amber-100/60 p-2 text-center">
+                    <div className="rounded-[10px] bg-amber-50 border border-amber-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-amber-500 tabular-nums leading-none">{neutralInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-amber-600/90 mt-1 leading-tight tracking-normal">Monitor closely</p>
-                      <p className="text-[9px] text-slate-400 mt-0.5 tabular-nums">
-                        {neutralDelta === null ? "First check" : neutralDelta === 0 ? "No change" : neutralDelta > 0 ? `↑ ${neutralDelta} more` : `↓ ${Math.abs(neutralDelta)} fewer`}
-                      </p>
+                      <p className="text-[10px] font-semibold text-amber-600/90 mt-1 leading-tight">Monitor closely</p>
+                      {neutralDelta !== null && neutralDelta !== 0 && (
+                        <p className="text-[9px] font-medium tabular-nums mt-0.5 text-amber-600">{neutralDelta > 0 ? `↑ ${neutralDelta}` : `↓ ${Math.abs(neutralDelta)}`}</p>
+                      )}
                     </div>
-                    <div className="rounded-[10px] bg-emerald-50 border border-emerald-100/60 p-2 text-center">
+                    <div className="rounded-[10px] bg-emerald-50 border border-emerald-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-emerald-600 tabular-nums leading-none">{positiveInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-emerald-600/90 mt-1 leading-tight tracking-normal">Healthy signals</p>
-                      <p className="text-[9px] text-slate-400 mt-0.5 tabular-nums">
-                        {positiveDelta === null ? "First check" : positiveDelta === 0 ? "No change" : positiveDelta > 0 ? `↑ ${positiveDelta} more` : `↓ ${Math.abs(positiveDelta)} fewer`}
-                      </p>
+                      <p className="text-[10px] font-semibold text-emerald-600/90 mt-1 leading-tight">Healthy signals</p>
+                      {positiveDelta !== null && positiveDelta !== 0 && (
+                        <p className="text-[9px] font-medium tabular-nums mt-0.5 text-emerald-600">{positiveDelta > 0 ? `↑ ${positiveDelta}` : `↓ ${Math.abs(positiveDelta)}`}</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-1.5">
@@ -880,7 +880,7 @@ export default function PropertyHealthDetailPage() {
             <div className="px-4 pt-3 pb-0">
               <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Next Steps</p>
             </div>
-            <div className="px-3 py-3 flex-1 space-y-2">
+            <div className="px-3 py-3 space-y-2">
               <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`} className="block">
                 <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-3 py-2.5 cursor-pointer group">
                   <p className="text-[12px] font-semibold text-white tracking-normal">View maintenance actions</p>
@@ -897,7 +897,7 @@ export default function PropertyHealthDetailPage() {
                 </div>
               </Link>
             </div>
-            <div className="px-4 pt-2 pb-2.5 border-t border-slate-200/70">
+            <div className="px-4 pt-2 pb-2.5 border-t border-slate-200/70 mt-auto">
               <p className="text-[9px] font-semibold tracking-normal text-slate-400/80">
                 {sortedInsights.length > 0 ? `${sortedInsights.length} factors tracked` : "Awaiting data"}
               </p>
