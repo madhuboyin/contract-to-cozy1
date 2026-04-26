@@ -38,7 +38,6 @@ import type { Property } from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
 import { Button } from '@/components/ui/button';
 import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
-import { WelcomeSection } from '@/components/WelcomeSection';
 import { cn } from '@/lib/utils';
 import {
   SourceChip,
@@ -1740,16 +1739,6 @@ export default function ResolutionCenterClient() {
   return (
     <>
       <div className="pb-20">
-        {selectedPropertyId && properties.length > 0 && (
-          <WelcomeSection
-            userName="there"
-            properties={properties}
-            selectedPropertyId={selectedPropertyId}
-            onPropertyChange={setSelectedPropertyId}
-            compact
-          />
-        )}
-
         <div className="space-y-6">
           <PageHero
             eyebrow="Fix"

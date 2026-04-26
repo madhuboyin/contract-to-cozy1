@@ -3,6 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -10,6 +11,7 @@ import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { CtcCommandSearch } from './CtcCommandSearch';
 import { CtcPropertySelector } from './CtcPropertySelector';
+import { Property } from '@/types';
 
 interface CtcTopCommandBarProps {
   className?: string;
@@ -18,6 +20,17 @@ interface CtcTopCommandBarProps {
 function usePropertyData() {
   const { selectedPropertyId } = usePropertyContext();
 
+  // Fetch all properties
+  const { data: propertiesResponse } = useQuery({
+    queryKey: ['properties'],
+    queryFn: async () => {
+      const response = await api.getProperties();
+      return response.success ? response.data : null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch selected property details
   const { data: property } = useQuery({
     queryKey: ['property', selectedPropertyId],
     queryFn: async () => {
@@ -29,12 +42,13 @@ function usePropertyData() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Extract first line of address (street address)
+  const properties = propertiesResponse?.properties || [];
   const address = property?.address || 'Main Home';
 
   return {
     propertyId: selectedPropertyId,
     propertyAddress: address,
+    properties,
   };
 }
 
@@ -88,8 +102,20 @@ function AlertsButton({ count }: { count: number | null }) {
 }
 
 export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
-  const { propertyId, propertyAddress } = usePropertyData();
+  const router = useRouter();
+  const { setSelectedPropertyId } = usePropertyContext();
+  const { propertyId, propertyAddress, properties } = usePropertyData();
   const { alertsCount, tasksCount } = useAlertsCounts();
+
+  const handlePropertySelect = (newPropertyId: string) => {
+    setSelectedPropertyId(newPropertyId);
+    // Navigate to the property's dashboard
+    router.push(`/dashboard/properties/${newPropertyId}`);
+  };
+
+  const handleAddProperty = () => {
+    router.push('/dashboard/properties/new');
+  };
 
   return (
     <>
@@ -122,7 +148,13 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
             <CtcCommandSearch className="flex-1 max-w-[600px]" />
 
             {/* Center: Property Selector (bigger) */}
-            <CtcPropertySelector propertyAddress={propertyAddress} />
+            <CtcPropertySelector 
+              propertyAddress={propertyAddress}
+              properties={properties}
+              selectedPropertyId={propertyId}
+              onPropertySelect={handlePropertySelect}
+              onAddProperty={handleAddProperty}
+            />
 
             {/* Right: Alerts Only */}
             <div className="flex items-center gap-2 shrink-0">
@@ -175,7 +207,14 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
           {/* Mobile Property Selector - Horizontal Scroll */}
           <div className="pb-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">
             <div className="flex items-center gap-2 min-w-max">
-              <CtcPropertySelector propertyAddress={propertyAddress} className="shrink-0" />
+              <CtcPropertySelector 
+                propertyAddress={propertyAddress}
+                properties={properties}
+                selectedPropertyId={propertyId}
+                onPropertySelect={handlePropertySelect}
+                onAddProperty={handleAddProperty}
+                className="shrink-0"
+              />
             </div>
           </div>
         </div>

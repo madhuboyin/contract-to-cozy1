@@ -38,7 +38,6 @@ import { ExistingOwnerDashboard } from './components/ExistingOwnerDashboard';
 import { SeasonalBanner } from '@/components/seasonal/SeasonalBanner';
 import { SeasonalWidget } from '@/components/seasonal/SeasonalWidget';
 import { useHomeownerSegment } from '@/lib/hooks/useHomeownerSegment';
-import { WelcomeSection } from '@/components/WelcomeSection';
 import AhaHero from './components/AhaHero';
 import { RoomsSnapshotSection } from './components/RoomsSnapshotSection';
 import { LocalUpdatesCarousel } from '@/components/localUpdates/LocalUpdatesCarousel';
@@ -645,16 +644,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      {selectedProperty && properties.length > 0 && (
-        <WelcomeSection
-          userName={user?.firstName || 'there'}
-          properties={properties}
-          selectedPropertyId={effectiveSelectedPropertyId}
-          onPropertyChange={setSelectedPropertyId}
-          compact
-        />
-      )}
-
       <div className="max-w-7xl mx-auto px-4 md:px-6 w-full">
         <CommandCenterTemplate
           primaryAction={primaryActionHero}
