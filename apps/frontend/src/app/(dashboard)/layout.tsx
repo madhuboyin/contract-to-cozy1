@@ -98,10 +98,19 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
   const labJob = PRIMARY_JOBS.find(j => j.key === 'home-lab');
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Empty header space to align with top bar */}
-      <div className="h-[72px] flex items-center px-3 border-b border-slate-200/70 flex-shrink-0">
-      </div>
+    <div className="relative flex flex-col h-full">
+      {/* Floating Collapse/Expand Button - Centered on right edge */}
+      <button
+        onClick={onToggleCollapse}
+        className="absolute top-1/2 -right-3 z-50 flex items-center justify-center h-6 w-6 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-md transition-all text-slate-600 hover:text-slate-900 -translate-y-1/2"
+        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {isCollapsed ? (
+          <ChevronRight className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronLeft className="h-3.5 w-3.5" />
+        )}
+      </button>
 
       {/* Primary nav */}
       <nav className="flex-1 py-5 px-3 space-y-1 overflow-y-auto">
@@ -197,21 +206,6 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
             <Globe className="h-4 w-4 text-slate-400 flex-shrink-0" />
             {!isCollapsed && 'Community'}
           </Link>
-        </div>
-
-        {/* Collapse/Expand Button - Icon Only */}
-        <div className="pt-4 mt-3 border-t border-slate-200/70">
-          <button
-            onClick={onToggleCollapse}
-            className="flex items-center justify-center w-full px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-[14px] transition-all"
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </button>
         </div>
 
         {/* Admin links (ADMIN role only) */}
