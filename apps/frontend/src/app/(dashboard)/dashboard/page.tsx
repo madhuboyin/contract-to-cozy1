@@ -120,8 +120,9 @@ function resolvePriorityAlertSavings(
 }
 
 function buildTopCardActionMeta(
-  impactLabel: string,
-  etaLabel: string,
+  actionMetaLabel: string,
+  actionMetaValue: string,
+  actionMetaSupportingText: string,
 ): {
   actionMetaLabel: string;
   actionMetaValue: string;
@@ -129,11 +130,67 @@ function buildTopCardActionMeta(
   compactActionLayout: true;
 } {
   return {
-    actionMetaLabel: impactLabel,
-    actionMetaValue: etaLabel,
-    actionMetaSupportingText: 'Recommended next move',
+    actionMetaLabel,
+    actionMetaValue,
+    actionMetaSupportingText,
     compactActionLayout: true,
   };
+}
+
+function buildHealthInsightActionMeta(factorTitle: string) {
+  return buildTopCardActionMeta(
+    'Review in Health Score',
+    factorTitle,
+    'Check Current Health Focus and the factor ledger for what needs attention.',
+  );
+}
+
+function buildIncidentActionMeta(incidentTitle: string, potentialSavings: number) {
+  if (potentialSavings > 0) {
+    return buildTopCardActionMeta(
+      'Potential savings',
+      formatUsd(potentialSavings),
+      `Open ${incidentTitle} details to review the risk summary and recommended actions.`,
+    );
+  }
+
+  return buildTopCardActionMeta(
+    'Open incident detail',
+    incidentTitle,
+    'Review the risk summary, timeline, and next recommended actions.',
+  );
+}
+
+function buildSavingsActionMeta(amount: number) {
+  return buildTopCardActionMeta(
+    'Verified annual savings',
+    `${formatUsd(amount)}/yr`,
+    'Open Home Savings to review matched opportunities and compare next steps.',
+  );
+}
+
+function buildVaultActionMeta() {
+  return buildTopCardActionMeta(
+    'Start in Home Vault',
+    'Add your first record',
+    'Upload a receipt, appliance, or service document to unlock fuller guidance.',
+  );
+}
+
+function buildMaintenanceActionMeta(overdueCount: number) {
+  return buildTopCardActionMeta(
+    'Review in Fix',
+    `${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}`,
+    'Open the priority actions list to see what is overdue and what to do next.',
+  );
+}
+
+function buildDefaultActionMeta() {
+  return buildTopCardActionMeta(
+    'Open Health Score',
+    'Review your score drivers',
+    'Check current health focus and recent changes affecting the property score.',
+  );
 }
 
 function isRateLimitedError(error: unknown): boolean {
@@ -562,10 +619,7 @@ export default function DashboardPage() {
         href: `/dashboard/properties/${highSeverityIncident.propertyId}/incidents/${highSeverityIncident.id}`,
         impactLabel: 'Active home risk',
         etaLabel: 'ETA 2 min',
-        actionMetaLabel: 'Potential savings',
-        actionMetaValue: formatUsd(potentialSavings),
-        actionMetaSupportingText: 'Verified from live signals',
-        compactActionLayout: true,
+        ...buildIncidentActionMeta(highSeverityIncident.title, potentialSavings),
       };
     }
 
@@ -581,7 +635,7 @@ export default function DashboardPage() {
         href: resolveUrgentActionHref(topHealthInsight, effectiveSelectedPropertyId),
         impactLabel,
         etaLabel,
-        ...buildTopCardActionMeta(impactLabel, etaLabel),
+        ...buildHealthInsightActionMeta(topHealthInsight.title),
       };
     }
 
@@ -596,7 +650,7 @@ export default function DashboardPage() {
         href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings'),
         impactLabel,
         etaLabel,
-        ...buildTopCardActionMeta(impactLabel, etaLabel),
+        ...buildSavingsActionMeta(annualSavingsPotential),
       };
     }
 
@@ -611,7 +665,7 @@ export default function DashboardPage() {
         href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/vault'),
         impactLabel,
         etaLabel,
-        ...buildTopCardActionMeta(impactLabel, etaLabel),
+        ...buildVaultActionMeta(),
       };
     }
 
@@ -629,7 +683,7 @@ export default function DashboardPage() {
           : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/fix?focus=priority-actions'),
         impactLabel,
         etaLabel,
-        ...buildTopCardActionMeta(impactLabel, etaLabel),
+        ...buildMaintenanceActionMeta(overdueMaintenanceCount),
       };
     }
 
@@ -643,7 +697,7 @@ export default function DashboardPage() {
       href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
       impactLabel,
       etaLabel,
-      ...buildTopCardActionMeta(impactLabel, etaLabel),
+      ...buildDefaultActionMeta(),
     };
   })();
 
