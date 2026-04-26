@@ -149,10 +149,10 @@ function buildTopCardActionMeta(
 function buildHealthInsightActionMeta(factorTitle: string, healthScore: number) {
   return buildTopCardActionMeta(
     `Health Score · ${factorTitle}`,
-    'Review target: this factor is currently the highest-priority health driver.',
-    'Open Health Score and review Current Health Focus plus the factor ledger for what needs attention.',
+    'Open Health Score to review Current Health Focus and the factor ledger.',
+    'This factor is currently the clearest health driver to review first.',
     'Current property health',
-    `${healthScore} / 100 needs review`,
+    `${healthScore} / 100`,
     healthScore,
   );
 }
@@ -185,8 +185,8 @@ function buildIncidentActionMeta(incidentTitle: string, potentialSavings: number
   if (potentialSavings > 0) {
     return buildTopCardActionMeta(
       `Incident Detail · ${incidentTitle}`,
-      `Potential savings: ${formatUsd(potentialSavings)}`,
-      `Open ${incidentTitle} to review the risk summary, timeline, and recommended actions.`,
+      'Open the incident detail to review the risk summary and next actions.',
+      `Potential savings if handled now: ${formatUsd(potentialSavings)}`,
       'Savings if handled now',
       formatUsd(potentialSavings),
       Math.min(100, Math.max(18, Math.round((potentialSavings / 1000) * 100))),
@@ -196,7 +196,7 @@ function buildIncidentActionMeta(incidentTitle: string, potentialSavings: number
   return buildTopCardActionMeta(
     `Incident Detail · ${incidentTitle}`,
     'Review the incident timeline and next recommended actions.',
-    `Open ${incidentTitle} details to review the risk summary and mitigation steps.`,
+    'Open the detail page to review the risk summary and mitigation steps.',
     'Review status',
     'Needs attention',
     62,
@@ -206,8 +206,8 @@ function buildIncidentActionMeta(incidentTitle: string, potentialSavings: number
 function buildSavingsActionMeta(amount: number) {
   return buildTopCardActionMeta(
     'Home Savings',
+    'Open Home Savings to review matched opportunities and compare next steps.',
     `Verified annual opportunity: ${formatUsd(amount)}/yr`,
-    'Open Home Savings to review matched opportunities, compare next steps, and lock in the best savings move.',
     'Annual savings identified',
     `${formatUsd(amount)}/yr`,
     Math.min(100, Math.max(16, Math.round((amount / 1500) * 100))),
@@ -218,7 +218,7 @@ function buildVaultActionMeta() {
   return buildTopCardActionMeta(
     'Home Vault',
     'Start with one receipt, appliance, or service record.',
-    'Add your first record to unlock richer guidance, better maintenance context, and stronger trust signals.',
+    'Add one record to unlock better guidance and stronger home context.',
     'Records added',
     '0 items on file',
     8,
@@ -228,8 +228,8 @@ function buildVaultActionMeta() {
 function buildMaintenanceActionMeta(overdueCount: number) {
   return buildTopCardActionMeta(
     'Fix · Priority actions',
-    `${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} ranked for review.`,
-    'Open the priority actions list to see what is overdue first and what to do next.',
+    `Open the priority actions list to review ${overdueCount} overdue task${overdueCount === 1 ? '' : 's'}.`,
+    'See what is overdue first and what to do next.',
     'Priority queue',
     `${overdueCount} item${overdueCount === 1 ? '' : 's'} need attention`,
     Math.min(100, Math.max(20, overdueCount * 24)),
@@ -240,9 +240,9 @@ function buildDefaultActionMeta(healthScore: number) {
   return buildTopCardActionMeta(
     'Health Score overview',
     'Review score drivers, recent changes, and current health focus.',
-    'Open Health Score to understand what is helping, what is dragging the score down, and where to act next.',
+    'Open Health Score to see what is helping, what is dragging the score down, and where to act next.',
     'Current property health',
-    `${healthScore} / 100 overall score`,
+    `${healthScore} / 100 overall`,
     healthScore,
   );
 }
@@ -669,7 +669,7 @@ export default function DashboardPage() {
       const potentialSavings = resolvePriorityAlertSavings(highSeverityIncident, annualSavingsPotential);
       return {
         badgeLabel: buildIncidentBadgeLabel(),
-        title: `Priority alert: ${highSeverityIncident.title}`,
+        title: highSeverityIncident.title,
         subtitle: highSeverityIncident.summary || 'A critical home event requires your review to prevent escalation.',
         ctaLabel: 'Review incident',
         href: `/dashboard/properties/${highSeverityIncident.propertyId}/incidents/${highSeverityIncident.id}`,
@@ -686,8 +686,8 @@ export default function DashboardPage() {
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildHealthInsightBadgeLabel(),
-        title: `${topHealthInsight.title} needs attention — your top priority this week.`,
-        subtitle: null,
+        title: `${topHealthInsight.title} needs attention.`,
+        subtitle: 'Chosen because it best balances cost prevention, confidence, and effort.',
         ctaLabel: `Review ${topHealthInsight.title.toLowerCase()}`,
         href: resolveUrgentActionHref(topHealthInsight, effectiveSelectedPropertyId),
         impactLabel,
@@ -702,8 +702,8 @@ export default function DashboardPage() {
       const etaLabel = 'ETA 3 min';
       return {
         badgeLabel: buildSavingsBadgeLabel(),
-        title: `We found ${formatUsd(annualSavingsPotential)} in potential annual savings.`,
-        subtitle: null,
+        title: `${formatUsd(annualSavingsPotential)} in potential annual savings.`,
+        subtitle: 'Chosen because this is the clearest verified savings opportunity right now.',
         ctaLabel: 'See your savings',
         href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings'),
         impactLabel,
@@ -718,8 +718,8 @@ export default function DashboardPage() {
       const etaLabel = 'ETA 90 sec';
       return {
         badgeLabel: buildVaultBadgeLabel(),
-        title: 'Start building your Home Vault for full intelligence.',
-        subtitle: null,
+        title: 'Start building your Home Vault.',
+        subtitle: 'Adding one core record unlocks stronger guidance across the dashboard.',
         ctaLabel: 'Add your first item',
         href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/vault'),
         impactLabel,
@@ -735,8 +735,8 @@ export default function DashboardPage() {
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildMaintenanceBadgeLabel(),
-        title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need${overdueMaintenanceCount === 1 ? 's' : ''} attention.`,
-        subtitle: null,
+        title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need attention.`,
+        subtitle: 'Chosen because these items are overdue and ranked highest for review.',
         ctaLabel: 'Fix overdue tasks',
         href: primaryOverdueAction
           ? resolveUrgentActionHref(primaryOverdueAction, effectiveSelectedPropertyId)
@@ -752,8 +752,8 @@ export default function DashboardPage() {
     const etaLabel = 'ETA 1 min';
     return {
       badgeLabel: buildDefaultBadgeLabel(),
-      title: 'All systems healthy — schedule your next maintenance check.',
-      subtitle: null,
+      title: 'All systems healthy.',
+      subtitle: 'Review your score drivers and current health focus to stay ahead of issues.',
       ctaLabel: 'View full report',
       href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
       impactLabel,
