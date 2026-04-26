@@ -307,8 +307,11 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
 
   const propertyQuery = actionPropertyId ? `?propertyId=${encodeURIComponent(actionPropertyId)}` : '';
 
-  if (action.type === 'INCIDENT') {
+  if (action.type === 'INCIDENT' && actionPropertyId) {
     return `/dashboard/properties/${actionPropertyId}/incidents/${action.id}`;
+  }
+  if (action.type === 'HEALTH_INSIGHT' && actionPropertyId) {
+    return `/dashboard/properties/${actionPropertyId}/health-score`;
   }
   if (action.type === 'MAINTENANCE_OVERDUE') {
     return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=overdue` : '?filter=overdue'}`;
@@ -526,7 +529,9 @@ export default function DashboardPage() {
   const scopedUrgentActions = data.urgentActions.filter(
     (action) => action.propertyId === effectiveSelectedPropertyId
   );
-  const primaryUrgentAction = scopedUrgentActions[0] || data.urgentActions[0];
+  const scopedActiveIncidents = data.activeIncidents.filter(
+    (incident) => incident.propertyId === effectiveSelectedPropertyId
+  );
 
   const annualSavingsPotential = Math.max(0, Math.round(homeSavingsSummaryQuery.data?.potentialAnnualSavings ?? 0));
   const riskExposureGap = Math.max(0, Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0));
@@ -545,13 +550,16 @@ export default function DashboardPage() {
 
   const heroNarrative = (() => {
     // 1. Open Urgent Incident
-    const highSeverityIncident = data.activeIncidents.find(inc => inc.severity === 'CRITICAL' || inc.severity === 'WARNING');
+    const highSeverityIncident =
+      scopedActiveIncidents.find((incident) => incident.severity === 'CRITICAL' || incident.severity === 'WARNING') ||
+      data.activeIncidents.find((incident) => incident.severity === 'CRITICAL' || incident.severity === 'WARNING');
     if (highSeverityIncident) {
       const potentialSavings = resolvePriorityAlertSavings(highSeverityIncident, annualSavingsPotential);
       return {
         title: `Priority alert: ${highSeverityIncident.title}`,
         subtitle: highSeverityIncident.summary || 'A critical home event requires your review to prevent escalation.',
         ctaLabel: 'Review incident',
+        href: `/dashboard/properties/${highSeverityIncident.propertyId}/incidents/${highSeverityIncident.id}`,
         impactLabel: 'Active home risk',
         etaLabel: 'ETA 2 min',
         actionMetaLabel: 'Potential savings',
@@ -570,6 +578,7 @@ export default function DashboardPage() {
         title: `${topHealthInsight.title} needs attention — your top priority this week.`,
         subtitle: null,
         ctaLabel: `Review ${topHealthInsight.title.toLowerCase()}`,
+        href: resolveUrgentActionHref(topHealthInsight, effectiveSelectedPropertyId),
         impactLabel,
         etaLabel,
         ...buildTopCardActionMeta(impactLabel, etaLabel),
@@ -584,6 +593,7 @@ export default function DashboardPage() {
         title: `We found ${formatUsd(annualSavingsPotential)} in potential annual savings.`,
         subtitle: null,
         ctaLabel: 'See your savings',
+        href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/home-savings'),
         impactLabel,
         etaLabel,
         ...buildTopCardActionMeta(impactLabel, etaLabel),
@@ -598,6 +608,7 @@ export default function DashboardPage() {
         title: 'Start building your Home Vault for full intelligence.',
         subtitle: null,
         ctaLabel: 'Add your first item',
+        href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/vault'),
         impactLabel,
         etaLabel,
         ...buildTopCardActionMeta(impactLabel, etaLabel),
@@ -605,6 +616,7 @@ export default function DashboardPage() {
     }
 
     // 5. Maintenance Overdue
+    const primaryOverdueAction = scopedUrgentActions.find((action) => action.type === 'MAINTENANCE_OVERDUE');
     if (overdueMaintenanceCount > 0) {
       const impactLabel = 'Preventative win';
       const etaLabel = 'ETA 2 min';
@@ -612,6 +624,9 @@ export default function DashboardPage() {
         title: `${overdueMaintenanceCount} maintenance task${overdueMaintenanceCount === 1 ? '' : 's'} need${overdueMaintenanceCount === 1 ? 's' : ''} attention.`,
         subtitle: null,
         ctaLabel: 'Fix overdue tasks',
+        href: primaryOverdueAction
+          ? resolveUrgentActionHref(primaryOverdueAction, effectiveSelectedPropertyId)
+          : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/fix?focus=priority-actions'),
         impactLabel,
         etaLabel,
         ...buildTopCardActionMeta(impactLabel, etaLabel),
@@ -625,15 +640,12 @@ export default function DashboardPage() {
       title: 'All systems healthy — schedule your next maintenance check.',
       subtitle: null,
       ctaLabel: 'View full report',
+      href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
       impactLabel,
       etaLabel,
       ...buildTopCardActionMeta(impactLabel, etaLabel),
     };
   })();
-
-  const ahaCtaHref = primaryUrgentAction
-    ? resolveUrgentActionHref(primaryUrgentAction, effectiveSelectedPropertyId)
-    : buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/vault');
 
   if (userLoading || data.isLoading || !redirectChecked) {
     return <DashboardRouteState state="loading" title="Preparing your command center" description="Syncing your latest home intelligence..." />;
@@ -723,8 +735,9 @@ export default function DashboardPage() {
         actionLabel={heroNarrative.ctaLabel}
         actionMetaLabel={heroNarrative.actionMetaLabel}
         actionMetaValue={heroNarrative.actionMetaValue}
+        actionMetaSupportingText={heroNarrative.actionMetaSupportingText}
         compactActionLayout={heroNarrative.compactActionLayout}
-        onAction={() => router.push(ahaCtaHref)}
+        onAction={() => router.push(heroNarrative.href)}
         isUrgent={data.activeIncidents.length > 0 || overdueMaintenanceCount > 0}
         trust={{
           confidenceLabel: 'High confidence',
