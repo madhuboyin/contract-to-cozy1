@@ -38,6 +38,26 @@ function getItemId(query?: QueryReader | null): string | null {
 }
 
 const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
+  '/dashboard/health-score': {
+    navTarget: 'health-score',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/health-score`, query),
+  },
+  '/dashboard/fix': {
+    navTarget: 'fix',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/fix`, query),
+  },
+  '/dashboard/save': {
+    navTarget: 'save',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/save`, query),
+  },
+  '/dashboard/vault': {
+    navTarget: 'vault',
+    toPropertyHref: (propertyId, query) =>
+      buildHref(`/dashboard/properties/${propertyId}/vault`, query),
+  },
   '/dashboard/coverage-intelligence': {
     navTarget: 'coverage-intelligence',
     toPropertyHref: (propertyId, query) =>
@@ -208,6 +228,10 @@ const DASHBOARD_ROUTE_RESOLVERS: Record<string, RouteResolver> = {
 };
 
 const NAV_TARGET_SUFFIXES: Record<string, string> = {
+  'health-score': 'health-score',
+  fix: 'fix',
+  save: 'save',
+  vault: 'vault',
   'coverage-intelligence': 'tools/coverage-intelligence',
   'risk-premium-optimizer': 'tools/risk-premium-optimizer',
   'do-nothing': 'tools/do-nothing',

@@ -584,6 +584,9 @@ export default function DashboardPage() {
   if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;
 
   const healthScore = selectedProperty?.healthScore?.totalScore ?? 82;
+  const healthScoreHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score');
+  const priorityActionsHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/fix');
+  const protectedValueHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/save');
   const primaryActionHero = (
     <div className="space-y-6">
       <PageHero
@@ -615,9 +618,33 @@ export default function DashboardPage() {
         }
       >
         <div className="grid gap-3 md:grid-cols-3">
-          <MetricTile label="Health score" value={healthScore} hint="Current property signal" tone={healthScore >= 80 ? 'success' : 'warning'} />
-          <MetricTile label="Priority actions" value={data.urgentActions.slice(0, 3).length} hint="Top 3 ranked moves" tone={data.urgentActions.length > 0 ? 'warning' : 'success'} />
-          <MetricTile label="Protected value" value={formatUsd(Math.max(544, annualSavingsPotential || 544))} hint="Savings and exposure tracked this year" tone="brand" />
+          <Link href={healthScoreHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
+            <MetricTile
+              label="Health score"
+              value={healthScore}
+              hint="Current property signal"
+              tone={healthScore >= 80 ? 'success' : 'warning'}
+              className="h-full cursor-pointer"
+            />
+          </Link>
+          <Link href={priorityActionsHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
+            <MetricTile
+              label="Priority actions"
+              value={data.urgentActions.slice(0, 3).length}
+              hint="Top 3 ranked moves"
+              tone={data.urgentActions.length > 0 ? 'warning' : 'success'}
+              className="h-full cursor-pointer"
+            />
+          </Link>
+          <Link href={protectedValueHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
+            <MetricTile
+              label="Protected value"
+              value={formatUsd(Math.max(544, annualSavingsPotential || 544))}
+              hint="Savings and exposure tracked this year"
+              tone="brand"
+              className="h-full cursor-pointer"
+            />
+          </Link>
         </div>
       </PageHero>
 

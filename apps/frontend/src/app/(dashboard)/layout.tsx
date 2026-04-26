@@ -199,26 +199,17 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
           </Link>
         </div>
 
-        {/* Collapse/Expand Button */}
+        {/* Collapse/Expand Button - Icon Only */}
         <div className="pt-4 mt-3 border-t border-slate-200/70">
           <button
             onClick={onToggleCollapse}
-            className={cn(
-              'flex items-center rounded-[14px] text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all w-full',
-              isCollapsed ? 'justify-center px-3 py-2' : 'gap-2 px-3 py-2'
-            )}
+            className="flex items-center justify-center w-full px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-[14px] transition-all"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? (
-              <>
-                <ChevronRight className="h-4 w-4" />
-                <span>Expand</span>
-              </>
+              <ChevronRight className="h-4 w-4" />
             ) : (
-              <>
-                <ChevronLeft className="h-4 w-4" />
-                <span>Collapse</span>
-              </>
+              <ChevronLeft className="h-4 w-4" />
             )}
           </button>
         </div>

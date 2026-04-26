@@ -14,6 +14,21 @@ describe('buildPropertyAwareDashboardHref', () => {
     expect(href).toBe('/dashboard/properties/property-123/tools/home-savings');
   });
 
+  it('maps health-score dashboard route to canonical property route', () => {
+    const href = buildPropertyAwareDashboardHref('property-123', '/dashboard/health-score');
+    expect(href).toBe('/dashboard/properties/property-123/health-score');
+  });
+
+  it('maps fix dashboard route to canonical property route', () => {
+    const href = buildPropertyAwareDashboardHref('property-123', '/dashboard/fix');
+    expect(href).toBe('/dashboard/properties/property-123/fix');
+  });
+
+  it('maps save dashboard route to canonical property route', () => {
+    const href = buildPropertyAwareDashboardHref('property-123', '/dashboard/save');
+    expect(href).toBe('/dashboard/properties/property-123/save');
+  });
+
   it('preserves query params on mapped routes and removes propertyId from source query', () => {
     const href = buildPropertyAwareDashboardHref(
       'property-123',
