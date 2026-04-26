@@ -7,6 +7,8 @@
  * 3. Target dashboard pages share this shell through the dashboard route group; /knowledge is outside that group today.
  * 4. ResolutionCenterClient previously rendered a page-level right rail; AppShell now owns the shared RightSidebar.
  * 5. RightSidebar reuses existing cached property health, score snapshot, orchestration, incident, booking, and resolution queries.
+ * 6. CtcTopCommandBar is now integrated as topBar prop, providing premium command/context layer above content.
+ * 7. When topBar is provided, it replaces the legacy mobileHeader for a unified experience.
  */
 
 import React from 'react';
@@ -14,18 +16,24 @@ import { RightSidebar } from '@/components/layout/RightSidebar';
 
 type AppShellProps = {
   leftNav: React.ReactNode;
-  mobileHeader: React.ReactNode;
+  mobileHeader?: React.ReactNode;
+  topBar?: React.ReactNode;
   banner?: React.ReactNode;
   children: React.ReactNode;
 };
 
-export function AppShell({ leftNav, mobileHeader, banner, children }: AppShellProps) {
+export function AppShell({ leftNav, mobileHeader, topBar, banner, children }: AppShellProps) {
   return (
     <div className="flex min-h-screen bg-[var(--ctc-surface-base)] text-slate-950">
       {leftNav}
 
       <div className="flex min-w-0 flex-1 flex-col md:pl-[246px]">
-        {mobileHeader}
+        {/* Top command bar (replaces mobile header on mobile, adds desktop bar) */}
+        {topBar}
+        
+        {/* Legacy mobile header - only shown if topBar is not provided */}
+        {!topBar && mobileHeader}
+        
         {banner}
 
         <div className="flex min-w-0 flex-1">

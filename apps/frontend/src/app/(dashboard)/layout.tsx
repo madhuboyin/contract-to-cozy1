@@ -39,6 +39,7 @@ import { PullToRefresh } from '@/components/mobile/PullToRefresh';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
 import DashboardBreadcrumbs from '@/components/navigation/DashboardBreadcrumbs';
 import { AppShell } from '@/components/layout/AppShell';
+import { CtcTopCommandBar } from '@/components/layout/CtcTopCommandBar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -508,6 +509,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
               <PersistentSidebarNav user={user} />
             </aside>
           }
+          topBar={<CtcTopCommandBar />}
           mobileHeader={
             <header className="md:hidden sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl safe-area-inset-top">
               <div
