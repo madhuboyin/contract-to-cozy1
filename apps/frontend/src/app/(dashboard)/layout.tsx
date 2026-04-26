@@ -100,21 +100,22 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
   return (
     <div className="flex flex-col h-full">
       {/* Collapse/Expand Button */}
-      <div className="h-[72px] flex items-center justify-between px-3 border-b border-slate-200/70 flex-shrink-0">
-        {!isCollapsed && (
-          <span className="text-xs font-semibold text-slate-400 tracking-wide uppercase">
-            Menu
-          </span>
-        )}
+      <div className="h-[72px] flex items-center px-3 border-b border-slate-200/70 flex-shrink-0">
         <button
           onClick={onToggleCollapse}
-          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors ml-auto"
+          className="flex items-center gap-2 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isCollapsed ? (
-            <ChevronRight className="h-4 w-4 text-slate-600" />
+            <>
+              <ChevronRight className="h-4 w-4" />
+              <span>Expand</span>
+            </>
           ) : (
-            <ChevronLeft className="h-4 w-4 text-slate-600" />
+            <>
+              <ChevronLeft className="h-4 w-4" />
+              <span>Collapse</span>
+            </>
           )}
         </button>
       </div>
