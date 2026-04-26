@@ -138,7 +138,7 @@ export default function CoverageIntelligenceToolCard({
         const latest = await runCoverageAnalysis(propertyId);
         setHasAnalysis(true);
         setAnalysis(latest);
-        router.push(`/dashboard/properties/${propertyId}/tools/coverage-intelligence`);
+        router.push(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?source=dashboard-card&action=run&verdict=${latest.overallVerdict}`);
       } finally {
         setRunning(false);
       }
@@ -146,7 +146,7 @@ export default function CoverageIntelligenceToolCard({
     }
 
     if (propertyId) {
-      router.push(`/dashboard/properties/${propertyId}/tools/coverage-intelligence`);
+      router.push(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?source=dashboard-card&hasAnalysis=${hasAnalysis}&status=${analysis?.status || 'ready'}`);
     }
   };
 

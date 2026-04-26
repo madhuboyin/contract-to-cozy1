@@ -129,14 +129,14 @@ export default function DoNothingSimulatorToolCard({
         });
         setHasRun(true);
         setRun(next);
-        router.push(`/dashboard/properties/${propertyId}/tools/do-nothing`);
+        router.push(`/dashboard/properties/${propertyId}/tools/do-nothing?source=dashboard-card&action=run&horizon=${next.horizonMonths}`);
       } finally {
         setRunning(false);
       }
       return;
     }
 
-    router.push(`/dashboard/properties/${propertyId}/tools/do-nothing`);
+    router.push(`/dashboard/properties/${propertyId}/tools/do-nothing?source=dashboard-card&hasRun=${hasRun}&status=${run?.status || 'new'}`);
   };
 
   const status = statusMeta(loading, run, hasRun);

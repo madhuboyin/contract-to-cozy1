@@ -109,14 +109,14 @@ export default function RiskPremiumOptimizerToolCard({
         const latest = await runRiskPremiumOptimizer(propertyId);
         setHasAnalysis(true);
         setAnalysis(latest);
-        router.push(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer`);
+        router.push(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer?source=dashboard-card&action=run&savingsRange=${encodeURIComponent(savingsRange)}`);
       } finally {
         setRunning(false);
       }
       return;
     }
 
-    router.push(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer`);
+    router.push(`/dashboard/properties/${propertyId}/tools/risk-premium-optimizer?source=dashboard-card&hasAnalysis=${hasAnalysis}&status=${analysis?.status || 'ready'}`);
   };
 
   const status = statusMeta(loading, analysis, hasAnalysis);

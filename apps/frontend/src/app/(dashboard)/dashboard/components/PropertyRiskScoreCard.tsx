@@ -256,10 +256,21 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
       </div>
 
       <Link
-        href={reportLink}
+        href={
+          totalExposure > 0 
+            ? `${reportLink}${weeklyChange !== "No change" ? '&view=trends' : ''}`
+            : weeklyChange !== "No change"
+            ? `${reportLink}?view=trends`
+            : reportLink
+        }
         className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
-        {totalExposure > 0 ? 'Review exposure details' : 'Open risk details'}
+        {totalExposure > 0 
+          ? 'Review exposure details' 
+          : weeklyChange !== "No change"
+          ? 'View risk trends'
+          : 'Open risk details'
+        }
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
       </Link>
     </div>

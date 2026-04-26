@@ -157,11 +157,18 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         href={
           maintenanceCount > 0
             ? `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&priority=high`
+            : weeklyChange !== "No change"
+            ? buildPropertyAwareDashboardHref(property.id, '/dashboard/health-score?view=trends')
             : buildPropertyAwareDashboardHref(property.id, '/dashboard/health-score')
         }
         className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
-        {maintenanceCount > 0 ? 'Review maintenance items' : 'Open health details'}
+        {maintenanceCount > 0 
+          ? 'Review maintenance items' 
+          : weeklyChange !== "No change"
+          ? 'View health trends'
+          : 'Open health details'
+        }
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
       </Link>
     </div>
