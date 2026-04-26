@@ -585,8 +585,14 @@ export default function DashboardPage() {
 
   const healthScore = selectedProperty?.healthScore?.totalScore ?? 82;
   const healthScoreHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score');
-  const priorityActionsHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/fix');
-  const protectedValueHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/save');
+  const priorityActionsHref = buildPropertyAwareDashboardHref(
+    effectiveSelectedPropertyId,
+    '/dashboard/fix?focus=priority-actions',
+  );
+  const protectedValueHref = buildPropertyAwareDashboardHref(
+    effectiveSelectedPropertyId,
+    '/dashboard/save?focus=protected-value',
+  );
   const primaryActionHero = (
     <div className="space-y-6">
       <PageHero

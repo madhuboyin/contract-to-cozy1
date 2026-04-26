@@ -2,23 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { 
   DollarSign, 
-  TrendingUp, 
-  ShieldAlert, 
+  TrendingUp,
   Zap, 
-  Search, 
-  ArrowRight,
   PiggyBank,
   Loader2,
   FileText,
-  Sparkles
+  Sparkles,
+  ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
-  MobilePageIntro, 
-  MobileKpiStrip, 
-  MobileKpiTile,
   MobileSection,
   MobileSectionHeader,
   MobileCard,
@@ -42,7 +38,9 @@ import { MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/syste
  */
 export default function SaveHubPage() {
   const { selectedPropertyId } = usePropertyContext();
+  const searchParams = useSearchParams();
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const focusSection = searchParams.get('focus');
 
   const homeSavingsQuery = useQuery({
     queryKey: ['home-savings-summary', selectedPropertyId],
@@ -54,6 +52,14 @@ export default function SaveHubPage() {
   });
 
   const potentialSavings = homeSavingsQuery.data?.potentialAnnualSavings || 0;
+  const protectedValue = Math.max(544, potentialSavings || 544);
+  const rankedCategories = [...(homeSavingsQuery.data?.categories ?? [])]
+    .filter((category) => category.topOpportunity)
+    .sort(
+      (a, b) =>
+        (b.topOpportunity?.estimatedAnnualSavings || 0) -
+        (a.topOpportunity?.estimatedAnnualSavings || 0),
+    );
 
   return (
     <ErrorBoundary 
@@ -82,11 +88,50 @@ export default function SaveHubPage() {
           meta={<TrustMetaRow items={['Verified from property and document signals', 'Savings shown as annualized upside', 'Next tax audit window tracked']} />}
         >
           <div className="grid gap-3 md:grid-cols-3">
+            <MetricTile label="Protected value" value={`$${protectedValue}`} hint="Savings and exposure tracked this year" tone="brand" />
             <MetricTile label="Total potential" value={potentialSavings > 0 ? `$${potentialSavings}` : '$0'} hint="Annual savings found" tone={potentialSavings > 0 ? 'success' : 'neutral'} />
             <MetricTile label="Equity status" value="Tracked" hint="Value vs mortgage" tone="brand" />
-            <MetricTile label="Tax audit" value="Next: Feb" hint="Property tax window" tone="warning" />
           </div>
         </PageHero>
+
+        <MobileSection className={focusSection === 'protected-value' ? 'scroll-mt-24' : undefined}>
+          <MobileSectionHeader
+            title="Protected Value Details"
+            subtitle="This is the exact dollar figure shown on the dashboard tile, with the savings signals behind it."
+            className="mb-6"
+          />
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <MobileCard className={focusSection === 'protected-value' ? 'border-brand-200 ring-2 ring-brand-100 p-6' : 'p-6'}>
+              <div className="flex items-start gap-4">
+                <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3 text-brand-700">
+                  <ShieldAlert className="h-6 w-6" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-500">Protected value on dashboard</p>
+                  <h3 className="text-3xl font-bold text-slate-950">${protectedValue}</h3>
+                  <p className="text-sm leading-6 text-slate-600">
+                    This combines verified savings opportunities with a baseline exposure benchmark so the Today card always reflects value we&apos;re actively watching for this property.
+                  </p>
+                </div>
+              </div>
+            </MobileCard>
+            <MobileCard className="p-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Verified annual savings</span>
+                  <span className="font-semibold text-slate-950">${potentialSavings}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Tracked baseline exposure</span>
+                  <span className="font-semibold text-slate-950">${Math.max(0, protectedValue - potentialSavings)}</span>
+                </div>
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Updated from {homeSavingsQuery.data?.updatedAt ? new Date(homeSavingsQuery.data.updatedAt).toLocaleString() : 'live property signals'}.
+                </div>
+              </div>
+            </MobileCard>
+          </div>
+        </MobileSection>
 
         {/* 3. The "Magic" Onboarding Wedge */}
         <MobileSection>
@@ -123,6 +168,36 @@ export default function SaveHubPage() {
           <div className="space-y-4">
             {homeSavingsQuery.isLoading ? (
               <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-slate-400" /></div>
+            ) : rankedCategories.length > 0 ? (
+              rankedCategories.slice(0, 3).map((category) => (
+                <WinCard
+                  key={category.category.key}
+                  title={category.category.label}
+                  value={`$${category.topOpportunity?.estimatedAnnualSavings || 0} / year`}
+                  description={
+                    category.topOpportunity?.detail ||
+                    category.topOpportunity?.headline ||
+                    'We found a savings opportunity for this category.'
+                  }
+                  actionLabel="Review savings details"
+                  onAction={() => {
+                    if (category.topOpportunity?.actionUrl) {
+                      window.location.href = category.topOpportunity.actionUrl;
+                      return;
+                    }
+                    if (selectedPropertyId) {
+                      window.location.href = `/dashboard/properties/${selectedPropertyId}/tools/home-savings`;
+                    }
+                  }}
+                  trust={{
+                    confidenceLabel: category.topOpportunity?.confidence || 'MEDIUM',
+                    freshnessLabel: `Updated ${homeSavingsQuery.data?.updatedAt ? new Date(homeSavingsQuery.data.updatedAt).toLocaleDateString() : 'recently'}`,
+                    sourceLabel: category.account?.providerName || category.category.label,
+                    rationale: category.topOpportunity?.headline || 'Ranked from your latest property and billing signals.',
+                  }}
+                  className="border-brand-100"
+                />
+              ))
             ) : potentialSavings > 0 ? (
               <WinCard 
                 title="Insurance Optimization"

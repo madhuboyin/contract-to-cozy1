@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Wrench, 
   Search, 
@@ -26,9 +26,49 @@ import {
 import { WinCard } from '@/components/shared/WinCard';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import { Booking } from '@/types';
+import { Booking, ScoredProperty } from '@/types';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
+import { listIncidents } from '../incidents/incidentsApi';
+import {
+  consolidateUrgentActions,
+  getChecklistEntries,
+  resolveUrgentActionHref,
+  UrgentActionItem,
+} from '@/lib/dashboard/urgentActions';
+
+function priorityActionTone(action: UrgentActionItem): {
+  confidenceLabel: string;
+  sourceLabel: string;
+  rationale: string;
+} {
+  if (action.type === 'INCIDENT') {
+    return {
+      confidenceLabel: action.severity || 'WARNING',
+      sourceLabel: 'Incident monitoring',
+      rationale: 'Triggered by a live property signal that needs attention.',
+    };
+  }
+  if (action.type === 'HEALTH_INSIGHT') {
+    return {
+      confidenceLabel: 'High confidence',
+      sourceLabel: 'Health score engine',
+      rationale: 'This action directly affects your property health score.',
+    };
+  }
+  if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
+    return {
+      confidenceLabel: 'Time-sensitive',
+      sourceLabel: 'Coverage tracking',
+      rationale: 'Coverage timing can create avoidable exposure if missed.',
+    };
+  }
+  return {
+    confidenceLabel: 'Needs action',
+    sourceLabel: 'Maintenance tracking',
+    rationale: 'This item is overdue and should be resolved soon.',
+  };
+}
 
 /**
  * ResolutionHubPage unifies three engines:
@@ -40,21 +80,41 @@ import { ErrorBoundary } from '@/components/system/ErrorBoundary';
  */
 export default function ResolutionHubPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolutions, setResolutions] = useState<any[]>([]);
+  const [priorityActions, setPriorityActions] = useState<UrgentActionItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const focusSection = searchParams.get('focus');
+  const priorityActionCount = priorityActions.slice(0, 3).length;
+  const activeIncidentsCount = priorityActions.filter((action) => action.type === 'INCIDENT').length;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [bookingsRes, resolutionsRes] = await Promise.all([
+      const [
+        bookingsRes,
+        resolutionsRes,
+        propertiesRes,
+        checklistRes,
+        warrantiesRes,
+        policiesRes,
+        incidentsRes,
+      ] = await Promise.all([
         api.listBookings({ propertyId: selectedPropertyId || undefined }),
         selectedPropertyId
           ? api.getPropertyResolutions(selectedPropertyId)
           : Promise.resolve({ success: true, data: [] }),
+        api.getProperties().catch(() => ({ success: false, data: { properties: [] } })),
+        api.getHomeBuyerChecklist().catch(() => ({ success: false, data: null })),
+        api.listWarranties(selectedPropertyId || undefined).catch(() => ({ success: false, data: { warranties: [] } })),
+        api.listInsurancePolicies(selectedPropertyId || undefined).catch(() => ({ success: false, data: { policies: [] } })),
+        selectedPropertyId
+          ? listIncidents({ propertyId: selectedPropertyId, limit: 10 }).catch(() => ({ items: [] }))
+          : Promise.resolve({ items: [] }),
       ]);
 
       const errors: string[] = [];
@@ -76,6 +136,38 @@ export default function ResolutionHubPage() {
             : 'Unable to load repair analyses.';
         errors.push(resolutionErrorMessage);
       }
+
+      const scoredProperties = propertiesRes.success
+        ? (propertiesRes.data.properties
+            .filter((property) => !selectedPropertyId || property.id === selectedPropertyId)
+            .map((property) => ({
+              ...property,
+              healthScore: (property as unknown as ScoredProperty).healthScore || {
+                totalScore: 0,
+                baseScore: 0,
+                unlockedScore: 0,
+                maxPotentialScore: 0,
+                maxBaseScore: 0,
+                maxExtraScore: 0,
+                insights: [],
+                ctaNeeded: false,
+              },
+            })) as ScoredProperty[])
+        : [];
+      const checklist = checklistRes.success ? checklistRes.data : null;
+      const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
+      const policies = policiesRes.success ? policiesRes.data.policies : [];
+      const activeIncidents = (incidentsRes as { items?: any[] }).items ?? [];
+
+      setPriorityActions(
+        consolidateUrgentActions(
+          scoredProperties,
+          getChecklistEntries(checklist),
+          warranties,
+          policies,
+          activeIncidents,
+        ),
+      );
 
       if (errors.length > 0) {
         setLoadError(errors.join(' '));
@@ -105,7 +197,7 @@ export default function ResolutionHubPage() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Resolution Hub Standby</h1>
           <p className="text-slate-500 mt-2 max-w-sm mx-auto">
-            We're reconnecting with our service provider network. Please refresh in a few moments.
+            We&apos;re reconnecting with our service provider network. Please refresh in a few moments.
           </p>
           <Button className="mt-8 rounded-xl h-11 px-8 bg-brand-600" onClick={() => window.location.reload()}>
             Refresh Hub
@@ -134,18 +226,63 @@ export default function ResolutionHubPage() {
             tone={activeBookings.length > 0 ? 'positive' : 'neutral'} 
           />
           <MobileKpiTile 
-            label="Decisions" 
-            value={resolutions.length} 
-            hint="Items needing review" 
+            label="Priority actions" 
+            value={priorityActionCount} 
+            hint="Top moves from Today" 
             tone="warning"
           />
           <MobileKpiTile 
-            label="Emergencies" 
-            value={0} 
-            hint="24/7 help available" 
-            tone="neutral"
+            label="Live incidents" 
+            value={activeIncidentsCount} 
+            hint={activeIncidentsCount > 0 ? 'Signal-driven issues' : 'No active incident'} 
+            tone={activeIncidentsCount > 0 ? 'warning' : 'neutral'}
           />
         </div>
+
+        <MobileSection className={focusSection === 'priority-actions' ? 'scroll-mt-24' : undefined}>
+          <MobileSectionHeader
+            title="Priority Actions"
+            subtitle="These are the exact ranked items behind the dashboard count."
+            className="mb-6"
+          />
+          <div className="space-y-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-8"><Loader2 className="animate-spin text-slate-400" /></div>
+            ) : priorityActions.length > 0 ? (
+              priorityActions.slice(0, 3).map((action) => {
+                const trust = priorityActionTone(action);
+                return (
+                  <WinCard
+                    key={action.id}
+                    title={action.title}
+                    value={action.type.replace(/_/g, ' ')}
+                    description={action.description}
+                    actionLabel="Open action details"
+                    onAction={() => router.push(resolveUrgentActionHref(action, selectedPropertyId || undefined))}
+                    isUrgent={action.type === 'INCIDENT' || action.type === 'RENEWAL_EXPIRED'}
+                    trust={{
+                      confidenceLabel: trust.confidenceLabel,
+                      freshnessLabel: action.dueDate ? `Due ${action.dueDate.toLocaleDateString()}` : 'Ranked today',
+                      sourceLabel: trust.sourceLabel,
+                      rationale: trust.rationale,
+                    }}
+                    className={focusSection === 'priority-actions' ? 'border-brand-200 ring-2 ring-brand-100' : undefined}
+                  />
+                );
+              })
+            ) : (
+              <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
+                <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+                </div>
+                <h4 className="text-lg font-bold text-slate-900">No Priority Actions Right Now</h4>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
+                  Your dashboard count is at zero because we didn&apos;t find incidents, overdue maintenance, or urgent renewals for this property.
+                </p>
+              </MobileCard>
+            )}
+          </div>
+        </MobileSection>
 
         {/* 3. Concierge Entry Points: "How can we help?" */}
         <MobileSection className="pt-4">
@@ -158,7 +295,7 @@ export default function ResolutionHubPage() {
             >
               <Link href={selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}>
                 <Zap className="h-8 w-8 text-brand-600 mb-4 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-lg text-slate-900 block">Something's Broken</span>
+                <span className="font-bold text-lg text-slate-900 block">Something&apos;s Broken</span>
                 <span className="text-sm text-slate-500 mt-1">AI-driven troubleshooting and repair vs. replace guidance.</span>
               </Link>
             </Button>
