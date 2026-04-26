@@ -123,25 +123,37 @@ function buildTopCardActionMeta(
   actionMetaLabel: string,
   actionMetaValue: string,
   actionMetaSupportingText: string,
+  actionProgressLabel?: string,
+  actionProgressValue?: string,
+  actionProgressPercent?: number,
 ): {
   actionMetaLabel: string;
   actionMetaValue: string;
   actionMetaSupportingText: string;
+  actionProgressLabel?: string;
+  actionProgressValue?: string;
+  actionProgressPercent?: number;
   compactActionLayout: true;
 } {
   return {
     actionMetaLabel,
     actionMetaValue,
     actionMetaSupportingText,
+    actionProgressLabel,
+    actionProgressValue,
+    actionProgressPercent,
     compactActionLayout: true,
   };
 }
 
-function buildHealthInsightActionMeta(factorTitle: string) {
+function buildHealthInsightActionMeta(factorTitle: string, healthScore: number) {
   return buildTopCardActionMeta(
     `Health Score · ${factorTitle}`,
     'Review target: this factor is currently the highest-priority health driver.',
     'Open Health Score and review Current Health Focus plus the factor ledger for what needs attention.',
+    'Current property health',
+    `${healthScore} / 100 needs review`,
+    healthScore,
   );
 }
 
@@ -175,6 +187,9 @@ function buildIncidentActionMeta(incidentTitle: string, potentialSavings: number
       `Incident Detail · ${incidentTitle}`,
       `Potential savings: ${formatUsd(potentialSavings)}`,
       `Open ${incidentTitle} to review the risk summary, timeline, and recommended actions.`,
+      'Savings if handled now',
+      formatUsd(potentialSavings),
+      Math.min(100, Math.max(18, Math.round((potentialSavings / 1000) * 100))),
     );
   }
 
@@ -182,6 +197,9 @@ function buildIncidentActionMeta(incidentTitle: string, potentialSavings: number
     `Incident Detail · ${incidentTitle}`,
     'Review the incident timeline and next recommended actions.',
     `Open ${incidentTitle} details to review the risk summary and mitigation steps.`,
+    'Review status',
+    'Needs attention',
+    62,
   );
 }
 
@@ -190,6 +208,9 @@ function buildSavingsActionMeta(amount: number) {
     'Home Savings',
     `Verified annual opportunity: ${formatUsd(amount)}/yr`,
     'Open Home Savings to review matched opportunities, compare next steps, and lock in the best savings move.',
+    'Annual savings identified',
+    `${formatUsd(amount)}/yr`,
+    Math.min(100, Math.max(16, Math.round((amount / 1500) * 100))),
   );
 }
 
@@ -198,6 +219,9 @@ function buildVaultActionMeta() {
     'Home Vault',
     'Start with one receipt, appliance, or service record.',
     'Add your first record to unlock richer guidance, better maintenance context, and stronger trust signals.',
+    'Records added',
+    '0 items on file',
+    8,
   );
 }
 
@@ -206,14 +230,20 @@ function buildMaintenanceActionMeta(overdueCount: number) {
     'Fix · Priority actions',
     `${overdueCount} overdue task${overdueCount === 1 ? '' : 's'} ranked for review.`,
     'Open the priority actions list to see what is overdue first and what to do next.',
+    'Priority queue',
+    `${overdueCount} item${overdueCount === 1 ? '' : 's'} need attention`,
+    Math.min(100, Math.max(20, overdueCount * 24)),
   );
 }
 
-function buildDefaultActionMeta() {
+function buildDefaultActionMeta(healthScore: number) {
   return buildTopCardActionMeta(
     'Health Score overview',
     'Review score drivers, recent changes, and current health focus.',
     'Open Health Score to understand what is helping, what is dragging the score down, and where to act next.',
+    'Current property health',
+    `${healthScore} / 100 overall score`,
+    healthScore,
   );
 }
 
@@ -617,6 +647,7 @@ export default function DashboardPage() {
   const annualSavingsPotential = Math.max(0, Math.round(homeSavingsSummaryQuery.data?.potentialAnnualSavings ?? 0));
   const riskExposureGap = Math.max(0, Math.round(riskSummaryQuery.data?.financialExposureTotal ?? 0));
   const overdueMaintenanceCount = scopedUrgentActions.filter(a => a.type === 'MAINTENANCE_OVERDUE').length;
+  const healthScore = selectedProperty?.healthScore?.totalScore ?? 82;
   const hasCompletionState =
     Boolean(selectedProperty) &&
     scopedUrgentActions.length === 0 &&
@@ -661,7 +692,7 @@ export default function DashboardPage() {
         href: resolveUrgentActionHref(topHealthInsight, effectiveSelectedPropertyId),
         impactLabel,
         etaLabel,
-        ...buildHealthInsightActionMeta(topHealthInsight.title),
+        ...buildHealthInsightActionMeta(topHealthInsight.title, healthScore),
       };
     }
 
@@ -727,8 +758,8 @@ export default function DashboardPage() {
       href: buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score'),
       impactLabel,
       etaLabel,
-      ...buildDefaultActionMeta(),
-    };
+        ...buildDefaultActionMeta(healthScore),
+      };
   })();
 
   if (userLoading || data.isLoading || !redirectChecked) {
@@ -741,7 +772,6 @@ export default function DashboardPage() {
 
   if (showWelcomeScreen && user) return <WelcomeModal userFirstName={user.firstName} />;
 
-  const healthScore = selectedProperty?.healthScore?.totalScore ?? 82;
   const healthScoreHref = buildPropertyAwareDashboardHref(effectiveSelectedPropertyId, '/dashboard/health-score');
   const priorityActionsHref = buildPropertyAwareDashboardHref(
     effectiveSelectedPropertyId,
@@ -820,6 +850,9 @@ export default function DashboardPage() {
         actionMetaLabel={heroNarrative.actionMetaLabel}
         actionMetaValue={heroNarrative.actionMetaValue}
         actionMetaSupportingText={heroNarrative.actionMetaSupportingText}
+        actionProgressLabel={heroNarrative.actionProgressLabel}
+        actionProgressValue={heroNarrative.actionProgressValue}
+        actionProgressPercent={heroNarrative.actionProgressPercent}
         compactActionLayout={heroNarrative.compactActionLayout}
         onAction={() => router.push(heroNarrative.href)}
         isUrgent={data.activeIncidents.length > 0 || overdueMaintenanceCount > 0}
