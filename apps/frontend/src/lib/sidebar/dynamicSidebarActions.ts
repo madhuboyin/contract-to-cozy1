@@ -130,10 +130,10 @@ function getTodayActions(ctx: SidebarContext): SidebarAction[] {
   if (ctx.signals?.urgentCount && ctx.signals.urgentCount > 0) {
     actions.push({
       id: 'review-urgent-alerts',
-      title: 'Review highest priority alert',
+      title: ctx.signals.urgentCount === 1 ? 'Review urgent issue' : 'Review urgent issues',
       description: `${ctx.signals.urgentCount} urgent issue${ctx.signals.urgentCount > 1 ? 's' : ''} detected`,
       icon: AlertTriangle,
-      href: `/dashboard/resolution-center?propertyId=${ctx.propertyId}`,
+      href: `/dashboard/resolution-center?propertyId=${ctx.propertyId}&filter=urgent&sort=priority`,
       priority: 'high',
       badge: 'Urgent',
       group: 'recommended-next',
@@ -266,7 +266,7 @@ function getProtectActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Review coverage gaps',
       description: `${ctx.signals.gapCount} gap${ctx.signals.gapCount > 1 ? 's' : ''} identified`,
       icon: ShieldCheck,
-      href: `${propPath}/tools/coverage-analysis`,
+      href: `${propPath}/tools/coverage-analysis?filter=gaps&highlight=true&expectedCount=${ctx.signals.gapCount}`,
       priority: 'high',
       badge: 'Action needed',
       group: 'recommended-next',
@@ -317,7 +317,7 @@ function getProtectActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Review risk exposure',
       description: `$${Math.round(ctx.signals.atRisk).toLocaleString()} at risk`,
       icon: AlertTriangle,
-      href: `/dashboard/resolution-center?propertyId=${ctx.propertyId}`,
+      href: `${propPath}/risk-assessment?focus=exposure&amount=${Math.round(ctx.signals.atRisk)}`,
       priority: 'medium',
       group: 'contextual-actions',
     });

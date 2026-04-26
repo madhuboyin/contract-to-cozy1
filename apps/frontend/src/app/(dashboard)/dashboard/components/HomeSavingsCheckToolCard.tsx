@@ -146,7 +146,18 @@ export default function HomeSavingsCheckToolCard({ propertyId }: HomeSavingsChec
       }
     }
 
-    router.push(`/dashboard/properties/${propertyId}/tools/home-savings`);
+    // Pass savings amounts as URL params to ensure destination shows same values
+    const params = new URLSearchParams();
+    if (monthlyPotential > 0) {
+      params.set('expectedMonthly', monthlyPotential.toString());
+      params.set('expectedAnnual', annualPotential.toString());
+    }
+    if (foundSavingsCount > 0) {
+      params.set('highlight', 'opportunities');
+    }
+    
+    const queryString = params.toString();
+    router.push(`/dashboard/properties/${propertyId}/tools/home-savings${queryString ? `?${queryString}` : ''}`);
   };
 
   const status = statusMeta(loading, summary, configuredCount, foundSavingsCount);

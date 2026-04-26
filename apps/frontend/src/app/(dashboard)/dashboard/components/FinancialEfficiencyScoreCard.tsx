@@ -206,10 +206,10 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
       </div>
 
       <Link
-        href={reportLink}
+        href={`${reportLink}${annualCost > 0 ? '?focus=breakdown&expectedCost=' + annualCost : ''}`}
         className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
-        Open financial details
+        {annualCost > 0 ? 'View cost breakdown' : 'Open financial details'}
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
       </Link>
       <MilestoneCelebration type={celebration.type} isOpen={celebration.isOpen} onClose={dismiss} />

@@ -177,7 +177,26 @@ export const UpcomingRenewalsCard: React.FC<UpcomingRenewalsCardProps> = ({ prop
         {/* CTA Button */}
         {totalRenewals > 0 && (
           <div className="pt-4">
-            <Link href="/dashboard/warranties">
+            <Link href={
+              // Navigate based on renewal type mix
+              (() => {
+                const insuranceCount = renewalItems.filter(r => r.type === 'insurance').length;
+                const warrantyCount = renewalItems.filter(r => r.type === 'warranty').length;
+                
+                // If only insurance, go to insurance page
+                if (insuranceCount > 0 && warrantyCount === 0) {
+                  return '/dashboard/insurance';
+                }
+                // If only warranties, go to warranties page
+                if (warrantyCount > 0 && insuranceCount === 0) {
+                  return '/dashboard/warranties';
+                }
+                // If mixed, go to protect page with renewals focus
+                return propertyId 
+                  ? `/dashboard/properties/${propertyId}/protect?focus=renewals`
+                  : '/dashboard/protect';
+              })()
+            }>
               <Button 
                 variant="ghost" 
                 className="w-full text-sm font-semibold text-blue-600 hover:bg-blue-50 hover:text-blue-700 rounded-md gap-2"

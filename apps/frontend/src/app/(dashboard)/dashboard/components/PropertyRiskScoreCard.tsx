@@ -140,8 +140,11 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
 
   const summary = summaryQuery.data || FALLBACK_SUMMARY;
   const isLoading = summaryQuery.isLoading;
+  const totalExposure = Math.max(0, Math.round(summary.financialExposureTotal || 0));
+  
+  // Navigate to risk assessment with exposure focus
   const reportLink = propertyId
-    ? `/dashboard/properties/${propertyId}/risk-assessment`
+    ? `/dashboard/properties/${propertyId}/risk-assessment${totalExposure > 0 ? '?focus=exposure' : ''}`
     : "/dashboard/properties";
 
   if (!propertyId || summary.status === "NO_PROPERTY") {
@@ -256,7 +259,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
         href={reportLink}
         className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
-        Open risk details
+        {totalExposure > 0 ? 'Review exposure details' : 'Open risk details'}
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
       </Link>
     </div>

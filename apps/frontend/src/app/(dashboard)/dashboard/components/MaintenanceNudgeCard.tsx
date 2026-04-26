@@ -27,9 +27,11 @@ export function MaintenanceNudgeCard({
     
     // Show card ONLY IF score is poor (< 70) AND there are actions
     const shouldShowNudge = healthScore < 70 && consolidatedActionCount > 0;
+    
+    // Build destination with action count to ensure consistency
     const destination = hasAssetDrivenActions
-        ? `/dashboard/maintenance?propertyId=${property.id}&priority=true`
-        : `/dashboard/maintenance?propertyId=${property.id}`;
+        ? `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&priority=high&expectedCount=${consolidatedActionCount}`
+        : `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&expectedCount=${consolidatedActionCount}`;
     
     if (!shouldShowNudge) {
         return null;
