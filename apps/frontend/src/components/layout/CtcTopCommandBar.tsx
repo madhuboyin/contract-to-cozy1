@@ -5,12 +5,18 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Bell } from 'lucide-react';
+import { Bell, AlertTriangle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { CtcCommandSearch } from './CtcCommandSearch';
 import { CtcPropertySelector } from './CtcPropertySelector';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Property } from '@/types';
 
 interface CtcTopCommandBarProps {
@@ -80,24 +86,83 @@ function useAlertsCounts() {
   };
 }
 
-function AlertsButton({ count }: { count: number | null }) {
+function AlertsButton({ count, propertyId }: { count: number | null; propertyId?: string }) {
+  const router = useRouter();
+  
+  const handleViewAll = () => {
+    if (propertyId) {
+      router.push(`/dashboard/resolution-center?propertyId=${propertyId}`);
+    } else {
+      router.push('/dashboard/resolution-center');
+    }
+  };
+
   return (
-    <button
-      type="button"
-      className={cn(
-        "relative flex items-center justify-center h-12 w-12 rounded-lg",
-        "border border-slate-200 bg-slate-50/50 hover:bg-slate-50",
-        "transition-all duration-200",
-        "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
-      )}
-    >
-      <Bell className="h-5 w-5 text-slate-600" />
-      {count !== null && count > 0 && (
-        <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-          {count > 9 ? '9+' : count}
-        </span>
-      )}
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "relative flex items-center justify-center h-12 w-12 rounded-lg",
+            "border border-slate-200 bg-slate-50/50 hover:bg-slate-50",
+            "transition-all duration-200",
+            "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
+          )}
+        >
+          <Bell className="h-5 w-5 text-slate-600" />
+          {count !== null && count > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+              {count > 9 ? '9+' : count}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-[320px]">
+        <div className="px-3 py-2 border-b border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-900">Notifications</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {count !== null && count > 0 
+              ? `${count} urgent ${count === 1 ? 'issue' : 'issues'} need attention`
+              : 'No urgent issues right now'}
+          </p>
+        </div>
+        
+        {count !== null && count > 0 ? (
+          <>
+            <div className="px-3 py-2">
+              <div className="flex items-start gap-2 py-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-900">Urgent issues detected</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {count} high-priority {count === 1 ? 'item requires' : 'items require'} immediate attention
+                  </p>
+                </div>
+              </div>
+            </div>
+            <DropdownMenuSeparator />
+            <div className="px-3 py-2">
+              <button
+                onClick={handleViewAll}
+                className="w-full text-center text-sm font-medium text-teal-600 hover:text-teal-700 py-1"
+              >
+                View all in Resolution Center →
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="px-3 py-4 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-50 mx-auto mb-2">
+              <Check className="h-6 w-6 text-teal-600" />
+            </div>
+            <p className="text-sm font-medium text-slate-900">All clear!</p>
+            <p className="text-xs text-slate-500 mt-1">No urgent issues at the moment</p>
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -158,7 +223,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
 
             {/* Right: Alerts Only */}
             <div className="flex items-center gap-2 shrink-0">
-              <AlertsButton count={alertsCount} />
+              <AlertsButton count={alertsCount} propertyId={propertyId} />
             </div>
           </div>
         </div>
