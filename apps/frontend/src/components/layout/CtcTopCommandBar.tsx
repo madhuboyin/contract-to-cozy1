@@ -29,9 +29,12 @@ function usePropertyData() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Extract first line of address (street address)
+  const address = property?.address || property?.street || 'Main Home';
+
   return {
     propertyId: selectedPropertyId,
-    propertyName: property?.name || 'Main Home',
+    propertyAddress: address,
   };
 }
 
@@ -69,7 +72,7 @@ function AlertsButton({ count }: { count: number | null }) {
       type="button"
       className={cn(
         "relative flex items-center justify-center h-12 w-12 rounded-lg",
-        "border border-slate-200 bg-white hover:bg-slate-50",
+        "border border-slate-200 bg-slate-50/50 hover:bg-slate-50",
         "transition-all duration-200",
         "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
       )}
@@ -85,7 +88,7 @@ function AlertsButton({ count }: { count: number | null }) {
 }
 
 export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
-  const { propertyId, propertyName } = usePropertyData();
+  const { propertyId, propertyAddress } = usePropertyData();
   const { alertsCount, tasksCount } = useAlertsCounts();
 
   return (
@@ -119,7 +122,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
             <CtcCommandSearch className="flex-1 max-w-[600px]" />
 
             {/* Center: Property Selector (bigger) */}
-            <CtcPropertySelector propertyName={propertyName} />
+            <CtcPropertySelector propertyAddress={propertyAddress} />
 
             {/* Right: Alerts Only */}
             <div className="flex items-center gap-2 shrink-0">
@@ -172,7 +175,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
           {/* Mobile Property Selector - Horizontal Scroll */}
           <div className="pb-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">
             <div className="flex items-center gap-2 min-w-max">
-              <CtcPropertySelector propertyName={propertyName} className="shrink-0" />
+              <CtcPropertySelector propertyAddress={propertyAddress} className="shrink-0" />
             </div>
           </div>
         </div>
