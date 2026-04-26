@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { 
   Wrench, 
   Search, 
@@ -79,9 +79,11 @@ function priorityActionTone(action: UrgentActionItem): {
  * It transforms the "Fix" job from a chore into a concierge experience.
  */
 export default function ResolutionHubPage() {
+  const params = useParams<{ id: string | string[] }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { selectedPropertyId } = usePropertyContext();
+  const propertyId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolutions, setResolutions] = useState<any[]>([]);
@@ -104,16 +106,16 @@ export default function ResolutionHubPage() {
         policiesRes,
         incidentsRes,
       ] = await Promise.all([
-        api.listBookings({ propertyId: selectedPropertyId || undefined }),
-        selectedPropertyId
-          ? api.getPropertyResolutions(selectedPropertyId)
+        api.listBookings({ propertyId: propertyId || undefined }),
+        propertyId
+          ? api.getPropertyResolutions(propertyId)
           : Promise.resolve({ success: true, data: [] }),
         api.getProperties().catch(() => ({ success: false, data: { properties: [] } })),
         api.getHomeBuyerChecklist().catch(() => ({ success: false, data: null })),
-        api.listWarranties(selectedPropertyId || undefined).catch(() => ({ success: false, data: { warranties: [] } })),
-        api.listInsurancePolicies(selectedPropertyId || undefined).catch(() => ({ success: false, data: { policies: [] } })),
-        selectedPropertyId
-          ? listIncidents({ propertyId: selectedPropertyId, limit: 10 }).catch(() => ({ items: [] }))
+        api.listWarranties(propertyId || undefined).catch(() => ({ success: false, data: { warranties: [] } })),
+        api.listInsurancePolicies(propertyId || undefined).catch(() => ({ success: false, data: { policies: [] } })),
+        propertyId
+          ? listIncidents({ propertyId, limit: 10 }).catch(() => ({ items: [] }))
           : Promise.resolve({ items: [] }),
       ]);
 
@@ -139,7 +141,7 @@ export default function ResolutionHubPage() {
 
       const scoredProperties = propertiesRes.success
         ? (propertiesRes.data.properties
-            .filter((property) => !selectedPropertyId || property.id === selectedPropertyId)
+            .filter((property) => !propertyId || property.id === propertyId)
             .map((property) => ({
               ...property,
               healthScore: (property as unknown as ScoredProperty).healthScore || {
@@ -178,7 +180,7 @@ export default function ResolutionHubPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedPropertyId]);
+  }, [propertyId]);
 
   useEffect(() => {
     void fetchData();
@@ -258,7 +260,7 @@ export default function ResolutionHubPage() {
                     value={action.type.replace(/_/g, ' ')}
                     description={action.description}
                     actionLabel="Open action details"
-                    onAction={() => router.push(resolveUrgentActionHref(action, selectedPropertyId || undefined))}
+                    onAction={() => router.push(resolveUrgentActionHref(action, propertyId || selectedPropertyId || undefined))}
                     isUrgent={action.type === 'INCIDENT' || action.type === 'RENEWAL_EXPIRED'}
                     trust={{
                       confidenceLabel: trust.confidenceLabel,
@@ -293,7 +295,7 @@ export default function ResolutionHubPage() {
               className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 rounded-2xl group transition-all"
               asChild
             >
-              <Link href={selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}>
+              <Link href={propertyId ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}>
                 <Zap className="h-8 w-8 text-brand-600 mb-4 group-hover:scale-110 transition-transform" />
                 <span className="font-bold text-lg text-slate-900 block">Something&apos;s Broken</span>
                 <span className="text-sm text-slate-500 mt-1">AI-driven troubleshooting and repair vs. replace guidance.</span>
@@ -305,7 +307,7 @@ export default function ResolutionHubPage() {
               className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 rounded-2xl group transition-all"
               asChild
             >
-              <Link href={selectedPropertyId ? `/dashboard/providers?propertyId=${selectedPropertyId}` : '/dashboard/providers'}>
+              <Link href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}>
                 <Search className="h-8 w-8 text-blue-600 mb-4 group-hover:scale-110 transition-transform" />
                 <span className="font-bold text-lg text-slate-900 block">Find a Specialist</span>
                 <span className="text-sm text-slate-500 mt-1">Search our directory of verified local service providers.</span>
@@ -317,7 +319,7 @@ export default function ResolutionHubPage() {
               className="h-auto flex-col items-start p-6 text-left border-red-100 hover:border-red-300 hover:bg-red-50/50 rounded-2xl group transition-all"
               asChild
             >
-              <Link href={selectedPropertyId ? `/dashboard/emergency?propertyId=${selectedPropertyId}` : '/dashboard/emergency'}>
+              <Link href={propertyId ? `/dashboard/emergency?propertyId=${propertyId}` : '/dashboard/emergency'}>
                 <AlertCircle className="h-8 w-8 text-red-600 mb-4 group-hover:rotate-12 transition-transform" />
                 <span className="font-bold text-lg text-slate-900 block">Emergency Help</span>
                 <span className="text-sm text-slate-500 mt-1">Instant 24/7 emergency services and shutdown guides.</span>
@@ -331,8 +333,8 @@ export default function ResolutionHubPage() {
             >
               <Link
                 href={
-                  selectedPropertyId
-                    ? `/dashboard/properties/${selectedPropertyId}/tools/quote-comparison?from=fix-hub`
+                  propertyId
+                    ? `/dashboard/properties/${propertyId}/tools/quote-comparison?from=fix-hub`
                     : '/dashboard/quote-comparison'
                 }
               >
@@ -379,7 +381,7 @@ export default function ResolutionHubPage() {
                     description={analysis.summary || 'Our AI has a recommendation for this item.'}
                     actionLabel="See Full Estimate"
                     onAction={() => {
-                      router.push(`/dashboard/properties/${selectedPropertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`);
+                      router.push(`/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`);
                     }}
                     trust={{
                       confidenceLabel: `${analysis.confidence} Confidence`,
@@ -400,7 +402,7 @@ export default function ResolutionHubPage() {
                   </p>
                   <div className="pt-6">
                     <Button variant="outline" className="rounded-xl border-slate-200 h-11 px-6" asChild>
-                      <Link href="/dashboard/replace-repair">
+                      <Link href={propertyId ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}>
                         <Zap className="mr-2 h-4 w-4 text-brand-600" />
                         Start Troubleshooter
                       </Link>
@@ -460,7 +462,7 @@ export default function ResolutionHubPage() {
                   </p>
                   <div className="pt-6">
                     <Button className="rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold h-11 px-6" asChild>
-                      <Link href={selectedPropertyId ? `/dashboard/providers?propertyId=${selectedPropertyId}` : '/dashboard/providers'}>
+                      <Link href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}>
                         Find a Service Provider
                       </Link>
                     </Button>
@@ -469,7 +471,7 @@ export default function ResolutionHubPage() {
                 )}
 
                 <Button variant="outline" className="w-full border-slate-200 text-slate-600 h-11" asChild>
-                <Link href={selectedPropertyId ? `/dashboard/bookings?propertyId=${selectedPropertyId}` : '/dashboard/bookings'}>
+                <Link href={propertyId ? `/dashboard/bookings?propertyId=${propertyId}` : '/dashboard/bookings'}>
                   <CalendarClock className="h-4 w-4 mr-2" />
                   View All Booking History
                 </Link>

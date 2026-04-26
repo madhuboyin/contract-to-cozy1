@@ -636,9 +636,9 @@ export default function DashboardPage() {
           <Link href={priorityActionsHref} className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
             <MetricTile
               label="Priority actions"
-              value={data.urgentActions.slice(0, 3).length}
+              value={scopedUrgentActions.slice(0, 3).length}
               hint="Top 3 ranked moves"
-              tone={data.urgentActions.length > 0 ? 'warning' : 'success'}
+              tone={scopedUrgentActions.length > 0 ? 'warning' : 'success'}
               className="h-full cursor-pointer"
             />
           </Link>
