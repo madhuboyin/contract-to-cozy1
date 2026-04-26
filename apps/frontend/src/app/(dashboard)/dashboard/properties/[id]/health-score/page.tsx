@@ -763,39 +763,39 @@ export default function PropertyHealthDetailPage() {
 
           {/* ── Card 1: Health score ── */}
           <div className="rounded-2xl border border-slate-200/50 bg-gradient-to-br from-white via-white to-slate-50/60 shadow-[0_1px_4px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
-            <div className="px-5 pt-4 pb-0">
+            <div className="px-4 pt-3 pb-0">
               <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Health score</p>
             </div>
-            <div className="flex flex-col items-center justify-center flex-1 px-5 py-1">
-              <div className="relative my-1">
-                <svg width="128" height="128" className="-rotate-90" aria-hidden="true">
-                  <circle cx="64" cy="64" r="54" fill="none" stroke="#e2e8f0" strokeWidth="7" />
+            <div className="flex flex-col items-center justify-center flex-1 px-4 py-2">
+              <div className="relative">
+                <svg width="110" height="110" className="-rotate-90" aria-hidden="true">
+                  <circle cx="55" cy="55" r="46" fill="none" stroke="#e2e8f0" strokeWidth="6" />
                   <circle
-                    cx="64" cy="64" r="54"
+                    cx="55" cy="55" r="46"
                     fill="none"
                     stroke={scoreRingColor}
-                    strokeWidth="7"
-                    strokeDasharray={`${(2 * Math.PI * 54).toFixed(2)} ${(2 * Math.PI * 54).toFixed(2)}`}
-                    strokeDashoffset={(2 * Math.PI * 54 * (1 - latestScore / 100)).toFixed(2)}
+                    strokeWidth="6"
+                    strokeDasharray={`${(2 * Math.PI * 46).toFixed(2)} ${(2 * Math.PI * 46).toFixed(2)}`}
+                    strokeDashoffset={(2 * Math.PI * 46 * (1 - latestScore / 100)).toFixed(2)}
                     strokeLinecap="round"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <div className="flex items-end gap-0.5 leading-none">
-                    <span className={`text-[40px] font-black tabular-nums leading-none tracking-tight ${healthDetails.color}`}>{latestScore.toFixed(0)}</span>
-                    <span className="text-[11px] font-semibold text-slate-400 mb-1.5 ml-0.5">/100</span>
+                    <span className={`text-[36px] font-black tabular-nums leading-none tracking-tight ${healthDetails.color}`}>{latestScore.toFixed(0)}</span>
+                    <span className="text-[10px] font-semibold text-slate-400 mb-1 ml-0.5">/100</span>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-1.5">
+                  <div className="flex items-center gap-1.5 mt-1">
                     <span className={`h-[5px] w-[5px] rounded-full shrink-0 ${scoreStatusDot}`} />
-                    <span className="text-[11px] font-semibold text-slate-500 tracking-normal">{healthDetails.level}</span>
+                    <span className="text-[10px] font-semibold text-slate-500 tracking-normal">{healthDetails.level}</span>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-center mt-0.5">
+              <div className="flex items-center justify-center mt-1">
                 <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
               </div>
             </div>
-            <div className="px-5 py-2.5 border-t border-slate-100/80 bg-slate-50/60">
+            <div className="px-4 py-2 border-t border-slate-100/80 bg-slate-50/60">
               <button
                 onClick={() => setShowScoreModal(true)}
                 className="text-[11px] font-semibold text-teal-600 hover:text-teal-500 transition-colors"
@@ -807,20 +807,20 @@ export default function PropertyHealthDetailPage() {
 
           {/* ── Card 2: Health Snapshot (primary surface) ── */}
           <div className="rounded-2xl border border-slate-200/70 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
-            <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-slate-100/80">
+            <div className="px-4 pt-3 pb-2 flex items-start justify-between border-b border-slate-100/80">
               <div>
                 <p className="text-[13px] font-semibold text-slate-900 tracking-normal">Health Snapshot</p>
-                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
                   {usingSnapshotInsights ? "Latest weekly snapshot" : "From current property profile"}
                 </p>
               </div>
-              <span className="text-[9px] font-bold tracking-normal bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full shrink-0 ml-3 mt-0.5">
+              <span className="text-[9px] font-bold tracking-normal bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full shrink-0 ml-3">
                 {usingSnapshotInsights ? "Weekly" : "Live"}
               </span>
             </div>
-            <div className="px-5 py-3 flex-1">
+            <div className="px-4 py-3 flex-1">
               {sortedInsights.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full py-8 text-center space-y-1.5">
+                <div className="flex flex-col items-center justify-center h-full py-6 text-center space-y-1.5">
                   <p className="text-sm font-medium text-slate-500">No signals available yet</p>
                   <p className="text-xs text-slate-400">
                     <Link href={`/dashboard/properties/${propertyId}/edit`} className="text-teal-600 hover:underline">Add property details</Link>
@@ -828,43 +828,43 @@ export default function PropertyHealthDetailPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
-                  <div className="grid grid-cols-3 gap-2.5">
-                    <div className="rounded-[10px] bg-red-50 border border-red-100/60 p-2.5 text-center">
-                      <p className="text-3xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-red-500/90 mt-1.5 leading-tight tracking-normal">Needs attention</p>
-                      <p className="text-[9px] text-slate-400 mt-1 tabular-nums">
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-[10px] bg-red-50 border border-red-100/60 p-2 text-center">
+                      <p className="text-2xl font-black text-red-600 tabular-nums leading-none">{negativeInsights.length}</p>
+                      <p className="text-[10px] font-semibold text-red-500/90 mt-1 leading-tight tracking-normal">Needs attention</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5 tabular-nums">
                         {negDelta === null ? "First check" : negDelta === 0 ? "No change" : negDelta > 0 ? `↑ ${negDelta} more` : `↓ ${Math.abs(negDelta)} fewer`}
                       </p>
                     </div>
-                    <div className="rounded-[10px] bg-amber-50 border border-amber-100/60 p-2.5 text-center">
-                      <p className="text-3xl font-black text-amber-500 tabular-nums leading-none">{neutralInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-amber-600/90 mt-1.5 leading-tight tracking-normal">Monitor closely</p>
-                      <p className="text-[9px] text-slate-400 mt-1 tabular-nums">
+                    <div className="rounded-[10px] bg-amber-50 border border-amber-100/60 p-2 text-center">
+                      <p className="text-2xl font-black text-amber-500 tabular-nums leading-none">{neutralInsights.length}</p>
+                      <p className="text-[10px] font-semibold text-amber-600/90 mt-1 leading-tight tracking-normal">Monitor closely</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5 tabular-nums">
                         {neutralDelta === null ? "First check" : neutralDelta === 0 ? "No change" : neutralDelta > 0 ? `↑ ${neutralDelta} more` : `↓ ${Math.abs(neutralDelta)} fewer`}
                       </p>
                     </div>
-                    <div className="rounded-[10px] bg-emerald-50 border border-emerald-100/60 p-2.5 text-center">
-                      <p className="text-3xl font-black text-emerald-600 tabular-nums leading-none">{positiveInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-emerald-600/90 mt-1.5 leading-tight tracking-normal">Healthy signals</p>
-                      <p className="text-[9px] text-slate-400 mt-1 tabular-nums">
+                    <div className="rounded-[10px] bg-emerald-50 border border-emerald-100/60 p-2 text-center">
+                      <p className="text-2xl font-black text-emerald-600 tabular-nums leading-none">{positiveInsights.length}</p>
+                      <p className="text-[10px] font-semibold text-emerald-600/90 mt-1 leading-tight tracking-normal">Healthy signals</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5 tabular-nums">
                         {positiveDelta === null ? "First check" : positiveDelta === 0 ? "No change" : positiveDelta > 0 ? `↑ ${positiveDelta} more` : `↓ ${Math.abs(positiveDelta)} fewer`}
                       </p>
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-2.5 rounded-lg bg-red-50/50 border border-red-100/50 px-3 py-2">
-                      <span className="h-[7px] w-[7px] rounded-full bg-red-400/80 shrink-0" />
-                      <span className="text-[10px] font-bold text-red-600 shrink-0 w-[82px] tracking-normal">Biggest risk</span>
-                      <span className="text-[12px] font-medium text-slate-700 truncate flex-1">{topNegativeInsight?.factor || "None currently"}</span>
+                    <div className="flex items-center gap-2 rounded-lg bg-red-50/50 border border-red-100/50 px-2.5 py-1.5">
+                      <span className="h-[6px] w-[6px] rounded-full bg-red-400/80 shrink-0" />
+                      <span className="text-[10px] font-bold text-red-600 shrink-0 w-[78px] tracking-normal">Biggest risk</span>
+                      <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topNegativeInsight?.factor || "None currently"}</span>
                       {topNegativeInsight && (
                         <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{topNegativeInsight.status}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2.5 rounded-lg bg-teal-50/50 border border-teal-100/50 px-3 py-2">
-                      <span className="h-[7px] w-[7px] rounded-full bg-teal-400/80 shrink-0" />
-                      <span className="text-[10px] font-bold text-teal-600 shrink-0 w-[82px] tracking-normal">Best performing</span>
-                      <span className="text-[12px] font-medium text-slate-700 truncate flex-1">{topPositiveInsight?.factor || "Building signal"}</span>
+                    <div className="flex items-center gap-2 rounded-lg bg-teal-50/50 border border-teal-100/50 px-2.5 py-1.5">
+                      <span className="h-[6px] w-[6px] rounded-full bg-teal-400/80 shrink-0" />
+                      <span className="text-[10px] font-bold text-teal-600 shrink-0 w-[78px] tracking-normal">Best performing</span>
+                      <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{topPositiveInsight?.factor || "Building signal"}</span>
                       {topPositiveInsight && (
                         <span className="text-[9px] text-slate-400 shrink-0 ml-auto">{topPositiveInsight.status}</span>
                       )}
@@ -877,13 +877,13 @@ export default function PropertyHealthDetailPage() {
 
           {/* ── Card 3: Next Steps ── */}
           <div className="rounded-2xl border border-slate-200/50 bg-slate-50/80 shadow-[0_1px_4px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col">
-            <div className="px-5 pt-4 pb-0">
+            <div className="px-4 pt-3 pb-0">
               <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Next Steps</p>
             </div>
-            <div className="px-4 py-3.5 flex-1 space-y-2">
+            <div className="px-3 py-3 flex-1 space-y-2">
               <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`} className="block">
-                <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-4 py-3.5 cursor-pointer group">
-                  <p className="text-[13px] font-semibold text-white tracking-normal">View maintenance actions</p>
+                <div className="rounded-xl bg-teal-800 hover:bg-teal-700 active:scale-[0.99] transition-all px-3 py-2.5 cursor-pointer group">
+                  <p className="text-[12px] font-semibold text-white tracking-normal">View maintenance actions</p>
                   <p className="text-[10px] text-teal-200/80 mt-0.5 group-hover:text-teal-100/80 transition-colors">
                     {negativeInsights.length > 0
                       ? `${negativeInsights.length} item${negativeInsights.length > 1 ? "s" : ""} need attention`
@@ -892,12 +892,12 @@ export default function PropertyHealthDetailPage() {
                 </div>
               </Link>
               <Link href={`/dashboard/properties/${propertyId}/edit`} className="block">
-                <div className="rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-4 py-2.5 cursor-pointer">
-                  <p className="text-[13px] font-medium text-slate-600">Edit property details</p>
+                <div className="rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 active:scale-[0.99] transition-all px-3 py-2 cursor-pointer">
+                  <p className="text-[12px] font-medium text-slate-600">Edit property details</p>
                 </div>
               </Link>
             </div>
-            <div className="px-5 pt-2.5 pb-3 border-t border-slate-200/70">
+            <div className="px-4 pt-2 pb-2.5 border-t border-slate-200/70">
               <p className="text-[9px] font-semibold tracking-normal text-slate-400/80">
                 {sortedInsights.length > 0 ? `${sortedInsights.length} factors tracked` : "Awaiting data"}
               </p>
