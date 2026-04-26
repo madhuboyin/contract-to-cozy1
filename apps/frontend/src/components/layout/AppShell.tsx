@@ -5,14 +5,12 @@
  * 1. Root authenticated layout is apps/frontend/src/app/(dashboard)/layout.tsx.
  * 2. The existing desktop left nav is passed in from that layout so its rendering stays unchanged.
  * 3. Target dashboard pages share this shell through the dashboard route group; /knowledge is outside that group today.
- * 4. ResolutionCenterClient previously rendered a page-level right rail; AppShell now owns the shared RightSidebar.
- * 5. RightSidebar reuses existing cached property health, score snapshot, orchestration, incident, booking, and resolution queries.
- * 6. CtcTopCommandBar is now integrated as topBar prop, providing premium command/context layer above content.
- * 7. When topBar is provided, it replaces the legacy mobileHeader for a unified experience.
+ * 4. CtcTopCommandBar is now integrated as topBar prop, providing premium command/context layer above content.
+ * 5. When topBar is provided, it replaces the legacy mobileHeader for a unified experience.
+ * 6. Right sidebar removed for cleaner, more focused layout.
  */
 
 import React from 'react';
-import { RightSidebar } from '@/components/layout/RightSidebar';
 
 type AppShellProps = {
   leftNav: React.ReactNode;
@@ -40,7 +38,6 @@ export function AppShell({ leftNav, mobileHeader, topBar, banner, children }: Ap
 
           <div className="flex min-w-0 flex-1">
             {children}
-            <RightSidebar />
           </div>
         </div>
       </div>
