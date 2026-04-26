@@ -1,7 +1,7 @@
 'use client';
 
 import React, { ReactNode } from 'react';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, CircleDollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
@@ -21,6 +21,7 @@ export interface WinCardProps {
   /** Optional supporting label/value pair shown beside a compact CTA */
   actionMetaLabel?: string;
   actionMetaValue?: string;
+  actionMetaSupportingText?: string;
   /** Render the CTA as a compact premium action row instead of a full-width bar */
   compactActionLayout?: boolean;
   /** Trust signals from the engine */
@@ -51,6 +52,7 @@ export function WinCard({
   onAction,
   actionMetaLabel,
   actionMetaValue,
+  actionMetaSupportingText,
   compactActionLayout = false,
   trust,
   icon,
@@ -79,6 +81,10 @@ export function WinCard({
     });
     if (onAction) onAction();
   };
+
+  const compactMetaLooksFinancial =
+    actionMetaLabel?.toLowerCase().includes('saving') ||
+    actionMetaValue?.trim().startsWith('$');
 
   return (
     <Card className={cn(
@@ -112,26 +118,47 @@ export function WinCard({
 
         {onAction && (
           compactActionLayout ? (
-            <div className="flex flex-col gap-3 rounded-[20px] border border-teal-200/80 bg-teal-50/85 px-4 py-3 shadow-[0_10px_28px_-24px_rgba(13,148,136,0.75)] sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                {actionMetaLabel ? (
-                  <p className="text-xs font-medium text-teal-900/70">
-                    {actionMetaLabel}
-                  </p>
-                ) : null}
-                {actionMetaValue ? (
-                  <p className="text-lg font-semibold tracking-tight text-teal-950">
-                    {actionMetaValue}
-                  </p>
-                ) : null}
+            <div className="flex flex-col gap-5 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-emerald-200/80 bg-emerald-50 shadow-[0_10px_18px_-14px_rgba(16,185,129,0.85)]">
+                  {compactMetaLooksFinancial ? (
+                    <CircleDollarSign className="h-5 w-5 text-emerald-700" />
+                  ) : (
+                    <Sparkles className="h-5 w-5 text-teal-700" />
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  {actionMetaLabel ? (
+                    <p className="text-sm font-medium text-slate-500">
+                      {actionMetaLabel}
+                    </p>
+                  ) : null}
+                  {actionMetaValue ? (
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <p className="text-[2rem] font-semibold leading-none tracking-[-0.04em] text-slate-950">
+                        {actionMetaValue}
+                      </p>
+                      {actionMetaSupportingText ? (
+                        <p className="text-sm font-medium text-slate-500">
+                          {actionMetaSupportingText}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : actionMetaSupportingText ? (
+                    <p className="text-sm font-medium text-slate-500">
+                      {actionMetaSupportingText}
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
               <Button
                 onClick={handleActionClick}
-                className="group min-h-[44px] w-fit self-start rounded-[14px] bg-teal-700 px-4 text-sm font-semibold text-white shadow-[0_14px_30px_-20px_rgba(13,148,136,0.9)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-[0_18px_36px_-18px_rgba(13,148,136,0.95)] focus-visible:ring-teal-600/45 focus-visible:ring-offset-white sm:self-center"
+                className="group min-h-[44px] w-fit self-start rounded-[16px] bg-teal-700 px-6 text-base font-semibold text-white shadow-[0_16px_36px_-20px_rgba(13,148,136,0.85)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-[0_20px_40px_-18px_rgba(13,148,136,0.95)] focus-visible:ring-teal-600/45 focus-visible:ring-offset-white sm:self-center"
               >
                 {actionLabel}
-                <ArrowRight className="ml-1 h-4 w-4 transition-transform duration-150 group-hover:translate-x-1" />
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-150 group-hover:translate-x-1" />
               </Button>
             </div>
           ) : (

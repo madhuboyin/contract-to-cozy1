@@ -49,6 +49,7 @@ describe('WinCard fallback trust behavior', () => {
         actionLabel="Review incident"
         actionMetaLabel="Potential savings"
         actionMetaValue="$180"
+        actionMetaSupportingText="Verified from live signals"
         compactActionLayout
         onAction={onAction}
         trust={{
@@ -61,6 +62,7 @@ describe('WinCard fallback trust behavior', () => {
 
     expect(screen.getByText('Potential savings')).toBeInTheDocument();
     expect(screen.getByText('$180')).toBeInTheDocument();
+    expect(screen.getByText('Verified from live signals')).toBeInTheDocument();
 
     const button = screen.getByRole('button', { name: /review incident/i });
     expect(button.className).toContain('w-fit');

@@ -122,10 +122,16 @@ function resolvePriorityAlertSavings(
 function buildTopCardActionMeta(
   impactLabel: string,
   etaLabel: string,
-): { actionMetaLabel: string; actionMetaValue: string; compactActionLayout: true } {
+): {
+  actionMetaLabel: string;
+  actionMetaValue: string;
+  actionMetaSupportingText: string;
+  compactActionLayout: true;
+} {
   return {
-    actionMetaLabel: etaLabel,
-    actionMetaValue: impactLabel,
+    actionMetaLabel: impactLabel,
+    actionMetaValue: etaLabel,
+    actionMetaSupportingText: 'Recommended next move',
     compactActionLayout: true,
   };
 }
@@ -550,6 +556,7 @@ export default function DashboardPage() {
         etaLabel: 'ETA 2 min',
         actionMetaLabel: 'Potential savings',
         actionMetaValue: formatUsd(potentialSavings),
+        actionMetaSupportingText: 'Verified from live signals',
         compactActionLayout: true,
       };
     }
