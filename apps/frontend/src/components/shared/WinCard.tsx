@@ -106,12 +106,12 @@ export function WinCard({
       isUrgent && "border-l-4 border-l-amber-500",
       className
     )}>
-      <CardHeader className={cn("pb-2 pt-4", compactActionLayout && "pb-3 pt-5")}>
+      <CardHeader className={cn("pb-2 pt-4", compactActionLayout && "pb-2 pt-4")}>
         <div
           className={cn(
             "flex items-center gap-2 text-xs font-medium text-gray-400",
             compactActionLayout &&
-              "inline-flex w-fit rounded-full bg-teal-50/90 px-4 py-2 text-sm font-semibold text-teal-800",
+              "inline-flex w-fit rounded-full bg-teal-50/85 px-3 py-1.5 text-[0.92rem] font-semibold text-teal-800",
           )}
         >
           {icon || <Sparkles className={cn("h-3.5 w-3.5 text-brand-600", compactActionLayout && "h-4 w-4 text-teal-700")} />}
@@ -119,9 +119,9 @@ export function WinCard({
         </div>
       </CardHeader>
       
-      <CardContent className={cn("space-y-3 pb-4", compactActionLayout && "space-y-4 pb-5")}>
+      <CardContent className={cn("space-y-3 pb-4", compactActionLayout && "space-y-3.5 pb-4")}>
         <div>
-          <h3 className={cn("text-2xl font-bold text-slate-900 leading-tight", compactActionLayout && "text-[2.05rem] tracking-[-0.035em]")}>
+          <h3 className={cn("text-2xl font-bold text-slate-900 leading-tight", compactActionLayout && "text-[1.72rem] tracking-[-0.03em]")}>
             {value}
           </h3>
           {!hasExplicitTrust && (
@@ -130,7 +130,7 @@ export function WinCard({
             </p>
           )}
           {description && (
-            <p className={cn("mt-1 text-sm text-slate-600", compactActionLayout && "mt-3 max-w-3xl text-[0.98rem] leading-8 text-slate-500")}>
+            <p className={cn("mt-1 text-sm text-slate-600", compactActionLayout && "mt-2.5 max-w-3xl text-[0.93rem] leading-7 text-slate-500")}>
               {description}
             </p>
           )}
@@ -138,30 +138,30 @@ export function WinCard({
 
         {onAction && (
           compactActionLayout ? (
-            <div className="flex flex-col gap-5 border-t border-slate-100 pt-5">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[20px] border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-teal-50 to-white shadow-[0_18px_32px_-28px_rgba(16,185,129,0.65)]">
+            <div className="flex flex-col gap-4 border-t border-slate-100 pt-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 items-start gap-3.5">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-100 bg-teal-50/65 shadow-[0_14px_28px_-26px_rgba(16,185,129,0.55)]">
                   {compactMetaLooksFinancial ? (
-                    <CircleDollarSign className="h-7 w-7 text-emerald-700" />
+                    <CircleDollarSign className="h-5 w-5 text-emerald-700" />
                   ) : (
-                    <Sparkles className="h-7 w-7 text-teal-700" />
+                    <Sparkles className="h-5 w-5 text-teal-700" />
                   )}
                 </div>
 
-                  <div className="min-w-0 max-w-2xl pt-1">
+                  <div className="min-w-0 max-w-2xl pt-0.5">
                   {actionMetaLabel ? (
-                    <p className="text-[0.82rem] font-semibold uppercase tracking-[0.16em] text-teal-800/70">
+                    <p className="text-[0.75rem] font-semibold uppercase tracking-[0.14em] text-teal-800/65">
                       {actionMetaLabel}
                     </p>
                   ) : null}
                   {compactActionHeadline ? (
-                    <p className="mt-2 text-[1rem] font-semibold leading-8 tracking-[-0.015em] text-slate-900 sm:text-[1.08rem]">
+                    <p className="mt-1.5 text-[0.95rem] font-medium leading-7 tracking-[-0.01em] text-slate-900 sm:text-[1rem]">
                       {compactActionHeadline}
                     </p>
                   ) : null}
                   {compactActionFootnote ? (
-                    <p className="mt-3 text-base font-semibold text-teal-700">
+                    <p className="mt-2 text-[0.95rem] font-medium text-teal-700">
                       {compactActionFootnote}
                     </p>
                   ) : null}
@@ -170,7 +170,7 @@ export function WinCard({
 
                 <Button
                   onClick={handleActionClick}
-                  className="group min-h-[44px] w-fit self-start rounded-[16px] bg-teal-700 px-6 text-base font-semibold text-white shadow-[0_14px_28px_-20px_rgba(13,148,136,0.82)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-[0_18px_34px_-18px_rgba(13,148,136,0.9)] focus-visible:ring-teal-600/45 focus-visible:ring-offset-white lg:self-center"
+                  className="group min-h-[44px] w-fit self-start rounded-[14px] bg-teal-700 px-5 text-[0.98rem] font-semibold text-white shadow-[0_12px_22px_-18px_rgba(13,148,136,0.72)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-[0_14px_26px_-16px_rgba(13,148,136,0.82)] focus-visible:ring-teal-600/45 focus-visible:ring-offset-white lg:self-center"
                 >
                   {actionLabel}
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-150 group-hover:translate-x-1" />
@@ -178,16 +178,16 @@ export function WinCard({
               </div>
 
               {(normalizedProgressPercent !== null || actionProgressValue || actionProgressLabel) ? (
-                <div className="flex flex-col gap-2 pt-1">
+                <div className="flex flex-col gap-1.5 pt-0.5">
                   {normalizedProgressPercent !== null ? (
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-teal-50">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-teal-50/90">
                       <div
                         className="h-full rounded-full bg-teal-600 transition-[width] duration-300"
                         style={{ width: `${normalizedProgressPercent}%` }}
                       />
                     </div>
                   ) : null}
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                  <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-[0.9rem]">
                     {actionProgressLabel ? (
                       <span className="font-medium text-slate-500">{actionProgressLabel}</span>
                     ) : null}
@@ -211,7 +211,7 @@ export function WinCard({
       </CardContent>
 
       <CardFooter className={cn("bg-slate-50/50 border-t border-slate-100 p-0", compactActionLayout && "bg-slate-50/35")}>
-        <p className={cn("w-full px-4 py-3 text-[11px] text-slate-500", compactActionLayout && "px-6 py-4 text-sm text-slate-500")}>
+        <p className={cn("w-full px-4 py-3 text-[11px] text-slate-500", compactActionLayout && "px-5 py-3 text-[0.88rem] text-slate-500")}>
           Analyzed 12+ signals · {trustSignals.freshnessLabel} · Updated today
         </p>
       </CardFooter>
