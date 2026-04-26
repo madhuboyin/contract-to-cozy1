@@ -24,6 +24,7 @@ import {
   setOnboardingStep,
   skipOnboarding,
 } from '@/lib/api/onboardingApi';
+import { isOnboardingComplete } from '@/lib/property/onboardingStatus';
 import Step1PropertyDetails from './steps/Step1PropertyDetails';
 import Step2Rooms from './steps/Step2Rooms';
 import Step3Inventory from './steps/Step3Inventory';
@@ -61,6 +62,7 @@ export default function OnboardingClient() {
   const syncQueryData = (data: OnboardingStatusDTO) => {
     queryClient.setQueryData(['property-onboarding', propertyId], data);
     queryClient.invalidateQueries({ queryKey: ['property-onboarding', propertyId] });
+    queryClient.invalidateQueries({ queryKey: ['property-bootstrap', propertyId] });
   };
 
   const setStepMutation = useMutation({
@@ -81,14 +83,16 @@ export default function OnboardingClient() {
 
   const skipMutation = useMutation({
     mutationFn: () => skipOnboarding(propertyId),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      syncQueryData(data);
       router.replace(`/dashboard/properties/${propertyId}`);
     },
   });
 
   const finishMutation = useMutation({
     mutationFn: () => finishOnboarding(propertyId),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      syncQueryData(data);
       router.replace(`/dashboard/properties/${propertyId}`);
     },
   });
@@ -151,7 +155,7 @@ export default function OnboardingClient() {
     );
   }
 
-  if (status.status === 'COMPLETED' || status.setupScore === 100) {
+  if (isOnboardingComplete(status)) {
     return (
       <DashboardShell>
         <MobilePageContainer className="py-6 lg:max-w-7xl lg:px-8 lg:pb-10">

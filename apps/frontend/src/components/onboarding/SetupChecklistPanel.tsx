@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { OnboardingStatusDTO } from '@/lib/api/onboardingApi';
+import { isOnboardingComplete } from '@/lib/property/onboardingStatus';
 
 type Props = {
   propertyId: string;
@@ -12,7 +13,7 @@ type Props = {
 };
 
 export default function SetupChecklistPanel({ propertyId, status }: Props) {
-  if (status.status === 'COMPLETED') {
+  if (isOnboardingComplete(status)) {
     return null;
   }
 

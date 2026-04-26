@@ -38,6 +38,7 @@ import IncidentsClient from "./incidents/IncidentsClient";
 import SetupChecklistPanel from "@/components/onboarding/SetupChecklistPanel";
 import NarrativeRevealOverlay from "@/components/narrative/NarrativeRevealOverlay";
 import { FEATURE_FLAGS } from "@/lib/featureFlags";
+import { isOnboardingComplete } from "@/lib/property/onboardingStatus";
 import {
   Sheet,
   SheetContent,
@@ -819,6 +820,8 @@ export default function PropertyDetailPage() {
       return null;
     },
     enabled: !!propertyId,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const property = bootstrap?.property || null;
@@ -946,7 +949,7 @@ export default function PropertyDetailPage() {
     .filter(Boolean)
     .join(" • ");
   const propertyTypeLabel = formatEnumLabel(property.propertyType, "Home");
-  const onboardingIncomplete = Boolean(onboardingStatus && onboardingStatus.status !== "COMPLETED");
+  const onboardingIncomplete = Boolean(onboardingStatus && !isOnboardingComplete(onboardingStatus));
   const criticalInsightCount =
     scoredProperty.healthScore?.insights?.filter((insight) =>
       HIGH_PRIORITY_STATUSES.includes(insight.status)
@@ -1162,7 +1165,7 @@ export default function PropertyDetailPage() {
         >
           <GuidanceResumeBanner propertyId={property.id} />
 
-          {onboardingStatus && onboardingStatus.status !== "COMPLETED" ? (
+          {onboardingStatus && !isOnboardingComplete(onboardingStatus) ? (
             <SetupChecklistPanel propertyId={property.id} status={onboardingStatus} />
           ) : null}
 
