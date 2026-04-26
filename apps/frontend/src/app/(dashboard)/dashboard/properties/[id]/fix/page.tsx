@@ -119,24 +119,21 @@ export default function ResolutionHubPage() {
           : Promise.resolve({ items: [] }),
       ]);
 
-      const errors: string[] = [];
+      let bookingsFailed = false;
+      let resolutionsFailed = false;
 
       if (bookingsRes.success) {
         setBookings(bookingsRes.data.bookings);
       } else {
         setBookings([]);
-        errors.push(bookingsRes.message || 'Unable to load booking data.');
+        bookingsFailed = true;
       }
 
       if (resolutionsRes.success) {
         setResolutions(resolutionsRes.data);
       } else {
         setResolutions([]);
-        const resolutionErrorMessage =
-          'message' in resolutionsRes && typeof resolutionsRes.message === 'string'
-            ? resolutionsRes.message
-            : 'Unable to load repair analyses.';
-        errors.push(resolutionErrorMessage);
+        resolutionsFailed = true;
       }
 
       const scoredProperties = propertiesRes.success
@@ -171,8 +168,10 @@ export default function ResolutionHubPage() {
         ),
       );
 
-      if (errors.length > 0) {
-        setLoadError(errors.join(' '));
+      if (bookingsFailed && resolutionsFailed) {
+        setLoadError('We could not load Fix data right now. Please try again.');
+      } else {
+        setLoadError(null);
       }
     } catch (error) {
       console.error('Failed to load resolution data:', error);
@@ -292,43 +291,58 @@ export default function ResolutionHubPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Button 
               variant="outline" 
-              className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 rounded-2xl group transition-all"
+              className="h-auto min-h-[184px] whitespace-normal p-0 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 rounded-2xl group transition-all"
               asChild
             >
-              <Link href={propertyId ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}>
-                <Zap className="h-8 w-8 text-brand-600 mb-4 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-lg text-slate-900 block">Something&apos;s Broken</span>
-                <span className="text-sm text-slate-500 mt-1">AI-driven troubleshooting and repair vs. replace guidance.</span>
+              <Link
+                href={propertyId ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}
+                className="flex h-full w-full min-w-0 flex-col items-start p-6 text-left"
+              >
+                <Zap className="mb-4 h-8 w-8 shrink-0 text-brand-600 transition-transform group-hover:scale-110" />
+                <span className="block w-full text-lg font-bold leading-tight text-slate-900">Something&apos;s Broken</span>
+                <span className="mt-2 block w-full whitespace-normal text-sm leading-6 text-slate-500">
+                  AI-driven troubleshooting and repair vs. replace guidance.
+                </span>
               </Link>
             </Button>
 
             <Button 
               variant="outline" 
-              className="h-auto flex-col items-start p-6 text-left border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 rounded-2xl group transition-all"
+              className="h-auto min-h-[184px] whitespace-normal p-0 text-left border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 rounded-2xl group transition-all"
               asChild
             >
-              <Link href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}>
-                <Search className="h-8 w-8 text-blue-600 mb-4 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-lg text-slate-900 block">Find a Specialist</span>
-                <span className="text-sm text-slate-500 mt-1">Search our directory of verified local service providers.</span>
+              <Link
+                href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}
+                className="flex h-full w-full min-w-0 flex-col items-start p-6 text-left"
+              >
+                <Search className="mb-4 h-8 w-8 shrink-0 text-blue-600 transition-transform group-hover:scale-110" />
+                <span className="block w-full text-lg font-bold leading-tight text-slate-900">Find a Specialist</span>
+                <span className="mt-2 block w-full whitespace-normal text-sm leading-6 text-slate-500">
+                  Search our directory of verified local service providers.
+                </span>
               </Link>
             </Button>
 
             <Button 
               variant="outline" 
-              className="h-auto flex-col items-start p-6 text-left border-red-100 hover:border-red-300 hover:bg-red-50/50 rounded-2xl group transition-all"
+              className="h-auto min-h-[184px] whitespace-normal p-0 text-left border-red-100 hover:border-red-300 hover:bg-red-50/50 rounded-2xl group transition-all"
               asChild
             >
-              <Link href={propertyId ? `/dashboard/emergency?propertyId=${propertyId}` : '/dashboard/emergency'}>
-                <AlertCircle className="h-8 w-8 text-red-600 mb-4 group-hover:rotate-12 transition-transform" />
-                <span className="font-bold text-lg text-slate-900 block">Emergency Help</span>
-                <span className="text-sm text-slate-500 mt-1">Instant 24/7 emergency services and shutdown guides.</span>
+              <Link
+                href={propertyId ? `/dashboard/emergency?propertyId=${propertyId}` : '/dashboard/emergency'}
+                className="flex h-full w-full min-w-0 flex-col items-start p-6 text-left"
+              >
+                <AlertCircle className="mb-4 h-8 w-8 shrink-0 text-red-600 transition-transform group-hover:rotate-12" />
+                <span className="block w-full text-lg font-bold leading-tight text-slate-900">Emergency Help</span>
+                <span className="mt-2 block w-full whitespace-normal text-sm leading-6 text-slate-500">
+                  Instant 24/7 emergency services and shutdown guides.
+                </span>
               </Link>
             </Button>
 
             <Button
               variant="outline"
-              className="h-auto flex-col items-start p-6 text-left border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/50 rounded-2xl group transition-all"
+              className="h-auto min-h-[184px] whitespace-normal p-0 text-left border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/50 rounded-2xl group transition-all"
               asChild
             >
               <Link
@@ -337,10 +351,13 @@ export default function ResolutionHubPage() {
                     ? `/dashboard/properties/${propertyId}/tools/quote-comparison?from=fix-hub`
                     : '/dashboard/quote-comparison'
                 }
+                className="flex h-full w-full min-w-0 flex-col items-start p-6 text-left"
               >
-                <Scale className="h-8 w-8 text-emerald-600 mb-4 group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-lg text-slate-900 block">Compare Quotes</span>
-                <span className="text-sm text-slate-500 mt-1">Review pricing side-by-side before you book.</span>
+                <Scale className="mb-4 h-8 w-8 shrink-0 text-emerald-600 transition-transform group-hover:scale-110" />
+                <span className="block w-full text-lg font-bold leading-tight text-slate-900">Compare Quotes</span>
+                <span className="mt-2 block w-full whitespace-normal text-sm leading-6 text-slate-500">
+                  Review pricing side-by-side before you book.
+                </span>
               </Link>
             </Button>
           </div>
