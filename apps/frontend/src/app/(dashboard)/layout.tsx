@@ -33,7 +33,6 @@ import { api } from '@/lib/api/client';
 import { AIChat } from '@/components/AIChat';
 import { PropertyProvider, usePropertyContext } from '@/lib/property/PropertyContext';
 import { NotificationProvider } from '@/lib/notifications/NotificationContext';
-import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { PullToRefresh } from '@/components/mobile/PullToRefresh';
 import DashboardCommandPalette from '@/components/navigation/DashboardCommandPalette';
@@ -215,12 +214,11 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
 
       {/* User actions at bottom */}
       <div className="flex-shrink-0 border-t border-slate-200/70 p-3">
-        <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="mt-2 flex w-full items-center gap-2.5 rounded-[16px] border border-slate-200/80 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-950"
+              className="flex w-full items-center gap-2.5 rounded-[16px] border border-slate-200/80 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-950"
             >
               <div className="h-8 w-8 rounded-full bg-teal-50 ring-1 ring-teal-200 flex items-center justify-center flex-shrink-0">
                 <span className="text-[11px] font-bold text-teal-800 ">

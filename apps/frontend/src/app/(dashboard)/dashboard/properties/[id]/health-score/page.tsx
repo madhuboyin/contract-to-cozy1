@@ -810,9 +810,6 @@ export default function PropertyHealthDetailPage() {
             <div className="px-4 pt-3 pb-2 flex items-start justify-between border-b border-slate-100/80">
               <div>
                 <p className="text-[13px] font-semibold text-slate-900 tracking-normal">Health Snapshot</p>
-                <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
-                  {usingSnapshotInsights ? "Latest weekly snapshot" : "From current property profile"}
-                </p>
               </div>
               <span className="text-[9px] font-bold tracking-normal bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full shrink-0 ml-3">
                 {usingSnapshotInsights ? "Weekly" : "Live"}

@@ -21,7 +21,7 @@ export function CtcPropertySelector({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 h-9 px-3 rounded-lg",
+        "flex items-center gap-2.5 h-12 px-4 rounded-lg",
         "border border-slate-200 bg-white hover:bg-slate-50",
         "transition-all duration-200",
         "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400",
@@ -29,10 +29,10 @@ export function CtcPropertySelector({
       )}
     >
       <Home className="h-4 w-4 text-slate-600 shrink-0" />
-      <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">
+      <span className="text-sm font-medium text-slate-700 truncate max-w-[140px]">
         {propertyName}
       </span>
-      <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+      <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
     </button>
   );
 }

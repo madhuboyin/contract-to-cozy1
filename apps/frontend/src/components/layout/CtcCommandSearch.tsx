@@ -33,7 +33,7 @@ export function CtcCommandSearch({ className, onOpen }: CtcCommandSearchProps) {
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        "flex items-center gap-3 w-full max-w-[480px] h-10 px-4 rounded-full",
+        "flex items-center gap-3 w-full max-w-[600px] h-12 px-4 rounded-full",
         "border border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300",
         "transition-all duration-200 group cursor-text",
         "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400",

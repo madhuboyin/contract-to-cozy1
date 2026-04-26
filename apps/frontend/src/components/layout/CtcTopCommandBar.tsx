@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, CheckSquare } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -68,36 +68,15 @@ function AlertsButton({ count }: { count: number | null }) {
     <button
       type="button"
       className={cn(
-        "relative flex items-center justify-center h-9 w-9 rounded-lg",
+        "relative flex items-center justify-center h-12 w-12 rounded-lg",
         "border border-slate-200 bg-white hover:bg-slate-50",
         "transition-all duration-200",
         "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
       )}
     >
-      <Bell className="h-4 w-4 text-slate-600" />
+      <Bell className="h-5 w-5 text-slate-600" />
       {count !== null && count > 0 && (
         <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-          {count > 9 ? '9+' : count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function TasksButton({ count }: { count: number | null }) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        "relative flex items-center justify-center h-9 w-9 rounded-lg",
-        "border border-slate-200 bg-white hover:bg-slate-50",
-        "transition-all duration-200",
-        "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
-      )}
-    >
-      <CheckSquare className="h-4 w-4 text-slate-600" />
-      {count !== null && count > 0 && (
-        <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-teal-500 px-1.5 text-[10px] font-bold text-white">
           {count > 9 ? '9+' : count}
         </span>
       )}
@@ -114,7 +93,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
       {/* Desktop Command Bar */}
       <div
         className={cn(
-          "hidden lg:block sticky top-0 z-50 w-full",
+          "hidden lg:block fixed top-0 left-0 right-0 z-50 w-full",
           "border-b border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl",
           className
         )}
@@ -136,16 +115,15 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
               </span>
             </Link>
 
-            {/* Center-Left: Command Search */}
-            <CtcCommandSearch className="flex-1 max-w-[480px]" />
+            {/* Center-Left: Command Search (bigger) */}
+            <CtcCommandSearch className="flex-1 max-w-[600px]" />
 
-            {/* Center: Property Selector */}
+            {/* Center: Property Selector (bigger) */}
             <CtcPropertySelector propertyName={propertyName} />
 
-            {/* Right: Actions */}
+            {/* Right: Alerts Only */}
             <div className="flex items-center gap-2 shrink-0">
               <AlertsButton count={alertsCount} />
-              <TasksButton count={tasksCount} />
             </div>
           </div>
         </div>
