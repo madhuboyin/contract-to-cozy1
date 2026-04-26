@@ -26,6 +26,8 @@ import {
   BookOpen,
   Globe,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { User } from '@/types';
 import { PropertySetupBanner } from '@/components/PropertySetupBanner';
@@ -77,7 +79,11 @@ function buildPropertyAwareHref(
 // Persistent sidebar nav (desktop)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PersistentSidebarNav({ user }: { user: User | null }) {
+function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: { 
+  user: User | null;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+}) {
   const pathname = usePathname();
   const { logout } = useAuth();
   const { selectedPropertyId } = usePropertyContext();
@@ -93,6 +99,26 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Collapse/Expand Button */}
+      <div className="h-[72px] flex items-center justify-between px-3 border-b border-slate-200/70 flex-shrink-0">
+        {!isCollapsed && (
+          <span className="text-xs font-semibold text-slate-400 tracking-wide uppercase">
+            Menu
+          </span>
+        )}
+        <button
+          onClick={onToggleCollapse}
+          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors ml-auto"
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-4 w-4 text-slate-600" />
+          ) : (
+            <ChevronLeft className="h-4 w-4 text-slate-600" />
+          )}
+        </button>
+      </div>
+
       {/* Primary nav */}
       <nav className="flex-1 py-5 px-3 space-y-1 overflow-y-auto">
         {coreJobs.map((job) => {
@@ -118,8 +144,10 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
             <Link
               key={job.key}
               href={href}
+              title={isCollapsed ? job.name : undefined}
               className={cn(
-                'group relative flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-semibold transition-all duration-[180ms] ease-out',
+                'group relative flex items-center rounded-[14px] text-sm font-semibold transition-all duration-[180ms] ease-out',
+                isCollapsed ? 'justify-center px-3 py-2.5' : 'gap-3 px-3 py-2.5',
                 isActive
                   ? 'bg-teal-50/90 text-teal-800 shadow-[inset_0_0_0_1px_rgba(20,184,166,0.22)]'
                   : 'text-slate-600 hover:-translate-y-px hover:bg-white/80 hover:text-slate-950 hover:shadow-sm'
@@ -131,7 +159,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
                   isActive ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-600'
                 )}
               />
-              <span>{job.name}</span>
+              {!isCollapsed && <span>{job.name}</span>}
             </Link>
           );
         })}
@@ -141,8 +169,10 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
           <div className="pt-2">
             <Link
               href={buildPropertyAwareHref(resolvedPropertyId, 'home-lab', labJob.key)}
+              title={isCollapsed ? labJob.name : undefined}
               className={cn(
-                'group flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-semibold transition-all duration-[180ms]',
+                'group flex items-center rounded-[14px] text-sm font-semibold transition-all duration-[180ms]',
+                isCollapsed ? 'justify-center px-3 py-2.5' : 'gap-3 px-3 py-2.5',
                 pathname?.startsWith('/dashboard/home-lab')
                   ? 'bg-teal-50/90 text-teal-800 shadow-[inset_0_0_0_1px_rgba(20,184,166,0.22)]'
                   : 'text-slate-600 hover:-translate-y-px hover:bg-white/80 hover:text-slate-950 hover:shadow-sm'
@@ -154,7 +184,7 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
                   pathname?.startsWith('/dashboard/home-lab') ? 'text-teal-700' : 'text-slate-400 group-hover:text-slate-600'
                 )}
               />
-              <span>{labJob.name}</span>
+              {!isCollapsed && <span>{labJob.name}</span>}
             </Link>
           </div>
         )}
@@ -163,50 +193,68 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
         <div className="pt-4 mt-3 border-t border-slate-200/70">
           <Link
             href={resolvedPropertyId ? `/knowledge?propertyId=${encodeURIComponent(resolvedPropertyId)}` : '/knowledge'}
+            title={isCollapsed ? 'Knowledge' : undefined}
             className={cn(
-              'flex items-center gap-3 rounded-[14px] px-3 py-2 text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800'
+              'flex items-center rounded-[14px] text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800',
+              isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
             )}
           >
             <BookOpen className="h-4 w-4 text-slate-400 flex-shrink-0" />
-            Knowledge
+            {!isCollapsed && 'Knowledge'}
           </Link>
           <Link
             href="/dashboard/community-events"
+            title={isCollapsed ? 'Community' : undefined}
             className={cn(
-              'flex items-center gap-3 rounded-[14px] px-3 py-2 text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800'
+              'flex items-center rounded-[14px] text-sm font-semibold text-slate-500 transition-all hover:bg-white/80 hover:text-slate-800',
+              isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
             )}
           >
             <Globe className="h-4 w-4 text-slate-400 flex-shrink-0" />
-            Community
+            {!isCollapsed && 'Community'}
           </Link>
         </div>
 
         {/* Admin links (ADMIN role only) */}
         {user?.role === 'ADMIN' && (
           <div className="pt-2 border-t border-gray-100 space-y-0.5">
-            <p className="px-3 pt-1 pb-0.5 text-[10px] tracking-normal text-gray-400 font-semibold">
-              Admin
-            </p>
+            {!isCollapsed && (
+              <p className="px-3 pt-1 pb-0.5 text-[10px] tracking-normal text-gray-400 font-semibold">
+                Admin
+              </p>
+            )}
             <Link
               href="/dashboard/analytics-admin"
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              title={isCollapsed ? 'Analytics' : undefined}
+              className={cn(
+                'flex items-center rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+                isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
+              )}
             >
               <BarChart2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              Analytics
+              {!isCollapsed && 'Analytics'}
             </Link>
             <Link
               href="/dashboard/knowledge-admin"
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              title={isCollapsed ? 'Knowledge Admin' : undefined}
+              className={cn(
+                'flex items-center rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+                isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
+              )}
             >
               <Settings className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              Knowledge Admin
+              {!isCollapsed && 'Knowledge Admin'}
             </Link>
             <Link
               href="/dashboard/worker-jobs"
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              title={isCollapsed ? 'Worker Jobs' : undefined}
+              className={cn(
+                'flex items-center rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+                isCollapsed ? 'justify-center px-3 py-2' : 'gap-3 px-3 py-2'
+              )}
             >
               <Cpu className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              Worker Jobs
+              {!isCollapsed && 'Worker Jobs'}
             </Link>
           </div>
         )}
@@ -214,38 +262,70 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
 
       {/* User actions at bottom */}
       <div className="flex-shrink-0 border-t border-slate-200/70 p-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2.5 rounded-[16px] border border-slate-200/80 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-950"
-            >
-              <div className="h-8 w-8 rounded-full bg-teal-50 ring-1 ring-teal-200 flex items-center justify-center flex-shrink-0">
-                <span className="text-[11px] font-bold text-teal-800 ">
+        {isCollapsed ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                title={user?.firstName ?? 'Account'}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-50 ring-1 ring-teal-200 transition-all hover:bg-teal-100 mx-auto"
+              >
+                <span className="text-[11px] font-bold text-teal-800">
                   {user?.firstName?.[0] ?? 'U'}
                 </span>
-              </div>
-              <span className="flex-1 text-left truncate">{user?.firstName ?? 'Account'}</span>
-              <ChevronDown className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-44">
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile" className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Profile
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={(e) => { e.preventDefault(); handleLogout(); }}
-              className="flex items-center gap-2 text-red-600 focus:text-red-600"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="right" sideOffset={6} className="w-44">
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/profile" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => { e.preventDefault(); handleLogout(); }}
+                className="flex items-center gap-2 text-red-600 focus:text-red-600"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2.5 rounded-[16px] border border-slate-200/80 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-white hover:text-slate-950"
+              >
+                <div className="h-8 w-8 rounded-full bg-teal-50 ring-1 ring-teal-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[11px] font-bold text-teal-800 ">
+                    {user?.firstName?.[0] ?? 'U'}
+                  </span>
+                </div>
+                <span className="flex-1 text-left truncate">{user?.firstName ?? 'Account'}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-44">
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/profile" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={(e) => { e.preventDefault(); handleLogout(); }}
+                className="flex items-center gap-2 text-red-600 focus:text-red-600"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );
@@ -397,6 +477,25 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [showBanner, setShowBanner] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const bannerFetchedRef = React.useRef(false);
+  
+  // Collapsible sidebar state
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  const toggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const newValue = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sidebarCollapsed', String(newValue));
+      }
+      return newValue;
+    });
+  };
 
   // Keep transition visible for a minimum duration regardless of how fast auth resolves.
   const mountTimeRef = React.useRef(Date.now());
@@ -489,10 +588,14 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       <PropertyProvider>
         <AppShell
           leftNav={
-            <aside className="hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl md:fixed md:top-[72px] md:bottom-0 md:z-40 md:flex md:w-[246px] md:flex-col">
-              <PersistentSidebarNav user={user} />
+            <aside className={cn(
+              "hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl md:fixed md:top-[72px] md:bottom-0 md:z-40 md:flex md:flex-col transition-all duration-300",
+              isCollapsed ? "md:w-[64px]" : "md:w-[246px]"
+            )}>
+              <PersistentSidebarNav user={user} isCollapsed={isCollapsed} onToggleCollapse={toggleCollapse} />
             </aside>
           }
+          sidebarCollapsed={isCollapsed}
           topBar={<CtcTopCommandBar />}
           mobileHeader={
             <header className="md:hidden sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl safe-area-inset-top">

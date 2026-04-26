@@ -18,9 +18,10 @@ type AppShellProps = {
   topBar?: React.ReactNode;
   banner?: React.ReactNode;
   children: React.ReactNode;
+  sidebarCollapsed?: boolean;
 };
 
-export function AppShell({ leftNav, mobileHeader, topBar, banner, children }: AppShellProps) {
+export function AppShell({ leftNav, mobileHeader, topBar, banner, children, sidebarCollapsed = false }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-[var(--ctc-surface-base)] text-slate-950">
       {/* Top command bar (full width, fixed above everything) */}
@@ -33,7 +34,7 @@ export function AppShell({ leftNav, mobileHeader, topBar, banner, children }: Ap
         {/* Left sidebar - positioned below top bar, fixed */}
         {leftNav}
 
-        <div className="flex min-w-0 flex-1 flex-col md:pl-[246px]">
+        <div className={`flex min-w-0 flex-1 flex-col transition-all duration-300 ${sidebarCollapsed ? 'md:pl-[64px]' : 'md:pl-[246px]'}`}>
           {banner}
 
           <div className="flex min-w-0 flex-1">
