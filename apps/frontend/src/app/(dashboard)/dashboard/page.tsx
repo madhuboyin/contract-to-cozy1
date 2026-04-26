@@ -96,7 +96,6 @@ function formatUsd(value: number): string {
 
 function resolvePriorityAlertSavings(
   incident: IncidentDTO | undefined,
-  fallbackAnnualSavings: number,
 ): number {
   const incidentDetails = incident?.details && typeof incident.details === 'object'
     ? (incident.details as Record<string, unknown>)
@@ -106,7 +105,6 @@ function resolvePriorityAlertSavings(
     incidentDetails?.potentialSavingsUsd,
     incidentDetails?.estimatedSavingsUsd,
     incidentDetails?.recommendedSavingsUsd,
-    fallbackAnnualSavings,
   ];
 
   for (const value of candidateValues) {
@@ -666,7 +664,7 @@ export default function DashboardPage() {
       scopedActiveIncidents.find((incident) => incident.severity === 'CRITICAL' || incident.severity === 'WARNING') ||
       data.activeIncidents.find((incident) => incident.severity === 'CRITICAL' || incident.severity === 'WARNING');
     if (highSeverityIncident) {
-      const potentialSavings = resolvePriorityAlertSavings(highSeverityIncident, annualSavingsPotential);
+      const potentialSavings = resolvePriorityAlertSavings(highSeverityIncident);
       return {
         badgeLabel: buildIncidentBadgeLabel(),
         title: highSeverityIncident.title,
