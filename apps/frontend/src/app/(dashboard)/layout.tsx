@@ -99,25 +99,8 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Collapse/Expand Button */}
+      {/* Empty header space to align with top bar */}
       <div className="h-[72px] flex items-center px-3 border-b border-slate-200/70 flex-shrink-0">
-        <button
-          onClick={onToggleCollapse}
-          className="flex items-center gap-2 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {isCollapsed ? (
-            <>
-              <ChevronRight className="h-4 w-4" />
-              <span>Expand</span>
-            </>
-          ) : (
-            <>
-              <ChevronLeft className="h-4 w-4" />
-              <span>Collapse</span>
-            </>
-          )}
-        </button>
       </div>
 
       {/* Primary nav */}
@@ -214,6 +197,30 @@ function PersistentSidebarNav({ user, isCollapsed, onToggleCollapse }: {
             <Globe className="h-4 w-4 text-slate-400 flex-shrink-0" />
             {!isCollapsed && 'Community'}
           </Link>
+        </div>
+
+        {/* Collapse/Expand Button */}
+        <div className="pt-4 mt-3 border-t border-slate-200/70">
+          <button
+            onClick={onToggleCollapse}
+            className={cn(
+              'flex items-center rounded-[14px] text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all w-full',
+              isCollapsed ? 'justify-center px-3 py-2' : 'gap-2 px-3 py-2'
+            )}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {isCollapsed ? (
+              <>
+                <ChevronRight className="h-4 w-4" />
+                <span>Expand</span>
+              </>
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Admin links (ADMIN role only) */}
