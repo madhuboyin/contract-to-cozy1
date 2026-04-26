@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { WinCard } from '@/components/shared/WinCard';
 
 jest.mock('@/lib/analytics/events', () => ({
@@ -17,7 +17,7 @@ describe('WinCard fallback trust behavior', () => {
     );
 
     expect(screen.getByText('Baseline fallback insight')).toBeInTheDocument();
-    expect(screen.getByText(/Low confidence \(fallback\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Template fallback/i)).toBeInTheDocument();
   });
 
   it('does not render fallback badge when explicit trust metadata is provided', () => {
@@ -35,6 +35,37 @@ describe('WinCard fallback trust behavior', () => {
     );
 
     expect(screen.queryByText('Baseline fallback insight')).not.toBeInTheDocument();
-    expect(screen.getByText(/High \(93%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Today/i)).toBeInTheDocument();
+  });
+
+  it('renders the compact action row when requested', () => {
+    const onAction = jest.fn();
+
+    render(
+      <WinCard
+        title="Priority alert"
+        value="Freeze Risk Detected"
+        description="Forecast minimum temperature is 26.4°F in the next 36 hours."
+        actionLabel="Review incident"
+        actionMetaLabel="Potential savings"
+        actionMetaValue="$180"
+        compactActionLayout
+        onAction={onAction}
+        trust={{
+          confidenceLabel: 'High',
+          freshnessLabel: 'Verified from live signals',
+          sourceLabel: 'Home signals',
+        }}
+      />
+    );
+
+    expect(screen.getByText('Potential savings')).toBeInTheDocument();
+    expect(screen.getByText('$180')).toBeInTheDocument();
+
+    const button = screen.getByRole('button', { name: /review incident/i });
+    expect(button.className).toContain('w-fit');
+
+    fireEvent.click(button);
+    expect(onAction).toHaveBeenCalledTimes(1);
   });
 });

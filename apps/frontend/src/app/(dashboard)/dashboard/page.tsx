@@ -94,6 +94,31 @@ function formatUsd(value: number): string {
   }).format(value);
 }
 
+function resolvePriorityAlertSavings(
+  incident: IncidentDTO | undefined,
+  fallbackAnnualSavings: number,
+): number {
+  const incidentDetails = incident?.details && typeof incident.details === 'object'
+    ? (incident.details as Record<string, unknown>)
+    : null;
+
+  const candidateValues = [
+    incidentDetails?.potentialSavingsUsd,
+    incidentDetails?.estimatedSavingsUsd,
+    incidentDetails?.recommendedSavingsUsd,
+    fallbackAnnualSavings,
+  ];
+
+  for (const value of candidateValues) {
+    const numericValue = typeof value === 'number' ? value : Number(value);
+    if (Number.isFinite(numericValue) && numericValue >= 0) {
+      return Math.round(numericValue);
+    }
+  }
+
+  return 0;
+}
+
 function isRateLimitedError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const status = (error as Error & { status?: number | string }).status;
@@ -505,12 +530,16 @@ export default function DashboardPage() {
     // 1. Open Urgent Incident
     const highSeverityIncident = data.activeIncidents.find(inc => inc.severity === 'CRITICAL' || inc.severity === 'WARNING');
     if (highSeverityIncident) {
+      const potentialSavings = resolvePriorityAlertSavings(highSeverityIncident, annualSavingsPotential);
       return {
         title: `Priority alert: ${highSeverityIncident.title}`,
         subtitle: highSeverityIncident.summary || 'A critical home event requires your review to prevent escalation.',
         ctaLabel: 'Review incident',
         impactLabel: 'Active home risk',
         etaLabel: 'ETA 2 min',
+        actionMetaLabel: 'Potential savings',
+        actionMetaValue: formatUsd(potentialSavings),
+        compactActionLayout: true,
       };
     }
 
@@ -523,6 +552,9 @@ export default function DashboardPage() {
         ctaLabel: `Review ${topHealthInsight.title.toLowerCase()}`,
         impactLabel: 'Top risk signal',
         etaLabel: 'ETA 2 min',
+        actionMetaLabel: undefined,
+        actionMetaValue: undefined,
+        compactActionLayout: false,
       };
     }
 
@@ -534,6 +566,9 @@ export default function DashboardPage() {
         ctaLabel: 'See your savings',
         impactLabel: `${formatUsd(annualSavingsPotential)}/yr potential`,
         etaLabel: 'ETA 3 min',
+        actionMetaLabel: undefined,
+        actionMetaValue: undefined,
+        compactActionLayout: false,
       };
     }
 
@@ -545,6 +580,9 @@ export default function DashboardPage() {
         ctaLabel: 'Add your first item',
         impactLabel: 'Unlock intelligence',
         etaLabel: 'ETA 90 sec',
+        actionMetaLabel: undefined,
+        actionMetaValue: undefined,
+        compactActionLayout: false,
       };
     }
 
@@ -556,6 +594,9 @@ export default function DashboardPage() {
         ctaLabel: 'Fix overdue tasks',
         impactLabel: 'Preventative win',
         etaLabel: 'ETA 2 min',
+        actionMetaLabel: undefined,
+        actionMetaValue: undefined,
+        compactActionLayout: false,
       };
     }
 
@@ -566,6 +607,9 @@ export default function DashboardPage() {
       ctaLabel: 'View full report',
       impactLabel: 'HomeScore up to date',
       etaLabel: 'ETA 1 min',
+      actionMetaLabel: undefined,
+      actionMetaValue: undefined,
+      compactActionLayout: false,
     };
   })();
 
@@ -659,6 +703,9 @@ export default function DashboardPage() {
         value={heroNarrative.title}
         description={heroNarrative.subtitle ?? 'Chosen because it best balances cost prevention, confidence, and effort.'}
         actionLabel={heroNarrative.ctaLabel}
+        actionMetaLabel={heroNarrative.actionMetaLabel}
+        actionMetaValue={heroNarrative.actionMetaValue}
+        compactActionLayout={heroNarrative.compactActionLayout}
         onAction={() => router.push(ahaCtaHref)}
         isUrgent={data.activeIncidents.length > 0 || overdueMaintenanceCount > 0}
         trust={{
