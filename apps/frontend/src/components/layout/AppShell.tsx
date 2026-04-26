@@ -24,21 +24,24 @@ type AppShellProps = {
 
 export function AppShell({ leftNav, mobileHeader, topBar, banner, children }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-[var(--ctc-surface-base)] text-slate-950">
-      {leftNav}
+    <div className="flex min-h-screen flex-col bg-[var(--ctc-surface-base)] text-slate-950">
+      {/* Top command bar (full width, above everything) */}
+      {topBar}
+      
+      {/* Legacy mobile header - only shown if topBar is not provided */}
+      {!topBar && mobileHeader}
+      
+      <div className="flex min-h-0 flex-1">
+        {/* Left sidebar - positioned below top bar */}
+        {leftNav}
 
-      <div className="flex min-w-0 flex-1 flex-col md:pl-[246px]">
-        {/* Top command bar (replaces mobile header on mobile, adds desktop bar) */}
-        {topBar}
-        
-        {/* Legacy mobile header - only shown if topBar is not provided */}
-        {!topBar && mobileHeader}
-        
-        {banner}
+        <div className="flex min-w-0 flex-1 flex-col md:pl-[246px]">
+          {banner}
 
-        <div className="flex min-w-0 flex-1">
-          {children}
-          <RightSidebar />
+          <div className="flex min-w-0 flex-1">
+            {children}
+            <RightSidebar />
+          </div>
         </div>
       </div>
     </div>

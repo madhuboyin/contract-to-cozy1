@@ -94,20 +94,6 @@ function PersistentSidebarNav({ user }: { user: User | null }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="h-[88px] flex items-center px-5 border-b border-slate-200/70 flex-shrink-0">
-        <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
-          <Image
-            src="/favicon.svg"
-            alt="ContractToCozy"
-            width={28}
-            height={28}
-            className="h-7 w-7 flex-shrink-0"
-          />
-          <span className="text-[15px] font-semibold tracking-normal text-slate-950 truncate">ContractToCozy</span>
-        </Link>
-      </div>
-
       {/* Primary nav */}
       <nav className="flex-1 py-5 px-3 space-y-1 overflow-y-auto">
         {coreJobs.map((job) => {
@@ -505,7 +491,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
       <PropertyProvider>
         <AppShell
           leftNav={
-            <aside className="hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl md:fixed md:inset-y-0 md:z-50 md:flex md:w-[246px] md:flex-col">
+            <aside className="hidden border-r border-slate-200/70 bg-white/82 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-xl md:fixed md:top-[72px] md:bottom-0 md:z-40 md:flex md:w-[246px] md:flex-col">
               <PersistentSidebarNav user={user} />
             </aside>
           }
