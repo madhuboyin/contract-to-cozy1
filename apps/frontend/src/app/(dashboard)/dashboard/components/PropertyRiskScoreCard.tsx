@@ -204,7 +204,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Shield className={HEADER_ICON} />
-          <span className={TITLE_CLASS}>Risk Exposure</span>
+          <span className={TITLE_CLASS}>Risk Score</span>
         </div>
         <StatusBadge status={badge.status} customLabel={badge.label} />
       </div>

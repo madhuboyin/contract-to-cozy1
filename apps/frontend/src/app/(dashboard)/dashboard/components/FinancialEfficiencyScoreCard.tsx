@@ -167,7 +167,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <DollarSign className={HEADER_ICON} />
-          <span className={TITLE_CLASS}>Financial</span>
+          <span className={TITLE_CLASS}>Cost Efficiency</span>
         </div>
         <StatusBadge status={badge.status} customLabel={badge.customLabel} />
       </div>
