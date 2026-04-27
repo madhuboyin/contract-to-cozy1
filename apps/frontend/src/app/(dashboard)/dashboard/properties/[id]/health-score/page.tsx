@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Activity, ArrowLeft, ChevronDown, Clock3, FileText, Flame, Gauge, Home, Loader2, ShieldCheck, Wind, Wrench } from "lucide-react";
+import { Activity, ArrowLeft, BarChart2, Calendar, CheckCircle2, ChevronDown, ClipboardList, Clock3, FileText, Flag, Flame, Gauge, Home, Info, Loader2, Minus, ShieldCheck, TrendingDown, TrendingUp, Wind, Wrench } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { api } from "@/lib/api/client";
@@ -545,6 +545,76 @@ export default function PropertyHealthDetailPage() {
   const neutralDelta = hasPreviousSnapshot ? neutralInsights.length - previousNeutralCount : null;
   const positiveDelta = hasPreviousSnapshot ? positiveInsights.length - previousPositiveCount : null;
 
+  // Derived values for premium redesign summary tiles
+  const trendPoints = series?.trend || [];
+  const bestScore = trendPoints.length > 0 ? Math.max(...trendPoints.map((p) => p.score)) : latestScore;
+  const firstTrendScore = trendPoints.length > 0 ? trendPoints[0].score : latestScore;
+  const lastTrendScore = trendPoints.length > 0 ? trendPoints[trendPoints.length - 1].score : latestScore;
+  const trendDiff = lastTrendScore - firstTrendScore;
+  const trendLabel = Math.abs(trendDiff) < 1 ? "Flat" : trendDiff > 0 ? "Rising" : "Declining";
+  const wowDelta = series?.deltaFromPreviousWeek ?? null;
+  const scoreStabilityLabel = wowDelta === null || Math.abs(wowDelta) < 1 ? "Stable" : wowDelta > 0 ? "Improving" : "Declining";
+  const stabilitySubtext = wowDelta === null || Math.abs(wowDelta) < 0.05 ? "vs last week" : `${wowDelta > 0 ? "+" : ""}${wowDelta.toFixed(1)} pts`;
+  const dataFilled = sortedInsights.filter((i) => String(i.status || "") !== "Missing Data").length;
+  const confidencePct = sortedInsights.length > 0 ? Math.min(100, Math.round((dataFilled / sortedInsights.length) * 100)) : 0;
+  const confidenceLabel = confidencePct >= 80 ? "High" : confidencePct >= 50 ? "Medium" : "Low";
+  const footerInsight =
+    wowDelta === null
+      ? "Your health score is being tracked — weekly snapshots will appear as data builds."
+      : Math.abs(wowDelta) < 0.05
+      ? "Your health score is stable and no significant changes were detected."
+      : wowDelta > 0
+      ? `Your health score improved by ${wowDelta.toFixed(1)} points this week.`
+      : `Your health score declined by ${Math.abs(wowDelta).toFixed(1)} points this week.`;
+
+  // Change card metrics
+  const latestPriorityCountForMetric = snapshotInsights.filter((i) => REQUIRED_ACTION_STATUSES.includes(String(i.status || ""))).length;
+  const prevPriorityCountForMetric = previousInsights.filter((i) => REQUIRED_ACTION_STATUSES.includes(String(i.status || ""))).length;
+  const latestReqForMetric = getRequiredActions(series?.latest);
+  const prevReqForMetric = getRequiredActions(series?.previous);
+  const deltaReq = latestReqForMetric !== null && prevReqForMetric !== null ? latestReqForMetric - prevReqForMetric : null;
+  const deltaPriorityMetric = hasPreviousSnapshot ? latestPriorityCountForMetric - prevPriorityCountForMetric : null;
+
+  function getChangeMetric(title: string): { value: string; color: string } | null {
+    const t = title.toLowerCase();
+    if (t.includes("week-over-week")) {
+      const v = wowDelta;
+      if (v === null) return null;
+      return {
+        value: Math.abs(v) < 0.05 ? "— 0.0" : `${v > 0 ? "+" : "—"} ${Math.abs(v).toFixed(1)}`,
+        color: v > 0 ? "text-emerald-600" : v < 0 ? "text-red-500" : "text-blue-500",
+      };
+    }
+    if (t.includes("maintenance")) {
+      if (deltaReq === null) return null;
+      return {
+        value: `${deltaReq === 0 ? "— " : deltaReq > 0 ? "+ " : "— "}${Math.abs(deltaReq)}`,
+        color: deltaReq > 0 ? "text-red-500" : deltaReq < 0 ? "text-emerald-600" : "text-amber-500",
+      };
+    }
+    if (t.includes("risky")) {
+      if (deltaPriorityMetric === null) return null;
+      return {
+        value: `${deltaPriorityMetric === 0 ? "— " : deltaPriorityMetric > 0 ? "+ " : "— "}${Math.abs(deltaPriorityMetric)}`,
+        color: deltaPriorityMetric > 0 ? "text-red-500" : deltaPriorityMetric < 0 ? "text-emerald-600" : "text-blue-500",
+      };
+    }
+    if (t.includes("drag")) {
+      const drag = asNumber(topNegativeInsight?.score) ?? 0;
+      return { value: `— ${Math.abs(drag).toFixed(1)}`, color: "text-red-500" };
+    }
+    return null;
+  }
+
+  function getChangeCardIcon(title: string) {
+    const t = title.toLowerCase();
+    if (t.includes("week-over-week")) return BarChart2;
+    if (t.includes("maintenance")) return ClipboardList;
+    if (t.includes("risky")) return Flag;
+    if (t.includes("drag") || t.includes("decline")) return TrendingDown;
+    return Activity;
+  }
+
   useEffect(() => {
     if (!focusedFactor) return;
     const el = document.querySelector<HTMLElement>(`[data-insight-key="${focusedFactor}"]`);
@@ -960,167 +1030,345 @@ export default function PropertyHealthDetailPage() {
           </div>
         </div>
 
-        <div className="mt-8 space-y-6">
-          <div className="space-y-2">
-            <h3 className="text-lg md:text-xl font-semibold">Overall Health Gauge: {healthDetails.level}</h3>
-            <div className="flex justify-between text-xs font-medium text-muted-foreground">
-              <span>Needs attention (0)</span>
-              <span>Excellent (100)</span>
-            </div>
-            <Progress value={percentage} className="h-4" indicatorClassName={healthDetails.progressColor} />
-          </div>
+        {/* ===== PREMIUM HEALTH SCORE REPORT SECTION ===== */}
+        <div className="mt-8 space-y-4">
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Card 
-              id="score-trend-section"
-              className={`lg:col-span-2 transition-all duration-300 ${
-                shouldFocusTrends ? 'ring-2 ring-teal-400 shadow-lg' : ''
-              }`}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <CardTitle className="text-base font-medium">Health score Trend</CardTitle>
-                    <CardDescription>Weekly snapshots for the last 6 months or 1 year.</CardDescription>
+          {/* Row 1: Premium Gauge Hero Card */}
+          <div className="rounded-2xl border border-slate-200/60 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.04)] px-8 py-6 transition-shadow hover:shadow-[0_6px_28px_rgba(0,0,0,0.09)]">
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-2xl font-semibold text-slate-900">Overall Health Gauge: {healthDetails.level}</h3>
+                <div className="flex items-center gap-3 mt-3 flex-wrap">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className={`text-5xl font-black tabular-nums tracking-tight leading-none ${healthDetails.color}`}>{latestScore.toFixed(0)}</span>
+                    <span className="text-lg text-slate-400 font-medium mb-1">/100</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
-                      6 Months
-                    </Button>
-                    <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
-                      1 Year
-                    </Button>
+                  <span className={`text-base font-semibold ${healthDetails.color}`}>{healthDetails.level}</span>
+                  {/* Delta pill */}
+                  {wowDelta === null || Math.abs(wowDelta) < 0.05 ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-500">
+                      <Minus className="h-3.5 w-3.5" /> 0 vs last week
+                    </span>
+                  ) : wowDelta > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+                      <TrendingUp className="h-3.5 w-3.5" /> +{wowDelta.toFixed(1)} vs last week
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-sm font-medium text-red-600">
+                      <TrendingDown className="h-3.5 w-3.5" /> {wowDelta.toFixed(1)} vs last week
+                    </span>
+                  )}
+                </div>
+
+                {/* Premium gauge bar with pointer marker */}
+                <div className="mt-6 relative">
+                  {/* Background track: gradient from red → amber → green */}
+                  <div className="h-3 rounded-full bg-gradient-to-r from-red-200 via-amber-200 to-emerald-200" />
+                  {/* Filled portion */}
+                  <div
+                    className={`absolute inset-y-0 left-0 rounded-full ${healthDetails.progressColor} transition-all duration-700 opacity-90`}
+                    style={{ width: `${percentage}%` }}
+                  />
+                  {/* Pointer marker chip */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-700"
+                    style={{ left: `${Math.min(98, Math.max(2, percentage))}%` }}
+                  >
+                    <div className="w-7 h-7 rounded-full bg-white border-2 border-slate-300 shadow-[0_2px_8px_rgba(0,0,0,0.15)] flex items-center justify-center">
+                      <span className="text-[9px] font-black tabular-nums text-slate-700">{latestScore.toFixed(0)}</span>
+                    </div>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
-                <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
-              </CardContent>
-            </Card>
+                <div className="flex justify-between text-xs font-medium text-slate-400 mt-2.5">
+                  <span>Needs attention (0)</span>
+                  <span>Excellent (100)</span>
+                </div>
+              </div>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-medium">Changes Impacting Score</CardTitle>
-                <CardDescription>What moved the score since the previous weekly snapshot.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {changes.every((c) => c.impact === "neutral") && (
-                  <p className="text-sm text-gray-500 mb-2">No significant changes since last week.</p>
-                )}
-                {changes.map((change, idx) => (
-                  <div key={`${change.title}-${idx}`} className="rounded-lg border border-black/10 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium">{change.title}</p>
-                      {change.impact !== "neutral" && (
-                        <Badge variant={change.impact === "positive" ? "success" : "destructive"}>
-                          {change.impact === "positive" ? "↑ Improved" : "↓ Declined"}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{change.detail}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+              {/* Right: Score range guide */}
+              <div className="shrink-0 pt-1">
+                <button
+                  onClick={() => setShowScoreModal(true)}
+                  className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm transition-all"
+                >
+                  <Info className="h-4 w-4 text-slate-400" />
+                  Score range guide
+                </button>
+              </div>
+            </div>
           </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-medium">Current Health Focus</CardTitle>
-              <CardDescription>
+          {/* Row 2: Two-column — Trend (65%) + Changes Rail (35%) */}
+          <div className="grid gap-4 lg:grid-cols-[65fr_35fr]">
+
+            {/* Left: Health Score Trend Card */}
+            <div
+              id="score-trend-section"
+              className={`rounded-2xl border border-slate-200/60 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col transition-all duration-300 hover:shadow-[0_6px_28px_rgba(0,0,0,0.10)] hover:-translate-y-px ${
+                shouldFocusTrends ? "ring-2 ring-teal-400 shadow-lg" : ""
+              }`}
+            >
+              {/* Card header */}
+              <div className="px-6 pt-5 pb-4 border-b border-slate-100/80">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-xl bg-blue-50 border border-blue-100/60 p-2.5 shrink-0">
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-semibold text-slate-900">Health score Trend</h4>
+                      <p className="text-sm text-slate-500 mt-0.5">Weekly snapshots for the last 6 months or 1 year.</p>
+                    </div>
+                  </div>
+                  {/* Premium segmented control */}
+                  <div className="flex items-center rounded-xl border border-slate-200/80 bg-slate-50/80 p-1 gap-1 shrink-0">
+                    <button
+                      onClick={() => setTrendWeeks(26)}
+                      className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                        trendWeeks === 26
+                          ? "bg-teal-700 text-white shadow-sm"
+                          : "text-slate-600 hover:text-slate-800 hover:bg-slate-100/80"
+                      }`}
+                    >
+                      6 Months
+                    </button>
+                    <button
+                      onClick={() => setTrendWeeks(52)}
+                      className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                        trendWeeks === 52
+                          ? "bg-teal-700 text-white shadow-sm"
+                          : "text-slate-600 hover:text-slate-800 hover:bg-slate-100/80"
+                      }`}
+                    >
+                      1 Year
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart area */}
+              <div className="px-6 pt-4 pb-2 flex-1">
+                <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+              </div>
+
+              {/* Bottom summary tiles */}
+              <div className="px-6 pb-4">
+                <div className="grid grid-cols-4 gap-3">
+                  {/* Score stability */}
+                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-1.5 shrink-0 mt-0.5">
+                      <Activity className="h-3.5 w-3.5 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium text-slate-400 leading-tight">Score stability</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{scoreStabilityLabel}</p>
+                      <p className="text-[10px] text-slate-400 leading-tight">{stabilitySubtext}</p>
+                    </div>
+                  </div>
+                  {/* 6-month trend */}
+                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-1.5 shrink-0 mt-0.5">
+                      <TrendingUp className="h-3.5 w-3.5 text-blue-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium text-slate-400 leading-tight">6-month trend</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{trendLabel}</p>
+                      <p className="text-[10px] text-slate-400 leading-tight">no change</p>
+                    </div>
+                  </div>
+                  {/* Best score this period */}
+                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                    <div className="rounded-lg bg-violet-50 border border-violet-100 p-1.5 shrink-0 mt-0.5">
+                      <Calendar className="h-3.5 w-3.5 text-violet-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium text-slate-400 leading-tight">Best score this period</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{bestScore.toFixed(0)}</p>
+                      <p className="text-[10px] text-slate-400 leading-tight">No change</p>
+                    </div>
+                  </div>
+                  {/* Score confidence */}
+                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5 flex items-start gap-2.5">
+                    <div className="rounded-lg bg-teal-50 border border-teal-100 p-1.5 shrink-0 mt-0.5">
+                      <ShieldCheck className="h-3.5 w-3.5 text-teal-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium text-slate-400 leading-tight">Score confidence</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{confidenceLabel}</p>
+                      <p className="text-[10px] text-slate-400 leading-tight">{confidencePct}% confidence</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer insight banner */}
+              <div className="mx-6 mb-5 rounded-xl border border-emerald-100/80 bg-emerald-50/60 px-4 py-3 flex items-center gap-3">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <p className="text-sm text-emerald-800 font-medium">{footerInsight}</p>
+              </div>
+            </div>
+
+            {/* Right: Changes Impacting Score Rail */}
+            <div className="rounded-2xl border border-slate-200/60 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
+              <div className="px-5 pt-5 pb-4 border-b border-slate-100/80">
+                <h4 className="text-lg font-semibold text-slate-900">Changes Impacting Score</h4>
+                <p className="text-sm text-slate-500 mt-0.5">What moved the score since the previous weekly snapshot.</p>
+              </div>
+
+              <div className="px-4 py-4 flex-1 space-y-3">
+                {changes.map((change, idx) => {
+                  const metric = getChangeMetric(change.title);
+                  const ChangeIcon = getChangeCardIcon(change.title);
+                  const isDragCard = change.title.toLowerCase().includes("drag");
+                  const isNegative = change.impact === "negative";
+                  const isPositive = change.impact === "positive";
+
+                  return (
+                    <div
+                      key={`${change.title}-${idx}`}
+                      className={`rounded-xl border px-4 py-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-px ${
+                        isDragCard && isNegative
+                          ? "border-red-200/80 bg-red-50/40"
+                          : "border-slate-200/70 bg-white hover:bg-slate-50/60"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Icon badge */}
+                        <div
+                          className={`rounded-full p-2 shrink-0 mt-0.5 ${
+                            isNegative
+                              ? "bg-red-100/80 text-red-600"
+                              : isPositive
+                              ? "bg-emerald-100/80 text-emerald-600"
+                              : "bg-slate-100/80 text-slate-500"
+                          }`}
+                        >
+                          <ChangeIcon className="h-4 w-4" />
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-800 leading-snug">{change.title}</p>
+                            {isDragCard && isNegative && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 shrink-0">
+                                <TrendingDown className="h-2.5 w-2.5" /> Declined
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1 leading-relaxed">{change.detail}</p>
+                        </div>
+
+                        {/* Right metric */}
+                        {metric && (
+                          <div className={`shrink-0 text-sm font-bold tabular-nums ${metric.color}`}>
+                            {metric.value}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Current Health Focus — refined styling */}
+          <div className="rounded-2xl border border-slate-200/60 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="px-6 pt-5 pb-4 border-b border-slate-100/80">
+              <h4 className="text-lg font-semibold text-slate-900">Current Health Focus</h4>
+              <p className="text-sm text-slate-500 mt-0.5">
                 {usingSnapshotInsights
                   ? "Top actionable and in-progress factors from the latest weekly snapshot."
                   : "Showing latest profile-driven health factors while weekly snapshot history is still building."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-                {focusInsights.length === 0 ? (
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              {focusInsights.length === 0 ? (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p>No factor details are available yet for this property.</p>
                   <p>
-                    Add property profile fields and service records to unlock full health summary:
-                    {" "}
-                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>
-                    {" "}
-                    or
-                    {" "}
+                    Add property profile fields and service records to unlock full health summary:{" "}
+                    <Link href={`/dashboard/properties/${propertyId}/edit`} className="underline">Edit property details</Link>{" "}
+                    or{" "}
                     <Link href={`/dashboard/documents?propertyId=${propertyId}`} className="underline">upload documents</Link>.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, false, getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor))}
+                  {focusInsights.map((insight, idx) =>
+                    renderFocusInsightAccordionRow(
+                      insight,
+                      idx,
+                      false,
+                      getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor
+                    )
+                  )}
                 </div>
               )}
-              <div className="mt-4">
+              <div className="mt-5">
                 <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}>
                   <Button variant="outline" size="sm">View maintenance actions</Button>
                 </Link>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <div>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-medium">Health Factor Ledger</CardTitle>
-                <CardDescription>Full factor-by-factor contributions grouped by negative, watch, and positive impact.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {sortedInsights.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-black/10 px-3 py-3 text-sm text-muted-foreground">
-                    No factor-level ledger is available yet. Complete property profile fields and upload service documents to unlock this section.
-                  </div>
-                ) : (
-                  <>
-                    {LEDGER_GROUPS.map((group) => {
-                      const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
-                      return (
-                        <div key={group.title} className="space-y-2">
-                          <div>
-                            <p className="text-xs font-semibold text-muted-foreground">
-                              {group.title}
-                              <span className={`ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                                group.tone === 'danger' ? 'bg-red-100 text-red-600' :
-                                group.tone === 'elevated' ? 'bg-amber-100 text-amber-700' :
-                                'bg-teal-100 text-teal-700'
-                              }`}>{groupInsights.length}</span>
+          {/* Health Factor Ledger — refined styling */}
+          <div className="rounded-2xl border border-slate-200/60 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="px-6 pt-5 pb-4 border-b border-slate-100/80">
+              <h4 className="text-lg font-semibold text-slate-900">Health Factor Ledger</h4>
+              <p className="text-sm text-slate-500 mt-0.5">Full factor-by-factor contributions grouped by negative, watch, and positive impact.</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {sortedInsights.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm text-muted-foreground">
+                  No factor-level ledger is available yet. Complete property profile fields and upload service documents to unlock this section.
+                </div>
+              ) : (
+                LEDGER_GROUPS.map((group) => {
+                  const groupInsights = getLedgerInsights(group.key, negativeInsights, neutralInsights, positiveInsights);
+                  return (
+                    <div key={group.title} className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        {group.title}
+                        <span className={`ml-1.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                          group.tone === "danger" ? "bg-red-100 text-red-600" :
+                          group.tone === "elevated" ? "bg-amber-100 text-amber-700" :
+                          "bg-teal-100 text-teal-700"
+                        }`}>{groupInsights.length}</span>
+                      </p>
+                      {groupInsights.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No factors in this category.</p>
+                      ) : (
+                        groupInsights.map((insight, idx) => (
+                          <div
+                            key={`${group.title}-${insight.factor || "insight"}-${idx}`}
+                            className={`rounded-xl border border-slate-200/70 border-l-[3px] ${getInsightLeftBorderColor(insight.status)} px-4 py-3`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium text-slate-800">{getDisplayFactorName(insight.factor)}</p>
+                              <Badge
+                                variant={
+                                  getInsightImpact(insight.status) === "negative" ? "destructive" :
+                                  getInsightImpact(insight.status) === "positive" ? "success" : "secondary"
+                                }
+                              >
+                                {getInsightChipLabel(insight.status)}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {getFactorDescription(insight.factor, insight.status)}
+                              {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
                             </p>
                           </div>
-                          {groupInsights.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No factors in this category.</p>
-                          ) : (
-                            groupInsights.map((insight, idx) => (
-                              <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className={`rounded-lg border border-black/10 border-l-[3px] ${getInsightLeftBorderColor(insight.status)} px-3 py-2`}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-medium">{getDisplayFactorName(insight.factor)}</p>
-                                  <Badge
-                                    variant={
-                                      getInsightImpact(insight.status) === "negative"
-                                        ? "destructive"
-                                        : getInsightImpact(insight.status) === "positive"
-                                        ? "success"
-                                        : "secondary"
-                                    }
-                                  >
-                                    {getInsightChipLabel(insight.status)}
-                                  </Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {getFactorDescription(insight.factor, insight.status)}
-                                  {getInsightDetailsSummary(insight) ? ` • ${getInsightDetailsSummary(insight)}` : ""}
-                                </p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                        ))
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>
