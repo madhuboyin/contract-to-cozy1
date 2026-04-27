@@ -51,6 +51,8 @@ function resolveActionTool(title: string | undefined, propertyId: string): Actio
     return { href: `${base}/hidden-asset-finder`, label: 'Asset Finder', toolKey: 'hidden-asset-finder' };
   if (/REFINANC/.test(key))
     return { href: `${base}/mortgage-refinance-radar`, label: 'Refinance Radar', toolKey: 'mortgage-refinance-radar' };
+  if (/SAVINGS|EFFICIENCY|COST/.test(key))
+    return { href: `/dashboard/properties/${propertyId}/financial-efficiency?focus=breakdown`, label: 'Financial Efficiency', toolKey: 'financial-efficiency' };
   return { href: `${base}/maintenance`, label: 'Maintenance', toolKey: 'maintenance' };
 }
 
@@ -511,8 +513,16 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
                               Optimized
                             </span>
                           )
-                          : '$220-$760',
-                      valueClassName: 'text-xs font-semibold text-emerald-700',
+                          : (
+                            <Link
+                              href={`/dashboard/properties/${propertyId}/financial-efficiency?focus=breakdown`}
+                              className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                              onClick={() => track('morning_brief_savings_clicked', { propertyId, scoreValue })}
+                            >
+                              $220-$760
+                            </Link>
+                          ),
+                      valueClassName: '',
                     },
                     {
                       key: 'next-renewal',
