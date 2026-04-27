@@ -29,6 +29,7 @@ import type { Booking, OrchestratedActionDTO, Property } from '@/types';
 import type { IncidentDTO } from '@/types/incidents.types';
 import { listIncidents } from '@/app/(dashboard)/dashboard/properties/[id]/incidents/incidentsApi';
 import { getSidebarActions, getPageAwareSubtitle, type SidebarAction } from '@/lib/sidebar/dynamicSidebarActions';
+import { getHomeSavingsSummary } from '@/lib/api/homeSavingsApi';
 
 type HealthTone = 'good' | 'fair' | 'poor';
 
@@ -266,6 +267,13 @@ function useSidebarData() {
     staleTime: 3 * 60 * 1000,
   });
 
+  const homeSavingsQuery = useQuery({
+    queryKey: ['home-savings-summary-sidebar', propertyId],
+    queryFn: () => (propertyId ? getHomeSavingsSummary(propertyId) : Promise.resolve(null)),
+    enabled: !!propertyId,
+    staleTime: 10 * 60 * 1000,
+  });
+
   return useMemo(() => {
     const property = propertyQuery.data as (Property & { healthScore?: { totalScore?: number } }) | null;
     const score = clampScore(scoreSnapshotQuery.data?.scores?.HEALTH?.latest?.score ?? property?.healthScore?.totalScore);
@@ -309,6 +317,7 @@ function useSidebarData() {
         highConfidence: activeActions.filter(isHighConfidence).length + activeIncidents.filter(isHighConfidence).length,
         gapCount: activeActions.filter(isCoverageAction).length,
         nextTask: chooseNextTask(activeActions, bookings),
+        savingsOpportunities: (homeSavingsQuery.data?.categories ?? []).filter((c) => c.status === 'FOUND_SAVINGS').length,
       },
     };
   }, [
@@ -327,6 +336,7 @@ function useSidebarData() {
     resolutionsQuery.isLoading,
     bookingsQuery.data,
     bookingsQuery.isLoading,
+    homeSavingsQuery.data,
   ]);
 }
 
@@ -449,11 +459,11 @@ function SnapshotBlock({
   );
 }
 
-function DynamicActionsBlock({ 
-  propertyId, 
+function DynamicActionsBlock({
+  propertyId,
   pathname,
   signals,
-}: { 
+}: {
   propertyId: string | undefined;
   pathname: string | null;
   signals: {
@@ -461,6 +471,7 @@ function DynamicActionsBlock({
     atRisk: number;
     highConfidence: number;
     gapCount: number;
+    savingsOpportunities: number;
   };
 }) {
   const router = useRouter();
@@ -476,6 +487,7 @@ function DynamicActionsBlock({
         atRisk: signals.atRisk,
         gapCount: signals.gapCount,
         highConfidence: signals.highConfidence,
+        savingsOpportunities: signals.savingsOpportunities,
       },
       missingData: {
         // These would ideally come from property data
@@ -677,8 +689,8 @@ export function RightSidebar() {
           />
         </>
       )}
-      <DynamicActionsBlock 
-        propertyId={data.propertyId} 
+      <DynamicActionsBlock
+        propertyId={data.propertyId}
         pathname={pathname}
         signals={data.snapshot}
       />

@@ -63,6 +63,7 @@ export interface SidebarContext {
     atRisk?: number;
     gapCount?: number;
     highConfidence?: number;
+    savingsOpportunities?: number;
   };
   missingData?: {
     hasInsurance?: boolean;
@@ -330,16 +331,29 @@ function getSaveActions(ctx: SidebarContext): SidebarAction[] {
   const actions: SidebarAction[] = [];
   const propPath = getPropertyPath(ctx.propertyId);
 
-  // Review savings opportunities - only show if opportunities likely exist
-  actions.push({
-    id: 'review-savings-opportunities',
-    title: 'Check for savings opportunities',
-    description: 'Analyze cost reduction potential',
-    icon: DollarSign,
-    href: `${propPath}/tools/home-savings?action=analyze`,
-    priority: 'high',
-    group: 'recommended-next',
-  });
+  const savingsCount = ctx.signals?.savingsOpportunities ?? 0;
+  if (savingsCount > 0) {
+    actions.push({
+      id: 'review-savings-opportunities',
+      title: 'Review savings opportunities',
+      description: `${savingsCount} saving${savingsCount === 1 ? '' : 's'} opportunity found`,
+      icon: DollarSign,
+      href: `${propPath}/tools/home-savings?highlight=opportunities`,
+      priority: 'high',
+      badge: 'Found',
+      group: 'recommended-next',
+    });
+  } else {
+    actions.push({
+      id: 'check-savings',
+      title: 'Check for savings',
+      description: 'Analyze cost reduction potential',
+      icon: DollarSign,
+      href: `${propPath}/tools/home-savings?action=analyze`,
+      priority: 'medium',
+      group: 'contextual-actions',
+    });
+  }
 
   // Compare cost growth
   actions.push({
