@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import { differenceInDays, formatDistanceToNow, parseISO } from 'date-fns';
 
 import type { GetIncidentDetailResponse, IncidentDTO, IncidentEventDTO } from '@/types/incidents.types';
 import {
@@ -62,6 +63,15 @@ export default function IncidentDetailClient() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
+
+  // Calculate incident age
+  const incidentAge = incident?.createdAt 
+    ? differenceInDays(new Date(), parseISO(incident.createdAt))
+    : null;
+  
+  const isStale = incidentAge !== null && incidentAge > 30;
+  const isVeryOld = incidentAge !== null && incidentAge > 90;
 
   async function load() {
     setErr(null);
@@ -161,6 +171,24 @@ export default function IncidentDetailClient() {
 
       {incident ? (
         <>
+          {/* Age Warning Banner */}
+          {isStale && (
+            <div className={`rounded-xl border p-4 ${isVeryOld ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+              <div className="flex items-start gap-3">
+                <AlertTriangle className={`h-5 w-5 flex-shrink-0 ${isVeryOld ? 'text-red-600' : 'text-amber-600'}`} />
+                <div className="flex-1">
+                  <p className={`text-sm font-semibold ${isVeryOld ? 'text-red-800' : 'text-amber-800'}`}>
+                    {isVeryOld ? 'Very Old Incident' : 'Stale Incident'}
+                  </p>
+                  <p className={`mt-1 text-sm ${isVeryOld ? 'text-red-700' : 'text-amber-700'}`}>
+                    This incident is {incidentAge} days old ({formatDistanceToNow(parseISO(incident.createdAt), { addSuffix: true })}). 
+                    The risk may no longer be relevant or may have already been addressed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <MobileCard>
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -203,6 +231,31 @@ export default function IncidentDetailClient() {
                 disabled={loading || busy}
                 onDone={load}
               />
+
+              {/* Mark as Resolved Button - only show for open incidents */}
+              {(incident.status === 'ACTIVE' || incident.status === 'DETECTED' || incident.status === 'EVALUATED') && (
+                <Button
+                  variant="default"
+                  className="min-h-[44px] w-full bg-green-600 hover:bg-green-700"
+                  disabled={loading || busy || resolving}
+                  onClick={async () => {
+                    setResolving(true);
+                    try {
+                      // TODO: Implement actual resolve API call when available
+                      // For now, just show feedback
+                      alert('Mark as Resolved functionality will be implemented when the API endpoint is available.');
+                      await load();
+                    } catch (ex: any) {
+                      setErr(ex?.message ?? 'Failed to resolve incident');
+                    } finally {
+                      setResolving(false);
+                    }
+                  }}
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  {resolving ? 'Resolving...' : 'Mark as Resolved'}
+                </Button>
+              )}
 
               <IncidentSeverityExplainPanel incident={incident} decisionTrace={decisionTrace} />
 
