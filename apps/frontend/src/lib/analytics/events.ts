@@ -50,6 +50,7 @@ export type CtcEventName =
   | 'morning_brief_opened'
   | 'morning_brief_cta_clicked'
   | 'morning_brief_savings_clicked'
+  | 'morning_brief_recall_clicked'
   // Performance
   | 'web_vital_recorded'
   // Diagnostics
@@ -150,6 +151,7 @@ export interface CtcEventProperties {
   morning_brief_opened: { propertyId: string; itemCount: number };
   morning_brief_cta_clicked: { propertyId: string; actionType: string; tool: CtcTool };
   morning_brief_savings_clicked: { propertyId: string; savingsEstimate?: string; scoreValue?: number };
+  morning_brief_recall_clicked: { propertyId: string; recallCount: number };
   // Performance
   web_vital_recorded: {
     metric: 'CLS' | 'FCP' | 'INP' | 'LCP' | 'TTFB';
