@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { getCostExplainer, CostExplainerDTO } from './costExplainerApi';
 import MultiLineChart from '../insurance-trend/MultiLineChart';
 import HomeToolsRail from '../../components/HomeToolsRail';
@@ -25,6 +25,8 @@ function badgeForConfidence(c?: string) {
 export default function CostExplainerClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
+  const searchParams = useSearchParams();
+  const focusCategory = searchParams.get('focus')?.toUpperCase() ?? null;
 
   const [years, setYears] = useState<5 | 10>(5);
   const [loading, setLoading] = useState(false);
@@ -56,6 +58,14 @@ export default function CostExplainerClient() {
     load(years);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  useEffect(() => {
+    if (!focusCategory || !data) return;
+    const timer = setTimeout(() => {
+      document.querySelector(`[data-cost-category="${focusCategory}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [focusCategory, data]);
 
   // ✅ Build chart model from snapshot.history
   const chartModel = useMemo(() => {
@@ -277,10 +287,13 @@ export default function CostExplainerClient() {
               No breakdown available for this analysis.
             </div>
           )}
-          {(data?.explanations || []).map((e, _idx, arr) => (
+          {(data?.explanations || []).map((e, _idx, arr) => {
+            const isFocused = focusCategory === e.category;
+            return (
             <div
               key={e.category}
-              className={`rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48${arr.length % 2 !== 0 && _idx === arr.length - 1 ? ' md:col-span-2' : ''}`}
+              data-cost-category={e.category}
+              className={`rounded-2xl border bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:bg-slate-900/48 scroll-mt-8${arr.length % 2 !== 0 && _idx === arr.length - 1 ? ' md:col-span-2' : ''}${isFocused ? ' border-teal-300 ring-2 ring-teal-200 ring-offset-1' : ' border-white/70 dark:border-slate-700/70'}`}
             >
               <div className="mb-1 text-[10px] font-semibold tracking-normal text-slate-400 dark:text-slate-500">
                 {e.category === 'TAXES' ? 'Property Tax' : e.category === 'INSURANCE' ? 'Insurance' : e.category === 'MAINTENANCE' ? 'Maintenance' : 'Total Cost'}
@@ -295,7 +308,8 @@ export default function CostExplainerClient() {
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-4 rounded-2xl border border-white/70 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur dark:border-slate-700/70 dark:bg-slate-900/48">

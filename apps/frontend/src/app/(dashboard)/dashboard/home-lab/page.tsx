@@ -72,7 +72,7 @@ const TOOLS: Tool[] = [
     description: 'See how long it takes for a home improvement to pay for itself.',
     category: 'Finance & Savings',
     icon: Timer,
-    href: '/dashboard/break-even'
+    href: '/dashboard/break-even?source=home-lab'
   },
   {
     id: 'price-finalization',
@@ -188,7 +188,7 @@ const TOOLS: Tool[] = [
     description: 'A clear explanation of why your home expenses are what they are.',
     category: 'Intelligence & Trends',
     icon: Info,
-    href: '/dashboard/cost-explainer'
+    href: '/dashboard/cost-explainer?source=home-lab'
   },
   {
     id: 'cost-volatility',
