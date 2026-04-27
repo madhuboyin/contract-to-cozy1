@@ -266,7 +266,7 @@ function getProtectActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Review coverage gaps',
       description: `${ctx.signals.gapCount} gap${ctx.signals.gapCount > 1 ? 's' : ''} identified`,
       icon: ShieldCheck,
-      href: `${propPath}/tools/coverage-analysis?filter=gaps&highlight=true&expectedCount=${ctx.signals.gapCount}`,
+      href: `${propPath}/tools/coverage-intelligence?filter=gaps&highlight=true&expectedCount=${ctx.signals.gapCount}`,
       priority: 'high',
       badge: 'Action needed',
       group: 'recommended-next',
@@ -305,7 +305,7 @@ function getProtectActions(ctx: SidebarContext): SidebarAction[] {
     title: 'Run coverage assessment',
     description: 'Analyze protection posture',
     icon: BarChart3,
-    href: `${propPath}/tools/coverage-analysis`,
+    href: `${propPath}/tools/coverage-intelligence`,
     priority: 'medium',
     group: 'contextual-actions',
   });
@@ -605,7 +605,7 @@ function getInventoryActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Review uncovered assets',
       description: `${ctx.signals.gapCount} item${ctx.signals.gapCount > 1 ? 's' : ''} without coverage`,
       icon: ShieldCheck,
-      href: `${propPath}/tools/coverage-analysis?filter=uncovered&source=inventory`,
+      href: `${propPath}/tools/coverage-intelligence?filter=uncovered&source=inventory`,
       priority: 'medium',
       group: 'protection-opportunities',
     });
@@ -702,7 +702,7 @@ function getGuidanceActions(ctx: SidebarContext): SidebarAction[] {
       title: 'Check coverage for this item',
       description: 'Review warranty and insurance',
       icon: ShieldCheck,
-      href: `${propPath}/tools/coverage-analysis`,
+      href: `${propPath}/tools/coverage-intelligence`,
       priority: 'medium',
       group: 'contextual-actions',
     });
