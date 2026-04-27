@@ -767,7 +767,7 @@ export default function PropertyHealthDetailPage() {
                         <p className="text-xs text-muted-foreground">No factors in this category.</p>
                       ) : (
                         groupInsights.map((insight, idx) => (
-                          <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className={`border-l-[3px] ${getInsightLeftBorderColor(insight.status)} pl-2`}>
+                          <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} data-insight-key={insight.factor?.toLowerCase() ?? ''} className={`border-l-[3px] ${getInsightLeftBorderColor(insight.status)} pl-2`}>
                             <CompactEntityRow
                               title={insight.factor || "Health insight"}
                               subtitle={getFactorDescription(insight.factor, insight.status)}

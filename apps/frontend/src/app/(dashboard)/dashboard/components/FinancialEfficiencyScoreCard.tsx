@@ -207,8 +207,8 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
 
       <Link
         href={
-          annualCost > 0 
-            ? `${reportLink}?focus=breakdown&expectedCost=${annualCost}${weeklyChange !== "No change" ? '&view=trends' : ''}`
+          annualCost > 0
+            ? `${reportLink}?focus=breakdown${weeklyChange !== "No change" ? '&view=trends' : ''}`
             : weeklyChange !== "No change"
             ? `${reportLink}?view=trends`
             : reportLink
