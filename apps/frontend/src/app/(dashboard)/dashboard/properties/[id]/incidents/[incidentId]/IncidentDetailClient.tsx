@@ -70,6 +70,7 @@ export default function IncidentDetailClient() {
   const [err, setErr] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Calculate incident age and staleness status
   const incidentAge = incident?.createdAt 
@@ -175,6 +176,12 @@ export default function IncidentDetailClient() {
       </MobileFilterSurface>
 
       {err ? <div className="rounded-xl border bg-red-50 p-3 text-sm text-red-700">{err}</div> : null}
+      
+      {successMessage ? (
+        <div className="rounded-xl border bg-green-50 border-green-200 p-3 text-sm text-green-700">
+          {successMessage}
+        </div>
+      ) : null}
 
       {incident ? (
         <>
@@ -207,6 +214,8 @@ export default function IncidentDetailClient() {
               }}
               onResolveNow={async () => {
                 setResolving(true);
+                setSuccessMessage(null);
+                setErr(null);
                 try {
                   console.log('[RESOLVE] Starting resolve operation...');
                   console.log('[RESOLVE] propertyId:', propertyId, 'incidentId:', incidentId);
@@ -218,6 +227,9 @@ export default function IncidentDetailClient() {
                   console.log('[RESOLVE] Resolve successful:', result);
                   await load();
                   console.log('[RESOLVE] Reload complete');
+                  setSuccessMessage('✓ Incident resolved successfully');
+                  // Clear success message after 5 seconds
+                  setTimeout(() => setSuccessMessage(null), 5000);
                 } catch (error: any) {
                   console.error('[RESOLVE] Error:', error);
                   setErr(error?.message ?? 'Failed to resolve incident');
@@ -318,6 +330,8 @@ export default function IncidentDetailClient() {
                   disabled={loading || busy || resolving}
                   onClick={async () => {
                     setResolving(true);
+                    setSuccessMessage(null);
+                    setErr(null);
                     try {
                       await setIncidentStatus({
                         propertyId,
@@ -325,6 +339,8 @@ export default function IncidentDetailClient() {
                         status: 'RESOLVED',
                       });
                       await load();
+                      setSuccessMessage('✓ Incident marked as resolved');
+                      setTimeout(() => setSuccessMessage(null), 5000);
                     } catch (ex: any) {
                       setErr(ex?.message ?? 'Failed to resolve incident');
                     } finally {
