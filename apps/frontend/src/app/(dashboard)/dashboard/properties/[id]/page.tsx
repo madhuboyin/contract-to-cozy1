@@ -107,7 +107,11 @@ const renderContextualButton = (insight: any, propertyId: string) => {
     insight.status.includes('Attention')) {
 
     // Map to valid ENUMs for Provider Search
-    if (insight.factor.includes('Age Factor') || insight.factor.includes('Roof')) {
+    if (
+      insight.factor.includes('Age Factor') ||
+      insight.factor.includes('Property Age (Year Built)') ||
+      insight.factor.includes('Roof')
+    ) {
       category = 'INSPECTION';
     } else if (insight.factor.includes('HVAC')) {
       category = 'HVAC';

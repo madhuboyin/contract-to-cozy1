@@ -39,14 +39,19 @@ const EXTRA_WEIGHTS = {
   APPLIANCES: 5,
 };
 
+const PROPERTY_AGE_FACTOR = 'Property Age (Year Built)';
+const LEGACY_PROPERTY_AGE_FACTOR = 'Age Factor';
+
 /**
  * Helper: Check if a specific insight is being addressed by an active booking
  * UPDATED: Now uses insightFactor field for precise matching
  */
 function isInsightBeingAddressed(insightName: string, activeBookings: Booking[]): boolean {
-  return activeBookings.some(
-    booking => booking.insightFactor === insightName
-  );
+  return activeBookings.some((booking) => {
+    if (booking.insightFactor === insightName) return true;
+    if (insightName === PROPERTY_AGE_FACTOR && booking.insightFactor === LEGACY_PROPERTY_AGE_FACTOR) return true;
+    return false;
+  });
 }
 
 /**
@@ -79,7 +84,7 @@ export function calculateHealthScore(
 
   // --- BASE SCORE CALCULATION (MANDATORY FIELDS: MAX 55) ---
 
-  // 1. Age Factor (Max 15)
+  // 1. Property Age (Year Built) (Max 15)
   if (property.yearBuilt) {
     const age = currentYear - property.yearBuilt;
     const ageScore = Math.max(0, BASE_WEIGHTS.AGE * (1 - age / 60));
@@ -93,16 +98,16 @@ export function calculateHealthScore(
     } else {
         // Age >= 30, triggers 'Needs Review'
         // UPDATED: Check insightFactor instead of category
-        if (isInsightBeingAddressed('Age Factor', activeBookings)) {
+        if (isInsightBeingAddressed(PROPERTY_AGE_FACTOR, activeBookings)) {
             status = 'Action Pending'; 
         } else {
             status = 'Needs Review';
         }
     }
 
-    insights.push({ factor: 'Age Factor', status, score: ageScore });
+    insights.push({ factor: PROPERTY_AGE_FACTOR, status, score: ageScore });
   } else {
-    insights.push({ factor: 'Age Factor', status: 'Missing Data', score: 0 });
+    insights.push({ factor: PROPERTY_AGE_FACTOR, status: 'Missing Data', score: 0 });
     maxUnlockableScore += BASE_WEIGHTS.AGE; 
   }
 

@@ -231,6 +231,22 @@ function getFactorDescription(factorName: string | undefined, condition: string 
   const factor = String(factorName || "");
   const cond = String(condition || "");
   const map: Record<string, Record<string, string>> = {
+    'Property Age (Year Built)': {
+      'Excellent': 'Recently built home — strong age signal',
+      'Good': 'Home age is within a typical maintenance window',
+      'Needs Review': 'Older home based on year built — review recommended',
+      'Needs attention': 'Older home age is increasing maintenance risk — priority review recommended',
+      'Action Pending': 'Age-related review is already in progress',
+      'Missing Data': 'Year built is missing — add it to improve score accuracy',
+    },
+    'Age Factor': {
+      'Excellent': 'Recently built home — strong age signal',
+      'Good': 'Home age is within a typical maintenance window',
+      'Needs Review': 'Older home based on year built — review recommended',
+      'Needs attention': 'Older home age is increasing maintenance risk — priority review recommended',
+      'Action Pending': 'Age-related review is already in progress',
+      'Missing Data': 'Year built is missing — add it to improve score accuracy',
+    },
     'Water Heater Age': {
       'Needs Review': 'Approaching end of typical lifespan — review recommended',
       'Needs attention': 'Past typical lifespan — replacement evaluation recommended',
