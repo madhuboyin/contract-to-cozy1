@@ -6,12 +6,20 @@ import HomeSavingsCheckPanel from '@/components/ai/HomeSavingsCheckPanel';
 import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+}
+
 export default function HomeSavingsToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const searchParams = useSearchParams();
   const guidanceStepKey = searchParams.get('guidanceStepKey');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+  const expectedMonthly = Number(searchParams.get('expectedMonthly') ?? 0);
+  const expectedAnnual = Number(searchParams.get('expectedAnnual') ?? 0);
+  const highlightOpportunities = searchParams.get('highlight') === 'opportunities';
+
   const backHref = guidanceJourneyId
     ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
     : `/dashboard/properties/${propertyId}`;
@@ -33,6 +41,17 @@ export default function HomeSavingsToolClient() {
         <HomeToolsRail propertyId={propertyId} showDesktop={false} />
       }
     >
+
+      {highlightOpportunities && expectedMonthly > 0 && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+          Your profile shows up to{' '}
+          <span className="font-semibold">{formatMoney(expectedMonthly)}/mo</span>
+          {expectedAnnual > 0 && (
+            <> ({formatMoney(expectedAnnual)}/yr)</>
+          )}{' '}
+          in potential savings. Review the opportunities below.
+        </div>
+      )}
 
       <div id="home-savings-opportunities">
         <HomeSavingsCheckPanel propertyId={propertyId} />

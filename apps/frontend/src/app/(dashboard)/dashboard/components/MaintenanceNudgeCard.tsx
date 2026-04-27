@@ -6,6 +6,13 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
 
+const MAINTENANCE_STATUSES = [
+  'Needs attention',
+  'Needs Review',
+  'Needs Inspection',
+  'Missing Data',
+];
+
 interface MaintenanceNudgeCardProps {
     property: ScoredProperty;
     consolidatedActionCount: number;
@@ -16,7 +23,7 @@ export function MaintenanceNudgeCard({
         consolidatedActionCount,
         hasAssetDrivenActions,
     }: MaintenanceNudgeCardProps) {
-    
+
     // Ensure healthScore data exists
     if (!property.healthScore) {
         return null;
@@ -24,15 +31,20 @@ export function MaintenanceNudgeCard({
 
     const healthScore = property.healthScore.totalScore || 0;
     const propertyName = property.name || 'Your Home';
-    
+
+    // Derive the maintenance-specific count from health insights so it matches
+    // the resolution-center destination filtered to maintenance items.
+    const maintenanceCount =
+        property.healthScore.insights?.filter((i) => MAINTENANCE_STATUSES.includes(i.status)).length ?? 0;
+
     // Show card ONLY IF score is poor (< 70) AND there are actions
     const shouldShowNudge = healthScore < 70 && consolidatedActionCount > 0;
-    
-    // Build destination with action count to ensure consistency
+
+    // Build destination using maintenanceCount so expectedCount matches what the page shows
     const destination = hasAssetDrivenActions
-        ? `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&priority=high&expectedCount=${consolidatedActionCount}`
-        : `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&expectedCount=${consolidatedActionCount}`;
-    
+        ? `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&priority=high&expectedCount=${maintenanceCount}`
+        : `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&expectedCount=${maintenanceCount}`;
+
     if (!shouldShowNudge) {
         return null;
     }
@@ -47,7 +59,6 @@ export function MaintenanceNudgeCard({
         buttonBorder: 'border-orange-300 hover:border-orange-400 hover:bg-orange-50',
         buttonText: 'text-orange-700'
     };
-    const actionText = consolidatedActionCount === 1 ? 'action' : 'actions';
     const badgeText = consolidatedActionCount > 5 ? '5+ PENDING' : `${consolidatedActionCount} PENDING`;
 
     return (
@@ -83,7 +94,9 @@ export function MaintenanceNudgeCard({
             {/* Line 2: Description + Button */}
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-[13px] text-gray-600 sm:ml-[30px]">
-                    {consolidatedActionCount} unresolved property issues for {propertyName}
+                    {maintenanceCount > 0
+                        ? `${maintenanceCount} maintenance item${maintenanceCount === 1 ? '' : 's'} need attention for ${propertyName}`
+                        : `Property health needs attention for ${propertyName}`}
                 </span>
                 <Link href={destination} className="self-start sm:self-auto">
                     <button className={`
