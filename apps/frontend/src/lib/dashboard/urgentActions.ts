@@ -77,17 +77,34 @@ export function consolidateUrgentActions(
   const criticalStatuses = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
   properties.forEach((property) => {
+    // Deduplicate insights by factor name, keeping the most severe (first in criticalStatuses array)
+    const insightsByFactor = new Map<string, { insight: any; statusIndex: number }>();
+    
     property.healthScore?.insights
       ?.filter((insight) => criticalStatuses.includes(insight.status))
-      .forEach((insight, index) => {
-        actions.push({
-          id: `${property.id}-INSIGHT-${index}`,
-          type: 'HEALTH_INSIGHT',
-          title: insight.factor,
-          description: `Status: ${insight.status}. Requires resolution.`,
-          propertyId: property.id,
-        });
+      .forEach((insight) => {
+        const factor = insight.factor;
+        const statusIndex = criticalStatuses.indexOf(insight.status);
+        const existing = insightsByFactor.get(factor);
+        
+        // Keep the insight with the most severe status (lower index = more severe)
+        if (!existing || statusIndex < existing.statusIndex) {
+          insightsByFactor.set(factor, { insight, statusIndex });
+        }
       });
+
+    // Create actions from deduplicated insights
+    insightsByFactor.forEach(({ insight }) => {
+      // Generate stable ID based on factor name instead of array index
+      const factorId = insight.factor.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      actions.push({
+        id: `${property.id}-INSIGHT-${factorId}`,
+        type: 'HEALTH_INSIGHT',
+        title: insight.factor,
+        description: `Status: ${insight.status}. Requires resolution.`,
+        propertyId: property.id,
+      });
+    });
   });
 
   checklistItems.forEach((item) => {
