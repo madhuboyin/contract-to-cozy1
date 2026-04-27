@@ -50,6 +50,7 @@ import {
     propertyId: string;
     status?: IncidentStatus;
     includeSuppressed?: boolean;
+    archived?: boolean; // Filter by archived status
     limit?: number;
     cursor?: string; // incident id cursor
   };

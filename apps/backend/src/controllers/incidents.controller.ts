@@ -148,6 +148,7 @@ export const listIncidents = async (req: CustomRequest, res: Response) => {
     const propertyId = req.params.propertyId;
     const status = req.query.status as IncidentStatus | undefined;
     const includeSuppressed = String(req.query.includeSuppressed || 'false') === 'true';
+    const archived = req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined;
     const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : undefined;
     const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
 
@@ -155,6 +156,7 @@ export const listIncidents = async (req: CustomRequest, res: Response) => {
       propertyId,
       status,
       includeSuppressed,
+      archived,
       limit,
       cursor,
     });
@@ -361,3 +363,181 @@ export const reevaluateIncidentNow = async (req: CustomRequest, res: Response) =
     });
   }
 };
+
+// ============================================================================
+// INCIDENT LIFECYCLE MANAGEMENT
+// ============================================================================
+
+/**
+ * Toggle incident pin status
+ * POST /api/properties/:propertyId/incidents/:incidentId/preferences
+ */
+export const updateIncidentPreferences = async (req: CustomRequest, res: Response) => {
+  try {
+    const { propertyId, incidentId } = req.params as any;
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    // ✅ Enforce property ownership
+    const exists = await assertIncidentInPropertyOr404({ propertyId, incidentId });
+    if (!exists) return res.status(404).json({ message: 'Incident not found' });
+
+    const { isPinned, pinnedNote, isArchived, archivedReason } = req.body || {};
+
+    const preference = await prisma.incidentUserPreference.upsert({
+      where: {
+        incidentId_userId: {
+          incidentId,
+          userId,
+        },
+      },
+      create: {
+        incidentId,
+        userId,
+        isPinned: isPinned ?? false,
+        pinnedAt: isPinned ? new Date() : null,
+        pinnedNote: pinnedNote ?? null,
+        isArchived: isArchived ?? false,
+        archivedAt: isArchived ? new Date() : null,
+        archivedReason: archivedReason ?? null,
+      },
+      update: {
+        ...(isPinned !== undefined && {
+          isPinned,
+          pinnedAt: isPinned ? new Date() : null,
+          pinnedNote: pinnedNote ?? null,
+        }),
+        ...(isArchived !== undefined && {
+          isArchived,
+          archivedAt: isArchived ? new Date() : null,
+          archivedReason: archivedReason ?? null,
+        }),
+      },
+    });
+
+    // If pinned, cancel any pending auto-resolution
+    if (isPinned) {
+      await prisma.incidentAutoResolutionNotification.updateMany({
+        where: {
+          incidentId,
+          executedAt: null,
+          canceledAt: null,
+        },
+        data: {
+          canceledAt: new Date(),
+        },
+      });
+    }
+
+    return res.json({ success: true, preference });
+  } catch (e: any) {
+    return res.status(400).json({ message: e?.message || 'Failed to update incident preferences' });
+  }
+};
+
+/**
+ * Archive an incident
+ * POST /api/properties/:propertyId/incidents/:incidentId/archive
+ */
+export const archiveIncident = async (req: CustomRequest, res: Response) => {
+  try {
+    const { propertyId, incidentId } = req.params as any;
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    // ✅ Enforce property ownership
+    const exists = await assertIncidentInPropertyOr404({ propertyId, incidentId });
+    if (!exists) return res.status(404).json({ message: 'Incident not found' });
+
+    const { reason } = req.body || {};
+
+    await prisma.incidentUserPreference.upsert({
+      where: {
+        incidentId_userId: {
+          incidentId,
+          userId,
+        },
+      },
+      create: {
+        incidentId,
+        userId,
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedReason: reason ?? null,
+      },
+      update: {
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedReason: reason ?? null,
+      },
+    });
+
+    return res.json({ success: true });
+  } catch (e: any) {
+    return res.status(400).json({ message: e?.message || 'Failed to archive incident' });
+  }
+};
+
+/**
+ * Restore an archived incident
+ * POST /api/properties/:propertyId/incidents/:incidentId/restore
+ */
+export const restoreIncident = async (req: CustomRequest, res: Response) => {
+  try {
+    const { propertyId, incidentId } = req.params as any;
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    // ✅ Enforce property ownership
+    const exists = await assertIncidentInPropertyOr404({ propertyId, incidentId });
+    if (!exists) return res.status(404).json({ message: 'Incident not found' });
+
+    await prisma.incidentUserPreference.updateMany({
+      where: {
+        incidentId,
+        userId,
+      },
+      data: {
+        isArchived: false,
+        archivedAt: null,
+        archivedReason: null,
+      },
+    });
+
+    return res.json({ success: true });
+  } catch (e: any) {
+    return res.status(400).json({ message: e?.message || 'Failed to restore incident' });
+  }
+};
+
+/**
+ * Cancel auto-resolution for an incident
+ * POST /api/properties/:propertyId/incidents/:incidentId/auto-resolution/cancel
+ */
+export const cancelAutoResolution = async (req: CustomRequest, res: Response) => {
+  try {
+    const { propertyId, incidentId } = req.params as any;
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    // ✅ Enforce property ownership
+    const exists = await assertIncidentInPropertyOr404({ propertyId, incidentId });
+    if (!exists) return res.status(404).json({ message: 'Incident not found' });
+
+    await prisma.incidentAutoResolutionNotification.updateMany({
+      where: {
+        incidentId,
+        userId,
+        executedAt: null,
+      },
+      data: {
+        canceledAt: new Date(),
+      },
+    });
+
+    return res.json({ success: true });
+  } catch (e: any) {
+    return res.status(400).json({ message: e?.message || 'Failed to cancel auto-resolution' });
+  }
+};
+

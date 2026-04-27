@@ -438,6 +438,15 @@ export class IncidentService {
     if (q.status) where.status = q.status;
     if (!q.includeSuppressed) where.isSuppressed = false;
 
+    // Filter by archived status if specified
+    if (q.archived !== undefined) {
+      where.userPreferences = {
+        some: {
+          isArchived: q.archived,
+        },
+      };
+    }
+
     const items = await prisma.incident.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -445,6 +454,7 @@ export class IncidentService {
       ...(q.cursor ? { skip: 1, cursor: { id: q.cursor } } : {}),
       include: {
         actions: true,
+        userPreferences: true,
       },
     });
 

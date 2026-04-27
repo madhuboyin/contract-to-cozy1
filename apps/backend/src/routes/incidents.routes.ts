@@ -15,6 +15,10 @@ import {
   confirmIncidentActionCreated,
   executeIncidentAction,
   reevaluateIncidentNow,
+  updateIncidentPreferences,
+  archiveIncident,
+  restoreIncident,
+  cancelAutoResolution,
 } from '../controllers/incidents.controller';
 
 import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
@@ -149,6 +153,50 @@ router.post(
   authenticate,
   propertyAuthMiddleware,
   reevaluateIncidentNow
+);
+
+// ============================================================================
+// INCIDENT LIFECYCLE MANAGEMENT
+// ============================================================================
+
+/**
+ * Update incident user preferences (pin/archive)
+ */
+router.patch(
+  '/properties/:propertyId/incidents/:incidentId/preferences',
+  authenticate,
+  propertyAuthMiddleware,
+  updateIncidentPreferences
+);
+
+/**
+ * Archive an incident
+ */
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/archive',
+  authenticate,
+  propertyAuthMiddleware,
+  archiveIncident
+);
+
+/**
+ * Restore an archived incident
+ */
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/restore',
+  authenticate,
+  propertyAuthMiddleware,
+  restoreIncident
+);
+
+/**
+ * Cancel auto-resolution for an incident
+ */
+router.post(
+  '/properties/:propertyId/incidents/:incidentId/auto-resolution/cancel',
+  authenticate,
+  propertyAuthMiddleware,
+  cancelAutoResolution
 );
 
 export default router;
