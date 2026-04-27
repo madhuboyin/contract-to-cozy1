@@ -156,6 +156,13 @@ function buildHealthInsightActionMeta(factorTitle: string, healthScore: number) 
   );
 }
 
+function getCompactHealthInsightTitle(factorTitle: string): string {
+  if (factorTitle === 'Property Age (Year Built)' || factorTitle === 'Age Factor') {
+    return 'Property Age';
+  }
+  return factorTitle;
+}
+
 function buildHealthInsightBadgeLabel() {
   return 'Top priority this week';
 }
@@ -714,17 +721,18 @@ export default function DashboardPage() {
     // 2. Top health insight
     const topHealthInsight = scopedUrgentActions.find(a => a.type === 'HEALTH_INSIGHT');
     if (topHealthInsight) {
+      const compactHealthInsightTitle = getCompactHealthInsightTitle(topHealthInsight.title);
       const impactLabel = 'Top risk signal';
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildHealthInsightBadgeLabel(),
-        title: `${topHealthInsight.title} needs attention.`,
+        title: `${compactHealthInsightTitle} needs attention.`,
         subtitle: 'Chosen because it best balances cost prevention, confidence, and effort.',
-        ctaLabel: `Review ${topHealthInsight.title.toLowerCase()}`,
+        ctaLabel: `Review ${compactHealthInsightTitle.toLowerCase()}`,
         href: resolveUrgentActionHref(topHealthInsight, effectiveSelectedPropertyId),
         impactLabel,
         etaLabel,
-        ...buildHealthInsightActionMeta(topHealthInsight.title, healthScore ?? 0),
+        ...buildHealthInsightActionMeta(compactHealthInsightTitle, healthScore ?? 0),
       };
     }
 
