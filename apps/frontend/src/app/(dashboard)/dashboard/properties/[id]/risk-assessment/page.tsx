@@ -3,7 +3,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Property, RiskAssessmentReport, AssetRiskDetail, RiskCategory, PropertyMaintenanceTask, RecurrenceFrequency, PropertyScoreSeries } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SEVERITY_CHIP } from "@/lib/utils/chipTokens";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { MaintenanceConfigModal } from "../../../maintenance-setup/MaintenanceConfigModal"; 
@@ -831,6 +831,7 @@ const AssetMatrixTable = ({
 export default function RiskAssessmentPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const queryClient = useQueryClient(); // 🔑 NEW: For invalidating queries
     const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
     const { user } = useAuth(); 
@@ -842,6 +843,42 @@ export default function RiskAssessmentPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<AssetRiskDetail | null>(null);
     const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
+
+    // 🔑 NEW: Extract focus parameter for exposure highlighting
+    const focusParam = searchParams.get('focus');
+    const shouldFocusExposure = focusParam === 'exposure';
+
+    // 🔑 NEW: Extract view parameter for trends highlighting
+    const viewParam = searchParams.get('view');
+    const shouldFocusTrends = viewParam === 'trends';
+
+    // 🔑 NEW: Scroll to exposure section when focus parameter is present
+    useEffect(() => {
+        if (shouldFocusExposure && !isCalculating && !isQueued) {
+            // Wait for DOM to render, then scroll to exposure section
+            const timer = setTimeout(() => {
+                const exposureElement = document.getElementById('exposure-summary');
+                if (exposureElement) {
+                    exposureElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [shouldFocusExposure, isCalculating, isQueued]);
+
+    // 🔑 NEW: Scroll to trends section when view parameter is present
+    useEffect(() => {
+        if (shouldFocusTrends && !isCalculating && !isQueued) {
+            // Wait for DOM to render, then scroll to trends section
+            const timer = setTimeout(() => {
+                const trendsElement = document.getElementById('risk-trends-section');
+                if (trendsElement) {
+                    trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [shouldFocusTrends, isCalculating, isQueued]);
 
     // 🔑 NEW: Fetch existing maintenance tasks for this property
     const { data: maintenanceTasksData, refetch: refetchTasks } = useQuery({
@@ -1333,37 +1370,51 @@ export default function RiskAssessmentPage() {
                         limit={2}
                     />
 
-                    <ReadOnlySummaryBlock
-                        title="Snapshot"
-                        items={[
-                            { label: "5-year exposure", value: formattedExposure, emphasize: true },
-                            { label: "Week delta", value: <ScoreDeltaIndicator delta={riskSeries?.deltaFromPreviousWeek} /> },
-                            { label: "Risk gauge", value: `${riskProgressValue}/100` },
-                            { label: "Status", value: isQueued ? "Queued" : isCalculating ? "Calculating" : "Calculated" },
-                        ]}
-                        columns={2}
-                    />
-
-                    <ScenarioInputCard
-                        title="Risk Trend"
-                        subtitle="Weekly risk snapshots."
-                        actions={
-                            <ActionPriorityRow
-                                secondaryActions={
-                                    <>
-                                        <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
-                                            6 Months
-                                        </Button>
-                                        <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
-                                            1 Year
-                                        </Button>
-                                    </>
-                                }
-                            />
-                        }
+                    <div 
+                        id="exposure-summary" 
+                        className={`transition-all duration-300 ${
+                            shouldFocusExposure ? 'ring-2 ring-teal-400 rounded-lg shadow-lg' : ''
+                        }`}
                     >
-                        <ScoreTrendChart points={riskTrend} ariaLabel="Property risk score trend" />
-                    </ScenarioInputCard>
+                        <ReadOnlySummaryBlock
+                            title="Snapshot"
+                            items={[
+                                { label: "5-year exposure", value: formattedExposure, emphasize: true },
+                                { label: "Week delta", value: <ScoreDeltaIndicator delta={riskSeries?.deltaFromPreviousWeek} /> },
+                                { label: "Risk gauge", value: `${riskProgressValue}/100` },
+                                { label: "Status", value: isQueued ? "Queued" : isCalculating ? "Calculating" : "Calculated" },
+                            ]}
+                            columns={2}
+                        />
+                    </div>
+
+                    <div
+                        id="risk-trends-section"
+                        className={`transition-all duration-300 ${
+                            shouldFocusTrends ? 'ring-2 ring-teal-400 rounded-lg shadow-lg' : ''
+                        }`}
+                    >
+                        <ScenarioInputCard
+                            title="Risk Trend"
+                            subtitle="Weekly risk snapshots."
+                            actions={
+                                <ActionPriorityRow
+                                    secondaryActions={
+                                        <>
+                                            <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                                                6 Months
+                                            </Button>
+                                            <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                                                1 Year
+                                            </Button>
+                                        </>
+                                    }
+                                />
+                            }
+                        >
+                            <ScoreTrendChart points={riskTrend} ariaLabel="Property risk score trend" />
+                        </ScenarioInputCard>
+                    </div>
 
                     <ScenarioInputCard title="Changes Impacting Score" subtitle="Key weekly drivers behind risk movement.">
                         <div className="space-y-2">
@@ -1430,7 +1481,12 @@ export default function RiskAssessmentPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="sm:col-span-2 lg:col-span-2">
+                <Card 
+                    id="exposure-summary" 
+                    className={`sm:col-span-2 lg:col-span-2 transition-all duration-300 ${
+                        shouldFocusExposure ? 'ring-2 ring-teal-400 shadow-lg' : ''
+                    }`}
+                >
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-base font-medium">Total Financial Exposure (5-Year)</CardTitle>
                         <DollarSign className="h-5 w-5 text-red-600" />
@@ -1531,7 +1587,12 @@ export default function RiskAssessmentPage() {
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-3">
-                    <Card className="lg:col-span-2">
+                    <Card 
+                        id="risk-trends-section"
+                        className={`lg:col-span-2 transition-all duration-300 ${
+                            shouldFocusTrends ? 'ring-2 ring-teal-400 shadow-lg' : ''
+                        }`}
+                    >
                         <CardHeader className="pb-2">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
