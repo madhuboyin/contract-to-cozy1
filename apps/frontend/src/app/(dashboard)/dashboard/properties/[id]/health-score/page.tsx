@@ -140,7 +140,7 @@ function getInsightTone(statusValue: string | undefined): "good" | "info" | "ele
 
 function getInsightChipLabel(insight: HealthInsight): string {
   const status = String(insight.status || "");
-  const name = getDisplayFactorName(insight.factor);
+  const name = getChipFactorName(insight.factor);
   if (status === "Missing Data") return `${name} missing`;
   if (REQUIRED_ACTION_STATUSES.includes(status)) return `${name} needs attention`;
   if (IN_PROGRESS_STATUSES.includes(status)) return `${name} in progress`;
@@ -162,6 +162,14 @@ function getDisplayFactorName(factorName: string | undefined): string {
   if (factor === "Systems Factor") return "Major Systems Health";
   if (factor === "Usage/Wear Factor") return "Property Usage Pattern";
   return factor || "Health insight";
+}
+
+function getChipFactorName(factorName: string | undefined): string {
+  const factor = String(factorName || "");
+  if (factor === "Age Factor" || factor === "Property Age (Year Built)") return "Year Built";
+  if (factor === "Systems Factor" || factor === "Major Systems Health") return "Major Systems";
+  if (factor === "Usage/Wear Factor" || factor === "Property Usage Pattern") return "Usage Pattern";
+  return getDisplayFactorName(factorName);
 }
 
 function getInsightKey(factorName: string | undefined): string {

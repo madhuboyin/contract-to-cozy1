@@ -219,7 +219,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
             ? `${reportLink}?view=trends`
             : reportLink
         }
-        className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
+        className="group mt-auto inline-flex min-h-[44px] items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
         {annualCost > 0
           ? 'See where you can save'

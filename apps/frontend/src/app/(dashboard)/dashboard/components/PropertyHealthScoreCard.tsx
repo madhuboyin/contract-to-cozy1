@@ -167,7 +167,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
             ? buildPropertyAwareDashboardHref(property.id, '/dashboard/health-score?view=trends')
             : buildPropertyAwareDashboardHref(property.id, '/dashboard/health-score')
         }
-        className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
+        className="group mt-auto inline-flex min-h-[44px] items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
         {maintenanceCount > 0
           ? 'Address maintenance needs'
