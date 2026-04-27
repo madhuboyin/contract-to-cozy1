@@ -95,7 +95,10 @@ export default function IncidentDetailClient() {
       setDecisionTrace(response.decisionTrace ?? null);
       setEvents(eventData.items ?? []);
     } catch (ex: any) {
-      setErr(ex?.message ?? 'Failed to load incident');
+      console.error('[LOAD] Error loading incident:', ex);
+      const errorMessage = ex?.response?.data?.message || ex?.message || 'Failed to load incident';
+      console.error('[LOAD] Error message:', errorMessage);
+      setErr(errorMessage);
     } finally {
       setLoading(false);
     }
