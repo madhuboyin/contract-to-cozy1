@@ -138,13 +138,15 @@ function getInsightTone(statusValue: string | undefined): "good" | "info" | "ele
   return "info";
 }
 
-function getInsightChipLabel(statusValue: string | undefined): string {
-  const status = String(statusValue || "");
-  if (REQUIRED_ACTION_STATUSES.includes(status)) return "Needs attention";
-  if (IN_PROGRESS_STATUSES.includes(status)) return "Work in progress";
-  if (WATCH_STATUSES.includes(status)) return "Watchlist";
-  if (POSITIVE_STATUSES.includes(status)) return "Healthy signal";
-  return "Review signal";
+function getInsightChipLabel(insight: HealthInsight): string {
+  const status = String(insight.status || "");
+  const name = getDisplayFactorName(insight.factor);
+  if (status === "Missing Data") return `${name} missing`;
+  if (REQUIRED_ACTION_STATUSES.includes(status)) return `${name} needs attention`;
+  if (IN_PROGRESS_STATUSES.includes(status)) return `${name} in progress`;
+  if (WATCH_STATUSES.includes(status)) return `Monitor ${name}`;
+  if (POSITIVE_STATUSES.includes(status)) return `${name} — healthy`;
+  return name;
 }
 
 function getInsightDetailsSummary(insight: HealthInsight): string | null {
@@ -642,7 +644,7 @@ export default function PropertyHealthDetailPage() {
     const detailLines = insight.details?.length ? insight.details.slice(0, 6) : [];
     const displayFactorName = getDisplayFactorName(insight.factor);
     const statusBadge = useStatusChip ? (
-      <StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>
+      <StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight)}</StatusChip>
     ) : (
       <Badge
         variant={
@@ -653,7 +655,7 @@ export default function PropertyHealthDetailPage() {
             : "secondary"
         }
       >
-        {getInsightChipLabel(insight.status)}
+        {getInsightChipLabel(insight)}
       </Badge>
     );
 
@@ -862,7 +864,7 @@ export default function PropertyHealthDetailPage() {
                             <CompactEntityRow
                               title={getDisplayFactorName(insight.factor)}
                               subtitle={getFactorDescription(insight.factor, insight.status)}
-                              status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>}
+                              status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight)}</StatusChip>}
                             />
                           </div>
                         ))
@@ -1360,7 +1362,7 @@ export default function PropertyHealthDetailPage() {
                                   getInsightImpact(insight.status) === "positive" ? "success" : "secondary"
                                 }
                               >
-                                {getInsightChipLabel(insight.status)}
+                                {getInsightChipLabel(insight)}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">

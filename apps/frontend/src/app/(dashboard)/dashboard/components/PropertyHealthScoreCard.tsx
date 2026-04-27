@@ -94,8 +94,12 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
 
   const healthScore = Math.max(0, Math.round(property.healthScore?.totalScore || 0));
   const healthDetails = getHealthLabel(healthScore);
+  const allInsights = property.healthScore?.insights ?? [];
   const maintenanceCount =
-    property.healthScore?.insights.filter((insight) => HIGH_PRIORITY_STATUSES.includes(insight.status)).length || 0;
+    allInsights.filter((insight) => HIGH_PRIORITY_STATUSES.includes(insight.status)).length;
+  const trackedInsights = allInsights.filter((insight) => insight.status !== "Missing Data");
+  const healthyCount = trackedInsights.filter((insight) => !HIGH_PRIORITY_STATUSES.includes(insight.status)).length;
+  const trackedCount = trackedInsights.length;
   const weeklyChange = formatWeeklyDelta(snapshotQuery.data?.scores?.HEALTH?.deltaFromPreviousWeek ?? null);
   const description = buildHealthMeaning(healthScore);
   const badge = getHealthPriority(healthScore, maintenanceCount);
@@ -128,7 +132,9 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
           <div className={cn("text-[20px] font-bold leading-none", healthDetails.color)}>
             {healthDetails.label}
           </div>
-          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">Major systems tracked</p>
+          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">
+            {trackedCount > 0 ? `${healthyCount} of ${trackedCount} systems healthy` : "Major systems tracked"}
+          </p>
         </div>
       </div>
 
