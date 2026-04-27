@@ -897,7 +897,11 @@ export default function PropertyHealthDetailPage() {
               <p className="text-[10px] font-bold tracking-normal text-slate-400/80">Health score</p>
             </div>
             <div className="flex flex-col items-center justify-center flex-1 px-4 py-2">
-              <div className="relative">
+              <div
+                className="relative"
+                role="img"
+                aria-label={`Property Health Score: ${latestScore.toFixed(0)} out of 100, ${healthDetails.level}`}
+              >
                 <svg width="110" height="110" className="-rotate-90" aria-hidden="true">
                   <circle cx="55" cy="55" r="46" fill="none" stroke="#e2e8f0" strokeWidth="6" />
                   <circle
@@ -910,7 +914,7 @@ export default function PropertyHealthDetailPage() {
                     strokeLinecap="round"
                   />
                 </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
                   <div className="flex items-end gap-0.5 leading-none">
                     <span className={`text-[36px] font-black tabular-nums leading-none tracking-tight ${healthDetails.color}`}>{latestScore.toFixed(0)}</span>
                     <span className="text-[10px] font-semibold text-slate-400 mb-1 ml-0.5">/100</span>

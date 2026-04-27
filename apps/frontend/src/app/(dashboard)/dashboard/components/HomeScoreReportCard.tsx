@@ -217,9 +217,14 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
       <p className={DESCRIPTION_CLASS}>{description}</p>
 
       <div className="conf-wrap">
-        <div className="mb-[3px] text-[9px] tracking-normal text-muted-foreground">Confidence</div>
+        <div className="mb-[3px] text-[9px] tracking-normal text-muted-foreground" aria-hidden="true">Confidence</div>
         <div className="h-[3px] overflow-hidden rounded bg-border">
           <div
+            role="progressbar"
+            aria-valuenow={confidencePct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Data confidence: ${confidencePct}%`}
             className={cn("h-full rounded transition-all duration-700", getConfidenceFillColor(confidence))}
             style={{ width: `${confidencePct}%` }}
           />
