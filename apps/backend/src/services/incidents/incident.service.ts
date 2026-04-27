@@ -309,7 +309,52 @@ export class IncidentService {
     const initialStatus = input.status ?? IncidentStatus.DETECTED;
 
     // Dedupe logic:
-    // - Prefer updating an existing incident with same fingerprint if it's still "open-ish"
+    // Step 1: Auto-resolve old unactioned incidents before creating new ones
+    const oldUnactionedIncidents = await prisma.incident.findMany({
+      where: {
+        propertyId: input.propertyId,
+        fingerprint: input.fingerprint,
+        status: { 
+          in: [IncidentStatus.DETECTED, IncidentStatus.EVALUATED, IncidentStatus.ACTIVE] 
+        },
+        createdAt: {
+          lt: new Date(Date.now() - 24 * 60 * 60 * 1000) // Older than 24 hours
+        }
+      },
+    });
+
+    // Auto-resolve old incidents
+    for (const oldIncident of oldUnactionedIncidents) {
+      await prisma.incident.update({
+        where: { id: oldIncident.id },
+        data: {
+          status: IncidentStatus.RESOLVED,
+          resolvedAt: now,
+        },
+      });
+      
+      await logIncidentEvent({
+        incidentId: oldIncident.id,
+        propertyId: oldIncident.propertyId,
+        userId: oldIncident.userId,
+        type: IncidentEventType.RESOLVED,
+        message: 'Auto-resolved due to new incident creation (no user action taken)',
+        payload: { 
+          autoResolved: true, 
+          reason: 'new_incident_created',
+          newIncidentFingerprint: input.fingerprint 
+        },
+      });
+
+      // Archive guidance for auto-resolved incidents
+      try {
+        await archiveIncidentGuidance(oldIncident.id);
+      } catch (guidanceError) {
+        logger.warn({ guidanceError }, '[GUIDANCE] auto-resolve archive hook failed');
+      }
+    }
+
+    // Step 2: Prefer updating an existing incident with same fingerprint if it's still "open-ish"
     const existing = await prisma.incident.findFirst({
       where: {
         propertyId: input.propertyId,

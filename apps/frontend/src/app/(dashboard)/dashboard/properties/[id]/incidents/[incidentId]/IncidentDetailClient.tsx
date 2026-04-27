@@ -188,8 +188,13 @@ export default function IncidentDetailClient() {
 
       {incident ? (
         <>
-          {/* Auto-Resolution Notification Banner */}
-          {stalenessStatus && stalenessStatus.isWarning && !isPinned && (
+          {/* Auto-Resolution Notification Banner - only show for non-resolved incidents */}
+          {stalenessStatus && 
+           stalenessStatus.isWarning && 
+           !isPinned && 
+           incident.status !== 'RESOLVED' && 
+           incident.status !== 'EXPIRED' && 
+           incident.status !== 'SUPPRESSED' && (
             <AutoResolutionNotificationBanner
               stalenessStatus={stalenessStatus}
               onPin={async () => {
@@ -243,8 +248,11 @@ export default function IncidentDetailClient() {
             />
           )}
 
-          {/* Age Warning Banner */}
-          {isStale && (
+          {/* Age Warning Banner - only show for non-resolved incidents */}
+          {isStale && 
+           incident.status !== 'RESOLVED' && 
+           incident.status !== 'EXPIRED' && 
+           incident.status !== 'SUPPRESSED' && (
             <div className={`rounded-xl border p-4 ${isVeryOld ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
               <div className="flex items-start gap-3">
                 <AlertTriangle className={`h-5 w-5 flex-shrink-0 ${isVeryOld ? 'text-red-600' : 'text-amber-600'}`} />
