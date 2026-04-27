@@ -313,18 +313,29 @@ const consolidateUrgentActions = (
     const actions: UrgentActionItem[] = [];
     const today = new Date();
     const ninetyDays = 90;
+    const incidentStaleThresholdDays = 30; // Only show incidents from last 30 days
 
     // 1. Process Active Incidents (Highest Priority)
-    incidents.filter(inc => inc.status !== 'RESOLVED' && inc.status !== 'SUPPRESSED').forEach(inc => {
-        actions.push({
-            id: inc.id,
-            type: 'INCIDENT',
-            title: inc.title,
-            description: inc.summary || 'Critical home event detected.',
-            propertyId: inc.propertyId,
-            severity: inc.severity || 'WARNING',
+    // Filter out resolved/suppressed AND stale incidents (older than 30 days)
+    incidents
+        .filter(inc => inc.status !== 'RESOLVED' && inc.status !== 'SUPPRESSED')
+        .filter(inc => {
+            // Filter out stale incidents
+            if (!inc.createdAt) return true; // Keep if no createdAt (shouldn't happen)
+            const createdDate = parseISO(inc.createdAt);
+            const daysSinceCreated = differenceInDays(today, createdDate);
+            return daysSinceCreated <= incidentStaleThresholdDays;
+        })
+        .forEach(inc => {
+            actions.push({
+                id: inc.id,
+                type: 'INCIDENT',
+                title: inc.title,
+                description: inc.summary || 'Critical home event detected.',
+                propertyId: inc.propertyId,
+                severity: inc.severity || 'WARNING',
+            });
         });
-    });
 
     // 2. Process Health score Insights (Critical items only)
     const CRITICAL_INSIGHT_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
