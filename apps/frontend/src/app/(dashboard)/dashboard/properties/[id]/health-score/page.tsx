@@ -656,18 +656,11 @@ export default function PropertyHealthDetailPage() {
     const scoreValue = asNumber(insight.score) ?? 0;
     const detailLines = insight.details?.length ? insight.details.slice(0, 6) : [];
     const displayFactorName = getDisplayFactorName(insight.factor);
-    const statusBadge = useStatusChip ? (
+    const impact = getInsightImpact(insight.status);
+    const statusBadge = useStatusChip || impact === "neutral" ? (
       <StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight)}</StatusChip>
     ) : (
-      <Badge
-        variant={
-          getInsightImpact(insight.status) === "negative"
-            ? "destructive"
-            : getInsightImpact(insight.status) === "positive"
-            ? "success"
-            : "secondary"
-        }
-      >
+      <Badge variant={impact === "negative" ? "destructive" : "success"}>
         {getInsightChipLabel(insight)}
       </Badge>
     );
