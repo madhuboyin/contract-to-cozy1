@@ -416,9 +416,20 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
 
   const propertyQuery = actionPropertyId ? `?propertyId=${encodeURIComponent(actionPropertyId)}` : '';
 
-  if (action.type === 'INCIDENT' && actionPropertyId) {
-    return `/dashboard/properties/${actionPropertyId}/incidents/${action.id}`;
+  // 🔑 FIXED: Better incident routing with proper fallbacks
+  if (action.type === 'INCIDENT') {
+    // If we have both property ID and incident ID, route to specific incident
+    if (actionPropertyId && action.id) {
+      return `/dashboard/properties/${actionPropertyId}/incidents/${action.id}`;
+    }
+    // If we have property ID but no incident ID, route to incidents list for that property
+    if (actionPropertyId) {
+      return `/dashboard/properties/${actionPropertyId}/incidents`;
+    }
+    // If no property ID, route to resolution center with urgent filter
+    return `/dashboard/resolution-center?filter=urgent`;
   }
+  
   if (action.type === 'HEALTH_INSIGHT' && actionPropertyId) {
     return `/dashboard/properties/${actionPropertyId}/health-score?focus=${encodeURIComponent(action.title.toLowerCase())}`;
   }
