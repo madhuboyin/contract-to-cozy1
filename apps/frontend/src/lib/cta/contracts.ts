@@ -110,18 +110,29 @@ export interface ValidationWarning {
  * Registry of all page contracts
  */
 export const PAGE_CONTRACTS: Record<string, PageContract> = {
-  '/dashboard/resolution-center': {
-    route: '/dashboard/resolution-center',
+  '/dashboard/properties/:id/fix': {
+    route: '/dashboard/properties/:id/fix',
     features: [
       'filter-urgent',
       'filter-maintenance',
       'sort-priority',
       'expected-count-validation',
       'highlight-items',
+      'decision-engine',
+      'provider-search',
+      'booking-management',
     ],
-    params: ['propertyId', 'filter', 'sort', 'priority', 'expectedCount'],
+    params: ['filter', 'sort', 'priority', 'expectedCount', 'focus', 'highlight'],
     metrics: ['count'],
-    description: 'Resolution center with filterable action items',
+    description: 'Resolution hub with decision engine, provider search, and booking management',
+  },
+  
+  '/dashboard/resolution-center': {
+    route: '/dashboard/resolution-center',
+    features: ['redirect-to-fix'],
+    params: ['propertyId'],
+    metrics: [],
+    description: 'DEPRECATED: Redirects to /dashboard/properties/:id/fix',
   },
   
   '/dashboard/properties/:id/health-score': {

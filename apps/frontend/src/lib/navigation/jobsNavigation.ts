@@ -88,16 +88,16 @@ export const PRIMARY_JOBS: NavJob[] = [
   {
     key: 'fix',
     name: 'Fix',
-    href: '/dashboard/resolution-center',
+    href: '/dashboard/fix', // Redirects to property-specific /dashboard/properties/[id]/fix
     icon: Wrench,
     description: 'Resolve issues and get things done',
     engines: [
-      'resolution-center',
-      'actions',
+      'resolution-hub',
+      'decision-engine',
+      'provider-search',
+      'booking-management',
       'replace-repair',
       'emergency',
-      'providers',
-      'bookings',
       'visual-inspector',
       'oracle',
       'service-price-radar',

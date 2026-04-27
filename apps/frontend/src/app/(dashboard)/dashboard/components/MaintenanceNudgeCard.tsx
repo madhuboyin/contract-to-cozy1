@@ -42,8 +42,8 @@ export function MaintenanceNudgeCard({
 
     // Build destination using maintenanceCount so expectedCount matches what the page shows
     const destination = hasAssetDrivenActions
-        ? `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&priority=high&expectedCount=${maintenanceCount}`
-        : `/dashboard/resolution-center?propertyId=${property.id}&filter=maintenance&expectedCount=${maintenanceCount}`;
+        ? `/dashboard/properties/${property.id}/fix?filter=maintenance&priority=high&expectedCount=${maintenanceCount}`
+        : `/dashboard/properties/${property.id}/fix?filter=maintenance&expectedCount=${maintenanceCount}`;
 
     if (!shouldShowNudge) {
         return null;
