@@ -35,6 +35,7 @@ import {
 import Link from 'next/link';
 import { track } from '@/lib/analytics/events';
 import type { CtcTool } from '@/lib/analytics/events';
+import { listPropertyRecalls } from '../properties/[id]/recalls/recallsApi';
 
 type MorningHomePulseCardProps = {
   propertyId?: string;
@@ -195,13 +196,6 @@ function getPulseCardStyle(kind: SummaryKind, score: number) {
   return 'bg-amber-50/30 border-amber-200/50';
 }
 
-function extractFirstCount(input: string): number | null {
-  const match = input.match(/(\d+)\s+item/i);
-  if (!match) return null;
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : null;
-}
-
 function extractCurrency(input: string): string | null {
   const match = input.match(/\$\s?[\d,]+(?:\.\d+)?/);
   if (!match) return null;
@@ -233,6 +227,7 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<'COMPLETE' | 'DISMISS' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actualRecallCount, setActualRecallCount] = useState<number | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     if (!propertyId) {
@@ -247,6 +242,20 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
       const data = await getDailySnapshot(propertyId);
       setSnapshot(data);
       track('morning_brief_opened', { propertyId, itemCount: data.payload.summary.length });
+
+      // 🔑 FIXED: Fetch actual recall count from API instead of parsing text
+      try {
+        const recallsData = await listPropertyRecalls(propertyId);
+        // Count only OPEN and NEEDS_CONFIRMATION recalls (not dismissed or resolved)
+        const activeRecalls = recallsData.matches.filter(
+          match => match.status === 'OPEN' || match.status === 'NEEDS_CONFIRMATION'
+        );
+        setActualRecallCount(activeRecalls.length);
+      } catch (recallError) {
+        // If recalls API fails, don't break the whole card - just hide recall CTA
+        console.warn('Failed to fetch recall count:', recallError);
+        setActualRecallCount(null);
+      }
     } catch (err: any) {
       setError(err?.message ?? 'Failed to load Morning Home Pulse.');
       setSnapshot(null);
@@ -329,9 +338,11 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
   const dailyStreak = snapshot.streaks.dailyPulseCheckin;
   const nextStreakMilestone = getNextMilestone(dailyStreak);
   const streakProgress = Math.min(100, Math.max(0, (dailyStreak / nextStreakMilestone) * 100));
-  const recallSignalText = `${payload.surprise.headline} ${payload.surprise.detail}`;
-  const hasRecallSignal = /recall|affected|safety/i.test(recallSignalText);
-  const recallMatchCount = extractFirstCount(recallSignalText) ?? 1;
+  
+  // 🔑 FIXED: Use actual recall count from API instead of fragile regex parsing
+  const hasActiveRecalls = actualRecallCount !== null && actualRecallCount > 0;
+  const recallCount = actualRecallCount ?? 0;
+  
   const noOverdueActive = snapshot.streaks.noOverdueTasks > 0;
 
   const weatherAlert = (
@@ -425,8 +436,8 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
               ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">Freeze warning</span>
               : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Weather alert</span>;
 
-          const inferredGapCount = hasRecallSignal
-            ? recallMatchCount
+          const inferredGapCount = hasActiveRecalls
+            ? recallCount
             : row.kind === 'RISK' && (riskExposurePct ?? 0) >= 60
               ? 1
               : 0;
@@ -683,13 +694,14 @@ export default function MorningHomePulseCard({ propertyId }: MorningHomePulseCar
             : `Overdue tasks detected · ${snapshot.streaks.microActionCompleted}-day micro-action streak`}
         </div>
 
-        {hasRecallSignal ? (
+        {hasActiveRecalls ? (
           <Link
             href={`/dashboard/properties/${propertyId}/recalls`}
             className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
+            onClick={() => track('morning_brief_recall_clicked', { propertyId, recallCount })}
           >
             <AlertTriangle className="h-3.5 w-3.5" />
-            Recall check: {recallMatchCount} item{recallMatchCount !== 1 ? 's' : ''} may be affected →
+            Recall check: {recallCount} item{recallCount !== 1 ? 's' : ''} may be affected →
           </Link>
         ) : (
           <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700">
