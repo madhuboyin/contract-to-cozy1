@@ -154,6 +154,16 @@ function getInsightDetailsSummary(insight: HealthInsight): string | null {
   return remaining > 0 ? `${visible.join(" • ")} • +${remaining} more` : visible.join(" • ");
 }
 
+function getDisplayFactorName(factorName: string | undefined): string {
+  const factor = String(factorName || "");
+  if (factor === "Age Factor") return "Property Age (Year Built)";
+  return factor || "Health insight";
+}
+
+function getInsightKey(factorName: string | undefined): string {
+  return getDisplayFactorName(factorName).toLowerCase();
+}
+
 function formatSignedPoints(value: number): string {
   if (Math.abs(value) < 0.05) return "0.0";
   const abs = Math.abs(value).toFixed(1);
@@ -228,18 +238,10 @@ function getInsightFactorIcon(factorValue: string | undefined, statusValue: stri
 }
 
 function getFactorDescription(factorName: string | undefined, condition: string | undefined): string {
-  const factor = String(factorName || "");
+  const factor = getDisplayFactorName(factorName);
   const cond = String(condition || "");
   const map: Record<string, Record<string, string>> = {
     'Property Age (Year Built)': {
-      'Excellent': 'Recently built home — strong age signal',
-      'Good': 'Home age is within a typical maintenance window',
-      'Needs Review': 'Older home based on year built — review recommended',
-      'Needs attention': 'Older home age is increasing maintenance risk — priority review recommended',
-      'Action Pending': 'Age-related review is already in progress',
-      'Missing Data': 'Year built is missing — add it to improve score accuracy',
-    },
-    'Age Factor': {
       'Excellent': 'Recently built home — strong age signal',
       'Good': 'Home age is within a typical maintenance window',
       'Needs Review': 'Older home based on year built — review recommended',
@@ -566,6 +568,7 @@ export default function PropertyHealthDetailPage() {
   const renderFocusInsightAccordionRow = (insight: HealthInsight, idx: number, useStatusChip: boolean, isFocused = false) => {
     const scoreValue = asNumber(insight.score) ?? 0;
     const detailLines = insight.details?.length ? insight.details.slice(0, 6) : [];
+    const displayFactorName = getDisplayFactorName(insight.factor);
     const statusBadge = useStatusChip ? (
       <StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>
     ) : (
@@ -586,7 +589,7 @@ export default function PropertyHealthDetailPage() {
       <details
         key={`${insight.factor || "insight"}-${idx}`}
         className={`rounded-lg border border-black/10 bg-white border-l-[3px] ${getInsightLeftBorderColor(insight.status)}${isFocused ? ' ring-2 ring-teal-400 ring-offset-1' : ''}`}
-        data-insight-key={insight.factor?.toLowerCase() ?? ''}
+        data-insight-key={getInsightKey(insight.factor)}
         open={isFocused || undefined}
       >
         <summary className="list-none cursor-pointer px-3 py-2">
@@ -594,7 +597,7 @@ export default function PropertyHealthDetailPage() {
             <div className="flex items-start gap-2">
               {getInsightFactorIcon(insight.factor, insight.status)}
               <div>
-                <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
+                <p className="text-sm font-medium">{displayFactorName}</p>
                 <p className="text-xs text-muted-foreground">{getFactorDescription(insight.factor, insight.status)}</p>
               </div>
             </div>
@@ -699,7 +702,7 @@ export default function PropertyHealthDetailPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, true, insight.factor?.toLowerCase() === focusedFactor))}
+                {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, true, getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor))}
               </div>
             )}
           </ScenarioInputCard>
@@ -783,9 +786,9 @@ export default function PropertyHealthDetailPage() {
                         <p className="text-xs text-muted-foreground">No factors in this category.</p>
                       ) : (
                         groupInsights.map((insight, idx) => (
-                          <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} data-insight-key={insight.factor?.toLowerCase() ?? ''} className={`border-l-[3px] ${getInsightLeftBorderColor(insight.status)} pl-2`}>
+                          <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} data-insight-key={getInsightKey(insight.factor)} className={`border-l-[3px] ${getInsightLeftBorderColor(insight.status)} pl-2`}>
                             <CompactEntityRow
-                              title={insight.factor || "Health insight"}
+                              title={getDisplayFactorName(insight.factor)}
                               subtitle={getFactorDescription(insight.factor, insight.status)}
                               status={<StatusChip tone={getInsightTone(insight.status)}>{getInsightChipLabel(insight.status)}</StatusChip>}
                             />
@@ -1047,7 +1050,7 @@ export default function PropertyHealthDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, false, insight.factor?.toLowerCase() === focusedFactor))}
+                  {focusInsights.map((insight, idx) => renderFocusInsightAccordionRow(insight, idx, false, getInsightKey(insight.factor) === focusedFactor || insight.factor?.toLowerCase() === focusedFactor))}
                 </div>
               )}
               <div className="mt-4">
@@ -1091,7 +1094,7 @@ export default function PropertyHealthDetailPage() {
                             groupInsights.map((insight, idx) => (
                               <div key={`${group.title}-${insight.factor || "insight"}-${idx}`} className={`rounded-lg border border-black/10 border-l-[3px] ${getInsightLeftBorderColor(insight.status)} px-3 py-2`}>
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-medium">{insight.factor || "Health insight"}</p>
+                                  <p className="text-sm font-medium">{getDisplayFactorName(insight.factor)}</p>
                                   <Badge
                                     variant={
                                       getInsightImpact(insight.status) === "negative"
