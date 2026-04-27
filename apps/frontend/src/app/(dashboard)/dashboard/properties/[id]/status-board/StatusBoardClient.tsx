@@ -278,7 +278,9 @@ export default function StatusBoardClient() {
   // Filters
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<string>("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>(
+    searchParams.get("category") ?? "all"
+  );
   const [groupBy, setGroupBy] = useState<string>("none");
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [includeHidden, setIncludeHidden] = useState(false);

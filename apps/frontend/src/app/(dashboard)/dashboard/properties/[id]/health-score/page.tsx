@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Activity, ArrowLeft, BarChart2, Calendar, CheckCircle2, ChevronDown, ClipboardList, Clock3, FileText, Flag, Flame, Gauge, Home, Info, Loader2, Minus, ShieldCheck, TrendingDown, TrendingUp, Wind, Wrench } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, BarChart2, Calendar, CheckCircle2, ChevronDown, ClipboardList, Clock3, FileText, Flag, Flame, Gauge, Home, Info, Loader2, Minus, ShieldCheck, TrendingDown, TrendingUp, Wind, Wrench } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PageHeader, PageHeaderHeading } from "@/components/page-header";
 import { api } from "@/lib/api/client";
@@ -154,6 +154,10 @@ function getInsightDetailsSummary(insight: HealthInsight): string | null {
   const visible = insight.details.slice(0, 2);
   const remaining = insight.details.length - visible.length;
   return remaining > 0 ? `${visible.join(" • ")} • +${remaining} more` : visible.join(" • ");
+}
+
+function isApplianceInsight(factorName: string | undefined): boolean {
+  return String(factorName || "").toLowerCase().includes("appliance");
 }
 
 function getDisplayFactorName(factorName: string | undefined): string {
@@ -707,6 +711,15 @@ export default function PropertyHealthDetailPage() {
             </div>
           ) : (
             <p>No additional scoring evidence is available yet. Add profile details and service records to improve transparency.</p>
+          )}
+          {isApplianceInsight(insight.factor) && getInsightImpact(insight.status) !== "positive" && (
+            <Link
+              href={`/dashboard/properties/${propertyId}/status-board?category=APPLIANCE`}
+              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+            >
+              View appliances on status board
+              <ArrowRight className="h-3 w-3" />
+            </Link>
           )}
         </div>
       </details>
