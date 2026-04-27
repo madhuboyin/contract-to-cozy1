@@ -47,7 +47,7 @@ v1 had internal contradictions: the consistency table used different names than 
 | Coverage (adjective) | Covered | Protected by warranty | Context-dependent |
 | Gap | Coverage Gap | Unprotected cost | Dollar amount when available |
 
-> **Why "Risk Score" not "Financial Risk":** "Risk Exposure" is standard insurance terminology and more precise than "Financial Risk". However, "Risk Score" aligns with the existing scoring system language and is consistent with "Health Score" and "Financial Efficiency Score". "Financial Risk" was rejected because it implies the score itself is risky rather than measuring risk.
+> **Why "Risk Score" not "Financial Risk":** Homeowners already understand the scoring pattern from "Health Score" and "Financial Efficiency Score" — "Risk Score" slots directly into that mental model without requiring domain knowledge. "Risk Exposure" is precise insurance jargon, but precision for insiders is not the goal here; clarity for homeowners is. "Financial Risk" was rejected separately because it implies the score itself is risky rather than measuring the user's risk exposure.
 
 ---
 
@@ -461,12 +461,12 @@ These findings were absent from v1. Generic labels are an accessibility problem,
 #### Finding 7.2: Score Ring Accessibility
 **Problem**: Score ring likely uses SVG or canvas with no accessible text equivalent
 **Recommended Fix**: Add `aria-label="Property Health Score: 72 out of 100, rated Good"`
-**Severity**: High
+**Severity**: High (WCAG 2.1 AA — SC 1.1.1 Non-text Content)
 
 #### Finding 7.3: Progress Bar for "Confidence"
 **Problem**: Confidence bar has no `role="progressbar"` or `aria-valuenow`/`aria-valuemax`
 **Recommended Fix**: Add ARIA progressbar attributes and `aria-label="Data confidence: 65%"`
-**Severity**: Medium
+**Severity**: Medium (WCAG 2.1 AA — SC 4.1.2 Name, Role, Value)
 
 ---
 
@@ -482,6 +482,11 @@ These findings were absent from v1. Generic labels are an accessibility problem,
 **Problem**: "[Item] needs attention" with long item names (e.g., "Water heater needs attention") may overflow badge boundaries
 **Action**: Establish maximum character length for status labels (suggested: 35 chars). Truncate with tooltip for overflow.
 **Severity**: Medium
+
+#### Finding 8.3: Touch Target Size for Longer CTAs
+**Problem**: Recommended CTA text replacements are longer than current labels and may require wider buttons to remain readable — which can push button height below the 44×44px minimum touch target on mobile
+**Action**: Validate all CTA buttons meet minimum touch target dimensions at 375px viewport. Resize if needed before shipping.
+**Severity**: Medium (WCAG 2.1 AA — SC 2.5.5 Target Size)
 
 ---
 
@@ -589,9 +594,11 @@ These are pure string constant changes. No data dependency. Doing these first pr
     - File: `PropertyHealthScoreCard.tsx`
     - Requires system count from API; use "Major systems tracked" as fallback
 
-20. **"Fully optimized" — gate on score value**
+20. **"Fully optimized" — VERIFY FIRST, then gate on score**
     - File: `FinancialEfficiencyScoreCard.tsx`
-    - **First**: Verify whether this is already conditional. If static, add score-gated logic.
+    - **Step 1**: Check whether `FinancialEfficiencyScoreCard.tsx` already conditionally renders this label based on score value
+    - **Step 2**: If static → add score-gated logic as described in Finding 2.2 (≥90: "Costs fully optimized", 70–89: "Well optimized", <70: "Room to improve")
+    - **Step 3**: If already conditional → mark Finding 2.2 as N/A and close this item
 
 ---
 
@@ -606,6 +613,10 @@ These are pure string constant changes. No data dependency. Doing these first pr
 | Dynamic/conditional (Phase 2) | 18–20 | 2–5 days | 2–4 hours | Backend data dependency not accounted for in v1 |
 | Accessibility additions | 7.1–7.3 | 4–6 hours | Not scoped | New scope |
 | Mobile validation | 8.1–8.2 | 2–4 hours | Not scoped | New scope |
+
+### Low Severity Findings
+
+Teams may choose to defer or skip findings marked **Low severity** if resources are constrained. These findings have real but minimal user impact and carry no risk to trust or task completion. Recommended priority: resolve all High and Medium findings before addressing Low severity items. Low severity findings left unaddressed should be noted in the backlog rather than closed.
 
 ### Backend Dependencies
 
