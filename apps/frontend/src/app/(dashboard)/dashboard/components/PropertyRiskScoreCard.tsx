@@ -41,7 +41,7 @@ function clampCoverageFactor(value: number) {
   return Math.min(Math.max(value, 0), 1);
 }
 
-function buildCoverageMetrics(details: AssetRiskDetail[], totalExposure: number) {
+function buildCoverageMetrics(details: AssetRiskDetail[], exposureAmount: number) {
   const totalAssetValue = details.reduce((sum, detail) => {
     return sum + Math.max(0, Number(detail.replacementCost || 0));
   }, 0);
@@ -52,7 +52,7 @@ function buildCoverageMetrics(details: AssetRiskDetail[], totalExposure: number)
   }, 0);
 
   const coverageRatio =
-    totalExposure === 0
+    exposureAmount === 0
       ? 1
       : totalAssetValue > 0
         ? Math.min(Math.max(coveredAmount / totalAssetValue, 0), 1)
