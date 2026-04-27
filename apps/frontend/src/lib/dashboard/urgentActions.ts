@@ -17,6 +17,7 @@ export interface UrgentActionItem {
   daysUntilDue?: number;
   propertyId: string;
   severity?: 'INFO' | 'WARNING' | 'CRITICAL';
+  entityType?: 'Warranty' | 'Insurance'; // Added to track renewal type
 }
 
 type ChecklistEntry = {
@@ -124,6 +125,7 @@ export function consolidateUrgentActions(
         dueDate,
         daysUntilDue: days,
         propertyId: item.propertyId || 'N/A',
+        entityType: itemType, // Track whether it's a Warranty or Insurance
       });
     } else if (days <= ninetyDays) {
       actions.push({
@@ -134,6 +136,7 @@ export function consolidateUrgentActions(
         dueDate,
         daysUntilDue: days,
         propertyId: item.propertyId || 'N/A',
+        entityType: itemType, // Track whether it's a Warranty or Insurance
       });
     }
   });
@@ -163,6 +166,14 @@ export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: s
     return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=overdue` : '?filter=overdue'}`;
   }
   if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
+    // Route based on entity type (Warranty vs Insurance)
+    if (action.entityType === 'Warranty') {
+      // Warranties are managed in the inventory/vault with coverage tab
+      return actionPropertyId 
+        ? `/dashboard/properties/${actionPropertyId}/inventory?tab=coverage&highlight=${action.id}`
+        : `/dashboard/vault?tab=coverage`;
+    }
+    // Insurance policies go to insurance/protect page
     return `/dashboard/insurance${propertyQuery}`;
   }
   if (actionPropertyId) {
