@@ -15,6 +15,8 @@ import {
   listIncidentEvents,
   orchestrateIncidentNow,
   reevaluateIncidentNow,
+  updateIncidentPreferences,
+  setIncidentStatus,
 } from '../incidentsApi';
 
 import IncidentSeverityBadge from '@/app/(dashboard)/dashboard/components/incidents/IncidentSeverityBadge';
@@ -181,20 +183,34 @@ export default function IncidentDetailClient() {
             <AutoResolutionNotificationBanner
               stalenessStatus={stalenessStatus}
               onPin={async () => {
-                // TODO: Implement API call when backend is ready
-                setIsPinned(true);
-                alert('Pin functionality will be fully implemented when the API endpoint is available.');
+                try {
+                  await updateIncidentPreferences({
+                    propertyId,
+                    incidentId,
+                    isPinned: true,
+                    pinnedNote: 'Pinned to prevent auto-resolution',
+                  });
+                  setIsPinned(true);
+                  await load();
+                } catch (error: any) {
+                  setErr(error?.message ?? 'Failed to pin incident');
+                }
               }}
               onDismiss={async () => {
-                // TODO: Store dismissal in user preferences
-                alert('Notification dismissed. This will be persisted when the API is available.');
+                // Just hide the banner locally - user can still see it in the age warning
+                // No need to persist dismissal
               }}
               onResolveNow={async () => {
                 setResolving(true);
                 try {
-                  // TODO: Implement actual resolve API call
-                  alert('Resolve functionality will be implemented when the API endpoint is available.');
+                  await setIncidentStatus({
+                    propertyId,
+                    incidentId,
+                    status: 'RESOLVED',
+                  });
                   await load();
+                } catch (error: any) {
+                  setErr(error?.message ?? 'Failed to resolve incident');
                 } finally {
                   setResolving(false);
                 }
@@ -260,9 +276,18 @@ export default function IncidentDetailClient() {
                   propertyId={propertyId}
                   isPinned={isPinned}
                   onToggle={async (pinned) => {
-                    // TODO: Implement API call when backend is ready
-                    setIsPinned(pinned);
-                    alert('Pin functionality will be fully implemented when the API endpoint is available.');
+                    try {
+                      await updateIncidentPreferences({
+                        propertyId,
+                        incidentId: incident.id,
+                        isPinned: pinned,
+                        pinnedNote: pinned ? 'Pinned by user' : undefined,
+                      });
+                      setIsPinned(pinned);
+                      await load();
+                    } catch (error: any) {
+                      setErr(error?.message ?? 'Failed to update pin status');
+                    }
                   }}
                   disabled={loading || busy}
                 />
@@ -284,9 +309,11 @@ export default function IncidentDetailClient() {
                   onClick={async () => {
                     setResolving(true);
                     try {
-                      // TODO: Implement actual resolve API call when available
-                      // For now, just show feedback
-                      alert('Mark as Resolved functionality will be implemented when the API endpoint is available.');
+                      await setIncidentStatus({
+                        propertyId,
+                        incidentId: incident.id,
+                        status: 'RESOLVED',
+                      });
                       await load();
                     } catch (ex: any) {
                       setErr(ex?.message ?? 'Failed to resolve incident');

@@ -145,3 +145,89 @@ export async function acknowledgeIncident(args: {
   );
   return response.data;
 }
+
+// ============================================================================
+// INCIDENT LIFECYCLE MANAGEMENT
+// ============================================================================
+
+/**
+ * Update incident user preferences (pin/archive)
+ */
+export async function updateIncidentPreferences(args: {
+  propertyId: string;
+  incidentId: string;
+  isPinned?: boolean;
+  pinnedNote?: string;
+  isArchived?: boolean;
+  archivedReason?: string;
+}): Promise<{ success: boolean; preference: any }> {
+  const response = await api.patch<{ success: boolean; preference: any }>(
+    `/api/properties/${args.propertyId}/incidents/${args.incidentId}/preferences`,
+    {
+      isPinned: args.isPinned,
+      pinnedNote: args.pinnedNote,
+      isArchived: args.isArchived,
+      archivedReason: args.archivedReason,
+    }
+  );
+  return response.data;
+}
+
+/**
+ * Archive an incident
+ */
+export async function archiveIncident(args: {
+  propertyId: string;
+  incidentId: string;
+  reason?: string;
+}): Promise<{ success: boolean }> {
+  const response = await api.post<{ success: boolean }>(
+    `/api/properties/${args.propertyId}/incidents/${args.incidentId}/archive`,
+    { reason: args.reason }
+  );
+  return response.data;
+}
+
+/**
+ * Restore an archived incident
+ */
+export async function restoreIncident(args: {
+  propertyId: string;
+  incidentId: string;
+}): Promise<{ success: boolean }> {
+  const response = await api.post<{ success: boolean }>(
+    `/api/properties/${args.propertyId}/incidents/${args.incidentId}/restore`,
+    {}
+  );
+  return response.data;
+}
+
+/**
+ * Cancel auto-resolution for an incident
+ */
+export async function cancelAutoResolution(args: {
+  propertyId: string;
+  incidentId: string;
+}): Promise<{ success: boolean }> {
+  const response = await api.post<{ success: boolean }>(
+    `/api/properties/${args.propertyId}/incidents/${args.incidentId}/auto-resolution/cancel`,
+    {}
+  );
+  return response.data;
+}
+
+/**
+ * Set incident status (including RESOLVED)
+ */
+export async function setIncidentStatus(args: {
+  propertyId: string;
+  incidentId: string;
+  status: IncidentStatus;
+}): Promise<IncidentDTO> {
+  const response = await api.patch<IncidentDTO>(
+    `/api/properties/${args.propertyId}/incidents/${args.incidentId}/status`,
+    { status: args.status }
+  );
+  return response.data;
+}
+
