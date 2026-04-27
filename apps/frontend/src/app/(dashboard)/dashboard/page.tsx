@@ -80,6 +80,7 @@ import { track } from '@/lib/analytics/events';
 import { listIncidents } from './properties/[id]/incidents/incidentsApi';
 import { listInventoryItems } from './inventory/inventoryApi';
 import { IncidentDTO } from '@/types/incidents.types';
+import { calculateStalenessStatus } from '@/lib/incidents/stalenessConfig';
 
 const PROPERTY_SETUP_SKIPPED_KEY = 'propertySetupSkipped'; 
 const DASHBOARD_AHA_SEEN_PREFIX = 'dashboardAhaSeen';
@@ -313,18 +314,20 @@ const consolidateUrgentActions = (
     const actions: UrgentActionItem[] = [];
     const today = new Date();
     const ninetyDays = 90;
-    const incidentStaleThresholdDays = 30; // Only show incidents from last 30 days
 
     // 1. Process Active Incidents (Highest Priority)
-    // Filter out resolved/suppressed AND stale incidents (older than 30 days)
+    // Filter out resolved/suppressed AND stale incidents using type-specific thresholds
     incidents
         .filter(inc => inc.status !== 'RESOLVED' && inc.status !== 'SUPPRESSED')
         .filter(inc => {
-            // Filter out stale incidents
+            // Use type-specific staleness thresholds
             if (!inc.createdAt) return true; // Keep if no createdAt (shouldn't happen)
-            const createdDate = parseISO(inc.createdAt);
-            const daysSinceCreated = differenceInDays(today, createdDate);
-            return daysSinceCreated <= incidentStaleThresholdDays;
+            
+            const stalenessStatus = calculateStalenessStatus(inc);
+            
+            // Only show incidents that haven't reached their stale threshold
+            // This means weather incidents disappear after 7 days, structural after 60 days, etc.
+            return !stalenessStatus.isStale;
         })
         .forEach(inc => {
             actions.push({

@@ -7,6 +7,9 @@ import { ArrowLeft, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
 import { differenceInDays, formatDistanceToNow, parseISO } from 'date-fns';
 
 import type { GetIncidentDetailResponse, IncidentDTO, IncidentEventDTO } from '@/types/incidents.types';
+import { calculateStalenessStatus } from '@/lib/incidents/stalenessConfig';
+import IncidentPinButton from '@/app/(dashboard)/dashboard/components/incidents/IncidentPinButton';
+import AutoResolutionNotificationBanner from '@/app/(dashboard)/dashboard/components/incidents/AutoResolutionNotificationBanner';
 import {
   getIncident,
   listIncidentEvents,
@@ -64,12 +67,14 @@ export default function IncidentDetailClient() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
 
-  // Calculate incident age
+  // Calculate incident age and staleness status
   const incidentAge = incident?.createdAt 
     ? differenceInDays(new Date(), parseISO(incident.createdAt))
     : null;
   
+  const stalenessStatus = incident ? calculateStalenessStatus(incident) : null;
   const isStale = incidentAge !== null && incidentAge > 30;
   const isVeryOld = incidentAge !== null && incidentAge > 90;
 
@@ -171,6 +176,32 @@ export default function IncidentDetailClient() {
 
       {incident ? (
         <>
+          {/* Auto-Resolution Notification Banner */}
+          {stalenessStatus && stalenessStatus.isWarning && !isPinned && (
+            <AutoResolutionNotificationBanner
+              stalenessStatus={stalenessStatus}
+              onPin={async () => {
+                // TODO: Implement API call when backend is ready
+                setIsPinned(true);
+                alert('Pin functionality will be fully implemented when the API endpoint is available.');
+              }}
+              onDismiss={async () => {
+                // TODO: Store dismissal in user preferences
+                alert('Notification dismissed. This will be persisted when the API is available.');
+              }}
+              onResolveNow={async () => {
+                setResolving(true);
+                try {
+                  // TODO: Implement actual resolve API call
+                  alert('Resolve functionality will be implemented when the API endpoint is available.');
+                  await load();
+                } finally {
+                  setResolving(false);
+                }
+              }}
+            />
+          )}
+
           {/* Age Warning Banner */}
           {isStale && (
             <div className={`rounded-xl border p-4 ${isVeryOld ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
@@ -223,6 +254,18 @@ export default function IncidentDetailClient() {
                     Check quote fairness
                   </Link>
                 </Button>
+
+                <IncidentPinButton
+                  incidentId={incident.id}
+                  propertyId={propertyId}
+                  isPinned={isPinned}
+                  onToggle={async (pinned) => {
+                    // TODO: Implement API call when backend is ready
+                    setIsPinned(pinned);
+                    alert('Pin functionality will be fully implemented when the API endpoint is available.');
+                  }}
+                  disabled={loading || busy}
+                />
               </div>
 
               <IncidentAckControls

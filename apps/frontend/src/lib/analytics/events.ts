@@ -56,7 +56,15 @@ export type CtcEventName =
   // Diagnostics
   | 'route_redirected'
   | 'dead_end_reached'
-  | 'api_error_encountered';
+  | 'api_error_encountered'
+  // Incident Lifecycle
+  | 'incident_pin_toggled'
+  | 'incident_archived'
+  | 'incident_restored'
+  | 'incident_auto_resolution_canceled'
+  | 'incident_auto_resolution_notification_dismissed'
+  | 'incident_resolved_manually_before_auto'
+  | 'incident_archive_view_opened';
 
 export type CtcTool =
   | 'service-price-radar'
@@ -165,6 +173,14 @@ export interface CtcEventProperties {
   // Navigation
   route_redirected: { oldRoute: string; canonicalRoute: string; redirectType: '308' | '307-resolver' };
   dead_end_reached: { route: string; propertyId?: string };
+  // Incident Lifecycle
+  incident_pin_toggled: { incidentId: string; propertyId: string; isPinned: boolean };
+  incident_archived: { incidentId: string; propertyId: string; reason?: string };
+  incident_restored: { incidentId: string; propertyId: string };
+  incident_auto_resolution_canceled: { incidentId: string; propertyId: string };
+  incident_auto_resolution_notification_dismissed: { incidentId: string; propertyId: string };
+  incident_resolved_manually_before_auto: { incidentId: string; propertyId: string; daysBeforeAutoResolve: number };
+  incident_archive_view_opened: { propertyId: string };
 }
 
 // ---------------------------------------------------------------------------
