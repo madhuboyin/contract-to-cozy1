@@ -184,32 +184,42 @@ export default function IncidentDetailClient() {
               stalenessStatus={stalenessStatus}
               onPin={async () => {
                 try {
+                  console.log('[PIN] Starting pin operation...');
                   await updateIncidentPreferences({
                     propertyId,
                     incidentId,
                     isPinned: true,
                     pinnedNote: 'Pinned to prevent auto-resolution',
                   });
+                  console.log('[PIN] Pin successful, updating state...');
                   setIsPinned(true);
                   await load();
+                  console.log('[PIN] Reload complete');
                 } catch (error: any) {
+                  console.error('[PIN] Error:', error);
                   setErr(error?.message ?? 'Failed to pin incident');
                 }
               }}
               onDismiss={async () => {
+                console.log('[DISMISS] Dismissing notification banner');
                 // Just hide the banner locally - user can still see it in the age warning
                 // No need to persist dismissal
               }}
               onResolveNow={async () => {
                 setResolving(true);
                 try {
-                  await setIncidentStatus({
+                  console.log('[RESOLVE] Starting resolve operation...');
+                  console.log('[RESOLVE] propertyId:', propertyId, 'incidentId:', incidentId);
+                  const result = await setIncidentStatus({
                     propertyId,
                     incidentId,
                     status: 'RESOLVED',
                   });
+                  console.log('[RESOLVE] Resolve successful:', result);
                   await load();
+                  console.log('[RESOLVE] Reload complete');
                 } catch (error: any) {
+                  console.error('[RESOLVE] Error:', error);
                   setErr(error?.message ?? 'Failed to resolve incident');
                 } finally {
                   setResolving(false);

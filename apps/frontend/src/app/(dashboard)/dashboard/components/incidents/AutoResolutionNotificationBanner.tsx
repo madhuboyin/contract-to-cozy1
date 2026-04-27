@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Clock, Pin, X, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { StalenessStatus } from '@/lib/incidents/stalenessConfig';
@@ -18,6 +18,8 @@ export default function AutoResolutionNotificationBanner({
   onDismiss,
   onResolveNow
 }: AutoResolutionNotificationBannerProps) {
+  const [loading, setLoading] = useState<'pin' | 'resolve' | 'dismiss' | null>(null);
+
   if (!stalenessStatus.isWarning) {
     return null;
   }
@@ -31,6 +33,33 @@ export default function AutoResolutionNotificationBanner({
   const iconColor = stalenessStatus.severity === 'critical' 
     ? 'text-red-600' 
     : 'text-amber-600';
+
+  const handlePin = async () => {
+    setLoading('pin');
+    try {
+      await onPin();
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleResolve = async () => {
+    setLoading('resolve');
+    try {
+      await onResolveNow();
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleDismiss = async () => {
+    setLoading('dismiss');
+    try {
+      await onDismiss();
+    } finally {
+      setLoading(null);
+    }
+  };
 
   return (
     <div className={`rounded-xl border p-4 ${bgColor}`}>
@@ -56,27 +85,30 @@ export default function AutoResolutionNotificationBanner({
               variant="outline"
               size="sm"
               className="min-h-[32px] bg-white"
-              onClick={onPin}
+              onClick={handlePin}
+              disabled={loading !== null}
             >
               <Pin className="h-3.5 w-3.5 mr-1.5" />
-              Pin to keep visible
+              {loading === 'pin' ? 'Pinning...' : 'Pin to keep visible'}
             </Button>
             
             <Button
               variant="outline"
               size="sm"
               className="min-h-[32px] bg-white"
-              onClick={onResolveNow}
+              onClick={handleResolve}
+              disabled={loading !== null}
             >
               <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-              Resolve now
+              {loading === 'resolve' ? 'Resolving...' : 'Resolve now'}
             </Button>
             
             <Button
               variant="ghost"
               size="sm"
               className="min-h-[32px]"
-              onClick={onDismiss}
+              onClick={handleDismiss}
+              disabled={loading !== null}
             >
               <X className="h-3.5 w-3.5 mr-1.5" />
               Dismiss
