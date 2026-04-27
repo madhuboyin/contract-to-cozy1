@@ -140,12 +140,6 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
 
   const summary = summaryQuery.data || FALLBACK_SUMMARY;
   const isLoading = summaryQuery.isLoading;
-  const totalExposure = Math.max(0, Math.round(summary.financialExposureTotal || 0));
-  
-  // Navigate to risk assessment with exposure focus
-  const reportLink = propertyId
-    ? `/dashboard/properties/${propertyId}/risk-assessment${totalExposure > 0 ? '?focus=exposure' : ''}`
-    : "/dashboard/properties";
 
   if (!propertyId || summary.status === "NO_PROPERTY") {
     return (
@@ -190,6 +184,11 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
   );
   const meaning = buildRiskMeaning(coverageRatio, totalExposure);
   const badge = getExposureBadge(totalExposure);
+
+  // Navigate to risk assessment with exposure focus
+  const reportLink = propertyId
+    ? `/dashboard/properties/${propertyId}/risk-assessment${totalExposure > 0 ? '?focus=exposure' : ''}`
+    : "/dashboard/properties";
 
   const exposureHeadline = totalExposure === 0 ? "$0 gap" : formatCurrency(totalExposure);
   const exposureTone = totalExposure === 0 ? "text-teal-600" : "text-red-600";
