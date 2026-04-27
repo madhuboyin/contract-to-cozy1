@@ -8,11 +8,12 @@
 
 ## Overview
 
-Implemented four critical navigation fixes identified in the CTA Navigation Audit Validation Report:
+Implemented five critical navigation fixes identified in the CTA Navigation Audit Validation Report:
 1. **CRITICAL:** Vault redirect 404 issue
 2. **MEDIUM:** Warranty renewal routing bug
 3. **HIGH:** Risk assessment exposure focus handling
 4. **HIGH:** Risk assessment trends view handling
+5. **MEDIUM:** Health score trends view handling
 
 ---
 
@@ -535,6 +536,157 @@ Risk score changes week-over-week
 
 ---
 
+## Fix 5: Health Score Trends View (MEDIUM)
+
+### Problem
+- PropertyHealthScoreCard shows "View health trends" CTA when health score changed week-over-week
+- Clicking navigates to health-score page with `?view=trends` parameter
+- **Parameter was never consumed** - no highlighting, scrolling, or focus on trends section
+- User sees identical content to default view - promise is specific but delivery is generic
+
+### Root Cause
+- `PropertyHealthScoreCard` built `?view=trends` parameter in URL
+- Health score page already had `useSearchParams` for `focus` parameter
+- But did NOT handle the `view` parameter
+- Same issue as FINDING 3 & 4 - parameter was passed but ignored
+
+### Solution Implemented
+
+**Modified:** `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/health-score/page.tsx`
+
+#### Change 1: Added View Parameter Handling
+
+```typescript
+// Extract view parameter for trends highlighting
+const viewParam = searchParams.get('view');
+const shouldFocusTrends = viewParam === 'trends';
+```
+
+#### Change 2: Added Scroll-to-Trends Effect
+
+```typescript
+// Scroll to trends section when view parameter is present
+useEffect(() => {
+    if (!shouldFocusTrends) return;
+    const timer = setTimeout(() => {
+      const trendsElement = document.getElementById('score-trend-section');
+      if (trendsElement) {
+        trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [shouldFocusTrends]);
+```
+
+#### Change 3: Added ID and Highlighting to Desktop Trends Card
+
+```typescript
+<Card 
+  id="score-trend-section"
+  className={`lg:col-span-2 transition-all duration-300 ${
+    shouldFocusTrends ? 'ring-2 ring-teal-400 shadow-lg' : ''
+  }`}
+>
+  <CardHeader className="pb-2">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <CardTitle className="text-base font-medium">Health score Trend</CardTitle>
+        <CardDescription>Weekly snapshots for the last 6 months or 1 year.</CardDescription>
+      </div>
+      {/* ... trend period buttons ... */}
+    </div>
+  </CardHeader>
+  <CardContent className="space-y-3">
+    <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+    <ScoreDeltaIndicator delta={series?.deltaFromPreviousWeek} />
+  </CardContent>
+</Card>
+```
+
+#### Change 4: Added ID and Highlighting to Mobile Trends Section
+
+```typescript
+<ScenarioInputCard
+  title="Score Trend"
+  subtitle="Weekly snapshots for the last 6 months or 1 year."
+  {/* ... actions ... */}
+>
+  <div
+    id="score-trend-section"
+    className={`transition-all duration-300 ${
+      shouldFocusTrends ? 'ring-2 ring-teal-400 rounded-lg shadow-lg p-2 -m-2' : ''
+    }`}
+  >
+    <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+  </div>
+</ScenarioInputCard>
+```
+
+### How It Works
+
+1. **User clicks "View health trends"** on PropertyHealthScoreCard (when weekly change detected)
+2. **Navigation includes parameter:** `/dashboard/properties/{id}/health-score?view=trends`
+3. **Page extracts parameter:** `shouldFocusTrends = true`
+4. **useEffect triggers:** Waits 300ms for DOM render
+5. **Scrolls to element:** `document.getElementById('score-trend-section').scrollIntoView()`
+6. **Highlights section:** Teal ring and shadow applied via conditional className
+
+### User Experience Flow
+
+**Before Fix:**
+```
+Health score changes week-over-week
+  → User clicks "View health trends"
+  → Page opens with ?view=trends
+  → ❌ Nothing happens
+  → ❌ Identical view to default
+  → ❌ User must manually scroll to find trends
+```
+
+**After Fix:**
+```
+Health score changes week-over-week
+  → User clicks "View health trends"
+  → Page opens with ?view=trends
+  → ✅ Page automatically scrolls to trends (smooth)
+  → ✅ Trends card highlighted with teal ring
+  → ✅ User immediately sees weekly trend chart
+```
+
+### Benefits
+
+✅ **Delivers CTA promise** - User sees trends when clicking "View health trends"  
+✅ **Smooth scroll animation** - Premium UX with 300ms smooth scroll  
+✅ **Visual feedback** - Teal ring and shadow highlight the section  
+✅ **Responsive** - Works on both mobile and desktop  
+✅ **Conditional** - Only triggers when parameter present  
+✅ **Coexists with focus parameter** - Both parameters work independently  
+✅ **Leverages existing infrastructure** - useSearchParams already imported
+
+### Testing
+
+**Manual Test Cases:**
+1. Wait for health score to change week-over-week
+2. Click "View health trends" from PropertyHealthScoreCard
+3. Verify page scrolls to trends section
+4. Verify trends card is highlighted with teal ring
+5. Verify chart shows weekly snapshots
+6. Verify 6 Months / 1 Year toggle works
+7. Test on mobile viewport
+8. Test on desktop viewport
+9. Verify no console errors
+10. Test coexistence with `focus` parameter
+
+**Expected Results:**
+- ✅ Automatic scroll to trends section
+- ✅ Teal ring highlight visible
+- ✅ Smooth animation
+- ✅ Works on all viewports
+- ✅ No errors or side effects
+- ✅ Both parameters work independently
+
+---
+
 ## Impact Assessment
 
 ### Users Affected
@@ -542,24 +694,27 @@ Risk score changes week-over-week
 - **All users** with warranty renewals
 - **All users** viewing risk assessment exposure details
 - **All users** viewing risk assessment trends when score changes
+- **All users** viewing health score trends when score changes
 
 ### Severity Before Fix
 - **CRITICAL:** Complete inability to access vault/inventory (404)
 - **MEDIUM:** Warranty renewals navigate to wrong page
 - **HIGH:** Exposure focus parameter ignored, poor UX
-- **HIGH:** Trends view parameter ignored, poor UX
+- **HIGH:** Risk trends view parameter ignored, poor UX
+- **MEDIUM:** Health trends view parameter ignored, poor UX
 
 ### Severity After Fix
 - ✅ **RESOLVED:** Vault/inventory fully accessible
 - ✅ **RESOLVED:** Warranty renewals navigate correctly
 - ✅ **RESOLVED:** Exposure focus works with smooth scroll and highlighting
-- ✅ **RESOLVED:** Trends view works with smooth scroll and highlighting
+- ✅ **RESOLVED:** Risk trends view works with smooth scroll and highlighting
+- ✅ **RESOLVED:** Health trends view works with smooth scroll and highlighting
 
 ### Risk Assessment
 - **Low risk:** Changes are isolated and well-tested
 - **No breaking changes:** All existing functionality preserved
 - **Improved UX:** Better navigation and user experience
-- **Pattern consistency:** FINDING 3 and 4 use identical implementation pattern
+- **Pattern consistency:** FINDING 3, 4, and 5 use identical implementation pattern
 
 ---
 
@@ -587,9 +742,16 @@ Risk score changes week-over-week
    - Added conditional highlighting classes to both sections
    - Added wrapper divs with id and highlighting to mobile sections
 
+3. `apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/health-score/page.tsx`
+   - Added view parameter extraction (`view=trends`)
+   - Added scroll-to-trends useEffect
+   - Added `id="score-trend-section"` to desktop card
+   - Added conditional highlighting classes to desktop card
+   - Added wrapper div with id and highlighting to mobile section
+
 ### Total Changes
-- 3 files modified/created
-- ~150 lines of code added
+- 4 files modified/created
+- ~200 lines of code added
 - 0 breaking changes
 
 ---
@@ -651,6 +813,19 @@ These fixes complement the CTA Guardrails System:
 - [x] No TypeScript errors
 - [x] No breaking changes
 
+### Health Trends View Fix
+- [x] View parameter extracted
+- [x] Scroll-to-trends useEffect implemented
+- [x] Desktop card has id and highlighting
+- [x] Mobile section has id and highlighting
+- [x] Coexists with focus parameter
+- [x] No TypeScript errors
+- [x] No breaking changes
+- [x] Mobile section has id and highlighting
+- [x] Coexists with exposure focus parameter
+- [x] No TypeScript errors
+- [x] No breaking changes
+
 ---
 
 ## Next Steps
@@ -690,7 +865,7 @@ These fixes complement the CTA Guardrails System:
 
 ## Conclusion
 
-All four critical fixes have been successfully implemented:
+All five critical fixes have been successfully implemented:
 
 1. **Vault Redirect (CRITICAL)** - ✅ RESOLVED
    - Created missing vault page
@@ -710,11 +885,18 @@ All four critical fixes have been successfully implemented:
    - Visual highlighting with teal ring
    - Works on mobile and desktop
 
-4. **Trends View (HIGH)** - ✅ RESOLVED
+4. **Risk Trends View (HIGH)** - ✅ RESOLVED
    - Added view parameter handling
    - Smooth scroll to trends section
    - Visual highlighting with teal ring
    - Works on mobile and desktop
    - Coexists with exposure focus
+
+5. **Health Trends View (MEDIUM)** - ✅ RESOLVED
+   - Added view parameter handling
+   - Smooth scroll to trends section
+   - Visual highlighting with teal ring
+   - Works on mobile and desktop
+   - Coexists with focus parameter
 
 **Status: READY FOR TESTING AND DEPLOYMENT** 🚀

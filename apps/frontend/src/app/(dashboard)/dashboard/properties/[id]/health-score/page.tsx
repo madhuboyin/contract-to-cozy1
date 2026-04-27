@@ -447,6 +447,11 @@ export default function PropertyHealthDetailPage() {
   const searchParams = useSearchParams();
   const propertyId = (Array.isArray(params.id) ? params.id[0] : params.id) as string;
   const focusedFactor = searchParams.get('focus')?.toLowerCase() ?? null;
+  
+  // 🔑 NEW: Extract view parameter for trends highlighting
+  const viewParam = searchParams.get('view');
+  const shouldFocusTrends = viewParam === 'trends';
+  
   const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
   const [showScoreModal, setShowScoreModal] = useState(false);
 
@@ -529,6 +534,18 @@ export default function PropertyHealthDetailPage() {
       setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
     }
   }, [focusedFactor]);
+
+  // 🔑 NEW: Scroll to trends section when view parameter is present
+  useEffect(() => {
+    if (!shouldFocusTrends) return;
+    const timer = setTimeout(() => {
+      const trendsElement = document.getElementById('score-trend-section');
+      if (trendsElement) {
+        trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [shouldFocusTrends]);
 
   const renderFocusInsightAccordionRow = (insight: HealthInsight, idx: number, useStatusChip: boolean, isFocused = false) => {
     const scoreValue = asNumber(insight.score) ?? 0;
@@ -689,7 +706,14 @@ export default function PropertyHealthDetailPage() {
               />
             }
           >
-            <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+            <div
+              id="score-trend-section"
+              className={`transition-all duration-300 ${
+                shouldFocusTrends ? 'ring-2 ring-teal-400 rounded-lg shadow-lg p-2 -m-2' : ''
+              }`}
+            >
+              <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
+            </div>
           </ScenarioInputCard>
 
           <ScenarioInputCard title="Changes Impacting Score" subtitle="What moved the score since the previous weekly snapshot.">
@@ -928,7 +952,12 @@ export default function PropertyHealthDetailPage() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
+            <Card 
+              id="score-trend-section"
+              className={`lg:col-span-2 transition-all duration-300 ${
+                shouldFocusTrends ? 'ring-2 ring-teal-400 shadow-lg' : ''
+              }`}
+            >
               <CardHeader className="pb-2">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
