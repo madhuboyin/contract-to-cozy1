@@ -300,6 +300,11 @@ export default function FinancialEfficiencyPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const focusBreakdown = searchParams.get('focus') === 'breakdown';
+    
+    // 🔑 NEW: Extract view parameter for trends highlighting
+    const viewParam = searchParams.get('view');
+    const shouldFocusTrends = viewParam === 'trends';
+    
     const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
 
     useEffect(() => {
@@ -309,6 +314,18 @@ export default function FinancialEfficiencyPage() {
         }, 350);
         return () => clearTimeout(timer);
     }, [focusBreakdown]);
+    
+    // 🔑 NEW: Scroll to trends section when view parameter is present
+    useEffect(() => {
+        if (!shouldFocusTrends) return;
+        const timer = setTimeout(() => {
+            const trendsElement = document.getElementById('efficiency-trends-section');
+            if (trendsElement) {
+                trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [shouldFocusTrends]);
     // 1. Fetch Property Details (to get name/address for header)
     const { data: property, isLoading: isLoadingProperty } = useQuery({
         queryKey: ["property", propertyId],
@@ -593,26 +610,33 @@ export default function FinancialEfficiencyPage() {
                         columns={2}
                     />
 
-                    <ScenarioInputCard
-                        title="Trend"
-                        subtitle="Weekly efficiency snapshots."
-                        actions={
-                            <ActionPriorityRow
-                                secondaryActions={
-                                    <>
-                                        <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
-                                            6 Months
-                                        </Button>
-                                        <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
-                                            1 Year
-                                        </Button>
-                                    </>
-                                }
-                            />
-                        }
+                    <div
+                        id="efficiency-trends-section"
+                        className={`transition-all duration-300 ${
+                            shouldFocusTrends ? 'ring-2 ring-teal-400 rounded-lg shadow-lg' : ''
+                        }`}
                     >
-                        <ScoreTrendChart points={financialTrend} ariaLabel="Financial efficiency score trend" />
-                    </ScenarioInputCard>
+                        <ScenarioInputCard
+                            title="Trend"
+                            subtitle="Weekly efficiency snapshots."
+                            actions={
+                                <ActionPriorityRow
+                                    secondaryActions={
+                                        <>
+                                            <Button size="sm" variant={trendWeeks === 26 ? "default" : "outline"} onClick={() => setTrendWeeks(26)}>
+                                                6 Months
+                                            </Button>
+                                            <Button size="sm" variant={trendWeeks === 52 ? "default" : "outline"} onClick={() => setTrendWeeks(52)}>
+                                                1 Year
+                                            </Button>
+                                        </>
+                                    }
+                                />
+                            }
+                        >
+                            <ScoreTrendChart points={financialTrend} ariaLabel="Financial efficiency score trend" />
+                        </ScenarioInputCard>
+                    </div>
 
                     <ScenarioInputCard title="Changes Impacting Score" subtitle="Top weekly factors moving efficiency.">
                         <div className="space-y-2">
@@ -797,7 +821,12 @@ export default function FinancialEfficiencyPage() {
 
                 {!isZeroState && (
                     <div className="grid gap-4 lg:grid-cols-3">
-                        <Card className="lg:col-span-2">
+                        <Card 
+                            id="efficiency-trends-section"
+                            className={`lg:col-span-2 transition-all duration-300 ${
+                                shouldFocusTrends ? 'ring-2 ring-teal-400 shadow-lg' : ''
+                            }`}
+                        >
                             <CardHeader className="pb-2">
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
