@@ -78,10 +78,20 @@ function formatIncidentDetails(details: unknown): React.ReactNode {
           .trim();
         
         // Format the value
-        let formattedValue: string;
+        let formattedValue: React.ReactNode;
         if (typeof value === 'object') {
-          // For nested objects, show formatted JSON
-          formattedValue = JSON.stringify(value, null, 2);
+          // For nested objects (like geoHint), format as compact key-value pairs
+          const nestedEntries = Object.entries(value as Record<string, unknown>);
+          formattedValue = (
+            <div className="mt-1 space-y-0.5 text-xs">
+              {nestedEntries.map(([nestedKey, nestedValue]) => (
+                <div key={nestedKey} className="flex gap-2">
+                  <span className="font-medium text-slate-600">{nestedKey}:</span>
+                  <span className="text-slate-900">{String(nestedValue)}</span>
+                </div>
+              ))}
+            </div>
+          );
         } else if (typeof value === 'boolean') {
           formattedValue = value ? 'Yes' : 'No';
         } else if (typeof value === 'number') {
@@ -94,7 +104,47 @@ function formatIncidentDetails(details: unknown): React.ReactNode {
         return (
           <div key={key} className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-slate-700">{formattedKey}</span>
-            <span className="text-sm text-slate-900 whitespace-pre-wrap break-words">{formattedValue}</span>
+            {typeof value === 'object' ? (
+              formattedValue
+            ) : (
+              <span className="text-sm text-slate-900 whitespace-pre-wrap break-words">{formattedValue}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatSignalPayload(payload: unknown): React.ReactNode {
+  if (!payload || typeof payload !== 'object') return String(payload || 'No data');
+  
+  const p = payload as Record<string, unknown>;
+  const entries = Object.entries(p);
+  
+  if (entries.length === 0) return 'No data';
+  
+  // Format as compact inline key-value pairs
+  return (
+    <div className="mt-2 space-y-1">
+      {entries.map(([key, value]) => {
+        if (value === null || value === undefined) return null;
+        
+        // Format nested objects inline
+        let displayValue: string;
+        if (typeof value === 'object') {
+          const nested = Object.entries(value as Record<string, unknown>)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ');
+          displayValue = `{ ${nested} }`;
+        } else {
+          displayValue = String(value);
+        }
+        
+        return (
+          <div key={key} className="flex gap-2 text-xs">
+            <span className="font-medium text-slate-600">{key}:</span>
+            <span className="text-slate-900">{displayValue}</span>
           </div>
         );
       })}
@@ -166,7 +216,7 @@ export default function IncidentDetailClient() {
   }
 
   return (
-    <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
+    <MobilePageContainer className="space-y-3 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-7xl lg:px-8 lg:pb-10">
       <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
         <Link href={`/dashboard/properties/${propertyId}?tab=incidents`}>
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -299,7 +349,7 @@ export default function IncidentDetailClient() {
            incident.status !== 'RESOLVED' && 
            incident.status !== 'EXPIRED' && 
            incident.status !== 'SUPPRESSED' && (
-            <div className={`rounded-xl border p-4 ${isVeryOld ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
+            <div className={`rounded-xl border p-3 ${isVeryOld ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}>
               <div className="flex items-start gap-3">
                 <AlertTriangle className={`h-5 w-5 flex-shrink-0 ${isVeryOld ? 'text-red-600' : 'text-amber-600'}`} />
                 <div className="flex-1">
@@ -316,7 +366,7 @@ export default function IncidentDetailClient() {
           )}
 
           <MobileCard>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <IncidentSeverityBadge severity={incident.severity} />
                 <IncidentStatusBadge status={incident.status} />
@@ -451,12 +501,12 @@ export default function IncidentDetailClient() {
               <h3 className="text-sm font-semibold">Signals</h3>
               <div className="mt-3 space-y-2">
                 {incident.signals.map((signal) => (
-                  <div key={signal.id} className="rounded-lg border p-3">
+                  <div key={signal.id} className="rounded-lg border bg-slate-50 p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-semibold text-slate-800">{humanizeActionType(signal.signalType)}</p>
                       <p className="text-xs text-slate-500">{new Date(signal.observedAt).toLocaleString()}</p>
                     </div>
-                    <pre className="mt-2 overflow-auto text-xs text-slate-700">{JSON.stringify(signal.payload, null, 2)}</pre>
+                    {formatSignalPayload(signal.payload)}
                   </div>
                 ))}
               </div>

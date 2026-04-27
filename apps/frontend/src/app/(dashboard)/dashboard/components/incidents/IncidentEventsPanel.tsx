@@ -74,7 +74,7 @@ export default function IncidentEventsPanel({ events }: { events: IncidentEventD
         <h3 className="text-sm font-semibold">Incident Timeline</h3>
       </div>
       {sortedEvents.length ? (
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-2">
           {sortedEvents.map((e, index) => {
             const Icon = getEventIcon(e.type);
             const colorClasses = getEventColor(e.type);
@@ -82,32 +82,24 @@ export default function IncidentEventsPanel({ events }: { events: IncidentEventD
             
             return (
               <div key={e.id} className="relative">
-                {/* Timeline connector line */}
+                {/* Timeline connector line - more compact */}
                 {!isFirst && (
-                  <div className="absolute left-[15px] top-[-12px] h-3 w-0.5 bg-slate-200" />
+                  <div className="absolute left-[15px] top-[-8px] h-2 w-0.5 bg-slate-200" />
                 )}
                 
-                <div className={`rounded-lg border p-3 ${colorClasses}`}>
-                  <div className="flex items-start gap-3">
+                <div className={`rounded-lg border p-2.5 ${colorClasses}`}>
+                  <div className="flex items-start gap-2.5">
                     <Icon className="h-4 w-4 flex-shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-xs font-semibold">{e.type}</p>
-                        <div className="flex flex-col items-end gap-0.5">
-                          <p className="text-xs whitespace-nowrap">
-                            {getRelativeTime(e.createdAt)}
-                          </p>
-                          {!isFirst && referenceDate && (
-                            <p className="text-[10px] opacity-70 whitespace-nowrap">
-                              {getRelativeTime(e.createdAt, referenceDate)}
-                            </p>
-                          )}
-                        </div>
+                        <p className="text-xs text-slate-600 whitespace-nowrap">
+                          {getRelativeTime(e.createdAt)}
+                        </p>
                       </div>
                       {e.message ? (
-                        <p className="mt-1.5 text-sm leading-relaxed">{e.message}</p>
+                        <p className="mt-1 text-xs leading-relaxed">{e.message}</p>
                       ) : null}
-                      <p className="mt-1 text-[10px] opacity-60">{fmt(e.createdAt)}</p>
                     </div>
                   </div>
                 </div>
