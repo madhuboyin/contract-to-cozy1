@@ -49,6 +49,7 @@ export type CtcEventName =
   // Morning Brief
   | 'morning_brief_opened'
   | 'morning_brief_cta_clicked'
+  | 'morning_brief_savings_clicked'
   // Performance
   | 'web_vital_recorded'
   // Diagnostics
@@ -78,7 +79,6 @@ export type CtcTool =
   | 'vault'
   | 'magic-scan'
   | 'resolution-hub'
-  | 'financial-efficiency';
   | 'financial-efficiency';
 
 function toEventAttributes(properties: Record<string, unknown>): Record<string, string> {
@@ -149,6 +149,7 @@ export interface CtcEventProperties {
   // Morning Brief
   morning_brief_opened: { propertyId: string; itemCount: number };
   morning_brief_cta_clicked: { propertyId: string; actionType: string; tool: CtcTool };
+  morning_brief_savings_clicked: { propertyId: string; savingsEstimate?: string; scoreValue?: number };
   // Performance
   web_vital_recorded: {
     metric: 'CLS' | 'FCP' | 'INP' | 'LCP' | 'TTFB';

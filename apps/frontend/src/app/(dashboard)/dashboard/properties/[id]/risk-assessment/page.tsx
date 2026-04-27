@@ -852,34 +852,6 @@ export default function RiskAssessmentPage() {
     const viewParam = searchParams.get('view');
     const shouldFocusTrends = viewParam === 'trends';
 
-    // 🔑 NEW: Scroll to exposure section when focus parameter is present
-    useEffect(() => {
-        if (shouldFocusExposure && !isCalculating && !isQueued) {
-            // Wait for DOM to render, then scroll to exposure section
-            const timer = setTimeout(() => {
-                const exposureElement = document.getElementById('exposure-summary');
-                if (exposureElement) {
-                    exposureElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }, 300);
-            return () => clearTimeout(timer);
-        }
-    }, [shouldFocusExposure, isCalculating, isQueued]);
-
-    // 🔑 NEW: Scroll to trends section when view parameter is present
-    useEffect(() => {
-        if (shouldFocusTrends && !isCalculating && !isQueued) {
-            // Wait for DOM to render, then scroll to trends section
-            const timer = setTimeout(() => {
-                const trendsElement = document.getElementById('risk-trends-section');
-                if (trendsElement) {
-                    trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }, 300);
-            return () => clearTimeout(timer);
-        }
-    }, [shouldFocusTrends, isCalculating, isQueued]);
-
     // 🔑 NEW: Fetch existing maintenance tasks for this property
     const { data: maintenanceTasksData, refetch: refetchTasks } = useQuery({
         queryKey: ['maintenance-tasks', propertyId],
@@ -1099,6 +1071,35 @@ export default function RiskAssessmentPage() {
     }
     
     const isCalculating = isLoadingReport && !report;
+
+    // 🔑 NEW: Scroll to exposure section when focus parameter is present
+    useEffect(() => {
+        if (shouldFocusExposure && !isCalculating && !isQueued) {
+            // Wait for DOM to render, then scroll to exposure section
+            const timer = setTimeout(() => {
+                const exposureElement = document.getElementById('exposure-summary');
+                if (exposureElement) {
+                    exposureElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [shouldFocusExposure, isCalculating, isQueued]);
+
+    // 🔑 NEW: Scroll to trends section when view parameter is present
+    useEffect(() => {
+        if (shouldFocusTrends && !isCalculating && !isQueued) {
+            // Wait for DOM to render, then scroll to trends section
+            const timer = setTimeout(() => {
+                const trendsElement = document.getElementById('risk-trends-section');
+                if (trendsElement) {
+                    trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [shouldFocusTrends, isCalculating, isQueued]);
+
     const score = report?.riskScore || 0;
     const { level, color, progressClass } = getRiskDetails(score);
     const riskSeries = scoreSnapshotQuery.data?.scores?.RISK;
