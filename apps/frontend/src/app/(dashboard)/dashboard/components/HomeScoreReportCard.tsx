@@ -208,7 +208,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
         />
         <div className="flex min-w-0 flex-col justify-center">
           <div className={cn("text-[20px] font-bold leading-none", scoreColor)}>{scoreLabel}</div>
-          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">Quality mixed</p>
+          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">Property condition varies</p>
         </div>
       </div>
 
@@ -228,7 +228,7 @@ export function HomeScoreReportCard({ propertyId }: HomeScoreReportCardProps) {
 
       <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">
         <div>
-          <span className={SUPPORT_LABEL}>Elevated assets</span>
+          <span className={SUPPORT_LABEL}>At-risk items</span>
           <div className={cn(META_VALUE, reasonsCount > 0 ? "text-amber-600" : "text-foreground")}>
             {reasonsCount > 0 ? `${reasonsCount} driving risk` : "None flagged"}
           </div>

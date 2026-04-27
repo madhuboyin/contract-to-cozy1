@@ -675,7 +675,7 @@ export default function FinancialEfficiencyPage() {
                     <ArrowLeft className="h-4 w-4 mr-1" /> Back
                 </Button>
                 <PageHeaderHeading className="flex items-center gap-2">
-                    <ScoreIcon className="h-6 w-6 md:h-8 md:w-8 text-primary" /> Financial Efficiency Report
+                    <ScoreIcon className="h-6 w-6 md:h-8 md:w-8 text-primary" /> Financial Efficiency Score
                 </PageHeaderHeading>
             </PageHeader>
 

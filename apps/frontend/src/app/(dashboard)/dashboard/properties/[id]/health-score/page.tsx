@@ -157,6 +157,8 @@ function getInsightDetailsSummary(insight: HealthInsight): string | null {
 function getDisplayFactorName(factorName: string | undefined): string {
   const factor = String(factorName || "");
   if (factor === "Age Factor") return "Property Age (Year Built)";
+  if (factor === "Systems Factor") return "Major Systems Health";
+  if (factor === "Usage/Wear Factor") return "Property Usage Pattern";
   return factor || "Health insight";
 }
 
@@ -328,7 +330,7 @@ const LEDGER_GROUPS: Array<{
   tone: "good" | "elevated" | "danger";
 }> = [
   { key: "negative", title: "Needs attention", tone: "danger" as const },
-  { key: "neutral", title: "Monitor closely", tone: "elevated" as const },
+  { key: "neutral", title: "Track these systems", tone: "elevated" as const },
   { key: "positive", title: "Healthy signals", tone: "good" as const },
 ];
 
@@ -711,7 +713,7 @@ export default function PropertyHealthDetailPage() {
               </Button>
               <MobilePageIntro
                 eyebrow="Property Score"
-                title="Property Health Report"
+                title="Property Health Score"
                 subtitle={`Weekly health summary for ${property?.name || "this property"} — what changed, what needs attention, and what's working.`}
                 action={
                   <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700">
@@ -879,7 +881,7 @@ export default function PropertyHealthDetailPage() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
         <PageHeaderHeading className="flex items-center gap-2">
-          <Activity className="h-6 w-6 md:h-8 md:w-8 text-primary" /> Property Health Report
+          <Activity className="h-6 w-6 md:h-8 md:w-8 text-primary" /> Property Health Score
         </PageHeaderHeading>
         <p className="text-muted-foreground text-sm md:text-base">
           Weekly health summary for {property?.name || "this property"} — what changed, what needs attention, and what&apos;s working.
@@ -964,7 +966,7 @@ export default function PropertyHealthDetailPage() {
                     </div>
                     <div className="rounded-[10px] bg-amber-50 border border-amber-100/60 px-2 pt-2 pb-2 text-center">
                       <p className="text-2xl font-black text-amber-500 tabular-nums leading-none">{neutralInsights.length}</p>
-                      <p className="text-[10px] font-semibold text-amber-600/90 mt-1 leading-tight">Monitor closely</p>
+                      <p className="text-[10px] font-semibold text-amber-600/90 mt-1 leading-tight">Track these systems</p>
                       {neutralDelta !== null && neutralDelta !== 0 && (
                         <p className="text-[9px] font-medium tabular-nums mt-0.5 text-amber-600">{neutralDelta > 0 ? `↑ ${neutralDelta}` : `↓ ${Math.abs(neutralDelta)}`}</p>
                       )}

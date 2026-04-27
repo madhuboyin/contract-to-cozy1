@@ -147,7 +147,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <Shield className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>Risk Exposure</span>
+            <span className={TITLE_CLASS}>Risk Score</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -162,7 +162,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <Shield className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>Risk Exposure</span>
+            <span className={TITLE_CLASS}>Risk Score</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -225,7 +225,7 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
           subLabelY={43}
           subLabelFontSize={9}
           subLabelOpacity={0.6}
-          ariaLabel={`Risk Exposure coverage: ${Math.round(coverageRatio * 100)}% covered, ${formatCurrency(
+          ariaLabel={`Risk Score coverage: ${Math.round(coverageRatio * 100)}% covered, ${formatCurrency(
             totalExposure,
           )} gap`}
         />
@@ -264,11 +264,11 @@ export function PropertyRiskScoreCard({ propertyId }: PropertyRiskScoreCardProps
         }
         className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
-        {totalExposure > 0 
-          ? 'Review exposure details' 
+        {totalExposure > 0
+          ? 'See unprotected costs'
           : weeklyChange !== "No change"
-          ? 'View risk trends'
-          : 'Open risk details'
+          ? 'See how your score changed'
+          : 'View risk details'
         }
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
       </Link>

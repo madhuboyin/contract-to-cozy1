@@ -83,7 +83,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <Activity className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>Health</span>
+            <span className={TITLE_CLASS}>Property Health</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -105,7 +105,7 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Activity className={HEADER_ICON} />
-          <span className={TITLE_CLASS}>Health</span>
+          <span className={TITLE_CLASS}>Property Health</span>
         </div>
         <StatusBadge status={badge.status} customLabel={badge.customLabel} />
       </div>
@@ -122,13 +122,13 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
           labelFontSize={14}
           labelFontWeight={600}
           labelY={37}
-          ariaLabel={`Health: ${healthScore} out of 100, ${healthDetails.label}`}
+          ariaLabel={`Property Health Score: ${healthScore} out of 100, ${healthDetails.label}`}
         />
         <div className="flex min-w-0 flex-col justify-center">
           <div className={cn("text-[20px] font-bold leading-none", healthDetails.color)}>
             {healthDetails.label}
           </div>
-          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">Systems healthy</p>
+          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">Major systems tracked</p>
         </div>
       </div>
 
@@ -140,9 +140,9 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
 
       <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">
         <div>
-          <span className={SUPPORT_LABEL}>Maintenance</span>
+          <span className={SUPPORT_LABEL}>Required maintenance</span>
           <div className={cn(META_VALUE, maintenanceCount > 0 ? "text-amber-600" : "text-foreground")}>
-            {maintenanceCount > 0 ? `${maintenanceCount} required` : "None pending"}
+            {maintenanceCount > 0 ? `${maintenanceCount} required` : "None"}
           </div>
         </div>
         <div>
@@ -163,11 +163,11 @@ export function PropertyHealthScoreCard({ property }: PropertyHealthScoreCardPro
         }
         className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
-        {maintenanceCount > 0 
-          ? 'Review maintenance items' 
+        {maintenanceCount > 0
+          ? 'Address maintenance needs'
           : weeklyChange !== "No change"
-          ? 'View health trends'
-          : 'Open health details'
+          ? 'See how your score changed'
+          : 'View system breakdown'
         }
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
       </Link>

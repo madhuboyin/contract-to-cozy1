@@ -52,6 +52,12 @@ function buildFinancialInsight(score: number, annualCost: number): string {
   return "Cost pressure is elevated and needs near-term tuning.";
 }
 
+function getOptimizationSubtext(score: number): string {
+  if (score >= 80) return "Costs well optimized";
+  if (score >= 60) return "Optimization headroom";
+  return "Room to improve";
+}
+
 function getFinancialPriority(score: number): { status: BadgeStatus; customLabel?: string } {
   if (score < 60) {
     return { status: "action", customLabel: "Needs focus" };
@@ -123,7 +129,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <DollarSign className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>Financial</span>
+            <span className={TITLE_CLASS}>Cost Efficiency</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -138,7 +144,7 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
             <DollarSign className={HEADER_ICON} />
-            <span className={TITLE_CLASS}>Financial</span>
+            <span className={TITLE_CLASS}>Cost Efficiency</span>
           </div>
           <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         </div>
@@ -178,11 +184,11 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
           labelFontSize={14}
           labelFontWeight={600}
           labelY={37}
-          ariaLabel={`Financial: ${score} out of 100, ${status.label}`}
+          ariaLabel={`Cost Efficiency Score: ${score} out of 100, ${status.label}`}
         />
         <div className="flex min-w-0 flex-col justify-center">
           <div className={cn("text-[20px] font-bold leading-none", status.color)}>{status.label}</div>
-          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">Fully optimized</p>
+          <p className="mt-[3px] whitespace-nowrap text-[11px] text-muted-foreground">{getOptimizationSubtext(score)}</p>
         </div>
       </div>
 
@@ -215,11 +221,11 @@ export const FinancialEfficiencyScoreCard: React.FC<FinancialEfficiencyScoreCard
         }
         className="group mt-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:underline"
       >
-        {annualCost > 0 
-          ? 'View cost breakdown' 
+        {annualCost > 0
+          ? 'See where you can save'
           : weeklyChange !== "No change"
-          ? 'View financial trends'
-          : 'Open financial details'
+          ? 'See how your score changed'
+          : 'View financial details'
         }
         <ArrowRight className="h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
       </Link>

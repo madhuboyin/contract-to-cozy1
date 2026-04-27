@@ -1450,7 +1450,7 @@ export default function RiskAssessmentPage() {
                     <ArrowLeft className="h-4 w-4 mr-1" /> Back
                 </Button>
                 <PageHeaderHeading className="flex items-center gap-2">
-                    <Zap className="h-8 w-8 text-primary" /> Property Risk Report
+                    <Zap className="h-8 w-8 text-primary" /> Risk Assessment
                 </PageHeaderHeading>
             </PageHeader>
 
