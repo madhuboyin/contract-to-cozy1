@@ -480,7 +480,18 @@ export class IncidentService {
     const where: any = {
       propertyId: q.propertyId,
     };
-    if (q.status) where.status = q.status;
+    
+    // If a specific status is requested, use it
+    if (q.status) {
+      where.status = q.status;
+    } else {
+      // By default, exclude terminal states (RESOLVED, EXPIRED, SUPPRESSED)
+      // This prevents resolved incidents from showing in dashboards
+      where.status = {
+        notIn: ['RESOLVED', 'EXPIRED', 'SUPPRESSED'],
+      };
+    }
+    
     if (!q.includeSuppressed) where.isSuppressed = false;
 
     // Filter by archived status if specified
