@@ -4,7 +4,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { FinancialEfficiencyReport, PropertyScoreSeries } from "@/types"; 
 import { api } from "@/lib/api/client";
 import { DashboardShell } from "@/components/DashboardShell";
@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ScoreDeltaIndicator, ScoreTrendChart } from "@/components/scores/ScoreTrendChart";
 import {
     ActionPriorityRow,
@@ -298,7 +298,17 @@ export default function FinancialEfficiencyPage() {
     const params = useParams();
     const propertyId = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const focusBreakdown = searchParams.get('focus') === 'breakdown';
     const [trendWeeks, setTrendWeeks] = useState<26 | 52>(26);
+
+    useEffect(() => {
+        if (!focusBreakdown) return;
+        const timer = setTimeout(() => {
+            document.getElementById('cost-breakdown')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 350);
+        return () => clearTimeout(timer);
+    }, [focusBreakdown]);
     // 1. Fetch Property Details (to get name/address for header)
     const { data: property, isLoading: isLoadingProperty } = useQuery({
         queryKey: ["property", propertyId],
@@ -621,7 +631,11 @@ export default function FinancialEfficiencyPage() {
                         </div>
                     </ScenarioInputCard>
 
-                    <details className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <details
+                        id="cost-breakdown"
+                        className="rounded-2xl border border-slate-200 bg-white p-4 scroll-mt-8"
+                        open={focusBreakdown || undefined}
+                    >
                         <summary className="cursor-pointer text-sm font-semibold text-slate-800">Detailed breakdown</summary>
                         <div className="mt-3">{renderDetailedSections()}</div>
                     </details>
@@ -837,7 +851,9 @@ export default function FinancialEfficiencyPage() {
                 )}
 
                 {/* --- Detailed Section Content --- */}
-                {renderDetailedSections()}
+                <div id="cost-breakdown" className="scroll-mt-8">
+                    {renderDetailedSections()}
+                </div>
             </div>
             </div>
             
