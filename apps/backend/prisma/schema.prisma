@@ -490,10 +490,10 @@ model InventoryRoom {
   homeEvents       HomeEvent[]
   signals          Signal[]
 
-  scanSessions    InventoryRoomScanSession[]
-  inventoryDrafts InventoryDraftItem[]
-  homeItems       HomeItem[]
-  plantProfiles   RoomPlantProfile[]
+  scanSessions         InventoryRoomScanSession[]
+  inventoryDrafts      InventoryDraftItem[]
+  homeItems            HomeItem[]
+  plantProfiles        RoomPlantProfile[]
   plantRecommendations RoomPlantRecommendation[]
 
   @@unique([propertyId, name])
@@ -578,15 +578,15 @@ model InventoryItem {
   insurancePolicy  InsurancePolicy?      @relation(fields: [insurancePolicyId], references: [id], onDelete: SetNull)
   importBatch      InventoryImportBatch? @relation(fields: [sourceBatchId], references: [id], onDelete: SetNull)
 
-  documents              Document[]
-  insuranceQuoteRequests InsuranceQuoteRequest[]
-  homeEvents             HomeEvent[]
-  homeItems              HomeItem[]
-  recallMatches          RecallMatch[]
-  replaceRepairAnalyses  ReplaceRepairAnalysis[]
-  guidanceSignals        GuidanceSignal[]
-  guidanceJourneys       GuidanceJourney[]
-  guidanceStepEvidences  GuidanceStepEvidence[]
+  documents                 Document[]
+  insuranceQuoteRequests    InsuranceQuoteRequest[]
+  homeEvents                HomeEvent[]
+  homeItems                 HomeItem[]
+  recallMatches             RecallMatch[]
+  replaceRepairAnalyses     ReplaceRepairAnalysis[]
+  guidanceSignals           GuidanceSignal[]
+  guidanceJourneys          GuidanceJourney[]
+  guidanceStepEvidences     GuidanceStepEvidence[]
   quoteComparisonWorkspaces QuoteComparisonWorkspace[]
   priceFinalizations        PriceFinalization[]
 
@@ -923,7 +923,7 @@ model InventoryScanDelta {
 }
 
 model CoverageAnalysis {
-  id                 String @id @default(uuid())
+  id                 String  @id @default(uuid())
   homeownerProfileId String
   propertyId         String
   assumptionSetId    String?
@@ -1355,15 +1355,15 @@ model User {
   streaks                   PropertyStreak[]
   homeItemStatusEvents      HomeItemStatusEvent[]
 
-  propertyInsightSnapshots      PropertyInsightSnapshot[]
-  propertyNarrativeRuns         PropertyNarrativeRun[]
-  knowledgeArticleEvents        KnowledgeArticleEvent[]
-  negotiationShieldCasesCreated NegotiationShieldCase[]   @relation("NegotiationShieldCaseCreatedBy")
-  priceFinalizationsCreated     PriceFinalization[]        @relation("PriceFinalizationCreatedBy")
+  propertyInsightSnapshots         PropertyInsightSnapshot[]
+  propertyNarrativeRuns            PropertyNarrativeRun[]
+  knowledgeArticleEvents           KnowledgeArticleEvent[]
+  negotiationShieldCasesCreated    NegotiationShieldCase[]    @relation("NegotiationShieldCaseCreatedBy")
+  priceFinalizationsCreated        PriceFinalization[]        @relation("PriceFinalizationCreatedBy")
   quoteComparisonWorkspacesCreated QuoteComparisonWorkspace[] @relation("QuoteComparisonWorkspaceCreatedBy")
-  radarStates                   PropertyRadarState[]
-  createdHomeTwinScenarios      HomeTwinScenario[]
-  assumptionSetsCreated         AssumptionSet[]
+  radarStates                      PropertyRadarState[]
+  createdHomeTwinScenarios         HomeTwinScenario[]
+  assumptionSetsCreated            AssumptionSet[]
 
   // Admin Analytics relations
   analyticsEvents ProductAnalyticsEvent[]
@@ -1374,6 +1374,10 @@ model User {
   // Home Renovation Risk Advisor
   renovationAdvisorSessions HomeRenovationAdvisorSession[] @relation("RenovationAdvisorSessionCreatedBy")
 
+  // Incident Lifecycle Management
+  incidentUserPreferences             IncidentUserPreference[]
+  incidentAutoResolutionNotifications IncidentAutoResolutionNotification[]
+
   @@index([email])
   @@index([role])
   @@index([status])
@@ -1381,13 +1385,13 @@ model User {
 }
 
 model RefreshTokenSession {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1398,17 +1402,17 @@ model RefreshTokenSession {
 }
 
 model MfaRecoveryCode {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
   codeHash  String
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, codeHash])
   @@index([userId])
   @@index([usedAt])
-  @@unique([userId, codeHash])
   @@map("mfa_recovery_codes")
 }
 
@@ -1582,7 +1586,7 @@ model PreferenceProfile {
   cashBufferPosture         CashBufferPosture?
   bundlingPreference        BundlingPreference?
   confidence                Float?
-  source                    PreferenceProfileSource @default(USER_INPUT)
+  source                    PreferenceProfileSource    @default(USER_INPUT)
   notesJson                 Json?
 
   createdAt DateTime @default(now())
@@ -1906,14 +1910,14 @@ model Property {
   guidanceStepEvidences  GuidanceStepEvidence[]
   inventoryImportBatches InventoryImportBatch[]
 
-  inventoryOcrSessions InventoryOcrSession[]
-  inventoryDraftItems  InventoryDraftItem[]
-  roomChecklistItems   RoomChecklistItem[]
-  roomPlantProfiles    RoomPlantProfile[]
+  inventoryOcrSessions     InventoryOcrSession[]
+  inventoryDraftItems      InventoryDraftItem[]
+  roomChecklistItems       RoomChecklistItem[]
+  roomPlantProfiles        RoomPlantProfile[]
   roomPlantRecommendations RoomPlantRecommendation[]
-  homeEvents           HomeEvent[]
-  financeSnapshots     PropertyFinanceSnapshot[]
-  toolOverrides        ToolOverride[]
+  homeEvents               HomeEvent[]
+  financeSnapshots         PropertyFinanceSnapshot[]
+  toolOverrides            ToolOverride[]
 
   roomScanSessions                InventoryRoomScanSession[]
   coverageAnalyses                CoverageAnalysis[]
@@ -1936,17 +1940,17 @@ model Property {
   homeScoreFinancialForecasts  HomeScoreFinancialForecast[]
   timezone                     String? // "America/New_York" (recommended for correct daily bucketing)
 
-  dailySnapshots           PropertyDailySnapshot[]
-  microActions             PropertyMicroAction[]
-  streaks                  PropertyStreak[]
-  homeSavingsRuns          HomeSavingsRun[]
-  homeSavingsOpportunities HomeSavingsOpportunity[]
-  homeSavingsAccounts      HomeSavingsAccount[]
-  serviceRadarChecks       ServiceRadarCheck[]
+  dailySnapshots            PropertyDailySnapshot[]
+  microActions              PropertyMicroAction[]
+  streaks                   PropertyStreak[]
+  homeSavingsRuns           HomeSavingsRun[]
+  homeSavingsOpportunities  HomeSavingsOpportunity[]
+  homeSavingsAccounts       HomeSavingsAccount[]
+  serviceRadarChecks        ServiceRadarCheck[]
   quoteComparisonWorkspaces QuoteComparisonWorkspace[]
   priceFinalizations        PriceFinalization[]
-  homeItems                HomeItem[]
-  maintenancePredictions   MaintenancePrediction[]
+  homeItems                 HomeItem[]
+  maintenancePredictions    MaintenancePrediction[]
 
   insightSnapshots           PropertyInsightSnapshot[]
   narrativeRuns              PropertyNarrativeRun[]
@@ -1996,6 +2000,9 @@ model Property {
   preferenceProfiles     PreferenceProfile[]
   assumptionSets         AssumptionSet[]
   signals                Signal[]
+
+  // Incident Lifecycle Management
+  incidentAutoResolutionNotifications IncidentAutoResolutionNotification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2269,8 +2276,8 @@ model Booking {
   maintenancePredictionId String?                @unique
   maintenancePrediction   MaintenancePrediction? @relation(fields: [maintenancePredictionId], references: [id])
 
-  inventoryItemId String?
-  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  inventoryItemId   String?
+  inventoryItem     InventoryItem?     @relation(fields: [inventoryItemId], references: [id])
   priceFinalization PriceFinalization?
 
   // Phase 5: Guidance journey linkage — stored at booking creation so that
@@ -2290,7 +2297,7 @@ model Booking {
   @@index([scheduledDate])
   @@index([category])
   @@index([insightFactor]) // For fast lookups
-  @@index([guidanceJourneyId])  // Phase 5: journey → bookings lookup
+  @@index([guidanceJourneyId]) // Phase 5: journey → bookings lookup
   @@map("bookings")
 }
 
@@ -2627,11 +2634,11 @@ model HomeAsset {
   manufacturerNorm String?
   modelNumberNorm  String?
 
-  recallMatches    RecallMatch[]
-  homeItems        HomeItem[]
-  guidanceSignals  GuidanceSignal[]
-  guidanceJourneys GuidanceJourney[]
-  guidanceStepEvidences GuidanceStepEvidence[]
+  recallMatches             RecallMatch[]
+  homeItems                 HomeItem[]
+  guidanceSignals           GuidanceSignal[]
+  guidanceJourneys          GuidanceJourney[]
+  guidanceStepEvidences     GuidanceStepEvidence[]
   quoteComparisonWorkspaces QuoteComparisonWorkspace[]
   priceFinalizations        PriceFinalization[]
 
@@ -3211,9 +3218,9 @@ model Signal {
   confidence  Float?
   sourceModel String
   sourceId    String
-  capturedAt  DateTime @default(now())
+  capturedAt  DateTime  @default(now())
   validUntil  DateTime?
-  version     Int      @default(1)
+  version     Int       @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3354,11 +3361,11 @@ enum GuidanceSignalStatus {
 
 enum GuidanceJourneyStatus {
   NOT_STARTED // IMP-GE-1: User-initiated journey created before the first step is taken
-  ACTIVE      // Journey is in progress
-  COMPLETED   // All required steps are complete
-  ABORTED     // System-cancelled; internal only — do not surface as user-facing copy
-  ARCHIVED    // System-archived; internal only — do not surface as user-facing copy
-  DISMISSED   // IMP-GE-1: User explicitly marked "not relevant" via override control
+  ACTIVE // Journey is in progress
+  COMPLETED // All required steps are complete
+  ABORTED // System-cancelled; internal only — do not surface as user-facing copy
+  ARCHIVED // System-archived; internal only — do not surface as user-facing copy
+  DISMISSED // IMP-GE-1: User explicitly marked "not relevant" via override control
 }
 
 enum GuidanceStepStatus {
@@ -3399,7 +3406,7 @@ enum GuidanceJourneyEventType {
   STEP_UNBLOCKED
   CONTEXT_UPDATED
   DERIVED_DATA_UPDATED
-  JOURNEY_DISMISSED     // IMP-GE-1: User clicked "Not relevant"; actorType must be USER
+  JOURNEY_DISMISSED // IMP-GE-1: User clicked "Not relevant"; actorType must be USER
   JOURNEY_SCOPE_CHANGED // IMP-GE-1: User clicked "Change asset"; links old journey to replacement
   JOURNEY_ISSUE_CHANGED // IMP-GE-1: User clicked "Different issue"; issueType updated on journey
 }
@@ -3617,12 +3624,12 @@ model GuidanceJourney {
   steps      GuidanceJourneyStep[]
   events     GuidanceJourneyEvent[]
   evidences  GuidanceStepEvidence[]
-  homeEvents HomeEvent[]           // FRD-FR-11/FR-03: retrospective lookback + verified resolution events
+  homeEvents HomeEvent[] // FRD-FR-11/FR-03: retrospective lookback + verified resolution events
 
   @@index([propertyId, status, updatedAt(sort: Desc)])
   @@index([propertyId, executionReadiness, status])
   @@index([propertyId, issueDomain, status])
-  @@index([propertyId, journeyTypeKey, status])          // P4-13: supports ensureJourneyForSignal() lookup
+  @@index([propertyId, journeyTypeKey, status]) // P4-13: supports ensureJourneyForSignal() lookup
   @@index([propertyId, currentStepOrder])
   @@index([propertyId, inventoryItemId, status, updatedAt(sort: Desc)])
   @@index([propertyId, homeAssetId, status, updatedAt(sort: Desc)])
@@ -3642,9 +3649,9 @@ model GuidanceJourney {
 model GuidanceJourneyStep {
   id String @id @default(uuid())
 
-  journeyId   String
-  stepOrder   Int
-  stepKey     String
+  journeyId String
+  stepOrder Int
+  stepKey   String
 
   // P4-6: Typed to GuidanceStepType enum. Previously untyped String? — any value
   // was accepted silently. Note: stepType mirrors decisionStage values and is not
@@ -3685,8 +3692,8 @@ model GuidanceJourneyStep {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  journey GuidanceJourney        @relation(fields: [journeyId], references: [id], onDelete: Cascade)
-  events  GuidanceJourneyEvent[]
+  journey   GuidanceJourney        @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  events    GuidanceJourneyEvent[]
   evidences GuidanceStepEvidence[]
 
   @@unique([journeyId, stepOrder])
@@ -3782,11 +3789,11 @@ model GuidanceStepEvidence {
   proofId          String?
   confidenceScore  Decimal? @db.Decimal(5, 4)
 
-  observedAt   DateTime @default(now())
-  verifiedAt   DateTime?
+  observedAt    DateTime  @default(now())
+  verifiedAt    DateTime?
   invalidatedAt DateTime?
 
-  supersededById String?
+  supersededById  String?
   createdByUserId String?
 
   payloadJson  Json?
@@ -3795,13 +3802,13 @@ model GuidanceStepEvidence {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  property      Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  journey       GuidanceJourney      @relation(fields: [journeyId], references: [id], onDelete: Cascade)
-  step          GuidanceJourneyStep  @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  signal        GuidanceSignal?      @relation(fields: [signalId], references: [id], onDelete: SetNull)
-  homeAsset     HomeAsset?           @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
-  inventoryItem InventoryItem?       @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  supersededBy  GuidanceStepEvidence? @relation("GuidanceStepEvidenceSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  property      Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  journey       GuidanceJourney        @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  step          GuidanceJourneyStep    @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  signal        GuidanceSignal?        @relation(fields: [signalId], references: [id], onDelete: SetNull)
+  homeAsset     HomeAsset?             @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem?         @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  supersededBy  GuidanceStepEvidence?  @relation("GuidanceStepEvidenceSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes    GuidanceStepEvidence[] @relation("GuidanceStepEvidenceSupersession")
 
   @@index([propertyId, observedAt(sort: Desc)])
@@ -4181,7 +4188,7 @@ model HomeEvent {
   @@index([propertyId, sourceBadge, occurredAt])
   @@index([propertyId, groupKey])
   @@index([provenanceId])
-  @@index([propertyId, guidanceJourneyId])           // FRD-FR-11: journey → events lookup
+  @@index([propertyId, guidanceJourneyId]) // FRD-FR-11: journey → events lookup
   @@index([propertyId, isRetrospective, occurredAt]) // FRD-FR-03: lookback query filter
   @@map("home_events")
 }
@@ -5188,7 +5195,7 @@ enum MitigationActionType {
 }
 
 model RiskPremiumOptimizationAnalysis {
-  id                 String @id @default(uuid())
+  id                 String  @id @default(uuid())
   homeownerProfileId String
   propertyId         String
   assumptionSetId    String?
@@ -5251,10 +5258,10 @@ model NegotiationShieldCase {
   property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   createdBy User?    @relation("NegotiationShieldCaseCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
-  inputs    NegotiationShieldInput[]
-  documents NegotiationShieldDocument[]
-  analyses  NegotiationShieldAnalysis[]
-  drafts    NegotiationShieldDraft[]
+  inputs             NegotiationShieldInput[]
+  documents          NegotiationShieldDocument[]
+  analyses           NegotiationShieldAnalysis[]
+  drafts             NegotiationShieldDraft[]
   priceFinalizations PriceFinalization[]
 
   @@index([propertyId, createdAt(sort: Desc)])
@@ -5582,7 +5589,7 @@ model DoNothingScenario {
 }
 
 model DoNothingSimulationRun {
-  id                 String @id @default(uuid())
+  id                 String  @id @default(uuid())
   homeownerProfileId String
   propertyId         String
   assumptionSetId    String?
@@ -5787,14 +5794,14 @@ model HomeScoreReport {
   id                  String                @id @default(uuid())
   propertyId          String
   preferenceProfileId String?
-  generatedByUserId String?
-  reportMode        HomeScoreReportMode   @default(HOMEOWNER)
-  reportVersion     String                @default("2.0")
-  scoreModelVersion String?
-  status            HomeScoreReportStatus @default(FINAL)
-  generatedAt       DateTime              @default(now())
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
+  generatedByUserId   String?
+  reportMode          HomeScoreReportMode   @default(HOMEOWNER)
+  reportVersion       String                @default("2.0")
+  scoreModelVersion   String?
+  status              HomeScoreReportStatus @default(FINAL)
+  generatedAt         DateTime              @default(now())
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
   property           Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   preferenceProfile  PreferenceProfile?            @relation(fields: [preferenceProfileId], references: [id], onDelete: SetNull)
@@ -6380,9 +6387,9 @@ model ServiceRadarCheck {
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
 
-  property    Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  systemLinks ServiceRadarCheckSystemLink[]
-  userActions ServiceRadarUserAction[]
+  property           Property                      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  systemLinks        ServiceRadarCheckSystemLink[]
+  userActions        ServiceRadarUserAction[]
   priceFinalizations PriceFinalization[]
 
   @@index([propertyId, createdAt(sort: Desc)])
@@ -6451,7 +6458,7 @@ model ServiceRadarUserAction {
 }
 
 model QuoteComparisonWorkspace {
-  id              String @id @default(uuid())
+  id              String  @id @default(uuid())
   propertyId      String
   createdByUserId String?
 
@@ -6496,8 +6503,8 @@ model QuoteComparisonQuote {
   workspaceId String
 
   vendorName      String
-  quoteAmount     Decimal @db.Decimal(12, 2)
-  currency        String  @default("USD")
+  quoteAmount     Decimal   @db.Decimal(12, 2)
+  currency        String    @default("USD")
   quoteDate       DateTime?
   serviceLabelRaw String?
   notes           String?
@@ -6523,7 +6530,7 @@ model QuoteComparisonQuote {
 }
 
 model PriceFinalization {
-  id              String @id @default(uuid())
+  id              String  @id @default(uuid())
   propertyId      String
   createdByUserId String?
 
@@ -6539,9 +6546,9 @@ model PriceFinalization {
 
   serviceCategory ServiceCategory?
   vendorName      String?
-  acceptedPrice   Decimal? @db.Decimal(12, 2)
-  quotePrice      Decimal? @db.Decimal(12, 2)
-  currency        String   @default("USD")
+  acceptedPrice   Decimal?         @db.Decimal(12, 2)
+  quotePrice      Decimal?         @db.Decimal(12, 2)
+  currency        String           @default("USD")
 
   scopeSummary      String?
   paymentTerms      String?
@@ -6556,7 +6563,7 @@ model PriceFinalization {
   quoteComparisonWorkspaceId String?
 
   finalizedAt DateTime?
-  bookingId   String? @unique
+  bookingId   String?   @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6585,14 +6592,14 @@ model PriceFinalization {
 }
 
 model PriceFinalizationTerm {
-  id                 String @id @default(uuid())
+  id                  String @id @default(uuid())
   priceFinalizationId String
 
   termType   PriceFinalizationTermType
   label      String
   value      String
-  sortOrder  Int     @default(0)
-  isAccepted Boolean @default(true)
+  sortOrder  Int                       @default(0)
+  isAccepted Boolean                   @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6676,8 +6683,8 @@ model HomeItem {
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
   homeAsset     HomeAsset?     @relation(fields: [homeAssetId], references: [id], onDelete: Cascade)
 
-  status HomeItemStatus?
-  events HomeItemStatusEvent[]
+  status  HomeItemStatus?
+  events  HomeItemStatusEvent[]
   signals Signal[]
 
   // Property-scoped uniqueness (safer for future)
@@ -7032,9 +7039,11 @@ model Incident {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  signals          IncidentSignal[]
-  actions          IncidentAction[]
-  acknowledgements IncidentAcknowledgement[]
+  signals                     IncidentSignal[]
+  actions                     IncidentAction[]
+  acknowledgements            IncidentAcknowledgement[]
+  userPreferences             IncidentUserPreference[]
+  autoResolutionNotifications IncidentAutoResolutionNotification[]
 
   property Property @relation(fields: [propertyId], references: [id])
 
@@ -7178,6 +7187,67 @@ model IncidentScoreSnapshot {
   incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@index([incidentId, computedAt])
+}
+
+// ============================================================================
+// INCIDENT LIFECYCLE MANAGEMENT (User Preferences & Auto-Resolution)
+// ============================================================================
+
+// User preferences for incident visibility and lifecycle management
+model IncidentUserPreference {
+  id         String @id @default(cuid())
+  incidentId String
+  userId     String
+
+  // Pinning: Prevents auto-resolution and keeps incident visible
+  isPinned   Boolean   @default(false)
+  pinnedAt   DateTime?
+  pinnedNote String?
+
+  // Archiving: Hides incident from main views but allows restoration
+  isArchived     Boolean   @default(false)
+  archivedAt     DateTime?
+  archivedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, userId])
+  @@index([userId])
+  @@index([isPinned])
+  @@index([isArchived])
+  @@map("incident_user_preferences")
+}
+
+// Auto-resolution notifications and scheduling
+model IncidentAutoResolutionNotification {
+  id         String @id @default(cuid())
+  incidentId String
+  propertyId String
+  userId     String
+
+  // Scheduling
+  scheduledFor DateTime // When the incident should be auto-resolved
+
+  // Execution tracking
+  notifiedAt DateTime? // When user was notified (7 days before)
+  canceledAt DateTime? // If user canceled auto-resolution
+  executedAt DateTime? // When auto-resolution was executed
+
+  createdAt DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId])
+  @@index([scheduledFor])
+  @@index([propertyId])
+  @@index([userId])
+  @@map("incident_auto_resolution_notifications")
 }
 
 // ============================================================================
