@@ -1147,7 +1147,7 @@ export default function PropertyHealthDetailPage() {
               </div>
 
               {/* Chart area */}
-              <div className="px-6 pt-4 pb-2 flex-1">
+              <div className="px-6 pt-4 pb-2">
                 <ScoreTrendChart points={series?.trend || []} ariaLabel="Property health score trend" />
               </div>
 
@@ -1210,12 +1210,12 @@ export default function PropertyHealthDetailPage() {
 
             {/* Right: Changes Impacting Score Rail */}
             <div className="rounded-2xl border border-slate-200/60 bg-white shadow-[0_4px_24px_rgba(0,0,0,0.07),0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
-              <div className="px-5 pt-5 pb-4 border-b border-slate-100/80">
+              <div className="px-5 pt-4 pb-3 border-b border-slate-100/80">
                 <h4 className="text-lg font-semibold text-slate-900">Changes Impacting Score</h4>
                 <p className="text-sm text-slate-500 mt-0.5">What moved the score since the previous weekly snapshot.</p>
               </div>
 
-              <div className="px-4 py-4 flex-1 space-y-3">
+              <div className="px-4 py-3 space-y-2">
                 {changes.map((change, idx) => {
                   const metric = getChangeMetric(change.title);
                   const ChangeIcon = getChangeCardIcon(change.title);
@@ -1226,16 +1226,16 @@ export default function PropertyHealthDetailPage() {
                   return (
                     <div
                       key={`${change.title}-${idx}`}
-                      className={`rounded-xl border px-4 py-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-px ${
+                      className={`rounded-xl border px-3 py-2.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-px ${
                         isDragCard && isNegative
                           ? "border-red-200/80 bg-red-50/40"
                           : "border-slate-200/70 bg-white hover:bg-slate-50/60"
                       }`}
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-2.5">
                         {/* Icon badge */}
                         <div
-                          className={`rounded-full p-2 shrink-0 mt-0.5 ${
+                          className={`rounded-full p-1.5 shrink-0 mt-0.5 ${
                             isNegative
                               ? "bg-red-100/80 text-red-600"
                               : isPositive
@@ -1243,7 +1243,7 @@ export default function PropertyHealthDetailPage() {
                               : "bg-slate-100/80 text-slate-500"
                           }`}
                         >
-                          <ChangeIcon className="h-4 w-4" />
+                          <ChangeIcon className="h-3.5 w-3.5" />
                         </div>
 
                         {/* Content */}
@@ -1256,7 +1256,7 @@ export default function PropertyHealthDetailPage() {
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-slate-500 mt-1 leading-relaxed">{change.detail}</p>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{change.detail}</p>
                         </div>
 
                         {/* Right metric */}
