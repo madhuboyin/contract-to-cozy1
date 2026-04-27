@@ -30,7 +30,7 @@ import {
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 const REQUIRED_ACTION_STATUSES = ["Needs attention", "Needs Review", "Needs Inspection", "Missing Data", "Needs Warranty"];
 const IN_PROGRESS_STATUSES = ["Action Pending"];
-const WATCH_STATUSES = ["Aging", "Incomplete", "Partial", "Average", "Standard"];
+const WATCH_STATUSES = ["Aging", "Incomplete", "Partial", "Average", "Standard", "High Density"];
 const POSITIVE_STATUSES = ["Excellent", "Good", "Modern", "Optimal", "Complete", "Low Density"];
 const INSIGHT_IMPACT_ORDER = { negative: 0, neutral: 1, positive: 2 } as const;
 
@@ -160,7 +160,7 @@ function getDisplayFactorName(factorName: string | undefined): string {
   const factor = String(factorName || "");
   if (factor === "Age Factor") return "Property Age (Year Built)";
   if (factor === "Systems Factor") return "Major Systems Health";
-  if (factor === "Usage/Wear Factor") return "Property Usage Pattern";
+  if (factor === "Usage/Wear Factor") return "Occupancy & Wear";
   return factor || "Health insight";
 }
 
@@ -168,7 +168,7 @@ function getChipFactorName(factorName: string | undefined): string {
   const factor = String(factorName || "");
   if (factor === "Age Factor" || factor === "Property Age (Year Built)") return "Year Built";
   if (factor === "Systems Factor" || factor === "Major Systems Health") return "Major Systems";
-  if (factor === "Usage/Wear Factor" || factor === "Property Usage Pattern") return "Usage Pattern";
+  if (factor === "Usage/Wear Factor" || factor === "Property Usage Pattern" || factor === "Occupancy & Wear") return "Occupancy";
   return getDisplayFactorName(factorName);
 }
 
@@ -279,16 +279,17 @@ function getFactorDescription(factorName: string | undefined, condition: string 
       'Needs attention': 'Past typical service life — plan replacement',
       'Modern': 'Recently serviced — maintain current schedule',
     },
-    'Usage/Wear Factor': {
-      'High Density': 'High usage pattern — more frequent maintenance recommended',
-      'Average': 'Normal usage — standard maintenance schedule applies',
-      'Low Density': 'Light usage — lower wear risk',
+    'Occupancy & Wear': {
+      'High Density': 'More occupants for your home\'s size means faster wear on fixtures and systems — more frequent maintenance checks are recommended',
+      'Average': 'Occupancy is in a normal range for this home — standard maintenance schedule applies',
+      'Low Density': 'Light occupancy for this home\'s size — lower day-to-day wear on fixtures and systems',
     },
-    'Systems Factor': {
-      'Modern': 'All major systems up to date — strong positive signal',
-      'Mixed': 'Some systems may need attention',
-      'Aging': 'Systems showing age — review recommended',
-      'Good': 'Systems in good condition',
+    'Major Systems Health': {
+      'Modern': 'Heating, cooling, and water systems are up to date — strong positive signal',
+      'Mixed': 'Some major systems may need attention — review heating, cooling, and water heater',
+      'Aging': 'Major systems are showing age — schedule a review of heating, cooling, and water heater',
+      'Good': 'Major systems are in good condition',
+      'Standard': 'Major systems are functioning at a standard level',
     },
     'Structure Factor': {
       'Good': 'Structural elements in good condition',
