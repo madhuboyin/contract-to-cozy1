@@ -89,7 +89,12 @@ export default function ResolutionHubPage() {
   const [resolutions, setResolutions] = useState<any[]>([]);
   const [priorityActions, setPriorityActions] = useState<UrgentActionItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  
+  // Get filter and focus parameters
+  const filterParam = searchParams.get('filter'); // 'urgent', 'maintenance', 'preventive', etc.
   const focusSection = searchParams.get('focus');
+  const expectedCount = searchParams.get('expectedCount');
+  
   const priorityActionCount = priorityActions.slice(0, 3).length;
   const activeIncidentsCount = priorityActions.filter((action) => action.type === 'INCIDENT').length;
 
@@ -189,6 +194,57 @@ export default function ResolutionHubPage() {
     bookings.filter(b => ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)), 
   [bookings]);
 
+  // Filter priority actions based on filter parameter
+  const filteredPriorityActions = useMemo(() => {
+    if (!filterParam) return priorityActions;
+    
+    const filter = filterParam.toLowerCase();
+    
+    // Filter mapping
+    if (filter === 'urgent') {
+      // Urgent: incidents and expired renewals
+      return priorityActions.filter(action => 
+        action.type === 'INCIDENT' || 
+        action.type === 'RENEWAL_EXPIRED' ||
+        action.severity === 'CRITICAL'
+      );
+    }
+    
+    if (filter === 'maintenance' || filter === 'preventive') {
+      // Maintenance/Preventive: overdue maintenance and health insights
+      return priorityActions.filter(action => 
+        action.type === 'MAINTENANCE_OVERDUE' ||
+        action.type === 'MAINTENANCE_UNSCHEDULED' ||
+        action.type === 'HEALTH_INSIGHT'
+      );
+    }
+    
+    if (filter === 'coverage') {
+      // Coverage: renewal-related actions
+      return priorityActions.filter(action => 
+        action.type === 'RENEWAL_EXPIRED' ||
+        action.type === 'RENEWAL_UPCOMING'
+      );
+    }
+    
+    // Default: return all
+    return priorityActions;
+  }, [priorityActions, filterParam]);
+
+  // Validate expected count if provided
+  const countMismatch = useMemo(() => {
+    if (!expectedCount) return null;
+    const expected = parseInt(expectedCount);
+    if (isNaN(expected)) return null;
+    if (filteredPriorityActions.length !== expected) {
+      return {
+        expected,
+        actual: filteredPriorityActions.length,
+      };
+    }
+    return null;
+  }, [expectedCount, filteredPriorityActions]);
+
   return (
     <ErrorBoundary 
       fallback={
@@ -243,14 +299,35 @@ export default function ResolutionHubPage() {
         <MobileSection className={focusSection === 'priority-actions' ? 'scroll-mt-24' : undefined}>
           <MobileSectionHeader
             title="Priority Actions"
-            subtitle="These are the exact ranked items behind the dashboard count."
+            subtitle={
+              filterParam 
+                ? `Filtered to ${filterParam} actions${expectedCount ? ` (expecting ${expectedCount})` : ''}`
+                : "These are the exact ranked items behind the dashboard count."
+            }
             className="mb-6"
           />
+          
+          {/* Count mismatch warning */}
+          {countMismatch && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4" data-testid="count-mismatch-warning">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-amber-900">Count Mismatch</h4>
+                  <p className="text-sm text-amber-700 mt-1">
+                    Expected {countMismatch.expected} {filterParam || 'priority'} {countMismatch.expected === 1 ? 'action' : 'actions'} but found {countMismatch.actual}.
+                    {countMismatch.actual === 0 && ' The items may have been resolved or the data may have refreshed.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="space-y-4">
             {loading ? (
               <div className="flex items-center justify-center py-8"><Loader2 className="animate-spin text-slate-400" /></div>
-            ) : priorityActions.length > 0 ? (
-              priorityActions.slice(0, 3).map((action) => {
+            ) : filteredPriorityActions.length > 0 ? (
+              filteredPriorityActions.slice(0, 10).map((action) => {
                 const trust = priorityActionTone(action);
                 return (
                   <WinCard
@@ -271,6 +348,16 @@ export default function ResolutionHubPage() {
                   />
                 );
               })
+            ) : filterParam ? (
+              <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
+                <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+                </div>
+                <h4 className="text-lg font-bold text-slate-900">No {filterParam} Actions</h4>
+                <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
+                  No {filterParam} actions found for this property. Try viewing all actions or check back later.
+                </p>
+              </MobileCard>
             ) : (
               <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
                 <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
