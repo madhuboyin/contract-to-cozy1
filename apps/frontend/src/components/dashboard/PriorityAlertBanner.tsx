@@ -94,7 +94,7 @@ export default function PriorityAlertBanner({ propertyId }: PriorityAlertBannerP
             </div>
           </div>
           <Link
-            href={`/dashboard/actions?propertyId=${encodeURIComponent(propertyId)}`}
+            href={`/dashboard/resolution-center?propertyId=${encodeURIComponent(propertyId)}&filter=urgent`}
             className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand-600 px-6 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 md:w-auto"
           >
             Review Actions →

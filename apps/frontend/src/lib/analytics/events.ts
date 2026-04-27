@@ -77,7 +77,9 @@ export type CtcTool =
   | 'action-center'
   | 'vault'
   | 'magic-scan'
-  | 'resolution-hub';
+  | 'resolution-hub'
+  | 'financial-efficiency';
+  | 'financial-efficiency';
 
 function toEventAttributes(properties: Record<string, unknown>): Record<string, string> {
   const attrs: Record<string, string> = {};
