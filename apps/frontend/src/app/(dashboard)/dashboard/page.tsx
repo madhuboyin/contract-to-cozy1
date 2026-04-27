@@ -316,11 +316,18 @@ const consolidateUrgentActions = (
     const ninetyDays = 90;
 
     // 1. Process Active Incidents (Highest Priority)
-    // Filter out resolved/suppressed AND stale incidents using type-specific thresholds
+    // Filter out resolved/suppressed/expired AND stale incidents using type-specific thresholds
     incidents
-        .filter(inc => inc.status !== 'RESOLVED' && inc.status !== 'SUPPRESSED')
         .filter(inc => {
-            // Use type-specific staleness thresholds
+            // First filter: Only show incidents that are NOT in terminal states
+            const isTerminalState = 
+                inc.status === 'RESOLVED' || 
+                inc.status === 'SUPPRESSED' || 
+                inc.status === 'EXPIRED';
+            
+            if (isTerminalState) return false;
+            
+            // Second filter: Use type-specific staleness thresholds
             if (!inc.createdAt) return true; // Keep if no createdAt (shouldn't happen)
             
             const stalenessStatus = calculateStalenessStatus(inc);

@@ -211,27 +211,65 @@ export default function IncidentSeverityExplainPanel({
           <div className="mt-3">
             <div className="text-xs font-semibold text-slate-700">Checks</div>
             <div className="mt-2 space-y-2">
-              {checks.map((c: any, idx: number) => (
-                <div key={idx} className="rounded-lg border bg-white px-3 py-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-900">{c.label ?? c.id}</div>
-                      {c.details ? (
-                        <div className="mt-1 text-xs text-slate-600">
-                          {safeStringify(c.details)}
-                        </div>
-                      ) : null}
+              {checks.map((c: any, idx: number) => {
+                // Format the check details nicely
+                const formatCheckDetails = (details: any) => {
+                  if (!details || typeof details !== 'object') return String(details || '');
+                  
+                  // If it's a simple object with few keys, format inline
+                  const entries = Object.entries(details);
+                  if (entries.length <= 3) {
+                    return entries
+                      .map(([key, value]) => {
+                        const formattedKey = key
+                          .replace(/([A-Z])/g, ' $1')
+                          .replace(/^./, (str) => str.toUpperCase())
+                          .trim();
+                        return `${formattedKey}: ${value}`;
+                      })
+                      .join(', ');
+                  }
+                  
+                  // For complex objects, show formatted list
+                  return (
+                    <div className="mt-1 space-y-1">
+                      {entries.map(([key, value]) => {
+                        const formattedKey = key
+                          .replace(/([A-Z])/g, ' $1')
+                          .replace(/^./, (str) => str.toUpperCase())
+                          .trim();
+                        return (
+                          <div key={key} className="text-xs">
+                            <span className="font-medium">{formattedKey}:</span> {String(value)}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <span
-                      className={`rounded-full border px-2 py-1 text-xs font-semibold ${
-                        c.passed ? 'bg-green-50' : 'bg-red-50'
-                      }`}
-                    >
-                      {c.passed ? 'PASS' : 'FAIL'}
-                    </span>
+                  );
+                };
+                
+                return (
+                  <div key={idx} className="rounded-lg border bg-white px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-slate-900">{c.label ?? c.id}</div>
+                        {c.details && (
+                          <div className="mt-1 text-xs text-slate-600">
+                            {formatCheckDetails(c.details)}
+                          </div>
+                        )}
+                      </div>
+                      <span
+                        className={`flex-shrink-0 rounded-full border px-2 py-1 text-xs font-semibold ${
+                          c.passed ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+                        }`}
+                      >
+                        {c.passed ? 'PASS' : 'FAIL'}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : null}

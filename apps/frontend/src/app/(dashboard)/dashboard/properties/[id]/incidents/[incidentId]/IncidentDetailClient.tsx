@@ -56,6 +56,52 @@ function extractPotentialSavings(details: unknown): number {
   return 0;
 }
 
+function formatIncidentDetails(details: unknown): React.ReactNode {
+  if (!details || typeof details !== 'object') return null;
+  
+  const d = details as Record<string, unknown>;
+  const entries = Object.entries(d);
+  
+  if (entries.length === 0) return null;
+  
+  // Format each key-value pair nicely
+  return (
+    <div className="space-y-2">
+      {entries.map(([key, value]) => {
+        // Skip if value is null or undefined
+        if (value === null || value === undefined) return null;
+        
+        // Format the key (convert camelCase to Title Case)
+        const formattedKey = key
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/^./, (str) => str.toUpperCase())
+          .trim();
+        
+        // Format the value
+        let formattedValue: string;
+        if (typeof value === 'object') {
+          // For nested objects, show formatted JSON
+          formattedValue = JSON.stringify(value, null, 2);
+        } else if (typeof value === 'boolean') {
+          formattedValue = value ? 'Yes' : 'No';
+        } else if (typeof value === 'number') {
+          // Format numbers with commas
+          formattedValue = value.toLocaleString();
+        } else {
+          formattedValue = String(value);
+        }
+        
+        return (
+          <div key={key} className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-slate-700">{formattedKey}</span>
+            <span className="text-sm text-slate-900 whitespace-pre-wrap break-words">{formattedValue}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function IncidentDetailClient() {
   const params = useParams<{ id: string; incidentId: string }>();
   const propertyId = params.id;
@@ -377,7 +423,9 @@ export default function IncidentDetailClient() {
                   )}
                   <div className="rounded-lg border bg-white p-3">
                     <p className="text-xs font-semibold text-slate-700">Details</p>
-                    <pre className="mt-2 overflow-auto text-xs text-slate-700">{JSON.stringify(incident.details, null, 2)}</pre>
+                    <div className="mt-2">
+                      {formatIncidentDetails(incident.details)}
+                    </div>
                   </div>
                 </>
               ) : null}
