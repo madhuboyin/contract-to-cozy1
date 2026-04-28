@@ -658,7 +658,7 @@ export default function StatusBoardClient() {
               {humanizeActionType(item.category)}
             </span>
           </TableCell>
-          <TableCell className="hidden py-5 text-sm md:table-cell">{formatAgeDisplay(item.ageYears)}</TableCell>
+          <TableCell className="hidden py-5 text-sm md:table-cell whitespace-nowrap">{formatAgeDisplay(item.ageYears)}</TableCell>
           <TableCell className="hidden py-5 lg:table-cell">
             <Badge variant="outline" className={`text-xs ${WARRANTY_COLORS[item.warrantyStatus]}`}>
               {WARRANTY_LABELS[item.warrantyStatus]}
