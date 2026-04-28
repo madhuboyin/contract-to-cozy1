@@ -13,6 +13,7 @@ export interface PriorityActionHeroProps {
   impactLabel?: string;
   confidenceLabel?: string;
   eyebrow?: string;
+  variant?: 'default' | 'warning';
   className?: string;
 }
 
@@ -24,17 +25,33 @@ export default function PriorityActionHero({
   impactLabel,
   confidenceLabel,
   eyebrow = 'Priority action',
+  variant = 'default',
   className,
 }: PriorityActionHeroProps) {
+  const isWarning = variant === 'warning';
   return (
     <section
       className={cn(
         CTC_TEMPLATE_SURFACES_V1.elevatedCard,
-        'bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.12),transparent_50%),white] p-4 md:p-5',
+        isWarning
+          ? 'p-4 md:p-5'
+          : 'bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.12),transparent_50%),white] p-4 md:p-5',
         className
       )}
+      style={isWarning ? {
+        background: 'var(--color-surface-warning)',
+        borderColor: 'var(--color-border-warning)',
+        borderLeftWidth: '3px',
+        borderLeftColor: 'var(--color-accent-warning)',
+      } : undefined}
     >
-      <p className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold tracking-normal text-brand-700">
+      <p
+        className={cn(
+          'mb-1 inline-flex items-center gap-1.5 text-xs font-semibold tracking-normal',
+          isWarning ? '' : 'text-brand-700'
+        )}
+        style={isWarning ? { color: 'var(--color-text-warning)' } : undefined}
+      >
         <Sparkles className="h-3.5 w-3.5" />
         {eyebrow}
       </p>

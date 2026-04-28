@@ -157,7 +157,7 @@ const WARRANTY_LABELS: Record<WarrantyBadge, string> = {
 };
 
 const HEADER_CELL_CLASS =
-  "h-12 px-3 text-[13px] font-semibold tracking-normal text-slate-700 dark:text-slate-200";
+  "col-header h-10 px-3 text-slate-500 dark:text-slate-400";
 
 const GLASS_PANEL_CLASS =
   "rounded-[26px] border border-white/60 bg-white/50 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/40";
@@ -715,7 +715,7 @@ export default function StatusBoardClient() {
                     recordOperationalGuidanceProgress(item, "replace_or_repair");
                   }}
                 >
-                  <Button size="sm" className="min-w-[160px] bg-teal-600 hover:bg-teal-700">
+                  <Button size="sm" variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
                     <Wrench className="mr-1.5 h-3.5 w-3.5" />
                     {primaryActionLabel}
                   </Button>
@@ -728,7 +728,7 @@ export default function StatusBoardClient() {
                     recordOperationalGuidanceProgress(item, "maintenance");
                   }}
                 >
-                  <Button size="sm" className="min-w-[160px] bg-teal-600 hover:bg-teal-700">
+                  <Button size="sm" variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
                     <Wrench className="mr-1.5 h-3.5 w-3.5" />
                     {primaryActionLabel}
                   </Button>
@@ -736,7 +736,8 @@ export default function StatusBoardClient() {
               ) : item.inventoryItemId ? (
                 <Button
                   size="sm"
-                  className="min-w-[160px] bg-teal-600 hover:bg-teal-700"
+                  variant="outline"
+                  className={LINK_ACTION_BUTTON_CLASS}
                   disabled={drawerLoading === item.id}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -761,7 +762,7 @@ export default function StatusBoardClient() {
                 </Link>
               ) : null
             ) : (
-              <span className="text-xs text-muted-foreground">Open details</span>
+              <span className="text-xs text-sky-600 dark:text-sky-400 cursor-pointer hover:underline">Open details ›</span>
             )}
           </TableCell>
           <TableCell className="w-10 py-5 align-middle">
@@ -1643,6 +1644,7 @@ export default function StatusBoardClient() {
             description={priorityActionDescription}
             impactLabel={priorityImpactLabel}
             confidenceLabel={`${summary.total} items evaluated`}
+            variant={priorityActionItem ? 'warning' : 'default'}
             primaryAction={(
               <Button className="w-full sm:w-auto" onClick={handlePriorityAction}>
                 {priorityActionCtaLabel}
@@ -1678,9 +1680,10 @@ export default function StatusBoardClient() {
                 <Box className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
                 <div className="text-left">
                   <p className="text-[10px] tracking-normal text-slate-400 dark:text-slate-500">All</p>
-                  <p className="mt-0.5 text-xl font-bold leading-none text-slate-800 dark:text-slate-100">
+                  <p className="stat-number mt-0.5 text-slate-800 dark:text-slate-100">
                     {summary.total}
                   </p>
+                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500 opacity-80">items monitored</p>
                 </div>
               </div>
               {conditionFilter === "all" && (
@@ -1701,9 +1704,10 @@ export default function StatusBoardClient() {
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
                 <div className="text-left">
                   <p className="text-[10px] tracking-normal text-emerald-500 dark:text-emerald-400">Good</p>
-                  <p className="mt-0.5 text-xl font-bold leading-none text-emerald-700 dark:text-emerald-300">
+                  <p className="stat-number mt-0.5 text-emerald-700 dark:text-emerald-300">
                     {summary.good}
                   </p>
+                  <p className="mt-1 text-[10px] text-emerald-500 dark:text-emerald-400 opacity-75">no action needed</p>
                 </div>
               </div>
               {conditionFilter === "GOOD" && (
@@ -1724,9 +1728,10 @@ export default function StatusBoardClient() {
                 <Clock className="h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
                 <div className="text-left">
                   <p className="text-[10px] tracking-normal text-amber-500 dark:text-amber-400">Monitor</p>
-                  <p className="mt-0.5 text-xl font-bold leading-none text-amber-700 dark:text-amber-300">
+                  <p className="stat-number mt-0.5 text-amber-700 dark:text-amber-300">
                     {summary.monitor}
                   </p>
+                  <p className="mt-1 text-[10px] text-amber-500 dark:text-amber-400 opacity-75">watch closely</p>
                 </div>
               </div>
               {conditionFilter === "MONITOR" && (
@@ -1767,11 +1772,17 @@ export default function StatusBoardClient() {
                   </p>
                   <p
                     className={cn(
-                      "mt-0.5 text-xl font-bold leading-none",
+                      "stat-number mt-0.5",
                       summary.actionNeeded > 0 ? "text-white" : "text-emerald-700 dark:text-emerald-300",
                     )}
                   >
                     {summary.actionNeeded > 0 ? summary.actionNeeded : "✓"}
+                  </p>
+                  <p className={cn(
+                    "mt-1 text-[10px] opacity-75",
+                    summary.actionNeeded > 0 ? "text-white/70" : "text-emerald-500 dark:text-emerald-400"
+                  )}>
+                    {summary.actionNeeded > 0 ? "require attention" : "all stable"}
                   </p>
                 </div>
               </div>

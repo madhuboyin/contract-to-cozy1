@@ -772,3 +772,86 @@ html {
     animation: ring-fill-in 0.7s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 }
+
+/* ========================================
+   INTELLIGENCE BOARD — DESIGN TOKENS
+   Apple/Stripe design language
+   ======================================== */
+
+:root {
+  /* Semantic color surfaces */
+  --color-surface-danger:   #FEF2F2;
+  --color-surface-warning:  #FFFBEB;
+  --color-surface-success:  #F0FDF4;
+  --color-surface-neutral:  #F9FAFB;
+  --color-surface-info:     #EFF6FF;
+
+  /* Semantic borders */
+  --color-border-danger:    rgba(239,68,68,0.25);
+  --color-border-warning:   rgba(217,119,6,0.3);
+  --color-border-success:   rgba(34,197,94,0.25);
+  --color-border-subtle:    rgba(0,0,0,0.07);
+  --color-border-default:   rgba(0,0,0,0.1);
+
+  /* Semantic text */
+  --color-text-danger:      #B91C1C;
+  --color-text-warning:     #92400E;
+  --color-text-success:     #166534;
+  --color-text-info:        #1D4ED8;
+  --color-text-muted:       #9CA3AF;
+  --color-text-tertiary:    #6B7280;
+
+  /* Accent colors */
+  --color-accent-danger:    #DC2626;
+  --color-accent-warning:   #D97706;
+  --color-accent-success:   #16A34A;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface-danger:   rgba(239,68,68,0.12);
+    --color-surface-warning:  rgba(217,119,6,0.12);
+    --color-surface-success:  rgba(34,197,94,0.1);
+    --color-surface-neutral:  rgba(255,255,255,0.04);
+  }
+}
+
+/* ---- Utility classes ---- */
+
+/* Table column headers — ALL CAPS, wide tracking */
+.col-header {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* Stat numbers inside summary tiles */
+.stat-number {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+/* Table item names */
+.item-name {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+}
+
+/* Section eyebrow labels (ALL CAPS small) */
+.label-caps {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .status-tiles-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
