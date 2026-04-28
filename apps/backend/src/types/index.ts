@@ -5,3 +5,4 @@ export * from './provider.types';
 export * from './homeowner-management.types';
 export * from './express-extension.types';
 export * from './roomPlantAdvisor.types';
+export * from './resolution-center.types';

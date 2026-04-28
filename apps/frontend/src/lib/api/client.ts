@@ -93,6 +93,7 @@ import {
   RadarFeedItem,
   RadarMatchDetail,
   RadarUserState,
+  ResolutionCenterPayload,
 } from '@/types';
 
 // REMOVED: import { RiskReportSummary } from '@/app/(dashboard)/dashboard/types'; as it was not defined or needed.
@@ -1085,6 +1086,25 @@ class APIClient {
   async getPropertyResolutions(id: string): Promise<APIResponse<any[]>> {
     const res = await this.get<any[]>(`/api/properties/${id}/resolutions`);
     return { success: true, data: res.data };
+  }
+
+  /**
+   * Get aggregated Resolution Center data for a property.
+   */
+  async getPropertyResolutionCenter(id: string): Promise<APIResponse<ResolutionCenterPayload>> {
+    const res = await this.get<ResolutionCenterPayload>(`/api/properties/${id}/resolution-center`);
+    const normalizedActions = (res.data.urgentActions || []).map((action) => ({
+      ...action,
+      dueDate: action.dueDate ? new Date(action.dueDate) : null,
+    }));
+
+    return {
+      success: true,
+      data: {
+        ...res.data,
+        urgentActions: normalizedActions,
+      },
+    };
   }
 
   /**

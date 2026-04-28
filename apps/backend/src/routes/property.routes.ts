@@ -90,6 +90,7 @@ router.get('/lookup', authenticate, propertyController.lookupProperty);
  *         description: List of active resolutions
  */
 router.get('/:id/resolutions', authenticate, propertyController.getPropertyResolutions);
+router.get('/:id/resolution-center', authenticate, propertyController.getPropertyResolutionCenter);
 
 /**
  * @swagger

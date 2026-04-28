@@ -1,27 +1,15 @@
 import { differenceInDays, isPast, parseISO } from 'date-fns';
-import { HomeBuyerChecklist, InsurancePolicy, InventoryItem, ScoredProperty, Warranty } from '@/types';
+import {
+  HomeBuyerChecklist,
+  InsurancePolicy,
+  InventoryItem,
+  ResolutionCenterAction,
+  ScoredProperty,
+  Warranty,
+} from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
 
-export interface UrgentActionItem {
-  id: string;
-  type:
-    | 'MAINTENANCE_OVERDUE'
-    | 'MAINTENANCE_UNSCHEDULED'
-    | 'RENEWAL_EXPIRED'
-    | 'RENEWAL_UPCOMING'
-    | 'HEALTH_INSIGHT'
-    | 'INCIDENT'
-    | 'COVERAGE_GAP'
-    | 'COVERAGE_PARTIAL';
-  title: string;
-  description: string;
-  dueDate?: Date;
-  daysUntilDue?: number;
-  propertyId: string;
-  severity?: 'INFO' | 'WARNING' | 'CRITICAL';
-  entityType?: 'Warranty' | 'Insurance'; // Added to track renewal type
-  itemId?: string;
-}
+export type UrgentActionItem = ResolutionCenterAction;
 
 type ChecklistEntry = {
   id: string;

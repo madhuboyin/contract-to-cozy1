@@ -7,6 +7,7 @@ import { CreatePropertyInput, UpdatePropertyInput } from '../utils/validators';
 import { computeSetupStatus } from '../services/propertyOnboarding.service';
 import { getOrCreateActiveNarrativeRun } from '../services/narrativeRun.service';
 import { NeighborhoodIntelligenceService } from '../neighborhoodIntelligence/neighborhoodIntelligenceService';
+import { getResolutionCenter } from '../services/resolutionCenter.service';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
 
@@ -291,6 +292,42 @@ export const getPropertyResolutions = async (req: AuthRequest, res: Response) =>
     res.status(500).json({
       success: false,
       message: 'Failed to fetch property resolutions',
+    });
+  }
+};
+
+/**
+ * Get aggregated Resolution Center data for a property.
+ */
+export const getPropertyResolutionCenter = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    const { id } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+
+    const resolutionCenter = await getResolutionCenter(id, userId);
+
+    res.json({
+      success: true,
+      data: resolutionCenter,
+    });
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error fetching property resolution center');
+    if (error?.message === 'Property not found or access denied.') {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to fetch property resolution center',
     });
   }
 };

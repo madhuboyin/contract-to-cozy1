@@ -3042,3 +3042,118 @@ export interface EvaluateRenovationAdvisorSessionInput {
   forceRefresh?: boolean;
   evaluationMode?: 'FULL' | 'PERMIT_ONLY' | 'TAX_ONLY' | 'LICENSING_ONLY';
 }
+
+export type ResolutionCaseKind =
+  | 'coverage_gap'
+  | 'repair_replace'
+  | 'maintenance'
+  | 'incident'
+  | 'renewal'
+  | 'health_insight';
+
+export type ResolutionCenterActionType =
+  | 'MAINTENANCE_OVERDUE'
+  | 'MAINTENANCE_UNSCHEDULED'
+  | 'RENEWAL_EXPIRED'
+  | 'RENEWAL_UPCOMING'
+  | 'HEALTH_INSIGHT'
+  | 'INCIDENT'
+  | 'COVERAGE_GAP'
+  | 'COVERAGE_PARTIAL';
+
+export interface ResolutionCenterAction {
+  id: string;
+  type: ResolutionCenterActionType;
+  title: string;
+  description: string;
+  dueDate?: Date | string | null;
+  daysUntilDue?: number;
+  propertyId: string;
+  severity?: 'INFO' | 'WARNING' | 'CRITICAL';
+  entityType?: 'Warranty' | 'Insurance';
+  itemId?: string;
+}
+
+export type ResolutionCaseStatus =
+  | 'detected'
+  | 'needs_analysis'
+  | 'options_ready'
+  | 'in_progress'
+  | 'resolved';
+
+export type ResolutionCasePriority = 'critical' | 'high' | 'medium' | 'low';
+
+export type ResolutionCaseSource =
+  | 'inventory'
+  | 'coverage'
+  | 'replace_repair'
+  | 'incident'
+  | 'health_score'
+  | 'checklist';
+
+export interface ResolutionCase {
+  id: string;
+  propertyId: string;
+  kind: ResolutionCaseKind;
+  status: ResolutionCaseStatus;
+  priority: ResolutionCasePriority;
+  title: string;
+  summary: string;
+  href: string;
+  itemId?: string;
+  dueDate?: string | null;
+  source: ResolutionCaseSource;
+  badges?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export type DecisionInsightKind = 'repair_replace' | 'coverage_recommendation';
+
+export interface DecisionInsight {
+  id: string;
+  propertyId: string;
+  kind: DecisionInsightKind;
+  title: string;
+  subject: string;
+  summary: string;
+  href: string;
+  itemId?: string;
+  trust: {
+    confidenceLabel: string;
+    freshnessLabel: string;
+    sourceLabel: string;
+    rationale: string;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+export type ExecutionItemKind = 'booking';
+
+export interface ExecutionItem {
+  id: string;
+  propertyId: string;
+  kind: ExecutionItemKind;
+  title: string;
+  subtitle?: string | null;
+  statusLabel: string;
+  href: string;
+  scheduledLabel?: string | null;
+  priceLabel?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ResolutionCenterData {
+  cases: ResolutionCase[];
+  decisionInsights: DecisionInsight[];
+  executionItems: ExecutionItem[];
+  counts: {
+    openCases: number;
+    decisionsReady: number;
+    activeBookings: number;
+    activeIncidents: number;
+  };
+}
+
+export interface ResolutionCenterPayload extends ResolutionCenterData {
+  urgentActions: ResolutionCenterAction[];
+}
