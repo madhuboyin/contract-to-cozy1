@@ -45,6 +45,8 @@ import { useToast } from '@/components/ui/use-toast';
 import TrustStrip from '../components/route-templates/TrustStrip';
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' {
+  if (item.coverageNotRequired) return 'covered';
+
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
 

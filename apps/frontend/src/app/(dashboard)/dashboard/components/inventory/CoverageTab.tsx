@@ -15,6 +15,8 @@ type CoverageTabProps = {
 };
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' {
+  if (item.coverageNotRequired) return 'covered';
+
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
   if (!hasWarranty && !hasInsurance) return 'uncovered';

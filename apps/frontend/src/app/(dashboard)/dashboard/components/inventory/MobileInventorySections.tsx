@@ -43,6 +43,8 @@ import type { InventoryPortfolioFilter, PortfolioStats } from './PortfolioIntell
 type CoverageStatus = 'gap' | 'partial' | 'covered';
 
 function getCoverageStatus(item: InventoryItem): CoverageStatus {
+  if (item.coverageNotRequired) return 'covered';
+
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
 

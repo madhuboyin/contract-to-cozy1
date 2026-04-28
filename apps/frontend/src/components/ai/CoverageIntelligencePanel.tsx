@@ -478,7 +478,7 @@ export default function CoverageIntelligencePanel({
     return items.find((item) => item.id === selectedItemId) ?? null;
   }, [items, selectedItemId]);
 
-  const selectedItemHasGap = !!selectedItem && (!selectedItem.warrantyId || !selectedItem.insurancePolicyId);
+  const selectedItemHasGap = !!selectedItem && !selectedItem.coverageNotRequired && (!selectedItem.warrantyId || !selectedItem.insurancePolicyId);
   const currentPathWithQuery = useMemo(() => {
     const query = searchParams.toString();
     return query ? `${pathname}?${query}` : pathname;
