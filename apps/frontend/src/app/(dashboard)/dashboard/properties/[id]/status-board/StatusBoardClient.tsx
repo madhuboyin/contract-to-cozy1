@@ -176,7 +176,7 @@ const DETAIL_BENTO_TILE_CLASS =
   "rounded-2xl border border-white/75 bg-gradient-to-br from-white/80 to-slate-50/60 p-4 shadow-[0_10px_20px_-16px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/70 dark:from-slate-900/55 dark:to-slate-900/35";
 
 const LINK_ACTION_BUTTON_CLASS =
-  "border-teal-200 text-teal-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-50 hover:text-teal-800 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.7)] dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40";
+  "h-8 px-2.5 text-xs border-teal-200 text-teal-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-50 hover:text-teal-800 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.7)] dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40";
 
 const INSTALL_DATE_MISSING_TOOLTIP =
   "Install date is empty. Add install date for accurate prediction.";
@@ -746,8 +746,8 @@ export default function StatusBoardClient() {
                     recordOperationalGuidanceProgress(item, "replace_or_repair");
                   }}
                 >
-                  <Button size="sm" variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
-                    <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                  <Button variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
+                    <Wrench className="mr-1 h-3 w-3" />
                     {primaryActionLabel}
                   </Button>
                 </Link>
@@ -759,14 +759,13 @@ export default function StatusBoardClient() {
                     recordOperationalGuidanceProgress(item, "maintenance");
                   }}
                 >
-                  <Button size="sm" variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
-                    <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                  <Button variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
+                    <Wrench className="mr-1 h-3 w-3" />
                     {primaryActionLabel}
                   </Button>
                 </Link>
               ) : item.inventoryItemId ? (
                 <Button
-                  size="sm"
                   variant="outline"
                   className={LINK_ACTION_BUTTON_CLASS}
                   disabled={drawerLoading === item.id}
@@ -775,7 +774,7 @@ export default function StatusBoardClient() {
                     void handleViewItem(item);
                   }}
                 >
-                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  <ExternalLink className="mr-1 h-3 w-3" />
                   {drawerLoading === item.id ? "Loading..." : primaryActionLabel}
                 </Button>
               ) : item.deepLinks.viewRoom ? (
@@ -786,8 +785,8 @@ export default function StatusBoardClient() {
                     recordOperationalGuidanceProgress(item, "view_room");
                   }}
                 >
-                  <Button size="sm" variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
-                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  <Button variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
+                    <ExternalLink className="mr-1 h-3 w-3" />
                     {primaryActionLabel}
                   </Button>
                 </Link>
@@ -796,7 +795,7 @@ export default function StatusBoardClient() {
               <span className="text-xs text-sky-600 dark:text-sky-400 cursor-pointer hover:underline">Open details ›</span>
             )}
           </TableCell>
-          <TableCell className="w-10 py-5 align-middle shrink-0">
+          <TableCell className="w-10 min-w-[40px] py-5 align-middle shrink-0">
             <ChevronRight
               className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
                 expandedId === item.id ? "rotate-90" : ""
@@ -2025,7 +2024,7 @@ export default function StatusBoardClient() {
                         <TableHead className={HEADER_CELL_CLASS}>Condition</TableHead>
                         <TableHead className={HEADER_CELL_CLASS}>Recommendation</TableHead>
                         <TableHead className={HEADER_CELL_CLASS}>Next step</TableHead>
-                        <TableHead className={`w-10 shrink-0 ${HEADER_CELL_CLASS}`} />
+                        <TableHead className={`w-10 min-w-[40px] shrink-0 ${HEADER_CELL_CLASS}`} />
                       </TableRow>
                     </TableHeader>
                     <TableBody>{renderItems(groupItems)}</TableBody>
@@ -2049,7 +2048,7 @@ export default function StatusBoardClient() {
                 <TableHead className={HEADER_CELL_CLASS}>Condition</TableHead>
                 <TableHead className={HEADER_CELL_CLASS}>Recommendation</TableHead>
                 <TableHead className={HEADER_CELL_CLASS}>Next step</TableHead>
-                <TableHead className={`w-10 shrink-0 ${HEADER_CELL_CLASS}`} />
+                <TableHead className={`w-10 min-w-[40px] shrink-0 ${HEADER_CELL_CLASS}`} />
               </TableRow>
             </TableHeader>
             <TableBody>{renderItems(items)}</TableBody>
