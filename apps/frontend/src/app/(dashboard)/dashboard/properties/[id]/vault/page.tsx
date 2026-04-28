@@ -8,24 +8,25 @@ interface VaultPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+function normalizeInventoryTab(tab: string | undefined): 'items' | 'coverage' {
+  if (tab === 'coverage') return 'coverage';
+  return 'items';
+}
+
 export default async function PropertyVaultPage({ params, searchParams }: VaultPageProps) {
   const { id } = await params;
   const search = await searchParams;
-  
-  // Get tab from query params (assets, documents, coverage)
-  const tab = typeof search.tab === 'string' ? search.tab : 'assets';
-  
-  // Build query string with tab
+
+  const tab = normalizeInventoryTab(typeof search.tab === 'string' ? search.tab : undefined);
+
   const queryParams = new URLSearchParams();
   queryParams.set('tab', tab);
-  
-  // Preserve other query parameters
+
   for (const [key, value] of Object.entries(search)) {
     if (key !== 'tab' && typeof value === 'string') {
       queryParams.set(key, value);
     }
   }
-  
-  // Redirect to inventory with tab parameter
+
   redirect(`/dashboard/properties/${id}/inventory?${queryParams.toString()}`);
 }
