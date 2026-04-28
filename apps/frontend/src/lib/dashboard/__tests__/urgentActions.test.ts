@@ -78,7 +78,7 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
     expect(actions).toHaveLength(0);
   });
 
-  it('does not create an action for low-value items', () => {
+  it('still creates an action for low-value items so Fix matches the coverage tab count', () => {
     const inventoryItems: InventoryItem[] = [
       createInventoryItem({
         id: 'item-4',
@@ -89,7 +89,23 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
 
     const actions = consolidateUrgentActions([], [], [], [], [], inventoryItems);
 
-    expect(actions).toHaveLength(0);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].type).toBe('COVERAGE_GAP');
+  });
+
+  it('creates an action when replacement cost is missing', () => {
+    const inventoryItems: InventoryItem[] = [
+      createInventoryItem({
+        id: 'item-4b',
+        name: 'Washer Dryer',
+        replacementCostCents: null,
+      }),
+    ];
+
+    const actions = consolidateUrgentActions([], [], [], [], [], inventoryItems);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].description).toContain('Replacement value has not been added yet.');
   });
 
   it('prioritizes COVERAGE_GAP ahead of COVERAGE_PARTIAL', () => {

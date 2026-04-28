@@ -167,15 +167,17 @@ export function consolidateUrgentActions(
       const hasWarranty = Boolean(item.warrantyId);
       const hasInsurance = Boolean(item.insurancePolicyId);
       const replacementValue = item.replacementCostCents ? item.replacementCostCents / 100 : 0;
-
-      if (replacementValue < 100) return;
+      const replacementValueText =
+        replacementValue > 0
+          ? `Replacement value: $${replacementValue.toFixed(0)}.`
+          : 'Replacement value has not been added yet.';
 
       if (!hasWarranty && !hasInsurance) {
         actions.push({
           id: `COVERAGE-GAP-${item.id}`,
           type: 'COVERAGE_GAP',
           title: `${item.name} needs coverage`,
-          description: `No warranty or insurance coverage. Replacement value: $${replacementValue.toFixed(0)}.`,
+          description: `No warranty or insurance coverage. ${replacementValueText}`,
           propertyId: item.propertyId || 'N/A',
           severity: 'WARNING',
           itemId: item.id,
@@ -188,7 +190,7 @@ export function consolidateUrgentActions(
           id: `COVERAGE-PARTIAL-${item.id}`,
           type: 'COVERAGE_PARTIAL',
           title: `${item.name} has partial coverage`,
-          description: `Missing ${!hasWarranty ? 'warranty' : 'insurance'} coverage. Replacement value: $${replacementValue.toFixed(0)}.`,
+          description: `Missing ${!hasWarranty ? 'warranty' : 'insurance'} coverage. ${replacementValueText}`,
           propertyId: item.propertyId || 'N/A',
           severity: 'INFO',
           itemId: item.id,
