@@ -129,7 +129,7 @@ function ProgressRing({ fraction, size, strokeWidth = 2.5 }: { fraction: number;
         strokeDasharray={circ}
         strokeDashoffset={offset}
         strokeLinecap="round"
-        className="text-teal-500 transition-[stroke-dashoffset] duration-500"
+        className="text-amber-500 transition-[stroke-dashoffset] duration-500"
       />
     </svg>
   );
