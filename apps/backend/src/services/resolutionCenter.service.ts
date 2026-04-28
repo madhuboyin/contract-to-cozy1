@@ -257,7 +257,8 @@ function resolveActionHref(action: ResolutionActionDTO, propertyId: string): str
   }
   if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
     if (action.entityType === 'Warranty') {
-      return `/dashboard/properties/${propertyId}/inventory?tab=coverage&highlight=${action.id}`;
+      const highlightQuery = action.itemId ? `&highlight=${encodeURIComponent(action.itemId)}` : '';
+      return `/dashboard/properties/${propertyId}/inventory?tab=coverage${highlightQuery}`;
     }
     return `/dashboard/insurance?propertyId=${encodeURIComponent(propertyId)}`;
   }
@@ -602,6 +603,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       select: {
         id: true,
         propertyId: true,
+        inventoryItemId: true,
         providerName: true,
         expiryDate: true,
       },
@@ -761,6 +763,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
         daysUntilDue: days,
         propertyId: item.propertyId || propertyId,
         entityType: itemType,
+        itemId: 'providerName' in item ? item.inventoryItemId || undefined : undefined,
       });
       return;
     }
@@ -775,6 +778,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
         daysUntilDue: days,
         propertyId: item.propertyId || propertyId,
         entityType: itemType,
+        itemId: 'providerName' in item ? item.inventoryItemId || undefined : undefined,
       });
     }
   });
@@ -801,14 +805,15 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     replaceRepairAnalyses as ReplaceRepairResolutionRecord[],
     propertyId,
   );
-  const decisionInsights = [...coverageInsights, ...replaceRepairInsights].slice(0, 10);
+  const allDecisionInsights = [...coverageInsights, ...replaceRepairInsights];
+  const decisionInsights = allDecisionInsights.slice(0, 10);
   const executionItems = mapBookingsToExecutionItems(bookings);
   const coverageInsightItemIds = new Set(coverageInsights.map((entry) => entry.itemId).filter(Boolean) as string[]);
   const workflowAwareBaseCases = mapActionsToCases(sortedActions, propertyId, coverageInsightItemIds);
   const cases = sortCases(
     enrichCasesWithWorkflowState(
-      appendDecisionOnlyCases(workflowAwareBaseCases, decisionInsights),
-      decisionInsights,
+      appendDecisionOnlyCases(workflowAwareBaseCases, allDecisionInsights),
+      allDecisionInsights,
       executionItems,
     ),
   );
@@ -820,7 +825,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     executionItems,
     counts: {
       openCases: cases.length,
-      decisionsReady: decisionInsights.length,
+      decisionsReady: allDecisionInsights.length,
       activeBookings: executionItems.length,
       activeIncidents: cases.filter((entry) => entry.kind === 'incident').length,
     },
