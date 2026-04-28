@@ -546,63 +546,51 @@ export default function ResolutionHubPage() {
 
         {/* Quick Help Tools — sits above Priority Actions so high-frequency entry points
             are reachable without scrolling past reactive content */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <Link
             href={
               propertyId
                 ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair`
                 : '/dashboard/replace-repair'
             }
-            className="group flex items-start gap-3 rounded-xl border border-slate-100 bg-white p-4 transition-colors hover:border-teal-100 hover:bg-teal-50/30"
+            className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-3.5 py-3 transition-colors hover:border-teal-100 hover:bg-teal-50/20"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100/70">
-              <Zap className="h-4.5 w-4.5 text-teal-700" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-100/70">
+              <Zap className="h-4 w-4 text-teal-700" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-semibold text-slate-900">Something&apos;s Broken</p>
-                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-teal-600" />
-              </div>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                AI-driven troubleshooting and repair vs. replace guidance.
-              </p>
+              <p className="truncate text-[15px] font-semibold text-slate-900">Something&apos;s Broken</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">Troubleshoot repair vs. replace</p>
             </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-teal-600" />
           </Link>
 
           <Link
             href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}
-            className="group flex items-start gap-3 rounded-xl border border-slate-100 bg-white p-4 transition-colors hover:border-blue-100 hover:bg-blue-50/25"
+            className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-3.5 py-3 transition-colors hover:border-blue-100 hover:bg-blue-50/20"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100/70">
-              <Search className="h-4.5 w-4.5 text-blue-700" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100/70">
+              <Search className="h-4 w-4 text-blue-700" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-semibold text-slate-900">Find a Specialist</p>
-                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-blue-600" />
-              </div>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Search our directory of verified local service providers.
-              </p>
+              <p className="truncate text-[15px] font-semibold text-slate-900">Find a Specialist</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">Browse verified service pros</p>
             </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-blue-600" />
           </Link>
 
           <Link
             href={propertyId ? `/dashboard/emergency?propertyId=${propertyId}` : '/dashboard/emergency'}
-            className="group flex items-start gap-3 rounded-xl border border-red-100/60 bg-white p-4 transition-colors hover:border-red-200 hover:bg-red-50/20"
+            className="group flex items-center gap-3 rounded-xl border border-red-100/60 bg-white px-3.5 py-3 transition-colors hover:border-red-200 hover:bg-red-50/15"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100/70">
-              <AlertCircle className="h-4.5 w-4.5 text-red-700" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100/70">
+              <AlertCircle className="h-4 w-4 text-red-700" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-semibold text-slate-900">Emergency Help</p>
-                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-red-600" />
-              </div>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Instant 24/7 emergency services and shutdown guides.
-              </p>
+              <p className="truncate text-[15px] font-semibold text-slate-900">Emergency Help</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">24/7 urgent response guides</p>
             </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-red-600" />
           </Link>
 
           <Link
@@ -611,20 +599,16 @@ export default function ResolutionHubPage() {
                 ? `/dashboard/properties/${propertyId}/tools/quote-comparison?from=fix-hub`
                 : '/dashboard/quote-comparison'
             }
-            className="group flex items-start gap-3 rounded-xl border border-violet-100/60 bg-white p-4 transition-colors hover:border-violet-200 hover:bg-violet-50/20"
+            className="group flex items-center gap-3 rounded-xl border border-violet-100/60 bg-white px-3.5 py-3 transition-colors hover:border-violet-200 hover:bg-violet-50/15"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100/70">
-              <Scale className="h-4.5 w-4.5 text-violet-700" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100/70">
+              <Scale className="h-4 w-4 text-violet-700" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-semibold text-slate-900">Compare Quotes</p>
-                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-violet-600" />
-              </div>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Review pricing side-by-side before you book.
-              </p>
+              <p className="truncate text-[15px] font-semibold text-slate-900">Compare Quotes</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">Review pricing side by side</p>
             </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-violet-600" />
           </Link>
         </div>
 
