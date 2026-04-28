@@ -1081,7 +1081,25 @@ export default function EditPropertyPage() {
             </div>
           ) : (
             <p className="mt-2 text-sm text-gray-700 dark:text-slate-300">
-              Next: {nextBestStepText ?? "Review your details"} <span className="text-gray-500 dark:text-slate-400">(takes ~10 seconds)</span>
+              Next:{" "}
+              <button
+                type="button"
+                className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:underline"
+                onClick={() => {
+                  const refId = startField?.fieldRefId;
+                  const sectionId = startField?.sectionId;
+                  const target = refId
+                    ? document.getElementById(refId)
+                    : sectionId
+                      ? document.querySelector(`.${sectionId}-section-card`)
+                      : null;
+                  target?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  if (target instanceof HTMLElement) target.focus?.();
+                }}
+              >
+                {nextBestStepText ?? "Review your details"}
+              </button>{" "}
+              <span className="text-gray-500 dark:text-slate-400">(takes ~10 seconds)</span>
             </p>
           )}
         </div>
