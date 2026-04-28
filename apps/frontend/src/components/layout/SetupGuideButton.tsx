@@ -62,37 +62,37 @@ export function SetupGuideButton({ property, className }: SetupGuideButtonProps)
 
   return (
     <>
-      {/* Desktop: text + ring */}
+      {/* Desktop: ghost text + ring */}
       <button
         type="button"
         onClick={handleClick}
         title={`Setup guide: ${completed}/${total} steps complete`}
         className={cn(
-          "hidden lg:flex items-center gap-2 h-12 rounded-lg px-3",
-          "border border-slate-200 bg-slate-50/50 hover:bg-slate-50",
-          "transition-all duration-200 text-sm font-medium text-slate-700",
-          "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400",
+          "hidden lg:flex items-center gap-1.5 rounded-md px-2.5 py-2",
+          "text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100/70",
+          "transition-colors duration-150",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30",
           className
         )}
       >
         <span>Setup guide</span>
-        <ProgressRing fraction={fraction} size={20} />
+        <ProgressRing fraction={fraction} size={18} />
       </button>
 
-      {/* Mobile: ring-only, same dimensions as NotificationsButton */}
+      {/* Mobile: ring-only, ghost */}
       <button
         type="button"
         onClick={handleClick}
         title={`Setup guide: ${completed}/${total} steps complete`}
         className={cn(
-          "lg:hidden relative flex items-center justify-center h-12 w-12 rounded-lg",
-          "border border-slate-200 bg-slate-50/50 hover:bg-slate-50",
-          "transition-all duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400",
+          "lg:hidden flex items-center justify-center h-10 w-10 rounded-md",
+          "text-slate-400 hover:text-slate-600 hover:bg-slate-100/70",
+          "transition-colors duration-150",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/30",
           className
         )}
       >
-        <ProgressRing fraction={fraction} size={22} />
+        <ProgressRing fraction={fraction} size={20} />
       </button>
     </>
   );

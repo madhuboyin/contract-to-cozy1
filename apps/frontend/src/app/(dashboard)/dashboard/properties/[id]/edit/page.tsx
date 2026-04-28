@@ -185,12 +185,12 @@ const propertySchema = z.object({
   waterHeaterInstallYear: z.coerce.number().int().min(1900).optional().nullable(),
   roofReplacementYear: z.coerce.number().int().min(1900).optional().nullable(),
   
-  hasDrainageIssues: z.boolean().optional(),
+  hasDrainageIssues: z.boolean().nullable().optional(),
   hasSmokeDetectors: z.boolean().optional(),
   hasCoDetectors: z.boolean().optional(),
   hasSecuritySystem: z.boolean().optional(),
   hasFireExtinguisher: z.boolean().optional(),
-  hasIrrigation: z.boolean().optional(),
+  hasIrrigation: z.boolean().nullable().optional(),
   purchasePriceDollars: z.number().nonnegative().optional().nullable(),
   purchaseDate: z.string().optional().nullable(),
   lastAppraisedValueDollars: z.number().nonnegative().optional().nullable(),
@@ -266,12 +266,12 @@ const mapDbToForm = (property: any): PropertyFormValues => {
         waterHeaterInstallYear: property.waterHeaterInstallYear,
         roofReplacementYear: property.roofReplacementYear,
         
-        hasDrainageIssues: property.hasDrainageIssues ?? false,
+        hasDrainageIssues: property.hasDrainageIssues ?? null,
         hasSmokeDetectors: property.hasSmokeDetectors ?? false,
         hasCoDetectors: property.hasCoDetectors ?? false,
         hasSecuritySystem: property.hasSecuritySystem ?? false,
         hasFireExtinguisher: property.hasFireExtinguisher ?? false,
-        hasIrrigation: property.hasIrrigation ?? false,
+        hasIrrigation: property.hasIrrigation ?? null,
         purchasePriceDollars:
           typeof property.purchasePriceCents === "number"
             ? property.purchasePriceCents / 100
@@ -555,9 +555,9 @@ export default function EditPropertyPage() {
       bathrooms: null, ownershipType: "" as any, occupantsCount: null,
       heatingType: "" as any, coolingType: "" as any, waterHeaterType: "" as any, 
       roofType: "" as any, hvacInstallYear: null, waterHeaterInstallYear: null,
-      roofReplacementYear: null, hasDrainageIssues: false, hasSmokeDetectors: false,
+      roofReplacementYear: null, hasDrainageIssues: null, hasSmokeDetectors: false,
       hasCoDetectors: false, hasSecuritySystem: false, hasFireExtinguisher: false,
-      hasIrrigation: false,
+      hasIrrigation: null,
       purchasePriceDollars: null,
       purchaseDate: null,
       lastAppraisedValueDollars: null,
@@ -639,10 +639,10 @@ export default function EditPropertyPage() {
         
         hasSmokeDetectors: data.hasSmokeDetectors ?? false,
         hasCoDetectors: data.hasCoDetectors ?? false,
-        hasDrainageIssues: data.hasDrainageIssues ?? false,
+        hasDrainageIssues: data.hasDrainageIssues ?? undefined,
         hasSecuritySystem: data.hasSecuritySystem ?? false,
         hasFireExtinguisher: data.hasFireExtinguisher ?? false,
-        hasIrrigation: data.hasIrrigation ?? false,
+        hasIrrigation: data.hasIrrigation ?? undefined,
         purchasePriceCents: dollarsToCents(data.purchasePriceDollars),
         purchaseDate: data.purchaseDate ?? null,
         lastAppraisedValue: dollarsToCents(data.lastAppraisedValueDollars),
@@ -1692,14 +1692,83 @@ export default function EditPropertyPage() {
                 {(Object.keys(CHECKBOX_META) as CheckboxField[]).map((fieldName) => {
                   const meta = CHECKBOX_META[fieldName];
                   const styles = CHECKBOX_IMPACT_STYLES[meta.impact];
+                  const isYesNoField = fieldName === "hasDrainageIssues" || fieldName === "hasIrrigation";
                   return (
                     <FormField
                       key={fieldName}
                       control={form.control}
                       name={fieldName}
                       render={({ field }) => {
+                        if (isYesNoField) {
+                          const value = field.value as boolean | null | undefined;
+                          const isYes = value === true;
+                          const isNo = value === false;
+                          const isDrainage = fieldName === "hasDrainageIssues";
+                          const cardStyle = isYes
+                            ? styles.checked
+                            : isNo
+                              ? "border-slate-200 bg-slate-50/60 dark:border-white/10 dark:bg-slate-900/20"
+                              : styles.unchecked;
+                          const dotClass = cn(
+                            "safety-card-dot mt-[3px] h-2 w-2 shrink-0 rounded-full",
+                            isYes
+                              ? cn(styles.dot, "ring-2 ring-offset-0", isDrainage ? "ring-amber-100 dark:ring-amber-900/40" : "ring-teal-100 dark:ring-teal-900/50")
+                              : isNo
+                                ? "bg-slate-400 dark:bg-slate-500"
+                                : "bg-gray-300 dark:bg-slate-600",
+                          );
+                          const hint = isYes
+                            ? meta.onHint
+                            : isNo
+                              ? (isDrainage ? "No drainage issues — noted." : "No irrigation system — noted.")
+                              : meta.offHint;
+                          return (
+                            <FormItem>
+                              <FormControl>
+                                <div className={cn(
+                                  "safety-card flex items-start justify-between gap-2.5 rounded-md border-[1.5px] px-3 py-2.5 transition-colors",
+                                  cardStyle,
+                                )}>
+                                  <div className="safety-card-content min-w-0 flex flex-1 items-start gap-2.5">
+                                    <span className={dotClass} />
+                                    <div>
+                                      <p className="safety-card-title m-0 mb-0.5 text-[13px] font-semibold leading-tight text-gray-800 dark:text-slate-200">{meta.label}</p>
+                                      <p className={cn("safety-card-subtitle m-0 text-[11px] leading-[1.3]", styles.hint)}>{hint}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => field.onChange(true)}
+                                      className={cn(
+                                        "h-6 px-2.5 rounded text-[11px] font-semibold transition-colors",
+                                        isYes
+                                          ? isDrainage ? "bg-amber-500 text-white" : "bg-teal-500 text-white"
+                                          : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700",
+                                      )}
+                                    >
+                                      Yes
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => field.onChange(false)}
+                                      className={cn(
+                                        "h-6 px-2.5 rounded text-[11px] font-semibold transition-colors",
+                                        isNo
+                                          ? "bg-slate-600 text-white dark:bg-slate-500"
+                                          : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700",
+                                      )}
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                </div>
+                              </FormControl>
+                            </FormItem>
+                          );
+                        }
+
                         const isChecked = Boolean(field.value);
-                        const isDrainage = fieldName === "hasDrainageIssues";
                         return (
                           <FormItem>
                             <FormControl>
@@ -1708,7 +1777,6 @@ export default function EditPropertyPage() {
                                 className={cn(
                                   "safety-card flex items-start justify-between gap-2.5 rounded-md border-[1.5px] px-3 py-2.5 transition-colors",
                                   isChecked ? styles.checked : styles.unchecked,
-                                  isDrainage && isChecked && "border-amber-400 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-900/20",
                                 )}
                               >
                                 <div className="safety-card-content min-w-0 flex flex-1 items-start gap-2.5">
@@ -1716,9 +1784,7 @@ export default function EditPropertyPage() {
                                     className={cn(
                                       "safety-card-dot mt-[3px] h-2 w-2 shrink-0 rounded-full",
                                       isChecked ? styles.dot : "bg-gray-300 dark:bg-slate-600",
-                                      isChecked && "ring-2 ring-offset-0",
-                                      isChecked && !isDrainage && "ring-teal-100 dark:ring-teal-900/50",
-                                      isChecked && isDrainage && "ring-amber-100 dark:ring-amber-900/40",
+                                      isChecked && "ring-2 ring-offset-0 ring-teal-100 dark:ring-teal-900/50",
                                     )}
                                   />
                                   <div>
@@ -1735,8 +1801,7 @@ export default function EditPropertyPage() {
                                     onCheckedChange={field.onChange}
                                     className={cn(
                                       "h-4 w-4 border-black/20 dark:border-white/20",
-                                      isChecked && !isDrainage && "data-[state=checked]:border-teal-500 data-[state=checked]:bg-teal-500",
-                                      isChecked && isDrainage && "data-[state=checked]:border-amber-500 data-[state=checked]:bg-amber-500",
+                                      isChecked && "data-[state=checked]:border-teal-500 data-[state=checked]:bg-teal-500",
                                     )}
                                   />
                                 </div>
