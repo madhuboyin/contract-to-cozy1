@@ -32,7 +32,78 @@ import { priceFinalizationService } from './priceFinalization.service';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 
+const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
+  BookingStatus.PENDING,
+  BookingStatus.CONFIRMED,
+  BookingStatus.IN_PROGRESS,
+];
+
+type BookingExecutionScope = {
+  type: string;
+  key: string;
+};
+
 export class BookingService {
+  private static buildExecutionScope(args: {
+    propertyId: string;
+    providerProfileId: string;
+    serviceId: string;
+    category: ServiceCategory;
+    maintenancePredictionId?: string | null;
+    priceFinalizationId?: string | null;
+    inventoryItemId?: string | null;
+    homeAssetId?: string | null;
+    guidanceJourneyId?: string | null;
+    guidanceStepKey?: string | null;
+  }): BookingExecutionScope {
+    if (args.maintenancePredictionId) {
+      return {
+        type: 'MAINTENANCE_PREDICTION',
+        key: `prediction:${args.propertyId}:${args.maintenancePredictionId}`,
+      };
+    }
+
+    if (args.priceFinalizationId) {
+      return {
+        type: 'PRICE_FINALIZATION',
+        key: `price-finalization:${args.propertyId}:${args.priceFinalizationId}`,
+      };
+    }
+
+    if (args.inventoryItemId) {
+      return {
+        type: 'INVENTORY_ITEM',
+        key: `inventory-item:${args.propertyId}:${args.inventoryItemId}`,
+      };
+    }
+
+    if (args.homeAssetId) {
+      return {
+        type: 'HOME_ASSET',
+        key: `home-asset:${args.propertyId}:${args.homeAssetId}`,
+      };
+    }
+
+    if (args.guidanceJourneyId && args.guidanceStepKey) {
+      return {
+        type: 'GUIDANCE_STEP',
+        key: `guidance-step:${args.propertyId}:${args.guidanceJourneyId}:${args.guidanceStepKey}`,
+      };
+    }
+
+    if (args.guidanceJourneyId) {
+      return {
+        type: 'GUIDANCE_JOURNEY',
+        key: `guidance-journey:${args.propertyId}:${args.guidanceJourneyId}`,
+      };
+    }
+
+    return {
+      type: 'SERVICE',
+      key: `service:${args.propertyId}:${args.providerProfileId}:${args.serviceId}:${args.category}`,
+    };
+  }
+
   /**
    * Generate unique booking number (format: B-YYYY-NNNNNN)
    */
@@ -224,6 +295,52 @@ export class BookingService {
       linkedPriceFinalizationId = finalization.id;
     }
 
+    const executionScope = this.buildExecutionScope({
+      propertyId: input.propertyId,
+      providerProfileId: service.providerProfileId,
+      serviceId: input.serviceId,
+      category: service.category,
+      maintenancePredictionId: linkedPrediction?.id ?? null,
+      priceFinalizationId: linkedPriceFinalizationId,
+      inventoryItemId: resolvedInventoryItemId,
+      homeAssetId: options?.homeAssetId ?? null,
+      guidanceJourneyId: options?.guidanceJourneyId ?? null,
+      guidanceStepKey: options?.guidanceStepKey ?? null,
+    });
+
+    const existingActiveScopeBooking = await prisma.booking.findFirst({
+      where: {
+        propertyId: input.propertyId,
+        activeExecutionScopeKey: executionScope.key,
+        status: {
+          in: ACTIVE_BOOKING_STATUSES,
+        },
+      },
+      select: {
+        id: true,
+        bookingNumber: true,
+        status: true,
+      },
+    });
+
+    if (existingActiveScopeBooking) {
+      const conflictError = new Error(
+        `An active booking already exists for this work (${existingActiveScopeBooking.status}).`
+      ) as Error & {
+        statusCode?: number;
+        details?: Record<string, unknown>;
+      };
+      conflictError.statusCode = 409;
+      conflictError.details = {
+        existingBookingId: existingActiveScopeBooking.id,
+        existingBookingNumber: existingActiveScopeBooking.bookingNumber,
+        existingBookingStatus: existingActiveScopeBooking.status,
+        executionScopeType: executionScope.type,
+        executionScopeKey: executionScope.key,
+      };
+      throw conflictError;
+    }
+
     // Generate booking number
     const bookingNumber = await this.generateBookingNumber();
 
@@ -264,6 +381,9 @@ export class BookingService {
         insightContext: predictiveInsightContext,
         maintenancePredictionId: input.maintenancePredictionId || null,
         inventoryItemId: resolvedInventoryItemId,
+        executionScopeType: executionScope.type,
+        executionScopeKey: executionScope.key,
+        activeExecutionScopeKey: executionScope.key,
         // Phase 5 (TR-03): persist so service completion can auto-advance the journey.
         // Spread-cast required until `npx prisma generate` is run after migration.
         ...({
@@ -734,6 +854,7 @@ export class BookingService {
         where: { id: bookingId },
         data: {
           status: 'COMPLETED',
+          activeExecutionScopeKey: null,
           actualStartTime: startTime,
           actualEndTime: endTime,
           finalPrice: input.finalPrice,
@@ -878,6 +999,7 @@ export class BookingService {
       where: { id: bookingId },
       data: {
         status: 'CANCELLED',
+        activeExecutionScopeKey: null,
         cancelledAt: new Date(),
         cancelledBy: userId,
         cancellationReason: input.reason,
@@ -1145,6 +1267,8 @@ export class BookingService {
       maintenancePredictionId: booking.maintenancePredictionId || null,
       inventoryItemId: booking.inventoryItemId || null,
       priceFinalizationId: booking.priceFinalization?.id || null,
+      executionScopeType: (booking as any).executionScopeType || null,
+      executionScopeKey: (booking as any).executionScopeKey || null,
       // Phase 5: cast until Prisma client is regenerated after schema migration
       guidanceJourneyId: (booking as any).guidanceJourneyId || null,
       cancelledAt: booking.cancelledAt,

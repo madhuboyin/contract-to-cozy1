@@ -163,6 +163,8 @@ export interface BookingResponse {
   maintenancePredictionId: string | null;
   inventoryItemId: string | null;
   priceFinalizationId: string | null;
+  executionScopeType: string | null;
+  executionScopeKey: string | null;
 
   // Phase 5: Guidance context — stored on the booking to enable service-completion
   // auto-advance of the linked guidance journey step (TR-03).

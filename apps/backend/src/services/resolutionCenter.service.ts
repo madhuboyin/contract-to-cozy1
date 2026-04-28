@@ -469,7 +469,10 @@ function mapBookingsToExecutionItems(bookings: Array<{
   status: string;
   estimatedPrice: unknown;
   scheduledDate: Date | null;
+  createdAt: Date;
   inventoryItemId?: string | null;
+  providerProfileId: string;
+  executionScopeKey?: string | null;
   insightFactor?: string | null;
   category?: string | null;
   provider: { id: string };
@@ -489,12 +492,40 @@ function mapBookingsToExecutionItems(bookings: Array<{
     priceLabel: `$${Number(booking.estimatedPrice || 0).toFixed(2)}`,
     metadata: {
       providerId: booking.provider.id,
+      providerProfileId: booking.providerProfileId,
       serviceId: booking.service.id,
       inventoryItemId: booking.inventoryItemId ?? null,
+      executionScopeKey: booking.executionScopeKey ?? null,
       insightFactor: booking.insightFactor ?? null,
       category: booking.category ?? null,
     },
   }));
+}
+
+function dedupeActiveBookings<T extends {
+  id: string;
+  property: { id: string };
+  service: { id: string; name: string };
+  providerProfileId: string;
+  createdAt: Date;
+  inventoryItemId?: string | null;
+  executionScopeKey?: string | null;
+}>(bookings: T[]): T[] {
+  const byScope = new Map<string, T>();
+
+  for (const booking of bookings) {
+    const fallbackScope =
+      booking.inventoryItemId
+        ? `inventory-item:${booking.property.id}:${booking.inventoryItemId}`
+        : `service:${booking.property.id}:${booking.providerProfileId}:${booking.service.id}`;
+    const scopeKey = booking.executionScopeKey ?? fallbackScope;
+    const existing = byScope.get(scopeKey);
+    if (!existing || booking.createdAt.getTime() > existing.createdAt.getTime()) {
+      byScope.set(scopeKey, booking);
+    }
+  }
+
+  return [...byScope.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 function matchDecisionInsightsForCase(
@@ -933,7 +964,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     ...replaceRepairInsights,
   ]);
   const decisionInsights = allDecisionInsights.slice(0, 10);
-  const executionItems = mapBookingsToExecutionItems(bookings);
+  const executionItems = mapBookingsToExecutionItems(dedupeActiveBookings(bookings));
   const coverageInsightItemIds = new Set(
     allDecisionInsights
       .filter((entry) => entry.kind === 'coverage_recommendation')

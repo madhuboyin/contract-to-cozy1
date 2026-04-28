@@ -367,6 +367,12 @@ export default function BookProviderPage() {
       }
     } catch (submitError: any) {
       console.error('Failed to create booking:', submitError);
+      const existingBookingId = submitError?.payload?.details?.existingBookingId;
+      if (submitError?.status === 409 && typeof existingBookingId === 'string') {
+        toast({ title: 'Existing booking found', description: 'Opening your active booking so you can update it.' });
+        router.push(`/dashboard/bookings/${existingBookingId}`);
+        return;
+      }
       setError(submitError?.message || 'An error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);

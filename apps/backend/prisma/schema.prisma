@@ -2283,6 +2283,12 @@ model Booking {
   inventoryItem     InventoryItem?     @relation(fields: [inventoryItemId], references: [id])
   priceFinalization PriceFinalization?
 
+  // Normalized execution scope for preventing duplicate active bookings across
+  // item-linked and generic service workflows.
+  executionScopeType      String?
+  executionScopeKey       String?
+  activeExecutionScopeKey String?
+
   // Phase 5: Guidance journey linkage — stored at booking creation so that
   // service completion can automatically advance the journey step (TR-03).
   guidanceJourneyId String?
@@ -2301,6 +2307,9 @@ model Booking {
   @@index([category])
   @@index([insightFactor]) // For fast lookups
   @@index([guidanceJourneyId]) // Phase 5: journey → bookings lookup
+  @@index([propertyId, executionScopeType, executionScopeKey])
+  @@index([propertyId, activeExecutionScopeKey])
+  @@unique([propertyId, activeExecutionScopeKey])
   @@map("bookings")
 }
 
