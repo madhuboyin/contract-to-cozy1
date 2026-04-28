@@ -261,8 +261,7 @@ export const getPropertyResolutions = async (req: AuthRequest, res: Response) =>
       });
     }
 
-    // Find active READY analyses for the property
-    const resolutions = await prisma.replaceRepairAnalysis.findMany({
+    const candidateResolutions = await prisma.replaceRepairAnalysis.findMany({
       where: {
         propertyId: id,
         homeownerProfileId,
@@ -280,8 +279,27 @@ export const getPropertyResolutions = async (req: AuthRequest, res: Response) =>
       orderBy: {
         computedAt: 'desc',
       },
-      take: 10,
+      take: 50,
     });
+
+    const resolutionsByItemId = new Map<string, (typeof candidateResolutions)[number]>();
+    candidateResolutions.forEach((resolution) => {
+      const existing = resolutionsByItemId.get(resolution.inventoryItemId);
+      if (!existing) {
+        resolutionsByItemId.set(resolution.inventoryItemId, resolution);
+        return;
+      }
+
+      const resolutionIsCurrent = resolution.currentMarker === 'CURRENT';
+      const existingIsCurrent = existing.currentMarker === 'CURRENT';
+      if (resolutionIsCurrent && !existingIsCurrent) {
+        resolutionsByItemId.set(resolution.inventoryItemId, resolution);
+      }
+    });
+
+    const resolutions = [...resolutionsByItemId.values()]
+      .sort((a, b) => b.computedAt.getTime() - a.computedAt.getTime())
+      .slice(0, 10);
 
     res.json({
       success: true,

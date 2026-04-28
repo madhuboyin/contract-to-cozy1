@@ -3965,6 +3965,7 @@ model ReplaceRepairAnalysis {
   homeownerProfileId String
   propertyId         String
   inventoryItemId    String
+  currentMarker      String?
 
   status      ReplaceRepairAnalysisStatus @default(READY)
   verdict     ReplaceRepairVerdict
@@ -3997,8 +3998,10 @@ model ReplaceRepairAnalysis {
   inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
 
   @@index([inventoryItemId, computedAt(sort: Desc)])
+  @@index([propertyId, inventoryItemId, currentMarker])
   @@index([propertyId, verdict])
   @@index([propertyId, impactLevel])
+  @@unique([propertyId, inventoryItemId, currentMarker])
   @@map("replace_repair_analyses")
 }
 

@@ -10,12 +10,14 @@ import type {
 
 const ACTIVE_BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] as const;
 const HEALTH_INSIGHT_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
+const CURRENT_REPLACE_REPAIR_MARKER = 'CURRENT';
 
 type ReplaceRepairResolutionRecord = {
   id: string;
   propertyId: string;
   homeownerProfileId: string;
   inventoryItemId: string;
+  currentMarker?: string | null;
   status: 'READY' | 'STALE' | 'ERROR';
   verdict: 'REPLACE_NOW' | 'REPLACE_SOON' | 'REPAIR_AND_MONITOR' | 'REPAIR_ONLY';
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
@@ -127,6 +129,51 @@ function parseItemIdFromInputsSnapshot(value: unknown): string | null {
   const itemRecord = item as Record<string, unknown>;
   const idFromItem = itemRecord.itemId ?? itemRecord.id;
   return typeof idFromItem === 'string' && idFromItem ? idFromItem : null;
+}
+
+function dedupeReplaceRepairAnalyses<T extends {
+  inventoryItemId: string;
+  currentMarker?: string | null;
+  computedAt: Date;
+  createdAt?: Date;
+}>(rows: T[]): T[] {
+  const byItemId = new Map<string, T>();
+
+  for (const row of rows) {
+    const existing = byItemId.get(row.inventoryItemId);
+    if (!existing) {
+      byItemId.set(row.inventoryItemId, row);
+      continue;
+    }
+
+    const rowIsCurrent = row.currentMarker === CURRENT_REPLACE_REPAIR_MARKER;
+    const existingIsCurrent = existing.currentMarker === CURRENT_REPLACE_REPAIR_MARKER;
+    if (rowIsCurrent && !existingIsCurrent) {
+      byItemId.set(row.inventoryItemId, row);
+      continue;
+    }
+    if (!rowIsCurrent && existingIsCurrent) {
+      continue;
+    }
+
+    const rowTime = row.computedAt.getTime();
+    const existingTime = existing.computedAt.getTime();
+    if (rowTime > existingTime) {
+      byItemId.set(row.inventoryItemId, row);
+      continue;
+    }
+
+    if (
+      rowTime === existingTime &&
+      row.createdAt &&
+      existing.createdAt &&
+      row.createdAt.getTime() > existing.createdAt.getTime()
+    ) {
+      byItemId.set(row.inventoryItemId, row);
+    }
+  }
+
+  return [...byItemId.values()].sort((a, b) => b.computedAt.getTime() - a.computedAt.getTime());
 }
 
 function isCoverageActive(expiryDate: Date | null | undefined, today: Date): boolean {
@@ -847,17 +894,20 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     coverageAnalysesByItemId.set(itemId, analysis);
   });
 
+  const dedupedReplaceRepairAnalyses = dedupeReplaceRepairAnalyses(replaceRepairAnalyses);
+
   const coverageInsights = mapCoverageGapsToInsights({
     coverageGaps,
     coverageAnalysesByItemId,
     propertyId,
   });
   const replaceRepairInsights = mapReplaceRepairAnalysesToInsights(
-    replaceRepairAnalyses.map((analysis) => ({
+    dedupedReplaceRepairAnalyses.map((analysis) => ({
       id: analysis.id,
       propertyId: analysis.propertyId,
       homeownerProfileId: analysis.homeownerProfileId,
       inventoryItemId: analysis.inventoryItemId,
+      currentMarker: analysis.currentMarker,
       status: analysis.status,
       verdict: analysis.verdict,
       confidence: analysis.confidence,

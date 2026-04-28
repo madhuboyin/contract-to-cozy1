@@ -72,6 +72,8 @@ type NextStep = {
   priority?: Priority;
 };
 
+const CURRENT_REPLACE_REPAIR_MARKER = 'CURRENT';
+
 type ItemDefaults = {
   lifespanYears: number;
   typicalRepairCostCents: number;
@@ -226,6 +228,51 @@ function mapAnalysisToDto(analysis: ReplaceRepairAnalysis): ReplaceRepairAnalysi
   };
 }
 
+function dedupeReplaceRepairRows<T extends {
+  inventoryItemId: string;
+  currentMarker?: string | null;
+  computedAt: Date;
+  createdAt?: Date;
+}>(rows: T[]): T[] {
+  const byItemId = new Map<string, T>();
+
+  for (const row of rows) {
+    const existing = byItemId.get(row.inventoryItemId);
+    if (!existing) {
+      byItemId.set(row.inventoryItemId, row);
+      continue;
+    }
+
+    const rowIsCurrent = row.currentMarker === CURRENT_REPLACE_REPAIR_MARKER;
+    const existingIsCurrent = existing.currentMarker === CURRENT_REPLACE_REPAIR_MARKER;
+    if (rowIsCurrent && !existingIsCurrent) {
+      byItemId.set(row.inventoryItemId, row);
+      continue;
+    }
+    if (!rowIsCurrent && existingIsCurrent) {
+      continue;
+    }
+
+    const rowTimestamp = row.computedAt.getTime();
+    const existingTimestamp = existing.computedAt.getTime();
+    if (rowTimestamp > existingTimestamp) {
+      byItemId.set(row.inventoryItemId, row);
+      continue;
+    }
+
+    if (
+      rowTimestamp === existingTimestamp &&
+      row.createdAt &&
+      existing.createdAt &&
+      row.createdAt.getTime() > existing.createdAt.getTime()
+    ) {
+      byItemId.set(row.inventoryItemId, row);
+    }
+  }
+
+  return [...byItemId.values()].sort((a, b) => b.computedAt.getTime() - a.computedAt.getTime());
+}
+
 export class ReplaceRepairService {
   private async assertItemForProperty(propertyId: string, itemId: string) {
     const item = await prisma.inventoryItem.findFirst({
@@ -256,10 +303,12 @@ export class ReplaceRepairService {
     await assertPropertyForUser(propertyId, userId);
     await this.assertItemForProperty(propertyId, itemId);
 
-    const latest = await prisma.replaceRepairAnalysis.findFirst({
+    const candidates = await prisma.replaceRepairAnalysis.findMany({
       where: { propertyId, inventoryItemId: itemId },
       orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
+      take: 10,
     });
+    const latest = dedupeReplaceRepairRows(candidates)[0];
 
     if (!latest) {
       return { exists: false as const };
@@ -566,48 +615,63 @@ export class ReplaceRepairService {
       });
     }
 
-    const analysis = await prisma.replaceRepairAnalysis.create({
-      data: {
-        homeownerProfileId: property.homeownerProfileId,
-        propertyId,
-        inventoryItemId: item.id,
-        status: ReplaceRepairAnalysisStatus.READY,
-        verdict,
-        confidence,
-        impactLevel,
-        summary: summaryByVerdict[verdict],
-        nextSteps: dedupeSteps(nextSteps).slice(0, 6),
-        decisionTrace: decisionTrace.slice(0, 12),
-        inputsSnapshot: {
-          item: {
-            itemId: item.id,
-            name: item.name,
-            category: item.category,
-            condition: item.condition,
-            installedOn: item.installedOn?.toISOString() ?? null,
-            purchasedOn: item.purchasedOn?.toISOString() ?? null,
-            lastServicedOn: item.lastServicedOn?.toISOString() ?? null,
-          },
-          overridesUsed: overrides ?? {},
-          assumptions: {
-            riskTolerance,
-            usageIntensity,
-            defaults,
-            repairSpendLast24mCents,
-            repairsLast24m,
-            failureProbability: Number(failureProb.toFixed(4)),
-            annualRepairRiskAfterReplaceCents,
-            annualRepairRiskDeltaCents,
-          },
+    const analysis = await prisma.$transaction(async (tx) => {
+      await tx.replaceRepairAnalysis.updateMany({
+        where: {
+          propertyId,
+          inventoryItemId: item.id,
+          currentMarker: CURRENT_REPLACE_REPAIR_MARKER,
         },
-        ageYears,
-        remainingYears,
-        estimatedNextRepairCostCents,
-        estimatedReplacementCostCents,
-        expectedAnnualRepairRiskCents,
-        expectedAnnualOwnershipDeltaCents: annualRepairRiskDeltaCents,
-        breakEvenMonths,
-      },
+        data: {
+          status: ReplaceRepairAnalysisStatus.STALE,
+          currentMarker: null,
+        },
+      });
+
+      return tx.replaceRepairAnalysis.create({
+        data: {
+          homeownerProfileId: property.homeownerProfileId,
+          propertyId,
+          inventoryItemId: item.id,
+          currentMarker: CURRENT_REPLACE_REPAIR_MARKER,
+          status: ReplaceRepairAnalysisStatus.READY,
+          verdict,
+          confidence,
+          impactLevel,
+          summary: summaryByVerdict[verdict],
+          nextSteps: dedupeSteps(nextSteps).slice(0, 6),
+          decisionTrace: decisionTrace.slice(0, 12),
+          inputsSnapshot: {
+            item: {
+              itemId: item.id,
+              name: item.name,
+              category: item.category,
+              condition: item.condition,
+              installedOn: item.installedOn?.toISOString() ?? null,
+              purchasedOn: item.purchasedOn?.toISOString() ?? null,
+              lastServicedOn: item.lastServicedOn?.toISOString() ?? null,
+            },
+            overridesUsed: overrides ?? {},
+            assumptions: {
+              riskTolerance,
+              usageIntensity,
+              defaults,
+              repairSpendLast24mCents,
+              repairsLast24m,
+              failureProbability: Number(failureProb.toFixed(4)),
+              annualRepairRiskAfterReplaceCents,
+              annualRepairRiskDeltaCents,
+            },
+          },
+          ageYears,
+          remainingYears,
+          estimatedNextRepairCostCents,
+          estimatedReplacementCostCents,
+          expectedAnnualRepairRiskCents,
+          expectedAnnualOwnershipDeltaCents: annualRepairRiskDeltaCents,
+          breakEvenMonths,
+        },
+      });
     });
 
     // Track outcome generated for the user
@@ -631,26 +695,27 @@ export class ReplaceRepairService {
 export async function markReplaceRepairStale(propertyId: string, inventoryItemId?: string) {
   if (!inventoryItemId) {
     await prisma.replaceRepairAnalysis.updateMany({
-      where: { propertyId, status: ReplaceRepairAnalysisStatus.READY },
-      data: { status: ReplaceRepairAnalysisStatus.STALE },
+      where: {
+        propertyId,
+        currentMarker: CURRENT_REPLACE_REPAIR_MARKER,
+      },
+      data: {
+        status: ReplaceRepairAnalysisStatus.STALE,
+        currentMarker: null,
+      },
     });
     return;
   }
 
-  const latest = await prisma.replaceRepairAnalysis.findFirst({
+  await prisma.replaceRepairAnalysis.updateMany({
     where: {
       propertyId,
       inventoryItemId,
-      status: ReplaceRepairAnalysisStatus.READY,
+      currentMarker: CURRENT_REPLACE_REPAIR_MARKER,
     },
-    orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
-    select: { id: true },
-  });
-
-  if (!latest) return;
-
-  await prisma.replaceRepairAnalysis.update({
-    where: { id: latest.id },
-    data: { status: ReplaceRepairAnalysisStatus.STALE },
+    data: {
+      status: ReplaceRepairAnalysisStatus.STALE,
+      currentMarker: null,
+    },
   });
 }
