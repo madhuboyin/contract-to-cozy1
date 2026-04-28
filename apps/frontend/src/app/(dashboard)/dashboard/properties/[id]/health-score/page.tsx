@@ -362,8 +362,10 @@ function getLedgerInsights(
 
 function buildHealthChangeItems(series: PropertyScoreSeries | undefined, latestInsights: HealthInsight[]) {
   const changes: Array<{ title: string; detail: string; impact: "positive" | "negative" | "neutral" }> = [];
+  const latestPoint = series?.latest ?? null;
+  const previousPoint = series?.previous ?? null;
 
-  if (!series?.latest) {
+  if (!latestPoint) {
     const requiredCount = latestInsights.filter((insight) => REQUIRED_ACTION_STATUSES.includes(String(insight.status || ""))).length;
     const inProgressCount = latestInsights.filter((insight) => IN_PROGRESS_STATUSES.includes(String(insight.status || ""))).length;
     const missingDataCount = latestInsights.filter((insight) => String(insight.status || "") === "Missing Data").length;
@@ -403,7 +405,7 @@ function buildHealthChangeItems(series: PropertyScoreSeries | undefined, latestI
     return changes.slice(0, 4);
   }
 
-  const delta = series.deltaFromPreviousWeek;
+  const delta = series?.deltaFromPreviousWeek ?? null;
   if (delta !== null) {
     changes.push({
       title: "Week-over-week score",
@@ -417,8 +419,8 @@ function buildHealthChangeItems(series: PropertyScoreSeries | undefined, latestI
     });
   }
 
-  const latestRequired = getRequiredActions(series.latest);
-  const previousRequired = getRequiredActions(series.previous);
+  const latestRequired = getRequiredActions(latestPoint);
+  const previousRequired = getRequiredActions(previousPoint);
   if (latestRequired !== null && previousRequired !== null) {
     const deltaRequired = latestRequired - previousRequired;
     changes.push({
@@ -433,13 +435,13 @@ function buildHealthChangeItems(series: PropertyScoreSeries | undefined, latestI
     });
   }
 
-  const latestPriorityCount = getSnapshotInsights(series.latest).filter((insight) =>
+  const latestPriorityCount = getSnapshotInsights(latestPoint).filter((insight) =>
     REQUIRED_ACTION_STATUSES.includes(String(insight.status || ""))
   ).length;
-  const previousPriorityCount = getSnapshotInsights(series.previous).filter((insight) =>
+  const previousPriorityCount = getSnapshotInsights(previousPoint).filter((insight) =>
     REQUIRED_ACTION_STATUSES.includes(String(insight.status || ""))
   ).length;
-  if (series.previous) {
+  if (previousPoint) {
     const deltaPriority = latestPriorityCount - previousPriorityCount;
     changes.push({
       title: "Risky insight signals",

@@ -156,9 +156,16 @@ function buildHealthInsightActionMeta(factorTitle: string, healthScore: number) 
   );
 }
 
+function isApplianceHealthInsightTitle(factorTitle: string | undefined): boolean {
+  return String(factorTitle || '').toLowerCase().includes('appliance');
+}
+
 function getCompactHealthInsightTitle(factorTitle: string): string {
   if (factorTitle === 'Property Age (Year Built)' || factorTitle === 'Age Factor') {
     return 'Property Age';
+  }
+  if (isApplianceHealthInsightTitle(factorTitle)) {
+    return 'Appliance Health';
   }
   return factorTitle;
 }
@@ -459,6 +466,9 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
   }
   
   if (action.type === 'HEALTH_INSIGHT' && actionPropertyId) {
+    if (isApplianceHealthInsightTitle(action.title)) {
+      return `/dashboard/properties/${actionPropertyId}/status-board?category=APPLIANCE`;
+    }
     return `/dashboard/properties/${actionPropertyId}/health-score?focus=${encodeURIComponent(action.title.toLowerCase())}`;
   }
   if (action.type === 'MAINTENANCE_OVERDUE') {
@@ -722,13 +732,18 @@ export default function DashboardPage() {
     const topHealthInsight = scopedUrgentActions.find(a => a.type === 'HEALTH_INSIGHT');
     if (topHealthInsight) {
       const compactHealthInsightTitle = getCompactHealthInsightTitle(topHealthInsight.title);
+      const isApplianceInsight = isApplianceHealthInsightTitle(topHealthInsight.title);
       const impactLabel = 'Top risk signal';
       const etaLabel = 'ETA 2 min';
       return {
         badgeLabel: buildHealthInsightBadgeLabel(),
-        title: `${compactHealthInsightTitle} needs attention.`,
-        subtitle: 'Chosen because it best balances cost prevention, confidence, and effort.',
-        ctaLabel: `Review ${compactHealthInsightTitle.toLowerCase()}`,
+        title: isApplianceInsight
+          ? 'Appliance health needs review.'
+          : `${compactHealthInsightTitle} needs attention.`,
+        subtitle: isApplianceInsight
+          ? 'One or more appliance signals may need review based on the latest property health data.'
+          : 'Chosen because it best balances cost prevention, confidence, and effort.',
+        ctaLabel: isApplianceInsight ? 'Review appliance health' : `Review ${compactHealthInsightTitle.toLowerCase()}`,
         href: resolveUrgentActionHref(topHealthInsight, effectiveSelectedPropertyId),
         impactLabel,
         etaLabel,

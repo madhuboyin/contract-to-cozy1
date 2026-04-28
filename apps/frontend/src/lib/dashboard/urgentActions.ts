@@ -210,6 +210,9 @@ export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: s
     return `/dashboard/properties/${actionPropertyId}/incidents/${action.id}`;
   }
   if (action.type === 'HEALTH_INSIGHT' && actionPropertyId) {
+    if (action.title.toLowerCase().includes('appliance')) {
+      return `/dashboard/properties/${actionPropertyId}/status-board?category=APPLIANCE`;
+    }
     return `/dashboard/properties/${actionPropertyId}/health-score?focus=${encodeURIComponent(action.title.toLowerCase())}`;
   }
   if (action.type === 'MAINTENANCE_OVERDUE') {
