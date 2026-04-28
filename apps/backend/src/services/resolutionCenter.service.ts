@@ -1,7 +1,5 @@
-import { differenceInDays, formatDistanceToNowStrict, isPast } from 'date-fns';
 import { prisma } from '../lib/prisma';
 import { getPropertyById } from './property.service';
-import type { ReplaceRepairAnalysisDTO } from './replaceRepairAnalysis.service';
 import type {
   DecisionInsightDTO,
   ExecutionItemDTO,
@@ -13,7 +11,17 @@ import type {
 const ACTIVE_BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] as const;
 const HEALTH_INSIGHT_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
-type ReplaceRepairResolutionRecord = ReplaceRepairAnalysisDTO & {
+type ReplaceRepairResolutionRecord = {
+  id: string;
+  propertyId: string;
+  homeownerProfileId: string;
+  inventoryItemId: string;
+  status: 'READY' | 'STALE' | 'ERROR';
+  verdict: 'REPLACE_NOW' | 'REPLACE_SOON' | 'REPAIR_AND_MONITOR' | 'REPAIR_ONLY';
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  impactLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  summary?: string | null;
+  computedAt: Date;
   inventoryItem?: {
     id: string;
     name: string;
@@ -61,6 +69,41 @@ function formatUsdFromCents(valueCents: number, currency = 'USD'): string {
     currency,
     maximumFractionDigits: 0,
   }).format(dollars);
+}
+
+function differenceInDays(left: Date, right: Date): number {
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  return Math.floor((left.getTime() - right.getTime()) / MS_PER_DAY);
+}
+
+function isPast(date: Date): boolean {
+  return date.getTime() < Date.now();
+}
+
+function formatDistanceToNowStrict(date: Date): string {
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  if (diffMinutes < 60) {
+    return `${Math.max(diffMinutes, 1)} minute${diffMinutes === 1 ? '' : 's'}`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? '' : 's'}`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) {
+    return `${diffDays} day${diffDays === 1 ? '' : 's'}`;
+  }
+
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) {
+    return `${diffMonths} month${diffMonths === 1 ? '' : 's'}`;
+  }
+
+  const diffYears = Math.floor(diffMonths / 12);
+  return `${diffYears} year${diffYears === 1 ? '' : 's'}`;
 }
 
 function replacementValueText(exposureCents: number, currency = 'USD'): string {
@@ -306,17 +349,17 @@ function mapReplaceRepairAnalysesToInsights(
     id: analysis.id,
     propertyId: analysis.propertyId,
     kind: 'repair_replace',
-    title: 'Repair vs Replace',
-    subject: analysis.inventoryItem?.name || 'Inventory Item',
-    summary: analysis.summary || 'Our AI has a recommendation for this item.',
-    href: `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`,
-    itemId: analysis.inventoryItemId,
-    trust: {
-      confidenceLabel: `${analysis.confidence} Confidence`,
-      freshnessLabel: `Calculated ${formatDistanceToNowStrict(new Date(analysis.computedAt))} ago`,
-      sourceLabel: 'Lifespan Engine',
-      rationale: `Verdict: ${analysis.verdict.replace(/_/g, ' ')}`,
-    },
+      title: 'Repair vs Replace',
+      subject: analysis.inventoryItem?.name || 'Inventory Item',
+      summary: analysis.summary || 'Our AI has a recommendation for this item.',
+      href: `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`,
+      itemId: analysis.inventoryItemId,
+      trust: {
+        confidenceLabel: `${analysis.confidence} Confidence`,
+        freshnessLabel: `Calculated ${formatDistanceToNowStrict(analysis.computedAt)} ago`,
+        sourceLabel: 'Lifespan Engine',
+        rationale: `Verdict: ${analysis.verdict.replace(/_/g, ' ')}`,
+      },
     metadata: {
       verdict: analysis.verdict,
       computedAt: analysis.computedAt,
@@ -380,7 +423,8 @@ function mapBookingsToExecutionItems(bookings: Array<{
   inventoryItemId?: string | null;
   insightFactor?: string | null;
   category?: string | null;
-  provider: { id: string; businessName: string };
+  provider: { id: string };
+  providerProfile?: { businessName: string | null } | null;
   service: { id: string; name: string };
   property: { id: string };
 }>): ExecutionItemDTO[] {
@@ -389,7 +433,7 @@ function mapBookingsToExecutionItems(bookings: Array<{
     propertyId: booking.property.id,
     kind: 'booking',
     title: booking.service.name || 'Service Job',
-    subtitle: booking.provider.businessName || null,
+    subtitle: booking.providerProfile?.businessName || null,
     statusLabel: booking.status,
     href: `/dashboard/bookings/${booking.id}`,
     scheduledLabel: booking.scheduledDate ? booking.scheduledDate.toLocaleDateString() : 'TBD',
@@ -636,6 +680,11 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       },
       include: {
         provider: true,
+        providerProfile: {
+          select: {
+            businessName: true,
+          },
+        },
         service: true,
         property: true,
       },
@@ -802,7 +851,19 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     propertyId,
   });
   const replaceRepairInsights = mapReplaceRepairAnalysesToInsights(
-    replaceRepairAnalyses as ReplaceRepairResolutionRecord[],
+    replaceRepairAnalyses.map((analysis) => ({
+      id: analysis.id,
+      propertyId: analysis.propertyId,
+      homeownerProfileId: analysis.homeownerProfileId,
+      inventoryItemId: analysis.inventoryItemId,
+      status: analysis.status,
+      verdict: analysis.verdict,
+      confidence: analysis.confidence,
+      impactLevel: analysis.impactLevel,
+      summary: analysis.summary,
+      computedAt: analysis.computedAt,
+      inventoryItem: analysis.inventoryItem,
+    })),
     propertyId,
   );
   const allDecisionInsights = [...coverageInsights, ...replaceRepairInsights];
