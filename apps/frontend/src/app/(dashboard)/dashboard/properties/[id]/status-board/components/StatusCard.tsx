@@ -1,15 +1,8 @@
-import { AlertTriangle, Pin, type ElementType } from "lucide-react";
+import { type ElementType } from "react";
+import { AlertTriangle, Pin, Wrench, Home, Cpu, Shield, Building, Box } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StatusBoardItemDTO, StatusBoardCondition, WarrantyBadge, PatchStatusPayload } from "../statusBoardApi";
 import { Badge } from "@/components/ui/badge";
-import {
-  Wrench,
-  Home,
-  Cpu,
-  Shield,
-  Building,
-  Box,
-} from "lucide-react";
 
 /**
  * Props for StatusCard component
