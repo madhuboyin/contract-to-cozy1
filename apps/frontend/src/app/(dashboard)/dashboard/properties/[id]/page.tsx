@@ -1034,7 +1034,12 @@ export default function PropertyDetailPage() {
                 ) : criticalInsightCount > 0 ? (
                   <Button
                     type="button"
-                    onClick={() => handleTabChange("maintenance")}
+                    onClick={() => {
+                      handleTabChange("maintenance");
+                      setTimeout(() => {
+                        document.getElementById("home-snapshot")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }, 50);
+                    }}
                     className="min-h-[44px] w-full sm:w-auto"
                   >
                     Review Maintenance Priorities
