@@ -165,6 +165,14 @@ export async function deleteInventoryItem(propertyId: string, itemId: string) {
   await api.delete(`/api/properties/${propertyId}/inventory/items/${itemId}`);
 }
 
+export async function waiveCoverage(propertyId: string, itemId: string, waived: boolean) {
+  const res = await api.patch<{ item: InventoryItem }>(
+    `/api/properties/${propertyId}/inventory/items/${itemId}`,
+    { coverageNotRequired: waived }
+  );
+  return res.data.item;
+}
+
 export async function getInventoryItem(propertyId: string, itemId: string) {
   const res = await api.get<{ item: InventoryItem }>(`/api/properties/${propertyId}/inventory/items/${itemId}`);
   return res.data.item;

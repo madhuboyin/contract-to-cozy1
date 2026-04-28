@@ -152,6 +152,8 @@ export function consolidateUrgentActions(
 
   if (inventoryItems) {
     inventoryItems.forEach((item) => {
+      if (item.coverageNotRequired) return;
+
       const hasWarranty = Boolean(item.warrantyId);
       const hasInsurance = Boolean(item.insurancePolicyId);
       const replacementValue = item.replacementCostCents ? item.replacementCostCents / 100 : 0;

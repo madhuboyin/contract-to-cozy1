@@ -116,6 +116,8 @@ export const updateItemBodySchema = z.object({
 
   notes: z.string().max(2000).nullable().optional(),
   tags: z.array(z.string().max(40)).optional(),
+
+  coverageNotRequired: z.boolean().optional(),
 });
 
 export const linkDocumentBodySchema = z.object({

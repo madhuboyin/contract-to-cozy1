@@ -562,6 +562,9 @@ model InventoryItem {
   replacementCostCents Int?
   currency             String @default("USD")
 
+  // Coverage waiver — user has opted this item out of coverage tracking
+  coverageNotRequired Boolean @default(false)
+
   // Notes + tags
   notes String?
   tags  String[] @default([])

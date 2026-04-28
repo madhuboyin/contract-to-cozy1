@@ -272,6 +272,11 @@ export default function InventoryItemDrawer(props: {
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // coverage waiver
+  const [coverageNotRequired, setCoverageNotRequired] = useState(false);
+  const [showWaiveCaution, setShowWaiveCaution] = useState(false);
+  const HIGH_VALUE_WAIVE_THRESHOLD = 500;
+
   // verification state
   const [verifying, setVerifying] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -371,6 +376,8 @@ useEffect(() => {
     
     setPurchaseCost(centsToDollars(item?.purchaseCostCents));
     setReplacementCost(centsToDollars(item?.replacementCostCents));
+    setCoverageNotRequired((item as any)?.coverageNotRequired ?? false);
+    setShowWaiveCaution(false);
 
     setLinkedDocs((item as any)?.documents ?? []);
     setUploadError(null);
@@ -848,6 +855,7 @@ useEffect(() => {
         tags: [],
         warrantyId: warrantyId || null,
         insurancePolicyId: insurancePolicyId || null,
+        coverageNotRequired,
       };
   
       if (isEdit && props.initialItem) {
@@ -1443,6 +1451,27 @@ useEffect(() => {
                   />
                 </div>
               </div>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3 hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={coverageNotRequired}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    const valueUsd = Number(replacementCost) || 0;
+                    if (checked && valueUsd >= HIGH_VALUE_WAIVE_THRESHOLD) {
+                      setShowWaiveCaution(true);
+                    } else {
+                      setCoverageNotRequired(checked);
+                    }
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded accent-black"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">This item doesn't need coverage</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Removes it from the coverage gaps list without treating it as uncovered.</p>
+                </div>
+              </label>
             </section>
 
             <section className="space-y-4 rounded-xl border border-gray-200 p-4">
@@ -1652,6 +1681,38 @@ useEffect(() => {
           </div>
         </div>
       </div>
+
+      {showWaiveCaution && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-base font-semibold text-gray-900">High-value item — are you sure?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              This item is valued at{' '}
+              <span className="font-medium">
+                ${Number(replacementCost || 0).toLocaleString(undefined, { minimumFractionDigits: 0 })}
+              </span>
+              . Are you sure it doesn't need coverage?
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setShowWaiveCaution(false)}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Go back
+              </button>
+              <button
+                onClick={() => {
+                  setCoverageNotRequired(true);
+                  setShowWaiveCaution(false);
+                }}
+                className="flex-1 rounded-xl bg-black py-2.5 text-sm font-medium text-white hover:bg-black/90"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LabelOcrModal open={labelOpen} onClose={closeLabelScanner} onCaptured={stableRunLabelOcr} />
 

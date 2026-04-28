@@ -135,6 +135,8 @@ export type InventoryItem = {
   tags: string[];
   sourceHash: string | null;
 
+  coverageNotRequired: boolean;
+
   createdAt: string;
   updatedAt: string;
 

@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, MoreHorizontal, RotateCcw, ShieldOff } from 'lucide-react';
 
 import { api } from '@/lib/api/client';
 import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
@@ -12,7 +12,7 @@ import { formatEnumLabel } from '@/lib/utils/formatters';
 import InsuranceQuoteModal from '@/app/(dashboard)/dashboard/components/coverage/InsuranceQuoteModal';
 import WhatsCoveredModal from '@/app/(dashboard)/dashboard/components/coverage/WhatsCoveredModal';
 import InventoryItemDrawer from '@/app/(dashboard)/dashboard/components/inventory/InventoryItemDrawer';
-import { getInventoryItem, listInventoryRooms } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
+import { getInventoryItem, listInventoryRooms, waiveCoverage } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import {
   ActionPriorityRow,
@@ -57,6 +57,16 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
   const [editingItem, setEditingItem] = React.useState<InventoryItem | null>(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [openingItemId, setOpeningItemId] = React.useState<string | null>(null);
+  const [waivedExpanded, setWaivedExpanded] = React.useState(false);
+  const [waivedLoading, setWaivedLoading] = React.useState<string | null>(null);
+  const [overflowOpen, setOverflowOpen] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!overflowOpen) return;
+    function close() { setOverflowOpen(null); }
+    document.addEventListener('click', close, { capture: true });
+    return () => document.removeEventListener('click', close, { capture: true });
+  }, [overflowOpen]);
 
   async function refreshCoverageOnly() {
     const response = await api.get(`/api/properties/${propertyId}/inventory/coverage-gaps`);
@@ -100,6 +110,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
   }, [propertyId]);
 
   const gaps = data?.gaps || [];
+  const waived: any[] = data?.waived || [];
   const counts = data?.counts || {};
 
   async function handleViewItem(itemId: string) {
@@ -117,6 +128,24 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
       });
     } finally {
       setOpeningItemId(null);
+    }
+  }
+
+  async function handleWaive(itemId: string, waive: boolean) {
+    setWaivedLoading(itemId);
+    setOverflowOpen(null);
+    try {
+      await waiveCoverage(propertyId, itemId, waive);
+      await refreshCoverageOnly();
+    } catch (e) {
+      console.error('[CoverageClient] waive failed', e);
+      toast({
+        title: waive ? 'Unable to waive coverage' : 'Unable to restore',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setWaivedLoading(null);
     }
   }
 
@@ -269,24 +298,52 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
         </ScenarioInputCard>
       ) : err ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>
-      ) : gaps.length === 0 ? (
-        <EmptyStateCard
-          title="No high-value coverage gaps"
-          description="All tracked high-value items currently have coverage or no gaps were detected."
-        />
       ) : (
+        <>
+          {gaps.length === 0 ? (
+            <EmptyStateCard
+              title="No high-value coverage gaps"
+              description="All tracked high-value items currently have coverage or no gaps were detected."
+            />
+          ) : (
         <ScenarioInputCard title="Priority Items" subtitle="Resolve uncovered or partially covered inventory first.">
           <div className="space-y-3">
             {gaps.map((gap: any) => {
               const gapTypeLabel = formatEnumLabel(gap.gapType) || 'Coverage Gap';
+              const isWaiving = waivedLoading === gap.inventoryItemId;
               return (
               <div key={gap.inventoryItemId} className="space-y-2.5 rounded-xl border border-black/10 p-2.5">
-                <CompactEntityRow
-                  title={gap.itemName}
-                  subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
-                  meta={gap.roomName ? `${gap.roomName} • ${gapTypeLabel}` : gapTypeLabel}
-                  status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gapTypeLabel}</StatusChip>}
-                />
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <CompactEntityRow
+                      title={gap.itemName}
+                      subtitle={gap.reasons?.join('. ') || 'Coverage gap detected'}
+                      meta={gap.roomName ? `${gap.roomName} • ${gapTypeLabel}` : gapTypeLabel}
+                      status={<StatusChip tone={gap.gapType === 'NO_COVERAGE' ? 'danger' : 'elevated'}>{gapTypeLabel}</StatusChip>}
+                    />
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <button
+                      onClick={() => setOverflowOpen(overflowOpen === gap.inventoryItemId ? null : gap.inventoryItemId)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 text-black/50 hover:bg-black/5"
+                      aria-label="More options"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                    {overflowOpen === gap.inventoryItemId && (
+                      <div className="absolute right-0 top-10 z-20 min-w-[200px] rounded-xl border border-black/10 bg-white p-1 shadow-lg">
+                        <button
+                          onClick={() => handleWaive(gap.inventoryItemId, true)}
+                          disabled={isWaiving}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-black/70 hover:bg-black/5 disabled:opacity-50"
+                        >
+                          <ShieldOff className="h-4 w-4" />
+                          Mark as not needed
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <ActionPriorityRow
                   primaryAction={
                     <Link
@@ -337,6 +394,54 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
             })}
           </div>
         </ScenarioInputCard>
+          )}
+
+          {waived.length > 0 && (
+          <div className="rounded-2xl border border-black/10 bg-white">
+            <button
+              onClick={() => setWaivedExpanded((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <span className="text-sm font-medium text-black/60">
+                Coverage not required ({waived.length} {waived.length === 1 ? 'item' : 'items'})
+              </span>
+              {waivedExpanded ? (
+                <ChevronDown className="h-4 w-4 text-black/40" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-black/40" />
+              )}
+            </button>
+            {waivedExpanded && (
+              <div className="border-t border-black/5 divide-y divide-black/5">
+                {waived.map((item: any) => {
+                  const isRestoring = waivedLoading === item.inventoryItemId;
+                  const valueStr = item.exposureCents
+                    ? `$${Math.round(item.exposureCents / 100).toLocaleString()}`
+                    : null;
+                  return (
+                    <div key={item.inventoryItemId} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-black/70">{item.itemName}</p>
+                        <p className="text-xs text-black/40">
+                          {[item.roomName, valueStr].filter(Boolean).join(' • ')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleWaive(item.inventoryItemId, false)}
+                        disabled={isRestoring}
+                        className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-black/10 px-3 py-1.5 text-xs text-black/60 hover:bg-black/5 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        {isRestoring ? 'Restoring...' : 'Restore'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          )}
+        </>
       )}
 
       <InsuranceQuoteModal

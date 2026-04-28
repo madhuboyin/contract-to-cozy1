@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 
 const HIGH_VALUE_THRESHOLD_CENTS = 150000;      // $1,500
-const APPLIANCE_THRESHOLD_CENTS = 75000;        // $750  ✅ tune as needed
+const APPLIANCE_THRESHOLD_CENTS = 75000;        // $750
 
 export type CoverageGapResult = {
   inventoryItemId: string;
@@ -23,6 +23,16 @@ export type CoverageGapResult = {
   reasons: string[];
 };
 
+export type WaivedCoverageResult = {
+  inventoryItemId: string;
+  propertyId: string;
+  itemName: string;
+  itemCategory?: string | null;
+  roomName?: string | null;
+  exposureCents: number;
+  currency: string;
+};
+
 function isActive(expiryDate: Date | null | undefined, today: Date) {
   if (!expiryDate) return false;
   const d = new Date(expiryDate);
@@ -30,12 +40,22 @@ function isActive(expiryDate: Date | null | undefined, today: Date) {
   return d > today;
 }
 
-export async function detectCoverageGaps(propertyId: string): Promise<CoverageGapResult[]> {
+export type CoverageGapDetectResult = {
+  gaps: CoverageGapResult[];
+  waived: WaivedCoverageResult[];
+};
+
+export async function detectCoverageGaps(propertyId: string): Promise<CoverageGapResult[]>;
+export async function detectCoverageGaps(
+  propertyId: string,
+  opts: { includeWaived: true }
+): Promise<CoverageGapDetectResult>;
+export async function detectCoverageGaps(
+  propertyId: string,
+  opts?: { includeWaived?: boolean }
+): Promise<CoverageGapResult[] | CoverageGapDetectResult> {
   const today = new Date();
 
-  // ✅ Fetch:
-  // - any item >= HIGH_VALUE threshold
-  // - OR appliances >= APPLIANCE threshold
   const items = await prisma.inventoryItem.findMany({
     where: {
       propertyId,
@@ -52,9 +72,23 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
     },
   });
 
+  const waived: WaivedCoverageResult[] = [];
   const results: CoverageGapResult[] = [];
 
   for (const item of items) {
+    if (item.coverageNotRequired) {
+      waived.push({
+        inventoryItemId: item.id,
+        propertyId,
+        itemName: item.name,
+        itemCategory: item.category ? String(item.category) : null,
+        roomName: item.room?.name ?? null,
+        exposureCents: item.replacementCostCents ?? 0,
+        currency: item.currency || 'USD',
+      });
+      continue;
+    }
+
     const itemCategory = item.category ? String(item.category) : null;
     const hasWarranty = !!item.warranty;
     const hasInsurance = !!item.insurancePolicy;
@@ -134,5 +168,8 @@ export async function detectCoverageGaps(propertyId: string): Promise<CoverageGa
     }
   }
 
+  if (opts?.includeWaived) {
+    return { gaps: results, waived };
+  }
   return results;
 }

@@ -392,7 +392,7 @@ router.get(
   async (req: CustomRequest, res: Response) => {
     try {
       const { propertyId } = req.params;
-      const gaps = await detectCoverageGaps(propertyId);
+      const { gaps, waived } = await detectCoverageGaps(propertyId, { includeWaived: true });
 
       const counts = gaps.reduce(
         (acc, g) => {
@@ -403,7 +403,7 @@ router.get(
         { total: 0 } as Record<string, number>
       );
 
-      return res.json({ success: true, data: { counts, gaps } });
+      return res.json({ success: true, data: { counts, gaps, waived } });
     } catch (err: any) {
       logger.error({ err }, '[INVENTORY] coverage-gaps failed');
       return res.status(500).json({ success: false, message: err.message || 'Failed to compute coverage gaps' });
