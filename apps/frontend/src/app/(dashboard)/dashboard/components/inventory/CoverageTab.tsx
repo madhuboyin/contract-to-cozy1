@@ -14,8 +14,8 @@ type CoverageTabProps = {
   onOpenActions: (count: number) => void;
 };
 
-function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' {
-  if (item.coverageNotRequired) return 'covered';
+function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' | 'waived' {
+  if (item.coverageNotRequired) return 'waived';
 
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
@@ -39,7 +39,7 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
     for (const item of valuedItems) {
       const value = Number(centsToDollars(item.replacementCostCents) || 0);
       const status = getCoverageStatus(item);
-      if (status === 'covered') fullyCoveredValue += value;
+      if (status === 'covered' || status === 'waived') fullyCoveredValue += value;
       else if (status === 'partial') partiallyCoveredValue += value;
       else uncoveredValue += value;
     }
@@ -63,7 +63,7 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
       const coveredValue = roomItems.reduce((sum, item) => {
         const value = Number(centsToDollars(item.replacementCostCents) || 0);
         const status = getCoverageStatus(item);
-        if (status === 'covered') return sum + value;
+        if (status === 'covered' || status === 'waived') return sum + value;
         if (status === 'partial') return sum + value * 0.65;
         return sum;
       }, 0);
@@ -77,7 +77,7 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
   }, [rooms, valuedItems]);
 
   const gapItems = useMemo(
-    () => items.filter((item) => getCoverageStatus(item) !== 'covered'),
+    () => items.filter((item) => getCoverageStatus(item) !== 'covered' && getCoverageStatus(item) !== 'waived'),
     [items],
   );
 

@@ -44,8 +44,8 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import TrustStrip from '../components/route-templates/TrustStrip';
 
-function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' {
-  if (item.coverageNotRequired) return 'covered';
+function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' | 'waived' {
+  if (item.coverageNotRequired) return 'waived';
 
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
@@ -57,7 +57,7 @@ function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'cove
 
 function getCoveragePercent(item: InventoryItem): number {
   const status = getCoverageStatus(item);
-  if (status === 'covered') return 100;
+  if (status === 'covered' || status === 'waived') return 100;
   if (status === 'partial') return 65;
   return 0;
 }
@@ -216,7 +216,7 @@ export default function InventoryClient() {
       return sum + (value * getCoveragePercent(item)) / 100;
     }, 0);
 
-    const gapCount = items.filter((item) => getCoverageStatus(item) !== 'covered').length;
+    const gapCount = items.filter((item) => getCoverageStatus(item) !== 'covered' && getCoverageStatus(item) !== 'waived').length;
     const missingValueCount = items.filter((item) => !hasReplacementValue(item)).length;
     const docCount = items.filter((item) => (item.documents?.length ?? 0) > 0).length;
 
@@ -233,7 +233,7 @@ export default function InventoryClient() {
 
   const exposedValue = useMemo(() => {
     return items
-      .filter((item) => getCoverageStatus(item) !== 'covered')
+      .filter((item) => getCoverageStatus(item) !== 'covered' && getCoverageStatus(item) !== 'waived')
       .reduce((sum, item) => sum + Number(item.replacementCostCents || 0) / 100, 0);
   }, [items]);
 
@@ -251,7 +251,7 @@ export default function InventoryClient() {
       if (recallFilter === 'with-recalls' && !hasRecall) return false;
       if (recallFilter === 'no-recalls' && hasRecall) return false;
 
-      if (activeSmartFilter === 'gaps' && getCoverageStatus(item) === 'covered') return false;
+      if (activeSmartFilter === 'gaps' && (getCoverageStatus(item) === 'covered' || getCoverageStatus(item) === 'waived')) return false;
       if (activeSmartFilter === 'no-value' && hasReplacementValue(item)) return false;
       if (activeSmartFilter === 'recalls' && !hasRecall) return false;
 
@@ -343,7 +343,7 @@ export default function InventoryClient() {
   const hasItems = items.length > 0;
   const hasFilteredItems = filteredItems.length > 0;
   const filteredGapCount = useMemo(
-    () => filteredItems.filter((item) => getCoverageStatus(item) !== 'covered').length,
+    () => filteredItems.filter((item) => getCoverageStatus(item) !== 'covered' && getCoverageStatus(item) !== 'waived').length,
     [filteredItems],
   );
 

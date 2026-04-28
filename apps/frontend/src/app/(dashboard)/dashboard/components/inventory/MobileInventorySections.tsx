@@ -40,10 +40,10 @@ import {
 import type { SmartFilterId } from './InventoryFilterBar';
 import type { InventoryPortfolioFilter, PortfolioStats } from './PortfolioIntelligenceStrip';
 
-type CoverageStatus = 'gap' | 'partial' | 'covered';
+type CoverageStatus = 'gap' | 'partial' | 'covered' | 'waived';
 
 function getCoverageStatus(item: InventoryItem): CoverageStatus {
-  if (item.coverageNotRequired) return 'covered';
+  if (item.coverageNotRequired) return 'waived';
 
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
@@ -55,7 +55,7 @@ function getCoverageStatus(item: InventoryItem): CoverageStatus {
 
 function getCoveragePercent(item: InventoryItem): number {
   const status = getCoverageStatus(item);
-  if (status === 'covered') return 100;
+  if (status === 'covered' || status === 'waived') return 100;
   if (status === 'partial') return 65;
   return 0;
 }
@@ -609,7 +609,9 @@ export function MobileInventoryItemCard({
           ? 'border-rose-200 bg-rose-50/30'
           : coverageStatus === 'partial'
             ? 'border-amber-200 bg-amber-50/30'
-            : 'border-[hsl(var(--mobile-border-subtle))] bg-white',
+            : coverageStatus === 'waived'
+              ? 'border-slate-200 bg-slate-50/50'
+              : 'border-[hsl(var(--mobile-border-subtle))] bg-white',
       ].join(' ')}
       onClick={() => onClick?.(item)}
       role="button"
@@ -641,12 +643,20 @@ export function MobileInventoryItemCard({
             tone={
               coverageStatus === 'covered'
                 ? 'good'
-                : coverageStatus === 'partial'
-                  ? 'elevated'
-                  : 'needsAction'
+                : coverageStatus === 'waived'
+                  ? 'info'
+                  : coverageStatus === 'partial'
+                    ? 'elevated'
+                    : 'needsAction'
             }
           >
-            {coverageStatus === 'covered' ? 'Covered' : coverageStatus === 'partial' ? 'Partial' : 'Coverage Gap'}
+            {coverageStatus === 'covered'
+              ? 'Covered'
+              : coverageStatus === 'waived'
+                ? 'Not required'
+                : coverageStatus === 'partial'
+                  ? 'Partial'
+                  : 'Coverage Gap'}
           </StatusChip>
         </div>
 
@@ -690,9 +700,11 @@ export function MobileInventoryItemCard({
                 'h-full rounded-full transition-all duration-700',
                 coverageStatus === 'covered'
                   ? 'bg-emerald-500'
-                  : coverageStatus === 'partial'
-                    ? 'bg-amber-400'
-                    : 'bg-rose-500',
+                  : coverageStatus === 'waived'
+                    ? 'bg-slate-300'
+                    : coverageStatus === 'partial'
+                      ? 'bg-amber-400'
+                      : 'bg-rose-500',
               ].join(' ')}
               style={{ width: `${coveragePercent}%` }}
             />

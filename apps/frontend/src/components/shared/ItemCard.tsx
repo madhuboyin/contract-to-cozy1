@@ -24,10 +24,10 @@ type ItemCardProps = {
   onAttachDocument?: (itemId: string) => void;
 };
 
-type CoverageStatus = 'gap' | 'partial' | 'covered';
+type CoverageStatus = 'gap' | 'partial' | 'covered' | 'waived';
 
 function getCoverageStatus(item: InventoryItem): CoverageStatus {
-  if (item.coverageNotRequired) return 'covered';
+  if (item.coverageNotRequired) return 'waived';
 
   const hasWarranty = Boolean(item.warrantyId);
   const hasInsurance = Boolean(item.insurancePolicyId);
@@ -39,7 +39,7 @@ function getCoverageStatus(item: InventoryItem): CoverageStatus {
 
 function getCoveragePercent(item: InventoryItem): number {
   const status = getCoverageStatus(item);
-  if (status === 'covered') return 100;
+  if (status === 'covered' || status === 'waived') return 100;
   if (status === 'partial') return 65;
   return 0;
 }
@@ -113,6 +113,7 @@ export default function ItemCard({
     gap: 'border-l-4 border-l-red-400',
     partial: 'border-l-4 border-l-amber-400',
     covered: 'border-l-4 border-l-emerald-400',
+    waived: 'border-l-4 border-l-slate-300',
   }[coverageStatus];
 
   function handleOpenCoverage(event: React.MouseEvent<HTMLButtonElement>) {
@@ -186,6 +187,10 @@ export default function ItemCard({
             <span className="whitespace-nowrap rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
               Partial coverage
             </span>
+          ) : coverageStatus === 'waived' ? (
+            <span className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+              Not required
+            </span>
           ) : (
             <span className="flex flex-shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
               <CheckCircle className="h-2.5 w-2.5" />
@@ -236,11 +241,13 @@ export default function ItemCard({
             {hasReplacementValue ? (
               <span
                 className={`font-semibold ${
-                  coveragePercent === 100
-                    ? 'text-emerald-600'
-                    : coveragePercent >= 50
-                      ? 'text-amber-500'
-                      : 'text-red-500'
+                  coverageStatus === 'waived'
+                    ? 'text-slate-400'
+                    : coveragePercent === 100
+                      ? 'text-emerald-600'
+                      : coveragePercent >= 50
+                        ? 'text-amber-500'
+                        : 'text-red-500'
                 }`}
               >
                 {coveragePercent}%
@@ -254,11 +261,13 @@ export default function ItemCard({
             {hasReplacementValue ? (
               <div
                 className={`h-full rounded-full transition-all duration-700 ${
-                  coveragePercent === 100
-                    ? 'bg-emerald-500'
-                    : coveragePercent >= 50
-                      ? 'bg-amber-400'
-                      : 'bg-red-400'
+                  coverageStatus === 'waived'
+                    ? 'bg-slate-300'
+                    : coveragePercent === 100
+                      ? 'bg-emerald-500'
+                      : coveragePercent >= 50
+                        ? 'bg-amber-400'
+                        : 'bg-red-400'
                 }`}
                 style={{ width: `${coveragePercent}%` }}
               />
@@ -286,7 +295,7 @@ export default function ItemCard({
         </div>
 
         <div className={`flex items-center gap-2 pt-1 ${isCompact ? '' : 'mt-1'}`}>
-          {coverageStatus !== 'covered' ? (
+          {coverageStatus !== 'covered' && coverageStatus !== 'waived' ? (
             <>
               <button
                 type="button"

@@ -150,6 +150,8 @@ async function detectResolutionCoverageGaps(propertyId: string): Promise<Coverag
   const results: CoverageGapResult[] = [];
 
   for (const item of items) {
+    if (item.coverageNotRequired) continue;
+
     const hasWarranty = Boolean(item.warranty);
     const hasInsurance = Boolean(item.insurancePolicy);
     const warrantyActive = hasWarranty && isCoverageActive(item.warranty?.expiryDate, today);
