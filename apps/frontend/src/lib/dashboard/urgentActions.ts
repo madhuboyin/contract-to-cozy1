@@ -1,5 +1,5 @@
 import { differenceInDays, isPast, parseISO } from 'date-fns';
-import { HomeBuyerChecklist, InsurancePolicy, ScoredProperty, Warranty } from '@/types';
+import { HomeBuyerChecklist, InsurancePolicy, InventoryItem, ScoredProperty, Warranty } from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
 
 export interface UrgentActionItem {
@@ -10,7 +10,9 @@ export interface UrgentActionItem {
     | 'RENEWAL_EXPIRED'
     | 'RENEWAL_UPCOMING'
     | 'HEALTH_INSIGHT'
-    | 'INCIDENT';
+    | 'INCIDENT'
+    | 'COVERAGE_GAP'
+    | 'COVERAGE_PARTIAL';
   title: string;
   description: string;
   dueDate?: Date;
@@ -18,6 +20,7 @@ export interface UrgentActionItem {
   propertyId: string;
   severity?: 'INFO' | 'WARNING' | 'CRITICAL';
   entityType?: 'Warranty' | 'Insurance'; // Added to track renewal type
+  itemId?: string;
 }
 
 type ChecklistEntry = {
@@ -56,6 +59,7 @@ export function consolidateUrgentActions(
   warranties: Warranty[],
   insurancePolicies: InsurancePolicy[],
   incidents: IncidentDTO[],
+  inventoryItems?: InventoryItem[],
 ): UrgentActionItem[] {
   const actions: UrgentActionItem[] = [];
   const today = new Date();
@@ -158,9 +162,46 @@ export function consolidateUrgentActions(
     }
   });
 
+  if (inventoryItems) {
+    inventoryItems.forEach((item) => {
+      const hasWarranty = Boolean(item.warrantyId);
+      const hasInsurance = Boolean(item.insurancePolicyId);
+      const replacementValue = item.replacementCostCents ? item.replacementCostCents / 100 : 0;
+
+      if (replacementValue < 100) return;
+
+      if (!hasWarranty && !hasInsurance) {
+        actions.push({
+          id: `COVERAGE-GAP-${item.id}`,
+          type: 'COVERAGE_GAP',
+          title: `${item.name} needs coverage`,
+          description: `No warranty or insurance coverage. Replacement value: $${replacementValue.toFixed(0)}.`,
+          propertyId: item.propertyId || 'N/A',
+          severity: 'WARNING',
+          itemId: item.id,
+        });
+        return;
+      }
+
+      if (!hasWarranty || !hasInsurance) {
+        actions.push({
+          id: `COVERAGE-PARTIAL-${item.id}`,
+          type: 'COVERAGE_PARTIAL',
+          title: `${item.name} has partial coverage`,
+          description: `Missing ${!hasWarranty ? 'warranty' : 'insurance'} coverage. Replacement value: $${replacementValue.toFixed(0)}.`,
+          propertyId: item.propertyId || 'N/A',
+          severity: 'INFO',
+          itemId: item.id,
+        });
+      }
+    });
+  }
+
   return actions.sort((a, b) => {
     if (a.type === 'INCIDENT' && b.type !== 'INCIDENT') return -1;
     if (b.type === 'INCIDENT' && a.type !== 'INCIDENT') return 1;
+    if (a.type === 'COVERAGE_GAP' && b.type !== 'COVERAGE_GAP' && b.type !== 'INCIDENT') return -1;
+    if (b.type === 'COVERAGE_GAP' && a.type !== 'COVERAGE_GAP' && a.type !== 'INCIDENT') return 1;
     if (a.daysUntilDue === undefined) return 1;
     if (b.daysUntilDue === undefined) return -1;
     return a.daysUntilDue - b.daysUntilDue;
@@ -192,6 +233,12 @@ export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: s
     }
     // Insurance policies go to insurance/protect page
     return `/dashboard/insurance${propertyQuery}`;
+  }
+  if (action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL') {
+    if (actionPropertyId && action.itemId) {
+      return `/dashboard/properties/${actionPropertyId}/inventory?tab=coverage&highlight=${action.itemId}`;
+    }
+    return '/dashboard/vault?tab=coverage';
   }
   if (actionPropertyId) {
     return `/dashboard/properties/${actionPropertyId}`;

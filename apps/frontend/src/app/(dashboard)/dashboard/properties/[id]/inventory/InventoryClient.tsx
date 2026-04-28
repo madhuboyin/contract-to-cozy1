@@ -399,7 +399,7 @@ export default function InventoryClient() {
               exposedValue={exposedValue}
               totalValue={portfolioStats.totalValue}
               onReviewGaps={() => setActiveSmartFilter('gaps')}
-              onViewActions={() => router.push(`/dashboard/resolution-center?propertyId=${propertyId}&filter=coverage`)}
+              onViewActions={() => router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage`)}
             />
           </MobileSection>
 
@@ -472,7 +472,9 @@ export default function InventoryClient() {
                     `/dashboard/properties/${propertyId}/inventory/items/${item.id}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
                   )
                 }
-                onOpenActions={() => router.push(`/dashboard/resolution-center?propertyId=${propertyId}&filter=coverage`)}
+                onOpenActions={(count) =>
+                  router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage&expectedCount=${count}`)
+                }
               />
             ) : !hasFilteredItems ? (
               <EmptyStateCard
@@ -548,7 +550,7 @@ export default function InventoryClient() {
             exposedValue={exposedValue}
             totalValue={portfolioStats.totalValue}
             onReviewGaps={() => setActiveSmartFilter('gaps')}
-            onViewActions={() => router.push(`/dashboard/resolution-center?propertyId=${propertyId}&filter=coverage`)}
+            onViewActions={() => router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage`)}
           />
 
           <PortfolioIntelligenceStrip
@@ -626,7 +628,9 @@ export default function InventoryClient() {
                   `/dashboard/properties/${propertyId}/inventory/items/${item.id}/coverage?returnTo=${encodeURIComponent(currentPathWithQuery)}`
                 )
               }
-              onOpenActions={() => router.push(`/dashboard/resolution-center?propertyId=${propertyId}&filter=coverage`)}
+              onOpenActions={(count) =>
+                router.push(`/dashboard/properties/${propertyId}/fix?filter=coverage&expectedCount=${count}`)
+              }
             />
           ) : !hasFilteredItems ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">

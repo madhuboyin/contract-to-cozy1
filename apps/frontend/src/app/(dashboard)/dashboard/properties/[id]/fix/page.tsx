@@ -26,6 +26,7 @@ import { BottomSafeAreaReserve } from '@/components/mobile/dashboard/MobilePrimi
 import { WinCard } from '@/components/shared/WinCard';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
+import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Booking, ScoredProperty } from '@/types';
 import { formatDistanceToNowStrict } from 'date-fns';
@@ -50,6 +51,10 @@ function getActionIcon(action: UrgentActionItem) {
       return <Shield className="h-5 w-5 text-rose-600" />;
     case 'RENEWAL_UPCOMING':
       return <Shield className="h-5 w-5 text-amber-600" />;
+    case 'COVERAGE_GAP':
+      return <Shield className="h-5 w-5 text-orange-600" />;
+    case 'COVERAGE_PARTIAL':
+      return <Shield className="h-5 w-5 text-blue-600" />;
     default:
       return <Wrench className="h-5 w-5 text-slate-500" />;
   }
@@ -67,6 +72,10 @@ function getActionIconBg(action: UrgentActionItem): string {
       return 'bg-rose-50 border border-rose-100';
     case 'RENEWAL_UPCOMING':
       return 'bg-amber-50 border border-amber-100';
+    case 'COVERAGE_GAP':
+      return 'bg-orange-50 border border-orange-100';
+    case 'COVERAGE_PARTIAL':
+      return 'bg-blue-50 border border-blue-100';
     default:
       return 'bg-slate-50 border border-slate-100';
   }
@@ -84,6 +93,10 @@ function getActionStatus(action: UrgentActionItem): { label: string; tone: 'dang
       return { label: 'Expired', tone: 'danger' };
     case 'RENEWAL_UPCOMING':
       return { label: 'Expiring Soon', tone: 'warning' };
+    case 'COVERAGE_GAP':
+      return { label: 'No Coverage', tone: 'warning' };
+    case 'COVERAGE_PARTIAL':
+      return { label: 'Partial Coverage', tone: 'neutral' };
     default:
       return { label: 'Action Required', tone: 'neutral' };
   }
@@ -98,6 +111,10 @@ function getImpactLevel(action: UrgentActionItem): { label: string; dotColor: st
     case 'HEALTH_INSIGHT':
     case 'RENEWAL_UPCOMING':
       return { label: 'Medium', dotColor: 'bg-amber-400' };
+    case 'COVERAGE_GAP':
+      return { label: 'High', dotColor: 'bg-orange-500' };
+    case 'COVERAGE_PARTIAL':
+      return { label: 'Medium', dotColor: 'bg-blue-400' };
     default:
       return { label: 'Low', dotColor: 'bg-emerald-400' };
   }
@@ -110,6 +127,8 @@ function getActionCta(action: UrgentActionItem): string {
     case 'MAINTENANCE_OVERDUE': return 'Schedule Now';
     case 'RENEWAL_EXPIRED': return 'Renew Now';
     case 'RENEWAL_UPCOMING': return 'Compare Plans';
+    case 'COVERAGE_GAP': return 'Add Coverage';
+    case 'COVERAGE_PARTIAL': return 'Complete Coverage';
     default:              return 'Take Action';
   }
 }
@@ -147,6 +166,7 @@ export default function ResolutionHubPage() {
         warrantiesRes,
         policiesRes,
         incidentsRes,
+        inventoryRes,
       ] = await Promise.all([
         api.listBookings({ propertyId: propertyId || undefined }),
         propertyId
@@ -159,6 +179,10 @@ export default function ResolutionHubPage() {
         propertyId
           ? listIncidents({ propertyId, limit: 10 }).catch(() => ({ items: [] }))
           : Promise.resolve({ items: [] }),
+        propertyId
+          ? listInventoryItems(propertyId, {}).then((items) => ({ success: true as const, data: { items } }))
+            .catch(() => ({ success: false as const, data: { items: [] } }))
+          : Promise.resolve({ success: true as const, data: { items: [] } }),
       ]);
 
       let bookingsFailed = false;
@@ -193,6 +217,7 @@ export default function ResolutionHubPage() {
       const warranties = warrantiesRes.success ? warrantiesRes.data.warranties : [];
       const policies = policiesRes.success ? policiesRes.data.policies : [];
       const activeIncidents = (incidentsRes as { items?: any[] }).items ?? [];
+      const inventoryItems = inventoryRes.success ? inventoryRes.data.items : [];
 
       setPriorityActions(
         consolidateUrgentActions(
@@ -201,6 +226,7 @@ export default function ResolutionHubPage() {
           warranties,
           policies,
           activeIncidents,
+          inventoryItems,
         ),
       );
 
@@ -241,7 +267,11 @@ export default function ResolutionHubPage() {
     }
     if (filter === 'coverage') {
       return priorityActions.filter(
-        (a) => a.type === 'RENEWAL_EXPIRED' || a.type === 'RENEWAL_UPCOMING',
+        (a) =>
+          a.type === 'RENEWAL_EXPIRED' ||
+          a.type === 'RENEWAL_UPCOMING' ||
+          a.type === 'COVERAGE_GAP' ||
+          a.type === 'COVERAGE_PARTIAL',
       );
     }
     return priorityActions;

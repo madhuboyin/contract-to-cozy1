@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, HelpCircle } from 'lucide-react';
 import type { InventoryItem, InventoryRoom } from '@/types';
 import { getInventoryItemIcon, resolveIcon } from '@/lib/icons';
@@ -10,7 +11,7 @@ type CoverageTabProps = {
   items: InventoryItem[];
   rooms: InventoryRoom[];
   onOpenCoverage: (item: InventoryItem) => void;
-  onOpenActions: () => void;
+  onOpenActions: (count: number) => void;
 };
 
 function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'covered' {
@@ -22,6 +23,7 @@ function getCoverageStatus(item: InventoryItem): 'uncovered' | 'partial' | 'cove
 }
 
 export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenActions }: CoverageTabProps) {
+  const searchParams = useSearchParams();
   const valuedItems = useMemo(
     () => items.filter((item) => Number(centsToDollars(item.replacementCostCents) || 0) > 0),
     [items],
@@ -76,6 +78,20 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
     () => items.filter((item) => getCoverageStatus(item) !== 'covered'),
     [items],
   );
+
+  useEffect(() => {
+    const highlightId = searchParams.get('highlight');
+    if (!highlightId) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const element = document.querySelector(`[data-item-id="${highlightId}"]`);
+      if (element instanceof HTMLElement) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchParams]);
 
   const donutStyle = useMemo(() => {
     const total = Math.max(1, breakdown.total);
@@ -163,7 +179,11 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
               <h3 className="text-sm font-semibold text-red-700">Items needing coverage ({gapItems.length})</h3>
             </div>
 
-            <button type="button" onClick={onOpenActions} className="text-xs text-teal-600 transition-colors hover:underline">
+            <button
+              type="button"
+              onClick={() => onOpenActions(gapItems.length)}
+              className="text-xs text-teal-600 transition-colors hover:underline"
+            >
               {'View in Actions ->'}
             </button>
           </div>
@@ -184,9 +204,16 @@ export default function CoverageTab({ items, rooms, onOpenCoverage, onOpenAction
                 HelpCircle,
               );
               const replacementValue = centsToDollars(item.replacementCostCents);
+              const isHighlighted = searchParams.get('highlight') === item.id;
 
               return (
-                <div key={item.id} className="flex flex-col gap-2 border-b border-gray-100 py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                  key={item.id}
+                  data-item-id={item.id}
+                  className={`flex flex-col gap-2 border-b border-gray-100 py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between ${
+                    isHighlighted ? 'rounded-lg border-yellow-200 bg-yellow-50 px-3 -mx-3' : ''
+                  }`}
+                >
                   <div className="flex items-center gap-2">
                     <Icon className="h-3.5 w-3.5 text-gray-400" />
                     <span className="text-sm text-gray-700">{item.name}</span>
