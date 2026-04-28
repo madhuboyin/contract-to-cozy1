@@ -203,8 +203,6 @@ export default function ResolutionHubPage() {
   const filterParam = searchParams.get('filter');
   const focusSection = searchParams.get('focus');
   const expectedCount = searchParams.get('expectedCount');
-
-  const priorityActionCount = priorityActions.slice(0, 3).length;
   const activeIncidentsCount = priorityActions.filter((a) => a.type === 'INCIDENT').length;
 
   const fetchData = useCallback(async () => {
@@ -332,6 +330,8 @@ export default function ResolutionHubPage() {
     }
     return priorityActions;
   }, [priorityActions, filterParam]);
+
+  const priorityActionCount = filterParam ? filteredPriorityActions.length : priorityActions.length;
 
   const countMismatch = useMemo(() => {
     if (!expectedCount) return null;
