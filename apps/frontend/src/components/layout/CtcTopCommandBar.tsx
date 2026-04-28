@@ -12,6 +12,7 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { CtcCommandSearch } from './CtcCommandSearch';
 import { CtcPropertySelector } from './CtcPropertySelector';
+import { SetupGuideButton } from './SetupGuideButton';
 import { Property } from '@/types';
 
 interface CtcTopCommandBarProps {
@@ -50,6 +51,7 @@ function usePropertyData() {
     propertyId: selectedPropertyId,
     propertyAddress: address,
     properties,
+    property: property ?? null,
   };
 }
 
@@ -85,7 +87,7 @@ function NotificationsButton() {
 export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
   const router = useRouter();
   const { setSelectedPropertyId } = usePropertyContext();
-  const { propertyId, propertyAddress, properties } = usePropertyData();
+  const { propertyId, propertyAddress, properties, property } = usePropertyData();
 
   const handlePropertySelect = (newPropertyId: string) => {
     setSelectedPropertyId(newPropertyId);
@@ -136,8 +138,9 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
               onAddProperty={handleAddProperty}
             />
 
-            {/* Right: Notifications */}
+            {/* Right: Setup guide + Notifications */}
             <div className="flex items-center gap-2 shrink-0">
+              <SetupGuideButton property={property} />
               <NotificationsButton />
             </div>
           </div>
@@ -172,6 +175,7 @@ export function CtcTopCommandBar({ className }: CtcTopCommandBarProps) {
 
             {/* Right Actions */}
             <div className="flex items-center gap-2">
+              <SetupGuideButton property={property} />
               <NotificationsButton />
             </div>
           </div>
