@@ -455,109 +455,115 @@ export default function ResolutionHubPage() {
         </div>
 
         {/* KPI Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Link
             href="#priority-actions"
-            className="group flex items-center gap-4 rounded-2xl border border-amber-100/70 bg-amber-50/40 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="group flex items-center gap-3 rounded-xl border border-amber-100/70 bg-amber-50/40 p-4 transition-colors hover:border-amber-200 hover:bg-amber-50/60"
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50">
-              <Clock className="h-5 w-5 text-amber-600" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100/80">
+              <Clock className="h-4.5 w-4.5 text-amber-700" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-slate-500">Open cases</p>
-              <p className="text-3xl font-bold leading-tight text-slate-900">{priorityActionCount}</p>
-              <p className="text-xs text-slate-400">Ranked items that still need attention</p>
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-bold leading-none text-slate-900">{priorityActionCount}</p>
+                <p className="text-sm font-medium text-slate-600">Open cases</p>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Ranked items that still need attention</p>
             </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
           </Link>
 
           <Link
             href="#decision-insights"
-            className="group flex items-center gap-4 rounded-2xl border border-indigo-100 bg-indigo-50/30 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="group flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 transition-colors hover:border-indigo-200 hover:bg-indigo-50/50"
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-indigo-100 bg-white">
-              <Search className="h-5 w-5 text-indigo-600" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100/70">
+              <Search className="h-4.5 w-4.5 text-indigo-700" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-slate-500">Decisions ready</p>
-              <p className="text-3xl font-bold leading-tight text-slate-900">{resolutionCenterData.counts.decisionsReady}</p>
-              <p className="text-xs text-slate-400">Recommendations waiting for a choice</p>
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-bold leading-none text-slate-900">{resolutionCenterData.counts.decisionsReady}</p>
+                <p className="text-sm font-medium text-slate-600">Decisions ready</p>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Recommendations waiting for a choice</p>
             </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
           </Link>
 
           <Link
             href={propertyId ? `/dashboard/bookings?propertyId=${propertyId}` : '/dashboard/bookings'}
-            className="group flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-4 transition-colors hover:border-teal-100 hover:bg-slate-50/70"
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-teal-100 bg-teal-50">
-              <Briefcase className="h-5 w-5 text-teal-600" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100/70">
+              <Briefcase className="h-4.5 w-4.5 text-teal-700" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-slate-500">Active Jobs</p>
-              <p className="text-3xl font-bold leading-tight text-slate-900">{resolutionCenterData.counts.activeBookings}</p>
-              <p className="text-xs text-slate-400">Cases already moving through execution</p>
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-bold leading-none text-slate-900">{resolutionCenterData.counts.activeBookings}</p>
+                <p className="text-sm font-medium text-slate-600">Active Jobs</p>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Cases already moving through execution</p>
             </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
           </Link>
 
           <Link
             href={propertyId ? `/dashboard/properties/${propertyId}/incidents` : '/dashboard/incidents'}
             className={cn(
-              'group flex items-center gap-4 rounded-2xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
+              'group flex items-center gap-3 rounded-xl border p-4 transition-colors',
               resolutionCenterData.counts.activeIncidents > 0
-                ? 'border-rose-100/70 bg-rose-50/30'
-                : 'border-slate-100 bg-white',
+                ? 'border-rose-100/70 bg-rose-50/30 hover:border-rose-200'
+                : 'border-slate-100 bg-white hover:border-blue-100 hover:bg-slate-50/70',
             )}
           >
             <div
               className={cn(
-                'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border',
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
                 resolutionCenterData.counts.activeIncidents > 0
-                  ? 'border-rose-200 bg-rose-50'
-                  : 'border-blue-100 bg-blue-50',
+                  ? 'bg-rose-100/80'
+                  : 'bg-blue-100/70',
               )}
             >
               <Radio
                 className={cn(
-                  'h-5 w-5',
-                  resolutionCenterData.counts.activeIncidents > 0 ? 'text-rose-600' : 'text-blue-500',
+                  'h-4.5 w-4.5',
+                  resolutionCenterData.counts.activeIncidents > 0 ? 'text-rose-700' : 'text-blue-600',
                 )}
               />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-slate-500">Live incidents</p>
-              <p className="text-3xl font-bold leading-tight text-slate-900">{resolutionCenterData.counts.activeIncidents}</p>
-              <p className="text-xs text-slate-400">
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-bold leading-none text-slate-900">{resolutionCenterData.counts.activeIncidents}</p>
+                <p className="text-sm font-medium text-slate-600">Live incidents</p>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
                 {resolutionCenterData.counts.activeIncidents > 0 ? 'Signal-driven issues' : 'No active incident'}
               </p>
             </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
           </Link>
         </div>
 
         {/* Quick Help Tools — sits above Priority Actions so high-frequency entry points
             are reachable without scrolling past reactive content */}
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Link
             href={
               propertyId
                 ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair`
                 : '/dashboard/replace-repair'
             }
-            className="group flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="group flex items-start gap-3 rounded-xl border border-slate-100 bg-white p-4 transition-colors hover:border-teal-100 hover:bg-teal-50/30"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-teal-100 bg-teal-50">
-                <Zap className="h-5 w-5 text-teal-600" />
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-slate-50 transition-all group-hover:border-teal-200 group-hover:bg-teal-50">
-                <ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5 group-hover:text-teal-600" />
-              </div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100/70">
+              <Zap className="h-4.5 w-4.5 text-teal-700" />
             </div>
-            <div>
-              <p className="font-bold text-slate-900">Something&apos;s Broken</p>
-              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-slate-900">Something&apos;s Broken</p>
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-teal-600" />
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
                 AI-driven troubleshooting and repair vs. replace guidance.
               </p>
             </div>
@@ -565,19 +571,17 @@ export default function ResolutionHubPage() {
 
           <Link
             href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}
-            className="group flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="group flex items-start gap-3 rounded-xl border border-slate-100 bg-white p-4 transition-colors hover:border-blue-100 hover:bg-blue-50/25"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50">
-                <Search className="h-5 w-5 text-blue-600" />
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-slate-50 transition-all group-hover:border-blue-200 group-hover:bg-blue-50">
-                <ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5 group-hover:text-blue-600" />
-              </div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100/70">
+              <Search className="h-4.5 w-4.5 text-blue-700" />
             </div>
-            <div>
-              <p className="font-bold text-slate-900">Find a Specialist</p>
-              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-slate-900">Find a Specialist</p>
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-blue-600" />
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
                 Search our directory of verified local service providers.
               </p>
             </div>
@@ -585,19 +589,17 @@ export default function ResolutionHubPage() {
 
           <Link
             href={propertyId ? `/dashboard/emergency?propertyId=${propertyId}` : '/dashboard/emergency'}
-            className="group flex flex-col gap-4 rounded-2xl border border-red-100/60 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="group flex items-start gap-3 rounded-xl border border-red-100/60 bg-white p-4 transition-colors hover:border-red-200 hover:bg-red-50/20"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-red-100 bg-red-50">
-                <AlertCircle className="h-5 w-5 text-red-600" />
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-slate-50 transition-all group-hover:border-red-200 group-hover:bg-red-50">
-                <ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5 group-hover:text-red-600" />
-              </div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100/70">
+              <AlertCircle className="h-4.5 w-4.5 text-red-700" />
             </div>
-            <div>
-              <p className="font-bold text-slate-900">Emergency Help</p>
-              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-slate-900">Emergency Help</p>
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-red-600" />
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
                 Instant 24/7 emergency services and shutdown guides.
               </p>
             </div>
@@ -609,19 +611,17 @@ export default function ResolutionHubPage() {
                 ? `/dashboard/properties/${propertyId}/tools/quote-comparison?from=fix-hub`
                 : '/dashboard/quote-comparison'
             }
-            className="group flex flex-col gap-4 rounded-2xl border border-violet-100/60 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+            className="group flex items-start gap-3 rounded-xl border border-violet-100/60 bg-white p-4 transition-colors hover:border-violet-200 hover:bg-violet-50/20"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50">
-                <Scale className="h-5 w-5 text-violet-600" />
-              </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-slate-50 transition-all group-hover:border-violet-200 group-hover:bg-violet-50">
-                <ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5 group-hover:text-violet-600" />
-              </div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100/70">
+              <Scale className="h-4.5 w-4.5 text-violet-700" />
             </div>
-            <div>
-              <p className="font-bold text-slate-900">Compare Quotes</p>
-              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-slate-900">Compare Quotes</p>
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-violet-600" />
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
                 Review pricing side-by-side before you book.
               </p>
             </div>
