@@ -79,6 +79,7 @@ import { track } from '@/lib/analytics/events';
 
 import { listIncidents } from './properties/[id]/incidents/incidentsApi';
 import { listInventoryItems } from './inventory/inventoryApi';
+import { getStatusBoard, StatusBoardItemDTO } from './properties/[id]/status-board/statusBoardApi';
 import { IncidentDTO } from '@/types/incidents.types';
 import { calculateStalenessStatus } from '@/lib/incidents/stalenessConfig';
 
@@ -150,6 +151,17 @@ function buildHealthInsightActionMeta(factorTitle: string, healthScore: number) 
     `Health Score · ${factorTitle}`,
     'Open Health Score to review Current Health Focus and the factor ledger.',
     'This factor is currently the clearest health driver to review first.',
+    'Current property health',
+    `${healthScore} / 100`,
+    healthScore,
+  );
+}
+
+function buildApplianceStatusActionMeta(itemName: string, healthScore: number, recommendation: string) {
+  return buildTopCardActionMeta(
+    `Status Board · ${itemName}`,
+    `Open the Status Board to review why ${itemName.toLowerCase()} is flagged and take the next recommended step.`,
+    `Current recommendation: ${recommendation}.`,
     'Current property health',
     `${healthScore} / 100`,
     healthScore,
@@ -576,6 +588,20 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const applianceStatusBoardQuery = useQuery({
+    queryKey: ['dashboard-appliance-priority', effectiveSelectedPropertyId],
+    queryFn: async () => {
+      if (!effectiveSelectedPropertyId) return null;
+      return getStatusBoard(effectiveSelectedPropertyId, {
+        categoryKey: 'APPLIANCE',
+        condition: 'ACTION_NEEDED',
+        limit: 10,
+      });
+    },
+    enabled: Boolean(effectiveSelectedPropertyId),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
     
@@ -697,6 +723,8 @@ export default function DashboardPage() {
   const healthScore = typeof selectedProperty?.healthScore?.totalScore === 'number'
     ? selectedProperty.healthScore.totalScore
     : null;
+  const topApplianceStatusItem: StatusBoardItemDTO | null =
+    applianceStatusBoardQuery.data?.items?.[0] ?? null;
   const hasCompletionState =
     Boolean(selectedProperty) &&
     scopedUrgentActions.length === 0 &&
@@ -735,6 +763,31 @@ export default function DashboardPage() {
       const isApplianceInsight = isApplianceHealthInsightTitle(topHealthInsight.title);
       const impactLabel = 'Top risk signal';
       const etaLabel = 'ETA 2 min';
+      if (isApplianceInsight && topApplianceStatusItem && effectiveSelectedPropertyId) {
+        const recommendationLabel =
+          topApplianceStatusItem.recommendation === 'REPLACE_SOON'
+            ? 'Replace Soon'
+            : topApplianceStatusItem.recommendation === 'REPAIR'
+            ? 'Repair'
+            : 'Review';
+        const statusBoardHref = `/dashboard/properties/${effectiveSelectedPropertyId}/status-board?category=APPLIANCE&condition=ACTION_NEEDED&q=${encodeURIComponent(
+          topApplianceStatusItem.displayName,
+        )}&expand=${encodeURIComponent(topApplianceStatusItem.id)}`;
+        return {
+          badgeLabel: buildHealthInsightBadgeLabel(),
+          title: `${topApplianceStatusItem.displayName} needs review.`,
+          subtitle: `Chosen because appliance status signals currently rank ${topApplianceStatusItem.displayName.toLowerCase()} as the clearest item to review first.`,
+          ctaLabel: `Review ${topApplianceStatusItem.displayName}`,
+          href: statusBoardHref,
+          impactLabel,
+          etaLabel,
+          ...buildApplianceStatusActionMeta(
+            topApplianceStatusItem.displayName,
+            healthScore ?? 0,
+            recommendationLabel,
+          ),
+        };
+      }
       return {
         badgeLabel: buildHealthInsightBadgeLabel(),
         title: isApplianceInsight

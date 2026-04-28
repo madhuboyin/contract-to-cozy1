@@ -252,6 +252,14 @@ function getWarrantyTone(status: WarrantyBadge): "good" | "elevated" | "danger" 
   return "info";
 }
 
+function getPrimaryActionLabel(item: StatusBoardItemDTO): string | null {
+  if (item.recommendation === "REPLACE_SOON" && item.deepLinks.replaceRepair) return "Replace or Repair";
+  if (item.deepLinks.maintenance && item.pendingMaintenance > 0) return "Open Maintenance";
+  if (item.inventoryItemId) return "View Item";
+  if (item.deepLinks.viewRoom) return "View Room";
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -276,8 +284,10 @@ export default function StatusBoardClient() {
   const hasGuidanceContext = hasGuidanceContinuityContext(guidanceContext);
 
   // Filters
-  const [search, setSearch] = useState("");
-  const [conditionFilter, setConditionFilter] = useState<string>("all");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [conditionFilter, setConditionFilter] = useState<string>(
+    searchParams.get("condition") ?? "all"
+  );
   const [categoryFilter, setCategoryFilter] = useState<string>(
     searchParams.get("category") ?? "all"
   );
@@ -285,7 +295,9 @@ export default function StatusBoardClient() {
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [includeHidden, setIncludeHidden] = useState(false);
   const [page, setPage] = useState(1);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(
+    searchParams.get("expand") ?? null
+  );
 
   // Inventory item drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -540,6 +552,9 @@ export default function StatusBoardClient() {
       <Fragment key={item.id}>
         {(() => {
           const isUrgentItem = !item.needsInstallDateForPrediction && item.condition === "ACTION_NEEDED";
+          const canShowReplaceRepair = Boolean(item.recommendation === "REPLACE_SOON" && item.deepLinks.replaceRepair);
+          const canShowMaintenance = Boolean(item.deepLinks.maintenance && item.pendingMaintenance > 0);
+          const primaryActionLabel = getPrimaryActionLabel(item);
           const categoryVisual = getCategoryVisual(item.category);
           const CategoryIcon = categoryVisual.Icon;
           const healthScore = getHealthScore(item);
@@ -690,6 +705,65 @@ export default function StatusBoardClient() {
               </Badge>
             )}
           </TableCell>
+          <TableCell className="py-5">
+            {primaryActionLabel ? (
+              canShowReplaceRepair ? (
+                <Link
+                  href={appendGuidanceHref(item.deepLinks.replaceRepair!)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    recordOperationalGuidanceProgress(item, "replace_or_repair");
+                  }}
+                >
+                  <Button size="sm" className="min-w-[160px] bg-teal-600 hover:bg-teal-700">
+                    <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                    {primaryActionLabel}
+                  </Button>
+                </Link>
+              ) : canShowMaintenance ? (
+                <Link
+                  href={appendGuidanceHref(item.deepLinks.maintenance!)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    recordOperationalGuidanceProgress(item, "maintenance");
+                  }}
+                >
+                  <Button size="sm" className="min-w-[160px] bg-teal-600 hover:bg-teal-700">
+                    <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                    {primaryActionLabel}
+                  </Button>
+                </Link>
+              ) : item.inventoryItemId ? (
+                <Button
+                  size="sm"
+                  className="min-w-[160px] bg-teal-600 hover:bg-teal-700"
+                  disabled={drawerLoading === item.id}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleViewItem(item);
+                  }}
+                >
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  {drawerLoading === item.id ? "Loading..." : primaryActionLabel}
+                </Button>
+              ) : item.deepLinks.viewRoom ? (
+                <Link
+                  href={appendGuidanceHref(item.deepLinks.viewRoom)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    recordOperationalGuidanceProgress(item, "view_room");
+                  }}
+                >
+                  <Button size="sm" variant="outline" className={LINK_ACTION_BUTTON_CLASS}>
+                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                    {primaryActionLabel}
+                  </Button>
+                </Link>
+              ) : null
+            ) : (
+              <span className="text-xs text-muted-foreground">Open details</span>
+            )}
+          </TableCell>
           <TableCell className="w-10 py-5 align-middle">
             <ChevronRight
               className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
@@ -701,7 +775,7 @@ export default function StatusBoardClient() {
 
         {expandedId === item.id && (
           <TableRow>
-            <TableCell colSpan={8} className="bg-transparent p-0">
+            <TableCell colSpan={9} className="bg-transparent p-0">
               <div className="m-2 rounded-2xl border border-white/70 bg-[radial-gradient(circle_at_0%_0%,rgba(45,212,191,0.14),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.72),rgba(248,250,252,0.52))] p-5 shadow-[0_20px_40px_-30px_rgba(15,23,42,0.7)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_0%_0%,rgba(45,212,191,0.16),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.62),rgba(2,6,23,0.45))]">
                 <div className="space-y-5 border-l-2 border-teal-200/80 pl-4 dark:border-teal-800/80">
                 {/* Details grid */}
@@ -857,7 +931,7 @@ export default function StatusBoardClient() {
                       </Button>
                     </Link>
                   )}
-                  {item.recommendation === "REPLACE_SOON" && item.deepLinks.replaceRepair ? (
+                  {canShowReplaceRepair ? (
                     <Link
                       href={appendGuidanceHref(item.deepLinks.replaceRepair)}
                       onClick={() => recordOperationalGuidanceProgress(item, 'replace_or_repair')}
@@ -885,7 +959,7 @@ export default function StatusBoardClient() {
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
-                  {item.deepLinks.maintenance && item.pendingMaintenance > 0 ? (
+                  {canShowMaintenance ? (
                     <Link
                       href={appendGuidanceHref(item.deepLinks.maintenance)}
                       onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
@@ -1888,7 +1962,8 @@ export default function StatusBoardClient() {
                         <TableHead className={`hidden md:table-cell ${HEADER_CELL_CLASS}`}>Age</TableHead>
                         <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Warranty</TableHead>
                         <TableHead className={HEADER_CELL_CLASS}>Condition</TableHead>
-                        <TableHead className={HEADER_CELL_CLASS}>Action</TableHead>
+                        <TableHead className={HEADER_CELL_CLASS}>Recommendation</TableHead>
+                        <TableHead className={HEADER_CELL_CLASS}>Next step</TableHead>
                         <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
                       </TableRow>
                     </TableHeader>
@@ -1911,7 +1986,8 @@ export default function StatusBoardClient() {
                 <TableHead className={`hidden md:table-cell ${HEADER_CELL_CLASS}`}>Age</TableHead>
                 <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Warranty</TableHead>
                 <TableHead className={HEADER_CELL_CLASS}>Condition</TableHead>
-                <TableHead className={HEADER_CELL_CLASS}>Action</TableHead>
+                <TableHead className={HEADER_CELL_CLASS}>Recommendation</TableHead>
+                <TableHead className={HEADER_CELL_CLASS}>Next step</TableHead>
                 <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
               </TableRow>
             </TableHeader>
