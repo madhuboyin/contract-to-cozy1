@@ -796,7 +796,7 @@ export default function StatusBoardClient() {
               <span className="text-xs text-sky-600 dark:text-sky-400 cursor-pointer hover:underline">Open details ›</span>
             )}
           </TableCell>
-          <TableCell className="w-10 py-5 align-middle">
+          <TableCell className="w-10 py-5 align-middle shrink-0">
             <ChevronRight
               className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
                 expandedId === item.id ? "rotate-90" : ""
@@ -2017,7 +2017,7 @@ export default function StatusBoardClient() {
                   <Table className="table-auto">
                     <TableHeader>
                       <TableRow className="border-b border-white/70 bg-white/55 dark:border-slate-700/80 dark:bg-slate-900/55">
-                        <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
+                        <TableHead className={`w-10 shrink-0 ${HEADER_CELL_CLASS}`} />
                         <TableHead className={HEADER_CELL_CLASS}>Name</TableHead>
                         <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Category</TableHead>
                         <TableHead className={`hidden md:table-cell ${HEADER_CELL_CLASS}`}>Age</TableHead>
@@ -2025,7 +2025,7 @@ export default function StatusBoardClient() {
                         <TableHead className={HEADER_CELL_CLASS}>Condition</TableHead>
                         <TableHead className={HEADER_CELL_CLASS}>Recommendation</TableHead>
                         <TableHead className={HEADER_CELL_CLASS}>Next step</TableHead>
-                        <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
+                        <TableHead className={`w-10 shrink-0 ${HEADER_CELL_CLASS}`} />
                       </TableRow>
                     </TableHeader>
                     <TableBody>{renderItems(groupItems)}</TableBody>
@@ -2041,7 +2041,7 @@ export default function StatusBoardClient() {
           <Table className="table-auto">
             <TableHeader>
               <TableRow className="border-b border-white/70 bg-white/55 dark:border-slate-700/80 dark:bg-slate-900/55">
-                <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
+                <TableHead className={`w-10 shrink-0 ${HEADER_CELL_CLASS}`} />
                 <TableHead className={HEADER_CELL_CLASS}>Name</TableHead>
                 <TableHead className={`hidden lg:table-cell ${HEADER_CELL_CLASS}`}>Category</TableHead>
                 <TableHead className={`hidden md:table-cell ${HEADER_CELL_CLASS}`}>Age</TableHead>
@@ -2049,7 +2049,7 @@ export default function StatusBoardClient() {
                 <TableHead className={HEADER_CELL_CLASS}>Condition</TableHead>
                 <TableHead className={HEADER_CELL_CLASS}>Recommendation</TableHead>
                 <TableHead className={HEADER_CELL_CLASS}>Next step</TableHead>
-                <TableHead className={`w-10 ${HEADER_CELL_CLASS}`} />
+                <TableHead className={`w-10 shrink-0 ${HEADER_CELL_CLASS}`} />
               </TableRow>
             </TableHeader>
             <TableBody>{renderItems(items)}</TableBody>
