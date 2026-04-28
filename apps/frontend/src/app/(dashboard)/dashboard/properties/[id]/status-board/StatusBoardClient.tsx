@@ -91,6 +91,10 @@ import PriorityActionHero from "@/components/system/PriorityActionHero";
 import RouteStateCard from "@/components/system/RouteStateCard";
 import TrustStrip from "../components/route-templates/TrustStrip";
 import { resolveDashboardBackHref } from "@/lib/navigation/backNavigation";
+import { STATUS_BOARD_FEATURE_FLAGS } from "./featureFlags";
+import { CardLayout } from "./components/CardLayout";
+import { CardLayoutErrorBoundary } from "./components/CardLayoutErrorBoundary";
+import type { CardHandlers } from "./components/CardGrid";
 
 // ---------------------------------------------------------------------------
 // Badge helpers
@@ -304,6 +308,9 @@ export default function StatusBoardClient() {
   const [drawerItem, setDrawerItem] = useState<InventoryItem | null>(null);
   const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
   const [drawerLoading, setDrawerLoading] = useState<string | null>(null);
+
+  // Card layout error state for graceful degradation
+  const [cardLayoutError, setCardLayoutError] = useState(false);
 
   const appendGuidanceHref = useCallback(
     (href: string) => appendGuidanceContinuityToHref(href, guidanceContext),
@@ -545,6 +552,30 @@ export default function StatusBoardClient() {
     setGroupBy("none");
     setPage(1);
   }, [missingInstallDateItem, priorityActionItem]);
+
+  // Card handlers for new card layout
+  const cardHandlers: CardHandlers = useMemo(() => ({
+    expandedId,
+    onToggleExpand: (itemId: string) => {
+      setExpandedId(expandedId === itemId ? null : itemId);
+    },
+    onTogglePin: handleTogglePin,
+    onToggleHide: handleToggleHide,
+    onViewItem: handleViewItem,
+    onSaveOverride: (itemId: string, payload) => {
+      patchMutation.mutate({ homeItemId: itemId, payload });
+    },
+  }), [expandedId, handleViewItem, patchMutation]);
+
+  // Handler for removing filters in card layout
+  const handleRemoveFilter = useCallback((key: string) => {
+    if (key === "condition") {
+      setConditionFilter("all");
+    } else if (key === "category") {
+      setCategoryFilter("all");
+    }
+    setPage(1);
+  }, []);
 
   // Render grouped or flat
   const renderItems = (itemList: StatusBoardItemDTO[]) =>
@@ -1920,7 +1951,7 @@ export default function StatusBoardClient() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table or Card Layout based on feature flag */}
       {isLoading ? (
         <RouteStateCard
           state="loading"
@@ -1948,6 +1979,25 @@ export default function StatusBoardClient() {
           }
           className={`mt-4 ${GLASS_PANEL_CLASS}`}
         />
+      ) : STATUS_BOARD_FEATURE_FLAGS.useCardLayout && !cardLayoutError ? (
+        // Card Layout (new modern UI) with error boundary
+        <div className="mt-4">
+          <CardLayoutErrorBoundary onError={() => setCardLayoutError(true)}>
+            <CardLayout
+              items={items}
+              summary={summary ?? null}
+              conditionFilter={conditionFilter}
+              categoryFilter={categoryFilter}
+              handlers={cardHandlers}
+              onConditionFilterChange={(condition) => {
+                setConditionFilter(condition);
+                setPage(1);
+              }}
+              onPriorityAction={handlePriorityAction}
+              onRemoveFilter={handleRemoveFilter}
+            />
+          </CardLayoutErrorBoundary>
+        </div>
       ) : groups && groupBy !== "none" ? (
         // Grouped view
         <div className="mt-4 space-y-4">
