@@ -596,6 +596,16 @@ function appendDecisionOnlyCases(
   return [...cases, ...derivedCases];
 }
 
+function filterMaterialDecisionInsights(decisionInsights: DecisionInsightDTO[]): DecisionInsightDTO[] {
+  return decisionInsights.filter((insight) => {
+    if (insight.kind === 'coverage_recommendation') {
+      return insight.metadata?.hasSavedAnalysis === true;
+    }
+
+    return true;
+  });
+}
+
 function sortCases(cases: ResolutionCaseDTO[]): ResolutionCaseDTO[] {
   const priorityRank: Record<ResolutionCaseDTO['priority'], number> = {
     critical: 0,
@@ -918,10 +928,18 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     })),
     propertyId,
   );
-  const allDecisionInsights = [...coverageInsights, ...replaceRepairInsights];
+  const allDecisionInsights = filterMaterialDecisionInsights([
+    ...coverageInsights,
+    ...replaceRepairInsights,
+  ]);
   const decisionInsights = allDecisionInsights.slice(0, 10);
   const executionItems = mapBookingsToExecutionItems(bookings);
-  const coverageInsightItemIds = new Set(coverageInsights.map((entry) => entry.itemId).filter(Boolean) as string[]);
+  const coverageInsightItemIds = new Set(
+    allDecisionInsights
+      .filter((entry) => entry.kind === 'coverage_recommendation')
+      .map((entry) => entry.itemId)
+      .filter(Boolean) as string[],
+  );
   const workflowAwareBaseCases = mapActionsToCases(sortedActions, propertyId, coverageInsightItemIds);
   const cases = sortCases(
     enrichCasesWithWorkflowState(
