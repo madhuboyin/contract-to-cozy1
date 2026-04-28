@@ -3,27 +3,28 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { 
-  Wrench, 
-  Search, 
-  CalendarClock, 
-  AlertCircle, 
-  ArrowRight, 
+import {
+  Wrench,
+  Search,
+  CalendarClock,
+  AlertCircle,
+  ArrowRight,
   Zap,
   Scale,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  ChevronRight,
+  Settings,
+  Clock,
+  Radio,
+  Briefcase,
+  Activity,
+  Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { 
-  MobilePageIntro, 
-  MobileKpiTile,
-  MobileSection,
-  MobileSectionHeader,
-  MobileCard,
-  BottomSafeAreaReserve
-} from '@/components/mobile/dashboard/MobilePrimitives';
+import { BottomSafeAreaReserve } from '@/components/mobile/dashboard/MobilePrimitives';
 import { WinCard } from '@/components/shared/WinCard';
+import { cn } from '@/lib/utils';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { Booking, ScoredProperty } from '@/types';
@@ -37,47 +38,84 @@ import {
   UrgentActionItem,
 } from '@/lib/dashboard/urgentActions';
 
-function priorityActionTone(action: UrgentActionItem): {
-  confidenceLabel: string;
-  sourceLabel: string;
-  rationale: string;
-} {
-  if (action.type === 'INCIDENT') {
-    return {
-      confidenceLabel: action.severity || 'WARNING',
-      sourceLabel: 'Incident monitoring',
-      rationale: 'Triggered by a live property signal that needs attention.',
-    };
+function getActionIcon(action: UrgentActionItem) {
+  switch (action.type) {
+    case 'INCIDENT':
+      return <AlertCircle className="h-5 w-5 text-rose-600" />;
+    case 'HEALTH_INSIGHT':
+      return <Activity className="h-5 w-5 text-teal-600" />;
+    case 'MAINTENANCE_OVERDUE':
+      return <Wrench className="h-5 w-5 text-orange-600" />;
+    case 'RENEWAL_EXPIRED':
+      return <Shield className="h-5 w-5 text-rose-600" />;
+    case 'RENEWAL_UPCOMING':
+      return <Shield className="h-5 w-5 text-amber-600" />;
+    default:
+      return <Wrench className="h-5 w-5 text-slate-500" />;
   }
-  if (action.type === 'HEALTH_INSIGHT') {
-    return {
-      confidenceLabel: 'High confidence',
-      sourceLabel: 'Health score engine',
-      rationale: 'This action directly affects your property health score.',
-    };
-  }
-  if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
-    return {
-      confidenceLabel: 'Time-sensitive',
-      sourceLabel: 'Coverage tracking',
-      rationale: 'Coverage timing can create avoidable exposure if missed.',
-    };
-  }
-  return {
-    confidenceLabel: 'Needs action',
-    sourceLabel: 'Maintenance tracking',
-    rationale: 'This item is overdue and should be resolved soon.',
-  };
 }
 
-/**
- * ResolutionHubPage unifies three engines:
- * 1. Decision (Replace vs. Repair)
- * 2. Search (Providers)
- * 3. Management (Bookings)
- * 
- * It transforms the "Fix" job from a chore into a concierge experience.
- */
+function getActionIconBg(action: UrgentActionItem): string {
+  switch (action.type) {
+    case 'INCIDENT':
+      return 'bg-rose-50 border border-rose-100';
+    case 'HEALTH_INSIGHT':
+      return 'bg-teal-50 border border-teal-100';
+    case 'MAINTENANCE_OVERDUE':
+      return 'bg-orange-50 border border-orange-100';
+    case 'RENEWAL_EXPIRED':
+      return 'bg-rose-50 border border-rose-100';
+    case 'RENEWAL_UPCOMING':
+      return 'bg-amber-50 border border-amber-100';
+    default:
+      return 'bg-slate-50 border border-slate-100';
+  }
+}
+
+function getActionStatus(action: UrgentActionItem): { label: string; tone: 'danger' | 'warning' | 'neutral' } {
+  switch (action.type) {
+    case 'INCIDENT':
+      return { label: action.severity === 'CRITICAL' ? 'Critical' : 'Live Alert', tone: 'danger' };
+    case 'HEALTH_INSIGHT':
+      return { label: 'Needs Review', tone: 'warning' };
+    case 'MAINTENANCE_OVERDUE':
+      return { label: 'Overdue', tone: 'danger' };
+    case 'RENEWAL_EXPIRED':
+      return { label: 'Expired', tone: 'danger' };
+    case 'RENEWAL_UPCOMING':
+      return { label: 'Expiring Soon', tone: 'warning' };
+    default:
+      return { label: 'Action Required', tone: 'neutral' };
+  }
+}
+
+function getImpactLevel(action: UrgentActionItem): { label: string; dotColor: string } {
+  switch (action.type) {
+    case 'INCIDENT':
+    case 'MAINTENANCE_OVERDUE':
+    case 'RENEWAL_EXPIRED':
+      return { label: 'High', dotColor: 'bg-rose-500' };
+    case 'HEALTH_INSIGHT':
+    case 'RENEWAL_UPCOMING':
+      return { label: 'Medium', dotColor: 'bg-amber-400' };
+    default:
+      return { label: 'Low', dotColor: 'bg-emerald-400' };
+  }
+}
+
+function getActionCta(action: UrgentActionItem): string {
+  switch (action.type) {
+    case 'INCIDENT':      return 'View Incident';
+    case 'HEALTH_INSIGHT': return 'Review Options';
+    case 'MAINTENANCE_OVERDUE': return 'Schedule Now';
+    case 'RENEWAL_EXPIRED': return 'Renew Now';
+    case 'RENEWAL_UPCOMING': return 'Compare Plans';
+    default:              return 'Take Action';
+  }
+}
+
+const RANK_COLORS = ['bg-amber-400', 'bg-blue-500', 'bg-violet-500', 'bg-slate-400'];
+
 export default function ResolutionHubPage() {
   const params = useParams<{ id: string | string[] }>();
   const router = useRouter();
@@ -89,14 +127,13 @@ export default function ResolutionHubPage() {
   const [resolutions, setResolutions] = useState<any[]>([]);
   const [priorityActions, setPriorityActions] = useState<UrgentActionItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  
-  // Get filter and focus parameters
-  const filterParam = searchParams.get('filter'); // 'urgent', 'maintenance', 'preventive', etc.
+
+  const filterParam = searchParams.get('filter');
   const focusSection = searchParams.get('focus');
   const expectedCount = searchParams.get('expectedCount');
-  
+
   const priorityActionCount = priorityActions.slice(0, 3).length;
-  const activeIncidentsCount = priorityActions.filter((action) => action.type === 'INCIDENT').length;
+  const activeIncidentsCount = priorityActions.filter((a) => a.type === 'INCIDENT').length;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -143,18 +180,12 @@ export default function ResolutionHubPage() {
 
       const scoredProperties = propertiesRes.success
         ? (propertiesRes.data.properties
-            .filter((property) => !propertyId || property.id === propertyId)
-            .map((property) => ({
-              ...property,
-              healthScore: (property as unknown as ScoredProperty).healthScore || {
-                totalScore: 0,
-                baseScore: 0,
-                unlockedScore: 0,
-                maxPotentialScore: 0,
-                maxBaseScore: 0,
-                maxExtraScore: 0,
-                insights: [],
-                ctaNeeded: false,
+            .filter((p) => !propertyId || p.id === propertyId)
+            .map((p) => ({
+              ...p,
+              healthScore: (p as unknown as ScoredProperty).healthScore || {
+                totalScore: 0, baseScore: 0, unlockedScore: 0, maxPotentialScore: 0,
+                maxBaseScore: 0, maxExtraScore: 0, insights: [], ctaNeeded: false,
               },
             })) as ScoredProperty[])
         : [];
@@ -190,268 +221,416 @@ export default function ResolutionHubPage() {
     void fetchData();
   }, [fetchData]);
 
-  const activeBookings = useMemo(() => 
-    bookings.filter(b => ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)), 
-  [bookings]);
+  const activeBookings = useMemo(
+    () => bookings.filter((b) => ['PENDING', 'CONFIRMED', 'IN_PROGRESS'].includes(b.status)),
+    [bookings],
+  );
 
-  // Filter priority actions based on filter parameter
   const filteredPriorityActions = useMemo(() => {
     if (!filterParam) return priorityActions;
-    
     const filter = filterParam.toLowerCase();
-    
-    // Filter mapping
     if (filter === 'urgent') {
-      // Urgent: incidents and expired renewals
-      return priorityActions.filter(action => 
-        action.type === 'INCIDENT' || 
-        action.type === 'RENEWAL_EXPIRED' ||
-        action.severity === 'CRITICAL'
+      return priorityActions.filter(
+        (a) => a.type === 'INCIDENT' || a.type === 'RENEWAL_EXPIRED' || a.severity === 'CRITICAL',
       );
     }
-    
     if (filter === 'maintenance' || filter === 'preventive') {
-      // Maintenance/Preventive: overdue maintenance and health insights
-      return priorityActions.filter(action => 
-        action.type === 'MAINTENANCE_OVERDUE' ||
-        action.type === 'MAINTENANCE_UNSCHEDULED' ||
-        action.type === 'HEALTH_INSIGHT'
+      return priorityActions.filter(
+        (a) => a.type === 'MAINTENANCE_OVERDUE' || a.type === 'MAINTENANCE_UNSCHEDULED' || a.type === 'HEALTH_INSIGHT',
       );
     }
-    
     if (filter === 'coverage') {
-      // Coverage: renewal-related actions
-      return priorityActions.filter(action => 
-        action.type === 'RENEWAL_EXPIRED' ||
-        action.type === 'RENEWAL_UPCOMING'
+      return priorityActions.filter(
+        (a) => a.type === 'RENEWAL_EXPIRED' || a.type === 'RENEWAL_UPCOMING',
       );
     }
-    
-    // Default: return all
     return priorityActions;
   }, [priorityActions, filterParam]);
 
-  // Validate expected count if provided
   const countMismatch = useMemo(() => {
     if (!expectedCount) return null;
     const expected = parseInt(expectedCount);
     if (isNaN(expected)) return null;
     if (filteredPriorityActions.length !== expected) {
-      return {
-        expected,
-        actual: filteredPriorityActions.length,
-      };
+      return { expected, actual: filteredPriorityActions.length };
     }
     return null;
   }, [expectedCount, filteredPriorityActions]);
 
   return (
-    <ErrorBoundary 
+    <ErrorBoundary
       fallback={
         <div className="mx-auto max-w-7xl p-6 text-center py-20">
-          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Wrench className="h-8 w-8 text-blue-600" />
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-teal-50">
+            <Wrench className="h-8 w-8 text-teal-600" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Resolution Hub Standby</h1>
-          <p className="text-slate-500 mt-2 max-w-sm mx-auto">
+          <p className="mx-auto mt-2 max-w-sm text-slate-500">
             We&apos;re reconnecting with our service provider network. Please refresh in a few moments.
           </p>
-          <Button className="mt-8 rounded-xl h-11 px-8 bg-brand-600" onClick={() => window.location.reload()}>
+          <Button
+            className="mt-8 h-11 rounded-xl bg-brand-600 px-8"
+            onClick={() => window.location.reload()}
+          >
             Refresh Hub
           </Button>
         </div>
       }
     >
-      <div className="mx-auto max-w-7xl space-y-12 p-4 sm:p-6 lg:px-8 lg:pb-12">
-        {/* 1. Page Header */}
-        <MobilePageIntro
-          title="Resolution Center"
-          subtitle="Something broken or need an upgrade? We'll handle the deciding, finding, and booking."
-          action={
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-blue-700 hidden sm:block">
-              <Wrench className="h-6 w-6" />
-            </div>
-          }
-        />
+      <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:px-8 lg:pb-12">
 
-        {/* 2. Status Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <MobileKpiTile 
-            label="Active Jobs" 
-            value={activeBookings.length} 
-            hint="Bookings in progress" 
-            tone={activeBookings.length > 0 ? 'positive' : 'neutral'} 
-          />
-          <MobileKpiTile 
-            label="Priority actions" 
-            value={priorityActionCount} 
-            hint="Top moves from Today" 
-            tone="warning"
-          />
-          <MobileKpiTile 
-            label="Live incidents" 
-            value={activeIncidentsCount} 
-            hint={activeIncidentsCount > 0 ? 'Signal-driven issues' : 'No active incident'} 
-            tone={activeIncidentsCount > 0 ? 'warning' : 'neutral'}
-          />
+        {/* ROW 2 — Premium Page Header */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-teal-100 bg-teal-50 shadow-sm">
+              <Wrench className="h-7 w-7 text-teal-600" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Resolution Center</h1>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Something broken or need an upgrade? We&apos;ll help with deciding, finding, and booking.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            className="hidden shrink-0 items-center gap-2 rounded-xl border-slate-200 h-10 px-4 text-sm font-medium text-slate-600 sm:flex"
+          >
+            <Settings className="h-4 w-4" />
+            Fix Settings
+          </Button>
         </div>
 
-        <MobileSection className={focusSection === 'priority-actions' ? 'scroll-mt-24' : undefined}>
-          <MobileSectionHeader
-            title="Priority Actions"
-            subtitle={
-              filterParam 
-                ? `Filtered to ${filterParam} actions${expectedCount ? ` (expecting ${expectedCount})` : ''}`
-                : "These are the exact ranked items behind the dashboard count."
-            }
-            className="mb-6"
-          />
-          
-          {/* Count mismatch warning */}
+        {/* ROW 3 — KPI Summary Cards */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Link
+            href={propertyId ? `/dashboard/bookings?propertyId=${propertyId}` : '/dashboard/bookings'}
+            className="group flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-teal-100 bg-teal-50">
+              <Briefcase className="h-5 w-5 text-teal-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-slate-500">Active Jobs</p>
+              <p className="text-3xl font-bold leading-tight text-slate-900">{activeBookings.length}</p>
+              <p className="text-xs text-slate-400">Bookings in progress</p>
+            </div>
+            <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
+          </Link>
+
+          <Link
+            href="#priority-actions"
+            className="group flex items-center gap-4 rounded-2xl border border-amber-100/70 bg-amber-50/40 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50">
+              <Clock className="h-5 w-5 text-amber-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-slate-500">Priority actions</p>
+              <p className="text-3xl font-bold leading-tight text-slate-900">{priorityActionCount}</p>
+              <p className="text-xs text-slate-400">Top moves from Today</p>
+            </div>
+            <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
+          </Link>
+
+          <Link
+            href={propertyId ? `/dashboard/properties/${propertyId}/incidents` : '/dashboard/incidents'}
+            className={cn(
+              'group flex items-center gap-4 rounded-2xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
+              activeIncidentsCount > 0
+                ? 'border-rose-100/70 bg-rose-50/30'
+                : 'border-slate-100 bg-white',
+            )}
+          >
+            <div
+              className={cn(
+                'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border',
+                activeIncidentsCount > 0 ? 'border-rose-200 bg-rose-50' : 'border-blue-100 bg-blue-50',
+              )}
+            >
+              <Radio className={cn('h-5 w-5', activeIncidentsCount > 0 ? 'text-rose-600' : 'text-blue-500')} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-slate-500">Live incidents</p>
+              <p className="text-3xl font-bold leading-tight text-slate-900">{activeIncidentsCount}</p>
+              <p className="text-xs text-slate-400">
+                {activeIncidentsCount > 0 ? 'Signal-driven issues' : 'No active incident'}
+              </p>
+            </div>
+            <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition-colors group-hover:text-slate-500" />
+          </Link>
+        </div>
+
+        {/* ROW 4 — Priority Actions */}
+        <div
+          id="priority-actions"
+          className={cn(
+            'overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm',
+            focusSection === 'priority-actions' && 'scroll-mt-24',
+          )}
+        >
+          {/* Section header */}
+          <div className="flex items-start justify-between gap-4 border-b border-slate-50 px-6 py-5">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-xl font-semibold text-slate-900">Priority Actions</h2>
+                {priorityActionCount > 0 && (
+                  <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-full bg-amber-400 px-1.5 text-xs font-bold text-white">
+                    {priorityActionCount}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-sm text-slate-500">
+                {filterParam
+                  ? `Filtered to ${filterParam} actions${expectedCount ? ` (expecting ${expectedCount})` : ''}`
+                  : 'These are the ranked items behind the dashboard count.'}
+              </p>
+            </div>
+            <Link
+              href={propertyId ? `/dashboard/properties/${propertyId}/fix` : '/dashboard/actions'}
+              className="mt-0.5 flex shrink-0 items-center gap-1 text-sm font-medium text-slate-500 transition-colors hover:text-teal-600"
+            >
+              View all actions
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+
+          {/* Count mismatch */}
           {countMismatch && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4" data-testid="count-mismatch-warning">
+            <div
+              className="mx-6 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4"
+              data-testid="count-mismatch-warning"
+            >
               <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
                 <div>
                   <h4 className="font-medium text-amber-900">Count Mismatch</h4>
-                  <p className="text-sm text-amber-700 mt-1">
-                    Expected {countMismatch.expected} {filterParam || 'priority'} {countMismatch.expected === 1 ? 'action' : 'actions'} but found {countMismatch.actual}.
-                    {countMismatch.actual === 0 && ' The items may have been resolved or the data may have refreshed.'}
+                  <p className="mt-1 text-sm text-amber-700">
+                    Expected {countMismatch.expected} {filterParam || 'priority'}{' '}
+                    {countMismatch.expected === 1 ? 'action' : 'actions'} but found {countMismatch.actual}.
+                    {countMismatch.actual === 0 &&
+                      ' The items may have been resolved or the data may have refreshed.'}
                   </p>
                 </div>
               </div>
             </div>
           )}
-          
-          <div className="space-y-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-8"><Loader2 className="animate-spin text-slate-400" /></div>
-            ) : filteredPriorityActions.length > 0 ? (
-              filteredPriorityActions.slice(0, 10).map((action) => {
-                const trust = priorityActionTone(action);
+
+          {/* Action rows */}
+          {loading ? (
+            <div className="flex items-center justify-center py-14">
+              <Loader2 className="animate-spin text-slate-400" />
+            </div>
+          ) : filteredPriorityActions.length > 0 ? (
+            <div className="divide-y divide-slate-50">
+              {filteredPriorityActions.slice(0, 10).map((action, index) => {
+                const impact = getImpactLevel(action);
+                const status = getActionStatus(action);
+                const rankColor = RANK_COLORS[Math.min(index, RANK_COLORS.length - 1)];
                 return (
-                  <WinCard
+                  <div
                     key={action.id}
-                    title={action.title}
-                    value={action.type.replace(/_/g, ' ')}
-                    description={action.description}
-                    actionLabel="Open action details"
-                    onAction={() => router.push(resolveUrgentActionHref(action, propertyId || selectedPropertyId || undefined))}
-                    isUrgent={action.type === 'INCIDENT' || action.type === 'RENEWAL_EXPIRED'}
-                    trust={{
-                      confidenceLabel: trust.confidenceLabel,
-                      freshnessLabel: action.dueDate ? `Due ${action.dueDate.toLocaleDateString()}` : 'Ranked today',
-                      sourceLabel: trust.sourceLabel,
-                      rationale: trust.rationale,
-                    }}
-                    className={focusSection === 'priority-actions' ? 'border-brand-200 ring-2 ring-brand-100' : undefined}
-                  />
+                    className={cn(
+                      'flex items-center gap-4 px-6 py-5 transition-colors hover:bg-slate-50/60',
+                      focusSection === 'priority-actions' && 'bg-teal-50/20',
+                    )}
+                  >
+                    {/* Rank badge */}
+                    <div
+                      className={cn(
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white',
+                        rankColor,
+                      )}
+                    >
+                      {index + 1}
+                    </div>
+
+                    {/* Category icon tile */}
+                    <div
+                      className={cn(
+                        'hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
+                        getActionIconBg(action),
+                      )}
+                    >
+                      {getActionIcon(action)}
+                    </div>
+
+                    {/* Content */}
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span className="text-[15px] font-semibold text-slate-900">{action.title}</span>
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                            status.tone === 'danger'
+                              ? 'border-rose-200 bg-rose-50 text-rose-700'
+                              : status.tone === 'warning'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-600',
+                          )}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+                      <p className="text-sm leading-relaxed text-slate-500">{action.description}</p>
+                    </div>
+
+                    {/* Impact meta */}
+                    <div className="hidden shrink-0 text-right lg:block">
+                      <p className="mb-1 text-xs text-slate-400">Impact</p>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className={cn('h-1.5 w-1.5 rounded-full', impact.dotColor)} />
+                        <span className="text-sm font-medium text-slate-700">{impact.label}</span>
+                      </div>
+                    </div>
+
+                    {/* Desktop CTA */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="hidden shrink-0 items-center gap-1 rounded-xl border-slate-200 text-slate-700 transition-all hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 sm:flex"
+                      onClick={() =>
+                        router.push(
+                          resolveUrgentActionHref(action, propertyId || selectedPropertyId || undefined),
+                        )
+                      }
+                    >
+                      {getActionCta(action)}
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+
+                    {/* Mobile tap arrow */}
+                    <button
+                      className="flex shrink-0 items-center sm:hidden"
+                      onClick={() =>
+                        router.push(
+                          resolveUrgentActionHref(action, propertyId || selectedPropertyId || undefined),
+                        )
+                      }
+                    >
+                      <ChevronRight className="h-5 w-5 text-slate-300" />
+                    </button>
+                  </div>
                 );
-              })
-            ) : filterParam ? (
-              <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
-                <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-400" />
-                </div>
-                <h4 className="text-lg font-bold text-slate-900">No {filterParam} Actions</h4>
-                <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
-                  No {filterParam} actions found for this property. Try viewing all actions or check back later.
-                </p>
-              </MobileCard>
-            ) : (
-              <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
-                <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-400" />
-                </div>
-                <h4 className="text-lg font-bold text-slate-900">No Priority Actions Right Now</h4>
-                <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
-                  Your dashboard count is at zero because we didn&apos;t find incidents, overdue maintenance, or urgent renewals for this property.
-                </p>
-              </MobileCard>
-            )}
-          </div>
-        </MobileSection>
+              })}
+            </div>
+          ) : filterParam ? (
+            <div className="px-6 py-14 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 shadow-sm">
+                <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+              </div>
+              <h4 className="text-lg font-bold text-slate-900">No {filterParam} Actions</h4>
+              <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-500">
+                No {filterParam} actions found for this property. Try viewing all actions or check back later.
+              </p>
+            </div>
+          ) : (
+            <div className="px-6 py-14 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 shadow-sm">
+                <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+              </div>
+              <h4 className="text-lg font-bold text-slate-900">No Priority Actions</h4>
+              <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-500">
+                Your home has no urgent repair items right now.
+              </p>
+            </div>
+          )}
+        </div>
 
-        {/* 3. Concierge Entry Points: "How can we help?" */}
-        <MobileSection className="pt-4">
-          <MobileSectionHeader title="How can we help?" className="mb-6" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Button 
-              variant="outline" 
-              className="h-auto min-h-[184px] whitespace-normal p-0 text-left border-slate-200 hover:border-brand-300 hover:bg-brand-50/50 rounded-2xl group transition-all"
-              asChild
-            >
-              <Link
-                href={propertyId ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}
-                className="flex h-full w-full min-w-0 flex-col items-start p-6 text-left"
-              >
-                <Zap className="mb-4 h-8 w-8 shrink-0 text-brand-600 transition-transform group-hover:scale-110" />
-                <span className="block w-full text-lg font-bold leading-tight text-slate-900">Something&apos;s Broken</span>
-                <span className="mt-2 block w-full whitespace-normal text-sm leading-6 text-slate-500">
-                  AI-driven troubleshooting and repair vs. replace guidance.
-                </span>
-              </Link>
-            </Button>
+        {/* ROW 5 — Quick Help Tools Grid */}
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <Link
+            href={
+              propertyId
+                ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair`
+                : '/dashboard/replace-repair'
+            }
+            className="group flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-teal-100 bg-teal-50">
+                <Zap className="h-5 w-5 text-teal-600" />
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-slate-50 transition-all group-hover:border-teal-200 group-hover:bg-teal-50">
+                <ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5 group-hover:text-teal-600" />
+              </div>
+            </div>
+            <div>
+              <p className="font-bold text-slate-900">Something&apos;s Broken</p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                AI-driven troubleshooting and repair vs. replace guidance.
+              </p>
+            </div>
+          </Link>
 
-            <Button 
-              variant="outline" 
-              className="h-auto min-h-[184px] whitespace-normal p-0 text-left border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 rounded-2xl group transition-all"
-              asChild
-            >
-              <Link
-                href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}
-                className="flex h-full w-full min-w-0 flex-col items-start p-6 text-left"
-              >
-                <Search className="mb-4 h-8 w-8 shrink-0 text-blue-600 transition-transform group-hover:scale-110" />
-                <span className="block w-full text-lg font-bold leading-tight text-slate-900">Find a Specialist</span>
-                <span className="mt-2 block w-full whitespace-normal text-sm leading-6 text-slate-500">
-                  Search our directory of verified local service providers.
-                </span>
-              </Link>
-            </Button>
+          <Link
+            href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}
+            className="group flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50">
+                <Search className="h-5 w-5 text-blue-600" />
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-slate-50 transition-all group-hover:border-blue-200 group-hover:bg-blue-50">
+                <ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5 group-hover:text-blue-600" />
+              </div>
+            </div>
+            <div>
+              <p className="font-bold text-slate-900">Find a Specialist</p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                Search our directory of verified local service providers.
+              </p>
+            </div>
+          </Link>
 
-            <Button 
-              variant="outline" 
-              className="h-auto min-h-[184px] whitespace-normal p-0 text-left border-red-100 hover:border-red-300 hover:bg-red-50/50 rounded-2xl group transition-all"
-              asChild
-            >
-              <Link
-                href={propertyId ? `/dashboard/emergency?propertyId=${propertyId}` : '/dashboard/emergency'}
-                className="flex h-full w-full min-w-0 flex-col items-start p-6 text-left"
-              >
-                <AlertCircle className="mb-4 h-8 w-8 shrink-0 text-red-600 transition-transform group-hover:rotate-12" />
-                <span className="block w-full text-lg font-bold leading-tight text-slate-900">Emergency Help</span>
-                <span className="mt-2 block w-full whitespace-normal text-sm leading-6 text-slate-500">
-                  Instant 24/7 emergency services and shutdown guides.
-                </span>
-              </Link>
-            </Button>
+          <Link
+            href={propertyId ? `/dashboard/emergency?propertyId=${propertyId}` : '/dashboard/emergency'}
+            className="group flex flex-col gap-4 rounded-2xl border border-red-100/60 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-red-100 bg-red-50">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-slate-50 transition-all group-hover:border-red-200 group-hover:bg-red-50">
+                <ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5 group-hover:text-red-600" />
+              </div>
+            </div>
+            <div>
+              <p className="font-bold text-slate-900">Emergency Help</p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                Instant 24/7 emergency services and shutdown guides.
+              </p>
+            </div>
+          </Link>
 
-            <Button
-              variant="outline"
-              className="h-auto min-h-[184px] whitespace-normal p-0 text-left border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50/50 rounded-2xl group transition-all"
-              asChild
-            >
-              <Link
-                href={
-                  propertyId
-                    ? `/dashboard/properties/${propertyId}/tools/quote-comparison?from=fix-hub`
-                    : '/dashboard/quote-comparison'
-                }
-                className="flex h-full w-full min-w-0 flex-col items-start p-6 text-left"
-              >
-                <Scale className="mb-4 h-8 w-8 shrink-0 text-emerald-600 transition-transform group-hover:scale-110" />
-                <span className="block w-full text-lg font-bold leading-tight text-slate-900">Compare Quotes</span>
-                <span className="mt-2 block w-full whitespace-normal text-sm leading-6 text-slate-500">
-                  Review pricing side-by-side before you book.
-                </span>
-              </Link>
-            </Button>
-          </div>
-        </MobileSection>
+          <Link
+            href={
+              propertyId
+                ? `/dashboard/properties/${propertyId}/tools/quote-comparison?from=fix-hub`
+                : '/dashboard/quote-comparison'
+            }
+            className="group flex flex-col gap-4 rounded-2xl border border-violet-100/60 bg-white p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50">
+                <Scale className="h-5 w-5 text-violet-600" />
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-100 bg-slate-50 transition-all group-hover:border-violet-200 group-hover:bg-violet-50">
+                <ArrowRight className="h-4 w-4 text-slate-400 transition-all group-hover:translate-x-0.5 group-hover:text-violet-600" />
+              </div>
+            </div>
+            <div>
+              <p className="font-bold text-slate-900">Compare Quotes</p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                Review pricing side-by-side before you book.
+              </p>
+            </div>
+          </Link>
+        </div>
 
+        {/* Load error */}
         {loadError && (
-          <MobileCard className="border border-red-200 bg-red-50/70 p-4">
+          <div className="rounded-2xl border border-red-200 bg-red-50/70 p-4">
             <p className="text-sm font-semibold text-red-700">Some Fix data is unavailable.</p>
             <p className="mt-1 text-sm text-red-700/90">{loadError}</p>
             <Button
@@ -461,128 +640,163 @@ export default function ResolutionHubPage() {
             >
               Retry loading
             </Button>
-          </MobileCard>
+          </div>
         )}
 
-        {/* 4. Active Resolutions Feed */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 pt-4">
-          
-          {/* Left Column: Decisions & Intelligence */}
-          <MobileSection>
-            <MobileSectionHeader 
-              title="Intelligence & Decisions" 
-              subtitle="Calculated recommendations for your active issues."
-            />
-            <div className="space-y-4">
+        {/* ROW 6 — Dual Content Panels */}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+
+          {/* Intelligence & Decisions */}
+          <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+            <div className="border-b border-slate-50 px-6 py-5">
+              <h2 className="text-xl font-semibold text-slate-900">Intelligence & Decisions</h2>
+              <p className="mt-1 text-sm text-slate-500">Calculated recommendations for your active issues.</p>
+            </div>
+            <div className="space-y-4 p-6">
               {loading ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-slate-400" /></div>
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="animate-spin text-slate-400" />
+                </div>
               ) : resolutions.length > 0 ? (
                 resolutions.map((analysis) => (
-                  <WinCard 
+                  <WinCard
                     key={analysis.id}
                     title="Repair vs Replace"
                     value={analysis.inventoryItem?.name || 'Inventory Item'}
                     description={analysis.summary || 'Our AI has a recommendation for this item.'}
                     actionLabel="See Full Estimate"
                     onAction={() => {
-                      router.push(`/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`);
+                      router.push(
+                        `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`,
+                      );
                     }}
                     trust={{
                       confidenceLabel: `${analysis.confidence} Confidence`,
                       freshnessLabel: `Calculated ${formatDistanceToNowStrict(new Date(analysis.computedAt))} ago`,
-                      sourceLabel: "Lifespan Engine",
-                      rationale: `Verdict: ${analysis.verdict.replace('_', ' ')}`
+                      sourceLabel: 'Lifespan Engine',
+                      rationale: `Verdict: ${analysis.verdict.replace('_', ' ')}`,
                     }}
                   />
                 ))
               ) : (
-                <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
-                  <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                <div className="flex flex-col items-center py-10 text-center">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 shadow-sm">
                     <CheckCircle2 className="h-8 w-8 text-emerald-400" />
                   </div>
                   <h4 className="text-lg font-bold text-slate-900">Your Home is Healthy</h4>
-                  <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
-                    No active issues detected. Use the troubleshooter if something feels off, or run a seasonal scan.
+                  <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-500">
+                    No active issues detected. Use the troubleshooter if something feels off, or run a seasonal
+                    scan.
                   </p>
                   <div className="pt-6">
-                    <Button variant="outline" className="rounded-xl border-slate-200 h-11 px-6" asChild>
-                      <Link href={propertyId ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair` : '/dashboard/replace-repair'}>
-                        <Zap className="mr-2 h-4 w-4 text-brand-600" />
+                    <Button variant="outline" className="h-11 rounded-xl border-slate-200 px-6" asChild>
+                      <Link
+                        href={
+                          propertyId
+                            ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair`
+                            : '/dashboard/replace-repair'
+                        }
+                      >
+                        <Zap className="mr-2 h-4 w-4 text-teal-600" />
                         Start Troubleshooter
                       </Link>
                     </Button>
                   </div>
-                </MobileCard>
+                </div>
               )}
             </div>
-          </MobileSection>
+          </div>
 
-          {/* Right Column: Execution & Tracking */}
-          <MobileSection>
-            <MobileSectionHeader 
-              title="Active Jobs & Bookings" 
-              subtitle="Track your scheduled services and pending quotes."
-            />
-            <div className="space-y-4">
+          {/* Active Jobs & Bookings */}
+          <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+            <div className="border-b border-slate-50 px-6 py-5">
+              <h2 className="text-xl font-semibold text-slate-900">Active Jobs & Bookings</h2>
+              <p className="mt-1 text-sm text-slate-500">Track your scheduled services and pending quotes.</p>
+            </div>
+            <div className="space-y-4 p-6">
               {loading ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-slate-400" /></div>
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="animate-spin text-slate-400" />
+                </div>
               ) : activeBookings.length > 0 ? (
                 activeBookings.map((booking) => (
-                  <MobileCard key={booking.id} className="border-l-4 border-l-brand-500 shadow-sm">
-                    <div className="flex justify-between items-start mb-3">
+                  <div
+                    key={booking.id}
+                    className="rounded-xl border border-slate-100 border-l-4 border-l-teal-500 p-4 shadow-sm"
+                  >
+                    <div className="mb-3 flex items-start justify-between">
                       <div>
                         <h4 className="font-bold text-slate-900">{booking.service?.name || 'Service Job'}</h4>
                         <p className="text-xs text-slate-500">{booking.provider?.businessName}</p>
                       </div>
-                      <div className="bg-brand-50 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-normal">
+                      <div className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold tracking-normal text-teal-700">
                         {booking.status}
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-slate-600 mb-4">
+                    <div className="mb-4 flex items-center gap-4 text-sm text-slate-600">
                       <div className="flex items-center gap-1">
                         <CalendarClock className="h-4 w-4 text-slate-400" />
-                        {booking.scheduledDate ? new Date(booking.scheduledDate).toLocaleDateString() : 'TBD'}
+                        {booking.scheduledDate
+                          ? new Date(booking.scheduledDate).toLocaleDateString()
+                          : 'TBD'}
                       </div>
                       <div className="font-medium text-slate-900">
                         ${Number(booking.estimatedPrice || 0).toFixed(2)}
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" className="w-full justify-between h-9 text-brand-700 hover:bg-brand-50/50 rounded-lg" asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 w-full justify-between rounded-lg text-teal-700 hover:bg-teal-50/50"
+                      asChild
+                    >
                       <Link href={`/dashboard/bookings/${booking.id}`}>
                         View Resolution Details
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
-                  </MobileCard>
+                  </div>
                 ))
               ) : (
-                <MobileCard className="bg-slate-50 border-dashed border-slate-200 text-center py-12 px-6">
-                  <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
+                <div className="flex flex-col items-center py-10 text-center">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 shadow-sm">
                     <Search className="h-8 w-8 text-slate-300" />
                   </div>
                   <h4 className="text-lg font-bold text-slate-900">No Active Jobs</h4>
-                  <p className="text-sm text-slate-500 max-w-xs mx-auto mt-2 leading-relaxed">
+                  <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-500">
                     Need a specialist for a project? Browse our directory of verified pros to get started.
                   </p>
                   <div className="pt-6">
-                    <Button className="rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold h-11 px-6" asChild>
-                      <Link href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}>
+                    <Button
+                      className="h-11 rounded-xl bg-brand-600 px-6 font-bold text-white hover:bg-brand-700"
+                      asChild
+                    >
+                      <Link
+                        href={
+                          propertyId
+                            ? `/dashboard/providers?propertyId=${propertyId}`
+                            : '/dashboard/providers'
+                        }
+                      >
                         Find a Service Provider
                       </Link>
                     </Button>
                   </div>
-                </MobileCard>
-                )}
+                </div>
+              )}
 
-                <Button variant="outline" className="w-full border-slate-200 text-slate-600 h-11" asChild>
-                <Link href={propertyId ? `/dashboard/bookings?propertyId=${propertyId}` : '/dashboard/bookings'}>
-                  <CalendarClock className="h-4 w-4 mr-2" />
+              <Button variant="outline" className="h-11 w-full rounded-xl border-slate-200 text-slate-600" asChild>
+                <Link
+                  href={
+                    propertyId ? `/dashboard/bookings?propertyId=${propertyId}` : '/dashboard/bookings'
+                  }
+                >
+                  <CalendarClock className="mr-2 h-4 w-4" />
                   View All Booking History
                 </Link>
-                </Button>
-
+              </Button>
             </div>
-          </MobileSection>
+          </div>
 
         </div>
 
