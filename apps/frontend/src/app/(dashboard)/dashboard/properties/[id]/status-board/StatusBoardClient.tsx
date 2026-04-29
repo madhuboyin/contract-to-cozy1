@@ -173,7 +173,7 @@ const TABLE_SHELL_CLASS =
   "overflow-hidden rounded-[26px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(248,250,252,0.52))] shadow-[0_20px_44px_-34px_rgba(15,23,42,0.7)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.62),rgba(2,6,23,0.45))]";
 
 const DETAIL_BENTO_TILE_CLASS =
-  "rounded-2xl border border-white/75 bg-gradient-to-br from-white/80 to-slate-50/60 p-3 shadow-[0_10px_20px_-16px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/70 dark:from-slate-900/55 dark:to-slate-900/35";
+  "rounded-2xl border border-white/75 bg-gradient-to-br from-white/80 to-slate-50/60 p-4 shadow-[0_10px_20px_-16px_rgba(15,23,42,0.55)] backdrop-blur-sm dark:border-slate-700/70 dark:from-slate-900/55 dark:to-slate-900/35";
 
 const LINK_ACTION_BUTTON_CLASS =
   "h-8 px-2.5 text-xs border-teal-200 text-teal-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-50 hover:text-teal-800 hover:shadow-[0_10px_24px_-16px_rgba(13,148,136,0.7)] dark:border-teal-900/70 dark:text-teal-300 dark:hover:bg-teal-950/40";
@@ -603,7 +603,7 @@ export default function StatusBoardClient() {
           )}
           onClick={() => handleExpand(item)}
         >
-          <TableCell className="w-10 py-3 align-middle">
+          <TableCell className="w-10 py-5 align-middle">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -614,7 +614,7 @@ export default function StatusBoardClient() {
               <Pin className="h-5 w-5 sm:h-4 sm:w-4" />
             </button>
           </TableCell>
-          <TableCell className="min-w-0 py-2 align-middle">
+          <TableCell className="min-w-0 py-3 align-middle">
             <div className="flex items-center gap-3 min-w-0">
               <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${categoryVisual.toneClass}`}>
                 <CategoryIcon className="h-4 w-4" />
@@ -652,19 +652,19 @@ export default function StatusBoardClient() {
               </div>
             </div>
           </TableCell>
-          <TableCell className="hidden py-3 text-sm text-muted-foreground lg:table-cell">
+          <TableCell className="hidden py-5 text-sm text-muted-foreground lg:table-cell">
             <span className="inline-flex items-center gap-1.5">
               <CategoryIcon className="h-3.5 w-3.5 text-slate-500" />
               {humanizeActionType(item.category)}
             </span>
           </TableCell>
-          <TableCell className="hidden py-3 text-sm md:table-cell whitespace-nowrap">{formatAgeDisplay(item.ageYears)}</TableCell>
-          <TableCell className="hidden py-3 lg:table-cell">
+          <TableCell className="hidden py-5 text-sm md:table-cell whitespace-nowrap">{formatAgeDisplay(item.ageYears)}</TableCell>
+          <TableCell className="hidden py-5 lg:table-cell">
             <Badge variant="outline" className={`text-xs ${WARRANTY_COLORS[item.warrantyStatus]}`}>
               {WARRANTY_LABELS[item.warrantyStatus]}
             </Badge>
           </TableCell>
-          <TableCell className="py-3">
+          <TableCell className="py-5">
             {item.needsInstallDateForPrediction ? (
               <span className="inline-flex items-center gap-1.5">
                 <Badge
@@ -704,7 +704,7 @@ export default function StatusBoardClient() {
               </>
             )}
           </TableCell>
-          <TableCell className="py-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+          <TableCell className="py-5 text-sm font-medium text-slate-700 dark:text-slate-200">
             {item.needsInstallDateForPrediction ? (
               <span className="inline-flex items-center gap-1.5">
                 <Badge
@@ -736,7 +736,7 @@ export default function StatusBoardClient() {
               </Badge>
             )}
           </TableCell>
-          <TableCell className="py-3">
+          <TableCell className="py-5">
             {primaryActionLabel ? (
               canShowReplaceRepair ? (
                 <Link
@@ -795,7 +795,7 @@ export default function StatusBoardClient() {
               <span className="text-xs text-sky-600 dark:text-sky-400 cursor-pointer hover:underline">Open details ›</span>
             )}
           </TableCell>
-          <TableCell className="w-10 min-w-[40px] py-3 align-middle shrink-0">
+          <TableCell className="w-10 min-w-[40px] py-5 align-middle shrink-0">
             <ChevronRight
               className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
                 expandedId === item.id ? "rotate-90" : ""
@@ -807,10 +807,10 @@ export default function StatusBoardClient() {
         {expandedId === item.id && (
           <TableRow>
             <TableCell colSpan={9} className="bg-transparent p-0">
-              <div className="m-2 rounded-2xl border border-white/70 bg-[radial-gradient(circle_at_0%_0%,rgba(45,212,191,0.14),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.72),rgba(248,250,252,0.52))] p-3 shadow-[0_20px_40px_-30px_rgba(15,23,42,0.7)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_0%_0%,rgba(45,212,191,0.16),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.62),rgba(2,6,23,0.45))]">
-                <div className="space-y-3 border-l-2 border-teal-200/80 pl-3 dark:border-teal-800/80">
+              <div className="m-2 rounded-2xl border border-white/70 bg-[radial-gradient(circle_at_0%_0%,rgba(45,212,191,0.14),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.72),rgba(248,250,252,0.52))] p-5 shadow-[0_20px_40px_-30px_rgba(15,23,42,0.7)] backdrop-blur-xl dark:border-slate-700/70 dark:bg-[radial-gradient(circle_at_0%_0%,rgba(45,212,191,0.16),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.62),rgba(2,6,23,0.45))]">
+                <div className="space-y-5 border-l-2 border-teal-200/80 pl-4 dark:border-teal-800/80">
                 {/* Details grid */}
-                <div className="grid grid-cols-2 gap-2 text-sm xl:grid-cols-5">
+                <div className="grid grid-cols-2 gap-3 text-sm xl:grid-cols-5">
                   <div
                     className={cn(
                       DETAIL_BENTO_TILE_CLASS,
@@ -1635,8 +1635,8 @@ export default function StatusBoardClient() {
       </div>
 
       <div className="hidden lg:block pb-6">
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-3 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))]">
-        <div className="relative z-10 space-y-2">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_12%_15%,rgba(251,191,36,0.14),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.16),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] p-4 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] dark:border-slate-700/80 dark:bg-[radial-gradient(circle_at_12%_15%,rgba(245,158,11,0.1),transparent_42%),radial-gradient(circle_at_88%_12%,rgba(20,184,166,0.12),transparent_38%),linear-gradient(180deg,rgba(2,6,23,0.88),rgba(2,6,23,0.78))] sm:p-5">
+        <div className="relative z-10 space-y-3">
         <HomeToolHeader
           toolId="status-board"
           propertyId={propertyId}
@@ -1696,24 +1696,24 @@ export default function StatusBoardClient() {
 
         {/* Summary strip */}
         {summary && (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <button
               type="button"
               onClick={() => { setConditionFilter("all"); setPage(1); }}
               className={cn(
-                "flex w-full items-center justify-between rounded-xl border px-3 py-2 transition-all hover:shadow-sm",
+                "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all hover:shadow-sm",
                 GLASS_CARD_CLASS,
                 conditionFilter === "all" ? "ring-2 ring-slate-400 dark:ring-slate-500" : "",
               )}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Box className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
                 <div className="text-left">
                   <p className="text-[10px] tracking-normal text-slate-400 dark:text-slate-500">All</p>
                   <p className="stat-number mt-0.5 text-slate-800 dark:text-slate-100">
                     {summary.total}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500 opacity-80">items monitored</p>
+                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500 opacity-80">items monitored</p>
                 </div>
               </div>
               {conditionFilter === "all" && (
@@ -1725,19 +1725,19 @@ export default function StatusBoardClient() {
               type="button"
               onClick={() => { setConditionFilter(conditionFilter === "GOOD" ? "all" : "GOOD"); setPage(1); }}
               className={cn(
-                "flex w-full items-center justify-between rounded-xl border px-3 py-2 transition-all hover:shadow-sm",
+                "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all hover:shadow-sm",
                 "border-emerald-200/70 bg-emerald-50/80 dark:border-emerald-800/50 dark:bg-emerald-950/30",
                 conditionFilter === "GOOD" ? "ring-2 ring-emerald-400 dark:ring-emerald-600" : "",
               )}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
                 <div className="text-left">
                   <p className="text-[10px] tracking-normal text-emerald-500 dark:text-emerald-400">Good</p>
                   <p className="stat-number mt-0.5 text-emerald-700 dark:text-emerald-300">
                     {summary.good}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-emerald-500 dark:text-emerald-400 opacity-75">no action needed</p>
+                  <p className="mt-1 text-[10px] text-emerald-500 dark:text-emerald-400 opacity-75">no action needed</p>
                 </div>
               </div>
               {conditionFilter === "GOOD" && (
@@ -1749,19 +1749,19 @@ export default function StatusBoardClient() {
               type="button"
               onClick={() => { setConditionFilter(conditionFilter === "MONITOR" ? "all" : "MONITOR"); setPage(1); }}
               className={cn(
-                "flex w-full items-center justify-between rounded-xl border px-3 py-2 transition-all hover:shadow-sm",
+                "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all hover:shadow-sm",
                 "border-amber-200/70 bg-amber-50/80 dark:border-amber-800/50 dark:bg-amber-950/30",
                 conditionFilter === "MONITOR" ? "ring-2 ring-amber-400 dark:ring-amber-600" : "",
               )}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Clock className="h-4 w-4 shrink-0 text-amber-500 dark:text-amber-400" />
                 <div className="text-left">
                   <p className="text-[10px] tracking-normal text-amber-500 dark:text-amber-400">Monitor</p>
                   <p className="stat-number mt-0.5 text-amber-700 dark:text-amber-300">
                     {summary.monitor}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-amber-500 dark:text-amber-400 opacity-75">watch closely</p>
+                  <p className="mt-1 text-[10px] text-amber-500 dark:text-amber-400 opacity-75">watch closely</p>
                 </div>
               </div>
               {conditionFilter === "MONITOR" && (
@@ -1778,7 +1778,7 @@ export default function StatusBoardClient() {
               }}
               disabled={summary.actionNeeded === 0}
               className={cn(
-                "flex w-full items-center justify-between rounded-xl border px-3 py-2 transition-all",
+                "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all",
                 summary.actionNeeded > 0
                   ? "cursor-pointer border-rose-600 bg-rose-500 hover:bg-rose-600 hover:shadow-sm"
                   : "cursor-default border-emerald-200/70 bg-emerald-50/80",
@@ -1787,7 +1787,7 @@ export default function StatusBoardClient() {
                   : "",
               )}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 {summary.actionNeeded > 0
                   ? <AlertTriangle className="h-4 w-4 shrink-0 text-white" />
                   : <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}
@@ -1809,7 +1809,7 @@ export default function StatusBoardClient() {
                     {summary.actionNeeded > 0 ? summary.actionNeeded : "✓"}
                   </p>
                   <p className={cn(
-                    "mt-0.5 text-[10px] opacity-75",
+                    "mt-1 text-[10px] opacity-75",
                     summary.actionNeeded > 0 ? "text-white/70" : "text-emerald-500 dark:text-emerald-400"
                   )}>
                     {summary.actionNeeded > 0 ? "require attention" : "all stable"}
@@ -1824,7 +1824,7 @@ export default function StatusBoardClient() {
         )}
 
       {/* Controls bar */}
-      <div className={`flex flex-wrap items-center gap-2 p-2 ${GLASS_PANEL_CLASS}`}>
+      <div className={`flex flex-wrap items-center gap-2 p-2.5 ${GLASS_PANEL_CLASS}`}>
         <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
