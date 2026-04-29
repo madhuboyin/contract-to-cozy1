@@ -285,6 +285,18 @@ export default function ReplaceRepairClient() {
                   if (propertyId) query.append('propertyId', propertyId);
                   if (itemId) query.append('itemId', itemId);
                   if (item?.category) query.append('category', item.category);
+                  if (guidanceContext.guidanceJourneyId) {
+                    query.append('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+                  }
+                  if (guidanceContext.guidanceStepKey) {
+                    query.append('guidanceStepKey', guidanceContext.guidanceStepKey);
+                  }
+                  if (guidanceContext.guidanceSignalIntentFamily) {
+                    query.append(
+                      'guidanceSignalIntentFamily',
+                      guidanceContext.guidanceSignalIntentFamily
+                    );
+                  }
                   query.append('from', 'replace-repair');
                   router.push(`/dashboard/providers?${query.toString()}`);
                 }}
