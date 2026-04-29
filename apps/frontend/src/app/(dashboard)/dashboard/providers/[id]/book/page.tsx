@@ -26,6 +26,11 @@ import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
 import { track } from '@/lib/analytics/events';
+import type { GuidanceExecutionGuardResult } from '@/lib/api/guidanceApi';
+import {
+  buildExecutionGuardDetails,
+  buildExecutionGuardMessage,
+} from '@/features/guidance/utils/executionGuardMessaging';
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 function getInitials(firstName: string, lastName: string) {
@@ -84,6 +89,7 @@ export default function BookProviderPage() {
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
   const [descriptionTouched, setDescriptionTouched] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  const [submitGuardDetails, setSubmitGuardDetails] = useState<GuidanceExecutionGuardResult | null>(null);
 
   const bookingGuardQuery = useExecutionGuard(selectedPropertyId, 'BOOKING', {
     enabled: Boolean(selectedPropertyId) && hasGuardScopeContext,
@@ -97,13 +103,26 @@ export default function BookProviderPage() {
   });
 
   const isExecutionBlocked = hasGuardScopeContext && Boolean(bookingGuardQuery.data?.blocked);
-  const blockedReason =
-    bookingGuardQuery.data?.blockedReason ?? bookingGuardQuery.data?.reasons?.[0] ?? null;
-  const blockedJourneyIds = new Set(bookingGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []);
+  const activeGuardDetails = submitGuardDetails ?? bookingGuardQuery.data ?? null;
+  const isGuardLoading =
+    hasGuardScopeContext &&
+    !bookingGuardQuery.data &&
+    (bookingGuardQuery.isLoading || bookingGuardQuery.isFetching);
+  const blockedReason = buildExecutionGuardMessage(activeGuardDetails, 'booking');
+  const blockedDetails = buildExecutionGuardDetails(activeGuardDetails);
+  const blockedJourneyIds = new Set(
+    activeGuardDetails?.missingPrerequisites.map((item) => item.journeyId) ?? []
+  );
   const blockedAction = bookingGuidanceQuery.actions.find((action) => blockedJourneyIds.has(action.journeyId)) ?? null;
   const blockedActionHref =
     blockedAction?.href ??
     (selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/risk-assessment` : '/dashboard/maintenance');
+
+  useEffect(() => {
+    if (bookingGuardQuery.data && !bookingGuardQuery.data.blocked && submitGuardDetails) {
+      setSubmitGuardDetails(null);
+    }
+  }, [bookingGuardQuery.data, submitGuardDetails]);
 
   useEffect(() => {
     if (!finalPrice) return;
@@ -295,8 +314,13 @@ export default function BookProviderPage() {
       return;
     }
 
+    if (isGuardLoading) {
+      setError('Checking required guidance steps before booking. Please try again in a moment.');
+      return;
+    }
+
     if (isExecutionBlocked) {
-      setError(blockedReason || 'Complete prerequisite guidance steps before booking.');
+      setError(blockedReason);
       return;
     }
 
@@ -371,6 +395,16 @@ export default function BookProviderPage() {
       if (submitError?.status === 409 && typeof existingBookingId === 'string') {
         toast({ title: 'Existing booking found', description: 'Opening your active booking so you can update it.' });
         router.push(`/dashboard/bookings/${existingBookingId}`);
+        return;
+      }
+      const guardDetails = submitError?.payload?.details as GuidanceExecutionGuardResult | undefined;
+      if (
+        submitError?.status === 409 &&
+        submitError?.message === 'Execution is blocked by incomplete guidance prerequisites.' &&
+        guardDetails
+      ) {
+        setSubmitGuardDetails(guardDetails);
+        setError(buildExecutionGuardMessage(guardDetails, 'booking'));
         return;
       }
       setError(submitError?.message || 'An error occurred. Please try again.');
@@ -463,16 +497,18 @@ export default function BookProviderPage() {
       primaryAction={{
         title: isExecutionBlocked ? 'Complete prerequisite steps before booking.' : 'Finish details and create this booking.',
         description: isExecutionBlocked
-          ? blockedReason || 'Required guidance steps are incomplete for this property.'
+          ? blockedReason
+          : isGuardLoading
+            ? 'Checking guidance prerequisites before this booking can proceed.'
           : 'Complete service, schedule, and request details, then submit from the sticky action footer.',
         primaryAction: (
           <button
             type="button"
             onClick={scrollToSubmit}
-            disabled={isExecutionBlocked}
+            disabled={isExecutionBlocked || isGuardLoading}
             className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60"
           >
-            {isExecutionBlocked ? 'Booking blocked' : 'Review submit section'}
+            {isExecutionBlocked ? 'Booking blocked' : isGuardLoading ? 'Checking requirements...' : 'Review submit section'}
           </button>
         ),
         supportingAction: (
@@ -531,10 +567,8 @@ export default function BookProviderPage() {
       {isExecutionBlocked ? (
         <GuidanceWarningBanner
           title="Booking blocked until prerequisite steps are complete"
-          message={
-            blockedReason ||
-            'Coverage, decision, or pricing validation steps are still incomplete for this property.'
-          }
+          message={blockedReason}
+          details={blockedDetails}
           actionLabel={blockedAction?.nextStep ? `Go to Step ${blockedAction.nextStep.stepOrder}` : 'Open required step'}
           actionHref={blockedActionHref}
         />

@@ -24,6 +24,10 @@ import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate'
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
+import {
+  buildExecutionGuardDetails,
+  buildExecutionGuardMessage,
+} from '@/features/guidance/utils/executionGuardMessaging';
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 interface CompleteUser extends User {
@@ -89,8 +93,15 @@ export default function ProviderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const isExecutionBlocked = hasGuardScopeContext && Boolean(bookingGuardQuery.data?.blocked);
-  const blockedReason =
-    bookingGuardQuery.data?.blockedReason ?? bookingGuardQuery.data?.reasons?.[0] ?? null;
+  const isGuardLoading =
+    hasGuardScopeContext &&
+    !bookingGuardQuery.data &&
+    (bookingGuardQuery.isLoading || bookingGuardQuery.isFetching);
+  const blockedReason = buildExecutionGuardMessage(
+    bookingGuardQuery.data ?? null,
+    'booking'
+  );
+  const blockedDetails = buildExecutionGuardDetails(bookingGuardQuery.data ?? null);
   const blockedJourneyIds = new Set(
     bookingGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []
   );
@@ -306,7 +317,9 @@ export default function ProviderDetailPage() {
       primaryAction={{
         title: isExecutionBlocked ? 'Booking blocked until required steps are complete.' : 'Ready to book this provider?',
         description: isExecutionBlocked
-          ? blockedReason || 'Complete prerequisite guidance steps before booking.'
+          ? blockedReason
+          : isGuardLoading
+            ? 'Checking guidance prerequisites before opening booking.'
           : 'Confirm service fit, then move directly into booking with property context preserved.',
         primaryAction: isExecutionBlocked ? (
           <button
@@ -316,6 +329,15 @@ export default function ProviderDetailPage() {
           >
             <Calendar className="h-4 w-4" />
             Book now (blocked)
+          </button>
+        ) : isGuardLoading ? (
+          <button
+            type="button"
+            disabled
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Checking requirements...
           </button>
         ) : (
           <Link
@@ -384,10 +406,8 @@ export default function ProviderDetailPage() {
       {isExecutionBlocked ? (
         <GuidanceWarningBanner
           title="Booking is blocked until prerequisite steps are complete"
-          message={
-            blockedReason ||
-            'Finish required guidance steps before proceeding to provider booking.'
-          }
+          message={blockedReason}
+          details={blockedDetails}
           actionLabel="Go to required step"
           actionHref={blockedActionHref}
         />

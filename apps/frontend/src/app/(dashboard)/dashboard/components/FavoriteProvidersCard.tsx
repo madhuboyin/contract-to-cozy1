@@ -68,6 +68,24 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
   // Replace placeholder data with fetched data
   const favorites = data || []; 
 
+  const buildProviderProfileHref = (providerId: string): string => {
+    const params = new URLSearchParams();
+    if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
+    if (guidanceContext.guidanceJourneyId) params.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+    if (guidanceContext.guidanceStepKey) params.set('guidanceStepKey', guidanceContext.guidanceStepKey);
+    if (guidanceContext.guidanceSignalIntentFamily) {
+      params.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);
+    }
+    if (guidanceContext.itemId) params.set('itemId', guidanceContext.itemId);
+    if (guidanceContext.homeAssetId) params.set('homeAssetId', guidanceContext.homeAssetId);
+
+    const from = searchParams.get('from');
+    if (from) params.set('from', from);
+
+    const basePath = `/dashboard/providers/${providerId}`;
+    return params.toString() ? `${basePath}?${params.toString()}` : basePath;
+  };
+
   const buildQuickBookHref = (providerId: string): string => {
     const params = new URLSearchParams();
     if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
@@ -165,7 +183,7 @@ export const FavoriteProvidersCard = ({ className }: { className?: string }) => 
                         </Avatar>
                         <div className="min-w-0">
                             <Link 
-                                href={`/dashboard/providers/${provider.id}`} 
+                                href={buildProviderProfileHref(provider.id)}
                                 className="font-medium text-gray-900 hover:text-brand-primary truncate block"
                                 title={displayName}
                             >

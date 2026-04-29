@@ -36,6 +36,10 @@ import ProviderShellTemplate from '@/components/providers/ProviderShellTemplate'
 import { useExecutionGuard } from '@/features/guidance/hooks/useExecutionGuard';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { GuidanceWarningBanner } from '@/components/guidance/GuidanceWarningBanner';
+import {
+  buildExecutionGuardDetails,
+  buildExecutionGuardMessage,
+} from '@/features/guidance/utils/executionGuardMessaging';
 
 const DEFAULT_RADIUS = 25;
 
@@ -203,6 +207,7 @@ const ProviderList = ({
   finalPrice,
   vendorName,
   executionBlocked,
+  executionGuardLoading,
   blockedActionHref,
 }: {
   providers: Provider[];
@@ -224,6 +229,7 @@ const ProviderList = ({
   finalPrice?: string;
   vendorName?: string;
   executionBlocked?: boolean;
+  executionGuardLoading?: boolean;
   blockedActionHref?: string;
 }) => {
   return (
@@ -319,6 +325,14 @@ const ProviderList = ({
                   >
                     View profile (blocked)
                   </button>
+                ) : executionGuardLoading ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-600"
+                  >
+                    Checking requirements...
+                  </button>
                 ) : (
                   <Link
                     href={profileLink}
@@ -396,8 +410,15 @@ export default function ProvidersPage() {
   const [contextItemName, setContextItemName] = useState<string | null>(null);
   const [propertyZipCode, setPropertyZipCode] = useState<string>('');
   const isExecutionBlocked = hasGuardScopeContext && Boolean(providerGuardQuery.data?.blocked);
-  const blockedReason =
-    providerGuardQuery.data?.blockedReason ?? providerGuardQuery.data?.reasons?.[0] ?? null;
+  const isGuardLoading =
+    hasGuardScopeContext &&
+    !providerGuardQuery.data &&
+    (providerGuardQuery.isLoading || providerGuardQuery.isFetching);
+  const blockedReason = buildExecutionGuardMessage(
+    providerGuardQuery.data ?? null,
+    'provider booking'
+  );
+  const blockedDetails = buildExecutionGuardDetails(providerGuardQuery.data ?? null);
   const blockedJourneyIds = new Set(
     providerGuardQuery.data?.missingPrerequisites.map((item) => item.journeyId) ?? []
   );
@@ -712,10 +733,8 @@ export default function ProvidersPage() {
       {isExecutionBlocked ? (
         <GuidanceWarningBanner
           title="Provider search is blocked until required guidance steps are complete"
-          message={
-            blockedReason ??
-            'Complete decision, coverage, or pricing steps before choosing a provider.'
-          }
+          message={blockedReason}
+          details={blockedDetails}
           actionLabel="Go to required step"
           actionHref={blockedActionHref}
         />
@@ -763,6 +782,7 @@ export default function ProvidersPage() {
           finalPrice={finalPrice}
           vendorName={vendorName}
           executionBlocked={isExecutionBlocked}
+          executionGuardLoading={isGuardLoading}
           blockedActionHref={blockedActionHref}
         />
       ) : (

@@ -1636,7 +1636,27 @@ export default function ResolutionCenterClient() {
   const handleViewProvider = (item: any) => {
     const providerId = item?.providerId;
     if (!providerId) return;
-    router.push(`/dashboard/providers/${encodeURIComponent(providerId)}`);
+    const params = new URLSearchParams();
+    if (selectedPropertyId) params.set('propertyId', selectedPropertyId);
+
+    const guidanceJourneyId = searchParams.get('guidanceJourneyId');
+    const guidanceStepKey = searchParams.get('guidanceStepKey');
+    const guidanceSignalIntentFamily = searchParams.get('guidanceSignalIntentFamily');
+    const itemId = searchParams.get('itemId');
+    const homeAssetId = searchParams.get('homeAssetId');
+
+    if (guidanceJourneyId) params.set('guidanceJourneyId', guidanceJourneyId);
+    if (guidanceStepKey) params.set('guidanceStepKey', guidanceStepKey);
+    if (guidanceSignalIntentFamily) {
+      params.set('guidanceSignalIntentFamily', guidanceSignalIntentFamily);
+    }
+    if (itemId) params.set('itemId', itemId);
+    if (homeAssetId) params.set('homeAssetId', homeAssetId);
+
+    const href = params.toString()
+      ? `/dashboard/providers/${encodeURIComponent(providerId)}?${params.toString()}`
+      : `/dashboard/providers/${encodeURIComponent(providerId)}`;
+    router.push(href);
   };
 
   const handleOpenHistoryItem = (item: any) => {
