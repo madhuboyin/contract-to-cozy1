@@ -1171,6 +1171,102 @@ export class GuidanceJourneyService {
     );
   }
 
+  private getStepProducedData(step: any): Record<string, unknown> | null {
+    const value = step?.producedDataJson ?? step?.producedData ?? null;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+  }
+
+  private async reconcileInvalidLegacyRepairReplaceState(args: {
+    propertyId: string;
+    journey: any;
+  }) {
+    const journey = args.journey;
+    if (
+      journey?.journeyTypeKey !== 'asset_lifecycle_resolution' ||
+      !journey?.inventoryItemId
+    ) {
+      return false;
+    }
+
+    const repairDecisionStep = (journey.steps ?? []).find(
+      (step: any) => step.stepKey === 'repair_replace_decision'
+    );
+    const legacyCostStep = (journey.steps ?? []).find(
+      (step: any) => this.isLegacyLifecycleCostStep(step)
+    );
+
+    if (!repairDecisionStep || !legacyCostStep) {
+      return false;
+    }
+
+    const repairPayload = this.getStepProducedData(repairDecisionStep);
+    const legacyCostPayload = this.getStepProducedData(legacyCostStep);
+    const repairProofType = toNonEmptyString(repairPayload?.proofType);
+    const legacyCostProofType = toNonEmptyString(legacyCostPayload?.proofType);
+
+    const invalidLegacyState =
+      repairDecisionStep.status === 'SKIPPED' &&
+      legacyCostStep.status === 'COMPLETED' &&
+      repairProofType !== 'repair_replace_analysis' &&
+      legacyCostProofType === 'cost_estimate';
+
+    if (!invalidLegacyState) {
+      return false;
+    }
+
+    const filteredMissing = asStringArray(journey.missingContextKeys).filter(
+      (item) => item !== 'skipped:repair_replace_decision'
+    );
+
+    await prisma.$transaction(async (tx) => {
+      await (tx as any).guidanceJourneyStep.update({
+        where: { id: repairDecisionStep.id },
+        data: {
+          status: 'PENDING',
+          startedAt: null,
+          completedAt: null,
+          skippedAt: null,
+          skippedReason: null,
+          skippedReasonCode: null,
+          blockedAt: null,
+          blockedReason: null,
+          blockedReasonCode: null,
+        },
+      });
+
+      await (tx as any).guidanceJourneyStep.update({
+        where: { id: legacyCostStep.id },
+        data: {
+          status: 'PENDING',
+          startedAt: null,
+          completedAt: null,
+          blockedAt: null,
+          blockedReason: null,
+          blockedReasonCode: null,
+        },
+      });
+
+      await (tx as any).guidanceJourney.update({
+        where: { id: journey.id },
+        data: {
+          isLowContext: filteredMissing.length > 0,
+          missingContextKeys: filteredMissing,
+          version: { increment: 1 },
+        },
+      });
+    });
+
+    await guidanceStepResolverService.recomputeJourneyState({
+      propertyId: args.propertyId,
+      journeyId: journey.id,
+      actorUserId: null,
+      signalId: journey.primarySignalId ?? null,
+    });
+
+    return true;
+  }
+
   private async backfillLegacyLifecycleCostEvidence(args: {
     propertyId: string;
     journey: any;
@@ -1352,7 +1448,14 @@ export class GuidanceJourneyService {
       journey,
     });
 
-    if (didBackfillLegacyEvidence) {
+    const didReconcileLegacyState = didBackfillLegacyEvidence
+      ? false
+      : await this.reconcileInvalidLegacyRepairReplaceState({
+          propertyId,
+          journey,
+        });
+
+    if (didBackfillLegacyEvidence || didReconcileLegacyState) {
       journey = await fetchJourney();
     }
 
@@ -1380,7 +1483,7 @@ export class GuidanceJourneyService {
   async listActiveJourneysForProperty(propertyId: string) {
     const { guidanceJourney } = getGuidanceModels();
 
-    return guidanceJourney.findMany({
+    const fetchJourneys = () => guidanceJourney.findMany({
       where: {
         propertyId,
         status: 'ACTIVE',
@@ -1389,6 +1492,10 @@ export class GuidanceJourneyService {
         primarySignal: true,
         steps: {
           orderBy: [{ stepOrder: 'asc' }],
+        },
+        evidences: {
+          orderBy: [{ observedAt: 'desc' }],
+          take: 50,
         },
         inventoryItem: {
           select: { name: true, category: true },
@@ -1399,6 +1506,33 @@ export class GuidanceJourneyService {
       },
       orderBy: [{ updatedAt: 'desc' }],
     });
+
+    let journeys = await fetchJourneys();
+    let changed = false;
+
+    for (const journey of journeys) {
+      const didBackfill = await this.backfillLegacyLifecycleCostEvidence({
+        propertyId,
+        journey,
+      });
+
+      const didReconcile = didBackfill
+        ? false
+        : await this.reconcileInvalidLegacyRepairReplaceState({
+            propertyId,
+            journey,
+          });
+
+      if (didBackfill || didReconcile) {
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      journeys = await fetchJourneys();
+    }
+
+    return journeys;
   }
 
   async listSignalsForProperty(propertyId: string) {
