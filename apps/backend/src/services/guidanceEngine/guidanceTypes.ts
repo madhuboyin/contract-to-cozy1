@@ -41,6 +41,8 @@ export const GUIDANCE_EXECUTION_READINESS = [
 export const GUIDANCE_SIGNAL_STATUS = ['ACTIVE', 'RESOLVED', 'SUPPRESSED', 'ARCHIVED'] as const;
 export const GUIDANCE_SCOPE_CATEGORIES = ['ITEM', 'SERVICE'] as const;
 export type GuidanceScopeCategory = (typeof GUIDANCE_SCOPE_CATEGORIES)[number];
+export const GUIDANCE_EVIDENCE_SCOPE_CATEGORIES = ['PROPERTY', 'ITEM', 'HOME_ASSET', 'SERVICE', 'UNKNOWN'] as const;
+export const GUIDANCE_EVIDENCE_COMPATIBILITY = ['MATCHED', 'BROADER_CONTEXT', 'MISMATCHED', 'UNKNOWN'] as const;
 
 export const GUIDANCE_JOURNEY_STATUS = ['NOT_STARTED', 'ACTIVE', 'COMPLETED', 'ABORTED', 'ARCHIVED', 'DISMISSED'] as const;
 export const GUIDANCE_STEP_STATUS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'] as const;
@@ -55,6 +57,8 @@ export type GuidanceJourneyStatus = (typeof GUIDANCE_JOURNEY_STATUS)[number];
 export type GuidanceStepStatus = (typeof GUIDANCE_STEP_STATUS)[number];
 export type GuidanceSeverity = (typeof GUIDANCE_SEVERITY)[number];
 export type GuidanceStepSkipPolicy = (typeof GUIDANCE_STEP_SKIP_POLICY)[number];
+export type GuidanceEvidenceScopeCategory = (typeof GUIDANCE_EVIDENCE_SCOPE_CATEGORIES)[number];
+export type GuidanceEvidenceCompatibility = (typeof GUIDANCE_EVIDENCE_COMPATIBILITY)[number];
 
 export type UserInitiatedJourneyInput = {
   scopeCategory: GuidanceScopeCategory;

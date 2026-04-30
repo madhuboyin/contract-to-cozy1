@@ -246,6 +246,11 @@ export type GuidanceJourneyDetailResponse = {
     proofType: string | null;
     proofId: string | null;
     confidenceScore: number | null;
+    expectedScopeCategory: string | null;
+    expectedScopeId: string | null;
+    actualScopeCategory: string | null;
+    actualScopeId: string | null;
+    compatibility: string | null;
     observedAt: string | null;
     verifiedAt: string | null;
     invalidatedAt: string | null;

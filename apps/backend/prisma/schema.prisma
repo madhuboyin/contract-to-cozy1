@@ -3451,6 +3451,21 @@ enum GuidanceEvidenceStatus {
   SUPERSEDED
 }
 
+enum GuidanceEvidenceScopeCategory {
+  PROPERTY
+  ITEM
+  HOME_ASSET
+  SERVICE
+  UNKNOWN
+}
+
+enum GuidanceEvidenceCompatibility {
+  MATCHED
+  BROADER_CONTEXT
+  MISMATCHED
+  UNKNOWN
+}
+
 // Normalized actionable signal; can be produced by any CtC tool, worker, or resolver.
 model GuidanceSignal {
   id String @id @default(uuid())
@@ -3801,6 +3816,12 @@ model GuidanceStepEvidence {
   proofId          String?
   confidenceScore  Decimal? @db.Decimal(5, 4)
 
+  expectedScopeCategory GuidanceEvidenceScopeCategory?
+  expectedScopeId       String?
+  actualScopeCategory   GuidanceEvidenceScopeCategory?
+  actualScopeId         String?
+  compatibility         GuidanceEvidenceCompatibility   @default(UNKNOWN)
+
   observedAt    DateTime  @default(now())
   verifiedAt    DateTime?
   invalidatedAt DateTime?
@@ -3832,6 +3853,7 @@ model GuidanceStepEvidence {
   @@index([evidenceRefType, evidenceRefId])
   @@index([sourceToolKey, sourceFeatureKey, observedAt(sort: Desc)])
   @@index([evidenceType, status, observedAt(sort: Desc)])
+  @@index([compatibility, observedAt(sort: Desc)])
   @@index([proofId])
   @@map("guidance_step_evidences")
 }

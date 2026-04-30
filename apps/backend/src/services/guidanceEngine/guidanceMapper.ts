@@ -176,6 +176,22 @@ export function mapGuidanceEvidence(evidence: any) {
     proofType: evidence.proofType ?? null,
     proofId: evidence.proofId ?? null,
     confidenceScore: decimalToNumber(evidence.confidenceScore),
+    expectedScopeCategory: evidence.expectedScopeCategory ?? null,
+    expectedScopeId: evidence.expectedScopeId ?? null,
+    actualScopeCategory:
+      evidence.actualScopeCategory ??
+      (evidence.sourceToolKey === 'true-cost'
+        ? 'PROPERTY'
+        : null) ??
+      (evidence.inventoryItemId ? 'ITEM' : evidence.homeAssetId ? 'HOME_ASSET' : 'PROPERTY'),
+    actualScopeId:
+      evidence.actualScopeId ??
+      (evidence.sourceToolKey === 'true-cost' ? evidence.propertyId : null) ??
+      evidence.inventoryItemId ??
+      evidence.homeAssetId ??
+      evidence.propertyId ??
+      null,
+    compatibility: evidence.compatibility ?? 'UNKNOWN',
     observedAt: asIso(evidence.observedAt),
     verifiedAt: asIso(evidence.verifiedAt),
     invalidatedAt: asIso(evidence.invalidatedAt),

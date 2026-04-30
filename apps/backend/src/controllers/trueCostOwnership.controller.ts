@@ -43,6 +43,7 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
   const guidanceStepKey = readQueryString(req.query.guidanceStepKey);
   const guidanceSignalIntentFamily =
     readQueryString(req.query.guidanceSignalIntentFamily)?.toLowerCase() ?? 'financial_exposure';
+  const inventoryItemId = readQueryString(req.query.inventoryItemId ?? req.query.itemId);
 
   try {
     await guidanceJourneyService.recordToolCompletion({
@@ -51,6 +52,7 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
       journeyId: guidanceJourneyId ?? null,
       signalIntentFamily: guidanceSignalIntentFamily,
       issueDomain: 'FINANCIAL',
+      inventoryItemId,
       sourceToolKey: 'true-cost',
       sourceEntityType: 'TRUE_COST_OWNERSHIP_ESTIMATE',
       sourceEntityId: `${propertyId}:${dto.meta.generatedAt}`,
@@ -67,6 +69,11 @@ export async function getTrueCostOwnership(req: CustomRequest, res: Response) {
         maintenanceTotal: dto.rollup.breakdown.maintenance,
         utilitiesTotal: dto.rollup.breakdown.utilities,
         confidence: dto.meta.confidence,
+      },
+      metadata: {
+        actualScopeCategory: 'PROPERTY',
+        actualScopeId: propertyId,
+        resultContextLabel: 'Whole-home ownership cost estimate',
       },
     });
   } catch (guidanceError) {

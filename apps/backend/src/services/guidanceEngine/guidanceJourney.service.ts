@@ -11,6 +11,8 @@ import { guidanceCopyService } from './guidanceCopy.service';
 import { guidanceValidationService } from './guidanceValidation.service';
 import {
   clampConfidenceToDecimal,
+  GuidanceEvidenceCompatibility,
+  GuidanceEvidenceScopeCategory,
   GuidanceEvidenceSourceType,
   GuidanceEvidenceStatus,
   GuidanceEvidenceType,
@@ -68,6 +70,126 @@ function toNonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+type GuidanceEvidenceScopeSnapshot = {
+  category: GuidanceEvidenceScopeCategory;
+  scopeId: string | null;
+};
+
+function normalizeEvidenceScopeCategory(value: unknown): GuidanceEvidenceScopeCategory | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toUpperCase();
+  if (
+    normalized === 'PROPERTY' ||
+    normalized === 'ITEM' ||
+    normalized === 'HOME_ASSET' ||
+    normalized === 'SERVICE' ||
+    normalized === 'UNKNOWN'
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
+function buildEvidenceScopeSnapshot(
+  category: GuidanceEvidenceScopeCategory,
+  scopeId: string | null
+): GuidanceEvidenceScopeSnapshot {
+  return {
+    category,
+    scopeId: toNonEmptyString(scopeId),
+  };
+}
+
+function inferExpectedEvidenceScope(journey: any): GuidanceEvidenceScopeSnapshot {
+  if (journey?.scopeCategory === 'SERVICE') {
+    return buildEvidenceScopeSnapshot('SERVICE', journey?.scopeId ?? journey?.serviceKey ?? null);
+  }
+  if (journey?.inventoryItemId) {
+    return buildEvidenceScopeSnapshot('ITEM', journey.inventoryItemId);
+  }
+  if (journey?.homeAssetId) {
+    return buildEvidenceScopeSnapshot('HOME_ASSET', journey.homeAssetId);
+  }
+  return buildEvidenceScopeSnapshot('PROPERTY', journey?.propertyId ?? null);
+}
+
+function inferActualEvidenceScope(args: {
+  input: GuidanceToolCompletionInput;
+  journey: any;
+  signal: any | null;
+  producedRecord: Record<string, unknown>;
+  metadataRecord: Record<string, unknown>;
+}): GuidanceEvidenceScopeSnapshot {
+  const explicitCategory =
+    normalizeEvidenceScopeCategory(args.metadataRecord.actualScopeCategory) ??
+    normalizeEvidenceScopeCategory(args.producedRecord.actualScopeCategory) ??
+    normalizeEvidenceScopeCategory(args.metadataRecord.scopeCategory) ??
+    normalizeEvidenceScopeCategory(args.producedRecord.scopeCategory);
+
+  const explicitScopeId =
+    readFirstNonEmptyString(args.metadataRecord, ['actualScopeId', 'scopeId']) ??
+    readFirstNonEmptyString(args.producedRecord, ['actualScopeId', 'scopeId']);
+
+  if (explicitCategory) {
+    const fallbackScopeId =
+      explicitCategory === 'PROPERTY'
+        ? args.input.propertyId
+        : explicitCategory === 'SERVICE'
+          ? toNonEmptyString(args.journey?.scopeId ?? args.journey?.serviceKey ?? null)
+          : explicitCategory === 'ITEM'
+            ? toNonEmptyString(args.input.inventoryItemId ?? args.journey?.inventoryItemId ?? args.signal?.inventoryItemId ?? null)
+            : explicitCategory === 'HOME_ASSET'
+              ? toNonEmptyString(args.input.homeAssetId ?? args.journey?.homeAssetId ?? args.signal?.homeAssetId ?? null)
+              : null;
+    return buildEvidenceScopeSnapshot(explicitCategory, explicitScopeId ?? fallbackScopeId ?? null);
+  }
+
+  if (args.input.inventoryItemId ?? args.signal?.inventoryItemId ?? args.journey?.inventoryItemId) {
+    return buildEvidenceScopeSnapshot(
+      'ITEM',
+      toNonEmptyString(args.input.inventoryItemId ?? args.signal?.inventoryItemId ?? args.journey?.inventoryItemId ?? null)
+    );
+  }
+
+  if (args.input.homeAssetId ?? args.signal?.homeAssetId ?? args.journey?.homeAssetId) {
+    return buildEvidenceScopeSnapshot(
+      'HOME_ASSET',
+      toNonEmptyString(args.input.homeAssetId ?? args.signal?.homeAssetId ?? args.journey?.homeAssetId ?? null)
+    );
+  }
+
+  if (args.journey?.scopeCategory === 'SERVICE' && (args.journey?.scopeId ?? args.journey?.serviceKey)) {
+    return buildEvidenceScopeSnapshot(
+      'SERVICE',
+      toNonEmptyString(args.journey?.scopeId ?? args.journey?.serviceKey ?? null)
+    );
+  }
+
+  return buildEvidenceScopeSnapshot('PROPERTY', args.input.propertyId);
+}
+
+function determineEvidenceCompatibility(args: {
+  expected: GuidanceEvidenceScopeSnapshot;
+  actual: GuidanceEvidenceScopeSnapshot;
+}): GuidanceEvidenceCompatibility {
+  const { expected, actual } = args;
+
+  if (expected.category === 'UNKNOWN' || actual.category === 'UNKNOWN') {
+    return 'UNKNOWN';
+  }
+
+  if (expected.category === actual.category) {
+    if (!expected.scopeId || !actual.scopeId) return 'MATCHED';
+    return expected.scopeId === actual.scopeId ? 'MATCHED' : 'MISMATCHED';
+  }
+
+  if (actual.category === 'PROPERTY' && expected.category !== 'PROPERTY') {
+    return 'BROADER_CONTEXT';
+  }
+
+  return 'MISMATCHED';
 }
 
 function readFirstNonEmptyString(record: Record<string, unknown>, keys: string[]): string | null {
@@ -352,6 +474,18 @@ export class GuidanceJourneyService {
           ? metadataRecord.confidenceScore
           : null;
     const confidenceScore = clampConfidenceToDecimal(confidenceCandidate);
+    const expectedScope = inferExpectedEvidenceScope(args.journey);
+    const actualScope = inferActualEvidenceScope({
+      input: args.input,
+      journey: args.journey,
+      signal: args.signal,
+      producedRecord,
+      metadataRecord,
+    });
+    const compatibility = determineEvidenceCompatibility({
+      expected: expectedScope,
+      actual: actualScope,
+    });
 
     const evidenceType = inferEvidenceType({
       sourceToolKey: args.input.sourceToolKey ?? null,
@@ -376,16 +510,8 @@ export class GuidanceJourneyService {
           journeyId: args.journey.id,
           stepId: args.step.id,
           signalId: args.signal?.id ?? args.journey.primarySignalId ?? null,
-          homeAssetId:
-            args.journey.homeAssetId ??
-            args.signal?.homeAssetId ??
-            args.input.homeAssetId ??
-            null,
-          inventoryItemId:
-            args.journey.inventoryItemId ??
-            args.signal?.inventoryItemId ??
-            args.input.inventoryItemId ??
-            null,
+          homeAssetId: actualScope.category === 'HOME_ASSET' ? actualScope.scopeId : null,
+          inventoryItemId: actualScope.category === 'ITEM' ? actualScope.scopeId : null,
           evidenceType,
           sourceType,
           status,
@@ -397,11 +523,21 @@ export class GuidanceJourneyService {
           proofType,
           proofId,
           confidenceScore,
+          expectedScopeCategory: expectedScope.category,
+          expectedScopeId: expectedScope.scopeId,
+          actualScopeCategory: actualScope.category,
+          actualScopeId: actualScope.scopeId,
+          compatibility,
           observedAt: new Date(),
           createdByUserId: args.input.actorUserId ?? null,
           payloadJson: producedData,
           metadataJson: {
             ...metadataRecord,
+            expectedScopeCategory: expectedScope.category,
+            expectedScopeId: expectedScope.scopeId,
+            actualScopeCategory: actualScope.category,
+            actualScopeId: actualScope.scopeId,
+            compatibility,
             stepStatus: args.input.status,
             stepKey: args.resolvedStepKey,
             reasonCode: args.input.reasonCode ?? null,

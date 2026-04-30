@@ -18,7 +18,7 @@ import { GuidanceStepList } from './GuidanceStepList';
 import { GuidanceWarningBanner } from './GuidanceWarningBanner';
 import { Button } from '@/components/ui/button';
 import { resolveGuidanceStepHref } from '@/features/guidance/utils/guidanceDisplay';
-import { GuidanceStepDTO } from '@/lib/api/guidanceApi';
+import { GuidanceJourneyDTO, GuidanceStepDTO } from '@/lib/api/guidanceApi';
 
 type GuidanceDrawerProps = {
   propertyId: string;
@@ -114,6 +114,7 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
         <div className="mt-4 space-y-3">
           {selectedStep ? (
             <CompletedStepDetail
+              journey={detailJourney}
               step={selectedStep}
               href={selectedStepHref}
               events={stepEvents}
@@ -202,13 +203,44 @@ function renderValue(value: unknown): string {
   }
 }
 
+function formatScopeLabel(category: string | null | undefined) {
+  if (category === 'ITEM') return 'Item-specific';
+  if (category === 'HOME_ASSET') return 'Asset-level';
+  if (category === 'SERVICE') return 'Service-level';
+  if (category === 'PROPERTY') return 'Home-wide';
+  return 'Scope unknown';
+}
+
+function buildScopeMessage(args: {
+  compatibility: string | null | undefined;
+  actualScopeCategory: string | null | undefined;
+  expectedScopeCategory: string | null | undefined;
+}) {
+  if (
+    (args.compatibility === 'BROADER_CONTEXT' || args.compatibility === 'UNKNOWN') &&
+    args.actualScopeCategory === 'PROPERTY' &&
+    args.expectedScopeCategory !== 'PROPERTY'
+  ) {
+    return `This result is home-wide planning context, not proof for just this ${args.expectedScopeCategory === 'ITEM' ? 'item' : 'step scope'}.`;
+  }
+  if (args.compatibility === 'MATCHED') {
+    return `${formatScopeLabel(args.actualScopeCategory)} result aligned with this guidance step.`;
+  }
+  if (args.compatibility === 'MISMATCHED') {
+    return `This result was captured for a different scope than the guidance step expected.`;
+  }
+  return `We captured a result for this step, but its exact scope could not be verified.`;
+}
+
 function CompletedStepDetail({
+  journey,
   step,
   href,
   events,
   evidences,
   onBack,
 }: {
+  journey: GuidanceJourneyDTO;
   step: GuidanceStepDTO;
   href: string | null;
   events: Array<{
@@ -225,7 +257,13 @@ function CompletedStepDetail({
     sourceToolKey: string | null;
     proofType: string | null;
     proofId: string | null;
+    expectedScopeCategory: string | null;
+    expectedScopeId: string | null;
+    actualScopeCategory: string | null;
+    actualScopeId: string | null;
+    compatibility: string | null;
     payload: Record<string, unknown> | null;
+    metadata: Record<string, unknown> | null;
     createdAt: string | null;
   }>;
   onBack: () => void;
@@ -234,6 +272,23 @@ function CompletedStepDetail({
   const completedAt = formatDateTime(step.completedAt);
   const skippedAt = formatDateTime(step.skippedAt);
   const latestEvent = events[0] ?? null;
+  const primaryEvidence = evidences[0] ?? null;
+  const expectedScopeCategory =
+    primaryEvidence?.expectedScopeCategory ??
+    (journey.scopeCategory === 'SERVICE'
+      ? 'SERVICE'
+      : journey.inventoryItemId
+        ? 'ITEM'
+        : journey.homeAssetId
+          ? 'HOME_ASSET'
+          : 'PROPERTY');
+  const actualScopeCategory = primaryEvidence?.actualScopeCategory ?? null;
+  const compatibility = primaryEvidence?.compatibility ?? 'UNKNOWN';
+  const scopeMessage = buildScopeMessage({
+    compatibility,
+    actualScopeCategory,
+    expectedScopeCategory,
+  });
 
   return (
     <div className="space-y-3 rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
@@ -271,10 +326,28 @@ function CompletedStepDetail({
         ) : null}
       </div>
 
+      {primaryEvidence ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Result scope
+          </p>
+          <p className="mb-0 text-sm font-medium text-slate-900">
+            {formatScopeLabel(actualScopeCategory)}
+            {compatibility === 'BROADER_CONTEXT' ? ' planning context' : ' result'}
+          </p>
+          <p className="mb-0 mt-1 text-xs text-slate-600">{scopeMessage}</p>
+          {primaryEvidence.metadata?.resultContextLabel && typeof primaryEvidence.metadata.resultContextLabel === 'string' ? (
+            <p className="mb-0 mt-1 text-xs text-slate-600">{primaryEvidence.metadata.resultContextLabel}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {summaryItems.length > 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            What was done
+            {compatibility === 'BROADER_CONTEXT' || (compatibility === 'UNKNOWN' && actualScopeCategory === 'PROPERTY' && expectedScopeCategory !== 'PROPERTY')
+              ? 'Context captured'
+              : 'What was done'}
           </p>
           <dl className="space-y-2">
             {summaryItems.map(([key, value]) => (
