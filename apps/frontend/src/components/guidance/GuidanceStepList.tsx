@@ -12,9 +12,16 @@ type GuidanceStepListProps = {
   journey: GuidanceJourneyDTO;
   steps: GuidanceStepDTO[];
   currentStepId?: string | null;
+  onOpenStepDetail?: (step: GuidanceStepDTO) => void;
 };
 
-export function GuidanceStepList({ propertyId, journey, steps, currentStepId }: GuidanceStepListProps) {
+export function GuidanceStepList({
+  propertyId,
+  journey,
+  steps,
+  currentStepId,
+  onOpenStepDetail,
+}: GuidanceStepListProps) {
   if (!steps.length) return null;
 
   return (
@@ -26,6 +33,9 @@ export function GuidanceStepList({ propertyId, journey, steps, currentStepId }: 
           step,
         });
         const isCurrent = currentStepId === step.id;
+        const shouldOpenInlineDetail =
+          Boolean(onOpenStepDetail) &&
+          (step.status === 'COMPLETED' || step.status === 'SKIPPED');
 
         return (
           <li
@@ -47,7 +57,16 @@ export function GuidanceStepList({ propertyId, journey, steps, currentStepId }: 
 
               <div className="flex shrink-0 items-center gap-2">
                 <GuidanceStatusBadge kind="step" value={step.status} />
-                {href ? (
+                {shouldOpenInlineDetail ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenStepDetail?.(step)}
+                    className="inline-flex items-center text-xs font-medium text-brand-primary hover:underline"
+                  >
+                    Open
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                ) : href ? (
                   <Link href={href} className="inline-flex items-center text-xs font-medium text-brand-primary hover:underline">
                     Open
                     <ChevronRight className="h-3 w-3" />
