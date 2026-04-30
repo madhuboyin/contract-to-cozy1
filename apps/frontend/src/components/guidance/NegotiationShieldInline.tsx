@@ -6,7 +6,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { CheckCircle, ShieldCheck, TrendingDown, AlertCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle, ShieldCheck, TrendingDown, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   createNegotiationShieldCase,
@@ -33,6 +33,7 @@ type NegotiationShieldInlineProps = {
   inventoryItemId?: string | null;
   assetName?: string;
   issueType?: string | null;
+  presentation?: 'default' | 'guided';
   onComplete: () => void;
 };
 
@@ -60,6 +61,7 @@ export function NegotiationShieldInline({
   inventoryItemId,
   assetName = 'this service',
   issueType,
+  presentation = 'default',
   onComplete,
 }: NegotiationShieldInlineProps) {
   const queryClient = useQueryClient();
@@ -69,6 +71,7 @@ export function NegotiationShieldInline({
   const [error, setError] = React.useState<string | null>(null);
   const [caseDetail, setCaseDetail] = React.useState<NegotiationShieldCaseDetail | null>(null);
   const [completing, setCompleting] = React.useState(false);
+  const isGuided = presentation === 'guided';
 
   const isValidQuote = Boolean(quoteAmount.trim()) && Number(quoteAmount) > 0;
 
@@ -285,18 +288,20 @@ export function NegotiationShieldInline({
         {/* CTAs */}
         <div className="flex flex-col gap-2">
           <Button
-            className="min-h-[44px] w-full"
+            className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
             disabled={completing}
             onClick={handleComplete}
           >
             {completing ? 'Saving…' : 'Apply strategy & continue'}
           </Button>
-          <Link
-            href={`/dashboard/properties/${propertyId}/tools/negotiation-shield?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}&caseId=${caseDetail.case.id}`}
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-          >
-            Open full NegotiationShield
-          </Link>
+          {!isGuided && (
+            <Link
+              href={`/dashboard/properties/${propertyId}/tools/negotiation-shield?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}&caseId=${caseDetail.case.id}`}
+              className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+            >
+              Open full NegotiationShield
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -305,14 +310,16 @@ export function NegotiationShieldInline({
   // ---- Entry: quote form ----
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
-        <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-          Enter a quote to get negotiation leverage
-        </p>
-        <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
-          Enter the contractor&apos;s quoted price for {assetName}. We&apos;ll generate scripts and leverage points to help you negotiate.
-        </p>
-      </div>
+      {!isGuided && (
+        <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+          <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+            Enter a quote to get negotiation leverage
+          </p>
+          <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
+            Enter the contractor&apos;s quoted price for {assetName}. We&apos;ll generate scripts and leverage points to help you negotiate.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <div>
@@ -347,18 +354,23 @@ export function NegotiationShieldInline({
 
       <div className="flex flex-col gap-2">
         <Button
-          className="min-h-[44px] w-full"
+          className="min-h-[52px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
           disabled={!isValidQuote}
           onClick={handleAnalyze}
         >
-          Get negotiation strategy
+          <span className="inline-flex items-center gap-2">
+            Generate Negotiation Plan
+            <ArrowRight className="h-4 w-4" />
+          </span>
         </Button>
-        <Link
-          href={`/dashboard/properties/${propertyId}/tools/negotiation-shield?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}`}
-          className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-        >
-          Open full NegotiationShield
-        </Link>
+        {!isGuided && (
+          <Link
+            href={`/dashboard/properties/${propertyId}/tools/negotiation-shield?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}`}
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+          >
+            Open full NegotiationShield
+          </Link>
+        )}
       </div>
     </div>
   );

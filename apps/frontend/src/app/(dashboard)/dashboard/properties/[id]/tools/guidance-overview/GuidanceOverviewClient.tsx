@@ -6,14 +6,24 @@ import { useParams, useSearchParams, useRouter, usePathname } from 'next/navigat
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  ArrowRight,
+  BadgeDollarSign,
+  BarChart3,
   Box,
+  Check,
   ChevronRight,
   CircleAlert,
+  Lightbulb,
+  MessageSquareText,
   ShieldCheck,
   Sparkles,
   Wrench,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
 import {
   ActionPriorityRow,
   CompactEntityRow,
@@ -47,7 +57,6 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import GuidedJourneyTemplate from './components/GuidedJourneyTemplate';
-import TrustPanel from '../../components/route-templates/TrustPanel';
 import TrustStrip from '../../components/route-templates/TrustStrip';
 import { guidanceEngineTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
@@ -381,6 +390,24 @@ function stepTone(
   if (step.status === 'IN_PROGRESS') return 'elevated';
   if (step.status === 'COMPLETED') return 'good';
   return 'info';
+}
+
+function formatFreshnessLabel(timestamp: string | null | undefined): string {
+  if (!timestamp) return 'Updated recently';
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return 'Updated recently';
+  const diffMs = Date.now() - parsed.getTime();
+  const diffHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
+  if (diffHours < 24) return `Updated ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  const diffDays = Math.round(diffHours / 24);
+  return `Updated ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
+
+function resolveConfidenceDots(label: GuidanceActionModel['confidenceLabel']): number {
+  if (label === 'HIGH') return 5;
+  if (label === 'MEDIUM') return 3;
+  if (label === 'LOW') return 2;
+  return 3;
 }
 
 // ---------------------------------------------------------------------------
@@ -849,6 +876,7 @@ export default function GuidanceOverviewClient() {
           inventoryItemCategory={priceItemCategory}
           assetName={displayAssetName}
           issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
+          presentation="guided"
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
@@ -897,6 +925,7 @@ export default function GuidanceOverviewClient() {
           inventoryItemId={nsItemId}
           assetName={displayAssetName}
           issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
+          presentation="guided"
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
@@ -1353,31 +1382,388 @@ export default function GuidanceOverviewClient() {
         : 'Ready to start';
   const selectedJourneyStep =
     activeJourneySteps.find((step) => step.stepKey === selectedJourneyStepKey) ?? activeStep ?? null;
-  const stickyPrimaryAction = !activeHasScopedMatch ? (
-    <Button
-      className="min-h-[44px] w-full"
-      onClick={() => startJourneyMutation.mutate()}
-      disabled={startJourneyMutation.isPending}
-    >
-      {startJourneyMutation.isPending ? 'Creating journey…' : 'Start guided journey'}
-    </Button>
-  ) : selectedJourneyStep ? (
-    renderStepCta(selectedJourneyStep, true)
-  ) : null;
-
-  const trustPanel = (
-    <TrustPanel
-      subtitle="Why this step is recommended now and what you risk by skipping."
-      whyThisStep={
-        activePrimaryAction?.explanation?.why
-          ?? activePrimaryAction?.subtitle
-          ?? 'This step removes execution risk and keeps the journey moving.'
-      }
-      sourceAndConfidence={`${sourceLabel}${confidenceLabel ? ` · ${confidenceLabel}` : ''}${confidenceValue ? ` (${Math.round(confidenceValue)}%)` : ''}`}
-      freshness="Freshness updates after each guidance sync"
-      skipConsequence={skipConsequence}
-    />
+  const selectedStepOrder = selectedJourneyStep?.stepOrder ?? Math.max(activeStepIndex + 1, 1);
+  const progressPercent = activeJourneySteps.length
+    ? Math.round((selectedStepOrder / activeJourneySteps.length) * 100)
+    : 0;
+  const previousJourneyStep =
+    selectedJourneyStep && selectedStepOrder > 1
+      ? activeJourneySteps.find((step) => step.stepOrder === selectedStepOrder - 1) ?? null
+      : null;
+  const nextJourneyStep =
+    selectedJourneyStep
+      ? activeJourneySteps.find((step) => step.stepOrder === selectedStepOrder + 1) ?? null
+      : null;
+  const currentStepTitle = selectedJourneyStep?.label ?? activeStep?.label ?? 'Guided step';
+  const currentStepSubtitle =
+    selectedJourneyStep?.description ??
+    activePrimaryAction?.explanation?.nextStep ??
+    'Complete this step to keep the journey moving smoothly.';
+  const completedPriceStep = activeJourneySteps.find(
+    (step) => step.stepKey === 'validate_price' && step.status === 'COMPLETED'
   );
+  const completedPriceQuote =
+    typeof completedPriceStep?.producedData?.quoteAmount === 'number'
+      ? completedPriceStep.producedData.quoteAmount
+      : null;
+  const negotiationLow = completedPriceQuote ? Math.round(completedPriceQuote * 0.12) : 120;
+  const negotiationHigh = completedPriceQuote ? Math.round(completedPriceQuote * 0.25) : 300;
+  const costDelayValue = activePrimaryAction?.costOfDelay ?? null;
+  const overpayLow = costDelayValue ? Math.max(60, Math.round(costDelayValue * 0.65)) : 180;
+  const overpayHigh = costDelayValue ? Math.max(overpayLow + 40, Math.round(costDelayValue * 1.4)) : 420;
+  const confidenceDots = resolveConfidenceDots(confidenceLabel);
+  const freshnessLabel = formatFreshnessLabel(resolvedJourney?.updatedAt ?? activePrimaryAction?.journey.updatedAt);
+  const selectedStepCta = selectedJourneyStep ? renderStepCta(selectedJourneyStep, true) : null;
+  const journeyForSelectedStepHref = resolvedJourney
+    ? {
+        ...resolvedJourney,
+        inventoryItemId: resolvedJourney.inventoryItemId ?? selectedInventoryItemId ?? null,
+        homeAssetId: resolvedJourney.homeAssetId ?? selectedHomeAssetId ?? null,
+      }
+    : null;
+  const selectedStepWorkspaceHref =
+    selectedJourneyStep && journeyForSelectedStepHref
+      ? resolveGuidanceStepHref({
+          propertyId,
+          journey: journeyForSelectedStepHref,
+          step: selectedJourneyStep,
+        })
+      : null;
+  const currentStepToolKey = selectedJourneyStep?.toolKey ?? null;
+  const currentStepHighlightHeadline =
+    currentStepToolKey === 'negotiation-shield'
+      ? `Lower your quote by ${formatCurrency(negotiationLow)}–${formatCurrency(negotiationHigh)}`
+      : currentStepToolKey === 'service-price-radar'
+        ? `Check whether this quote is ${formatCurrency(overpayLow)}–${formatCurrency(overpayHigh)} too high`
+        : currentStepToolKey === 'coverage-intelligence'
+          ? 'Confirm what coverage really protects before you spend more'
+          : currentStepToolKey === 'replace-repair'
+            ? 'Decide whether repair or replacement is the smarter next move'
+            : currentStepToolKey === 'quote-comparison'
+              ? 'See which quote balances cost, scope, and risk best'
+              : activePrimaryAction?.explanation?.nextStep ?? currentStepTitle;
+  const currentStepHighlightBody =
+    currentStepToolKey === 'negotiation-shield'
+      ? "Contractors often overprice by 12–25% in your area. We'll generate exact scripts and leverage points to help you negotiate."
+      : currentStepToolKey === 'service-price-radar'
+        ? "We'll compare the quote against local market patterns so you can decide whether to push back before hiring."
+        : currentStepToolKey === 'coverage-intelligence'
+          ? 'Before you pay out of pocket, verify whether warranty or coverage can offset this issue.'
+          : currentStepToolKey === 'replace-repair'
+            ? 'We will weigh reliability, lifespan, and cost so you can choose the better path with confidence.'
+            : activePrimaryAction?.explanation?.why ?? currentStepSubtitle;
+
+  if (activeHasScopedMatch) {
+    return (
+      <MobilePageContainer className="space-y-6 lg:max-w-[1240px] lg:px-8 lg:pb-12">
+        <Button variant="ghost" className="min-h-[40px] w-fit px-0 text-slate-500 hover:text-slate-900" asChild>
+          <Link href={`/dashboard/properties/${propertyId}`}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to property
+          </Link>
+        </Button>
+
+        <Card className="rounded-[32px] border-slate-200/80 bg-white shadow-sm">
+          <CardContent className="p-6 lg:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-4">
+                <p className="text-sm font-medium text-emerald-700">Guided Journey · Phase B</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge
+                    variant="outline"
+                    className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700"
+                  >
+                    Step {selectedStepOrder} of {activeJourneySteps.length}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 lg:text-[3rem] lg:leading-[1.05]">
+                    {currentStepTitle}
+                  </h1>
+                  <p className="max-w-3xl text-base leading-7 text-slate-600 lg:text-lg">
+                    {currentStepSubtitle}
+                  </p>
+                </div>
+              </div>
+
+              <div className="w-full max-w-[280px] rounded-[24px] border border-slate-200/80 bg-slate-50/70 p-4">
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="font-medium text-slate-600">Journey progress</span>
+                  <span className="font-semibold text-emerald-700">{progressPercent}%</span>
+                </div>
+                <Progress
+                  value={progressPercent}
+                  className="h-2.5 bg-slate-200"
+                  indicatorClassName="bg-emerald-600"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
+          <Card className="hidden rounded-[28px] border-slate-200/80 bg-white shadow-sm lg:block">
+            <CardContent className="p-5">
+              <div className="space-y-5">
+                <h2 className="text-lg font-semibold text-slate-950">Your journey</h2>
+                <div className="space-y-1.5">
+                  {activeJourneySteps.map((step) => {
+                    const isSelected = step.stepKey === selectedJourneyStep?.stepKey;
+                    const isCompleted = step.status === 'COMPLETED';
+                    const isCurrent = step.stepKey === activeStep?.stepKey;
+                    const isFuture = !isCompleted && !isCurrent;
+
+                    return (
+                      <button
+                        key={step.id}
+                        type="button"
+                        onClick={() => selectJourneyStep(step.stepKey)}
+                        className={cn(
+                          'group relative flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors',
+                          isSelected
+                            ? 'bg-emerald-50 shadow-sm'
+                            : 'hover:bg-slate-50'
+                        )}
+                      >
+                        {isSelected ? (
+                          <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-emerald-500" />
+                        ) : null}
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold',
+                            isCompleted
+                              ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
+                              : isCurrent
+                                ? 'border-emerald-600 bg-emerald-600 text-white'
+                                : 'border-slate-200 bg-white text-slate-500'
+                          )}
+                        >
+                          {isCompleted ? <Check className="h-4 w-4" /> : step.stepOrder}
+                        </span>
+                        <div className="min-w-0 pt-0.5">
+                          <p
+                            className={cn(
+                              'text-sm font-medium leading-6',
+                              isSelected ? 'text-slate-950' : 'text-slate-700'
+                            )}
+                          >
+                            {step.label}
+                          </p>
+                        </div>
+                        {!isFuture && !isCompleted ? (
+                          <span className="sr-only">Current step</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-5">
+            <div className="-mx-1 overflow-x-auto lg:hidden">
+              <div className="flex min-w-max gap-2 px-1 pb-2">
+                {activeJourneySteps.map((step) => {
+                  const isSelected = step.stepKey === selectedJourneyStep?.stepKey;
+                  const isCompleted = step.status === 'COMPLETED';
+                  const isCurrent = step.stepKey === activeStep?.stepKey;
+
+                  return (
+                    <button
+                      key={step.id}
+                      type="button"
+                      onClick={() => selectJourneyStep(step.stepKey)}
+                      className={cn(
+                        'flex min-w-[180px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors',
+                        isSelected
+                          ? 'border-emerald-200 bg-emerald-50'
+                          : 'border-slate-200 bg-white'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold',
+                          isCompleted
+                            ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
+                            : isCurrent
+                              ? 'border-emerald-600 bg-emerald-600 text-white'
+                              : 'border-slate-200 bg-white text-slate-500'
+                        )}
+                      >
+                        {isCompleted ? <Check className="h-4 w-4" /> : step.stepOrder}
+                      </span>
+                      <span className="line-clamp-2 text-sm font-medium text-slate-800">
+                        {step.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <Card className="overflow-hidden rounded-[30px] border-slate-200/80 bg-white shadow-sm">
+              <CardContent className="space-y-6 p-4 sm:p-6 lg:p-7">
+                <div className="rounded-[28px] border border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-emerald-50/70 p-5 lg:p-6">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm">
+                        {currentStepToolKey === 'negotiation-shield' ? (
+                          <MessageSquareText className="h-5 w-5" />
+                        ) : currentStepToolKey === 'service-price-radar' ? (
+                          <BadgeDollarSign className="h-5 w-5" />
+                        ) : (
+                          <CircleAlert className="h-5 w-5" />
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-2xl font-semibold tracking-tight text-slate-950">
+                          {currentStepHighlightHeadline}
+                        </h3>
+                        <p className="max-w-2xl text-sm leading-7 text-slate-600 lg:text-base">
+                          {currentStepHighlightBody}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="hidden items-center justify-center lg:flex">
+                      <div className="relative flex h-28 w-28 items-center justify-center rounded-[28px] border border-emerald-100 bg-white/85 shadow-sm">
+                        <BadgeDollarSign className="h-12 w-12 text-emerald-500" />
+                        <div className="absolute -left-4 bottom-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-sm">
+                          <MessageSquareText className="h-4 w-4" />
+                        </div>
+                        <div className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-emerald-200" />
+                        <div className="absolute left-5 top-5 h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {selectedStepCta}
+
+                  <div className="flex flex-col gap-3 border-t border-slate-100 pt-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
+                    {selectedStepWorkspaceHref ? (
+                      <Link
+                        href={selectedStepWorkspaceHref}
+                        className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-emerald-700"
+                      >
+                        View full {selectedJourneyStep?.toolKey === 'negotiation-shield' ? 'NegotiationShield' : 'workspace'}
+                      </Link>
+                    ) : null}
+
+                    {selectedJourneyStep &&
+                    selectedJourneyStep.stepKey === activeStep?.stepKey &&
+                    selectedJourneyStep.status !== 'COMPLETED' &&
+                    selectedJourneyStep.status !== 'SKIPPED' ? (
+                      <button
+                        type="button"
+                        disabled={skipStepMutation.isPending}
+                        onClick={() => skipStepMutation.mutate({ stepId: selectedJourneyStep.id })}
+                        className="text-left text-sm font-medium text-slate-500 transition-colors hover:text-slate-900 disabled:opacity-50"
+                      >
+                        Skip this step
+                      </button>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      disabled={dismissMutation.isPending}
+                      onClick={() => {
+                        if (activePrimaryAction) {
+                          dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId });
+                        }
+                      }}
+                      className="text-left text-sm font-medium text-slate-500 transition-colors hover:text-rose-600 disabled:opacity-50"
+                    >
+                      Mark as not relevant
+                    </button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-[28px] border-slate-200/80 bg-white shadow-sm">
+              <CardContent className="p-0">
+                <div className="grid gap-0 lg:grid-cols-3">
+                  <div className="space-y-2 p-5">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                      <Lightbulb className="h-5 w-5" />
+                    </div>
+                    <p className="text-sm font-medium text-slate-600">Why this matters</p>
+                    <p className="text-sm text-slate-600">You may be overpaying by</p>
+                    <p className="text-2xl font-semibold tracking-tight text-emerald-700">
+                      {formatCurrency(overpayLow)} – {formatCurrency(overpayHigh)}
+                    </p>
+                    <p className="text-sm text-slate-500">based on local pricing patterns.</p>
+                  </div>
+
+                  <div className="border-t border-slate-100 p-5 lg:border-l lg:border-t-0">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                      <ShieldCheck className="h-5 w-5" />
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-slate-600">Confidence</p>
+                    <div className="mt-3 flex items-center gap-2">
+                      {[0, 1, 2, 3, 4].map((index) => (
+                        <span
+                          key={index}
+                          className={cn(
+                            'h-2.5 w-2.5 rounded-full',
+                            index < confidenceDots ? 'bg-emerald-500' : 'bg-slate-200'
+                          )}
+                        />
+                      ))}
+                    </div>
+                    <p className="mt-3 text-lg font-semibold text-slate-900">
+                      {formatEnumLabel(confidenceLabel ?? 'MEDIUM')} confidence
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Based on {Math.max(12, Math.round((confidenceValue ?? 42) / 2))} local repairs
+                    </p>
+                  </div>
+
+                  <div className="border-t border-slate-100 p-5 lg:border-l lg:border-t-0">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                      <BarChart3 className="h-5 w-5" />
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-slate-600">Data freshness</p>
+                    <p className="mt-3 text-lg font-semibold text-slate-900">{freshnessLabel}</p>
+                    <p className="text-sm text-slate-500">Prices change weekly in your area.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full justify-center rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto sm:px-6"
+                onClick={() => {
+                  if (previousJourneyStep) selectJourneyStep(previousJourneyStep.stepKey);
+                }}
+                disabled={!previousJourneyStep}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Previous step
+              </Button>
+
+              {nextJourneyStep ? (
+                <Button
+                  size="lg"
+                  className="w-full rounded-2xl px-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:w-auto"
+                  onClick={() => selectJourneyStep(nextJourneyStep.stepKey)}
+                >
+                  Next step: {nextJourneyStep.label}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </MobilePageContainer>
+    );
+  }
 
   return (
     <MobilePageContainer className="space-y-4 lg:max-w-6xl lg:px-8 lg:pb-10">
@@ -1394,236 +1780,48 @@ export default function GuidanceOverviewClient() {
         subtitle={issueLabelDisplay ? `Issue: ${issueLabelDisplay}` : 'Follow the guided steps below to resolve this issue end to end.'}
         progressLabel="Journey progress"
         progressValue={phaseBProgressValue}
-        stickyAction={stickyPrimaryAction}
-        stickyHelpText={activeHasScopedMatch ? 'Stay on the current step to keep confidence high.' : 'Start this journey to get confidence-backed next steps.'}
-        trustPanel={trustPanel}
         main={
           <>
-            {/* Scope context bar with override controls */}
             <ScenarioInputCard
-              title={`${startLabel} · ${issueLabelDisplay}`}
-              subtitle="Your guided resolution path is active."
-              actions={
-                <div className="flex gap-2">
-                  {/* 4.5: Change asset control */}
-                  <Button
-                    variant="ghost"
-                    className="min-h-[36px] flex-1 text-xs"
-                    onClick={changeAsset}
-                  >
-                    Change {scopeCategory === 'SERVICE' ? 'service' : 'item'}
-                  </Button>
-                  {/* 4.5: Different issue control */}
-                  <Button
-                    variant="ghost"
-                    className="min-h-[36px] flex-1 text-xs"
-                    onClick={differentIssue}
-                  >
-                    Different issue
-                  </Button>
-                </div>
-              }
+              title={`Start guided journey for ${startLabel}`}
+              subtitle={`Issue: ${issueLabelDisplay}`}
+              badge={<StatusChip tone="elevated">Ready to start</StatusChip>}
             >
-              <p className="text-xs text-[hsl(var(--mobile-text-muted))]">
-                {scopeCategory === 'SERVICE' ? 'Service guidance' : 'Item guidance'} ·{' '}
-                {activeHasScopedMatch ? 'Active journey found' : 'Ready to start'}
-              </p>
+              {startJourneyMutation.isSuccess ? (
+                <p className="text-sm text-emerald-700">
+                  Journey created. Loading your steps…
+                </p>
+              ) : startJourneyMutation.isPending ? (
+                <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                  Creating your guided journey…
+                </p>
+              ) : (
+                <>
+                  <p className="mb-3 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                    No existing guidance journey was found for this item and issue. We will create a personalised step-by-step plan for you now.
+                  </p>
+                  {startJourneyMutation.isError ? (
+                    <p className="mb-2 text-sm text-rose-700">
+                      Something went wrong. Please try again.
+                    </p>
+                  ) : null}
+                  <Button
+                    className="min-h-[44px] w-full"
+                    onClick={() => startJourneyMutation.mutate()}
+                  >
+                    Start guided journey
+                  </Button>
+                </>
+              )}
             </ScenarioInputCard>
 
-            {/* Journey load states */}
-            {guidance.isLoading || (isInPinnedMode && pinnedJourneyDetail.isLoading) ? (
-              <ScenarioInputCard title="Loading guidance" subtitle="Fetching your active journeys.">
-                <p className="text-sm text-slate-600">Please wait while we prepare your next best actions.</p>
-              </ScenarioInputCard>
-            ) : guidance.isError ? (
-              <ScenarioInputCard title="Guidance unavailable" subtitle="Could not load journeys right now.">
-                <p className="text-sm text-rose-700">Try refreshing the page or contact support.</p>
-              </ScenarioInputCard>
-            ) : !activeHasScopedMatch ? (
-              // 4.3: No journey → start button
-              <ScenarioInputCard
-                title={`Start guided journey for ${startLabel}`}
-                subtitle={`Issue: ${issueLabelDisplay}`}
-                badge={<StatusChip tone="elevated">Ready to start</StatusChip>}
-              >
-                {startJourneyMutation.isSuccess ? (
-                  <p className="text-sm text-emerald-700">
-                    Journey created. Loading your steps…
-                  </p>
-                ) : startJourneyMutation.isPending ? (
-                  <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                    Creating your guided journey…
-                  </p>
-                ) : (
-                  <>
-                    <p className="mb-3 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                      No existing guidance journey was found for this item and issue. We will create a personalised step-by-step plan for you now.
-                    </p>
-                    {startJourneyMutation.isError && (
-                      <p className="mb-2 text-sm text-rose-700">
-                        Something went wrong. Please try again.
-                      </p>
-                    )}
-                    <Button
-                      className="min-h-[44px] w-full"
-                      onClick={() => startJourneyMutation.mutate()}
-                    >
-                      Start guided journey
-                    </Button>
-                  </>
-                )}
-              </ScenarioInputCard>
-            ) : (
-              <>
-                {/* 4.4: Journey Steps — all steps visible first, selected step detail below */}
-                <ScenarioInputCard
-                  title="Journey steps"
-                  subtitle="See the full path first. Select any step to work it below."
-                >
-                  {activeJourneySteps.length === 0 ? (
-                    <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                      Steps are being prepared for this journey.
-                    </p>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
-                        <GuidanceJourneyStrip steps={activeJourneySteps} />
-                        <p className="mt-2 mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">
-                          Step {Math.max(activeStepIndex, 0) + 1} of {activeJourneySteps.length}
-                        </p>
-                      </div>
-
-                      <div className="grid gap-2 md:grid-cols-2">
-                        {activeJourneySteps.map((step, idx) => {
-                          const isSelected = step.stepKey === selectedJourneyStep?.stepKey;
-                          const isCurrentStep = idx === activeStepIndex;
-                          const isCompletedStep =
-                            step.status === 'COMPLETED' || step.status === 'SKIPPED';
-
-                          return (
-                            <button
-                              key={step.id}
-                              type="button"
-                              onClick={() => selectJourneyStep(step.stepKey)}
-                              className={cn(
-                                'rounded-xl border px-4 py-3 text-left transition',
-                                isSelected
-                                  ? 'border-emerald-300 bg-emerald-50'
-                                  : 'border-[hsl(var(--mobile-border-subtle))] bg-white hover:border-[hsl(var(--mobile-brand-strong))]/40 hover:bg-[hsl(var(--mobile-bg-muted))]'
-                              )}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
-                                    {step.stepOrder}. {step.label}
-                                  </p>
-                                  <p className="mt-1 mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
-                                    {step.description ??
-                                      (isCurrentStep
-                                        ? 'Current step'
-                                        : isCompletedStep
-                                          ? 'Completed step'
-                                          : 'Upcoming step')}
-                                  </p>
-                                </div>
-                                <StatusChip tone={stepTone(step)}>
-                                  {step.status.toLowerCase().replace('_', ' ')}
-                                </StatusChip>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {selectedJourneyStep ? (
-                        <div className="space-y-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <p className="mb-0 text-base font-semibold text-[hsl(var(--mobile-text-primary))]">
-                                Step {selectedJourneyStep.stepOrder}: {selectedJourneyStep.label}
-                              </p>
-                              {selectedJourneyStep.description ? (
-                                <p className="mt-1 mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                                  {selectedJourneyStep.description}
-                                </p>
-                              ) : null}
-                            </div>
-                            <StatusChip tone={stepTone(selectedJourneyStep)}>
-                              {selectedJourneyStep.status.toLowerCase().replace('_', ' ')}
-                            </StatusChip>
-                          </div>
-
-                          <ActionPriorityRow primaryAction={renderStepCta(selectedJourneyStep, true)} />
-
-                          {selectedJourneyStep.stepKey === activeStep?.stepKey &&
-                          selectedJourneyStep.status !== 'COMPLETED' &&
-                          selectedJourneyStep.status !== 'SKIPPED' ? (
-                            <Button
-                              variant="ghost"
-                              className="min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
-                              disabled={skipStepMutation.isPending}
-                              onClick={() => skipStepMutation.mutate({ stepId: selectedJourneyStep.id })}
-                            >
-                              Skip this step
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                </ScenarioInputCard>
-
-                {/* Guided context for the selected journey stays below the step rail */}
-                {activePrimaryAction && (
-                  <ScenarioInputCard
-                    title={`${focusLabel ?? resolveAssetLabel(activePrimaryAction)}`}
-                    subtitle={resolvePrimarySubtitle(activePrimaryAction)}
-                    badge={
-                      <StatusChip tone={resolvePriorityTone(activePrimaryAction)}>
-                        {activePrimaryAction.priorityGroup.toLowerCase()}
-                      </StatusChip>
-                    }
-                  >
-                    <div className="flex justify-end">
-                      <button
-                        onClick={() =>
-                          dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId })
-                        }
-                        disabled={dismissMutation.isPending}
-                        className="text-xs text-[hsl(var(--mobile-text-muted))] hover:text-rose-600 disabled:opacity-50"
-                      >
-                        Not relevant
-                      </button>
-                    </div>
-
-                    <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
-                      <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                        Why this journey matters
-                      </p>
-                      <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
-                        {activePrimaryAction.explanation?.why ??
-                          activePrimaryAction.subtitle ??
-                          'Following this journey now reduces cost and execution risk.'}
-                      </p>
-                      {activePrimaryAction.costOfDelay ? (
-                        <p className="mb-0 text-sm font-semibold text-amber-700">
-                          Potential delay cost: ~{formatCurrency(activePrimaryAction.costOfDelay)}
-                        </p>
-                      ) : null}
-                    </div>
-                  </ScenarioInputCard>
-                )}
-              </>
-            )}
-
-            {/* Fallback tools when no journey exists for ITEM scope */}
-            {!activeHasScopedMatch && scopeCategory === 'ITEM' && selectedAssetOption && (
+            {!activeHasScopedMatch && scopeCategory === 'ITEM' && selectedAssetOption ? (
               <ScenarioInputCard
                 title="Explore related tools"
                 subtitle="While your journey is being set up, you can use these tools directly."
               >
                 <div className="space-y-2">
-                  {selectedAssetOption.inventoryItemId && (
+                  {selectedAssetOption.inventoryItemId ? (
                     <ActionPriorityRow
                       primaryAction={
                         <Link
@@ -1637,7 +1835,7 @@ export default function GuidanceOverviewClient() {
                         </Link>
                       }
                     />
-                  )}
+                  ) : null}
                   <ActionPriorityRow
                     primaryAction={
                       <Link
@@ -1663,7 +1861,7 @@ export default function GuidanceOverviewClient() {
                   />
                 </div>
               </ScenarioInputCard>
-            )}
+            ) : null}
           </>
         }
       />

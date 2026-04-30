@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle,
   ChevronDown,
   TrendingDown,
@@ -98,6 +99,7 @@ type PriceCheckInlineProps = {
   inventoryItemCategory: string | null;
   assetName?: string;
   issueType?: string | null;
+  presentation?: 'default' | 'guided';
   onComplete: () => void;
 };
 
@@ -114,6 +116,7 @@ export function PriceCheckInline({
   inventoryItemCategory,
   assetName = 'this item',
   issueType,
+  presentation = 'default',
   onComplete,
 }: PriceCheckInlineProps) {
   const queryClient = useQueryClient();
@@ -158,6 +161,7 @@ export function PriceCheckInline({
   const priorCheck = (recentChecksQuery.data ?? [])[0] ?? null;
 
   const isValidForm = Boolean(quoteAmount.trim()) && Number(quoteAmount) > 0;
+  const isGuided = presentation === 'guided';
 
   // ---- Submit a new check ----
   async function handleSubmit() {
@@ -263,7 +267,7 @@ export function PriceCheckInline({
   if (phase === 'prior' && priorCheck) {
     return (
       <div className="space-y-3">
-        <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
           <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
             Recent price check found
           </p>
@@ -285,7 +289,9 @@ export function PriceCheckInline({
           <button
             type="button"
             onClick={() => setPhase('form')}
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+            className={isGuided
+              ? 'inline-flex min-h-[40px] w-full items-center justify-center rounded-xl px-3 text-sm font-medium text-slate-600 hover:text-emerald-700'
+              : 'inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]'}
           >
             Run a new check instead
           </button>
@@ -297,14 +303,16 @@ export function PriceCheckInline({
   // ---- State A: Form ----
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
-        <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-          Validate the service quote
-        </p>
-        <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
-          Enter the quote you received. We&apos;ll compare it against market rates for your area.
-        </p>
-      </div>
+      {!isGuided ? (
+        <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+          <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+            Validate the service quote
+          </p>
+          <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
+            Enter the quote you received. We&apos;ll compare it against market rates for your area.
+          </p>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         {/* Category */}
@@ -376,18 +384,21 @@ export function PriceCheckInline({
 
       <div className="flex flex-col gap-2">
         <Button
-          className="min-h-[44px] w-full"
+          className="min-h-[50px] w-full rounded-2xl shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
           disabled={!isValidForm}
           onClick={handleSubmit}
         >
           Check this quote
+          <ArrowRight className="h-4 w-4" />
         </Button>
-        <Link
-          href={fullToolHref}
-          className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-        >
-          Open full price radar
-        </Link>
+        {!isGuided ? (
+          <Link
+            href={fullToolHref}
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+          >
+            Open full price radar
+          </Link>
+        ) : null}
       </div>
     </div>
   );
