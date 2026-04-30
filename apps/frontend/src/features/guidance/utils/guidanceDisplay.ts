@@ -39,6 +39,27 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
   'guidance-overview': '/dashboard/properties/:propertyId/tools/guidance-overview',
 };
 
+const GUIDANCE_FOCUSED_TOOL_KEYS = new Set([
+  'booking',
+  'capital-timeline',
+  'coverage-intelligence',
+  'coverage-options',
+  'do-nothing-simulator',
+  'documents',
+  'history-verify',
+  'home-event-radar',
+  'home-savings',
+  'inspection-report',
+  'maintenance',
+  'negotiation-shield',
+  'price-finalization',
+  'quote-comparison',
+  'recalls',
+  'replace-repair',
+  'service-price-radar',
+  'true-cost',
+]);
+
 function replaceRouteParam(path: string, key: string, value: string | null | undefined): string {
   if (!path.includes(`:${key}`)) return path;
   if (!value) return path;
@@ -110,8 +131,21 @@ export function resolveGuidanceStepHref(args: {
   journey: GuidanceJourneyDTO;
   step: GuidanceStepDTO;
   next?: GuidanceNextStepResult | null;
+  mode?: 'guided' | 'standalone';
 }): string | null {
-  const { propertyId, journey, step, next } = args;
+  const { propertyId, journey, step, next, mode = 'guided' } = args;
+
+  if (
+    mode === 'guided' &&
+    step.toolKey &&
+    GUIDANCE_FOCUSED_TOOL_KEYS.has(step.toolKey)
+  ) {
+    return appendGuidanceContext(
+      `/dashboard/properties/${propertyId}/guidance/step`,
+      journey,
+      step
+    );
+  }
 
   const routeTemplate =
     step.routePath ?? (step.toolKey ? FALLBACK_TOOL_ROUTE[step.toolKey] ?? null : null);
