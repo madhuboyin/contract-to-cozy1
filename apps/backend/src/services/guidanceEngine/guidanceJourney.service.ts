@@ -1093,6 +1093,21 @@ export class GuidanceJourneyService {
       throw new APIError('Unable to resolve a journey step key for tool completion.', 400, 'GUIDANCE_STEP_KEY_REQUIRED');
     }
 
+    const targetStep = (journey.steps ?? []).find(
+      (step: any) => step.stepKey === resolvedStepKey
+    );
+
+    if (input.status === 'COMPLETED' && targetStep?.status === 'SKIPPED') {
+      await guidanceStepResolverService.markStepStatus({
+        propertyId: input.propertyId,
+        journeyId: journey.id,
+        stepKey: resolvedStepKey,
+        nextStatus: 'IN_PROGRESS',
+        actorUserId: input.actorUserId ?? null,
+        signalId: signal?.id ?? null,
+      });
+    }
+
     const transitioned = await guidanceStepResolverService.markStepStatus({
       propertyId: input.propertyId,
       journeyId: journey.id,
@@ -1180,19 +1195,16 @@ export class GuidanceJourneyService {
         evidence.stepId === legacyCostStep.id &&
         evidence.proofType === 'repair_replace_analysis'
     );
-    if (hasItemScopedEvidence) {
-      return false;
-    }
 
     const repairDecisionStep = (journey.steps ?? []).find(
       (step: any) =>
-        step.stepKey === 'repair_replace_decision' &&
-        step.producedData &&
-        step.producedData.proofType === 'repair_replace_analysis'
+        step.stepKey === 'repair_replace_decision'
     );
 
     const fallbackProducedData =
-      repairDecisionStep?.producedData && typeof repairDecisionStep.producedData === 'object'
+      repairDecisionStep?.producedData &&
+      typeof repairDecisionStep.producedData === 'object' &&
+      repairDecisionStep.producedData.proofType === 'repair_replace_analysis'
         ? repairDecisionStep.producedData
         : null;
     const fallbackProofId = toNonEmptyString(fallbackProducedData?.proofId);
@@ -1209,6 +1221,58 @@ export class GuidanceJourneyService {
       return false;
     }
 
+    const sharedProducedData = latestAnalysis
+      ? this.buildReplaceRepairProducedData(latestAnalysis)
+      : fallbackProducedData;
+    const sharedSourceEntityId = latestAnalysis?.id ?? fallbackProofId;
+
+    let changed = false;
+
+    if (
+      repairDecisionStep &&
+      repairDecisionStep.status !== 'COMPLETED' &&
+      sharedProducedData
+    ) {
+      try {
+        await this.recordToolCompletion({
+          propertyId: args.propertyId,
+          actorUserId: null,
+          journeyId: journey.id,
+          inventoryItemId: journey.inventoryItemId,
+          signalIntentFamily:
+            journey.primarySignal?.signalIntentFamily ?? 'lifecycle_end_or_past_life',
+          issueDomain: 'ASSET_LIFECYCLE',
+          sourceToolKey: 'replace-repair',
+          sourceEntityType: 'REPLACE_REPAIR_ANALYSIS',
+          sourceEntityId: sharedSourceEntityId,
+          stepKey: repairDecisionStep.stepKey,
+          status: 'COMPLETED',
+          producedData: sharedProducedData,
+          metadata: {
+            actualScopeCategory: 'ITEM',
+            actualScopeId: journey.inventoryItemId,
+            resultContextLabel: 'Item-specific repair vs replace analysis',
+            legacyStepBackfill: true,
+          },
+        });
+        changed = true;
+      } catch (error) {
+        logger.warn(
+          {
+            propertyId: args.propertyId,
+            journeyId: journey.id,
+            inventoryItemId: journey.inventoryItemId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          '[GUIDANCE] failed to backfill repair/replace decision step'
+        );
+      }
+    }
+
+    if (hasItemScopedEvidence) {
+      return changed;
+    }
+
     try {
       await this.recordToolCompletion({
         propertyId: args.propertyId,
@@ -1219,12 +1283,10 @@ export class GuidanceJourneyService {
         issueDomain: 'ASSET_LIFECYCLE',
         sourceToolKey: 'replace-repair',
         sourceEntityType: 'REPLACE_REPAIR_ANALYSIS',
-        sourceEntityId: latestAnalysis?.id ?? fallbackProofId,
+        sourceEntityId: sharedSourceEntityId,
         stepKey: legacyCostStep.stepKey,
         status: 'COMPLETED',
-        producedData: latestAnalysis
-          ? this.buildReplaceRepairProducedData(latestAnalysis)
-          : fallbackProducedData,
+        producedData: sharedProducedData,
         metadata: {
           actualScopeCategory: 'ITEM',
           actualScopeId: journey.inventoryItemId,
@@ -1244,7 +1306,7 @@ export class GuidanceJourneyService {
         },
         '[GUIDANCE] failed to backfill legacy lifecycle cost evidence'
       );
-      return false;
+      return changed;
     }
   }
 
