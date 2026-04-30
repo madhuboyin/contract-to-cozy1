@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, ArrowLeft, Loader2, Wrench, Search } from 'lucide-react';
+import Link from 'next/link';
+import { AlertCircle, ArrowLeft, Loader2, Wrench, Search, Lock, ArrowRight } from 'lucide-react';
 import { getInventoryItem } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -25,6 +26,8 @@ import {
   runReplaceRepairAnalysis,
 } from '@/lib/api/replaceRepairApi';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
+import { useJourney } from '@/features/guidance/hooks/useJourney';
+import { mapGuidanceJourneyToActionModel } from '@/features/guidance/utils/guidanceMappers';
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
 const CATEGORY_LIFESPAN_YEARS: Record<string, number> = {
@@ -224,6 +227,67 @@ export default function ReplaceRepairClient() {
     }),
     [searchParams]
   );
+  const journeyQuery = useJourney(propertyId, guidanceContext.guidanceJourneyId ?? null);
+  const pinnedJourneyAction = useMemo(() => {
+    if (!propertyId || !journeyQuery.data?.journey) return null;
+    return mapGuidanceJourneyToActionModel({
+      propertyId,
+      journey: journeyQuery.data.journey,
+      next: journeyQuery.data.next ?? null,
+    });
+  }, [propertyId, journeyQuery.data]);
+  const providerSearchHref = useMemo(() => {
+    const query = new URLSearchParams();
+    if (propertyId) query.append('propertyId', propertyId);
+    if (itemId) query.append('itemId', itemId);
+    if (item?.category) query.append('category', item.category);
+    if (guidanceContext.guidanceJourneyId) {
+      query.append('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+    }
+    if (guidanceContext.guidanceStepKey) {
+      query.append('guidanceStepKey', guidanceContext.guidanceStepKey);
+    }
+    if (guidanceContext.guidanceSignalIntentFamily) {
+      query.append(
+        'guidanceSignalIntentFamily',
+        guidanceContext.guidanceSignalIntentFamily
+      );
+    }
+    query.append('from', 'replace-repair');
+    return `/dashboard/providers?${query.toString()}`;
+  }, [
+    propertyId,
+    itemId,
+    item?.category,
+    guidanceContext.guidanceJourneyId,
+    guidanceContext.guidanceStepKey,
+    guidanceContext.guidanceSignalIntentFamily,
+  ]);
+  const shouldRouteToJourneyStep = Boolean(
+    pinnedJourneyAction &&
+      (pinnedJourneyAction.executionReadiness !== 'READY' ||
+        pinnedJourneyAction.fundingGapFlag ||
+        pinnedJourneyAction.blockedReason)
+  );
+  const isJourneyLoadingForCta = Boolean(
+    guidanceContext.guidanceJourneyId && !pinnedJourneyAction && journeyQuery.isLoading
+  );
+  const journeyStepLabel = pinnedJourneyAction?.nextStep?.label?.trim()
+    ? pinnedJourneyAction.nextStep.label.trim()
+    : pinnedJourneyAction?.explanation?.nextStep?.trim() || 'Review next step';
+  const journeyStepNumber =
+    typeof pinnedJourneyAction?.nextStep?.stepOrder === 'number'
+      ? pinnedJourneyAction.nextStep.stepOrder
+      : null;
+  const journeyCtaLabel = journeyStepNumber
+    ? `Step ${journeyStepNumber}: ${journeyStepLabel}`
+    : journeyStepLabel;
+  const journeyCtaHint =
+    pinnedJourneyAction?.blockedReason ||
+    pinnedJourneyAction?.warnings?.[0] ||
+    (pinnedJourneyAction?.fundingGapFlag
+      ? 'Review funding options before committing to execution.'
+      : null);
 
   const runAnalysis = async () => {
     if (!propertyId || !itemId) return;
@@ -278,32 +342,57 @@ export default function ReplaceRepairClient() {
           />
           {analysis && (
             <div className="px-1">
-              <Button 
-                className="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-xl h-12 shadow-md shadow-brand-100"
-                onClick={() => {
-                  const query = new URLSearchParams();
-                  if (propertyId) query.append('propertyId', propertyId);
-                  if (itemId) query.append('itemId', itemId);
-                  if (item?.category) query.append('category', item.category);
-                  if (guidanceContext.guidanceJourneyId) {
-                    query.append('guidanceJourneyId', guidanceContext.guidanceJourneyId);
-                  }
-                  if (guidanceContext.guidanceStepKey) {
-                    query.append('guidanceStepKey', guidanceContext.guidanceStepKey);
-                  }
-                  if (guidanceContext.guidanceSignalIntentFamily) {
-                    query.append(
-                      'guidanceSignalIntentFamily',
-                      guidanceContext.guidanceSignalIntentFamily
-                    );
-                  }
-                  query.append('from', 'replace-repair');
-                  router.push(`/dashboard/providers?${query.toString()}`);
-                }}
-              >
-                <Search className="mr-2 h-4 w-4" />
-                Find Pros for this {analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON' ? 'Replacement' : 'Repair'}
-              </Button>
+              {shouldRouteToJourneyStep && pinnedJourneyAction?.href ? (
+                <div className="space-y-2">
+                  <Button
+                    asChild
+                    className="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-xl h-12 shadow-md shadow-brand-100"
+                  >
+                    <Link href={pinnedJourneyAction.href}>
+                      {journeyCtaLabel}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                  {journeyCtaHint ? (
+                    <p className="mb-0 text-sm text-slate-600">{journeyCtaHint}</p>
+                  ) : null}
+                </div>
+              ) : isJourneyLoadingForCta ? (
+                <Button
+                  type="button"
+                  disabled
+                  className="w-full rounded-xl h-12"
+                  variant="secondary"
+                >
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Checking required steps...
+                </Button>
+              ) : shouldRouteToJourneyStep ? (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    disabled
+                    className="w-full rounded-xl h-12"
+                    variant="secondary"
+                  >
+                    <Lock className="mr-2 h-4 w-4" />
+                    Continue with guidance first
+                  </Button>
+                  {journeyCtaHint ? (
+                    <p className="mb-0 text-sm text-slate-600">{journeyCtaHint}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <Button
+                  className="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-xl h-12 shadow-md shadow-brand-100"
+                  onClick={() => {
+                    router.push(providerSearchHref);
+                  }}
+                >
+                  <Search className="mr-2 h-4 w-4" />
+                  Find Pros for this {analysis.verdict === 'REPLACE_NOW' || analysis.verdict === 'REPLACE_SOON' ? 'Replacement' : 'Repair'}
+                </Button>
+              )}
             </div>
           )}
         </div>

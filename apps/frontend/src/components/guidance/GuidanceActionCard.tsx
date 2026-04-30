@@ -29,7 +29,7 @@ const COVERAGE_LABEL: Record<string, string> = {
 
 const WARNING_TITLE: Record<string, string> = {
   NOT_READY: 'This step is blocked — complete prerequisites first',
-  NEEDS_CONTEXT: 'Answer a few questions to unlock the next step',
+  NEEDS_CONTEXT: 'Complete the next planning step before execution',
 };
 
 export function GuidanceActionCard({ action, onOpenJourney, compact = false }: GuidanceActionCardProps) {
@@ -46,7 +46,10 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
 
   const urgency = URGENCY_CONFIG[action.priorityGroup] ?? null;
   const coverageLabel = action.coverageImpact ? COVERAGE_LABEL[action.coverageImpact] ?? null : null;
-  const warningTitle = WARNING_TITLE[action.executionReadiness] ?? 'Before you continue';
+  const warningTitle =
+    action.executionReadiness === 'NEEDS_CONTEXT' && action.fundingGapFlag
+      ? 'Review funding before you schedule work'
+      : WARNING_TITLE[action.executionReadiness] ?? 'Before you continue';
   const firstMissingStep =
     action.executionReadiness === 'NEEDS_CONTEXT' && action.missingPrerequisites.length > 0
       ? action.missingPrerequisites[0].label
