@@ -1145,6 +1145,17 @@ export class GuidanceJourneyService {
     };
   }
 
+  private isLegacyLifecycleCostStep(step: any) {
+    const stepKey = String(step?.stepKey ?? '').toLowerCase();
+    const toolKey = String(step?.toolKey ?? '').toLowerCase();
+    const label = String(step?.label ?? '').toLowerCase();
+    return (
+      stepKey === 'estimate_cost_impact' ||
+      toolKey === 'true-cost' ||
+      label.includes('cost tradeoff')
+    );
+  }
+
   private async backfillLegacyLifecycleCostEvidence(args: {
     propertyId: string;
     journey: any;
@@ -1158,7 +1169,7 @@ export class GuidanceJourneyService {
     }
 
     const legacyCostStep = (journey.steps ?? []).find(
-      (step: any) => step.stepKey === 'estimate_cost_impact'
+      (step: any) => this.isLegacyLifecycleCostStep(step)
     );
     if (!legacyCostStep || legacyCostStep.status !== 'COMPLETED') {
       return false;
@@ -1173,6 +1184,19 @@ export class GuidanceJourneyService {
       return false;
     }
 
+    const repairDecisionStep = (journey.steps ?? []).find(
+      (step: any) =>
+        step.stepKey === 'repair_replace_decision' &&
+        step.producedData &&
+        step.producedData.proofType === 'repair_replace_analysis'
+    );
+
+    const fallbackProducedData =
+      repairDecisionStep?.producedData && typeof repairDecisionStep.producedData === 'object'
+        ? repairDecisionStep.producedData
+        : null;
+    const fallbackProofId = toNonEmptyString(fallbackProducedData?.proofId);
+
     const latestAnalysis = await prisma.replaceRepairAnalysis.findFirst({
       where: {
         propertyId: args.propertyId,
@@ -1181,7 +1205,7 @@ export class GuidanceJourneyService {
       orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    if (!latestAnalysis) {
+    if (!latestAnalysis && !fallbackProducedData) {
       return false;
     }
 
@@ -1195,15 +1219,18 @@ export class GuidanceJourneyService {
         issueDomain: 'ASSET_LIFECYCLE',
         sourceToolKey: 'replace-repair',
         sourceEntityType: 'REPLACE_REPAIR_ANALYSIS',
-        sourceEntityId: latestAnalysis.id,
-        stepKey: 'estimate_cost_impact',
+        sourceEntityId: latestAnalysis?.id ?? fallbackProofId,
+        stepKey: legacyCostStep.stepKey,
         status: 'COMPLETED',
-        producedData: this.buildReplaceRepairProducedData(latestAnalysis),
+        producedData: latestAnalysis
+          ? this.buildReplaceRepairProducedData(latestAnalysis)
+          : fallbackProducedData,
         metadata: {
           actualScopeCategory: 'ITEM',
           actualScopeId: journey.inventoryItemId,
           resultContextLabel: 'Item-specific repair vs replace analysis',
           legacyStepBackfill: true,
+          sourceStepKey: repairDecisionStep?.stepKey ?? null,
         },
       });
       return true;

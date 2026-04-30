@@ -549,7 +549,9 @@ function pickPreferredEvidence(args: {
   const direct = [...args.evidences];
   const isLegacyLifecycleCostStep =
     args.journey.journeyTypeKey === 'asset_lifecycle_resolution' &&
-    (args.step.stepKey === 'estimate_cost_impact' || args.step.toolKey === 'true-cost');
+    (args.step.stepKey === 'estimate_cost_impact' ||
+      args.step.toolKey === 'true-cost' ||
+      args.step.label.toLowerCase().includes('cost tradeoff'));
 
   const fallbackCandidates = isLegacyLifecycleCostStep
     ? args.allJourneyEvidences.filter(
@@ -575,6 +577,53 @@ function pickPreferredEvidence(args: {
     if (rankDiff !== 0) return rankDiff;
     return (b.createdAt || '').localeCompare(a.createdAt || '');
   })[0];
+}
+
+function buildRepairReplaceStepEvidenceFallback(args: {
+  journey: GuidanceJourneyDTO;
+  selectedStep: GuidanceStepDTO;
+}): GuidanceEvidenceView | null {
+  const isLegacyLifecycleCostStep =
+    args.journey.journeyTypeKey === 'asset_lifecycle_resolution' &&
+    (args.selectedStep.stepKey === 'estimate_cost_impact' ||
+      args.selectedStep.toolKey === 'true-cost' ||
+      args.selectedStep.label.toLowerCase().includes('cost tradeoff'));
+
+  if (!isLegacyLifecycleCostStep) return null;
+
+  const sourceStep = (args.journey.steps ?? []).find(
+    (step) =>
+      step.stepKey === 'repair_replace_decision' &&
+      step.producedData &&
+      step.producedData.proofType === 'repair_replace_analysis'
+  );
+
+  if (!sourceStep?.producedData) {
+    return null;
+  }
+
+  return {
+    id: `fallback-step-${sourceStep.id}`,
+    evidenceType: 'TOOL_RESULT',
+    sourceToolKey: sourceStep.toolKey ?? 'replace-repair',
+    proofType:
+      typeof sourceStep.producedData.proofType === 'string'
+        ? sourceStep.producedData.proofType
+        : 'repair_replace_analysis',
+    proofId:
+      typeof sourceStep.producedData.proofId === 'string' ? sourceStep.producedData.proofId : null,
+    expectedScopeCategory: 'ITEM',
+    expectedScopeId: args.journey.inventoryItemId ?? null,
+    actualScopeCategory: 'ITEM',
+    actualScopeId: args.journey.inventoryItemId ?? null,
+    compatibility: 'MATCHED',
+    payload: sourceStep.producedData,
+    metadata: {
+      resultContextLabel: 'Item-specific repair vs replace analysis',
+      surfacedFromStepOutput: true,
+    },
+    createdAt: sourceStep.completedAt ?? sourceStep.updatedAt ?? null,
+  };
 }
 
 function buildEvidenceTitle(evidence: GuidanceEvidenceView) {
@@ -650,15 +699,20 @@ function CompletedStepDetail({
     evidences,
     allJourneyEvidences,
   });
+  const fallbackStepEvidence = buildRepairReplaceStepEvidenceFallback({
+    journey,
+    selectedStep: step,
+  });
+  const preferredDisplayEvidence = preferredEvidence ?? fallbackStepEvidence;
   const displayedPayload =
-    preferredEvidence?.payload && Object.keys(preferredEvidence.payload).length > 0
-      ? preferredEvidence.payload
+    preferredDisplayEvidence?.payload && Object.keys(preferredDisplayEvidence.payload).length > 0
+      ? preferredDisplayEvidence.payload
       : step.producedData ?? {};
   const summaryItems = Object.entries(displayedPayload);
   const completedAt = formatDateTime(step.completedAt);
   const skippedAt = formatDateTime(step.skippedAt);
   const latestEvent = events[0] ?? null;
-  const primaryEvidence = preferredEvidence ?? evidences[0] ?? null;
+  const primaryEvidence = preferredDisplayEvidence ?? evidences[0] ?? null;
   const expectedScopeCategory =
     primaryEvidence?.expectedScopeCategory ??
     (journey.scopeCategory === 'SERVICE'
@@ -737,7 +791,7 @@ function CompletedStepDetail({
             {compatibility === 'BROADER_CONTEXT' ? ' planning context' : ' result'}
           </p>
           <p className="mb-0 mt-1 text-xs text-slate-600">{scopeMessage}</p>
-          {preferredEvidence && !evidences.some((evidence) => evidence.id === preferredEvidence.id) ? (
+          {primaryEvidence && !evidences.some((evidence) => evidence.id === primaryEvidence.id) ? (
             <p className="mb-0 mt-1 text-xs text-slate-600">
               Showing the item-specific repair vs replace result because it is more relevant than the older home-wide estimate for this legacy step.
             </p>
