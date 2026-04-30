@@ -648,17 +648,20 @@ export default function ServicePriceRadarClient() {
   const prefilledQuoteAmount = searchParams.get('quoteAmount');
   const prefilledLinkedEntityType = searchParams.get('linkedEntityType');
   const prefilledLinkedEntityId = searchParams.get('linkedEntityId');
+  const effectiveLinkedEntityType =
+    prefilledLinkedEntityType ?? (guidanceItemId ? 'APPLIANCE' : null);
+  const effectiveLinkedEntityId = prefilledLinkedEntityId ?? guidanceItemId;
   const prefilledLinkedKey =
-    prefilledLinkedEntityType && prefilledLinkedEntityId
-      ? `${prefilledLinkedEntityType}:${prefilledLinkedEntityId}`
+    effectiveLinkedEntityType && effectiveLinkedEntityId
+      ? `${effectiveLinkedEntityType}:${effectiveLinkedEntityId}`
       : '';
   const prefilledLinkedOption =
     prefilledLinkedKey &&
-    ['SYSTEM', 'APPLIANCE', 'DOCUMENT', 'INCIDENT', 'ROOM', 'OTHER'].includes(prefilledLinkedEntityType || '')
+    ['SYSTEM', 'APPLIANCE', 'DOCUMENT', 'INCIDENT', 'ROOM', 'OTHER'].includes(effectiveLinkedEntityType || '')
       ? {
           key: prefilledLinkedKey,
-          linkedEntityType: prefilledLinkedEntityType as ServiceRadarLinkedEntityType,
-          linkedEntityId: prefilledLinkedEntityId as string,
+          linkedEntityType: effectiveLinkedEntityType as ServiceRadarLinkedEntityType,
+          linkedEntityId: effectiveLinkedEntityId as string,
           label: searchParams.get('label')?.trim() || 'Linked context',
           description: 'Prefilled from your current workflow',
         }
@@ -670,8 +673,8 @@ export default function ServicePriceRadarClient() {
     searchParams.get('label') || '',
     prefilledQuoteAmount || '',
     searchParams.get('vendor') || '',
-    prefilledLinkedEntityType || '',
-    prefilledLinkedEntityId || '',
+    effectiveLinkedEntityType || '',
+    effectiveLinkedEntityId || '',
   ].join('|');
 
   const hasResult = Boolean(currentCheck);
@@ -856,6 +859,8 @@ export default function ServicePriceRadarClient() {
       );
     }
   }, [
+    effectiveLinkedEntityId,
+    effectiveLinkedEntityType,
     prefilledCategoryValue,
     prefilledLinkedKey,
     prefilledLinkedOption,

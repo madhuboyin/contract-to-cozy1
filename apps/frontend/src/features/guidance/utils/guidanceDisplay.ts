@@ -69,6 +69,12 @@ function appendGuidanceContext(
   if (journey.homeAssetId) {
     params.set('homeAssetId', journey.homeAssetId);
   }
+  if (step.toolKey === 'service-price-radar' && journey.inventoryItemId) {
+    params.set('linkedEntityType', 'APPLIANCE');
+    params.set('linkedEntityId', journey.inventoryItemId);
+    const assetName = journey.inventoryItem?.name?.trim() ?? null;
+    if (assetName) params.set('label', assetName);
+  }
   // FRD-FR-10: For booking steps, pass asset name and issue description so the
   // booking form can auto-populate the description field.
   if (step.toolKey === 'booking') {
