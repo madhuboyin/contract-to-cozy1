@@ -205,6 +205,99 @@ function renderValue(value: unknown): string {
   }
 }
 
+function formatMoneyFromCents(value: unknown) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(numeric / 100);
+}
+
+function formatMonths(value: unknown) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  const rounded = Math.round(numeric);
+  return `${rounded} month${rounded === 1 ? '' : 's'}`;
+}
+
+function renderRepairReplaceCostTradeoff(payload: Record<string, unknown>) {
+  const verdict = String(payload.verdict ?? '').toUpperCase();
+  if (
+    verdict !== 'REPAIR_ONLY' &&
+    verdict !== 'REPAIR_AND_MONITOR' &&
+    verdict !== 'REPLACE_SOON' &&
+    verdict !== 'REPLACE_NOW'
+  ) {
+    return null;
+  }
+
+  const nextRepairCost = formatMoneyFromCents(payload.estimatedNextRepairCostCents);
+  const replacementCost = formatMoneyFromCents(payload.estimatedReplacementCostCents);
+  const annualRepairRisk = formatMoneyFromCents(payload.expectedAnnualRepairRiskCents);
+  const remainingYears =
+    typeof payload.remainingYears === 'number' && Number.isFinite(payload.remainingYears)
+      ? `${payload.remainingYears.toFixed(1)} year${payload.remainingYears.toFixed(1) === '1.0' ? '' : 's'}`
+      : null;
+  const breakEvenMonths = formatMonths(payload.breakEvenMonths);
+  const summary = typeof payload.summary === 'string' ? payload.summary : null;
+  const confidence = typeof payload.confidence === 'string' ? payload.confidence : null;
+
+  const isRepairVerdict = verdict === 'REPAIR_ONLY' || verdict === 'REPAIR_AND_MONITOR';
+  const title = isRepairVerdict
+    ? 'Repair is acceptable now, but here is the cost tradeoff of keeping the item longer.'
+    : 'Replacement is the better path, and here is why it is financially better than continuing to repair.';
+
+  const points = isRepairVerdict
+    ? [
+        nextRepairCost ? `Expected next repair cost: ${nextRepairCost}` : null,
+        annualRepairRisk ? `Likely future repair risk: about ${annualRepairRisk} per year if problems continue.` : null,
+        remainingYears ? `Repair may buy about ${remainingYears} of additional use.` : null,
+        breakEvenMonths
+          ? `If repair costs keep stacking up, replacement may become the better value in about ${breakEvenMonths}.`
+          : replacementCost
+            ? `Repeated repairs should still be compared against replacing the item for about ${replacementCost}.`
+            : null,
+      ]
+    : [
+        replacementCost ? `Replacement cost for this item: ${replacementCost}` : null,
+        nextRepairCost
+          ? `Continuing to repair would likely start with another ${nextRepairCost} and may not solve the longer-term problem.`
+          : null,
+        annualRepairRisk
+          ? `Ongoing failure risk is about ${annualRepairRisk} per year, which makes continued repair harder to justify.`
+          : null,
+        breakEvenMonths
+          ? `Replacing now may avoid repeated spend because repair costs can catch up within about ${breakEvenMonths}.`
+          : null,
+      ];
+
+  const visiblePoints = points.filter((point): point is string => Boolean(point));
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Cost tradeoff
+      </p>
+      <p className="mb-0 text-sm font-medium text-slate-900">{title}</p>
+      {summary ? (
+        <p className="mb-0 mt-1 text-sm text-slate-700">{summary}</p>
+      ) : null}
+      {visiblePoints.length > 0 ? (
+        <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+          {visiblePoints.map((point) => (
+            <li key={point}>{point}</li>
+          ))}
+        </ul>
+      ) : null}
+      {confidence ? (
+        <p className="mb-0 mt-2 text-xs text-slate-500">Confidence: {confidence}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function formatScopeLabel(category: string | null | undefined) {
   if (category === 'ITEM') return 'Item-specific';
   if (category === 'HOME_ASSET') return 'Asset-level';
@@ -384,6 +477,10 @@ function CompletedStepDetail({
     actualScopeCategory,
     expectedScopeCategory,
   });
+  const repairReplaceTradeoff =
+    primaryEvidence?.proofType === 'repair_replace_analysis'
+      ? renderRepairReplaceCostTradeoff(displayedPayload)
+      : null;
 
   return (
     <div className="space-y-3 rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
@@ -442,12 +539,16 @@ function CompletedStepDetail({
         </div>
       ) : null}
 
+      {repairReplaceTradeoff}
+
       {summaryItems.length > 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {compatibility === 'BROADER_CONTEXT' || (compatibility === 'UNKNOWN' && actualScopeCategory === 'PROPERTY' && expectedScopeCategory !== 'PROPERTY')
               ? 'Context captured'
-              : 'What was done'}
+              : repairReplaceTradeoff
+                ? 'Supporting details'
+                : 'What was done'}
           </p>
           <dl className="space-y-2">
             {summaryItems.map(([key, value]) => (
