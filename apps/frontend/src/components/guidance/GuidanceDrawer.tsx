@@ -67,23 +67,22 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
     setSelectedStepId(null);
   }, [action?.journeyId]);
 
-  if (!action || !detailJourney) return null;
-
   const firstWarning =
     detailNext?.blockedReason ||
-    action.blockedReason ||
+    action?.blockedReason ||
     detailNext?.warnings?.[0] ||
-    action.warnings[0] ||
+    action?.warnings[0] ||
     null;
   const selectedStep =
     detailSteps.find((step) => step.id === selectedStepId) ?? null;
-  const selectedStepHref = selectedStep
-    ? resolveGuidanceStepHref({
-        propertyId,
-        journey: detailJourney,
-        step: selectedStep,
-      })
-    : null;
+  const selectedStepHref =
+    selectedStep && detailJourney
+      ? resolveGuidanceStepHref({
+          propertyId,
+          journey: detailJourney,
+          step: selectedStep,
+        })
+      : null;
   const stepEvents = useMemo(
     () =>
       (journeyDetail.data?.events ?? [])
@@ -98,6 +97,8 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
         .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
     [journeyDetail.data?.evidences, selectedStep?.id]
   );
+
+  if (!action || !detailJourney) return null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

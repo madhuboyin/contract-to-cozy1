@@ -110,4 +110,41 @@ describe('Guidance UI safety', () => {
     expect(screen.getByText(/Guided Next Step/i)).toBeInTheDocument();
     expect(screen.getByText(/Next step unavailable/i)).toBeInTheDocument();
   });
+
+  it('does not show unavailable warning when the next step CTA is intentionally hidden', () => {
+    const action = buildAction({
+      nextStep: {
+        id: 'step-1',
+        journeyId: 'journey-1',
+        stepOrder: 6,
+        stepKey: 'prepare_negotiation_strategy',
+        stepType: null,
+        label: 'Prepare Negotiation Strategy',
+        description: null,
+        decisionStage: 'DECISION',
+        executionReadiness: 'NEEDS_CONTEXT',
+        status: 'PENDING',
+        isRequired: true,
+        toolKey: 'negotiation-strategy',
+        routePath: '/dashboard/test',
+        requiredContextKeys: [],
+        missingContextKeys: [],
+        blockedReasonCode: null,
+        blockedReason: null,
+        skippedReasonCode: null,
+        skippedReason: null,
+        producedData: null,
+        startedAt: null,
+        completedAt: null,
+        skippedAt: null,
+        blockedAt: null,
+        updatedAt: null,
+      },
+      href: '/dashboard/test',
+    });
+
+    render(<GuidanceActionCard action={action} compact hidePrimaryCta />);
+
+    expect(screen.queryByText(/Next step unavailable/i)).not.toBeInTheDocument();
+  });
 });

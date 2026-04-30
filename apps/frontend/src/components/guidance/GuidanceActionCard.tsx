@@ -126,12 +126,12 @@ export function GuidanceActionCard({
               className="min-h-[44px] w-full"
             />
           </div>
-        ) : (
+        ) : !action.nextStep ? (
           <GuidanceWarningBanner
             title="Next step unavailable"
             message="We're preparing your next step. Refresh in a moment or open all steps for details."
           />
-        )}
+        ) : null}
 
         <GuidanceJourneyStrip steps={safeSteps} />
 
