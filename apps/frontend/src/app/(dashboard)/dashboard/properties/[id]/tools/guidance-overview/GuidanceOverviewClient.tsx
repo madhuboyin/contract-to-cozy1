@@ -1481,7 +1481,7 @@ export default function GuidanceOverviewClient() {
                   </Badge>
                 </div>
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 lg:text-[3rem] lg:leading-[1.05]">
+                  <h1 className="text-2xl font-semibold tracking-tight text-slate-950 lg:text-[2.5rem] lg:leading-[1.08]">
                     {currentStepTitle}
                   </h1>
                   <p className="max-w-3xl text-base leading-7 text-slate-600 lg:text-lg">
