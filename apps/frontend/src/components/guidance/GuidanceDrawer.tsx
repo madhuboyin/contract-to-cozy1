@@ -408,6 +408,35 @@ function pickPreferredEvidence(args: {
   })[0];
 }
 
+function buildEvidenceTitle(evidence: GuidanceEvidenceView) {
+  if (evidence.proofType === 'repair_replace_analysis') {
+    return 'Repair vs replace analysis';
+  }
+  if (evidence.proofType === 'cost_estimate') {
+    return 'Home-wide cost estimate';
+  }
+  return titleizeKey(evidence.proofType ?? evidence.evidenceType);
+}
+
+function buildEvidenceSubtitle(evidence: GuidanceEvidenceView) {
+  if (evidence.proofType === 'repair_replace_analysis') {
+    const verdict = typeof evidence.payload?.verdict === 'string' ? evidence.payload.verdict : null;
+    const readableVerdict = verdict ? titleizeKey(verdict) : null;
+    const summary = typeof evidence.payload?.summary === 'string' ? evidence.payload.summary : null;
+    return [readableVerdict, summary, formatDateTime(evidence.createdAt)]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  if (evidence.proofType === 'cost_estimate') {
+    return ['Whole-home planning context', formatDateTime(evidence.createdAt)]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  return [formatScopeLabel(evidence.actualScopeCategory), formatDateTime(evidence.createdAt)]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function CompletedStepDetail({
   journey,
   step,
@@ -582,22 +611,16 @@ function CompletedStepDetail({
       {evidences.length > 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Proof captured
+            Evidence used
           </p>
           <ul className="space-y-2">
             {evidences.slice(0, 3).map((evidence) => (
               <li key={evidence.id} className="text-sm text-slate-900">
                 <p className="mb-0 font-medium">
-                  {titleizeKey(evidence.proofType ?? evidence.evidenceType)}
+                  {buildEvidenceTitle(evidence)}
                 </p>
                 <p className="mb-0 text-xs text-slate-600">
-                  {[
-                    evidence.sourceToolKey ? titleizeKey(evidence.sourceToolKey) : null,
-                    evidence.proofId ?? null,
-                    formatDateTime(evidence.createdAt),
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  {buildEvidenceSubtitle(evidence)}
                 </p>
               </li>
             ))}

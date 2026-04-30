@@ -1126,35 +1126,146 @@ export class GuidanceJourneyService {
     };
   }
 
+  private buildReplaceRepairProducedData(analysis: any) {
+    return {
+      proofType: 'repair_replace_analysis',
+      proofId: analysis.id,
+      verdict: analysis.verdict,
+      confidence: analysis.confidence,
+      impactLevel: analysis.impactLevel ?? null,
+      summary: analysis.summary ?? null,
+      ageYears: analysis.ageYears ?? null,
+      remainingYears: analysis.remainingYears ?? null,
+      breakEvenMonths: analysis.breakEvenMonths ?? null,
+      estimatedNextRepairCostCents: analysis.estimatedNextRepairCostCents ?? null,
+      estimatedReplacementCostCents: analysis.estimatedReplacementCostCents ?? null,
+      expectedAnnualRepairRiskCents: analysis.expectedAnnualRepairRiskCents ?? null,
+      decisionTrace: analysis.decisionTrace ?? [],
+      nextSteps: analysis.nextSteps ?? [],
+    };
+  }
+
+  private async backfillLegacyLifecycleCostEvidence(args: {
+    propertyId: string;
+    journey: any;
+  }) {
+    const journey = args.journey;
+    if (
+      journey?.journeyTypeKey !== 'asset_lifecycle_resolution' ||
+      !journey?.inventoryItemId
+    ) {
+      return false;
+    }
+
+    const legacyCostStep = (journey.steps ?? []).find(
+      (step: any) => step.stepKey === 'estimate_cost_impact'
+    );
+    if (!legacyCostStep || legacyCostStep.status !== 'COMPLETED') {
+      return false;
+    }
+
+    const hasItemScopedEvidence = (journey.evidences ?? []).some(
+      (evidence: any) =>
+        evidence.stepId === legacyCostStep.id &&
+        evidence.proofType === 'repair_replace_analysis'
+    );
+    if (hasItemScopedEvidence) {
+      return false;
+    }
+
+    const latestAnalysis = await prisma.replaceRepairAnalysis.findFirst({
+      where: {
+        propertyId: args.propertyId,
+        inventoryItemId: journey.inventoryItemId,
+      },
+      orderBy: [{ computedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    if (!latestAnalysis) {
+      return false;
+    }
+
+    try {
+      await this.recordToolCompletion({
+        propertyId: args.propertyId,
+        actorUserId: null,
+        journeyId: journey.id,
+        inventoryItemId: journey.inventoryItemId,
+        signalIntentFamily: journey.primarySignal?.signalIntentFamily ?? 'lifecycle_end_or_past_life',
+        issueDomain: 'ASSET_LIFECYCLE',
+        sourceToolKey: 'replace-repair',
+        sourceEntityType: 'REPLACE_REPAIR_ANALYSIS',
+        sourceEntityId: latestAnalysis.id,
+        stepKey: 'estimate_cost_impact',
+        status: 'COMPLETED',
+        producedData: this.buildReplaceRepairProducedData(latestAnalysis),
+        metadata: {
+          actualScopeCategory: 'ITEM',
+          actualScopeId: journey.inventoryItemId,
+          resultContextLabel: 'Item-specific repair vs replace analysis',
+          legacyStepBackfill: true,
+        },
+      });
+      return true;
+    } catch (error) {
+      logger.warn(
+        {
+          propertyId: args.propertyId,
+          journeyId: journey.id,
+          inventoryItemId: journey.inventoryItemId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        '[GUIDANCE] failed to backfill legacy lifecycle cost evidence'
+      );
+      return false;
+    }
+  }
+
   async getJourneyById(propertyId: string, journeyId: string) {
     const { guidanceJourney } = getGuidanceModels();
 
-    const journey = await guidanceJourney.findFirst({
-      where: {
-        id: journeyId,
-        propertyId,
-      },
-      include: {
-        primarySignal: true,
-        steps: {
-          orderBy: [{ stepOrder: 'asc' }],
+    const fetchJourney = () =>
+      guidanceJourney.findFirst({
+        where: {
+          id: journeyId,
+          propertyId,
         },
-        events: {
-          orderBy: [{ createdAt: 'desc' }],
-          take: 50,
+        include: {
+          primarySignal: true,
+          steps: {
+            orderBy: [{ stepOrder: 'asc' }],
+          },
+          events: {
+            orderBy: [{ createdAt: 'desc' }],
+            take: 50,
+          },
+          evidences: {
+            orderBy: [{ observedAt: 'desc' }],
+            take: 75,
+          },
+          inventoryItem: {
+            select: { name: true, category: true },
+          },
+          homeAsset: {
+            select: { assetType: true },
+          },
         },
-        evidences: {
-          orderBy: [{ observedAt: 'desc' }],
-          take: 75,
-        },
-        inventoryItem: {
-          select: { name: true, category: true },
-        },
-        homeAsset: {
-          select: { assetType: true },
-        },
-      },
+      });
+
+    let journey = await fetchJourney();
+
+    if (!journey) {
+      throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
+    }
+
+    const didBackfillLegacyEvidence = await this.backfillLegacyLifecycleCostEvidence({
+      propertyId,
+      journey,
     });
+
+    if (didBackfillLegacyEvidence) {
+      journey = await fetchJourney();
+    }
 
     if (!journey) {
       throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
