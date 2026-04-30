@@ -1,15 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { type ElementType } from 'react';
 import Link from 'next/link';
-import { LucideIcon, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ToolCardProps {
   title: string;
   description: string;
   href: string;
-  icon: LucideIcon;
+  icon: ElementType;
   category: string;
   isNew?: boolean;
 }
