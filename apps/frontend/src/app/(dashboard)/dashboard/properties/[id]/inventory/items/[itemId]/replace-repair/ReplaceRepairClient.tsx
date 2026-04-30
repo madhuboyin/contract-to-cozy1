@@ -424,6 +424,7 @@ export default function ReplaceRepairClient() {
         toolKey="replace-repair"
         limit={1}
         journeyId={guidanceContext.guidanceJourneyId}
+        hidePrimaryCta
       />
 
       <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">

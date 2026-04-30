@@ -13,6 +13,7 @@ type GuidanceActionCardProps = {
   action: GuidanceActionModel;
   onOpenJourney?: (action: GuidanceActionModel) => void;
   compact?: boolean;
+  hidePrimaryCta?: boolean;
 };
 
 const URGENCY_CONFIG: Record<string, { label: string; className: string }> = {
@@ -32,7 +33,12 @@ const WARNING_TITLE: Record<string, string> = {
   NEEDS_CONTEXT: 'Complete the next planning step before execution',
 };
 
-export function GuidanceActionCard({ action, onOpenJourney, compact = false }: GuidanceActionCardProps) {
+export function GuidanceActionCard({
+  action,
+  onOpenJourney,
+  compact = false,
+  hidePrimaryCta = false,
+}: GuidanceActionCardProps) {
   const warningMessage = action.blockedReason ?? action.warnings?.[0] ?? null;
   const safeTitle = action.title?.trim() ? action.title.trim() : 'Guided Next Step';
   const showSeverityBadge = Boolean(action.severity && action.severity !== 'UNKNOWN');
@@ -96,7 +102,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
         {/* Funding gap callout */}
         {action.fundingGapFlag && !action.costOfDelay ? (
           <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-            This project may cost more than your current savings plan can comfortably cover.
+            Based on current cost and savings estimates, this project may be expensive to book right now.
           </div>
         ) : null}
 
@@ -107,7 +113,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
           />
         ) : null}
 
-        {action.nextStep ? (
+        {action.nextStep && !hidePrimaryCta ? (
           <div className="space-y-1.5">
             <p className="mb-0 text-xs font-medium text-muted-foreground">Your next step</p>
             <GuidancePrimaryCta

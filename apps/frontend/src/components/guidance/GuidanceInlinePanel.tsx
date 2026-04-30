@@ -21,6 +21,7 @@ type GuidanceInlinePanelProps = {
   /** When provided, fetches this journey directly and pins the panel to it.
    *  Handles NOT_STARTED journeys that are excluded from the active-only list. */
   journeyId?: string | null;
+  hidePrimaryCta?: boolean;
 };
 
 export function GuidanceInlinePanel({
@@ -32,6 +33,7 @@ export function GuidanceInlinePanel({
   limit = 2,
   compact = false,
   journeyId,
+  hidePrimaryCta = false,
 }: GuidanceInlinePanelProps) {
   const [drawerAction, setDrawerAction] = useState<GuidanceActionModel | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -91,6 +93,7 @@ export function GuidanceInlinePanel({
               key={action.journeyId}
               action={action}
               compact={compact}
+              hidePrimaryCta={hidePrimaryCta}
               onOpenJourney={(selected) => {
                 setDrawerAction(selected);
                 setDrawerOpen(true);
