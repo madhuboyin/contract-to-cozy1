@@ -404,7 +404,15 @@ export default function GuidanceStepPageClient() {
 
             {showContinue ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm">
-                This step is complete. Continue to {nextStep?.label} when you’re ready.
+                <p className="mb-3">
+                  This step is complete. Continue to {nextStep?.label} when you’re ready.
+                </p>
+                <Button asChild className="w-full rounded-xl sm:w-auto">
+                  <Link href={continueHref!}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Continue to {nextStep?.label}
+                  </Link>
+                </Button>
               </div>
             ) : null}
           </div>
