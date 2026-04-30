@@ -126,10 +126,43 @@ export function formatStepStatusLabel(status: GuidanceStepStatus): string {
   return formatEnumLabel(status);
 }
 
+const ISSUE_TYPE_LABELS: Record<string, string> = {
+  not_working: 'Not working properly',
+  past_life: 'Aging or past expected life',
+  broken: 'Broken or physically damaged',
+  inspection_needed: 'Needs inspection or maintenance',
+  coverage_question: 'Coverage or warranty question',
+  cost_estimate: 'Need a cost estimate',
+  not_draining: 'Not draining properly',
+  not_drying: 'Not drying properly',
+  not_cooling: 'Not cooling properly',
+  not_heating: 'Not heating properly',
+  not_cleaning: 'Not cleaning properly',
+  leak: 'Leaking water',
+  unusual_noise: 'Making unusual noise',
+  error_code: 'Showing an error code or warning light',
+  door_issue: 'Door not latching or sealing',
+  burner_issue: 'Burner or element not working',
+  ice_maker: 'Ice maker or water dispenser not working',
+  poor_airflow: 'Poor airflow or uneven temperatures',
+  high_utility_cost: 'Unusually high utility costs',
+  low_pressure: 'Low water pressure',
+  no_hot_water: 'No hot water',
+  slow_drain: 'Slow drain or clog',
+  tripping_breaker: 'Tripping circuit breaker',
+  flickering: 'Flickering lights or power fluctuations',
+  outlet_issue: 'Outlet or switch not functioning',
+  visible_damage: 'Visible damage',
+  gutter_issue: 'Gutter or drainage issue',
+  battery_low: 'Low battery or replacement needed',
+  connectivity_issue: 'Connectivity or pairing issue',
+};
+
 export function formatIssueTypeLabel(issueType: string | null | undefined): string | null {
   const normalized = issueType?.trim();
   if (!normalized) return null;
-  return formatEnumLabel(normalized) || normalized;
+  const key = normalized.toLowerCase();
+  return ISSUE_TYPE_LABELS[key] ?? formatEnumLabel(normalized) ?? normalized;
 }
 
 export function resolveGuidanceStepHref(args: {
