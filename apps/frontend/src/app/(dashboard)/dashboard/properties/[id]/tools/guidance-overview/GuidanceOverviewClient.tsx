@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useParams, useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -392,6 +392,7 @@ export default function GuidanceOverviewClient() {
   const propertyId = params.id;
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
 
   React.useEffect(() => {
@@ -410,6 +411,8 @@ export default function GuidanceOverviewClient() {
   const selectedIssueType = searchParams.get('issueType');
   // Phase 6c: direct journey resume — bypasses the wizard when present
   const pinnedJourneyId = searchParams.get('journeyId');
+  const requestedStepKey =
+    searchParams.get('stepKey') ?? searchParams.get('guidanceStepKey');
 
   // Infer scopeCategory: if asset params present without explicit scopeCategory, treat as ITEM
   const rawScopeCategory = searchParams.get('scopeCategory') as GuidanceScopeCategory | null;
@@ -668,7 +671,9 @@ export default function GuidanceOverviewClient() {
   }, [scopeCategory, selectedServiceKey, selectedAssetOption, selectedAssetName]);
   const [customIssue, setCustomIssue] = React.useState('');
   const [showAllIssueTypes, setShowAllIssueTypes] = React.useState(false);
-  const [showAllJourneySteps, setShowAllJourneySteps] = React.useState(false);
+  const [selectedJourneyStepKey, setSelectedJourneyStepKey] = React.useState<string | null>(
+    requestedStepKey
+  );
 
   React.useEffect(() => {
     setShowAllIssueTypes(false);
@@ -700,13 +705,6 @@ export default function GuidanceOverviewClient() {
   const safeStepIndex = Math.max(activeStepIndex, 0);
   const visibleIssueTypes = showAllIssueTypes ? suggestedIssueTypes : suggestedIssueTypes.slice(0, 5);
   const shouldShowIssueTypeToggle = suggestedIssueTypes.length > 5;
-  const journeyPreviewCount = Math.min(
-    activeJourneySteps.length,
-    Math.max(2, safeStepIndex + 2)
-  );
-  const visibleJourneySteps = showAllJourneySteps
-    ? activeJourneySteps
-    : activeJourneySteps.slice(0, journeyPreviewCount);
   const confidenceValue = activePrimaryAction?.confidenceScore ?? activePrimaryAction?.journey.confidenceScore ?? null;
   const confidenceLabel = activePrimaryAction?.confidenceLabel ?? activePrimaryAction?.journey.confidenceLabel ?? null;
   const sourceLabel = activePrimaryAction?.journey.primarySignal?.sourceToolKey
@@ -725,8 +723,26 @@ export default function GuidanceOverviewClient() {
     : '0/3 complete';
 
   React.useEffect(() => {
-    setShowAllJourneySteps(false);
-  }, [activePrimaryAction?.journeyId]);
+    const availableKeys = new Set(activeJourneySteps.map((step) => step.stepKey));
+    if (requestedStepKey && availableKeys.has(requestedStepKey)) {
+      setSelectedJourneyStepKey(requestedStepKey);
+      return;
+    }
+    if (selectedJourneyStepKey && availableKeys.has(selectedJourneyStepKey)) {
+      return;
+    }
+    setSelectedJourneyStepKey(activeStep?.stepKey ?? activeJourneySteps[0]?.stepKey ?? null);
+  }, [requestedStepKey, selectedJourneyStepKey, activeJourneySteps, activeStep?.stepKey]);
+
+  const selectJourneyStep = React.useCallback(
+    (stepKey: string) => {
+      setSelectedJourneyStepKey(stepKey);
+      const next = new URLSearchParams(searchParams.toString());
+      next.set('stepKey', stepKey);
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
 
   // ---- Render helpers ----
   // Resolve the step href via the shared helper that substitutes :propertyId, :itemId, etc.
@@ -1335,6 +1351,8 @@ export default function GuidanceOverviewClient() {
       : activeHasScopedMatch
         ? 'Journey active'
         : 'Ready to start';
+  const selectedJourneyStep =
+    activeJourneySteps.find((step) => step.stepKey === selectedJourneyStepKey) ?? activeStep ?? null;
   const stickyPrimaryAction = !activeHasScopedMatch ? (
     <Button
       className="min-h-[44px] w-full"
@@ -1343,8 +1361,8 @@ export default function GuidanceOverviewClient() {
     >
       {startJourneyMutation.isPending ? 'Creating journey…' : 'Start guided journey'}
     </Button>
-  ) : activeStep ? (
-    renderStepCta(activeStep, true)
+  ) : selectedJourneyStep ? (
+    renderStepCta(selectedJourneyStep, true)
   ) : null;
 
   const trustPanel = (
@@ -1457,7 +1475,105 @@ export default function GuidanceOverviewClient() {
               </ScenarioInputCard>
             ) : (
               <>
-                {/* Primary action card with steps from the single journey (4.4) */}
+                {/* 4.4: Journey Steps — all steps visible first, selected step detail below */}
+                <ScenarioInputCard
+                  title="Journey steps"
+                  subtitle="See the full path first. Select any step to work it below."
+                >
+                  {activeJourneySteps.length === 0 ? (
+                    <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
+                      Steps are being prepared for this journey.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
+                        <GuidanceJourneyStrip steps={activeJourneySteps} />
+                        <p className="mt-2 mb-0 text-xs text-[hsl(var(--mobile-text-muted))]">
+                          Step {Math.max(activeStepIndex, 0) + 1} of {activeJourneySteps.length}
+                        </p>
+                      </div>
+
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {activeJourneySteps.map((step, idx) => {
+                          const isSelected = step.stepKey === selectedJourneyStep?.stepKey;
+                          const isCurrentStep = idx === activeStepIndex;
+                          const isCompletedStep =
+                            step.status === 'COMPLETED' || step.status === 'SKIPPED';
+
+                          return (
+                            <button
+                              key={step.id}
+                              type="button"
+                              onClick={() => selectJourneyStep(step.stepKey)}
+                              className={cn(
+                                'rounded-xl border px-4 py-3 text-left transition',
+                                isSelected
+                                  ? 'border-emerald-300 bg-emerald-50'
+                                  : 'border-[hsl(var(--mobile-border-subtle))] bg-white hover:border-[hsl(var(--mobile-brand-strong))]/40 hover:bg-[hsl(var(--mobile-bg-muted))]'
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="mb-0 text-sm font-semibold text-[hsl(var(--mobile-text-primary))]">
+                                    {step.stepOrder}. {step.label}
+                                  </p>
+                                  <p className="mt-1 mb-0 text-xs text-[hsl(var(--mobile-text-secondary))]">
+                                    {step.description ??
+                                      (isCurrentStep
+                                        ? 'Current step'
+                                        : isCompletedStep
+                                          ? 'Completed step'
+                                          : 'Upcoming step')}
+                                  </p>
+                                </div>
+                                <StatusChip tone={stepTone(step)}>
+                                  {step.status.toLowerCase().replace('_', ' ')}
+                                </StatusChip>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {selectedJourneyStep ? (
+                        <div className="space-y-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="mb-0 text-base font-semibold text-[hsl(var(--mobile-text-primary))]">
+                                Step {selectedJourneyStep.stepOrder}: {selectedJourneyStep.label}
+                              </p>
+                              {selectedJourneyStep.description ? (
+                                <p className="mt-1 mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                                  {selectedJourneyStep.description}
+                                </p>
+                              ) : null}
+                            </div>
+                            <StatusChip tone={stepTone(selectedJourneyStep)}>
+                              {selectedJourneyStep.status.toLowerCase().replace('_', ' ')}
+                            </StatusChip>
+                          </div>
+
+                          <ActionPriorityRow primaryAction={renderStepCta(selectedJourneyStep, true)} />
+
+                          {selectedJourneyStep.stepKey === activeStep?.stepKey &&
+                          selectedJourneyStep.status !== 'COMPLETED' &&
+                          selectedJourneyStep.status !== 'SKIPPED' ? (
+                            <Button
+                              variant="ghost"
+                              className="min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
+                              disabled={skipStepMutation.isPending}
+                              onClick={() => skipStepMutation.mutate({ stepId: selectedJourneyStep.id })}
+                            >
+                              Skip this step
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </ScenarioInputCard>
+
+                {/* Guided context for the selected journey stays below the step rail */}
                 {activePrimaryAction && (
                   <ScenarioInputCard
                     title={`${focusLabel ?? resolveAssetLabel(activePrimaryAction)}`}
@@ -1468,7 +1584,6 @@ export default function GuidanceOverviewClient() {
                       </StatusChip>
                     }
                   >
-                    {/* 4.5: Not relevant control */}
                     <div className="flex justify-end">
                       <button
                         onClick={() =>
@@ -1481,20 +1596,9 @@ export default function GuidanceOverviewClient() {
                       </button>
                     </div>
 
-                    {/* Progress strip */}
-                    {activeJourneySteps.length > 0 && (
-                      <div className="mb-2">
-                        <GuidanceJourneyStrip steps={activeJourneySteps} />
-                        <p className="mt-1 text-xs text-[hsl(var(--mobile-text-muted))]">
-                          Step {Math.max(activeStepIndex, 0) + 1} of {activeJourneySteps.length}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Why now */}
                     <div className="space-y-2 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] p-3">
                       <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                        Why now
+                        Why this journey matters
                       </p>
                       <p className="mb-0 text-sm text-[hsl(var(--mobile-text-secondary))]">
                         {activePrimaryAction.explanation?.why ??
@@ -1507,100 +1611,8 @@ export default function GuidanceOverviewClient() {
                         </p>
                       ) : null}
                     </div>
-
-                    {/* 4.5: Skip button for active step */}
-                    {activePrimaryAction.currentStep?.id && (
-                      <Button
-                        variant="ghost"
-                        className="mt-1 min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
-                        disabled={skipStepMutation.isPending}
-                        onClick={() => {
-                          if (activePrimaryAction.currentStep?.id) {
-                            skipStepMutation.mutate({ stepId: activePrimaryAction.currentStep.id });
-                          }
-                        }}
-                      >
-                        Skip this step
-                      </Button>
-                    )}
                   </ScenarioInputCard>
                 )}
-
-                {/* 4.4: Journey Steps — ordered steps of the single primary journey */}
-                <ScenarioInputCard
-                  title="Journey Steps"
-                  subtitle={showAllJourneySteps ? 'Full journey path.' : 'Current + next step focus.'}
-                >
-                  {activeJourneySteps.length === 0 ? (
-                    <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
-                      Steps are being prepared for this journey.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {visibleJourneySteps.map((step, idx) => {
-                        const isActiveStep = idx === activeStepIndex;
-                        const isFutureStep =
-                          activeStepIndex >= 0 ? idx > activeStepIndex : step.status === 'PENDING';
-                        const isCompletedStep = step.status === 'COMPLETED' || step.status === 'SKIPPED';
-
-                        return (
-                          <div
-                            key={step.id}
-                            className={
-                              isFutureStep && !isActiveStep
-                                ? 'opacity-50'
-                                : ''
-                            }
-                          >
-                            <CompactEntityRow
-                              title={`Step ${step.stepOrder}: ${step.label}`}
-                              subtitle={step.description ?? undefined}
-                              meta={isCompletedStep ? 'Completed' : isActiveStep ? 'Current step' : 'Upcoming'}
-                              status={
-                                <StatusChip tone={stepTone(step)}>
-                                  {step.status.toLowerCase().replace('_', ' ')}
-                                </StatusChip>
-                              }
-                            />
-                            {isActiveStep && (
-                              <>
-                                <ActionPriorityRow
-                                  primaryAction={renderStepCta(step, true)}
-                                />
-                                {/* 4.5: Skip per step in list */}
-                                <Button
-                                  variant="ghost"
-                                  className="min-h-[40px] w-full text-sm text-[hsl(var(--mobile-text-muted))]"
-                                  disabled={skipStepMutation.isPending}
-                                  onClick={() => skipStepMutation.mutate({ stepId: step.id })}
-                                >
-                                  Skip this step
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {activeJourneySteps.length > visibleJourneySteps.length ? (
-                        <button
-                          type="button"
-                          onClick={() => setShowAllJourneySteps(true)}
-                          className="w-full rounded-xl border border-dashed border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
-                        >
-                          Show full journey ({activeJourneySteps.length} steps)
-                        </button>
-                      ) : showAllJourneySteps && activeJourneySteps.length > 2 ? (
-                        <button
-                          type="button"
-                          onClick={() => setShowAllJourneySteps(false)}
-                          className="w-full rounded-xl border border-dashed border-[hsl(var(--mobile-border-subtle))] bg-white px-4 py-2 text-xs font-semibold text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
-                        >
-                          Show focused view
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
-                </ScenarioInputCard>
               </>
             )}
 
