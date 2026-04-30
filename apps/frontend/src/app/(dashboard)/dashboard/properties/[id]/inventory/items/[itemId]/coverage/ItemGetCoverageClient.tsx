@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, ArrowLeft, Loader2, ShieldCheck } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ItemCoverageAnalysisDTO,
   ItemCoverageAnalysisOverrides,
@@ -25,6 +26,7 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { getWarrantyCategoryForInventoryCategory } from '@/lib/config/serviceCategoryMapping';
+import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
 type TraceImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 
@@ -162,6 +164,7 @@ function mergeOverridesWithPrefill(
 }
 
 export default function ItemGetCoverageClient() {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -266,6 +269,19 @@ export default function ItemGetCoverageClient() {
       );
       setHasAnalysis(true);
       setAnalysis(next);
+      if (guidanceContext.guidanceJourneyId) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['guidance', 'journey', propertyId, guidanceContext.guidanceJourneyId],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['guidance', 'property', propertyId, itemId],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['guidance', 'property', propertyId],
+          }),
+        ]);
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to run item coverage analysis.');
     } finally {
@@ -522,6 +538,18 @@ export default function ItemGetCoverageClient() {
                 ))}
               </div>
             </ScenarioInputCard>
+          ) : null}
+
+          {guidanceContext.guidanceJourneyId ? (
+            <GuidanceInlinePanel
+              propertyId={propertyId}
+              title="Next in Journey"
+              subtitle="This step is complete once the coverage result is captured. Continue with the next guided action."
+              journeyId={guidanceContext.guidanceJourneyId}
+              expectedInventoryItemId={itemId}
+              userSelectedScopeId={itemId}
+              limit={1}
+            />
           ) : null}
         </>
       )}

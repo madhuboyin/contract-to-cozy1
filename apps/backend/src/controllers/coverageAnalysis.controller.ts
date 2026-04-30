@@ -54,39 +54,32 @@ export async function runCoverageAnalysis(req: CustomRequest, res: Response) {
     const overrides = (req.body?.overrides ?? {}) as CoverageAnalysisOverrides;
     const analysis = await service.run(propertyId, userId, overrides, { assumptionSetId });
 
-    const shouldEmitGuidanceSignal =
-      analysis.overallVerdict !== 'NOT_WORTH_IT' ||
-      analysis.insuranceVerdict === 'WORTH_IT' ||
-      analysis.warrantyVerdict === 'WORTH_IT';
-
-    if (shouldEmitGuidanceSignal) {
-      try {
-        await guidanceJourneyService.recordToolCompletion({
-          propertyId,
-          actorUserId: userId,
-          journeyId: guidanceJourneyId,
-          signalIntentFamily: guidanceSignalIntentFamily || 'coverage_gap',
-          issueDomain: 'INSURANCE',
-          sourceToolKey: 'coverage-intelligence',
-          sourceEntityType: 'COVERAGE_ANALYSIS',
-          sourceEntityId: analysis.id,
-          stepKey: guidanceStepKey || 'check_coverage',
-          status: 'COMPLETED',
-          producedData: {
-            proofType: 'coverage_assessment',
-            proofId: analysis.id,
-            overallVerdict: analysis.overallVerdict,
-            insuranceVerdict: analysis.insuranceVerdict,
-            warrantyVerdict: analysis.warrantyVerdict,
-            confidence: analysis.confidence,
-            insurance: analysis.insurance,
-            warranty: analysis.warranty,
-            nextSteps: analysis.nextSteps ?? [],
-          },
-        });
-      } catch (guidanceError) {
-        logger.warn({ guidanceError }, '[GUIDANCE] coverage analysis hook failed');
-      }
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId,
+        actorUserId: userId,
+        journeyId: guidanceJourneyId,
+        signalIntentFamily: guidanceSignalIntentFamily || 'coverage_gap',
+        issueDomain: 'INSURANCE',
+        sourceToolKey: 'coverage-intelligence',
+        sourceEntityType: 'COVERAGE_ANALYSIS',
+        sourceEntityId: analysis.id,
+        stepKey: guidanceStepKey || 'check_coverage',
+        status: 'COMPLETED',
+        producedData: {
+          proofType: 'coverage_assessment',
+          proofId: analysis.id,
+          overallVerdict: analysis.overallVerdict,
+          insuranceVerdict: analysis.insuranceVerdict,
+          warrantyVerdict: analysis.warrantyVerdict,
+          confidence: analysis.confidence,
+          insurance: analysis.insurance,
+          warranty: analysis.warranty,
+          nextSteps: analysis.nextSteps ?? [],
+        },
+      });
+    } catch (guidanceError) {
+      logger.warn({ guidanceError }, '[GUIDANCE] coverage analysis hook failed');
     }
 
     return res.json({ success: true, data: { analysis } });
@@ -163,40 +156,33 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
     const overrides = (req.body?.overrides ?? {}) as ItemCoverageAnalysisOverrides;
     const analysis = await service.runItemAnalysis(propertyId, itemId, userId, overrides);
 
-    const shouldEmitGuidanceSignal =
-      analysis.overallVerdict !== 'NOT_WORTH_IT' ||
-      analysis.insuranceVerdict === 'WORTH_IT' ||
-      analysis.warrantyVerdict === 'WORTH_IT';
-
-    if (shouldEmitGuidanceSignal) {
-      try {
-        await guidanceJourneyService.recordToolCompletion({
-          propertyId,
-          actorUserId: userId,
-          journeyId: guidanceJourneyId,
-          inventoryItemId: itemId,
-          signalIntentFamily: guidanceSignalIntentFamily || 'coverage_gap',
-          issueDomain: 'INSURANCE',
-          sourceToolKey: 'coverage-intelligence',
-          sourceEntityType: 'COVERAGE_ANALYSIS',
-          sourceEntityId: analysis.id,
-          stepKey: guidanceStepKey || 'check_coverage',
-          status: 'COMPLETED',
-          producedData: {
-            proofType: 'coverage_assessment',
-            proofId: analysis.id,
-            overallVerdict: analysis.overallVerdict,
-            insuranceVerdict: analysis.insuranceVerdict,
-            warrantyVerdict: analysis.warrantyVerdict,
-            confidence: analysis.confidence,
-            item: analysis.item,
-            warranty: analysis.warranty,
-            nextSteps: analysis.nextSteps ?? [],
-          },
-        });
-      } catch (guidanceError) {
-        logger.warn({ guidanceError }, '[GUIDANCE] item coverage analysis hook failed');
-      }
+    try {
+      await guidanceJourneyService.recordToolCompletion({
+        propertyId,
+        actorUserId: userId,
+        journeyId: guidanceJourneyId,
+        inventoryItemId: itemId,
+        signalIntentFamily: guidanceSignalIntentFamily || 'coverage_gap',
+        issueDomain: 'INSURANCE',
+        sourceToolKey: 'coverage-intelligence',
+        sourceEntityType: 'COVERAGE_ANALYSIS',
+        sourceEntityId: analysis.id,
+        stepKey: guidanceStepKey || 'check_coverage',
+        status: 'COMPLETED',
+        producedData: {
+          proofType: 'coverage_assessment',
+          proofId: analysis.id,
+          overallVerdict: analysis.overallVerdict,
+          insuranceVerdict: analysis.insuranceVerdict,
+          warrantyVerdict: analysis.warrantyVerdict,
+          confidence: analysis.confidence,
+          item: analysis.item,
+          warranty: analysis.warranty,
+          nextSteps: analysis.nextSteps ?? [],
+        },
+      });
+    } catch (guidanceError) {
+      logger.warn({ guidanceError }, '[GUIDANCE] item coverage analysis hook failed');
     }
 
     return res.json({ success: true, data: { analysis } });
