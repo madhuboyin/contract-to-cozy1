@@ -34,6 +34,8 @@ import {
 } from '@/lib/dashboard/urgentActions';
 import { filterResolutionActions } from '@/lib/dashboard/resolutionCenterViewModel';
 import { filterResolutionCases } from '@/lib/dashboard/resolutionCases';
+import { useGuidance } from '@/features/guidance/hooks/useGuidance';
+import type { GuidanceJourneyDTO } from '@/lib/api/guidanceApi';
 
 // Extracts the real status string from HEALTH_INSIGHT descriptions like
 // "Status: Needs Inspection. Requires resolution."
@@ -291,6 +293,51 @@ function getCaseWorkflowLabel(caseItem: ResolutionCase): string | null {
   return null;
 }
 
+function isResumableJourney(journey: GuidanceJourneyDTO): boolean {
+  return !['DISMISSED', 'COMPLETED', 'ABORTED', 'ARCHIVED'].includes(journey.status);
+}
+
+function compareJourneyPriority(a: GuidanceJourneyDTO, b: GuidanceJourneyDTO): number {
+  const statusScore = (journey: GuidanceJourneyDTO) =>
+    journey.status === 'ACTIVE' ? 2 : journey.steps?.some((step) => step.status === 'IN_PROGRESS') ? 1 : 0;
+  const scoreDiff = statusScore(b) - statusScore(a);
+  if (scoreDiff !== 0) return scoreDiff;
+
+  const currentOrderA = a.currentStepOrder ?? Number.MAX_SAFE_INTEGER;
+  const currentOrderB = b.currentStepOrder ?? Number.MAX_SAFE_INTEGER;
+  if (currentOrderA !== currentOrderB) return currentOrderA - currentOrderB;
+
+  const updatedAtA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+  const updatedAtB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+  return updatedAtB - updatedAtA;
+}
+
+function buildGuidanceOverviewHref(propertyId: string, journey: GuidanceJourneyDTO): string {
+  const params = new URLSearchParams();
+  params.set('journeyId', journey.id);
+  params.set('guidanceJourneyId', journey.id);
+
+  if (journey.currentStepKey) {
+    params.set('stepKey', journey.currentStepKey);
+    params.set('guidanceStepKey', journey.currentStepKey);
+  }
+
+  if (journey.inventoryItemId) {
+    params.set('scopeCategory', 'ITEM');
+    params.set('itemId', journey.inventoryItemId);
+    params.set('inventoryItemId', journey.inventoryItemId);
+  } else if (journey.homeAssetId) {
+    params.set('scopeCategory', 'ASSET');
+    params.set('homeAssetId', journey.homeAssetId);
+  } else {
+    params.set('scopeCategory', 'PROPERTY');
+  }
+
+  if (journey.issueType) params.set('issueType', journey.issueType);
+
+  return `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`;
+}
+
 export default function ResolutionHubPage() {
   const params = useParams<{ id: string | string[] }>();
   const router = useRouter();
@@ -322,6 +369,9 @@ export default function ResolutionHubPage() {
       : rolloutOverride === '0'
         ? false
         : process.env.NEXT_PUBLIC_RESOLUTION_CENTER_V2 !== '0';
+  const guidance = useGuidance(propertyId, {
+    enabled: Boolean(propertyId),
+  });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -409,6 +459,24 @@ export default function ResolutionHubPage() {
     }
     return null;
   }, [displayedOpenCaseCount, expectedCount]);
+
+  const activeJourneyByItemId = useMemo(() => {
+    const map = new Map<string, GuidanceJourneyDTO>();
+    for (const journey of guidance.journeys) {
+      if (!journey.inventoryItemId || !isResumableJourney(journey)) continue;
+      const existing = map.get(journey.inventoryItemId);
+      if (!existing || compareJourneyPriority(journey, existing) < 0) {
+        map.set(journey.inventoryItemId, journey);
+      }
+    }
+    return map;
+  }, [guidance.journeys]);
+
+  const resolveDecisionInsightHref = useCallback((kind: string, href: string, itemId?: string) => {
+    if (kind !== 'repair_replace' || !propertyId || !itemId) return href;
+    const journey = activeJourneyByItemId.get(itemId);
+    return journey ? buildGuidanceOverviewHref(propertyId, journey) : href;
+  }, [activeJourneyByItemId, propertyId]);
 
   return (
     <ErrorBoundary
@@ -930,7 +998,7 @@ export default function ResolutionHubPage() {
                       insight.kind === 'coverage_recommendation' ? 'Review Coverage' : 'See Full Estimate'
                     }
                     onAction={() => {
-                      router.push(insight.href);
+                      router.push(resolveDecisionInsightHref(insight.kind, insight.href, insight.itemId));
                     }}
                     trust={insight.trust}
                   />
