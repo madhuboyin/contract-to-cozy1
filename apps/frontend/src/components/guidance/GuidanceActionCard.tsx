@@ -48,7 +48,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
   const coverageLabel = action.coverageImpact ? COVERAGE_LABEL[action.coverageImpact] ?? null : null;
   const warningTitle =
     action.executionReadiness === 'NEEDS_CONTEXT' && action.fundingGapFlag
-      ? 'Review funding before you schedule work'
+      ? 'Check whether this cost fits your budget before booking'
       : WARNING_TITLE[action.executionReadiness] ?? 'Before you continue';
   const firstMissingStep =
     action.executionReadiness === 'NEEDS_CONTEXT' && action.missingPrerequisites.length > 0
@@ -96,7 +96,7 @@ export function GuidanceActionCard({ action, onOpenJourney, compact = false }: G
         {/* Funding gap callout */}
         {action.fundingGapFlag && !action.costOfDelay ? (
           <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-            Funding gap detected — review your budget before scheduling work.
+            This project may cost more than your current savings plan can comfortably cover.
           </div>
         ) : null}
 

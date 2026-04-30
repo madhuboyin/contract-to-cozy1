@@ -209,7 +209,9 @@ export class GuidanceCopyService {
     }
 
     if (options?.fundingGapFlag) {
-      next.push('Review funding options before committing to execution.');
+      next.push(
+        'Before booking, check whether this cost fits your budget. If it feels too high, compare lower-cost options or negotiate the price first.'
+      );
     }
 
     if (options?.confidenceLabel === 'LOW') {

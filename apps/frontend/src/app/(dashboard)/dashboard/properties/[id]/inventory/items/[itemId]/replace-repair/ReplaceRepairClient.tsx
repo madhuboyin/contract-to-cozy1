@@ -304,7 +304,7 @@ export default function ReplaceRepairClient() {
     activeJourneyAction?.blockedReason ||
     activeJourneyAction?.warnings?.[0] ||
     (activeJourneyAction?.fundingGapFlag
-      ? 'Review funding options before committing to execution.'
+      ? 'Before booking, check whether this cost fits your budget. If it feels too high, compare lower-cost options or negotiate the price first.'
       : null);
 
   const runAnalysis = async () => {
