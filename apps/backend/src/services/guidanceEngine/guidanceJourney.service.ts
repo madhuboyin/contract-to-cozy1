@@ -72,6 +72,11 @@ function toNonEmptyString(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
 type GuidanceEvidenceScopeSnapshot = {
   category: GuidanceEvidenceScopeCategory;
   scopeId: string | null;
