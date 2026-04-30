@@ -30,6 +30,8 @@ export default function CoverageIntelligenceToolClient() {
   const guidanceJourneyId = searchParams.get('guidanceJourneyId');
   const rawTab = searchParams.get('tab') as CoverageTab | null;
   const activeTab: CoverageTab = rawTab === 'options' || rawTab === 'trend' ? rawTab : 'coverage';
+  const selectedInventoryItemId =
+    searchParams.get('itemId') ?? searchParams.get('inventoryItemId');
 
   const isGuidanceContext = Boolean(guidanceJourneyId);
 
@@ -38,6 +40,24 @@ export default function CoverageIntelligenceToolClient() {
     track('workflow_started', { tool: 'coverage-intelligence', propertyId, entryPoint: isGuidanceContext ? 'guidance' : 'direct' });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  useEffect(() => {
+    if (!propertyId || !selectedInventoryItemId) return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.set('itemId', selectedInventoryItemId);
+    next.set('inventoryItemId', selectedInventoryItemId);
+    next.set(
+      'returnTo',
+      `/dashboard/properties/${propertyId}/tools/coverage-intelligence`
+    );
+    router.replace(
+      `/dashboard/properties/${propertyId}/inventory/items/${selectedInventoryItemId}/coverage?${next.toString()}`
+    );
+  }, [propertyId, router, searchParams, selectedInventoryItemId]);
+
+  if (selectedInventoryItemId) {
+    return null;
+  }
 
   function switchTab(tab: CoverageTab) {
     const next = new URLSearchParams(searchParams.toString());

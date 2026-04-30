@@ -195,7 +195,7 @@ export function CoverageCheckInline({
 
   // Build the full-tool link with guidance context pre-attached
   const fullToolHref = isItemScoped
-    ? `/dashboard/properties/${propertyId}/tools/coverage-intelligence?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}&itemId=${inventoryItemId}`
+    ? `/dashboard/properties/${propertyId}/inventory/items/${inventoryItemId}/coverage?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}&itemId=${inventoryItemId}&inventoryItemId=${inventoryItemId}`
     : `/dashboard/properties/${propertyId}/tools/coverage-intelligence?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}`;
 
   // ---- Completed state ----

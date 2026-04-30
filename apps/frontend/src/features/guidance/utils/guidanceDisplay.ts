@@ -128,6 +128,14 @@ export function resolveGuidanceStepHref(args: {
     );
   }
 
+  if (step.toolKey === 'coverage-intelligence' && journey.inventoryItemId) {
+    return appendGuidanceContext(
+      `/dashboard/properties/${propertyId}/inventory/items/${journey.inventoryItemId}/coverage`,
+      journey,
+      step
+    );
+  }
+
   const safeRoute = stripUnresolvedSegments(route);
   if (safeRoute) {
     // Item 21: Inject weather-signal-derived provider category for weather booking steps
