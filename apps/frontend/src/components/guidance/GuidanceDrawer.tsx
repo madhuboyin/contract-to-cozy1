@@ -215,11 +215,133 @@ function formatMoneyFromCents(value: unknown) {
   }).format(numeric / 100);
 }
 
+function formatCount(value: unknown, singularLabel: string, pluralLabel: string) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const rounded = Math.round(numeric);
+  return `${rounded} ${rounded === 1 ? singularLabel : pluralLabel}`;
+}
+
 function formatMonths(value: unknown) {
   const numeric = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return null;
   const rounded = Math.round(numeric);
   return `${rounded} month${rounded === 1 ? '' : 's'}`;
+}
+
+function formatYears(value: unknown) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return null;
+  return `${numeric.toFixed(1)} year${numeric.toFixed(1) === '1.0' ? '' : 's'}`;
+}
+
+function parseObjectList(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+    );
+  }
+  return [];
+}
+
+function humanizeRepairReplaceVerdict(value: unknown) {
+  const verdict = typeof value === 'string' ? value.toUpperCase() : '';
+  switch (verdict) {
+    case 'REPAIR_ONLY':
+      return 'Repair now';
+    case 'REPAIR_AND_MONITOR':
+      return 'Repair and monitor';
+    case 'REPLACE_SOON':
+      return 'Plan to replace soon';
+    case 'REPLACE_NOW':
+      return 'Replace now';
+    default:
+      return null;
+  }
+}
+
+function renderRepairReplaceDecisionSummary(payload: Record<string, unknown>) {
+  const verdict = humanizeRepairReplaceVerdict(payload.verdict);
+  if (!verdict) return null;
+
+  const summary = typeof payload.summary === 'string' ? payload.summary : null;
+  const ageYears = formatYears(payload.ageYears);
+  const remainingYears = formatYears(payload.remainingYears);
+  const confidence = typeof payload.confidence === 'string' ? payload.confidence : null;
+  const decisionTrace = parseObjectList(payload.decisionTrace).slice(0, 4);
+  const nextSteps = parseObjectList(payload.nextSteps).slice(0, 3);
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Recommendation
+      </p>
+      <p className="mb-0 text-sm font-medium text-slate-900">{verdict}</p>
+      {summary ? <p className="mb-0 mt-1 text-sm text-slate-700">{summary}</p> : null}
+
+      {(ageYears || remainingYears || confidence) ? (
+        <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {ageYears ? (
+            <div>
+              <dt className="text-xs font-medium text-slate-600">Estimated age</dt>
+              <dd className="mt-0.5 text-sm text-slate-900">{ageYears}</dd>
+            </div>
+          ) : null}
+          {remainingYears ? (
+            <div>
+              <dt className="text-xs font-medium text-slate-600">Estimated time left</dt>
+              <dd className="mt-0.5 text-sm text-slate-900">{remainingYears}</dd>
+            </div>
+          ) : null}
+          {confidence ? (
+            <div>
+              <dt className="text-xs font-medium text-slate-600">Confidence</dt>
+              <dd className="mt-0.5 text-sm text-slate-900">{titleizeKey(confidence)}</dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
+
+      {decisionTrace.length > 0 ? (
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-medium text-slate-600">Why this was recommended</p>
+          <ul className="space-y-1.5 text-sm text-slate-700">
+            {decisionTrace.map((entry, index) => {
+              const label =
+                typeof entry.label === 'string' ? entry.label : `Reason ${index + 1}`;
+              const detail = typeof entry.detail === 'string' ? entry.detail : null;
+              return (
+                <li key={`${label}-${index}`}>
+                  <span className="font-medium text-slate-900">{label}:</span>{' '}
+                  {detail ?? 'Additional context was captured for this recommendation.'}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      {nextSteps.length > 0 ? (
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-medium text-slate-600">Recommended next moves</p>
+          <ul className="space-y-1.5 text-sm text-slate-700">
+            {nextSteps.map((entry, index) => {
+              const title =
+                typeof entry.title === 'string' ? entry.title : `Next step ${index + 1}`;
+              const detail = typeof entry.detail === 'string' ? entry.detail : null;
+              return (
+                <li key={`${title}-${index}`}>
+                  <span className="font-medium text-slate-900">{title}</span>
+                  {detail ? `: ${detail}` : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function renderRepairReplaceCostTradeoff(payload: Record<string, unknown>) {
@@ -294,6 +416,53 @@ function renderRepairReplaceCostTradeoff(payload: Record<string, unknown>) {
       {confidence ? (
         <p className="mb-0 mt-2 text-xs text-slate-500">Confidence: {confidence}</p>
       ) : null}
+    </div>
+  );
+}
+
+function renderRepairReplaceSupportingDetails(payload: Record<string, unknown>) {
+  const detailRows = [
+    {
+      label: 'Expected next repair cost',
+      value: formatMoneyFromCents(payload.estimatedNextRepairCostCents),
+    },
+    {
+      label: 'Estimated replacement cost',
+      value: formatMoneyFromCents(payload.estimatedReplacementCostCents),
+    },
+    {
+      label: 'Likely annual repair risk',
+      value: formatMoneyFromCents(payload.expectedAnnualRepairRiskCents),
+    },
+    {
+      label: 'Break-even timing',
+      value: formatMonths(payload.breakEvenMonths),
+    },
+    {
+      label: 'Estimated time left',
+      value: formatYears(payload.remainingYears),
+    },
+    {
+      label: 'Recent repair events reviewed',
+      value: formatCount(payload.repairCountLookback, 'event', 'events'),
+    },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+
+  if (!detailRows.length) return null;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Supporting details
+      </p>
+      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {detailRows.map((row) => (
+          <div key={row.label}>
+            <dt className="text-xs font-medium text-slate-600">{row.label}</dt>
+            <dd className="mt-0.5 text-sm text-slate-900">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -510,6 +679,17 @@ function CompletedStepDetail({
     primaryEvidence?.proofType === 'repair_replace_analysis'
       ? renderRepairReplaceCostTradeoff(displayedPayload)
       : null;
+  const repairReplaceDecisionSummary =
+    primaryEvidence?.proofType === 'repair_replace_analysis'
+      ? renderRepairReplaceDecisionSummary(displayedPayload)
+      : null;
+  const repairReplaceSupportingDetails =
+    primaryEvidence?.proofType === 'repair_replace_analysis'
+      ? renderRepairReplaceSupportingDetails(displayedPayload)
+      : null;
+  const shouldHideGenericSummary =
+    primaryEvidence?.proofType === 'repair_replace_analysis' &&
+    Boolean(repairReplaceDecisionSummary || repairReplaceTradeoff || repairReplaceSupportingDetails);
 
   return (
     <div className="space-y-3 rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
@@ -568,9 +748,13 @@ function CompletedStepDetail({
         </div>
       ) : null}
 
+      {repairReplaceDecisionSummary}
+
       {repairReplaceTradeoff}
 
-      {summaryItems.length > 0 ? (
+      {repairReplaceSupportingDetails}
+
+      {!shouldHideGenericSummary && summaryItems.length > 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {compatibility === 'BROADER_CONTEXT' || (compatibility === 'UNKNOWN' && actualScopeCategory === 'PROPERTY' && expectedScopeCategory !== 'PROPERTY')
