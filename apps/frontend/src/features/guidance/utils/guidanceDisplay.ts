@@ -126,6 +126,12 @@ export function formatStepStatusLabel(status: GuidanceStepStatus): string {
   return formatEnumLabel(status);
 }
 
+export function formatIssueTypeLabel(issueType: string | null | undefined): string | null {
+  const normalized = issueType?.trim();
+  if (!normalized) return null;
+  return formatEnumLabel(normalized) || normalized;
+}
+
 export function resolveGuidanceStepHref(args: {
   propertyId: string;
   journey: GuidanceJourneyDTO;

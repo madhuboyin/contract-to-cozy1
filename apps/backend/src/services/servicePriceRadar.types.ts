@@ -95,6 +95,8 @@ export type ServiceRadarCreateInput = {
 
 export type ServiceRadarListQuery = {
   limit: number;
+  linkedEntityType?: ServiceRadarLinkedEntityTypeValue;
+  linkedEntityId?: string;
 };
 
 export type ServiceRadarLinkedEntitySummaryDTO = {

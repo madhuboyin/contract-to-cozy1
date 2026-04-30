@@ -25,6 +25,7 @@ import {
 } from '@/app/(dashboard)/dashboard/properties/[id]/tools/service-price-radar/servicePriceRadarApi';
 import { completeGuidanceStep } from '@/lib/api/guidanceApi';
 import { formatCurrency } from '@/lib/utils/format';
+import { formatIssueTypeLabel } from '@/features/guidance/utils/guidanceDisplay';
 
 // ---------------------------------------------------------------------------
 // Verdict display config
@@ -118,7 +119,8 @@ export function PriceCheckInline({
   const queryClient = useQueryClient();
 
   const defaultCategory = inferCategory(inventoryItemCategory);
-  const defaultDescription = [assetName, issueType].filter(Boolean).join(' — ');
+  const issueLabel = formatIssueTypeLabel(issueType);
+  const defaultDescription = [assetName, issueLabel].filter(Boolean).join(' — ');
 
   const [phase, setPhase] = React.useState<Phase>('loading');
   const [category, setCategory] = React.useState<ServiceRadarCategory>(defaultCategory);
@@ -131,8 +133,17 @@ export function PriceCheckInline({
 
   // ---- Fetch recent checks to detect State C ----
   const recentChecksQuery = useQuery({
-    queryKey: ['price-radar-checks', propertyId, 'recent-for-guidance'],
-    queryFn: () => listServicePriceRadarChecks(propertyId, 3),
+    queryKey: [
+      'price-radar-checks',
+      propertyId,
+      'recent-for-guidance',
+      inventoryItemId ?? 'none',
+    ],
+    queryFn: () =>
+      listServicePriceRadarChecks(propertyId, 3, {
+        linkedEntityType: inventoryItemId ? 'APPLIANCE' : undefined,
+        linkedEntityId: inventoryItemId,
+      }),
     staleTime: 2 * 60_000,
   });
 
@@ -175,7 +186,12 @@ export function PriceCheckInline({
       });
       setResult(check);
       queryClient.invalidateQueries({
-        queryKey: ['price-radar-checks', propertyId, 'recent-for-guidance'],
+        queryKey: [
+          'price-radar-checks',
+          propertyId,
+          'recent-for-guidance',
+          inventoryItemId ?? 'none',
+        ],
       });
       setPhase('result');
     } catch (err) {

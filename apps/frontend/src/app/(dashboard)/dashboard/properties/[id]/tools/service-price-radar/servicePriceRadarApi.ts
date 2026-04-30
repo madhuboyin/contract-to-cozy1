@@ -188,11 +188,25 @@ export async function createServicePriceRadarCheck(
 
 export async function listServicePriceRadarChecks(
   propertyId: string,
-  limit = 12
+  limit = 12,
+  filters?: {
+    linkedEntityType?: ServiceRadarLinkedEntityType;
+    linkedEntityId?: string | null;
+  }
 ): Promise<ServicePriceRadarCheckSummary[]> {
   const res = await api.get<{ items: ServicePriceRadarCheckSummary[] }>(
     `/api/properties/${propertyId}/service-price-radar/checks`,
-    { params: { limit } }
+    {
+      params: {
+        limit,
+        ...(filters?.linkedEntityType && filters?.linkedEntityId
+          ? {
+              linkedEntityType: filters.linkedEntityType,
+              linkedEntityId: filters.linkedEntityId,
+            }
+          : {}),
+      },
+    }
   );
   return res.data.items;
 }

@@ -15,6 +15,7 @@ import {
 } from '@/lib/api/guidanceApi';
 import {
   buildJourneyTitle,
+  formatIssueTypeLabel,
   formatReadinessLabel,
   formatStepStatusLabel,
   resolveGuidanceStepHref,
@@ -27,8 +28,17 @@ import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 
-function shellBackHref(propertyId: string, journeyId: string): string {
-  return `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${journeyId}`;
+function shellBackHref(propertyId: string, journey: GuidanceJourneyDTO): string {
+  const params = new URLSearchParams({ journeyId: journey.id });
+  if (journey.inventoryItemId) {
+    params.set('itemId', journey.inventoryItemId);
+    params.set('inventoryItemId', journey.inventoryItemId);
+  }
+  if (journey.homeAssetId) params.set('homeAssetId', journey.homeAssetId);
+  const assetName = journey.inventoryItem?.name?.trim() || journey.homeAsset?.assetType || '';
+  if (assetName) params.set('assetName', assetName);
+  if (journey.issueType) params.set('issueType', journey.issueType);
+  return `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`;
 }
 
 function GuidanceStepList({
@@ -73,12 +83,13 @@ function JourneyContextCard({
   journey: GuidanceJourneyDTO;
 }) {
   const assetName = journey.inventoryItem?.name?.trim() || journey.homeAsset?.assetType || 'This item';
+  const issueLabel = formatIssueTypeLabel(journey.issueType);
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <p className="mb-2 text-sm font-semibold text-slate-900">Guidance context</p>
       <div className="space-y-1 text-sm text-slate-700">
         <p className="mb-0 font-medium text-slate-900">{assetName}</p>
-        {journey.issueType ? <p className="mb-0">{journey.issueType}</p> : null}
+        {issueLabel ? <p className="mb-0">{issueLabel}</p> : null}
         <p className="mb-0">Readiness: {formatReadinessLabel(journey.executionReadiness)}</p>
         <p className="mb-0">
           Progress: {journey.progress.completedCount}/{journey.progress.totalCount} complete
@@ -106,7 +117,7 @@ function UnsupportedGuidanceStep({
       step,
       next,
       mode: 'standalone',
-    }) ?? shellBackHref(propertyId, journey.id);
+    }) ?? shellBackHref(propertyId, journey);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -129,7 +140,7 @@ function UnsupportedGuidanceStep({
           </Link>
         </Button>
         <Button asChild variant="outline" className="rounded-xl">
-          <Link href={shellBackHref(propertyId, journey.id)}>Back to journey</Link>
+          <Link href={shellBackHref(propertyId, journey)}>Back to journey</Link>
         </Button>
       </div>
     </div>
@@ -348,7 +359,7 @@ export default function GuidanceStepPageClient() {
     <div className="mx-auto max-w-6xl px-4 py-6">
       <div className="mb-4">
         <Button asChild variant="ghost" className="pl-0 text-slate-600 hover:text-slate-900">
-          <Link href={shellBackHref(propertyId, journey.id)}>
+          <Link href={shellBackHref(propertyId, journey)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to journey
           </Link>

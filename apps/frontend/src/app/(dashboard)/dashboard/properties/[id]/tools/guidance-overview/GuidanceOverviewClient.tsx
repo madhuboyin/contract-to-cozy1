@@ -24,7 +24,7 @@ import {
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { useJourney } from '@/features/guidance/hooks/useJourney';
 import type { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
-import { formatIssueDomain, resolveGuidanceStepHref } from '@/features/guidance/utils/guidanceDisplay';
+import { formatIssueDomain, formatIssueTypeLabel, resolveGuidanceStepHref } from '@/features/guidance/utils/guidanceDisplay';
 import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import {
   skipGuidanceStep,
@@ -649,13 +649,6 @@ export default function GuidanceOverviewClient() {
   });
 
   // ---- Derived ----
-  const focusLabel =
-    selectedAssetOption?.assetName ??
-    (selectedServiceKey
-      ? SERVICE_CATEGORIES.find((s) => s.key === selectedServiceKey)?.label ?? selectedServiceKey
-      : null) ??
-    (primaryAction ? resolveAssetLabel(primaryAction) : null);
-
   const suggestedIssueTypes = React.useMemo(() => {
     if (scopeCategory === 'SERVICE') {
       return selectedServiceKey
@@ -697,6 +690,13 @@ export default function GuidanceOverviewClient() {
   );
   const activeHasScopedMatch = isInPinnedMode ? Boolean(activePrimaryAction) : hasScopedMatch;
   const activeStep = activeStepIndex >= 0 ? activeJourneySteps[activeStepIndex] : null;
+  const focusLabel = isInPinnedMode
+    ? (activePrimaryAction ? resolveAssetLabel(activePrimaryAction) : null)
+    : selectedAssetOption?.assetName ??
+      (selectedServiceKey
+        ? SERVICE_CATEGORIES.find((s) => s.key === selectedServiceKey)?.label ?? selectedServiceKey
+        : null) ??
+      (primaryAction ? resolveAssetLabel(primaryAction) : null);
   const safeStepIndex = Math.max(activeStepIndex, 0);
   const visibleIssueTypes = showAllIssueTypes ? suggestedIssueTypes : suggestedIssueTypes.slice(0, 5);
   const shouldShowIssueTypeToggle = suggestedIssueTypes.length > 5;
@@ -1317,16 +1317,16 @@ export default function GuidanceOverviewClient() {
   // ---------------------------------------------------------------------------
 
   const startLabel =
+    (isInPinnedMode && activePrimaryAction ? resolveAssetLabel(activePrimaryAction) : null) ??
     selectedAssetOption?.assetName ??
     SERVICE_CATEGORIES.find((s) => s.key === selectedServiceKey)?.label ??
     selectedAssetName ??
-    (isInPinnedMode && activePrimaryAction ? resolveAssetLabel(activePrimaryAction) : null) ??
     'your item';
 
   const issueLabelDisplay =
     suggestedIssueTypes.find((i) => i.key === selectedIssueType)?.label ??
-    selectedIssueType ??
-    (isInPinnedMode ? (activePrimaryAction?.journey.issueType ?? '') : '') ??
+    (isInPinnedMode ? formatIssueTypeLabel(activePrimaryAction?.journey.issueType) : null) ??
+    formatIssueTypeLabel(selectedIssueType) ??
     '';
 
   const phaseBProgressValue =

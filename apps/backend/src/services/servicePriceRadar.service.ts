@@ -850,7 +850,19 @@ export class ServicePriceRadarService {
     await assertPropertyForUser(propertyId, userId);
 
     const rows = await prismaAny.serviceRadarCheck.findMany({
-      where: { propertyId },
+      where: {
+        propertyId,
+        ...(query.linkedEntityType && query.linkedEntityId
+          ? {
+              systemLinks: {
+                some: {
+                  linkedEntityType: query.linkedEntityType,
+                  linkedEntityId: query.linkedEntityId,
+                },
+              },
+            }
+          : {}),
+      },
       orderBy: [{ createdAt: 'desc' }],
       take: query.limit,
       select: {

@@ -102,6 +102,16 @@ export const listServicePriceRadarQuerySchema = z.object({
       if (!Number.isFinite(parsed) || parsed <= 0) return 20;
       return Math.min(parsed, 50);
     }),
+  linkedEntityType: enumValueSchema(
+    SERVICE_RADAR_LINKED_ENTITY_TYPE_VALUES,
+    'linkedEntityType'
+  ).optional(),
+  linkedEntityId: z
+    .string()
+    .trim()
+    .min(1)
+    .max(191)
+    .optional(),
 });
 
 export type ListServicePriceRadarQuery = z.infer<typeof listServicePriceRadarQuerySchema>;
