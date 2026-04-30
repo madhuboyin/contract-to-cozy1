@@ -22,6 +22,8 @@ type GuidanceInlinePanelProps = {
    *  Handles NOT_STARTED journeys that are excluded from the active-only list. */
   journeyId?: string | null;
   hidePrimaryCta?: boolean;
+  userSelectedScopeId?: string | null;
+  expectedInventoryItemId?: string | null;
 };
 
 export function GuidanceInlinePanel({
@@ -34,6 +36,8 @@ export function GuidanceInlinePanel({
   compact = false,
   journeyId,
   hidePrimaryCta = false,
+  userSelectedScopeId = null,
+  expectedInventoryItemId = null,
 }: GuidanceInlinePanelProps) {
   const [drawerAction, setDrawerAction] = useState<GuidanceActionModel | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -47,10 +51,20 @@ export function GuidanceInlinePanel({
     issueDomains,
     toolKey,
     limit,
+    userSelectedScopeId: userSelectedScopeId ?? expectedInventoryItemId ?? undefined,
     enabled: Boolean(propertyId) && !journeyId,
   });
 
   const actions = useMemo<GuidanceActionModel[]>(() => {
+    const filterToExpectedItem = (items: GuidanceActionModel[]) => {
+      if (!expectedInventoryItemId) return items;
+      return items.filter(
+        (action) =>
+          action.journey.inventoryItemId === expectedInventoryItemId ||
+          action.journey.scopeId === expectedInventoryItemId
+      );
+    };
+
     if (journeyId) {
       if (!propertyId || !pinnedJourney.data?.journey) return [];
       const mapped = mapGuidanceJourneyToActionModel({
@@ -58,10 +72,10 @@ export function GuidanceInlinePanel({
         journey: pinnedJourney.data.journey,
         next: pinnedJourney.data.next ?? null,
       });
-      return [mapped];
+      return filterToExpectedItem([mapped]);
     }
-    return guidance.actions;
-  }, [journeyId, propertyId, pinnedJourney.data, guidance.actions]);
+    return filterToExpectedItem(guidance.actions);
+  }, [expectedInventoryItemId, journeyId, propertyId, pinnedJourney.data, guidance.actions]);
 
   const isLoading = journeyId ? pinnedJourney.isLoading : guidance.isLoading;
   const isError = journeyId ? pinnedJourney.isError : guidance.isError;

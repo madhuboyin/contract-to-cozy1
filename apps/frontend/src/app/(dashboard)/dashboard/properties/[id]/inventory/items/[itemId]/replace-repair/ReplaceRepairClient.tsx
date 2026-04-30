@@ -243,7 +243,21 @@ export default function ReplaceRepairClient() {
       next: journeyQuery.data.next ?? null,
     });
   }, [propertyId, journeyQuery.data]);
-  const activeJourneyAction = pinnedJourneyAction ?? scopedGuidance.actions[0] ?? null;
+  const actionMatchesCurrentItem = useMemo(
+    () => (action: NonNullable<typeof pinnedJourneyAction>) =>
+      action.journey.inventoryItemId === itemId || action.journey.scopeId === itemId,
+    [itemId]
+  );
+  const scopedJourneyActions = useMemo(
+    () => scopedGuidance.actions.filter(actionMatchesCurrentItem),
+    [actionMatchesCurrentItem, scopedGuidance.actions]
+  );
+  const activeJourneyAction = useMemo(() => {
+    if (pinnedJourneyAction && actionMatchesCurrentItem(pinnedJourneyAction)) {
+      return pinnedJourneyAction;
+    }
+    return scopedJourneyActions[0] ?? null;
+  }, [actionMatchesCurrentItem, pinnedJourneyAction, scopedJourneyActions]);
   const providerSearchHref = useMemo(() => {
     const query = new URLSearchParams();
     if (propertyId) query.append('propertyId', propertyId);
@@ -424,6 +438,8 @@ export default function ReplaceRepairClient() {
         toolKey="replace-repair"
         limit={1}
         journeyId={guidanceContext.guidanceJourneyId}
+        userSelectedScopeId={itemId}
+        expectedInventoryItemId={itemId}
         hidePrimaryCta
       />
 

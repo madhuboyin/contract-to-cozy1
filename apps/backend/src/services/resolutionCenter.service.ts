@@ -31,6 +31,15 @@ type ReplaceRepairResolutionRecord = {
   } | null;
 };
 
+type ReplaceRepairJourneyRecord = {
+  id: string;
+  inventoryItemId: string | null;
+  updatedAt: Date;
+  primarySignal?: {
+    signalIntentFamily: string;
+  } | null;
+};
+
 type CoverageAnalysisRecord = {
   id: string;
   propertyId: string;
@@ -393,15 +402,27 @@ function mapActionsToCases(
 function mapReplaceRepairAnalysesToInsights(
   analyses: ReplaceRepairResolutionRecord[],
   propertyId: string,
+  journeysByItemId?: Map<string, ReplaceRepairJourneyRecord>,
 ): DecisionInsightDTO[] {
-  return analyses.map((analysis) => ({
-    id: analysis.id,
-    propertyId: analysis.propertyId,
-    kind: 'repair_replace',
+  return analyses.map((analysis) => {
+    const journey = journeysByItemId?.get(analysis.inventoryItemId);
+    const query = new URLSearchParams();
+    if (journey?.id) query.set('guidanceJourneyId', journey.id);
+    query.set('guidanceStepKey', 'repair_replace_decision');
+    query.set('itemId', analysis.inventoryItemId);
+    query.set('inventoryItemId', analysis.inventoryItemId);
+    if (journey?.primarySignal?.signalIntentFamily) {
+      query.set('guidanceSignalIntentFamily', journey.primarySignal.signalIntentFamily);
+    }
+
+    return {
+      id: analysis.id,
+      propertyId: analysis.propertyId,
+      kind: 'repair_replace',
       title: 'Repair vs Replace',
       subject: analysis.inventoryItem?.name || 'Inventory Item',
       summary: analysis.summary || 'Our AI has a recommendation for this item.',
-      href: `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`,
+      href: `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair?${query.toString()}`,
       itemId: analysis.inventoryItemId,
       trust: {
         confidenceLabel: `${analysis.confidence} Confidence`,
@@ -414,7 +435,8 @@ function mapReplaceRepairAnalysesToInsights(
       computedAt: analysis.computedAt,
       impactLevel: analysis.impactLevel,
     },
-  }));
+    };
+  });
 }
 
 function mapCoverageGapsToInsights(args: {
@@ -718,6 +740,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     incidents,
     bookings,
     replaceRepairAnalyses,
+    replaceRepairJourneys,
     coverageGaps,
     coverageAnalyses,
   ] = await Promise.all([
@@ -800,6 +823,33 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
         computedAt: 'desc',
       },
       take: 10,
+    }),
+    prisma.guidanceJourney.findMany({
+      where: {
+        propertyId,
+        issueDomain: 'ASSET_LIFECYCLE',
+        status: 'ACTIVE',
+        inventoryItemId: {
+          not: null,
+        },
+        steps: {
+          some: {
+            toolKey: 'replace-repair',
+          },
+        },
+      },
+      select: {
+        id: true,
+        inventoryItemId: true,
+        updatedAt: true,
+        primarySignal: {
+          select: {
+            signalIntentFamily: true,
+          },
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+      take: 200,
     }),
     detectResolutionCoverageGaps(propertyId),
     prisma.coverageAnalysis.findMany({
@@ -936,6 +986,11 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
   });
 
   const dedupedReplaceRepairAnalyses = dedupeReplaceRepairAnalyses(replaceRepairAnalyses);
+  const replaceRepairJourneysByItemId = new Map<string, ReplaceRepairJourneyRecord>();
+  replaceRepairJourneys.forEach((journey) => {
+    if (!journey.inventoryItemId || replaceRepairJourneysByItemId.has(journey.inventoryItemId)) return;
+    replaceRepairJourneysByItemId.set(journey.inventoryItemId, journey);
+  });
 
   const coverageInsights = mapCoverageGapsToInsights({
     coverageGaps,
@@ -958,6 +1013,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       inventoryItem: analysis.inventoryItem,
     })),
     propertyId,
+    replaceRepairJourneysByItemId,
   );
   const allDecisionInsights = filterMaterialDecisionInsights([
     ...coverageInsights,
