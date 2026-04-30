@@ -39,7 +39,6 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import {
@@ -1162,15 +1161,9 @@ export default function ServicePriceRadarClient() {
       intro={
         <div className="space-y-3">
           <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
-            <Link
-              href={
-                isGuidanceContext
-                  ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceContext.guidanceJourneyId}`
-                  : `/dashboard/properties/${propertyId}`
-              }
-            >
+            <Link href={`/dashboard/properties/${propertyId}`}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              {isGuidanceContext ? 'Back to guidance' : 'Back to property'}
+              Back to property
             </Link>
           </Button>
           <MobilePageIntro
@@ -1203,18 +1196,6 @@ export default function ServicePriceRadarClient() {
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >
-      {!isGuidanceContext && (
-        <GuidanceInlinePanel
-          propertyId={propertyId}
-          title="Journey Context"
-          subtitle="Price validation should be completed before negotiation or booking."
-          toolKey="service-price-radar"
-          limit={1}
-          compact
-          journeyId={guidanceContext?.guidanceJourneyId ?? null}
-        />
-      )}
-
       <TrustStrip
         variant="footnote"
         confidenceLabel={pricingTrust.confidenceLabel}

@@ -26,7 +26,6 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { getWarrantyCategoryForInventoryCategory } from '@/lib/config/serviceCategoryMapping';
-import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 
 type TraceImpact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 
@@ -540,17 +539,6 @@ export default function ItemGetCoverageClient() {
             </ScenarioInputCard>
           ) : null}
 
-          {guidanceContext.guidanceJourneyId ? (
-            <GuidanceInlinePanel
-              propertyId={propertyId}
-              title="Next in Journey"
-              subtitle="This step is complete once the coverage result is captured. Continue with the next guided action."
-              journeyId={guidanceContext.guidanceJourneyId}
-              expectedInventoryItemId={itemId}
-              userSelectedScopeId={itemId}
-              limit={1}
-            />
-          ) : null}
         </>
       )}
     </MobileToolWorkspace>

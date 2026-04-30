@@ -6,8 +6,6 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import { track } from '@/lib/analytics/events';
 import CoverageIntelligencePanel from '@/components/ai/CoverageIntelligencePanel';
 import ToolExplainerSection from '@/components/tool-explainer/ToolExplainerSection';
-import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import CoverageOptionsClient from '../coverage-options/CoverageOptionsClient';
@@ -69,9 +67,7 @@ export default function CoverageIntelligenceToolClient() {
     router.replace(`/dashboard/properties/${propertyId}/tools/coverage-intelligence?${next.toString()}`);
   }
 
-  const backHref = isGuidanceContext
-    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
-    : `/dashboard/properties/${propertyId}`;
+  const backHref = `/dashboard/properties/${propertyId}`;
   const trust = coverageLoopTrust({
     confidenceLabel: 'Medium-High, based on linked policy and inventory signals',
     freshnessLabel: 'Updates when coverage documents, warranties, or inventory change',
@@ -101,7 +97,7 @@ export default function CoverageIntelligenceToolClient() {
   return (
     <ToolWorkspaceTemplate
       backHref={backHref}
-      backLabel={isGuidanceContext ? 'Back to guidance' : 'Back to property'}
+      backLabel="Back to property"
       eyebrow="Home tool"
       title="Coverage Intelligence"
       subtitle="Insurance and warranty coverage assessment for this property."
@@ -113,20 +109,8 @@ export default function CoverageIntelligenceToolClient() {
       {/* Tab navigation */}
       {tabNav}
 
-      {/* Standalone-only widgets — hidden when arriving from a guidance step */}
-      {!isGuidanceContext && activeTab === 'coverage' && (
-        <>
-          <GuidanceInlinePanel
-            propertyId={propertyId}
-            title="Where This Tool Fits"
-            subtitle="Coverage Intelligence is part of active guidance journeys. Complete the next required step after review."
-            toolKey="coverage-intelligence"
-            limit={1}
-            journeyId={guidanceJourneyId}
-          />
-
-          <ToolExplainerSection toolKey="coverageIntelligence" id="how-it-works" />
-        </>
+      {activeTab === 'coverage' && (
+        <ToolExplainerSection toolKey="coverageIntelligence" id="how-it-works" />
       )}
 
       {/* Tab content */}
@@ -140,12 +124,6 @@ export default function CoverageIntelligenceToolClient() {
         <InsuranceTrendClient />
       )}
 
-      <GuidanceStepCompletionCard
-        propertyId={propertyId}
-        guidanceStepKey={guidanceStepKey}
-        guidanceJourneyId={guidanceJourneyId}
-        actionLabel="Mark coverage review complete"
-      />
     </ToolWorkspaceTemplate>
   );
 }

@@ -12,7 +12,6 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { formatEnumLabel } from '@/lib/utils/formatters';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 import {
   listServicePriceRadarChecks,
   type ServicePriceRadarCheckSummary,
@@ -216,7 +215,7 @@ export default function QuoteComparisonWorkspaceClient() {
       confidenceScore: null,
       expectedLow: null,
       expectedHigh: null,
-      sourceLabel: 'Guidance context',
+      sourceLabel: 'Prefilled quote',
       serviceRadarCheckId: null,
       createdAt: null,
     };
@@ -351,22 +350,20 @@ export default function QuoteComparisonWorkspaceClient() {
     setManualInputError(null);
   };
 
-  const backHref = isGuidanceContext
-    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
-    : `/dashboard/properties/${propertyId}`;
+  const backHref = `/dashboard/properties/${propertyId}`;
   const trust = pricingLoopTrust({
     confidenceLabel:
       selectedQuotes.length >= 2
         ? 'High with multiple side-by-side quotes in the same decision flow'
         : 'Medium until at least two comparable quotes are selected',
     freshnessLabel: 'Updates as new Service Price Radar checks are created',
-    sourceLabel: 'Service Price Radar check history + guidance prefill + manual quote entries',
+    sourceLabel: 'Service Price Radar history + prefilled quote context + manual quote entries',
   });
 
   return (
     <CompareTemplate
       backHref={backHref}
-      backLabel={isGuidanceContext ? 'Back to guidance' : 'Back to property'}
+      backLabel="Back to property"
       title="Quote Comparison Workspace"
       subtitle="Compare live quote checks side by side and choose the best quote to finalize."
       rail={<HomeToolsRail propertyId={propertyId} context="quote-comparison" currentToolId="quote-comparison" />}
@@ -555,23 +552,7 @@ export default function QuoteComparisonWorkspaceClient() {
           />
         </div>
       }
-      footer={
-        <GuidanceStepCompletionCard
-          propertyId={propertyId}
-          guidanceStepKey={guidanceStepKey}
-          guidanceJourneyId={guidanceJourneyId}
-          actionLabel="Mark quote comparison complete"
-          producedData={{
-            workspaceId: searchParams.get('quoteComparisonWorkspaceId') || null,
-            quoteCount: quotes.length,
-            selectedVendorName: recommendedQuote?.vendorName ?? null,
-            selectedQuoteAmount: recommendedQuote?.quoteAmount ?? null,
-            currency: recommendedQuote?.currency ?? 'USD',
-            comparedQuoteIds: selectedQuoteIds,
-            signalIntentFamily: guidanceSignalIntentFamily ?? null,
-          }}
-        />
-      }
+      footer={null}
     />
   );
 }

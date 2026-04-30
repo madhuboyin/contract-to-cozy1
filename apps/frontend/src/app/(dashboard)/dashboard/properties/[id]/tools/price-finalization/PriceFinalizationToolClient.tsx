@@ -26,7 +26,6 @@ import {
 import { pricingLoopTrust } from '@/lib/trust/trustPresets';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
-import { GuidanceStepCompletionCard } from '@/components/guidance/GuidanceStepCompletionCard';
 
 type FormState = {
   serviceCategory: ServiceCategory | '';
@@ -355,21 +354,19 @@ export default function PriceFinalizationToolClient() {
     itemId,
     homeAssetId,
   ]);
-  const backHref = guidanceJourneyId
-    ? `/dashboard/properties/${propertyId}/tools/guidance-overview?journeyId=${guidanceJourneyId}`
-    : `/dashboard/properties/${propertyId}`;
+  const backHref = `/dashboard/properties/${propertyId}`;
   const trust = pricingLoopTrust({
     confidenceLabel: finalizedDetail
       ? 'High for finalized records; medium for draft entries'
       : 'Medium while drafting',
     freshnessLabel: 'Updates with every draft save and finalization action',
-    sourceLabel: 'Quote context + selected vendor terms + guidance context',
+    sourceLabel: 'Quote context + selected vendor terms + linked tool context',
   });
 
   return (
     <CompareTemplate
       backHref={backHref}
-      backLabel={guidanceJourneyId ? 'Back to guidance' : 'Back to property'}
+      backLabel="Back to property"
       title="Price Finalization"
       subtitle="Capture accepted quote terms and final price before moving to booking."
       rail={<HomeToolsRail propertyId={propertyId} context="price-finalization" currentToolId="price-finalization" />}
@@ -587,35 +584,22 @@ export default function PriceFinalizationToolClient() {
         </>
       }
       footer={
-        <>
-          {bookingHref ? (
-            <ScenarioInputCard title="Next Step" subtitle="Your accepted terms can now prefill booking.">
-              <div className="flex items-center gap-2 text-sm text-emerald-700">
-                <CheckCircle2 className="h-4 w-4" />
-                Price finalized and ready for booking.
-              </div>
-              <div className="pt-2">
-                <Link
-                  href={bookingHref}
-                  className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-4 text-sm font-semibold text-white hover:bg-black/90"
-                >
-                  Continue to Provider Booking
-                </Link>
-              </div>
-            </ScenarioInputCard>
-          ) : null}
-          <GuidanceStepCompletionCard
-            propertyId={propertyId}
-            guidanceStepKey={guidanceStepKey}
-            guidanceJourneyId={guidanceJourneyId}
-            actionLabel="Mark price finalization reviewed"
-            producedData={
-              guidanceSignalIntentFamily
-                ? { signalIntentFamily: guidanceSignalIntentFamily }
-                : undefined
-            }
-          />
-        </>
+        bookingHref ? (
+          <ScenarioInputCard title="Next Step" subtitle="Your accepted terms can now prefill booking.">
+            <div className="flex items-center gap-2 text-sm text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" />
+              Price finalized and ready for booking.
+            </div>
+            <div className="pt-2">
+              <Link
+                href={bookingHref}
+                className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-black bg-black px-4 text-sm font-semibold text-white hover:bg-black/90"
+              >
+                Continue to Provider Booking
+              </Link>
+            </div>
+          </ScenarioInputCard>
+        ) : null
       }
     />
   );

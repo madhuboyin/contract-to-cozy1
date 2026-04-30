@@ -25,7 +25,6 @@ import {
   ReplaceRepairOverrides,
   runReplaceRepairAnalysis,
 } from '@/lib/api/replaceRepairApi';
-import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { useJourney } from '@/features/guidance/hooks/useJourney';
 import { mapGuidanceJourneyToActionModel } from '@/features/guidance/utils/guidanceMappers';
@@ -431,18 +430,6 @@ export default function ReplaceRepairClient() {
       }
       footer={<BottomSafeAreaReserve size="chatAware" />}
     >
-      <GuidanceInlinePanel
-        propertyId={propertyId}
-        title="Journey Context"
-        subtitle="This decision step should happen before coverage checks, pricing validation, and booking."
-        toolKey="replace-repair"
-        limit={1}
-        journeyId={guidanceContext.guidanceJourneyId}
-        userSelectedScopeId={itemId}
-        expectedInventoryItemId={itemId}
-        hidePrimaryCta
-      />
-
       <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
         Educational decision support only. This estimate does not guarantee outcomes or recommend specific vendors.
       </div>
