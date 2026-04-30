@@ -26,6 +26,7 @@ import {
   runReplaceRepairAnalysis,
 } from '@/lib/api/replaceRepairApi';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
+import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { useJourney } from '@/features/guidance/hooks/useJourney';
 import { mapGuidanceJourneyToActionModel } from '@/features/guidance/utils/guidanceMappers';
 
@@ -228,6 +229,12 @@ export default function ReplaceRepairClient() {
     [searchParams]
   );
   const journeyQuery = useJourney(propertyId, guidanceContext.guidanceJourneyId ?? null);
+  const scopedGuidance = useGuidance(propertyId, {
+    toolKey: 'replace-repair',
+    limit: 1,
+    userSelectedScopeId: itemId,
+    enabled: Boolean(propertyId && itemId) && !guidanceContext.guidanceJourneyId,
+  });
   const pinnedJourneyAction = useMemo(() => {
     if (!propertyId || !journeyQuery.data?.journey) return null;
     return mapGuidanceJourneyToActionModel({
@@ -236,18 +243,26 @@ export default function ReplaceRepairClient() {
       next: journeyQuery.data.next ?? null,
     });
   }, [propertyId, journeyQuery.data]);
+  const activeJourneyAction = pinnedJourneyAction ?? scopedGuidance.actions[0] ?? null;
   const providerSearchHref = useMemo(() => {
     const query = new URLSearchParams();
     if (propertyId) query.append('propertyId', propertyId);
     if (itemId) query.append('itemId', itemId);
     if (item?.category) query.append('category', item.category);
-    if (guidanceContext.guidanceJourneyId) {
-      query.append('guidanceJourneyId', guidanceContext.guidanceJourneyId);
+    if (activeJourneyAction?.journeyId) {
+      query.append('guidanceJourneyId', activeJourneyAction.journeyId);
     }
-    if (guidanceContext.guidanceStepKey) {
+    if (activeJourneyAction?.nextStep?.stepKey) {
+      query.append('guidanceStepKey', activeJourneyAction.nextStep.stepKey);
+    } else if (guidanceContext.guidanceStepKey) {
       query.append('guidanceStepKey', guidanceContext.guidanceStepKey);
     }
-    if (guidanceContext.guidanceSignalIntentFamily) {
+    if (activeJourneyAction?.journey.primarySignal?.signalIntentFamily) {
+      query.append(
+        'guidanceSignalIntentFamily',
+        activeJourneyAction.journey.primarySignal.signalIntentFamily
+      );
+    } else if (guidanceContext.guidanceSignalIntentFamily) {
       query.append(
         'guidanceSignalIntentFamily',
         guidanceContext.guidanceSignalIntentFamily
@@ -259,33 +274,36 @@ export default function ReplaceRepairClient() {
     propertyId,
     itemId,
     item?.category,
-    guidanceContext.guidanceJourneyId,
+    activeJourneyAction?.journeyId,
+    activeJourneyAction?.nextStep?.stepKey,
+    activeJourneyAction?.journey.primarySignal?.signalIntentFamily,
     guidanceContext.guidanceStepKey,
     guidanceContext.guidanceSignalIntentFamily,
   ]);
   const shouldRouteToJourneyStep = Boolean(
-    pinnedJourneyAction &&
-      (pinnedJourneyAction.executionReadiness !== 'READY' ||
-        pinnedJourneyAction.fundingGapFlag ||
-        pinnedJourneyAction.blockedReason)
+    activeJourneyAction &&
+      (activeJourneyAction.executionReadiness !== 'READY' ||
+        activeJourneyAction.fundingGapFlag ||
+        activeJourneyAction.blockedReason)
   );
   const isJourneyLoadingForCta = Boolean(
-    guidanceContext.guidanceJourneyId && !pinnedJourneyAction && journeyQuery.isLoading
+    (guidanceContext.guidanceJourneyId && !pinnedJourneyAction && journeyQuery.isLoading) ||
+      (!guidanceContext.guidanceJourneyId && scopedGuidance.isLoading)
   );
-  const journeyStepLabel = pinnedJourneyAction?.nextStep?.label?.trim()
-    ? pinnedJourneyAction.nextStep.label.trim()
-    : pinnedJourneyAction?.explanation?.nextStep?.trim() || 'Review next step';
+  const journeyStepLabel = activeJourneyAction?.nextStep?.label?.trim()
+    ? activeJourneyAction.nextStep.label.trim()
+    : activeJourneyAction?.explanation?.nextStep?.trim() || 'Review next step';
   const journeyStepNumber =
-    typeof pinnedJourneyAction?.nextStep?.stepOrder === 'number'
-      ? pinnedJourneyAction.nextStep.stepOrder
+    typeof activeJourneyAction?.nextStep?.stepOrder === 'number'
+      ? activeJourneyAction.nextStep.stepOrder
       : null;
   const journeyCtaLabel = journeyStepNumber
     ? `Step ${journeyStepNumber}: ${journeyStepLabel}`
     : journeyStepLabel;
   const journeyCtaHint =
-    pinnedJourneyAction?.blockedReason ||
-    pinnedJourneyAction?.warnings?.[0] ||
-    (pinnedJourneyAction?.fundingGapFlag
+    activeJourneyAction?.blockedReason ||
+    activeJourneyAction?.warnings?.[0] ||
+    (activeJourneyAction?.fundingGapFlag
       ? 'Review funding options before committing to execution.'
       : null);
 
@@ -342,13 +360,13 @@ export default function ReplaceRepairClient() {
           />
           {analysis && (
             <div className="px-1">
-              {shouldRouteToJourneyStep && pinnedJourneyAction?.href ? (
+              {shouldRouteToJourneyStep && activeJourneyAction?.href ? (
                 <div className="space-y-2">
                   <Button
                     asChild
                     className="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-xl h-12 shadow-md shadow-brand-100"
                   >
-                    <Link href={pinnedJourneyAction.href}>
+                    <Link href={activeJourneyAction.href}>
                       {journeyCtaLabel}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
