@@ -12,7 +12,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   confirmRecallMatch,
@@ -68,6 +68,7 @@ type RecallCheckInlineProps = {
   stepKey: string;
   inventoryItemId: string | null;
   assetName?: string;
+  presentation?: 'default' | 'guided';
   onComplete: () => void;
 };
 
@@ -82,12 +83,14 @@ export function RecallCheckInline({
   stepKey,
   inventoryItemId,
   assetName = 'this item',
+  presentation = 'default',
   onComplete,
 }: RecallCheckInlineProps) {
   const queryClient = useQueryClient();
   const [completing, setCompleting] = React.useState(false);
   const [completeDone, setCompleteDone] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
+  const isGuided = presentation === 'guided';
 
   const copy = STEP_COPY[stepKey] ?? DEFAULT_COPY;
   const isItemScoped = Boolean(inventoryItemId);
@@ -204,15 +207,17 @@ export function RecallCheckInline({
       <div className="space-y-3">
         <p className="text-xs text-rose-700">Failed to load recalls. You can still complete this step or open the full recalls page.</p>
         <div className="flex flex-col gap-2">
-          <Button className="min-h-[44px] w-full" disabled={completing} onClick={handleComplete}>
+          <Button className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md" disabled={completing} onClick={handleComplete}>
             {completing ? 'Saving…' : copy.cta}
           </Button>
-          <Link
-            href={fullRecallsHref}
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-          >
-            Open full recalls page
-          </Link>
+          {!isGuided && (
+            <Link
+              href={fullRecallsHref}
+              className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+            >
+              Open full recalls page
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -221,9 +226,11 @@ export function RecallCheckInline({
   return (
     <div className="space-y-3">
       {/* Instruction banner */}
-      <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
-        <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">{copy.instruction}</p>
-      </div>
+      {!isGuided && (
+        <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+          <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">{copy.instruction}</p>
+        </div>
+      )}
 
       {/* No open recalls */}
       {activeMatches.length === 0 && (
@@ -256,15 +263,22 @@ export function RecallCheckInline({
 
       {/* Always-present completion actions */}
       <div className="flex flex-col gap-2">
-        <Button className="min-h-[44px] w-full" disabled={completing} onClick={handleComplete}>
-          {completing ? 'Saving…' : copy.cta}
+        <Button className="min-h-[52px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md" disabled={completing} onClick={handleComplete}>
+          {completing ? 'Saving…' : (
+            <span className="inline-flex items-center gap-2">
+              {copy.cta}
+              <ArrowRight className="h-4 w-4" />
+            </span>
+          )}
         </Button>
-        <Link
-          href={fullRecallsHref}
-          className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-        >
-          Open full recalls page
-        </Link>
+        {!isGuided && (
+          <Link
+            href={fullRecallsHref}
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+          >
+            Open full recalls page
+          </Link>
+        )}
       </div>
     </div>
   );

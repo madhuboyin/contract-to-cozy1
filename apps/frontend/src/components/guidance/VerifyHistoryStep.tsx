@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { ArrowRight, CheckCircle, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   getGuidanceSymptomTypes,
@@ -37,6 +37,7 @@ type VerifyHistoryStepProps = {
   assetCategory?: string | null;
   /** Human-readable asset name for display */
   assetName?: string;
+  presentation?: 'default' | 'guided';
   /** Called after the step is successfully completed */
   onComplete: () => void;
 };
@@ -64,9 +65,11 @@ export function VerifyHistoryStep({
   inventoryItemId,
   assetCategory,
   assetName = 'this item',
+  presentation = 'default',
   onComplete,
 }: VerifyHistoryStepProps) {
   const queryClient = useQueryClient();
+  const isGuided = presentation === 'guided';
 
   // ---- 1. Load symptom types for this asset category (FRD-FR-04) ----
   const symptomQuery = useQuery({
@@ -190,7 +193,7 @@ export function VerifyHistoryStep({
   return (
     <div className="space-y-4">
       {/* ---- Existing history banner ---- */}
-      {assetContext && assetContext.hasHistory && assetContext.recentEvents.length > 0 && (
+      {assetContext && assetContext.hasHistory && assetContext.recentEvents.length > 0 && !isGuided && (
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5">
           <p className="mb-1 text-xs font-semibold text-sky-800">Recent history for {assetName}</p>
           <ul className="space-y-1">
@@ -355,11 +358,16 @@ export function VerifyHistoryStep({
 
       {/* ---- Submit ---- */}
       <Button
-        className="min-h-[44px] w-full"
+        className="min-h-[52px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
         disabled={!symptomChosen || submitState === 'saving'}
         onClick={handleSubmit}
       >
-        {submitState === 'saving' ? 'Saving…' : 'Confirm & continue'}
+        {submitState === 'saving' ? 'Saving…' : (
+          <span className="inline-flex items-center gap-2">
+            Confirm & continue
+            <ArrowRight className="h-4 w-4" />
+          </span>
+        )}
       </Button>
     </div>
   );

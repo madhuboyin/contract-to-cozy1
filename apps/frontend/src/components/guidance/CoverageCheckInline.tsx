@@ -8,7 +8,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   getCoverageAnalysis,
@@ -57,6 +57,7 @@ type CoverageCheckInlineProps = {
   stepKey: string;
   inventoryItemId: string | null;
   assetName?: string;
+  presentation?: 'default' | 'guided';
   onComplete: () => void;
 };
 
@@ -94,11 +95,13 @@ export function CoverageCheckInline({
   stepKey,
   inventoryItemId,
   assetName = 'this item',
+  presentation = 'default',
   onComplete,
 }: CoverageCheckInlineProps) {
   const queryClient = useQueryClient();
   const [completing, setCompleting] = React.useState(false);
   const [completeDone, setCompleteDone] = React.useState(false);
+  const isGuided = presentation === 'guided';
 
   const isItemScoped = Boolean(inventoryItemId);
 
@@ -244,18 +247,20 @@ export function CoverageCheckInline({
         {/* Actions */}
         <div className="flex flex-col gap-2">
           <Button
-            className="min-h-[44px] w-full"
+            className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
             disabled={completing}
             onClick={handleMarkReviewed}
           >
-            {completing ? 'Saving…' : 'Mark coverage reviewed'}
+            {completing ? 'Saving…' : 'Use this result & continue'}
           </Button>
-          <Link
-            href={fullToolHref}
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-          >
-            Open full coverage tool
-          </Link>
+          {!isGuided && (
+            <Link
+              href={fullToolHref}
+              className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+            >
+              Open full coverage tool
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -264,17 +269,19 @@ export function CoverageCheckInline({
   // ---- No analysis yet — offer to run or skip straight to review ----
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
-        <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-          {isItemScoped
-            ? `Check coverage status for ${assetName}`
-            : 'Check property coverage status'}
-        </p>
-        <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
-          Run a quick analysis to see whether insurance and warranty coverage is adequate before
-          proceeding.
-        </p>
-      </div>
+      {!isGuided && (
+        <div className="rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-[hsl(var(--mobile-bg-muted))] px-3 py-2.5">
+          <p className="text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+            {isItemScoped
+              ? `Check coverage status for ${assetName}`
+              : 'Check property coverage status'}
+          </p>
+          <p className="mt-0.5 text-xs text-[hsl(var(--mobile-text-secondary))]">
+            Run a quick analysis to see whether insurance and warranty coverage is adequate before
+            proceeding.
+          </p>
+        </div>
+      )}
 
       {isError && (
         <p className="text-xs text-rose-700">Analysis failed. Please try again.</p>
@@ -282,18 +289,25 @@ export function CoverageCheckInline({
 
       <div className="flex flex-col gap-2">
         <Button
-          className="min-h-[44px] w-full"
+          className="min-h-[52px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
           disabled={isPending}
           onClick={handleRunAnalysis}
         >
-          {isPending ? 'Running analysis…' : 'Run coverage check'}
+          {isPending ? 'Running analysis…' : (
+            <span className="inline-flex items-center gap-2">
+              Run coverage check
+              <ArrowRight className="h-4 w-4" />
+            </span>
+          )}
         </Button>
-        <Link
-          href={fullToolHref}
-          className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
-        >
-          Open full coverage tool
-        </Link>
+        {!isGuided && (
+          <Link
+            href={fullToolHref}
+            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))] hover:bg-[hsl(var(--mobile-bg-muted))]"
+          >
+            Open full coverage tool
+          </Link>
+        )}
       </div>
     </div>
   );

@@ -799,6 +799,7 @@ export default function GuidanceOverviewClient() {
           inventoryItemId={journeyInventoryItemId}
           assetCategory={assetCategory}
           assetName={displayAssetName}
+          presentation="guided"
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
@@ -825,6 +826,7 @@ export default function GuidanceOverviewClient() {
             stepId={step.id}
             stepKey={step.stepKey}
             assetName={displayAssetName}
+            presentation="guided"
             onComplete={() => {
               queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
               queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
@@ -849,6 +851,7 @@ export default function GuidanceOverviewClient() {
           stepKey={step.stepKey}
           inventoryItemId={coverageItemId}
           assetName={displayAssetName}
+          presentation="guided"
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
@@ -901,6 +904,7 @@ export default function GuidanceOverviewClient() {
           stepKey={step.stepKey}
           inventoryItemId={recallItemId}
           assetName={displayAssetName}
+          presentation="guided"
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
