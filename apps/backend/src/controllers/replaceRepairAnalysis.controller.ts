@@ -3,6 +3,7 @@ import { CustomRequest } from '../types';
 import { ReplaceRepairOverrides, ReplaceRepairService } from '../services/replaceRepairAnalysis.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { APIError } from '../middleware/error.middleware';
 
 const service = new ReplaceRepairService();
 
@@ -49,6 +50,28 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
     const overrides = (req.body?.overrides ?? {}) as ReplaceRepairOverrides;
     const analysis = await service.runItemAnalysis(propertyId, itemId, userId, overrides);
 
+    const guidanceProducedData = {
+      proofType: 'repair_replace_analysis',
+      proofId: analysis.id,
+      verdict: analysis.verdict,
+      confidence: analysis.confidence,
+      impactLevel: analysis.impactLevel,
+      summary: analysis.summary,
+      ageYears: analysis.ageYears,
+      remainingYears: analysis.remainingYears,
+      breakEvenMonths: analysis.breakEvenMonths,
+      estimatedNextRepairCostCents: analysis.estimatedNextRepairCostCents,
+      estimatedReplacementCostCents: analysis.estimatedReplacementCostCents,
+      expectedAnnualRepairRiskCents: analysis.expectedAnnualRepairRiskCents,
+      decisionTrace: analysis.decisionTrace ?? [],
+      nextSteps: analysis.nextSteps ?? [],
+    };
+    const guidanceMetadata = {
+      actualScopeCategory: 'ITEM',
+      actualScopeId: itemId,
+      resultContextLabel: 'Item-specific repair vs replace analysis',
+    };
+
     try {
       await guidanceJourneyService.recordToolCompletion({
         propertyId,
@@ -62,19 +85,41 @@ export async function runReplaceRepairAnalysis(req: CustomRequest, res: Response
         sourceEntityId: analysis.id,
         stepKey: guidanceStepKey || 'repair_replace_decision',
         status: 'COMPLETED',
-        producedData: {
-          proofType: 'repair_replace_analysis',
-          proofId: analysis.id,
-          verdict: analysis.verdict,
-          confidence: analysis.confidence,
-          impactLevel: analysis.impactLevel,
-          breakEvenMonths: analysis.breakEvenMonths,
-          estimatedNextRepairCostCents: analysis.estimatedNextRepairCostCents,
-          estimatedReplacementCostCents: analysis.estimatedReplacementCostCents,
-          expectedAnnualRepairRiskCents: analysis.expectedAnnualRepairRiskCents,
-          nextSteps: analysis.nextSteps ?? [],
-        },
+        producedData: guidanceProducedData,
+        metadata: guidanceMetadata,
       });
+
+      if (guidanceJourneyId && guidanceStepKey !== 'estimate_cost_impact') {
+        try {
+          await guidanceJourneyService.recordToolCompletion({
+            propertyId,
+            actorUserId: userId,
+            journeyId: guidanceJourneyId,
+            inventoryItemId: itemId,
+            signalIntentFamily: guidanceSignalIntentFamily || 'lifecycle_end_or_past_life',
+            issueDomain: 'ASSET_LIFECYCLE',
+            sourceToolKey: 'replace-repair',
+            sourceEntityType: 'REPLACE_REPAIR_ANALYSIS',
+            sourceEntityId: analysis.id,
+            stepKey: 'estimate_cost_impact',
+            status: 'COMPLETED',
+            producedData: guidanceProducedData,
+            metadata: {
+              ...guidanceMetadata,
+              legacyStepBackfill: true,
+            },
+          });
+        } catch (legacyStepError) {
+          if (
+            legacyStepError instanceof APIError &&
+            legacyStepError.code === 'GUIDANCE_STEP_NOT_FOUND'
+          ) {
+            // Current journeys no longer have this step; ignore.
+          } else {
+            throw legacyStepError;
+          }
+        }
+      }
     } catch (guidanceError) {
       logger.warn({ guidanceError }, '[GUIDANCE] replace/repair analysis hook failed');
     }

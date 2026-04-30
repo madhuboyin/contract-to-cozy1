@@ -97,6 +97,7 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
         .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
     [journeyDetail.data?.evidences, selectedStep?.id]
   );
+  const allJourneyEvidences = journeyDetail.data?.evidences ?? [];
 
   if (!action || !detailJourney) return null;
 
@@ -119,6 +120,7 @@ export function GuidanceDrawer({ propertyId, action, open, onOpenChange }: Guida
               href={selectedStepHref}
               events={stepEvents}
               evidences={stepEvidences}
+              allJourneyEvidences={allJourneyEvidences}
               onBack={() => setSelectedStepId(null)}
             />
           ) : null}
@@ -232,12 +234,94 @@ function buildScopeMessage(args: {
   return `We captured a result for this step, but its exact scope could not be verified.`;
 }
 
+type GuidanceEvidenceView = {
+  id: string;
+  evidenceType: string;
+  sourceToolKey: string | null;
+  proofType: string | null;
+  proofId: string | null;
+  expectedScopeCategory: string | null;
+  expectedScopeId: string | null;
+  actualScopeCategory: string | null;
+  actualScopeId: string | null;
+  compatibility: string | null;
+  payload: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string | null;
+};
+
+function evidenceRank(evidence: GuidanceEvidenceView) {
+  const compatibilityRank =
+    evidence.compatibility === 'MATCHED'
+      ? 4
+      : evidence.compatibility === 'BROADER_CONTEXT'
+        ? 2
+        : evidence.compatibility === 'UNKNOWN'
+          ? 1
+          : 0;
+  const scopeRank =
+    evidence.actualScopeCategory === 'ITEM'
+      ? 4
+      : evidence.actualScopeCategory === 'HOME_ASSET'
+        ? 3
+        : evidence.actualScopeCategory === 'SERVICE'
+          ? 2
+          : evidence.actualScopeCategory === 'PROPERTY'
+            ? 1
+            : 0;
+  const proofRank =
+    evidence.proofType === 'repair_replace_analysis'
+      ? 3
+      : evidence.proofType === 'cost_estimate'
+        ? 1
+        : 0;
+  return compatibilityRank * 100 + scopeRank * 10 + proofRank;
+}
+
+function pickPreferredEvidence(args: {
+  journey: GuidanceJourneyDTO;
+  step: GuidanceStepDTO;
+  evidences: GuidanceEvidenceView[];
+  allJourneyEvidences: GuidanceEvidenceView[];
+}) {
+  const direct = [...args.evidences];
+  const isLegacyLifecycleCostStep =
+    args.journey.journeyTypeKey === 'asset_lifecycle_resolution' &&
+    (args.step.stepKey === 'estimate_cost_impact' || args.step.toolKey === 'true-cost');
+
+  const fallbackCandidates = isLegacyLifecycleCostStep
+    ? args.allJourneyEvidences.filter(
+        (evidence) =>
+          evidence.proofType === 'repair_replace_analysis' &&
+          evidence.sourceToolKey === 'replace-repair' &&
+          evidence.actualScopeCategory === 'ITEM' &&
+          evidence.actualScopeId === args.journey.inventoryItemId
+      )
+    : [];
+
+  const candidates = [...direct];
+  for (const evidence of fallbackCandidates) {
+    if (!candidates.some((candidate) => candidate.id === evidence.id)) {
+      candidates.push(evidence);
+    }
+  }
+
+  if (!candidates.length) return null;
+
+  return [...candidates].sort((a, b) => {
+    const rankDiff = evidenceRank(b) - evidenceRank(a);
+    if (rankDiff !== 0) return rankDiff;
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  })[0];
+}
+
 function CompletedStepDetail({
   journey,
   step,
   href,
   events,
   evidences,
+  allJourneyEvidences,
   onBack,
 }: {
   journey: GuidanceJourneyDTO;
@@ -266,13 +350,24 @@ function CompletedStepDetail({
     metadata: Record<string, unknown> | null;
     createdAt: string | null;
   }>;
+  allJourneyEvidences: GuidanceEvidenceView[];
   onBack: () => void;
 }) {
-  const summaryItems = Object.entries(step.producedData ?? {});
+  const preferredEvidence = pickPreferredEvidence({
+    journey,
+    step,
+    evidences,
+    allJourneyEvidences,
+  });
+  const displayedPayload =
+    preferredEvidence?.payload && Object.keys(preferredEvidence.payload).length > 0
+      ? preferredEvidence.payload
+      : step.producedData ?? {};
+  const summaryItems = Object.entries(displayedPayload);
   const completedAt = formatDateTime(step.completedAt);
   const skippedAt = formatDateTime(step.skippedAt);
   const latestEvent = events[0] ?? null;
-  const primaryEvidence = evidences[0] ?? null;
+  const primaryEvidence = preferredEvidence ?? evidences[0] ?? null;
   const expectedScopeCategory =
     primaryEvidence?.expectedScopeCategory ??
     (journey.scopeCategory === 'SERVICE'
@@ -336,6 +431,11 @@ function CompletedStepDetail({
             {compatibility === 'BROADER_CONTEXT' ? ' planning context' : ' result'}
           </p>
           <p className="mb-0 mt-1 text-xs text-slate-600">{scopeMessage}</p>
+          {preferredEvidence && !evidences.some((evidence) => evidence.id === preferredEvidence.id) ? (
+            <p className="mb-0 mt-1 text-xs text-slate-600">
+              Showing the item-specific repair vs replace result because it is more relevant than the older home-wide estimate for this legacy step.
+            </p>
+          ) : null}
           {primaryEvidence.metadata?.resultContextLabel && typeof primaryEvidence.metadata.resultContextLabel === 'string' ? (
             <p className="mb-0 mt-1 text-xs text-slate-600">{primaryEvidence.metadata.resultContextLabel}</p>
           ) : null}
