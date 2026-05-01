@@ -222,7 +222,20 @@ export function resolveGuidanceStepHref(args: {
 
   if (step.toolKey === 'booking') {
     const bookingBaseRoute = `/dashboard/providers?propertyId=${encodeURIComponent(propertyId)}`;
-    return appendGuidanceContext(bookingBaseRoute, journey, step);
+    const bookingRoute = appendGuidanceContext(bookingBaseRoute, journey, step);
+    const returnTo = buildGuidanceOverviewHref({
+      propertyId,
+      journeyId: journey.id,
+      stepKey: step.stepKey,
+      inventoryItemId: journey.inventoryItemId,
+      homeAssetId: journey.homeAssetId,
+      assetName:
+        journey.inventoryItem?.name?.trim() ??
+        (journey.homeAsset?.assetType ? formatEnumLabel(journey.homeAsset.assetType) : null),
+      issueType: journey.issueType,
+    });
+    const joiner = bookingRoute.includes('?') ? '&' : '?';
+    return `${bookingRoute}${joiner}returnTo=${encodeURIComponent(returnTo)}`;
   }
 
   const safeRoute = stripUnresolvedSegments(route);

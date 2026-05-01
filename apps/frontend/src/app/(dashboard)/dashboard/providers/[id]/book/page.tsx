@@ -117,6 +117,8 @@ export default function BookProviderPage() {
   const blockedActionHref =
     blockedAction?.href ??
     (selectedPropertyId ? `/dashboard/properties/${selectedPropertyId}/risk-assessment` : '/dashboard/maintenance');
+  const contextualBackHref = returnTo;
+  const contextualBackLabel = guidanceJourneyId ? 'Back to guidance' : 'Back to previous step';
 
   useEffect(() => {
     if (bookingGuardQuery.data && !bookingGuardQuery.data.blocked && submitGuardDetails) {
@@ -374,7 +376,7 @@ export default function BookProviderPage() {
 
         const fromParam = searchParams.get('from');
 
-        if (fromParam === 'resolution-center' && returnTo) {
+        if (returnTo) {
           const returnQuery = new URLSearchParams();
           returnQuery.set('bookingCreated', 'true');
           if (providerId) returnQuery.set('providerId', providerId);
@@ -454,13 +456,22 @@ export default function BookProviderPage() {
           title: 'Provider data unavailable for booking.',
           description: 'Return to provider profile and choose another pro or retry shortly.',
           primaryAction: (
-            <button
-              type="button"
-              onClick={() => navigateBackWithDashboardFallback(router)}
-              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
-            >
-              Go back
-            </button>
+            contextualBackHref ? (
+              <Link
+                href={contextualBackHref}
+                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+              >
+                {contextualBackLabel}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigateBackWithDashboardFallback(router)}
+                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+              >
+                Go back
+              </button>
+            )
           ),
         }}
         routeState={{
@@ -512,13 +523,22 @@ export default function BookProviderPage() {
           </button>
         ),
         supportingAction: (
-          <button
-            type="button"
-            onClick={() => navigateBackWithDashboardFallback(router)}
-            className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Back to provider profile
-          </button>
+          contextualBackHref ? (
+            <Link
+              href={contextualBackHref}
+              className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              {contextualBackLabel}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigateBackWithDashboardFallback(router)}
+              className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Back to provider profile
+            </button>
+          )
         ),
         impactLabel: selectedService ? 'Booking-ready setup' : 'Service selection required',
         confidenceLabel: selectedPropertyId ? 'Property context selected' : 'Property selection required',
@@ -548,15 +568,27 @@ export default function BookProviderPage() {
         />
       }
     >
-      <button
-        onClick={() => navigateBackWithDashboardFallback(router)}
-        className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
-      >
-        <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
-        Back
-      </button>
+      {contextualBackHref ? (
+        <Link
+          href={contextualBackHref}
+          className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
+        >
+          <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          {contextualBackLabel}
+        </Link>
+      ) : (
+        <button
+          onClick={() => navigateBackWithDashboardFallback(router)}
+          className="flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] hover:text-[hsl(var(--mobile-text-primary))]"
+        >
+          <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+      )}
 
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3">
@@ -766,13 +798,22 @@ export default function BookProviderPage() {
               </button>
             }
             secondaryActions={
-              <button
-                type="button"
-                onClick={() => navigateBackWithDashboardFallback(router)}
-                className="min-h-[44px] w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
-              >
-                Cancel
-              </button>
+              contextualBackHref ? (
+                <Link
+                  href={contextualBackHref}
+                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+                >
+                  {contextualBackLabel}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => navigateBackWithDashboardFallback(router)}
+                  className="min-h-[44px] w-full rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 text-sm font-medium text-[hsl(var(--mobile-text-primary))]"
+                >
+                  Cancel
+                </button>
+              )
             }
           />
         </div>

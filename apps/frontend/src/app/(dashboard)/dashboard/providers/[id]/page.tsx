@@ -110,6 +110,8 @@ export default function ProviderDetailPage() {
   const blockedActionHref =
     blockedAction?.href ??
     (propertyId ? `/dashboard/properties/${propertyId}/risk-assessment` : '/dashboard/maintenance');
+  const contextualBackHref = returnTo;
+  const contextualBackLabel = guidanceJourneyId ? 'Back to guidance' : 'Back to previous step';
 
   const FAVORITES_QUERY_KEY = ['favorites'];
 
@@ -252,13 +254,22 @@ export default function ProviderDetailPage() {
           title: 'Provider details are currently unavailable.',
           description: 'Return to search and try another provider or retry this profile.',
           primaryAction: (
-            <button
-              type="button"
-              onClick={() => navigateBackWithDashboardFallback(router)}
-              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
-            >
-              Back to provider search
-            </button>
+            contextualBackHref ? (
+              <Link
+                href={contextualBackHref}
+                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+              >
+                {contextualBackLabel}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigateBackWithDashboardFallback(router)}
+                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary/90"
+              >
+                Back to provider search
+              </button>
+            )
           ),
         }}
         routeState={{
@@ -396,12 +407,21 @@ export default function ProviderDetailPage() {
         />
       }
     >
-      <button
-        onClick={() => navigateBackWithDashboardFallback(router)}
-        className="min-h-[44px] text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
-      >
-        ← Back
-      </button>
+      {contextualBackHref ? (
+        <Link
+          href={contextualBackHref}
+          className="inline-flex min-h-[44px] items-center text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
+        >
+          ← {contextualBackLabel}
+        </Link>
+      ) : (
+        <button
+          onClick={() => navigateBackWithDashboardFallback(router)}
+          className="min-h-[44px] text-sm text-[hsl(var(--mobile-text-secondary))] transition-colors hover:text-[hsl(var(--mobile-text-primary))]"
+        >
+          ← Back
+        </button>
+      )}
 
       {isExecutionBlocked ? (
         <GuidanceWarningBanner

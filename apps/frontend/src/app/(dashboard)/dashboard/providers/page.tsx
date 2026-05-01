@@ -693,16 +693,19 @@ export default function ProvidersPage() {
               Compare multiple quotes first
             </Link>
           )}
-          {returnTo && (
-            <Link
-              href={returnTo}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900"
-            >
-              Back to Resolution Center
-            </Link>
-          )}
         </MobileCard>
       )}
+
+      {returnTo ? (
+        <MobileCard variant="compact" className="border-slate-200 bg-slate-50 shadow-sm">
+          <Link
+            href={returnTo}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900"
+          >
+            {guidanceJourneyId ? 'Back to guidance' : 'Back to previous step'}
+          </Link>
+        </MobileCard>
+      ) : null}
 
       {insightContext && fromSource !== 'replace-repair' ? (
         <MobileCard variant="compact" className="border-sky-200 bg-sky-50">
