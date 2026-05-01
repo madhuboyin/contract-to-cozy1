@@ -98,7 +98,9 @@ function appendGuidanceContext(
   // FRD-FR-10: For booking steps, pass asset name and issue description so the
   // booking form can auto-populate the description field.
   if (step.toolKey === 'booking') {
-    const assetName = journey.inventoryItem?.name?.trim() ?? null;
+    const assetName =
+      journey.inventoryItem?.name?.trim() ??
+      (journey.homeAsset?.assetType ? formatEnumLabel(journey.homeAsset.assetType) : null);
     if (assetName) params.set('assetName', assetName);
     if (journey.issueType) params.set('issueDescription', journey.issueType);
   }
@@ -216,6 +218,11 @@ export function resolveGuidanceStepHref(args: {
       journey,
       step
     );
+  }
+
+  if (step.toolKey === 'booking') {
+    const bookingBaseRoute = `/dashboard/providers?propertyId=${encodeURIComponent(propertyId)}`;
+    return appendGuidanceContext(bookingBaseRoute, journey, step);
   }
 
   const safeRoute = stripUnresolvedSegments(route);
