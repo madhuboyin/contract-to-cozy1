@@ -27,6 +27,7 @@ import { CoverageCheckInline } from '@/components/guidance/CoverageCheckInline';
 import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
+import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
 
 function shellBackHref(propertyId: string, journey: GuidanceJourneyDTO): string {
   const params = new URLSearchParams({ journeyId: journey.id });
@@ -265,6 +266,28 @@ export default function GuidanceStepPageClient() {
           inventoryItemCategory={journey.inventoryItem?.category ?? null}
           assetName={assetName}
           issueType={issueType}
+          onComplete={refreshGuidance}
+        />
+      );
+    }
+
+    if (
+      targetStep.toolKey === 'replacement-model-comparison' ||
+      targetStep.toolKey === 'replacement-purchase-options' ||
+      targetStep.toolKey === 'replacement-purchase-finalization' ||
+      targetStep.toolKey === 'replacement-planning' ||
+      targetStep.toolKey === 'replacement-plan-followup'
+    ) {
+      return (
+        <ReplacementJourneyInline
+          propertyId={propertyId}
+          journeyId={journey.id}
+          stepId={targetStep.id}
+          stepKey={targetStep.stepKey}
+          toolKey={targetStep.toolKey}
+          assetName={assetName}
+          issueType={issueType}
+          producedData={targetStep.producedData}
           onComplete={refreshGuidance}
         />
       );

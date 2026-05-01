@@ -53,6 +53,7 @@ import { CoverageCheckInline } from '@/components/guidance/CoverageCheckInline';
 import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { PriceFinalizationInline } from '@/components/guidance/PriceFinalizationInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
+import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { getGuidanceItemVisual } from '@/components/guidance/guidanceItemVisual';
 import { cn } from '@/lib/utils';
@@ -953,6 +954,38 @@ export default function GuidanceOverviewClient() {
       );
     }
 
+    if (
+      (
+        step.toolKey === 'replacement-model-comparison' ||
+        step.toolKey === 'replacement-purchase-options' ||
+        step.toolKey === 'replacement-purchase-finalization' ||
+        step.toolKey === 'replacement-planning' ||
+        step.toolKey === 'replacement-plan-followup'
+      ) &&
+      activePrimaryAction
+    ) {
+      const displayAssetName =
+        resolvedJourney?.inventoryItem?.name?.trim() ||
+        selectedAssetOption?.assetName ||
+        'this item';
+      return (
+        <ReplacementJourneyInline
+          propertyId={propertyId}
+          journeyId={activePrimaryAction.journeyId}
+          stepId={step.id}
+          stepKey={step.stepKey}
+          toolKey={step.toolKey}
+          assetName={displayAssetName}
+          issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
+          producedData={step.producedData}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+          }}
+        />
+      );
+    }
+
     // Inline recall check for safety_alert, check_recall_coverage,
     // review_remedy_instructions, recall_resolution steps.
     if (step.toolKey === 'recalls' && activePrimaryAction) {
@@ -1563,6 +1596,16 @@ export default function GuidanceOverviewClient() {
           ? 'Confirm what coverage really protects before you spend more'
           : currentStepToolKey === 'replace-repair'
             ? 'Decide whether repair or replacement is the smarter next move'
+            : currentStepToolKey === 'replacement-model-comparison'
+              ? 'Shortlist the replacement models worth buying'
+              : currentStepToolKey === 'replacement-purchase-options'
+                ? 'Compare sellers, pricing, and purchase terms side by side'
+                : currentStepToolKey === 'replacement-purchase-finalization'
+                  ? 'Lock in the model and seller you want to move forward with'
+                  : currentStepToolKey === 'replacement-planning'
+                    ? 'Set a budget and shortlist for the replacement plan'
+                    : currentStepToolKey === 'replacement-plan-followup'
+                      ? 'Save the follow-up date for this replacement plan'
             : currentStepToolKey === 'quote-comparison'
               ? 'See which quote balances cost, scope, and risk best'
               : activePrimaryAction?.explanation?.nextStep ?? currentStepTitle;
@@ -1573,8 +1616,18 @@ export default function GuidanceOverviewClient() {
         ? "We'll compare the quote against local market patterns so you can decide whether to push back before hiring."
         : currentStepToolKey === 'coverage-intelligence'
           ? 'Before you pay out of pocket, verify whether warranty or coverage can offset this issue.'
-          : currentStepToolKey === 'replace-repair'
-            ? 'We will weigh reliability, lifespan, and cost so you can choose the better path with confidence.'
+        : currentStepToolKey === 'replace-repair'
+          ? 'We will weigh reliability, lifespan, and cost so you can choose the better path with confidence.'
+          : currentStepToolKey === 'replacement-model-comparison'
+            ? 'Capture the model options that best fit your budget, efficiency goals, and timing.'
+            : currentStepToolKey === 'replacement-purchase-options'
+              ? 'Compare the seller, price, warranty, and availability details before choosing where to buy.'
+              : currentStepToolKey === 'replacement-purchase-finalization'
+                ? 'Save the exact purchase choice for this phase so the replacement path is clear and resumable.'
+                : currentStepToolKey === 'replacement-planning'
+                  ? 'Set the replacement budget and shortlist now so you can shop later without starting over.'
+                  : currentStepToolKey === 'replacement-plan-followup'
+                    ? 'Store the follow-up timing and top option so this plan is easy to resume later.'
             : activePrimaryAction?.explanation?.why ?? currentStepSubtitle;
 
   if (activeHasScopedMatch) {
