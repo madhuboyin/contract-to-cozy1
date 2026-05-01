@@ -403,6 +403,21 @@ function formatFreshnessLabel(timestamp: string | null | undefined): string {
   return `Updated ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 }
 
+const FRESHNESS_COPY: Record<string, string> = {
+  HVAC:         'Seasonal pricing — verify before booking.',
+  APPLIANCE:    'Pricing is stable for this category.',
+  PLUMBING:     'Costs vary by region and urgency.',
+  ROOFING:      'Pricing peaks spring–summer.',
+  ELECTRICAL:   'Labour rates shift quarterly.',
+  LANDSCAPING:  'Seasonal demand affects rates.',
+  PEST_CONTROL: 'Rates are stable year-round.',
+};
+
+function getFreshnessCopy(issueDomain: string | null | undefined): string {
+  if (!issueDomain) return 'Verify pricing before committing to a quote.';
+  return FRESHNESS_COPY[issueDomain] ?? 'Verify pricing before committing to a quote.';
+}
+
 function resolveConfidenceDots(label: GuidanceActionModel['confidenceLabel']): number {
   if (label === 'HIGH') return 5;
   if (label === 'MEDIUM') return 3;
@@ -1473,8 +1488,8 @@ export default function GuidanceOverviewClient() {
   const negotiationLow = completedPriceQuote ? Math.round(completedPriceQuote * 0.12) : 120;
   const negotiationHigh = completedPriceQuote ? Math.round(completedPriceQuote * 0.25) : 300;
   const costDelayValue = activePrimaryAction?.costOfDelay ?? null;
-  const overpayLow = costDelayValue ? Math.max(60, Math.round(costDelayValue * 0.65)) : 180;
-  const overpayHigh = costDelayValue ? Math.max(overpayLow + 40, Math.round(costDelayValue * 1.4)) : 420;
+  const overpayLow = costDelayValue ? Math.max(60, Math.round(costDelayValue * 0.7)) : 180;
+  const overpayHigh = costDelayValue ? Math.max(overpayLow + 40, costDelayValue) : 420;
   const confidenceDots = resolveConfidenceDots(confidenceLabel);
   const freshnessLabel = formatFreshnessLabel(resolvedJourney?.updatedAt ?? activePrimaryAction?.journey.updatedAt);
   const selectedStepCta = selectedJourneyStep ? renderStepCta(selectedJourneyStep, true) : null;
@@ -1755,11 +1770,11 @@ export default function GuidanceOverviewClient() {
                       <Lightbulb className="h-5 w-5" />
                     </div>
                     <p className="text-sm font-medium text-slate-600">Why this matters</p>
-                    <p className="text-sm text-slate-600">You may be overpaying by</p>
+                    <p className="text-sm text-slate-600">Estimated cost of waiting</p>
                     <p className="text-2xl font-semibold tracking-tight text-emerald-700">
                       {formatCurrency(overpayLow)} – {formatCurrency(overpayHigh)}
                     </p>
-                    <p className="text-sm text-slate-500">based on local pricing patterns.</p>
+                    <p className="text-sm text-slate-500">from your repair cost model.</p>
                   </div>
 
                   <div className="border-t border-slate-100 p-5 lg:border-l lg:border-t-0">
@@ -1782,7 +1797,7 @@ export default function GuidanceOverviewClient() {
                       {formatEnumLabel(confidenceLabel ?? 'MEDIUM')} confidence
                     </p>
                     <p className="text-sm text-slate-500">
-                      Based on {Math.max(12, Math.round((confidenceValue ?? 42) / 2))} local repairs
+                      Based on {activePrimaryAction?.progress.completedCount ?? 0} of {activePrimaryAction?.progress.totalCount ?? 0} completed checks
                     </p>
                   </div>
 
@@ -1792,7 +1807,7 @@ export default function GuidanceOverviewClient() {
                     </div>
                     <p className="mt-2 text-sm font-medium text-slate-600">Data freshness</p>
                     <p className="mt-3 text-lg font-semibold text-slate-900">{freshnessLabel}</p>
-                    <p className="text-sm text-slate-500">Prices change weekly in your area.</p>
+                    <p className="text-sm text-slate-500">{getFreshnessCopy(activePrimaryAction?.issueDomain)}</p>
                   </div>
                 </div>
               </CardContent>
