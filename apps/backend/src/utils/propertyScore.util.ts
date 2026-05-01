@@ -327,41 +327,27 @@ export function calculateHealthScore(
     
     extraScore += appScore;
     
-    // Determine Status, Factor Name, and Details
-    let status = 'Complete';
-    let factorName = 'Appliances';
-    let details: string[] | undefined = undefined;
-    
     if (criticallyAging) {
         if (hasActiveHomeWarranty) {
-            status = 'Complete'; 
+            insights.push({ factor: 'Appliances', status: 'Complete', score: appScore });
         } else {
-            // FIX 3: Add appliance list to details array
-            const count = appliancesNeedingWarranty.length;
-            factorName = `Appliances (${count} aging)`;
-            status = 'Needs Warranty';
-            
-            // Create detailed list of appliances with age
-            details = appliancesNeedingWarranty.map((a: HomeAsset) => {
-                const age = a.installationYear ? currentYear - a.installationYear : 0;
-                const assetName = a.assetType.split('_').map(w => 
+            // One insight per aging appliance so each gets its own named card
+            appliancesNeedingWarranty.forEach((a: HomeAsset, index: number) => {
+                const assetName = a.assetType.split('_').map((w: string) =>
                     w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
                 ).join(' ');
-                return `${assetName} (${age} years old)`;
+                insights.push({
+                    factor: `${assetName} aging`,
+                    status: 'Needs Warranty',
+                    score: index === 0 ? appScore : 0,
+                });
             });
         }
     } else if (assetCount < maxAssetsForScore) {
-        status = 'Partial';
+        insights.push({ factor: 'Appliances', status: 'Partial', score: appScore });
     } else {
-        status = 'Complete';
+        insights.push({ factor: 'Appliances', status: 'Complete', score: appScore });
     }
-
-    insights.push({ 
-        factor: factorName, 
-        status: status, 
-        score: appScore,
-        ...(details && { details }) // Only include if details exist
-    });
   } else {
     // Missing data scenario
     insights.push({ factor: 'Appliances', status: 'Missing Data', score: 0 });
