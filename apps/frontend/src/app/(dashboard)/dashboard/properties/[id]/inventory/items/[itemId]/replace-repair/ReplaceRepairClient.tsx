@@ -87,12 +87,19 @@ function compactDate(value?: string) {
 
 function inferAgeYears(item: InventoryItem): number | null {
   const source = item.installedOn ?? item.purchasedOn;
-  if (!source) return null;
-  const dt = new Date(source);
-  if (Number.isNaN(dt.getTime())) return null;
-  const years = (Date.now() - dt.getTime()) / (1000 * 60 * 60 * 24 * 365);
-  if (!Number.isFinite(years) || years < 0) return null;
-  return years;
+  if (source) {
+    const dt = new Date(source);
+    if (Number.isNaN(dt.getTime())) return null;
+    const years = (Date.now() - dt.getTime()) / (1000 * 60 * 60 * 24 * 365);
+    if (!Number.isFinite(years) || years < 0) return null;
+    return years;
+  }
+  const installYear = item.homeAsset?.installationYear;
+  if (installYear && Number.isFinite(installYear)) {
+    const age = new Date().getFullYear() - installYear;
+    return age >= 0 ? age : null;
+  }
+  return null;
 }
 
 function buildPrefillInputs(item: InventoryItem): Partial<DollarInputs> {
