@@ -315,11 +315,9 @@ function compareJourneyPriority(a: GuidanceJourneyDTO, b: GuidanceJourneyDTO): n
 function buildGuidanceOverviewHref(propertyId: string, journey: GuidanceJourneyDTO): string {
   const params = new URLSearchParams();
   params.set('journeyId', journey.id);
-  params.set('guidanceJourneyId', journey.id);
 
   if (journey.currentStepKey) {
     params.set('stepKey', journey.currentStepKey);
-    params.set('guidanceStepKey', journey.currentStepKey);
   }
 
   if (journey.inventoryItemId) {

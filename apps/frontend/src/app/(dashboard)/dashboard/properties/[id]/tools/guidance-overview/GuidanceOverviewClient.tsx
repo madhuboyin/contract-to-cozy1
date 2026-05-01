@@ -33,7 +33,7 @@ import {
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import { useJourney } from '@/features/guidance/hooks/useJourney';
-import type { GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
+import { mapGuidanceJourneyToActionModel, type GuidanceActionModel } from '@/features/guidance/utils/guidanceMappers';
 import { formatIssueDomain, formatIssueTypeLabel, resolveGuidanceStepHref } from '@/features/guidance/utils/guidanceDisplay';
 import { listInventoryItems } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import {
@@ -708,8 +708,26 @@ export default function GuidanceOverviewClient() {
 
   // ---- Phase 6c: pinned journey mode ----
   const pinnedAction = React.useMemo(
-    () => (pinnedJourneyId ? (allActions.find((a) => a.journeyId === pinnedJourneyId) ?? null) : null),
-    [pinnedJourneyId, allActions]
+    () => {
+      if (!pinnedJourneyId) return null;
+
+      const existingAction = allActions.find((action) => action.journeyId === pinnedJourneyId);
+      if (existingAction) return existingAction;
+
+      const pinnedJourney =
+        pinnedJourneyDetail.data?.journey ??
+        guidance.journeys.find((journey) => journey.id === pinnedJourneyId) ??
+        null;
+
+      if (!pinnedJourney) return null;
+
+      return mapGuidanceJourneyToActionModel({
+        propertyId,
+        journey: pinnedJourney,
+        next: pinnedJourneyDetail.data?.next ?? guidance.nextByJourney.get(pinnedJourney.id) ?? null,
+      });
+    },
+    [allActions, guidance.journeys, guidance.nextByJourney, pinnedJourneyDetail.data, pinnedJourneyId, propertyId]
   );
   const isInPinnedMode = Boolean(pinnedJourneyId);
   // When pinned, use the pinned journey's action + detail so Step 4 renders directly.
