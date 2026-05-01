@@ -467,7 +467,8 @@ export default function GuidanceOverviewClient() {
       if (v === null) next.delete(k);
       else next.set(k, v);
     }
-    router.push(`${baseHref}?${next.toString()}`);
+    const query = next.toString();
+    router.push(query ? `${baseHref}?${query}` : baseHref);
   }
 
   function navigateToScopeCategory(cat: GuidanceScopeCategory) {
@@ -503,6 +504,15 @@ export default function GuidanceOverviewClient() {
   function differentIssue() {
     // Clear issueType only, keep asset/service selection
     pushParams({ issueType: null });
+  }
+
+  function resetJourneyContext() {
+    pushParams({
+      issueType: null,
+      journeyId: null,
+      stepKey: null,
+      guidanceStepKey: null,
+    });
   }
 
   // ---- Data fetching ----
@@ -655,8 +665,10 @@ export default function GuidanceOverviewClient() {
       dismissGuidanceJourney(propertyId, journeyId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
-      // Return to overview without issueType
-      differentIssue();
+      queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+      // Clear journey-specific URL state so pinned resume links do not keep rendering
+      // a dismissed journey after the mutation succeeds.
+      resetJourneyContext();
     },
   });
 
@@ -1783,6 +1795,54 @@ export default function GuidanceOverviewClient() {
             </div>
           </div>
         </div>
+      </MobilePageContainer>
+    );
+  }
+
+  if (guidance.isError && !isInPinnedMode) {
+    return (
+      <MobilePageContainer className="space-y-4 lg:max-w-6xl lg:px-8 lg:pb-10">
+        <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
+          <Link href={`/dashboard/properties/${propertyId}`}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to property
+          </Link>
+        </Button>
+
+        <GuidedJourneyTemplate
+          phase="B"
+          title={`Resolving: ${startLabel}`}
+          subtitle={
+            issueLabelDisplay
+              ? `Issue: ${issueLabelDisplay}`
+              : 'We need guidance data before we can continue this workflow.'
+          }
+          progressLabel="Journey progress"
+          progressValue={phaseBProgressValue}
+          main={
+            <ScenarioInputCard
+              title="We couldn't load your guidance right now"
+              subtitle="This looks like a temporary loading problem, so we are not creating a new journey yet."
+              badge={<StatusChip tone="danger">Retry needed</StatusChip>}
+            >
+              <p className="mb-3 text-sm text-[hsl(var(--mobile-text-secondary))]">
+                Retry loading guidance to check for an existing journey and the correct next steps for this issue.
+              </p>
+              <ActionPriorityRow
+                primaryAction={
+                  <Button
+                    className="min-h-[44px] w-full"
+                    onClick={() => {
+                      void guidance.refetch();
+                    }}
+                  >
+                    Retry guidance
+                  </Button>
+                }
+              />
+            </ScenarioInputCard>
+          }
+        />
       </MobilePageContainer>
     );
   }
