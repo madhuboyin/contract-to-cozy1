@@ -7,6 +7,7 @@ import { Shield, ArrowRight, Settings, Wrench } from 'lucide-react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScoredProperty } from "@/app/(dashboard)/dashboard/types";
+import { buildHealthInsightResolutionHref } from '@/lib/navigation/healthInsightRouting';
 
 const HIGH_PRIORITY_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspection', 'Missing Data', 'Needs Warranty'];
 
@@ -76,6 +77,11 @@ export function HealthInsightList({ property }: HealthInsightListProps) {
 
 // Helper function to render a button based on the insight factor/status
 const renderContextualButton = (insight: { factor: string; status: string; score: number; details?: string[] }, propertyId: string) => {
+    const healthInsightResolutionHref = buildHealthInsightResolutionHref({
+        propertyId,
+        factor: insight.factor,
+        status: insight.status,
+    });
     
     // Appliance warranty actions - redirect to warranties page
     if (insight.factor.includes('Appliances') && insight.status === 'Needs Warranty') {
@@ -83,6 +89,16 @@ const renderContextualButton = (insight: { factor: string; status: string; score
             <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
                 <Link href={`/dashboard/warranties?propertyId=${propertyId}`}>
                     Manage Appliance Warranties <Shield className="ml-2 h-4 w-4" />
+                </Link>
+            </Button>
+        );
+    }
+
+    if (healthInsightResolutionHref) {
+        return (
+            <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+                <Link href={healthInsightResolutionHref}>
+                    Review Options <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
             </Button>
         );

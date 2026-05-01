@@ -65,6 +65,7 @@ import { GuidanceResumeBanner } from '@/components/guidance/GuidanceResumeBanner
 import PropertyHubTemplate from './components/PropertyHubTemplate';
 import { HomeScoreReportCard } from '../../components/HomeScoreReportCard';
 import { DigitalTwinPreview } from './components/DigitalTwinPreview';
+import { buildHealthInsightResolutionHref } from '@/lib/navigation/healthInsightRouting';
 
 
 
@@ -96,6 +97,11 @@ const HIGH_PRIORITY_STATUSES = ['Needs attention', 'Needs Review', 'Needs Inspec
  * UPDATED: Added appliance warranty redirect logic (Fix 1)
  */
 const renderContextualButton = (insight: any, propertyId: string) => {
+  const healthInsightResolutionHref = buildHealthInsightResolutionHref({
+    propertyId,
+    factor: insight.factor,
+    status: insight.status,
+  });
 
   let buttonLabel = '';
   let category = ''; // Must be a ServiceCategory enum value (e.g., INSPECTION, PLUMBING)
@@ -180,6 +186,16 @@ const renderContextualButton = (insight: any, propertyId: string) => {
       <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
         <Link href={`/dashboard/warranties?propertyId=${propertyId}`}>
           Manage Appliance Warranties <Shield className="ml-2 h-4 w-4" />
+        </Link>
+      </Button>
+    );
+  }
+
+  if (healthInsightResolutionHref) {
+    return (
+      <Button size="sm" variant="default" asChild className="w-full sm:w-auto">
+        <Link href={healthInsightResolutionHref}>
+          Review Options <ArrowRight className="ml-2 h-4 w-4" />
         </Link>
       </Button>
     );

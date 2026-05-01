@@ -19,6 +19,7 @@ export interface ResolutionActionDTO {
   severity?: 'INFO' | 'WARNING' | 'CRITICAL';
   entityType?: 'Warranty' | 'Insurance';
   itemId?: string;
+  assetName?: string;
 }
 
 export type ResolutionCaseKind =

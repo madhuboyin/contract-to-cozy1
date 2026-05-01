@@ -28,6 +28,7 @@ import {
 } from "@/components/mobile/dashboard/MobilePrimitives";
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { buildHealthInsightResolutionHref } from '@/lib/navigation/healthInsightRouting';
 const REQUIRED_ACTION_STATUSES = ["Needs attention", "Needs Review", "Needs Inspection", "Missing Data", "Needs Warranty"];
 const IN_PROGRESS_STATUSES = ["Action Pending"];
 const WATCH_STATUSES = ["Aging", "Incomplete", "Partial", "Average", "Standard", "High Density"];
@@ -519,6 +520,25 @@ export default function PropertyHealthDetailPage() {
     retry: 1,
   });
 
+  useEffect(() => {
+    if (!focusedFactor) return;
+    const el = document.querySelector<HTMLElement>(`[data-insight-key="${focusedFactor}"]`);
+    if (el) {
+      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
+    }
+  }, [focusedFactor]);
+
+  useEffect(() => {
+    if (!shouldFocusTrends) return;
+    const timer = setTimeout(() => {
+      const trendsElement = document.getElementById('score-trend-section');
+      if (trendsElement) {
+        trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [shouldFocusTrends]);
+
   if (isLoadingProperty || !propertyId) {
     return (
       <DashboardShell>
@@ -545,6 +565,21 @@ export default function PropertyHealthDetailPage() {
   const usingSnapshotInsights = snapshotInsights.length > 0;
   const sortedInsights = sortInsightsForDisplay(latestInsights);
   const focusInsights = sortedInsights.slice(0, 5);
+  const focusedInsight = focusedFactor
+    ? sortedInsights.find(
+        (insight) =>
+          getInsightKey(insight.factor) === focusedFactor ||
+          insight.factor?.toLowerCase() === focusedFactor
+      ) ?? null
+    : null;
+  const focusedInsightActionHref =
+    focusedInsight && propertyId
+      ? buildHealthInsightResolutionHref({
+          propertyId,
+          factor: focusedInsight.factor,
+          status: focusedInsight.status,
+        })
+      : null;
   const negativeInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "negative");
   const neutralInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "neutral");
   const positiveInsights = sortedInsights.filter((insight) => getInsightImpact(insight.status) === "positive");
@@ -633,26 +668,6 @@ export default function PropertyHealthDetailPage() {
     if (t.includes("drag") || t.includes("decline")) return TrendingDown;
     return Activity;
   }
-
-  useEffect(() => {
-    if (!focusedFactor) return;
-    const el = document.querySelector<HTMLElement>(`[data-insight-key="${focusedFactor}"]`);
-    if (el) {
-      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
-    }
-  }, [focusedFactor]);
-
-  // 🔑 NEW: Scroll to trends section when view parameter is present
-  useEffect(() => {
-    if (!shouldFocusTrends) return;
-    const timer = setTimeout(() => {
-      const trendsElement = document.getElementById('score-trend-section');
-      if (trendsElement) {
-        trendsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [shouldFocusTrends]);
 
   const renderFocusInsightAccordionRow = (insight: HealthInsight, idx: number, useStatusChip: boolean, isFocused = false) => {
     const scoreValue = asNumber(insight.score) ?? 0;
@@ -772,7 +787,9 @@ export default function PropertyHealthDetailPage() {
               <ActionPriorityRow
                 primaryAction={
                   <Button asChild>
-                    <Link href={`/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}>View maintenance actions</Link>
+                    <Link href={focusedInsightActionHref ?? `/dashboard/properties/${propertyId}/?tab=maintenance&view=insights`}>
+                      {focusedInsightActionHref ? 'Review issue options' : 'View maintenance actions'}
+                    </Link>
                   </Button>
                 }
               />

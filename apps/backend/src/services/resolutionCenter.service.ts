@@ -75,6 +75,11 @@ type CoverageGapResult = {
   reasons: string[];
 };
 
+type ResolutionInventoryItemRecord = {
+  id: string;
+  name: string;
+};
+
 function formatUsdFromCents(valueCents: number, currency = 'USD'): string {
   const dollars = valueCents / 100;
   return new Intl.NumberFormat('en-US', {
@@ -124,6 +129,77 @@ function replacementValueText(exposureCents: number, currency = 'USD'): string {
     return `Replacement value: ${formatUsdFromCents(exposureCents, currency)}.`;
   }
   return 'Replacement value has not been added yet.';
+}
+
+function normalizeResolutionText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractHealthInsightAssetName(title: string): string | null {
+  const trimmed = title.trim();
+  if (!trimmed) return null;
+
+  const withoutSuffix = trimmed
+    .replace(/\s+aging$/i, '')
+    .replace(/\s+age$/i, '')
+    .replace(/\s+needs coverage$/i, '')
+    .replace(/\s+has partial coverage$/i, '')
+    .trim();
+
+  if (!withoutSuffix) return null;
+
+  const normalized = normalizeResolutionText(withoutSuffix);
+  if (
+    normalized === 'property' ||
+    normalized === 'property age' ||
+    normalized === 'hvac' ||
+    normalized === 'hvac age' ||
+    normalized === 'water heater' ||
+    normalized === 'water heater age'
+  ) {
+    return null;
+  }
+
+  return withoutSuffix;
+}
+
+function matchInventoryItemForHealthInsight(
+  title: string,
+  inventoryItems: ResolutionInventoryItemRecord[],
+): ResolutionInventoryItemRecord | null {
+  const assetName = extractHealthInsightAssetName(title);
+  if (!assetName) return null;
+
+  const normalizedAssetName = normalizeResolutionText(assetName);
+  if (!normalizedAssetName) return null;
+
+  let bestMatch: ResolutionInventoryItemRecord | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const item of inventoryItems) {
+    const normalizedItemName = normalizeResolutionText(item.name);
+    if (!normalizedItemName) continue;
+
+    const isMatch =
+      normalizedItemName === normalizedAssetName ||
+      normalizedItemName.includes(normalizedAssetName) ||
+      normalizedAssetName.includes(normalizedItemName);
+
+    if (!isMatch) continue;
+
+    const score = Math.abs(normalizedItemName.length - normalizedAssetName.length);
+    if (score < bestScore) {
+      bestMatch = item;
+      bestScore = score;
+    }
+  }
+
+  return bestMatch;
 }
 
 function parseItemIdFromInputsSnapshot(value: unknown): string | null {
@@ -353,6 +429,15 @@ function resolveActionHref(action: ResolutionActionDTO, propertyId: string): str
     return `/dashboard/properties/${propertyId}/incidents/${action.id}`;
   }
   if (action.type === 'HEALTH_INSIGHT') {
+    if (action.itemId) {
+      const params = new URLSearchParams();
+      params.set('scopeCategory', 'ITEM');
+      params.set('itemId', action.itemId);
+      params.set('inventoryItemId', action.itemId);
+      if (action.assetName) params.set('assetName', action.assetName);
+      params.set('customIssueLabel', action.title);
+      return `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`;
+    }
     return `/dashboard/properties/${propertyId}/health-score?focus=${encodeURIComponent(action.title.toLowerCase())}`;
   }
   if (action.type === 'MAINTENANCE_OVERDUE') {
@@ -744,6 +829,7 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
     insurancePolicies,
     incidents,
     bookings,
+    inventoryItems,
     replaceRepairAnalyses,
     replaceRepairJourneys,
     coverageGaps,
@@ -808,6 +894,14 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       },
       orderBy: [{ createdAt: 'desc' }],
       take: 10,
+    }),
+    prisma.inventoryItem.findMany({
+      where: { propertyId },
+      select: {
+        id: true,
+        name: true,
+      },
+      take: 200,
     }),
     prisma.replaceRepairAnalysis.findMany({
       where: {
@@ -917,12 +1011,15 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
 
   insightsByFactor.forEach(({ factor, status }) => {
     const factorId = factor.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const matchedItem = matchInventoryItemForHealthInsight(factor, inventoryItems);
     urgentActions.push({
       id: `${property.id}-INSIGHT-${factorId}`,
       type: 'HEALTH_INSIGHT',
       title: factor,
       description: `Status: ${status}. Requires resolution.`,
       propertyId: property.id,
+      itemId: matchedItem?.id,
+      assetName: matchedItem?.name ?? extractHealthInsightAssetName(factor) ?? undefined,
     });
   });
 
