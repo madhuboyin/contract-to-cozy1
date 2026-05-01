@@ -1478,6 +1478,11 @@ export default function GuidanceOverviewClient() {
     selectedJourneyStep?.description ??
     activePrimaryAction?.explanation?.nextStep ??
     'Complete this step to keep the journey moving smoothly.';
+  const currentItemName =
+    resolvedJourney?.inventoryItem?.name?.trim() ||
+    selectedAssetOption?.assetName ||
+    selectedAssetName ||
+    null;
   const completedPriceStep = activeJourneySteps.find(
     (step) => step.stepKey === 'validate_price' && step.status === 'COMPLETED'
   );
@@ -1556,6 +1561,11 @@ export default function GuidanceOverviewClient() {
                   </Badge>
                 </div>
                 <div className="space-y-2">
+                  {currentItemName ? (
+                    <p className="text-sm font-medium text-slate-500">
+                      {currentItemName}
+                    </p>
+                  ) : null}
                   <h1 className="text-2xl font-semibold tracking-tight text-slate-950 lg:text-[2.5rem] lg:leading-[1.08]">
                     {currentStepTitle}
                   </h1>
