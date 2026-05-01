@@ -34,6 +34,8 @@ type ReplaceRepairResolutionRecord = {
 type ReplaceRepairJourneyRecord = {
   id: string;
   inventoryItemId: string | null;
+  currentStepKey: string | null;
+  issueType: string | null;
   updatedAt: Date;
   primarySignal?: {
     signalIntentFamily: string;
@@ -407,13 +409,16 @@ function mapReplaceRepairAnalysesToInsights(
   return analyses.map((analysis) => {
     const journey = journeysByItemId?.get(analysis.inventoryItemId);
     const query = new URLSearchParams();
-    if (journey?.id) query.set('guidanceJourneyId', journey.id);
-    query.set('guidanceStepKey', 'repair_replace_decision');
+    if (journey?.id) query.set('journeyId', journey.id);
+    if (journey?.currentStepKey) {
+      query.set('stepKey', journey.currentStepKey);
+    }
+    query.set('scopeCategory', 'ITEM');
     query.set('itemId', analysis.inventoryItemId);
     query.set('inventoryItemId', analysis.inventoryItemId);
-    if (journey?.primarySignal?.signalIntentFamily) {
-      query.set('guidanceSignalIntentFamily', journey.primarySignal.signalIntentFamily);
-    }
+    if (analysis.inventoryItem?.name) query.set('assetName', analysis.inventoryItem.name);
+    if (journey?.issueType) query.set('issueType', journey.issueType);
+    if (analysis.summary) query.set('customIssueLabel', analysis.summary);
 
     return {
       id: analysis.id,
@@ -422,7 +427,7 @@ function mapReplaceRepairAnalysesToInsights(
       title: 'Repair vs Replace',
       subject: analysis.inventoryItem?.name || 'Inventory Item',
       summary: analysis.summary || 'Our AI has a recommendation for this item.',
-      href: `/dashboard/properties/${propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair?${query.toString()}`,
+      href: `/dashboard/properties/${propertyId}/tools/guidance-overview?${query.toString()}`,
       itemId: analysis.inventoryItemId,
       trust: {
         confidenceLabel: `${analysis.confidence} Confidence`,
@@ -841,6 +846,8 @@ export async function getResolutionCenter(propertyId: string, userId: string): P
       select: {
         id: true,
         inventoryItemId: true,
+        currentStepKey: true,
+        issueType: true,
         updatedAt: true,
         primarySignal: {
           select: {
