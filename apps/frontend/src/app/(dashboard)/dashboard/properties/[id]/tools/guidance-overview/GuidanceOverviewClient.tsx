@@ -50,6 +50,7 @@ import { RepairReplaceGate } from '@/components/guidance/RepairReplaceGate';
 import { NegotiationShieldInline } from '@/components/guidance/NegotiationShieldInline';
 import { CoverageCheckInline } from '@/components/guidance/CoverageCheckInline';
 import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
+import { PriceFinalizationInline } from '@/components/guidance/PriceFinalizationInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { getGuidanceItemVisual } from '@/components/guidance/guidanceItemVisual';
@@ -984,6 +985,35 @@ export default function GuidanceOverviewClient() {
           assetName={displayAssetName}
           issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
           presentation="guided"
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+          }}
+        />
+      );
+    }
+
+    if (step.toolKey === 'price-finalization' && activePrimaryAction) {
+      const priceFinalizationItemId =
+        resolvedJourney?.inventoryItemId ?? selectedInventoryItemId ?? null;
+      const priceFinalizationItemCategory =
+        resolvedJourney?.inventoryItem?.category ?? selectedAssetOption?.category ?? null;
+      const displayAssetName =
+        resolvedJourney?.inventoryItem?.name?.trim() ||
+        selectedAssetOption?.assetName ||
+        'this service';
+      return (
+        <PriceFinalizationInline
+          propertyId={propertyId}
+          journeyId={activePrimaryAction.journeyId}
+          stepId={step.id}
+          stepKey={step.stepKey}
+          inventoryItemId={priceFinalizationItemId}
+          inventoryItemCategory={priceFinalizationItemCategory}
+          homeAssetId={resolvedJourney?.homeAssetId ?? selectedHomeAssetId ?? null}
+          guidanceSignalIntentFamily={resolvedJourney?.primarySignal?.signalIntentFamily ?? null}
+          assetName={displayAssetName}
+          issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });

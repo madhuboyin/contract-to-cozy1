@@ -4,6 +4,7 @@ import {
   PriceFinalizationCreateInput,
   PriceFinalizationDetailDTO,
   PriceFinalizationFinalizeInput,
+  PriceFinalizationListFilters,
   PriceFinalizationListResponse,
   PriceFinalizationSourceType,
   PriceFinalizationStatus,
@@ -258,12 +259,20 @@ async function loadDetailOrThrow(propertyId: string, finalizationId: string): Pr
 }
 
 export class PriceFinalizationService {
-  async listForProperty(propertyId: string, userId: string, limit = 20): Promise<PriceFinalizationListResponse> {
+  async listForProperty(
+    propertyId: string,
+    userId: string,
+    limit = 20,
+    filters?: PriceFinalizationListFilters
+  ): Promise<PriceFinalizationListResponse> {
     await ensurePropertyAccess(propertyId, userId);
 
     const rows = await prismaAny.priceFinalization.findMany({
       where: {
         propertyId,
+        ...(filters?.guidanceJourneyId ? { guidanceJourneyId: filters.guidanceJourneyId } : {}),
+        ...(filters?.inventoryItemId ? { inventoryItemId: filters.inventoryItemId } : {}),
+        ...(filters?.homeAssetId ? { homeAssetId: filters.homeAssetId } : {}),
       },
       orderBy: {
         createdAt: 'desc',

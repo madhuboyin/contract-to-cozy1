@@ -29,11 +29,7 @@ function getSetupSteps(property: Property): SetupStep[] {
     },
     {
       label: 'Safety',
-      done: !!(property.hasSmokeDetectors || property.hasCoDetectors),
-    },
-    {
-      label: 'Property photo',
-      done: !!property.coverPhotoDocumentId,
+      done: property.hasSmokeDetectors !== null && property.hasCoDetectors !== null,
     },
   ];
 }

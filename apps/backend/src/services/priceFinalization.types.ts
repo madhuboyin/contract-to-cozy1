@@ -119,6 +119,12 @@ export type PriceFinalizationDetailDTO = {
   actualSpendCents: number | null;
 };
 
+export type PriceFinalizationListFilters = {
+  guidanceJourneyId?: string | null;
+  inventoryItemId?: string | null;
+  homeAssetId?: string | null;
+};
+
 export type PriceFinalizationListResponse = {
   items: PriceFinalizationDetailDTO[];
 };

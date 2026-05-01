@@ -97,13 +97,27 @@ export type PriceFinalizationUpdateInput = PriceFinalizationDraftInput & {
   allowPostFinalizeEdits?: boolean;
 };
 
+export type PriceFinalizationListFilters = {
+  guidanceJourneyId?: string | null;
+  inventoryItemId?: string | null;
+  homeAssetId?: string | null;
+};
+
 export async function listPriceFinalizations(
   propertyId: string,
-  limit = 20
+  limit = 20,
+  filters?: PriceFinalizationListFilters
 ): Promise<PriceFinalizationDetail[]> {
   const res = await api.get<{ items: PriceFinalizationDetail[] }>(
     `/api/properties/${propertyId}/price-finalizations`,
-    { params: { limit } }
+    {
+      params: {
+        limit,
+        guidanceJourneyId: filters?.guidanceJourneyId ?? undefined,
+        inventoryItemId: filters?.inventoryItemId ?? undefined,
+        homeAssetId: filters?.homeAssetId ?? undefined,
+      },
+    }
   );
   return res.data.items;
 }

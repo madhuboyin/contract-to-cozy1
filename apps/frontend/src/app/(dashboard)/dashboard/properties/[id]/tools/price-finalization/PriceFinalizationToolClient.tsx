@@ -159,7 +159,11 @@ export default function PriceFinalizationToolClient() {
       setLoading(true);
       setError(null);
       try {
-        const list = await listPriceFinalizations(propertyId, 20);
+        const list = await listPriceFinalizations(propertyId, 20, {
+          guidanceJourneyId: guidanceJourneyId || undefined,
+          inventoryItemId: itemId || undefined,
+          homeAssetId: homeAssetId || undefined,
+        });
         if (cancelled) return;
         setItems(list);
         const defaultActive = list[0]?.id ?? null;
@@ -184,7 +188,7 @@ export default function PriceFinalizationToolClient() {
     return () => {
       cancelled = true;
     };
-  }, [propertyId]);
+  }, [guidanceJourneyId, homeAssetId, itemId, propertyId]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));

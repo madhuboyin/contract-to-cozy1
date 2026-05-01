@@ -79,6 +79,9 @@ export const priceFinalizationListQuerySchema = z.object({
       if (!Number.isFinite(parsed) || parsed <= 0) return 20;
       return Math.min(parsed, 50);
     }),
+  guidanceJourneyId: uuidSchema.optional(),
+  inventoryItemId: uuidSchema.optional(),
+  homeAssetId: uuidSchema.optional(),
 });
 
 export const priceFinalizationPropertyParamsSchema = z.object({

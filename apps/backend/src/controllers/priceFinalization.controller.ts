@@ -52,7 +52,12 @@ export async function listPriceFinalizations(
     const result = await priceFinalizationService.listForProperty(
       req.params.propertyId,
       userId,
-      queryResult.data.limit
+      queryResult.data.limit,
+      {
+        guidanceJourneyId: queryResult.data.guidanceJourneyId,
+        inventoryItemId: queryResult.data.inventoryItemId,
+        homeAssetId: queryResult.data.homeAssetId,
+      }
     );
 
     res.status(200).json({ success: true, data: result });
