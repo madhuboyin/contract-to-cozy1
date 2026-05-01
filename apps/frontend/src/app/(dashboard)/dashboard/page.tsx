@@ -301,13 +301,23 @@ function formatSeasonLabel(rawSeason: string | null | undefined): string | null 
 
 export interface UrgentActionItem {
     id: string;
-    type: 'MAINTENANCE_OVERDUE' | 'MAINTENANCE_UNSCHEDULED' | 'RENEWAL_EXPIRED' | 'RENEWAL_UPCOMING' | 'HEALTH_INSIGHT' | 'INCIDENT';
+    type:
+      | 'MAINTENANCE_OVERDUE'
+      | 'MAINTENANCE_UNSCHEDULED'
+      | 'RENEWAL_EXPIRED'
+      | 'RENEWAL_UPCOMING'
+      | 'HEALTH_INSIGHT'
+      | 'INCIDENT'
+      | 'COVERAGE_GAP'
+      | 'COVERAGE_PARTIAL';
     title: string;
     description: string;
     dueDate?: Date;
     daysUntilDue?: number;
     propertyId: string;
     severity?: 'INFO' | 'WARNING' | 'CRITICAL';
+    entityType?: 'Warranty' | 'Insurance';
+    itemId?: string;
 }
 
 interface DashboardData {
