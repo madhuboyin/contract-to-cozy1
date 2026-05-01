@@ -41,7 +41,6 @@ const FALLBACK_TOOL_ROUTE: Record<string, string> = {
 };
 
 const GUIDANCE_FOCUSED_TOOL_KEYS = new Set([
-  'booking',
   'capital-timeline',
   'coverage-intelligence',
   'coverage-options',
@@ -53,7 +52,6 @@ const GUIDANCE_FOCUSED_TOOL_KEYS = new Set([
   'inspection-report',
   'maintenance',
   'negotiation-shield',
-  'price-finalization',
   'quote-comparison',
   'recalls',
   'replace-repair',
