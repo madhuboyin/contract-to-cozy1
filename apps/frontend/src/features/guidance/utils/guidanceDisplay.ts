@@ -1,4 +1,5 @@
 import { formatEnumLabel } from '@/lib/utils/formatters';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import {
   GuidanceExecutionReadiness,
   GuidanceIssueDomain,
@@ -200,11 +201,15 @@ export function resolveGuidanceStepHref(args: {
   route = replaceRouteParam(route, 'issueType', journey.issueType ?? null);
 
   if (step.toolKey === 'replace-repair' && journey.inventoryItemId) {
-    return appendGuidanceContext(
-      `/dashboard/properties/${propertyId}/inventory/items/${journey.inventoryItemId}/replace-repair`,
-      journey,
-      step
-    );
+    return buildGuidanceOverviewHref({
+      propertyId,
+      journeyId: journey.id,
+      stepKey: step.stepKey,
+      inventoryItemId: journey.inventoryItemId,
+      homeAssetId: journey.homeAssetId,
+      assetName: journey.inventoryItem?.name ?? null,
+      issueType: journey.issueType,
+    });
   }
 
   if (step.toolKey === 'coverage-intelligence' && journey.inventoryItemId) {

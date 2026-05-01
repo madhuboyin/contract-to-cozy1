@@ -44,6 +44,7 @@ import type { GuidanceActionModel } from "@/features/guidance/utils/guidanceMapp
 import type { GuidanceIssueDomain } from "@/lib/api/guidanceApi";
 
 import { navigateBackWithDashboardFallback } from '@/lib/navigation/backNavigation';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 // --- Types for Query Data ---
 type RiskReportFull = RiskAssessmentReport; 
 // The API returns either the raw report object (RiskReportFull) or the string 'QUEUED'
@@ -172,6 +173,16 @@ const ASSET_CATEGORY_SIGNAL_HINTS: Record<RiskCategory, string[]> = {
     SAFETY: ['recall', 'safety', 'inspection'],
     FINANCIAL_GAP: ['financial', 'coverage', 'cost', 'utility', 'energy'],
 };
+
+function buildAssetGuidanceHref(propertyId: string, asset: AssetRiskDetail, issueLabel?: string | null): string {
+    return buildGuidanceOverviewHref({
+        propertyId,
+        inventoryItemId: asset.inventoryItemId ?? null,
+        homeAssetId: asset.homeAssetId ?? null,
+        assetName: asset.assetName,
+        customIssueLabel: issueLabel || asset.actionCta || `${asset.assetName} needs attention`,
+    });
+}
 
 function tokenizeForMatch(value: string | null | undefined): Set<string> {
     if (!value) return new Set();
@@ -629,16 +640,7 @@ const AssetMatrixTable = ({
                     asChild
                     className={`gap-1 ${sizeClass}`}
                 >
-                    <Link href={{
-                        pathname: '/dashboard/providers',
-                        query: {
-                            category: getProviderCategoryForSystemType(item.systemType),
-                            insightFactor: item.assetName.replace(/_/g, ' '),
-                            propertyId: propertyId,
-                            ...(item.inventoryItemId ? { itemId: item.inventoryItemId } : {}),
-                            ...(item.homeAssetId ? { homeAssetId: item.homeAssetId } : {}),
-                        }
-                    }}>
+                    <Link href={buildAssetGuidanceHref(propertyId, item, ctaText)}>
                         {ctaText}
                     </Link>
                 </Button>
@@ -653,9 +655,9 @@ const AssetMatrixTable = ({
                     if (hasBooking) {
                         onViewBooking(existingBooking);
                     } else if (hasTask && existingTask) {
-                        onViewTask(existingTask);
+                        window.location.href = buildAssetGuidanceHref(propertyId, item, existingTask.title || ctaText);
                     } else if (ctaText === 'Add Home Warranty') {
-                        window.location.href = `/dashboard/warranties?action=new&from=risk-assessment`;
+                        window.location.href = buildAssetGuidanceHref(propertyId, item, ctaText);
                     } else {
                         onScheduleInspection(item);
                     }
@@ -1172,38 +1174,8 @@ export default function RiskAssessmentPage() {
             router.push(`/dashboard/bookings/${existingBooking.id}`);
             return;
         }
-        
-        // 1. Home Warranty → Warranties page
-        if (asset.actionCta === 'Add Home Warranty') {
-            const params = new URLSearchParams({
-                action: 'new',
-                propertyId: propertyId,
-                from: 'risk-assessment',
-                systemType: asset.systemType,
-                assetName: asset.assetName,
-            });
-            router.push(`/dashboard/warranties?${params.toString()}`);
-            return;
-        }
-        
-        // 2. Schedule Inspection/Maintenance → Provider Search (for booking services)
-        if (asset.actionCta?.includes('Schedule') || asset.actionCta?.includes('Book')) {
-            const category = getProviderCategoryForSystemType(asset.systemType);
-            
-            // Navigate to provider search with context AND from parameter
-            const params = new URLSearchParams({
-                category: category,
-                insightFactor: insightFactor,
-                propertyId: propertyId,
-                from: 'risk-assessment', // 🔑 NEW: Track navigation source
-            });
-            if (asset.inventoryItemId) {
-                params.set('itemId', asset.inventoryItemId);
-            }
-            if (asset.homeAssetId) {
-                params.set('homeAssetId', asset.homeAssetId);
-            }
-            router.push(`/dashboard/providers?${params.toString()}`);
+        if (asset.actionCta === 'Add Home Warranty' || asset.actionCta?.includes('Schedule') || asset.actionCta?.includes('Book')) {
+            router.push(buildAssetGuidanceHref(propertyId, asset, asset.actionCta || insightFactor));
             return;
         }
         
@@ -1219,7 +1191,10 @@ export default function RiskAssessmentPage() {
 
     // 🔑 NEW: Handle viewing existing task
     const handleViewTask = (task: PropertyMaintenanceTask) => {
-        router.push(`/dashboard/maintenance?propertyId=${propertyId}&from=risk-assessment`);
+        router.push(buildGuidanceOverviewHref({
+            propertyId,
+            customIssueLabel: task.title || 'Maintenance task needs review',
+        }));
     };
 
     // 🔑 NEW: Handle successful task creation

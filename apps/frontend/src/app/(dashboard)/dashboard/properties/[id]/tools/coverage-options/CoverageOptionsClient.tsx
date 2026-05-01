@@ -19,6 +19,7 @@ import HomeToolsRail from '../../components/HomeToolsRail';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import CompareTemplate from '../../components/route-templates/CompareTemplate';
 import { coverageLoopTrust } from '@/lib/trust/trustPresets';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 export default function CoverageOptionsClient() {
   const params = useParams<{ id: string }>();
@@ -111,6 +112,14 @@ export default function CoverageOptionsClient() {
     freshnessLabel: 'Real-time when coverage records are updated',
     sourceLabel: 'Inventory coverage gaps + linked warranty/insurance details',
   });
+  const buildGapGuidanceHref = React.useCallback((gap: any) => buildGuidanceOverviewHref({
+    propertyId,
+    journeyId: guidanceJourneyId ?? null,
+    stepKey: guidanceStepKey,
+    inventoryItemId: gap.inventoryItemId,
+    assetName: gap.itemName ?? null,
+    customIssueLabel: gap.reasons?.[0] || `${gap.itemName || 'Item'} coverage gap`,
+  }), [guidanceJourneyId, guidanceStepKey, propertyId]);
 
   React.useEffect(() => {
     if (!propertyId || !guidanceJourneyId || proofCompleted) return;
@@ -165,7 +174,7 @@ export default function CoverageOptionsClient() {
         ),
         supportingAction: (
           <Button variant="outline" asChild className="w-full sm:w-auto">
-            <Link href={`/dashboard/properties/${propertyId}/inventory/items/${topGap.inventoryItemId}/replace-repair`}>
+            <Link href={buildGapGuidanceHref(topGap)}>
               Review repair/replace context
             </Link>
           </Button>
@@ -217,7 +226,7 @@ export default function CoverageOptionsClient() {
                       }
                       secondaryActions={
                         <Link
-                          href={`/dashboard/properties/${propertyId}/inventory/items/${gap.inventoryItemId}/replace-repair`}
+                          href={buildGapGuidanceHref(gap)}
                           className="inline-flex min-h-[40px] items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5"
                         >
                           Repair/Replace

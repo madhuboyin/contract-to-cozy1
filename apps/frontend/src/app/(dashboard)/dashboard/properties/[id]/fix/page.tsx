@@ -36,6 +36,7 @@ import { filterResolutionActions } from '@/lib/dashboard/resolutionCenterViewMod
 import { filterResolutionCases } from '@/lib/dashboard/resolutionCases';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import type { GuidanceJourneyDTO } from '@/lib/api/guidanceApi';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // Extracts the real status string from HEALTH_INSIGHT descriptions like
 // "Status: Needs Inspection. Requires resolution."
@@ -358,6 +359,18 @@ export default function ResolutionHubPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const filterParam = searchParams.get('filter');
+  const genericIssueGuidanceHref = propertyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        customIssueLabel: 'Something is broken',
+      })
+    : '/dashboard/replace-repair';
+  const specialistGuidanceHref = propertyId
+    ? buildGuidanceOverviewHref({
+        propertyId,
+        customIssueLabel: 'Need a specialist for a home issue',
+      })
+    : '/dashboard/providers';
   const focusSection = searchParams.get('focus');
   const expectedCount = searchParams.get('expectedCount');
   const rolloutOverride = searchParams.get('rcv2');
@@ -614,11 +627,7 @@ export default function ResolutionHubPage() {
             are reachable without scrolling past reactive content */}
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           <Link
-            href={
-              propertyId
-                ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair`
-                : '/dashboard/replace-repair'
-            }
+            href={genericIssueGuidanceHref}
             className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-3.5 py-3 transition-colors hover:border-teal-100 hover:bg-teal-50/20"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-100/70">
@@ -632,7 +641,7 @@ export default function ResolutionHubPage() {
           </Link>
 
           <Link
-            href={propertyId ? `/dashboard/providers?propertyId=${propertyId}` : '/dashboard/providers'}
+            href={specialistGuidanceHref}
             className="group flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-3.5 py-3 transition-colors hover:border-blue-100 hover:bg-blue-50/20"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100/70">
@@ -1015,11 +1024,7 @@ export default function ResolutionHubPage() {
                   <div className="pt-6">
                     <Button variant="outline" className="h-11 rounded-xl border-slate-200 px-6" asChild>
                       <Link
-                        href={
-                          propertyId
-                            ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair`
-                            : '/dashboard/replace-repair'
-                        }
+                        href={genericIssueGuidanceHref}
                       >
                         <Zap className="mr-2 h-4 w-4 text-teal-600" />
                         Start Troubleshooter
@@ -1041,11 +1046,7 @@ export default function ResolutionHubPage() {
                   <div className="pt-6">
                     <Button variant="outline" className="h-11 rounded-xl border-slate-200 px-6" asChild>
                       <Link
-                        href={
-                          propertyId
-                            ? `/dashboard/properties/${propertyId}/inventory?intent=replace-repair`
-                            : '/dashboard/replace-repair'
-                        }
+                        href={genericIssueGuidanceHref}
                       >
                         <Zap className="mr-2 h-4 w-4 text-teal-600" />
                         Start Troubleshooter
@@ -1118,11 +1119,7 @@ export default function ResolutionHubPage() {
                       asChild
                     >
                       <Link
-                        href={
-                          propertyId
-                            ? `/dashboard/providers?propertyId=${propertyId}`
-                            : '/dashboard/providers'
-                        }
+                        href={specialistGuidanceHref}
                       >
                         Find a Service Provider
                       </Link>

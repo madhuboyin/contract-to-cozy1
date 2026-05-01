@@ -8,6 +8,7 @@ import {
   Warranty,
 } from '@/types';
 import { IncidentDTO } from '@/types/incidents.types';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 export type UrgentActionItem = ResolutionCenterAction;
 
@@ -204,39 +205,13 @@ export function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: s
   const fallbackPropertyId = propertyId || undefined;
   const actionPropertyId =
     action.propertyId && action.propertyId !== 'N/A' ? action.propertyId : fallbackPropertyId;
-  const propertyQuery = actionPropertyId ? `?propertyId=${encodeURIComponent(actionPropertyId)}` : '';
+  if (!actionPropertyId) return '/dashboard/actions';
 
-  if (action.type === 'INCIDENT' && actionPropertyId) {
-    return `/dashboard/properties/${actionPropertyId}/incidents/${action.id}`;
-  }
-  if (action.type === 'HEALTH_INSIGHT' && actionPropertyId) {
-    if (action.title.toLowerCase().includes('appliance')) {
-      return `/dashboard/properties/${actionPropertyId}/status-board?category=APPLIANCE`;
-    }
-    return `/dashboard/properties/${actionPropertyId}/health-score?focus=${encodeURIComponent(action.title.toLowerCase())}`;
-  }
-  if (action.type === 'MAINTENANCE_OVERDUE') {
-    return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=overdue` : '?filter=overdue'}`;
-  }
-  if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
-    // Route based on entity type (Warranty vs Insurance)
-    if (action.entityType === 'Warranty') {
-      // Warranties are managed in the inventory/vault with coverage tab
-      return actionPropertyId 
-        ? `/dashboard/properties/${actionPropertyId}/inventory?tab=coverage&highlight=${action.id}`
-        : `/dashboard/vault?tab=coverage`;
-    }
-    // Insurance policies go to insurance/protect page
-    return `/dashboard/insurance${propertyQuery}`;
-  }
-  if (action.type === 'COVERAGE_GAP' || action.type === 'COVERAGE_PARTIAL') {
-    if (actionPropertyId && action.itemId) {
-      return `/dashboard/properties/${actionPropertyId}/inventory?tab=coverage&highlight=${action.itemId}`;
-    }
-    return '/dashboard/vault?tab=coverage';
-  }
-  if (actionPropertyId) {
-    return `/dashboard/properties/${actionPropertyId}`;
-  }
-  return '/dashboard/actions';
+  const issueLabel = action.title?.trim() || action.description?.trim() || null;
+
+  return buildGuidanceOverviewHref({
+    propertyId: actionPropertyId,
+    inventoryItemId: action.itemId ?? null,
+    customIssueLabel: issueLabel,
+  });
 }

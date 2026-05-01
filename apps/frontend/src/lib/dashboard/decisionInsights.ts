@@ -1,6 +1,7 @@
 import { formatDistanceToNowStrict } from 'date-fns';
 import type { Booking, DecisionInsight, ExecutionItem } from '@/types';
 import type { ReplaceRepairAnalysisDTO } from '@/lib/api/replaceRepairApi';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 export type ReplaceRepairResolution = ReplaceRepairAnalysisDTO & {
   inventoryItem?: {
@@ -21,7 +22,12 @@ export function mapReplaceRepairAnalysesToDecisionInsights(
     title: 'Repair vs Replace',
     subject: analysis.inventoryItem?.name || 'Inventory Item',
     summary: analysis.summary || 'Our AI has a recommendation for this item.',
-    href: `/dashboard/properties/${propertyId || analysis.propertyId}/inventory/items/${analysis.inventoryItemId}/replace-repair`,
+    href: buildGuidanceOverviewHref({
+      propertyId: propertyId || analysis.propertyId,
+      inventoryItemId: analysis.inventoryItemId,
+      assetName: analysis.inventoryItem?.name ?? null,
+      customIssueLabel: analysis.summary || 'Repair vs replace guidance',
+    }),
     itemId: analysis.inventoryItemId,
     trust: {
       confidenceLabel: `${analysis.confidence} Confidence`,

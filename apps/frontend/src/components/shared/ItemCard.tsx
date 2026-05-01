@@ -11,6 +11,7 @@ import { centsToDollars, formatCurrency } from '@/lib/utils/format';
 import { normalizeDisplaySegments, titleCaseCategory } from '@/lib/utils/string';
 import InlineValueEditor from '@/app/(dashboard)/dashboard/components/inventory/InlineValueEditor';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 type ItemCardVariant = 'room' | 'inventory';
 
@@ -135,7 +136,14 @@ export default function ItemCard({
       return;
     }
 
-    router.push(`/dashboard/properties/${item.propertyId}/inventory/items/${item.id}/replace-repair`);
+    router.push(buildGuidanceOverviewHref({
+      propertyId: item.propertyId,
+      inventoryItemId: item.id,
+      homeAssetId: item.homeAssetId,
+      assetName: item.name,
+      customIssueLabel: `Repair or replace ${item.name}`,
+      backTo: currentPathWithQuery,
+    }));
   }
 
   return (

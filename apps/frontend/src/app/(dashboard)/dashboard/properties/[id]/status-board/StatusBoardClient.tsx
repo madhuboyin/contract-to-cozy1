@@ -326,7 +326,7 @@ export default function StatusBoardClient() {
   );
 
   const buildGuidanceOverviewHref = useCallback(
-    (item: StatusBoardItemDTO) => {
+    (item: StatusBoardItemDTO, issueLabel?: string) => {
       const params = new URLSearchParams({
         scopeCategory: "ITEM",
         assetName: item.displayName,
@@ -336,6 +336,9 @@ export default function StatusBoardClient() {
         params.set("itemId", item.inventoryItemId);
       } else if (item.homeAssetId) {
         params.set("homeAssetId", item.homeAssetId);
+      }
+      if (issueLabel) {
+        params.set("customIssueLabel", issueLabel);
       }
       return appendGuidanceHref(
         `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`
@@ -780,7 +783,7 @@ export default function StatusBoardClient() {
                 </Link>
               ) : canShowMaintenance ? (
                 <Link
-                  href={appendGuidanceHref(item.deepLinks.maintenance!)}
+                  href={buildGuidanceOverviewHref(item, 'Maintenance follow-up')}
                   onClick={(event) => {
                     event.stopPropagation();
                     recordOperationalGuidanceProgress(item, "maintenance");
@@ -981,7 +984,7 @@ export default function StatusBoardClient() {
                   )}
                   {item.deepLinks.warranty && (
                     <Link
-                      href={appendGuidanceHref(item.deepLinks.warranty)}
+                      href={buildGuidanceOverviewHref(item, 'Warranty review')}
                       onClick={() => recordOperationalGuidanceProgress(item, 'view_warranty')}
                     >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
@@ -1019,7 +1022,7 @@ export default function StatusBoardClient() {
                   ) : null}
                   {canShowMaintenance ? (
                     <Link
-                      href={appendGuidanceHref(item.deepLinks.maintenance)}
+                      href={buildGuidanceOverviewHref(item, 'Maintenance follow-up')}
                       onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
                     >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
@@ -1047,7 +1050,7 @@ export default function StatusBoardClient() {
                   )}
                   {item.deepLinks.riskAssessment && (
                     <Link
-                      href={appendGuidanceHref(item.deepLinks.riskAssessment)}
+                      href={buildGuidanceOverviewHref(item, 'Risk review')}
                       onClick={() => recordOperationalGuidanceProgress(item, 'risk_assessment')}
                     >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
@@ -1236,7 +1239,7 @@ export default function StatusBoardClient() {
                 </Button>
               ) : canShowMaintenance ? (
                 <Link
-                  href={appendGuidanceHref(item.deepLinks.maintenance!)}
+                  href={buildGuidanceOverviewHref(item, 'Maintenance follow-up')}
                   onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
                 >
                   <Button className="w-full bg-teal-600 hover:bg-teal-700">Open Maintenance</Button>
@@ -1255,7 +1258,7 @@ export default function StatusBoardClient() {
                 ) : null}
                 {item.deepLinks.warranty ? (
                   <Link
-                    href={appendGuidanceHref(item.deepLinks.warranty)}
+                    href={buildGuidanceOverviewHref(item, 'Warranty review')}
                     onClick={() => recordOperationalGuidanceProgress(item, 'view_warranty')}
                   >
                     <Button size="sm" variant="outline">Warranty</Button>
@@ -1263,7 +1266,7 @@ export default function StatusBoardClient() {
                 ) : null}
                 {canShowMaintenance ? (
                   <Link
-                    href={appendGuidanceHref(item.deepLinks.maintenance!)}
+                    href={buildGuidanceOverviewHref(item, 'Maintenance follow-up')}
                     onClick={() => recordOperationalGuidanceProgress(item, 'maintenance')}
                   >
                     <Button size="sm" variant="outline">Maintenance</Button>
@@ -1271,7 +1274,7 @@ export default function StatusBoardClient() {
                 ) : null}
                 {item.deepLinks.riskAssessment ? (
                   <Link
-                    href={appendGuidanceHref(item.deepLinks.riskAssessment)}
+                    href={buildGuidanceOverviewHref(item, 'Risk review')}
                     onClick={() => recordOperationalGuidanceProgress(item, 'risk_assessment')}
                   >
                     <Button size="sm" variant="outline">Risk</Button>

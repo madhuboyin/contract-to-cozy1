@@ -140,7 +140,7 @@ describe('consolidateUrgentActions - Coverage Gaps', () => {
     );
 
     expect(resolveUrgentActionHref(action, 'prop-1')).toBe(
-      '/dashboard/properties/prop-1/inventory?tab=coverage&highlight=item-7',
+      '/dashboard/properties/prop-1/tools/guidance-overview?scopeCategory=ITEM&itemId=item-7&inventoryItemId=item-7&issueType=washer_dryer_needs_coverage&customIssueLabel=Washer+Dryer+needs+coverage',
     );
   });
 });

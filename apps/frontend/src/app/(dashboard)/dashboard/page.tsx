@@ -68,6 +68,7 @@ import { MagicCaptureSheet } from '@/components/orchestration/MagicCaptureSheet'
 import { WinCard } from '@/components/shared/WinCard';
 import { ErrorBoundary } from '@/components/system/ErrorBoundary';
 import { Button } from '@/components/ui/button';
+import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { ConfidenceBadge as PremiumConfidenceBadge, MetricTile, PageHero, SmartCTA, TrustMetaRow } from '@/components/system/PremiumPrimitives';
 import {
   appendGuidanceContinuityToHref,
@@ -460,39 +461,13 @@ function resolveUrgentActionHref(action: UrgentActionItem, propertyId?: string):
   const fallbackPropertyId = propertyId || undefined;
   const actionPropertyId =
     action.propertyId && action.propertyId !== 'N/A' ? action.propertyId : fallbackPropertyId;
+  if (!actionPropertyId) return '/dashboard/resolution-center?filter=urgent';
 
-  const propertyQuery = actionPropertyId ? `?propertyId=${encodeURIComponent(actionPropertyId)}` : '';
-
-  // 🔑 FIXED: Better incident routing with proper fallbacks
-  if (action.type === 'INCIDENT') {
-    // If we have both property ID and incident ID, route to specific incident
-    if (actionPropertyId && action.id) {
-      return `/dashboard/properties/${actionPropertyId}/incidents/${action.id}`;
-    }
-    // If we have property ID but no incident ID, route to incidents list for that property
-    if (actionPropertyId) {
-      return `/dashboard/properties/${actionPropertyId}/incidents`;
-    }
-    // If no property ID, route to resolution center with urgent filter
-    return `/dashboard/resolution-center?filter=urgent`;
-  }
-  
-  if (action.type === 'HEALTH_INSIGHT' && actionPropertyId) {
-    if (isApplianceHealthInsightTitle(action.title)) {
-      return `/dashboard/properties/${actionPropertyId}/status-board?category=APPLIANCE`;
-    }
-    return `/dashboard/properties/${actionPropertyId}/health-score?focus=${encodeURIComponent(action.title.toLowerCase())}`;
-  }
-  if (action.type === 'MAINTENANCE_OVERDUE') {
-    return `/dashboard/maintenance${propertyQuery ? `${propertyQuery}&filter=overdue` : '?filter=overdue'}`;
-  }
-  if (action.type === 'RENEWAL_EXPIRED' || action.type === 'RENEWAL_UPCOMING') {
-    return `/dashboard/insurance${propertyQuery}`;
-  }
-  if (actionPropertyId) {
-    return `/dashboard/properties/${actionPropertyId}`;
-  }
-  return '/dashboard/actions';
+  return buildGuidanceOverviewHref({
+    propertyId: actionPropertyId,
+    inventoryItemId: action.itemId ?? null,
+    customIssueLabel: action.title?.trim() || action.description?.trim() || null,
+  });
 }
 
 function urgentActionCtaLabel(action?: UrgentActionItem, isReturningVisitor = true): string {
