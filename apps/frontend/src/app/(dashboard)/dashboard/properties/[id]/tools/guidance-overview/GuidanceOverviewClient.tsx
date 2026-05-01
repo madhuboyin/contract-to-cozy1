@@ -1433,10 +1433,10 @@ export default function GuidanceOverviewClient() {
 
   const issueLabelDisplay =
     selectedCustomIssueLabel ||
-    suggestedIssueTypes.find((i) => i.key === selectedIssueType)?.label ??
-    (isInPinnedMode ? formatIssueTypeLabel(activePrimaryAction?.journey.issueType) : null) ??
-    formatIssueTypeLabel(selectedIssueType) ??
-    '';
+    (suggestedIssueTypes.find((i) => i.key === selectedIssueType)?.label ??
+      (isInPinnedMode ? formatIssueTypeLabel(activePrimaryAction?.journey.issueType) : null) ??
+      formatIssueTypeLabel(selectedIssueType) ??
+      '');
 
   const phaseBProgressValue =
     activeJourneySteps.length > 0

@@ -36,7 +36,7 @@ import { filterResolutionActions } from '@/lib/dashboard/resolutionCenterViewMod
 import { filterResolutionCases } from '@/lib/dashboard/resolutionCases';
 import { useGuidance } from '@/features/guidance/hooks/useGuidance';
 import type { GuidanceJourneyDTO } from '@/lib/api/guidanceApi';
-import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
+import { buildGuidanceOverviewHref as buildIssueGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 
 // Extracts the real status string from HEALTH_INSIGHT descriptions like
 // "Status: Needs Inspection. Requires resolution."
@@ -360,13 +360,13 @@ export default function ResolutionHubPage() {
 
   const filterParam = searchParams.get('filter');
   const genericIssueGuidanceHref = propertyId
-    ? buildGuidanceOverviewHref({
+    ? buildIssueGuidanceOverviewHref({
         propertyId,
         customIssueLabel: 'Something is broken',
       })
     : '/dashboard/replace-repair';
   const specialistGuidanceHref = propertyId
-    ? buildGuidanceOverviewHref({
+    ? buildIssueGuidanceOverviewHref({
         propertyId,
         customIssueLabel: 'Need a specialist for a home issue',
       })
