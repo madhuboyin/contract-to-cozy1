@@ -7,6 +7,14 @@ import {
 
 const uuidSchema = z.string().uuid();
 const jsonRecordSchema = z.record(z.string(), z.unknown());
+const optionalUuidFilterSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : undefined;
+  },
+  uuidSchema.optional().catch(undefined)
+);
 
 const optionalText = (max: number) =>
   z
@@ -79,9 +87,9 @@ export const priceFinalizationListQuerySchema = z.object({
       if (!Number.isFinite(parsed) || parsed <= 0) return 20;
       return Math.min(parsed, 50);
     }),
-  guidanceJourneyId: uuidSchema.optional(),
-  inventoryItemId: uuidSchema.optional(),
-  homeAssetId: uuidSchema.optional(),
+  guidanceJourneyId: optionalUuidFilterSchema,
+  inventoryItemId: optionalUuidFilterSchema,
+  homeAssetId: optionalUuidFilterSchema,
 });
 
 export const priceFinalizationPropertyParamsSchema = z.object({

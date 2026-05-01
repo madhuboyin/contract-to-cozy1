@@ -53,6 +53,23 @@ const EMPTY_FORM: FormState = {
   notes: '',
 };
 
+function buildDraftStorageKey(args: {
+  propertyId: string;
+  journeyId?: string | null;
+  inventoryItemId?: string | null;
+  homeAssetId?: string | null;
+  stepKey?: string | null;
+}): string {
+  return [
+    'price-finalization-workspace',
+    args.propertyId,
+    args.journeyId || 'no-journey',
+    args.inventoryItemId || 'no-item',
+    args.homeAssetId || 'no-home-asset',
+    args.stepKey || 'no-step',
+  ].join(':');
+}
+
 function toMoneyNumber(value: string): number | undefined {
   const normalized = value.trim();
   if (!normalized) return undefined;
@@ -128,6 +145,17 @@ export default function PriceFinalizationToolClient() {
   const quoteComparisonWorkspaceId = searchParams.get('quoteComparisonWorkspaceId');
   const serviceRadarCheckId = searchParams.get('serviceRadarCheckId');
   const negotiationShieldCaseId = searchParams.get('negotiationShieldCaseId');
+  const draftStorageKey = React.useMemo(
+    () =>
+      buildDraftStorageKey({
+        propertyId,
+        journeyId: guidanceJourneyId,
+        inventoryItemId: itemId,
+        homeAssetId,
+        stepKey: guidanceStepKey,
+      }),
+    [guidanceJourneyId, guidanceStepKey, homeAssetId, itemId, propertyId]
+  );
 
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -142,6 +170,7 @@ export default function PriceFinalizationToolClient() {
     vendorName: defaultVendorName || '',
     quotePrice: defaultQuoteAmount || '',
   });
+  const [hasHydratedDraft, setHasHydratedDraft] = React.useState(false);
 
   const activeDetail = React.useMemo(
     () => items.find((entry) => entry.id === activeId) ?? null,
@@ -153,6 +182,32 @@ export default function PriceFinalizationToolClient() {
   );
 
   React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.sessionStorage.getItem(draftStorageKey);
+      if (!raw) {
+        setHasHydratedDraft(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<FormState>;
+      setForm((prev) => ({
+        ...prev,
+        ...parsed,
+      }));
+    } catch {
+      // Ignore corrupted draft state and continue with defaults/server data.
+    } finally {
+      setHasHydratedDraft(true);
+    }
+  }, [draftStorageKey]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || !hasHydratedDraft) return;
+    window.sessionStorage.setItem(draftStorageKey, JSON.stringify(form));
+  }, [draftStorageKey, form, hasHydratedDraft]);
+
+  React.useEffect(() => {
+    if (!hasHydratedDraft) return;
     let cancelled = false;
 
     (async () => {
@@ -188,7 +243,7 @@ export default function PriceFinalizationToolClient() {
     return () => {
       cancelled = true;
     };
-  }, [guidanceJourneyId, homeAssetId, itemId, propertyId]);
+  }, [guidanceJourneyId, hasHydratedDraft, homeAssetId, itemId, propertyId]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -292,6 +347,9 @@ export default function PriceFinalizationToolClient() {
       setItems((prev) => [detail, ...prev.filter((entry) => entry.id !== detail.id)]);
       setActiveId(detail.id);
       setForm(buildFormFromDetail(detail));
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(draftStorageKey, JSON.stringify(buildFormFromDetail(detail)));
+      }
     } catch (saveError: any) {
       setError(saveError?.message || 'Unable to save draft.');
     } finally {
@@ -323,6 +381,9 @@ export default function PriceFinalizationToolClient() {
       setActiveId(finalized.id);
       setFinalizedId(finalized.id);
       setForm(buildFormFromDetail(finalized));
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(draftStorageKey, JSON.stringify(buildFormFromDetail(finalized)));
+      }
     } catch (finalizeError: any) {
       setError(finalizeError?.message || 'Unable to finalize price.');
     } finally {

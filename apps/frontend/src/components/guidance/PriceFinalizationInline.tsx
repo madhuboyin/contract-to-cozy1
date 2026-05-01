@@ -65,6 +65,23 @@ const EMPTY_FORM: FormState = {
   notes: '',
 };
 
+function buildDraftStorageKey(args: {
+  propertyId: string;
+  journeyId?: string | null;
+  inventoryItemId?: string | null;
+  homeAssetId?: string | null;
+  stepKey?: string | null;
+}): string {
+  return [
+    'price-finalization-inline',
+    args.propertyId,
+    args.journeyId || 'no-journey',
+    args.inventoryItemId || 'no-item',
+    args.homeAssetId || 'no-home-asset',
+    args.stepKey || 'no-step',
+  ].join(':');
+}
+
 const INVENTORY_CATEGORY_TO_SERVICE_CATEGORY: Partial<Record<string, ServiceCategory>> = {
   HVAC: 'HVAC',
   PLUMBING: 'PLUMBING',
@@ -153,6 +170,17 @@ export function PriceFinalizationInline({
   onComplete,
 }: PriceFinalizationInlineProps) {
   const queryClient = useQueryClient();
+  const draftStorageKey = React.useMemo(
+    () =>
+      buildDraftStorageKey({
+        propertyId,
+        journeyId,
+        inventoryItemId,
+        homeAssetId,
+        stepKey,
+      }),
+    [homeAssetId, inventoryItemId, journeyId, propertyId, stepKey]
+  );
   const defaultServiceCategory = React.useMemo(
     () => inferDefaultServiceCategory(inventoryItemCategory),
     [inventoryItemCategory]
@@ -170,6 +198,7 @@ export function PriceFinalizationInline({
     ...EMPTY_FORM,
     serviceCategory: defaultServiceCategory,
   });
+  const [hasHydratedDraft, setHasHydratedDraft] = React.useState(false);
 
   const activeDetail = React.useMemo(
     () => items.find((entry) => entry.id === activeId) ?? null,
@@ -181,6 +210,32 @@ export function PriceFinalizationInline({
   );
 
   React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.sessionStorage.getItem(draftStorageKey);
+      if (!raw) {
+        setHasHydratedDraft(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<FormState>;
+      setForm((prev) => ({
+        ...prev,
+        ...parsed,
+      }));
+    } catch {
+      // Ignore corrupted draft state and continue with defaults/server data.
+    } finally {
+      setHasHydratedDraft(true);
+    }
+  }, [draftStorageKey]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || !hasHydratedDraft) return;
+    window.sessionStorage.setItem(draftStorageKey, JSON.stringify(form));
+  }, [draftStorageKey, form, hasHydratedDraft]);
+
+  React.useEffect(() => {
+    if (!hasHydratedDraft) return;
     let cancelled = false;
 
     (async () => {
@@ -227,7 +282,7 @@ export function PriceFinalizationInline({
     return () => {
       cancelled = true;
     };
-  }, [defaultServiceCategory, homeAssetId, inventoryItemId, journeyId, propertyId]);
+  }, [defaultServiceCategory, hasHydratedDraft, homeAssetId, inventoryItemId, journeyId, propertyId]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -338,6 +393,9 @@ export function PriceFinalizationInline({
       setItems((prev) => [detail, ...prev.filter((entry) => entry.id !== detail.id)]);
       setActiveId(detail.id);
       setForm(buildFormFromDetail(detail));
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(draftStorageKey, JSON.stringify(buildFormFromDetail(detail)));
+      }
       if (detail.status === 'FINALIZED') {
         setFinalizedId(detail.id);
       }
@@ -382,6 +440,9 @@ export function PriceFinalizationInline({
       setActiveId(finalized.id);
       setFinalizedId(finalized.id);
       setForm(buildFormFromDetail(finalized));
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(draftStorageKey, JSON.stringify(buildFormFromDetail(finalized)));
+      }
 
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
