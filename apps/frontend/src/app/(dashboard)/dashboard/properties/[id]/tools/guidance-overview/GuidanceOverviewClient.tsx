@@ -410,6 +410,10 @@ function resolveConfidenceDots(label: GuidanceActionModel['confidenceLabel']): n
   return 3;
 }
 
+function normalizeIssueTypeKey(issueType: string): string {
+  return issueType.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -436,6 +440,7 @@ export default function GuidanceOverviewClient() {
   const selectedAssetName = searchParams.get('assetName')?.trim() ?? '';
   const selectedServiceKey = searchParams.get('serviceKey');
   const selectedIssueType = searchParams.get('issueType');
+  const selectedCustomIssueLabel = searchParams.get('customIssueLabel')?.trim() ?? '';
   // Phase 6c: direct journey resume — bypasses the wizard when present
   const pinnedJourneyId = searchParams.get('journeyId');
   const requestedStepKey =
@@ -492,8 +497,11 @@ export default function GuidanceOverviewClient() {
     router.push(`${baseHref}?scopeCategory=SERVICE&serviceKey=${serviceKey}`);
   }
 
-  function navigateToIssue(issueType: string) {
-    pushParams({ issueType });
+  function navigateToIssue(issueType: string, customIssueLabel?: string | null) {
+    pushParams({
+      issueType,
+      customIssueLabel: customIssueLabel?.trim() ? customIssueLabel.trim() : null,
+    });
   }
 
   function changeAsset() {
@@ -503,12 +511,13 @@ export default function GuidanceOverviewClient() {
 
   function differentIssue() {
     // Clear issueType only, keep asset/service selection
-    pushParams({ issueType: null });
+    pushParams({ issueType: null, customIssueLabel: null });
   }
 
   function resetJourneyContext() {
     pushParams({
       issueType: null,
+      customIssueLabel: null,
       journeyId: null,
       stepKey: null,
       guidanceStepKey: null,
@@ -1165,6 +1174,24 @@ export default function GuidanceOverviewClient() {
                     </div>
                   ))}
                 </div>
+              ) : inventoryQuery.isError ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-rose-700">
+                    We couldn&apos;t load your inventory right now. Please retry to pick the right item for this journey.
+                  </p>
+                  <ActionPriorityRow
+                    primaryAction={
+                      <Button
+                        className="min-h-[42px] w-full"
+                        onClick={() => {
+                          void inventoryQuery.refetch();
+                        }}
+                      >
+                        Retry inventory
+                      </Button>
+                    }
+                  />
+                </div>
               ) : filteredAssetOptions.length === 0 ? (
                 <div className="space-y-2">
                   <p className="text-sm text-[hsl(var(--mobile-text-secondary))]">
@@ -1378,7 +1405,9 @@ export default function GuidanceOverviewClient() {
                 {customIssue.trim() && (
                   <Button
                     className="min-h-[42px] w-full"
-                    onClick={() => navigateToIssue(customIssue.trim())}
+                    onClick={() =>
+                      navigateToIssue(normalizeIssueTypeKey(customIssue), customIssue.trim())
+                    }
                   >
                     Continue with: {customIssue.trim()}
                   </Button>
@@ -1403,6 +1432,7 @@ export default function GuidanceOverviewClient() {
     'your item';
 
   const issueLabelDisplay =
+    selectedCustomIssueLabel ||
     suggestedIssueTypes.find((i) => i.key === selectedIssueType)?.label ??
     (isInPinnedMode ? formatIssueTypeLabel(activePrimaryAction?.journey.issueType) : null) ??
     formatIssueTypeLabel(selectedIssueType) ??
