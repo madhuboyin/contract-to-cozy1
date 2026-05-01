@@ -15,6 +15,7 @@ import {
   CircleAlert,
   Lightbulb,
   MessageSquareText,
+  MoreHorizontal,
   ShieldCheck,
   Sparkles,
   Wrench,
@@ -694,6 +695,7 @@ export default function GuidanceOverviewClient() {
       // Clear journey-specific URL state so pinned resume links do not keep rendering
       // a dismissed journey after the mutation succeeds.
       resetJourneyContext();
+      setShowDismissConfirm(false);
     },
   });
 
@@ -738,6 +740,7 @@ export default function GuidanceOverviewClient() {
   const [selectedJourneyStepKey, setSelectedJourneyStepKey] = React.useState<string | null>(
     requestedStepKey
   );
+  const [showDismissConfirm, setShowDismissConfirm] = React.useState(false);
 
   React.useEffect(() => {
     setShowAllIssueTypes(false);
@@ -1624,7 +1627,46 @@ export default function GuidanceOverviewClient() {
           <Card className="hidden rounded-[28px] border-slate-200/80 bg-white shadow-sm lg:block">
             <CardContent className="p-5">
               <div className="space-y-5">
-                <h2 className="text-lg font-semibold text-slate-950">Your journey</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-slate-950">Your journey</h2>
+                  {activePrimaryAction ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowDismissConfirm((v) => !v)}
+                      className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                      aria-label="Journey options"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+                {showDismissConfirm ? (
+                  <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-sm">
+                    <p className="font-medium text-rose-900">Remove this journey?</p>
+                    <p className="mt-0.5 text-rose-700">This issue will no longer appear in your guidance.</p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={dismissMutation.isPending}
+                        onClick={() => {
+                          if (activePrimaryAction) {
+                            dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId });
+                          }
+                        }}
+                        className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+                      >
+                        {dismissMutation.isPending ? 'Removing…' : 'Yes, remove'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowDismissConfirm(false)}
+                        className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="space-y-1.5">
                   {activeJourneySteps.map((step) => {
                     const isSelected = step.stepKey === selectedJourneyStep?.stepKey;
@@ -1681,6 +1723,46 @@ export default function GuidanceOverviewClient() {
           </Card>
 
           <div className="space-y-5">
+            {activePrimaryAction ? (
+              <div className="flex items-center justify-between lg:hidden">
+                <span className="text-sm font-semibold text-slate-950">Your journey</span>
+                <button
+                  type="button"
+                  onClick={() => setShowDismissConfirm((v) => !v)}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Journey options"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </div>
+            ) : null}
+            {showDismissConfirm ? (
+              <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-sm lg:hidden">
+                <p className="font-medium text-rose-900">Remove this journey?</p>
+                <p className="mt-0.5 text-rose-700">This issue will no longer appear in your guidance.</p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={dismissMutation.isPending}
+                    onClick={() => {
+                      if (activePrimaryAction) {
+                        dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId });
+                      }
+                    }}
+                    className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    {dismissMutation.isPending ? 'Removing…' : 'Yes, remove'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDismissConfirm(false)}
+                    className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="-mx-1 overflow-x-auto lg:hidden">
               <div className="flex min-w-max gap-2 px-1 pb-2">
                 {activeJourneySteps.map((step) => {
@@ -1785,18 +1867,6 @@ export default function GuidanceOverviewClient() {
                       </button>
                     ) : null}
 
-                    <button
-                      type="button"
-                      disabled={dismissMutation.isPending}
-                      onClick={() => {
-                        if (activePrimaryAction) {
-                          dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId });
-                        }
-                      }}
-                      className="text-left text-sm font-medium text-slate-500 transition-colors hover:text-rose-600 disabled:opacity-50"
-                    >
-                      Mark as not relevant
-                    </button>
                   </div>
                 </div>
               </CardContent>
