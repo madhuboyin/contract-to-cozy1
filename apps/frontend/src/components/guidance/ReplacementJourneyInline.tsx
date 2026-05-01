@@ -23,6 +23,13 @@ type ReplacementJourneyInlineProps = {
 
 type ModelEntry = { name: string; price: string; reason: string };
 type VendorEntry = { vendor: string; price: string; warranty: string; timeline: string };
+type SuggestedModel = {
+  id: string;
+  label: string;
+  estimatedPrice: number;
+  fit: string;
+  specs: string[];
+};
 
 const DEFAULT_MODELS: ModelEntry[] = [
   { name: '', price: '', reason: '' },
@@ -74,6 +81,95 @@ function buildSubtitle(stepKey: string, assetName: string, issueLabel: string | 
   return `Save the follow-up plan for ${context}.`;
 }
 
+function inferReplacementFamily(assetName: string): {
+  noun: string;
+  priceBand: [number, number, number];
+  specsByTier: string[][];
+} {
+  const normalized = assetName.toLowerCase();
+  if (normalized.includes('dishwasher')) {
+    return {
+      noun: 'dishwasher',
+      priceBand: [700, 1000, 1400],
+      specsByTier: [
+        ['Standard capacity', 'Basic drying', 'Entry energy efficiency'],
+        ['Quiet cycle', 'Better drying', 'Stronger energy efficiency'],
+        ['Very quiet', 'Flexible racks', 'Best efficiency + warranty'],
+      ],
+    };
+  }
+  if (normalized.includes('refrigerator') || normalized.includes('fridge')) {
+    return {
+      noun: 'refrigerator',
+      priceBand: [1200, 1800, 2600],
+      specsByTier: [
+        ['Reliable cooling', 'Standard storage', 'Entry efficiency'],
+        ['Better organization', 'Stronger efficiency', 'Lower noise'],
+        ['Premium storage', 'Best efficiency', 'Longest warranty'],
+      ],
+    };
+  }
+  if (normalized.includes('washer') || normalized.includes('dryer')) {
+    return {
+      noun: normalized.includes('dryer') ? 'dryer' : 'washer',
+      priceBand: [800, 1100, 1500],
+      specsByTier: [
+        ['Core cycles', 'Standard capacity', 'Entry efficiency'],
+        ['Quieter operation', 'Better fabric care', 'Improved efficiency'],
+        ['Largest capacity', 'Smart controls', 'Best efficiency + warranty'],
+      ],
+    };
+  }
+  if (normalized.includes('water heater')) {
+    return {
+      noun: 'water heater',
+      priceBand: [1200, 2200, 3200],
+      specsByTier: [
+        ['Like-for-like replacement', 'Standard recovery', 'Lower upfront cost'],
+        ['Higher efficiency', 'Improved warranty', 'Balanced operating cost'],
+        ['Heat-pump or premium tier', 'Best efficiency', 'Highest long-term savings'],
+      ],
+    };
+  }
+  if (normalized.includes('hvac') || normalized.includes('furnace') || normalized.includes('ac')) {
+    return {
+      noun: 'HVAC system',
+      priceBand: [6500, 9000, 13000],
+      specsByTier: [
+        ['Reliable replacement', 'Entry efficiency tier', 'Lower upfront cost'],
+        ['Balanced efficiency', 'Quieter operation', 'Better warranty'],
+        ['High-efficiency tier', 'Variable performance', 'Best comfort + savings'],
+      ],
+    };
+  }
+  return {
+    noun: assetName.toLowerCase(),
+    priceBand: [900, 1400, 2200],
+    specsByTier: [
+      ['Reliable core performance', 'Lower upfront cost', 'Standard warranty'],
+      ['Better efficiency', 'Balanced feature set', 'Improved warranty'],
+      ['Best efficiency', 'Premium features', 'Longest warranty coverage'],
+    ],
+  };
+}
+
+function buildSuggestedModels(assetName: string): SuggestedModel[] {
+  const family = inferReplacementFamily(assetName);
+  const tiers = ['Good fit', 'Better fit', 'Best long-term fit'] as const;
+  return family.priceBand.map((price, index) => ({
+    id: `suggested-model-${index + 1}`,
+    label: `${tiers[index]} ${family.noun}`,
+    estimatedPrice: price,
+    fit:
+      index === 0
+        ? 'Best if you want the lowest upfront replacement cost.'
+        : index === 1
+          ? 'Best balance of price, efficiency, and day-to-day comfort.'
+          : 'Best if you plan to stay longer and want the strongest long-term value.',
+    specs: family.specsByTier[index] ?? [],
+  }));
+}
+
 export function ReplacementJourneyInline({
   propertyId,
   journeyId,
@@ -88,6 +184,7 @@ export function ReplacementJourneyInline({
   const queryClient = useQueryClient();
   const issueLabel = formatIssueTypeLabel(issueType);
   const draftKey = React.useMemo(() => storageKey({ propertyId, journeyId, stepKey }), [propertyId, journeyId, stepKey]);
+  const suggestedModels = React.useMemo(() => buildSuggestedModels(assetName), [assetName]);
 
   const [completed, setCompleted] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -179,12 +276,13 @@ export function ReplacementJourneyInline({
       return {
         proofType: 'replacement_model_shortlist',
         proofId: `${journeyId}:${stepKey}`,
-        shortlistedModels: activeModels.map((entry) => ({
-          name: entry.name.trim(),
-          price: toMoney(entry.price),
-          reason: entry.reason.trim(),
+        shortlistedModels: suggestedModels.map((entry) => ({
+          name: entry.label,
+          price: entry.estimatedPrice,
+          reason: entry.fit,
+          specs: entry.specs,
         })),
-        selectedModelName: selectedModel || activeModels[0]?.name || null,
+        selectedModelName: selectedModel || suggestedModels[0]?.label || null,
         notes: notes.trim() || null,
       };
     }
@@ -243,8 +341,8 @@ export function ReplacementJourneyInline({
   }
 
   function validateStep(): string | null {
-    if (stepKey === 'compare_replacement_models' && activeModels.length === 0) {
-      return 'Add at least one replacement model to continue.';
+    if (stepKey === 'compare_replacement_models' && !selectedModel.trim()) {
+      return 'Choose one of the suggested replacement options to continue.';
     }
     if (stepKey === 'compare_purchase_options' && activeVendors.length === 0) {
       return 'Add at least one purchase option to continue.';
@@ -311,7 +409,55 @@ export function ReplacementJourneyInline({
           </div>
         ) : null}
 
-        {(stepKey === 'compare_replacement_models' || stepKey === 'set_budget_and_shortlist') && (
+        {stepKey === 'compare_replacement_models' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <PackageCheck className="h-4 w-4 text-emerald-600" />
+              We generated a starter shortlist so the user can review options instead of typing model details manually.
+            </div>
+            {suggestedModels.map((entry) => {
+              const isSelected = selectedModel === entry.label;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => setSelectedModel(entry.label)}
+                  className={`w-full rounded-2xl border p-4 text-left transition-colors ${
+                    isSelected
+                      ? 'border-emerald-300 bg-emerald-50'
+                      : 'border-black/10 bg-white hover:border-emerald-200 hover:bg-emerald-50/40'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">{entry.label}</p>
+                      <p className="mt-1 text-sm text-slate-600">{entry.fit}</p>
+                    </div>
+                    <StatusChip tone={isSelected ? 'good' : 'info'}>
+                      {formatCurrency(entry.estimatedPrice)}
+                    </StatusChip>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {entry.specs.map((spec) => (
+                      <span
+                        key={spec}
+                        className="rounded-full border border-black/10 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
+                      >
+                        {spec}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
+              <span className="font-medium">Selected option: </span>
+              {selectedModel || 'Pick the shortlist option that feels like the best fit.'}
+            </div>
+          </div>
+        )}
+
+        {stepKey === 'set_budget_and_shortlist' && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <PackageCheck className="h-4 w-4 text-emerald-600" />
