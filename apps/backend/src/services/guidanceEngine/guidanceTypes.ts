@@ -44,7 +44,7 @@ export type GuidanceScopeCategory = (typeof GUIDANCE_SCOPE_CATEGORIES)[number];
 export const GUIDANCE_EVIDENCE_SCOPE_CATEGORIES = ['PROPERTY', 'ITEM', 'HOME_ASSET', 'SERVICE', 'UNKNOWN'] as const;
 export const GUIDANCE_EVIDENCE_COMPATIBILITY = ['MATCHED', 'BROADER_CONTEXT', 'MISMATCHED', 'UNKNOWN'] as const;
 
-export const GUIDANCE_JOURNEY_STATUS = ['NOT_STARTED', 'ACTIVE', 'COMPLETED', 'ABORTED', 'ARCHIVED', 'DISMISSED'] as const;
+export const GUIDANCE_JOURNEY_STATUS = ['NOT_STARTED', 'ACTIVE', 'BRANCHED', 'COMPLETED', 'ABORTED', 'ARCHIVED', 'DISMISSED'] as const;
 export const GUIDANCE_STEP_STATUS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'] as const;
 export const GUIDANCE_SEVERITY = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'UNKNOWN'] as const;
 export const GUIDANCE_STEP_SKIP_POLICY = ['ALLOWED', 'DISCOURAGED', 'DISALLOWED'] as const;
@@ -68,6 +68,24 @@ export type UserInitiatedJourneyInput = {
   homeAssetId?: string | null;
   serviceKey?: string | null;
 };
+
+export const REPAIR_REPLACE_BRANCH_CHOICES = [
+  'CONTINUE_REPAIR',
+  'CONTINUE_REPLACEMENT',
+  'PLAN_LATER',
+  'SHOP_NOW',
+] as const;
+
+export type RepairReplaceBranchChoice = (typeof REPAIR_REPLACE_BRANCH_CHOICES)[number];
+
+export const REPAIR_REPLACE_VERDICTS = [
+  'REPLACE_NOW',
+  'REPLACE_SOON',
+  'REPAIR_AND_MONITOR',
+  'REPAIR_ONLY',
+] as const;
+
+export type RepairReplaceVerdict = (typeof REPAIR_REPLACE_VERDICTS)[number];
 
 export type GuidanceSignalSourceInput = {
   propertyId: string;

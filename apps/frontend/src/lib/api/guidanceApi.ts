@@ -34,10 +34,16 @@ export type GuidanceExecutionReadiness =
   | 'TRACKING_ONLY'
   | 'UNKNOWN';
 
-export type GuidanceJourneyStatus = 'NOT_STARTED' | 'ACTIVE' | 'COMPLETED' | 'ABORTED' | 'ARCHIVED' | 'DISMISSED';
+export type GuidanceJourneyStatus = 'NOT_STARTED' | 'ACTIVE' | 'BRANCHED' | 'COMPLETED' | 'ABORTED' | 'ARCHIVED' | 'DISMISSED';
 export type GuidanceScopeCategory = 'ITEM' | 'SERVICE';
 export type GuidanceStepStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED' | 'BLOCKED';
 export type GuidanceSeverity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'UNKNOWN';
+export type RepairReplaceVerdict = 'REPLACE_NOW' | 'REPLACE_SOON' | 'REPAIR_AND_MONITOR' | 'REPAIR_ONLY';
+export type RepairReplaceBranchChoice =
+  | 'CONTINUE_REPAIR'
+  | 'CONTINUE_REPLACEMENT'
+  | 'PLAN_LATER'
+  | 'SHOP_NOW';
 
 export type GuidanceSignalDTO = {
   id: string;
@@ -119,6 +125,12 @@ export type GuidanceJourneyDTO = {
   scopeId: string | null;
   issueType: string | null;
   serviceKey: string | null;
+  parentJourneyId?: string | null;
+  branchFromStepKey?: string | null;
+  branchType?: string | null;
+  branchChoice?: string | null;
+  sourceVerdict?: string | null;
+  branchedAt?: string | null;
   isUserInitiated: boolean;
   dismissedReason: string | null;
   dismissedAt: string | null;
@@ -486,6 +498,35 @@ export async function dismissGuidanceJourney(
   const res = await api.post<{ journey: GuidanceJourneyDTO }>(
     `/api/properties/${propertyId}/guidance/journeys/${journeyId}/dismiss`,
     { reason }
+  );
+  return res.data;
+}
+
+export async function branchGuidanceRepairReplace(
+  propertyId: string,
+  journeyId: string,
+  payload: {
+    stepKey: string;
+    analysisId: string;
+    verdict: RepairReplaceVerdict;
+    choice: RepairReplaceBranchChoice;
+  }
+): Promise<{
+  sourceJourney: GuidanceJourneyDTO;
+  activeJourney: GuidanceJourneyDTO;
+  next: GuidanceNextStepResult | null;
+  branchCreated: boolean;
+  branchType: string | null;
+}> {
+  const res = await api.post<{
+    sourceJourney: GuidanceJourneyDTO;
+    activeJourney: GuidanceJourneyDTO;
+    next: GuidanceNextStepResult | null;
+    branchCreated: boolean;
+    branchType: string | null;
+  }>(
+    `/api/properties/${propertyId}/guidance/journeys/${journeyId}/branch-from-repair-replace`,
+    payload
   );
   return res.data;
 }

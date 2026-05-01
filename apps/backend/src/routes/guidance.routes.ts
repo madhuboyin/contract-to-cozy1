@@ -6,6 +6,7 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import {
   blockGuidanceStep,
+  branchGuidanceRepairReplace,
   changeGuidanceJourneyIssue,
   completeGuidanceStep,
   dismissGuidanceJourney,
@@ -134,6 +135,13 @@ const dismissJourneyBodySchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+const branchRepairReplaceBodySchema = z.object({
+  stepKey: z.string().trim().min(2).max(120),
+  analysisId: z.string().trim().min(2).max(120),
+  verdict: z.enum(['REPLACE_NOW', 'REPLACE_SOON', 'REPAIR_AND_MONITOR', 'REPAIR_ONLY']),
+  choice: z.enum(['CONTINUE_REPAIR', 'CONTINUE_REPLACEMENT', 'PLAN_LATER', 'SHOP_NOW']),
+});
+
 const changeIssueBodySchema = z.object({
   issueType: z.string().trim().min(1).max(120),
 });
@@ -242,6 +250,14 @@ router.post(
   propertyAuthMiddleware,
   validateBody(dismissJourneyBodySchema),
   dismissGuidanceJourney
+);
+
+router.post(
+  '/properties/:propertyId/guidance/journeys/:journeyId/branch-from-repair-replace',
+  validate(propertyJourneyParamsSchema),
+  propertyAuthMiddleware,
+  validateBody(branchRepairReplaceBodySchema),
+  branchGuidanceRepairReplace
 );
 
 router.post(

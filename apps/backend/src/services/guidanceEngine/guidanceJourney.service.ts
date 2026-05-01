@@ -1,6 +1,6 @@
 import { APIError } from '../../middleware/error.middleware';
 import { prisma } from '../../lib/prisma';
-import { getGuidanceTemplateBySignalFamily, getDefaultStepKey, getTemplateByIssueType } from './guidanceTemplateRegistry';
+import { getGuidanceTemplateBySignalFamily, getDefaultStepKey, getTemplateByIssueType, getTemplateByJourneyTypeKey } from './guidanceTemplateRegistry';
 import { guidanceSignalResolverService } from './guidanceSignalResolver.service';
 import { guidanceStepResolverService } from './guidanceStepResolver.service';
 import { guidanceFinancialContextService } from './guidanceFinancialContext.service';
@@ -19,9 +19,33 @@ import {
   GuidanceSignalSourceInput,
   GuidanceToolCompletionInput,
   UserInitiatedJourneyInput,
+  RepairReplaceBranchChoice,
+  RepairReplaceVerdict,
   getGuidanceModels,
 } from './guidanceTypes';
 import { logger } from '../../lib/logger';
+
+const ACTIVE_GUIDANCE_JOURNEY_STATUSES = ['ACTIVE', 'NOT_STARTED'] as const;
+const REPLACEMENT_BRANCH_TYPE_BY_CHOICE: Record<
+  Extract<RepairReplaceBranchChoice, 'CONTINUE_REPLACEMENT' | 'PLAN_LATER' | 'SHOP_NOW'>,
+  { branchType: string; journeyTypeKey: string; issueType: string }
+> = {
+  CONTINUE_REPLACEMENT: {
+    branchType: 'REPLACEMENT_PURCHASE_NOW',
+    journeyTypeKey: 'replacement_purchase_now',
+    issueType: 'replacement_purchase_now',
+  },
+  PLAN_LATER: {
+    branchType: 'REPLACEMENT_PLAN_LATER',
+    journeyTypeKey: 'replacement_plan_later',
+    issueType: 'replacement_plan_later',
+  },
+  SHOP_NOW: {
+    branchType: 'REPLACEMENT_SHOP_NOW',
+    journeyTypeKey: 'replacement_shop_now',
+    issueType: 'replacement_shop_now',
+  },
+};
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -1414,10 +1438,10 @@ export class GuidanceJourneyService {
   async getJourneyById(propertyId: string, journeyId: string) {
     const { guidanceJourney } = getGuidanceModels();
 
-    const fetchJourney = () =>
+    const fetchJourney = (id: string) =>
       guidanceJourney.findFirst({
         where: {
-          id: journeyId,
+          id,
           propertyId,
         },
         include: {
@@ -1442,10 +1466,24 @@ export class GuidanceJourneyService {
         },
       });
 
-    let journey = await fetchJourney();
+    let journey = await fetchJourney(journeyId);
 
     if (!journey) {
       throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
+    }
+
+    if (journey.status === 'BRANCHED') {
+      const childJourney = await guidanceJourney.findFirst({
+        where: {
+          propertyId,
+          parentJourneyId: journey.id,
+          status: { in: [...ACTIVE_GUIDANCE_JOURNEY_STATUSES] },
+        },
+        orderBy: [{ updatedAt: 'desc' }],
+      });
+      if (childJourney?.id) {
+        journey = await fetchJourney(childJourney.id);
+      }
     }
 
     const didBackfillLegacyEvidence = await this.backfillLegacyLifecycleCostEvidence({
@@ -1461,7 +1499,7 @@ export class GuidanceJourneyService {
         });
 
     if (didBackfillLegacyEvidence || didReconcileLegacyState) {
-      journey = await fetchJourney();
+      journey = await fetchJourney(journey.id);
     }
 
     if (!journey) {
@@ -1491,7 +1529,7 @@ export class GuidanceJourneyService {
     const fetchJourneys = () => guidanceJourney.findMany({
       where: {
         propertyId,
-        status: 'ACTIVE',
+        status: { in: [...ACTIVE_GUIDANCE_JOURNEY_STATUSES] },
       },
       include: {
         primarySignal: true,
@@ -1613,25 +1651,33 @@ export class GuidanceJourneyService {
     };
   }
 
-  async createUserInitiatedJourney(
-    propertyId: string,
-    input: UserInitiatedJourneyInput,
-    actorUserId: string
-  ) {
+  private async createJourneyFromTemplate(args: {
+    propertyId: string;
+    actorUserId: string | null;
+    templateKey: string;
+    issueType: string;
+    scopeCategory: 'ITEM' | 'SERVICE';
+    scopeId: string;
+    inventoryItemId?: string | null;
+    homeAssetId?: string | null;
+    serviceKey?: string | null;
+    parentJourneyId?: string | null;
+    branchFromStepKey?: string | null;
+    branchType?: string | null;
+    branchChoice?: string | null;
+    sourceVerdict?: string | null;
+    contextSnapshotPatch?: Record<string, unknown> | null;
+  }) {
     const { guidanceJourney, guidanceJourneyEvent } = getGuidanceModels();
-    const template = getTemplateByIssueType(input.issueType, input.scopeCategory);
+    const template = getTemplateByJourneyTypeKey(args.templateKey);
     const now = new Date();
-
-    const scopeId = input.scopeId;
-    const inventoryItemId = input.inventoryItemId ?? (input.scopeCategory === 'ITEM' ? input.scopeId : null) ?? null;
-    const homeAssetId = input.homeAssetId ?? null;
-    const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
 
     const journey = await guidanceJourney.create({
       data: {
-        propertyId,
-        homeAssetId,
-        inventoryItemId,
+        propertyId: args.propertyId,
+        homeAssetId: args.homeAssetId ?? null,
+        inventoryItemId: args.inventoryItemId ?? null,
+        parentJourneyId: args.parentJourneyId ?? null,
         primarySignalId: null,
         journeyKey: template.journeyKey,
         journeyTypeKey: template.journeyTypeKey,
@@ -1640,20 +1686,26 @@ export class GuidanceJourneyService {
         decisionStage: template.defaultDecisionStage,
         executionReadiness: template.defaultReadiness,
         status: 'NOT_STARTED',
-        scopeCategory: input.scopeCategory,
-        scopeId,
-        issueType: input.issueType,
-        serviceKey,
+        scopeCategory: args.scopeCategory,
+        scopeId: args.scopeId,
+        issueType: args.issueType,
+        serviceKey: args.serviceKey ?? null,
         isUserInitiated: true,
         isLowContext: false,
         missingContextKeys: [],
         currentStepOrder: null,
         currentStepKey: template.canonicalFirstStepKey,
+        branchFromStepKey: args.branchFromStepKey ?? null,
+        branchType: args.branchType ?? null,
+        branchChoice: args.branchChoice ?? null,
+        sourceVerdict: args.sourceVerdict ?? null,
+        branchedAt: args.parentJourneyId ? now : null,
         contextSnapshotJson: {
-          initiatedByUserId: actorUserId,
-          issueType: input.issueType,
-          scopeCategory: input.scopeCategory,
-          scopeId,
+          initiatedByUserId: args.actorUserId,
+          issueType: args.issueType,
+          scopeCategory: args.scopeCategory,
+          scopeId: args.scopeId,
+          ...(args.contextSnapshotPatch ?? {}),
         },
         derivedSnapshotJson: null,
         startedAt: now,
@@ -1666,36 +1718,306 @@ export class GuidanceJourneyService {
 
     await guidanceJourneyEvent.create({
       data: {
-        propertyId,
+        propertyId: args.propertyId,
         journeyId: journey.id,
         signalId: null,
         eventType: 'JOURNEY_CREATED',
-        actorType: 'USER',
-        actorUserId,
+        actorType: args.actorUserId ? 'USER' : 'SYSTEM',
+        actorUserId: args.actorUserId ?? null,
         payloadJson: {
           journeyTypeKey: template.journeyTypeKey,
-          issueType: input.issueType,
-          scopeCategory: input.scopeCategory,
-          scopeId,
+          issueType: args.issueType,
+          scopeCategory: args.scopeCategory,
+          scopeId: args.scopeId,
           isUserInitiated: true,
+          parentJourneyId: args.parentJourneyId ?? null,
+          branchType: args.branchType ?? null,
+          branchChoice: args.branchChoice ?? null,
         },
       },
     });
 
     await guidanceStepResolverService.ensureTemplateSteps({
-      propertyId,
+      propertyId: args.propertyId,
       journeyId: journey.id,
       templateSteps: template.steps,
-      actorUserId,
+      actorUserId: args.actorUserId ?? null,
       signalId: null,
     });
 
     return guidanceStepResolverService.recomputeJourneyState({
-      propertyId,
+      propertyId: args.propertyId,
       journeyId: journey.id,
-      actorUserId,
+      actorUserId: args.actorUserId ?? null,
       signalId: null,
     });
+  }
+
+  async createUserInitiatedJourney(
+    propertyId: string,
+    input: UserInitiatedJourneyInput,
+    actorUserId: string
+  ) {
+    const scopeId = input.scopeId;
+    const inventoryItemId = input.inventoryItemId ?? (input.scopeCategory === 'ITEM' ? input.scopeId : null) ?? null;
+    const homeAssetId = input.homeAssetId ?? null;
+    const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
+    const template = getTemplateByIssueType(input.issueType, input.scopeCategory);
+
+    return this.createJourneyFromTemplate({
+      propertyId,
+      actorUserId,
+      templateKey: template.journeyTypeKey,
+      issueType: input.issueType,
+      scopeCategory: input.scopeCategory,
+      scopeId,
+      inventoryItemId,
+      homeAssetId,
+      serviceKey,
+    });
+  }
+
+  async branchFromRepairReplaceDecision(args: {
+    propertyId: string;
+    journeyId: string;
+    actorUserId: string;
+    stepKey: string;
+    analysisId: string;
+    verdict: RepairReplaceVerdict;
+    choice: RepairReplaceBranchChoice;
+  }) {
+    const { guidanceJourney, guidanceJourneyEvent } = getGuidanceModels();
+    const sourceJourney = await guidanceJourney.findFirst({
+      where: { id: args.journeyId, propertyId: args.propertyId },
+      include: {
+        steps: { orderBy: [{ stepOrder: 'asc' }] },
+        inventoryItem: { select: { name: true, category: true } },
+        homeAsset: { select: { assetType: true } },
+      },
+    });
+
+    if (!sourceJourney) {
+      throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
+    }
+
+    if (sourceJourney.journeyTypeKey !== 'asset_lifecycle_resolution') {
+      throw new APIError(
+        'Repair vs replace branching is only supported on asset lifecycle journeys.',
+        400,
+        'GUIDANCE_BRANCH_UNSUPPORTED_JOURNEY'
+      );
+    }
+
+    const repairDecisionStep = (sourceJourney.steps ?? []).find(
+      (step: any) => step.stepKey === args.stepKey
+    );
+
+    if (!repairDecisionStep) {
+      throw new APIError('Repair vs replace step not found on this journey.', 404, 'GUIDANCE_STEP_NOT_FOUND');
+    }
+
+    const isReplacementVerdict = args.verdict === 'REPLACE_NOW' || args.verdict === 'REPLACE_SOON';
+    const completionPayload = {
+      proofType: 'repair_replace_branch_decision',
+      proofId: args.analysisId,
+      analysisId: args.analysisId,
+      verdict: args.verdict,
+      branchChoice: args.choice,
+      overrideApplied: args.choice === 'CONTINUE_REPAIR' && isReplacementVerdict,
+      confirmedAt: new Date().toISOString(),
+    };
+
+    const completed = await guidanceStepResolverService.markStepStatus({
+      propertyId: args.propertyId,
+      journeyId: sourceJourney.id,
+      stepKey: args.stepKey,
+      nextStatus: 'COMPLETED',
+      actorUserId: args.actorUserId,
+      reasonCode: 'USER_CONFIRMED_REPAIR_REPLACE_DECISION',
+      producedData: completionPayload,
+      signalId: sourceJourney.primarySignalId ?? null,
+    });
+
+    if (!isReplacementVerdict || args.choice === 'CONTINUE_REPAIR') {
+      await guidanceJourneyEvent.create({
+        data: {
+          propertyId: args.propertyId,
+          journeyId: sourceJourney.id,
+          stepId: repairDecisionStep.id,
+          signalId: sourceJourney.primarySignalId ?? null,
+          eventType: 'CONTEXT_UPDATED',
+          actorType: 'USER',
+          actorUserId: args.actorUserId,
+          reasonCode: isReplacementVerdict ? 'REPLACEMENT_OVERRIDDEN_TO_REPAIR' : 'REPAIR_PATH_CONFIRMED',
+          payloadJson: completionPayload,
+        },
+      });
+
+      const activeJourney = await this.getJourneyById(args.propertyId, sourceJourney.id);
+      const next = await this.resolveNextStepWithIntelligence({
+        propertyId: args.propertyId,
+        journeyId: activeJourney.id,
+      });
+
+      return {
+        sourceJourney: completed.journey,
+        activeJourney,
+        next,
+        branchCreated: false,
+        branchType: null,
+      };
+    }
+
+    if (args.verdict === 'REPLACE_NOW' && args.choice !== 'CONTINUE_REPLACEMENT') {
+      throw new APIError('REPLACE_NOW must continue with replacement or repair.', 400, 'GUIDANCE_INVALID_BRANCH_CHOICE');
+    }
+
+    if (args.verdict === 'REPLACE_SOON' && !['PLAN_LATER', 'SHOP_NOW'].includes(args.choice)) {
+      throw new APIError('REPLACE_SOON requires a planning or shopping choice.', 400, 'GUIDANCE_INVALID_BRANCH_CHOICE');
+    }
+
+    const branchConfig = REPLACEMENT_BRANCH_TYPE_BY_CHOICE[
+      args.choice as Extract<RepairReplaceBranchChoice, 'CONTINUE_REPLACEMENT' | 'PLAN_LATER' | 'SHOP_NOW'>
+    ];
+
+    const existingChild = await guidanceJourney.findFirst({
+      where: {
+        propertyId: args.propertyId,
+        parentJourneyId: sourceJourney.id,
+        branchType: branchConfig.branchType,
+        status: { in: [...ACTIVE_GUIDANCE_JOURNEY_STATUSES] },
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+
+    if (existingChild) {
+      const activeJourney = await this.getJourneyById(args.propertyId, existingChild.id);
+      const next = await this.resolveNextStepWithIntelligence({
+        propertyId: args.propertyId,
+        journeyId: activeJourney.id,
+      });
+      return {
+        sourceJourney: completed.journey,
+        activeJourney,
+        next,
+        branchCreated: false,
+        branchType: branchConfig.branchType,
+      };
+    }
+
+    const sourceUpdated = await guidanceJourney.update({
+      where: { id: sourceJourney.id },
+      data: {
+        status: 'BRANCHED',
+        branchFromStepKey: args.stepKey,
+        branchType: branchConfig.branchType,
+        branchChoice: args.choice,
+        sourceVerdict: args.verdict,
+        branchedAt: new Date(),
+        lastTransitionAt: new Date(),
+        version: { increment: 1 },
+      },
+      include: {
+        steps: { orderBy: [{ stepOrder: 'asc' }] },
+      },
+    });
+
+    await guidanceJourneyEvent.create({
+      data: {
+        propertyId: args.propertyId,
+        journeyId: sourceJourney.id,
+        stepId: repairDecisionStep.id,
+        signalId: sourceJourney.primarySignalId ?? null,
+        eventType: 'JOURNEY_BRANCHED',
+        actorType: 'USER',
+        actorUserId: args.actorUserId,
+        reasonCode: branchConfig.branchType,
+        payloadJson: {
+          ...completionPayload,
+          branchType: branchConfig.branchType,
+        },
+      },
+    });
+
+    await guidanceJourneyEvent.create({
+      data: {
+        propertyId: args.propertyId,
+        journeyId: sourceJourney.id,
+        signalId: sourceJourney.primarySignalId ?? null,
+        eventType: 'JOURNEY_STATUS_CHANGED',
+        actorType: 'USER',
+        actorUserId: args.actorUserId,
+        fromJourneyStatus: sourceJourney.status as any,
+        toJourneyStatus: 'BRANCHED' as any,
+        reasonCode: branchConfig.branchType,
+      },
+    });
+
+    let childJourney = await this.createJourneyFromTemplate({
+      propertyId: args.propertyId,
+      actorUserId: args.actorUserId,
+      templateKey: branchConfig.journeyTypeKey,
+      issueType: branchConfig.issueType,
+      scopeCategory: (sourceJourney.scopeCategory as 'ITEM' | 'SERVICE') ?? 'ITEM',
+      scopeId:
+        sourceJourney.scopeId ??
+        sourceJourney.inventoryItemId ??
+        sourceJourney.homeAssetId ??
+        sourceJourney.serviceKey ??
+        sourceJourney.id,
+      inventoryItemId: sourceJourney.inventoryItemId ?? null,
+      homeAssetId: sourceJourney.homeAssetId ?? null,
+      serviceKey: sourceJourney.serviceKey ?? null,
+      parentJourneyId: sourceJourney.id,
+      branchFromStepKey: args.stepKey,
+      branchType: branchConfig.branchType,
+      branchChoice: args.choice,
+      sourceVerdict: args.verdict,
+      contextSnapshotPatch: {
+        sourceJourneyId: sourceJourney.id,
+        sourceIssueType: sourceJourney.issueType ?? null,
+        sourceJourneyTypeKey: sourceJourney.journeyTypeKey ?? null,
+        sourceAssetName: sourceJourney.inventoryItem?.name ?? sourceJourney.homeAsset?.assetType ?? null,
+        repairReplaceAnalysisId: args.analysisId,
+        repairReplaceVerdict: args.verdict,
+      },
+    });
+
+    const confirmStep = (childJourney.steps ?? []).find((step: any) => step.stepOrder === 1);
+    if (confirmStep) {
+      const confirmResult = await guidanceStepResolverService.markStepStatus({
+        propertyId: args.propertyId,
+        journeyId: childJourney.id,
+        stepKey: confirmStep.stepKey,
+        nextStatus: 'COMPLETED',
+        actorUserId: args.actorUserId,
+        reasonCode: 'SYSTEM_CONFIRMED_BRANCH_ENTRY',
+        producedData: {
+          proofType: 'replacement_branch_entry',
+          proofId: args.analysisId,
+          analysisId: args.analysisId,
+          sourceJourneyId: sourceJourney.id,
+          sourceStepKey: args.stepKey,
+          branchChoice: args.choice,
+          verdict: args.verdict,
+        },
+      });
+      childJourney = confirmResult.journey;
+    }
+
+    const activeJourney = await this.getJourneyById(args.propertyId, childJourney.id);
+    const next = await this.resolveNextStepWithIntelligence({
+      propertyId: args.propertyId,
+      journeyId: activeJourney.id,
+    });
+
+    return {
+      sourceJourney: sourceUpdated,
+      activeJourney,
+      next,
+      branchCreated: true,
+      branchType: branchConfig.branchType,
+    };
   }
 
   async dismissJourney(
@@ -1824,7 +2146,7 @@ export class GuidanceJourneyService {
     const journey = await this.getJourneyById(params.propertyId, params.journeyId);
     const next = await guidanceStepResolverService.resolveNextStep({
       propertyId: params.propertyId,
-      journeyId: params.journeyId,
+      journeyId: journey.id,
     });
 
     return this.enrichAction({

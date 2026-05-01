@@ -885,9 +885,16 @@ export default function GuidanceOverviewClient() {
             stepKey={step.stepKey}
             assetName={displayAssetName}
             presentation="guided"
-            onComplete={() => {
+            onComplete={(result) => {
               queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
               queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+              if (result?.activeJourneyId) {
+                const nextParams = new URLSearchParams(searchParams.toString());
+                nextParams.set('journeyId', result.activeJourneyId);
+                nextParams.delete('stepKey');
+                nextParams.delete('guidanceStepKey');
+                router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+              }
             }}
           />
         );

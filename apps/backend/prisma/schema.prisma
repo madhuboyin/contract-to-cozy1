@@ -3374,6 +3374,7 @@ enum GuidanceSignalStatus {
 enum GuidanceJourneyStatus {
   NOT_STARTED // IMP-GE-1: User-initiated journey created before the first step is taken
   ACTIVE // Journey is in progress
+  BRANCHED // Source journey handed off to a replacement child journey
   COMPLETED // All required steps are complete
   ABORTED // System-cancelled; internal only — do not surface as user-facing copy
   ARCHIVED // System-archived; internal only — do not surface as user-facing copy
@@ -3409,6 +3410,7 @@ enum GuidanceActorType {
 enum GuidanceJourneyEventType {
   JOURNEY_CREATED
   JOURNEY_STATUS_CHANGED
+  JOURNEY_BRANCHED
   JOURNEY_READINESS_CHANGED
   STEP_STATUS_CHANGED
   STEP_STARTED
@@ -3564,6 +3566,7 @@ model GuidanceJourney {
   homeAssetId     String?
   inventoryItemId String?
   primarySignalId String?
+  parentJourneyId String?
 
   journeyKey String?
 
@@ -3622,6 +3625,11 @@ model GuidanceJourney {
   // Examples: "warranty_purchase", "insurance_purchase", "general_inspection", "cleaning".
   // Null for all ITEM-scoped journeys.
   serviceKey String?
+  branchFromStepKey String?
+  branchType         String?
+  branchChoice       String?
+  sourceVerdict      String?
+  branchedAt         DateTime?
 
   // Populated when status is set to DISMISSED.
   dismissedReason String?
@@ -3647,6 +3655,8 @@ model GuidanceJourney {
   homeAsset     HomeAsset?      @relation(fields: [homeAssetId], references: [id], onDelete: SetNull)
   inventoryItem InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   primarySignal GuidanceSignal? @relation(fields: [primarySignalId], references: [id], onDelete: SetNull)
+  parentJourney GuidanceJourney? @relation("GuidanceJourneyBranch", fields: [parentJourneyId], references: [id], onDelete: SetNull)
+  childJourneys GuidanceJourney[] @relation("GuidanceJourneyBranch")
 
   steps      GuidanceJourneyStep[]
   events     GuidanceJourneyEvent[]
@@ -3661,6 +3671,7 @@ model GuidanceJourney {
   @@index([propertyId, inventoryItemId, status, updatedAt(sort: Desc)])
   @@index([propertyId, homeAssetId, status, updatedAt(sort: Desc)])
   @@index([primarySignalId])
+  @@index([parentJourneyId])
   @@index([mergedSignalGroupKey])
   @@index([homeAssetId])
   @@index([inventoryItemId])
@@ -3669,6 +3680,8 @@ model GuidanceJourney {
   @@index([propertyId, scopeId, status])
   @@index([propertyId, scopeCategory, scopeId, status])
   @@index([propertyId, isUserInitiated, status])
+  @@index([propertyId, parentJourneyId, status])
+  @@index([propertyId, branchType, status])
   @@index([serviceKey])
   @@map("guidance_journeys")
 }

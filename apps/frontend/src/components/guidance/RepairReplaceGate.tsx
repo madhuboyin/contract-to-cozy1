@@ -14,7 +14,10 @@ import {
   runReplaceRepairAnalysis,
   ReplaceRepairAnalysisDTO,
 } from '@/lib/api/replaceRepairApi';
-import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import {
+  branchGuidanceRepairReplace,
+  type RepairReplaceBranchChoice,
+} from '@/lib/api/guidanceApi';
 import { formatCurrency } from '@/lib/utils/format';
 
 // ---------------------------------------------------------------------------
@@ -59,7 +62,11 @@ type RepairReplaceGateProps = {
   stepKey: string;
   assetName?: string;
   presentation?: 'default' | 'guided';
-  onComplete: () => void;
+  onComplete: (result?: {
+    activeJourneyId: string;
+    branchType: string | null;
+    branchCreated: boolean;
+  }) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -103,27 +110,33 @@ export function RepairReplaceGate({
     },
   });
 
-  // Proceed: record step completion
-  async function handleProceed(analysis: ReplaceRepairAnalysisDTO) {
-    setCompleting(true);
-    try {
-      await recordGuidanceToolStatus(propertyId, {
-        journeyId,
+  const branchMutation = useMutation({
+    mutationFn: async (args: {
+      analysis: ReplaceRepairAnalysisDTO;
+      choice: RepairReplaceBranchChoice;
+    }) =>
+      branchGuidanceRepairReplace(propertyId, journeyId, {
         stepKey,
-        sourceToolKey: 'replace-repair',
-        status: 'COMPLETED',
-        producedData: {
-          verdict: analysis.verdict,
-          confidence: analysis.confidence,
-          remainingYears: analysis.remainingYears ?? null,
-          breakEvenMonths: analysis.breakEvenMonths ?? null,
-          analysisId: analysis.id,
-        },
-      });
+        analysisId: args.analysis.id,
+        verdict: args.analysis.verdict,
+        choice: args.choice,
+      }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
       setCompleteDone(true);
-      onComplete();
+      onComplete({
+        activeJourneyId: result.activeJourney.id,
+        branchType: result.branchType,
+        branchCreated: result.branchCreated,
+      });
+    },
+  });
+
+  async function handleProceed(analysis: ReplaceRepairAnalysisDTO, choice: RepairReplaceBranchChoice) {
+    setCompleting(true);
+    try {
+      await branchMutation.mutateAsync({ analysis, choice });
     } catch (err) {
       console.error('[RepairReplaceGate] proceed failed', err);
     } finally {
@@ -208,13 +221,61 @@ export function RepairReplaceGate({
 
         {/* Actions */}
         <div className="flex flex-col gap-2">
-          <Button
-            className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
-            disabled={completing}
-            onClick={() => handleProceed(displayAnalysis)}
-          >
-            {completing ? 'Saving…' : 'Confirm decision & continue'}
-          </Button>
+          {(displayAnalysis.verdict === 'REPAIR_ONLY' || displayAnalysis.verdict === 'REPAIR_AND_MONITOR') && (
+            <Button
+              className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
+              disabled={completing}
+              onClick={() => handleProceed(displayAnalysis, 'CONTINUE_REPAIR')}
+            >
+              {completing ? 'Saving…' : 'Confirm decision & continue'}
+            </Button>
+          )}
+          {displayAnalysis.verdict === 'REPLACE_NOW' && (
+            <>
+              <Button
+                className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
+                disabled={completing}
+                onClick={() => handleProceed(displayAnalysis, 'CONTINUE_REPLACEMENT')}
+              >
+                {completing ? 'Saving…' : 'Continue with replacement'}
+              </Button>
+              <Button
+                variant="outline"
+                className="min-h-[48px] w-full rounded-2xl"
+                disabled={completing}
+                onClick={() => handleProceed(displayAnalysis, 'CONTINUE_REPAIR')}
+              >
+                Continue with repair instead
+              </Button>
+            </>
+          )}
+          {displayAnalysis.verdict === 'REPLACE_SOON' && (
+            <>
+              <Button
+                className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md"
+                disabled={completing}
+                onClick={() => handleProceed(displayAnalysis, 'PLAN_LATER')}
+              >
+                {completing ? 'Saving…' : 'Plan for later'}
+              </Button>
+              <Button
+                variant="secondary"
+                className="min-h-[48px] w-full rounded-2xl"
+                disabled={completing}
+                onClick={() => handleProceed(displayAnalysis, 'SHOP_NOW')}
+              >
+                Shop now
+              </Button>
+              <Button
+                variant="outline"
+                className="min-h-[48px] w-full rounded-2xl"
+                disabled={completing}
+                onClick={() => handleProceed(displayAnalysis, 'CONTINUE_REPAIR')}
+              >
+                Continue with repair instead
+              </Button>
+            </>
+          )}
           {!isGuided && (
             <Link
               href={`/dashboard/properties/${propertyId}/inventory/items/${inventoryItemId}/replace-repair?guidanceJourneyId=${journeyId}&guidanceStepKey=${stepKey}`}

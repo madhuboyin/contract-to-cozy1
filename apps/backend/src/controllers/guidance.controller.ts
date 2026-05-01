@@ -332,6 +332,37 @@ export async function dismissGuidanceJourney(req: CustomRequest, res: Response, 
   }
 }
 
+export async function branchGuidanceRepairReplace(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = requireUserId(req);
+    const propertyId = req.params.propertyId;
+    const journeyId = req.params.journeyId;
+
+    const result = await guidanceJourneyService.branchFromRepairReplaceDecision({
+      propertyId,
+      journeyId,
+      actorUserId: userId,
+      stepKey: req.body.stepKey,
+      analysisId: req.body.analysisId,
+      verdict: req.body.verdict,
+      choice: req.body.choice,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        sourceJourney: mapGuidanceJourney(result.sourceJourney),
+        activeJourney: mapGuidanceJourney(result.activeJourney),
+        next: result.next,
+        branchCreated: result.branchCreated,
+        branchType: result.branchType,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function changeGuidanceJourneyIssue(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const userId = requireUserId(req);

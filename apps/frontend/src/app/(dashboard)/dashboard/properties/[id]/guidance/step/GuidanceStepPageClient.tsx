@@ -235,7 +235,7 @@ export default function GuidanceStepPageClient() {
           stepId={targetStep.id}
           stepKey={targetStep.stepKey}
           assetName={assetName}
-          onComplete={refreshGuidance}
+          onComplete={() => refreshGuidance()}
         />
       );
     }

@@ -385,6 +385,10 @@ export class GuidanceStepResolverService {
       throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
     }
 
+    if (journey.status === 'BRANCHED') {
+      return journey;
+    }
+
     const steps = (journey.steps ?? []) as any[];
     const currentStep = steps.find((step) => isActionableStepStatus(step.status as GuidanceStepStatus)) ?? null;
     const blockedStep = steps.find((step) => step.status === 'BLOCKED') ?? null;
