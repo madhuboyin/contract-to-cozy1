@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useMemo, type ElementType } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getStatusBoard,
@@ -270,6 +270,7 @@ function getPrimaryActionLabel(item: StatusBoardItemDTO): string | null {
 
 export default function StatusBoardClient() {
   const params = useParams();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const propertyId = params.id as string;
@@ -313,8 +314,34 @@ export default function StatusBoardClient() {
   const [cardLayoutError, setCardLayoutError] = useState(false);
 
   const appendGuidanceHref = useCallback(
-    (href: string) => appendGuidanceContinuityToHref(href, guidanceContext),
-    [guidanceContext]
+    (href: string) => {
+      const hrefWithGuidance = appendGuidanceContinuityToHref(href, guidanceContext);
+      const params = new URLSearchParams(searchParams.toString());
+      const currentHref = `${pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+      const target = new URL(hrefWithGuidance, "http://localhost");
+      target.searchParams.set("backTo", currentHref);
+      return `${target.pathname}${target.search}${target.hash}`;
+    },
+    [guidanceContext, pathname, searchParams]
+  );
+
+  const buildGuidanceOverviewHref = useCallback(
+    (item: StatusBoardItemDTO) => {
+      const params = new URLSearchParams({
+        scopeCategory: "ITEM",
+        assetName: item.displayName,
+      });
+      if (item.inventoryItemId) {
+        params.set("inventoryItemId", item.inventoryItemId);
+        params.set("itemId", item.inventoryItemId);
+      } else if (item.homeAssetId) {
+        params.set("homeAssetId", item.homeAssetId);
+      }
+      return appendGuidanceHref(
+        `/dashboard/properties/${propertyId}/tools/guidance-overview?${params.toString()}`
+      );
+    },
+    [appendGuidanceHref, propertyId]
   );
 
   const recordOperationalGuidanceProgress = useCallback(
@@ -740,7 +767,7 @@ export default function StatusBoardClient() {
             {primaryActionLabel ? (
               canShowReplaceRepair ? (
                 <Link
-                  href={appendGuidanceHref(item.deepLinks.replaceRepair!)}
+                  href={buildGuidanceOverviewHref(item)}
                   onClick={(event) => {
                     event.stopPropagation();
                     recordOperationalGuidanceProgress(item, "replace_or_repair");
@@ -964,7 +991,7 @@ export default function StatusBoardClient() {
                   )}
                   {canShowReplaceRepair ? (
                     <Link
-                      href={appendGuidanceHref(item.deepLinks.replaceRepair)}
+                      href={buildGuidanceOverviewHref(item)}
                       onClick={() => recordOperationalGuidanceProgress(item, 'replace_or_repair')}
                     >
                       <Button variant="outline" size="sm" className={LINK_ACTION_BUTTON_CLASS}>
@@ -1194,7 +1221,7 @@ export default function StatusBoardClient() {
             primaryAction={
               canShowReplaceRepair ? (
                 <Link
-                  href={appendGuidanceHref(item.deepLinks.replaceRepair!)}
+                  href={buildGuidanceOverviewHref(item)}
                   onClick={() => recordOperationalGuidanceProgress(item, 'replace_or_repair')}
                 >
                   <Button className="w-full bg-teal-600 hover:bg-teal-700">Replace or Repair</Button>
