@@ -123,6 +123,33 @@ export default function CoverageOverviewClient() {
 
   const shieldTone = shieldScore >= 75 ? 'emerald' : shieldScore >= 45 ? 'amber' : 'rose';
 
+  // Deterministic fallback when Gemini can't produce strategicAdvice
+  function getStaticAdvice(a: NonNullable<typeof analysis>): string {
+    const hasInsurance = !a.insurance.flags.some(f => f.code === 'NO_PROPERTY_POLICY');
+    const hasWarranty = (a.warranty.inputsUsed.warrantyAnnualCostUsd ?? 0) > 0;
+    const highGaps = a.insurance.flags.filter(f => f.severity === 'HIGH' && f.code !== 'NO_PROPERTY_POLICY').length;
+
+    if (!hasInsurance && !hasWarranty) {
+      return 'No insurance policy or warranty plan is on record — you have full exposure to repair and liability costs. Adding at least one layer of protection is the single highest-impact action right now.';
+    }
+    if (!hasInsurance) {
+      return 'No insurance policy is linked to this property. Even with a warranty in place, you\'re exposed to major liability and structural risks. Upload your policy to Vault to close this gap.';
+    }
+    if (a.overallVerdict === 'WORTH_IT') {
+      if (highGaps > 0) {
+        return `Your coverage is strong, but ${highGaps} high-priority gap${highGaps > 1 ? 's' : ''} need${highGaps === 1 ? 's' : ''} attention. Closing ${highGaps > 1 ? 'these' : 'it'} now will lock in the full value of your current protection profile.`;
+      }
+      return 'Your coverage profile looks healthy — insurance and warranty are aligned with your risk level. Run this check again after any major appliance purchase or new claim.';
+    }
+    if (a.overallVerdict === 'SITUATIONAL') {
+      return 'Your coverage is adequate but has room to improve. Review your priority gaps and consider whether a home warranty closes your remaining exposure at a cost that makes sense.';
+    }
+    return 'Your coverage profile needs attention. Start with the highest-severity items in Priority Gaps to meaningfully reduce your out-of-pocket exposure.';
+  }
+
+  const displayAdvice = analysis?.strategicAdvice ?? (analysis ? getStaticAdvice(analysis) : null);
+  const adviceIsAI = !!analysis?.strategicAdvice;
+
   // Maps each flag code to its most relevant remediation route and CTA label
   const GAP_ACTIONS: Record<string, { href: string; label: string }> = {
     NO_PROPERTY_POLICY:        { href: `/dashboard/properties/${propertyId}/vault`,                             label: 'Add Insurance Policy'      },
@@ -195,27 +222,7 @@ export default function CoverageOverviewClient() {
           {/* AI Insights */}
           <div className="lg:col-span-9 flex flex-col gap-6">
              <AnimatePresence mode="wait">
-              {analysis?.strategicAdvice ? (
-                <motion.div
-                  key="ai-ready"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex-1 relative overflow-hidden rounded-[32px] bg-gradient-to-br from-sky-600 to-indigo-700 p-8 shadow-xl text-white flex flex-col justify-center"
-                >
-                  <div className="flex items-start gap-6 relative z-10">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-xl border border-white/10 shadow-inner">
-                      <Wand2 className="h-6 w-6 text-white" />
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">AI Intelligence Take</span>
-                      <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic">
-                        &ldquo;{analysis.strategicAdvice}&rdquo;
-                      </p>
-                    </div>
-                  </div>
-                  <Sparkles className="absolute -bottom-8 -right-8 h-40 w-48 text-white/10 pointer-events-none" />
-                </motion.div>
-              ) : runMutation.isPending ? (
+              {runMutation.isPending ? (
                 <motion.div
                   key="ai-loading"
                   initial={{ opacity: 0 }}
@@ -227,7 +234,7 @@ export default function CoverageOverviewClient() {
                       <Loader2 className="h-6 w-6 text-white animate-spin" />
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">AI Intelligence Take</span>
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">Coverage Take</span>
                       <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic text-sky-100">
                         Analyzing your protection profile…
                       </p>
@@ -235,9 +242,31 @@ export default function CoverageOverviewClient() {
                   </div>
                   <Sparkles className="absolute -bottom-8 -right-8 h-40 w-48 text-white/10 pointer-events-none" />
                 </motion.div>
+              ) : displayAdvice ? (
+                <motion.div
+                  key="advice-ready"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex-1 relative overflow-hidden rounded-[32px] bg-gradient-to-br from-sky-600 to-indigo-700 p-8 shadow-xl text-white flex flex-col justify-center"
+                >
+                  <div className="flex items-start gap-6 relative z-10">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-xl border border-white/10 shadow-inner">
+                      {adviceIsAI ? <Wand2 className="h-6 w-6 text-white" /> : <ShieldCheck className="h-6 w-6 text-white" />}
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">
+                        {adviceIsAI ? 'AI Intelligence Take' : 'Coverage Summary'}
+                      </span>
+                      <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic">
+                        &ldquo;{displayAdvice}&rdquo;
+                      </p>
+                    </div>
+                  </div>
+                  <Sparkles className="absolute -bottom-8 -right-8 h-40 w-48 text-white/10 pointer-events-none" />
+                </motion.div>
               ) : (
                 <div className="flex-1 rounded-[32px] border-2 border-dashed border-slate-200 bg-white p-8 flex items-center justify-center text-center">
-                   <p className="text-sm font-bold text-slate-400 font-poppins italic">Refresh intelligence to generate AI strategy.</p>
+                  <p className="text-sm font-bold text-slate-400 font-poppins italic">Refresh intelligence to generate a coverage summary.</p>
                 </div>
               )}
             </AnimatePresence>
