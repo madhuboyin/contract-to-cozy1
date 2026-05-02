@@ -2,6 +2,7 @@ type GuidanceOverviewHrefOptions = {
   propertyId: string;
   journeyId?: string | null;
   stepKey?: string | null;
+  scopeCategory?: 'ITEM' | 'SERVICE' | null;
   inventoryItemId?: string | null;
   homeAssetId?: string | null;
   assetName?: string | null;
@@ -22,6 +23,7 @@ export function buildGuidanceOverviewHref({
   propertyId,
   journeyId,
   stepKey,
+  scopeCategory,
   inventoryItemId,
   homeAssetId,
   assetName,
@@ -43,6 +45,8 @@ export function buildGuidanceOverviewHref({
     if (homeAssetId) {
       params.set('homeAssetId', homeAssetId);
     }
+  } else if (scopeCategory) {
+    params.set('scopeCategory', scopeCategory);
   }
 
   const trimmedAssetName = assetName?.trim();

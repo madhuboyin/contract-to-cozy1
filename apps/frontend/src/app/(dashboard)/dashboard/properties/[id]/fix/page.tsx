@@ -362,13 +362,14 @@ export default function ResolutionHubPage() {
   const genericIssueGuidanceHref = propertyId
     ? buildIssueGuidanceOverviewHref({
         propertyId,
+        scopeCategory: 'ITEM',
         customIssueLabel: 'Something is broken',
       })
     : '/dashboard/replace-repair';
   const specialistGuidanceHref = propertyId
     ? buildIssueGuidanceOverviewHref({
         propertyId,
-        customIssueLabel: 'Need a specialist for a home issue',
+        scopeCategory: 'SERVICE',
       })
     : '/dashboard/providers';
   const focusSection = searchParams.get('focus');
