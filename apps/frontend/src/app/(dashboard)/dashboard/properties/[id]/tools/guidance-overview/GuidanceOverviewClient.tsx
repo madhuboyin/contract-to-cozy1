@@ -448,6 +448,46 @@ function normalizeIssueTypeKey(issueType: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Shared sub-components
+// ---------------------------------------------------------------------------
+
+function DismissConfirmPanel({
+  isPending,
+  onConfirm,
+  onCancel,
+  className,
+}: {
+  isPending: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn('rounded-2xl border border-rose-100 bg-rose-50 p-3 text-sm', className)}>
+      <p className="font-medium text-rose-900">Remove this journey?</p>
+      <p className="mt-0.5 text-rose-700">This issue will no longer appear in your guidance.</p>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={onConfirm}
+          className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+        >
+          {isPending ? 'Removing…' : 'Yes, remove'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -1172,6 +1212,10 @@ export default function GuidanceOverviewClient() {
   // Step 1: No scope category → show selector (skipped in pinned mode)
   // ---------------------------------------------------------------------------
   if (!scopeCategory && !isInPinnedMode) {
+    const inProgressActions = allActions
+      .filter((a) => a.journey.status === 'ACTIVE')
+      .slice(0, 3);
+
     return (
       <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-6xl lg:px-8 lg:pb-10">
         <Button variant="ghost" className="min-h-[44px] w-fit px-0 text-muted-foreground" asChild>
@@ -1189,6 +1233,33 @@ export default function GuidanceOverviewClient() {
           progressValue={phaseAProgressValue}
           main={
             <>
+              {inProgressActions.length > 0 ? (
+                <ScenarioInputCard
+                  title={`${inProgressActions.length} active ${inProgressActions.length === 1 ? 'journey' : 'journeys'} in progress`}
+                  subtitle="Pick up where you left off."
+                >
+                  <div className="space-y-1.5">
+                    {inProgressActions.map((action) => (
+                      <Link
+                        key={action.journeyId}
+                        href={`${baseHref}?journeyId=${action.journeyId}`}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-[hsl(var(--mobile-border-subtle))] bg-white px-3 py-2.5 transition-colors hover:border-[hsl(var(--mobile-brand-strong))] hover:bg-[hsl(var(--mobile-brand-strong))]/5"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
+                            {action.title}
+                          </p>
+                          <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">
+                            {action.progress.completedCount} of {action.progress.totalCount} steps done
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      </Link>
+                    ))}
+                  </div>
+                </ScenarioInputCard>
+              ) : null}
+
               <ScenarioInputCard
                 title="What do you need guidance for?"
                 subtitle="Select a category to get started."
@@ -1657,48 +1728,74 @@ export default function GuidanceOverviewClient() {
         })
       : null;
   const currentStepToolKey = selectedJourneyStep?.toolKey ?? null;
+
+  function getStepHighlight(
+    toolKey: string | null,
+    negLow: number,
+    negHigh: number,
+    ovLow: number,
+    ovHigh: number
+  ): { headline: string | null; body: string | null } {
+    const STEP_COPY: Record<string, { headline: string; body: string | null }> = {
+      'coverage-intelligence': {
+        headline: 'Confirm what coverage really protects before you spend more',
+        body: 'Before you pay out of pocket, verify whether warranty or coverage can offset this issue.',
+      },
+      'replace-repair': {
+        headline: 'Decide whether repair or replacement is the smarter next move',
+        body: 'We will weigh reliability, lifespan, and cost so you can choose the better path with confidence.',
+      },
+      'replacement-model-comparison': {
+        headline: 'Shortlist the replacement models worth buying',
+        body: 'Capture the model options that best fit your budget, efficiency goals, and timing.',
+      },
+      'replacement-purchase-options': {
+        headline: 'Compare sellers, pricing, and purchase terms side by side',
+        body: 'Compare the seller, price, warranty, and availability details before choosing where to buy.',
+      },
+      'replacement-purchase-finalization': {
+        headline: 'Lock in the model and seller you want to move forward with',
+        body: 'Save the exact purchase choice for this phase so the replacement path is clear and resumable.',
+      },
+      'replacement-planning': {
+        headline: 'Set a budget and shortlist for the replacement plan',
+        body: 'Set the replacement budget and shortlist now so you can shop later without starting over.',
+      },
+      'replacement-plan-followup': {
+        headline: 'Save the follow-up date for this replacement plan',
+        body: 'Store the follow-up timing and top option so this plan is easy to resume later.',
+      },
+      'quote-comparison': {
+        headline: 'See which quote balances cost, scope, and risk best',
+        body: null,
+      },
+    };
+    if (toolKey === 'negotiation-shield') {
+      return {
+        headline: `Lower your quote by ${formatCurrency(negLow)}–${formatCurrency(negHigh)}`,
+        body: "Contractors often overprice by 12–25% in your area. We'll generate exact scripts and leverage points to help you negotiate.",
+      };
+    }
+    if (toolKey === 'service-price-radar') {
+      return {
+        headline: `Check whether this quote is ${formatCurrency(ovLow)}–${formatCurrency(ovHigh)} too high`,
+        body: "We'll compare the quote against local market patterns so you can decide whether to push back before hiring.",
+      };
+    }
+    return toolKey ? (STEP_COPY[toolKey] ?? { headline: null, body: null }) : { headline: null, body: null };
+  }
+
+  const stepHighlight = getStepHighlight(
+    currentStepToolKey,
+    negotiationLow,
+    negotiationHigh,
+    overpayLow,
+    overpayHigh
+  );
   const currentStepHighlightHeadline =
-    currentStepToolKey === 'negotiation-shield'
-      ? `Lower your quote by ${formatCurrency(negotiationLow)}–${formatCurrency(negotiationHigh)}`
-      : currentStepToolKey === 'service-price-radar'
-        ? `Check whether this quote is ${formatCurrency(overpayLow)}–${formatCurrency(overpayHigh)} too high`
-        : currentStepToolKey === 'coverage-intelligence'
-          ? 'Confirm what coverage really protects before you spend more'
-          : currentStepToolKey === 'replace-repair'
-            ? 'Decide whether repair or replacement is the smarter next move'
-            : currentStepToolKey === 'replacement-model-comparison'
-              ? 'Shortlist the replacement models worth buying'
-              : currentStepToolKey === 'replacement-purchase-options'
-                ? 'Compare sellers, pricing, and purchase terms side by side'
-                : currentStepToolKey === 'replacement-purchase-finalization'
-                  ? 'Lock in the model and seller you want to move forward with'
-                  : currentStepToolKey === 'replacement-planning'
-                    ? 'Set a budget and shortlist for the replacement plan'
-                    : currentStepToolKey === 'replacement-plan-followup'
-                      ? 'Save the follow-up date for this replacement plan'
-            : currentStepToolKey === 'quote-comparison'
-              ? 'See which quote balances cost, scope, and risk best'
-              : activePrimaryAction?.explanation?.nextStep ?? currentStepTitle;
+    stepHighlight.headline ?? activePrimaryAction?.explanation?.nextStep ?? currentStepTitle;
   const currentStepHighlightBody =
-    currentStepToolKey === 'negotiation-shield'
-      ? "Contractors often overprice by 12–25% in your area. We'll generate exact scripts and leverage points to help you negotiate."
-      : currentStepToolKey === 'service-price-radar'
-        ? "We'll compare the quote against local market patterns so you can decide whether to push back before hiring."
-        : currentStepToolKey === 'coverage-intelligence'
-          ? 'Before you pay out of pocket, verify whether warranty or coverage can offset this issue.'
-        : currentStepToolKey === 'replace-repair'
-          ? 'We will weigh reliability, lifespan, and cost so you can choose the better path with confidence.'
-          : currentStepToolKey === 'replacement-model-comparison'
-            ? 'Capture the model options that best fit your budget, efficiency goals, and timing.'
-            : currentStepToolKey === 'replacement-purchase-options'
-              ? 'Compare the seller, price, warranty, and availability details before choosing where to buy.'
-              : currentStepToolKey === 'replacement-purchase-finalization'
-                ? 'Save the exact purchase choice for this phase so the replacement path is clear and resumable.'
-                : currentStepToolKey === 'replacement-planning'
-                  ? 'Set the replacement budget and shortlist now so you can shop later without starting over.'
-                  : currentStepToolKey === 'replacement-plan-followup'
-                    ? 'Store the follow-up timing and top option so this plan is easy to resume later.'
-            : activePrimaryAction?.explanation?.why ?? currentStepSubtitle;
+    stepHighlight.body ?? activePrimaryAction?.explanation?.why ?? currentStepSubtitle;
 
   if (activeHasScopedMatch) {
     // Show a skeleton while the journey detail (and its steps) are loading so the
@@ -1886,31 +1983,15 @@ export default function GuidanceOverviewClient() {
                   ) : null}
                 </div>
                 {showDismissConfirm ? (
-                  <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-sm">
-                    <p className="font-medium text-rose-900">Remove this journey?</p>
-                    <p className="mt-0.5 text-rose-700">This issue will no longer appear in your guidance.</p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        disabled={dismissMutation.isPending}
-                        onClick={() => {
-                          if (activePrimaryAction) {
-                            dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId });
-                          }
-                        }}
-                        className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
-                      >
-                        {dismissMutation.isPending ? 'Removing…' : 'Yes, remove'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowDismissConfirm(false)}
-                        className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
+                  <DismissConfirmPanel
+                    isPending={dismissMutation.isPending}
+                    onConfirm={() => {
+                      if (activePrimaryAction) {
+                        dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId });
+                      }
+                    }}
+                    onCancel={() => setShowDismissConfirm(false)}
+                  />
                 ) : null}
                 <div className="space-y-1.5">
                   {activeJourneySteps.map((step) => {
@@ -1982,31 +2063,16 @@ export default function GuidanceOverviewClient() {
               </div>
             ) : null}
             {showDismissConfirm ? (
-              <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 text-sm lg:hidden">
-                <p className="font-medium text-rose-900">Remove this journey?</p>
-                <p className="mt-0.5 text-rose-700">This issue will no longer appear in your guidance.</p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={dismissMutation.isPending}
-                    onClick={() => {
-                      if (activePrimaryAction) {
-                        dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId });
-                      }
-                    }}
-                    className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
-                  >
-                    {dismissMutation.isPending ? 'Removing…' : 'Yes, remove'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowDismissConfirm(false)}
-                    className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              <DismissConfirmPanel
+                className="lg:hidden"
+                isPending={dismissMutation.isPending}
+                onConfirm={() => {
+                  if (activePrimaryAction) {
+                    dismissMutation.mutate({ journeyId: activePrimaryAction.journeyId });
+                  }
+                }}
+                onCancel={() => setShowDismissConfirm(false)}
+              />
             ) : null}
             <div className="-mx-1 overflow-x-auto lg:hidden">
               <div className="flex min-w-max gap-2 px-1 pb-2">
