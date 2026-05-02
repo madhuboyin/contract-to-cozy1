@@ -152,6 +152,9 @@ const modelShortlistBodySchema = z.object({
   budgetMin: z.number().positive().optional(),
   budgetMax: z.number().positive().optional(),
   rebateAmount: z.number().min(0).optional(),
+  primaryPriority: z.enum(['lowest_cost', 'energy_savings', 'quiet_operation', 'long_term_reliability', 'fast_availability']).optional(),
+  homeOwnershipYears: z.enum(['under_3', '3_to_7', '7_plus']).optional(),
+  mustHaves: z.array(z.enum(['energy_star', 'smart_home', 'specific_brand'])).optional(),
   journeyContext: z.string().trim().max(500).optional(),
 });
 

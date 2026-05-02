@@ -635,6 +635,18 @@ export type ModelShortlistResult = {
   generatedAt: string;
 };
 
+export type PrimaryPriority = 'lowest_cost' | 'energy_savings' | 'quiet_operation' | 'long_term_reliability' | 'fast_availability';
+export type HomeOwnershipYears = 'under_3' | '3_to_7' | '7_plus';
+export type MustHave = 'energy_star' | 'smart_home' | 'specific_brand';
+
+export type ReplacementPriorities = {
+  budgetMax?: number;
+  primaryPriority?: PrimaryPriority;
+  homeOwnershipYears?: HomeOwnershipYears;
+  mustHaves?: MustHave[];
+  skipped?: boolean;
+};
+
 export async function generateModelShortlist(
   propertyId: string,
   params: {
@@ -642,6 +654,9 @@ export async function generateModelShortlist(
     budgetMin?: number;
     budgetMax?: number;
     rebateAmount?: number;
+    primaryPriority?: PrimaryPriority;
+    homeOwnershipYears?: HomeOwnershipYears;
+    mustHaves?: MustHave[];
     journeyContext?: string;
   }
 ): Promise<ModelShortlistResult> {

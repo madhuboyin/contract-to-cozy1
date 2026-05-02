@@ -100,9 +100,12 @@ class ModelShortlistAdvisorService {
     budgetMin?: number;
     budgetMax?: number;
     rebateAmount?: number;
+    primaryPriority?: string;
+    homeOwnershipYears?: string;
+    mustHaves?: string[];
     journeyContext?: string;
   }): Promise<ModelShortlistResult> {
-    const { propertyId, assetName, budgetMin, budgetMax, rebateAmount = 0, journeyContext } = params;
+    const { propertyId, assetName, budgetMin, budgetMax, rebateAmount = 0, primaryPriority, homeOwnershipYears, mustHaves, journeyContext } = params;
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -122,6 +125,9 @@ class ModelShortlistAdvisorService {
       rebateAmount,
       city,
       state,
+      primaryPriority,
+      homeOwnershipYears,
+      mustHaves,
       journeyContext,
     });
 

@@ -114,6 +114,20 @@ function getModelSpecInstructions(assetCategory: string): string {
   return instructions[assetCategory] ?? `For keySpecs include exactly these 5 keys relevant to this appliance: "Energy Rating", "Noise Level", "Primary Feature", "Warranty", "Capacity or Output".`;
 }
 
+const PRIORITY_INSTRUCTIONS: Record<string, string> = {
+  lowest_cost: 'The user\'s top priority is LOWEST UPFRONT COST. The budget tier should be the strongest recommendation. Keep all three options lean on price.',
+  energy_savings: 'The user\'s top priority is LOWEST ENERGY BILLS. Lead with Energy Star certified models and include estimated annual kWh savings vs. a baseline model in the "whyThisForYou" reasoning.',
+  quiet_operation: 'The user\'s top priority is QUIET OPERATION. Lead with the noise level (dBA) spec for every recommendation. The budget tier should still be reasonably quiet; the premium tier should be the quietest available.',
+  long_term_reliability: 'The user\'s top priority is LONG-TERM RELIABILITY. Favor brands with strong reliability records and longer warranties. Call out the reliability reputation in the "whyThisForYou" field.',
+  fast_availability: 'The user\'s top priority is FAST AVAILABILITY. Favor models commonly stocked at major US retailers (Home Depot, Lowe\'s, Best Buy, Costco). Note typical stock status in the "whyThisForYou" field.',
+};
+
+const TENURE_INSTRUCTIONS: Record<string, string> = {
+  under_3: 'IMPORTANT: The homeowner plans to stay LESS THAN 3 YEARS. Do not recommend premium models unless the payback period is under 2 years. Prioritize lower upfront cost and avoid over-investing in energy efficiency.',
+  '3_to_7': 'The homeowner plans to stay 3–7 YEARS. Balance upfront cost with moderate efficiency and reliability gains. Mid-range is likely the sweet spot.',
+  '7_plus': 'The homeowner plans to stay 7+ YEARS. Efficiency premiums are fully justified. Prioritize long-term reliability, Energy Star ratings, and strong warranties. Mention approximate payback periods where relevant.',
+};
+
 export const MODEL_SHORTLIST_PROMPT_TEMPLATE = (params: {
   assetName: string;
   assetCategory: string;
@@ -122,40 +136,49 @@ export const MODEL_SHORTLIST_PROMPT_TEMPLATE = (params: {
   rebateAmount: number;
   city: string;
   state: string;
+  primaryPriority?: string;
+  homeOwnershipYears?: string;
+  mustHaves?: string[];
   journeyContext?: string;
 }): string => {
-  const { assetName, assetCategory, budgetMin, budgetMax, rebateAmount, city, state, journeyContext } = params;
-  const rebateNote = rebateAmount > 0 ? `\nA $${rebateAmount} rebate or incentive may apply — factor this into value reasoning.` : '';
-  const contextNote = journeyContext ? `\nAdditional context: ${journeyContext}` : '';
-  const specInstructions = getModelSpecInstructions(assetCategory);
-  return `You are a home appliance expert helping a homeowner in ${city}${state ? `, ${state}` : ''} choose a replacement ${assetName}.
+  const { assetName, assetCategory, budgetMin, budgetMax, rebateAmount, city, state, primaryPriority, homeOwnershipYears, mustHaves, journeyContext } = params;
 
-Budget: $${budgetMin.toLocaleString()} – $${budgetMax.toLocaleString()}${rebateNote}${contextNote}
-
-Recommend exactly 3 real models from brands available in the US market:
-- tier "budget": lowest upfront cost, reliable, within the lower budget range
-- tier "mid": best balance of price, efficiency, and features
-- tier "premium": best long-term specs, energy savings, and longevity
-
-${specInstructions}
-
-Return ONLY a valid JSON array — no markdown, no code blocks:
-[
-  {
-    "brand": "Exact Brand Name",
-    "modelNumber": "Exact Model Number",
-    "displayName": "Brand Series Name (e.g. Bosch 300 Series Dishwasher)",
-    "tier": "budget",
-    "estimatedPrice": 799,
-    "keySpecs": { "Spec Name": "Spec Value" },
-    "whyThisForYou": "One sentence specific to their situation and budget",
-    "energyStarCertified": true,
-    "warrantyYears": 1,
-    "specConfidence": "estimated"
-  }
-]
-
-Rules: tier must be exactly "budget", "mid", or "premium". estimatedPrice must be a number within budget range. keySpecs must have exactly 5 entries. warrantyYears must be a number. specConfidence must always be "estimated". Use different brands across the 3 tiers when possible.`;
+  const lines: string[] = [];
+  lines.push(`You are a home appliance expert helping a homeowner in ${city}${state ? `, ${state}` : ''} choose a replacement ${assetName}.`);
+  lines.push('');
+  lines.push(`Budget: $${budgetMin.toLocaleString()} – $${budgetMax.toLocaleString()}`);
+  if (rebateAmount > 0) lines.push(`A $${rebateAmount} rebate or incentive may apply — factor this into value reasoning.`);
+  if (primaryPriority && PRIORITY_INSTRUCTIONS[primaryPriority]) lines.push(`\n${PRIORITY_INSTRUCTIONS[primaryPriority]}`);
+  if (homeOwnershipYears && TENURE_INSTRUCTIONS[homeOwnershipYears]) lines.push(`\n${TENURE_INSTRUCTIONS[homeOwnershipYears]}`);
+  if (mustHaves && mustHaves.includes('energy_star')) lines.push('\nREQUIREMENT: ALL recommendations MUST be Energy Star certified. Do not suggest any model that lacks Energy Star certification.');
+  if (mustHaves && mustHaves.includes('smart_home')) lines.push('\nREQUIREMENT: ALL recommendations should support WiFi or smart home integration.');
+  if (journeyContext) lines.push(`\nAdditional context: ${journeyContext}`);
+  lines.push('');
+  lines.push('Recommend exactly 3 real models from brands available in the US market:');
+  lines.push('- tier "budget": lowest upfront cost, reliable, within the lower budget range');
+  lines.push('- tier "mid": best balance of price, efficiency, and features');
+  lines.push('- tier "premium": best long-term specs, energy savings, and longevity');
+  lines.push('');
+  lines.push(getModelSpecInstructions(assetCategory));
+  lines.push('');
+  lines.push('Return ONLY a valid JSON array — no markdown, no code blocks:');
+  lines.push('[');
+  lines.push('  {');
+  lines.push('    "brand": "Exact Brand Name",');
+  lines.push('    "modelNumber": "Exact Model Number",');
+  lines.push('    "displayName": "Brand Series Name (e.g. Bosch 300 Series Dishwasher)",');
+  lines.push('    "tier": "budget",');
+  lines.push('    "estimatedPrice": 799,');
+  lines.push('    "keySpecs": { "Spec Name": "Spec Value" },');
+  lines.push('    "whyThisForYou": "One sentence specific to their priorities, tenure, and budget",');
+  lines.push('    "energyStarCertified": true,');
+  lines.push('    "warrantyYears": 1,');
+  lines.push('    "specConfidence": "estimated"');
+  lines.push('  }');
+  lines.push(']');
+  lines.push('');
+  lines.push('Rules: tier must be exactly "budget", "mid", or "premium". estimatedPrice must be a number within budget range. keySpecs must have exactly 5 entries. warrantyYears must be a number. specConfidence must always be "estimated". Use different brands across the 3 tiers when possible.');
+  return lines.join('\n');
 };
 
 

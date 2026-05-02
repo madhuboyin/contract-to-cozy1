@@ -445,11 +445,14 @@ export async function generateGuidanceModelShortlist(req: CustomRequest, res: Re
   try {
     requireUserId(req);
     const propertyId = req.params.propertyId;
-    const { assetName, budgetMin, budgetMax, rebateAmount, journeyContext } = req.body as {
+    const { assetName, budgetMin, budgetMax, rebateAmount, primaryPriority, homeOwnershipYears, mustHaves, journeyContext } = req.body as {
       assetName: string;
       budgetMin?: number;
       budgetMax?: number;
       rebateAmount?: number;
+      primaryPriority?: string;
+      homeOwnershipYears?: string;
+      mustHaves?: string[];
       journeyContext?: string;
     };
 
@@ -459,6 +462,9 @@ export async function generateGuidanceModelShortlist(req: CustomRequest, res: Re
       budgetMin,
       budgetMax,
       rebateAmount,
+      primaryPriority,
+      homeOwnershipYears,
+      mustHaves,
       journeyContext,
     });
 

@@ -54,6 +54,8 @@ import { PriceCheckInline } from '@/components/guidance/PriceCheckInline';
 import { PriceFinalizationInline } from '@/components/guidance/PriceFinalizationInline';
 import { RecallCheckInline } from '@/components/guidance/RecallCheckInline';
 import { ReplacementJourneyInline } from '@/components/guidance/ReplacementJourneyInline';
+import { ReplacementPrioritiesCapture } from '@/components/guidance/ReplacementPrioritiesCapture';
+import type { ReplacementPriorities } from '@/lib/api/guidanceApi';
 import { getProviderCategoryForSystemType } from '@/lib/config/serviceCategoryMapping';
 import { getGuidanceItemVisual } from '@/components/guidance/guidanceItemVisual';
 import { cn } from '@/lib/utils';
@@ -954,6 +956,27 @@ export default function GuidanceOverviewClient() {
       );
     }
 
+    if (step.toolKey === 'replacement-priorities-capture' && activePrimaryAction) {
+      const displayAssetName =
+        resolvedJourney?.inventoryItem?.name?.trim() ||
+        selectedAssetOption?.assetName ||
+        'this item';
+      return (
+        <ReplacementPrioritiesCapture
+          propertyId={propertyId}
+          journeyId={activePrimaryAction.journeyId}
+          stepId={step.id}
+          stepKey={step.stepKey}
+          toolKey={step.toolKey}
+          assetName={displayAssetName}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+            queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+          }}
+        />
+      );
+    }
+
     if (
       (
         step.toolKey === 'replacement-model-comparison' ||
@@ -968,6 +991,13 @@ export default function GuidanceOverviewClient() {
         resolvedJourney?.inventoryItem?.name?.trim() ||
         selectedAssetOption?.assetName ||
         'this item';
+
+      // Extract priorities from the completed set_replacement_priorities step
+      const prioritiesStep = activeJourneySteps.find((s) => s.stepKey === 'set_replacement_priorities');
+      const savedPriorities = prioritiesStep?.producedData as ReplacementPriorities | null | undefined;
+      const priorities: ReplacementPriorities | undefined =
+        savedPriorities && !savedPriorities.skipped ? savedPriorities : undefined;
+
       return (
         <ReplacementJourneyInline
           propertyId={propertyId}
@@ -978,6 +1008,7 @@ export default function GuidanceOverviewClient() {
           assetName={displayAssetName}
           issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
           producedData={step.producedData}
+          priorities={priorities}
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });

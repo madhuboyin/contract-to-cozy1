@@ -5,7 +5,7 @@ import { CheckCircle2, PackageCheck, ShoppingCart, Wallet, CalendarDays, Zap, St
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ScenarioInputCard, StatusChip } from '@/components/mobile/dashboard/MobilePrimitives';
-import { recordGuidanceToolStatus, generateModelShortlist, type AIModelRecommendation } from '@/lib/api/guidanceApi';
+import { recordGuidanceToolStatus, generateModelShortlist, type AIModelRecommendation, type ReplacementPriorities } from '@/lib/api/guidanceApi';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatIssueTypeLabel } from '@/features/guidance/utils/guidanceDisplay';
 
@@ -19,6 +19,7 @@ type ReplacementJourneyInlineProps = {
   issueType?: string | null;
   producedData?: Record<string, unknown> | null;
   rebateAmount?: number;
+  priorities?: ReplacementPriorities;
   onComplete: () => void;
 };
 
@@ -50,8 +51,13 @@ function storageKey(args: { propertyId: string; journeyId: string; stepKey: stri
   return ['replacement-journey-inline', args.propertyId, args.journeyId, args.stepKey].join(':');
 }
 
-function aiShortlistCacheKey(args: { propertyId: string; journeyId: string }) {
-  return ['replacement-ai-shortlist', args.propertyId, args.journeyId].join(':');
+function aiShortlistCacheKey(args: { propertyId: string; journeyId: string; priorities?: ReplacementPriorities }) {
+  const prioritySlug = [
+    args.priorities?.primaryPriority ?? 'default',
+    args.priorities?.homeOwnershipYears ?? 'any',
+    args.priorities?.budgetMax?.toString() ?? '0',
+  ].join('-');
+  return ['replacement-ai-shortlist', args.propertyId, args.journeyId, prioritySlug].join(':');
 }
 
 function buildTitle(stepKey: string) {
@@ -203,12 +209,17 @@ export function ReplacementJourneyInline({
   issueType,
   producedData,
   rebateAmount = 0,
+  priorities,
   onComplete,
 }: ReplacementJourneyInlineProps) {
   const queryClient = useQueryClient();
   const issueLabel = formatIssueTypeLabel(issueType);
   const draftKey = React.useMemo(() => storageKey({ propertyId, journeyId, stepKey }), [propertyId, journeyId, stepKey]);
-  const shortlistCacheKey = React.useMemo(() => aiShortlistCacheKey({ propertyId, journeyId }), [propertyId, journeyId]);
+  const shortlistCacheKey = React.useMemo(
+    () => aiShortlistCacheKey({ propertyId, journeyId, priorities }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [propertyId, journeyId, priorities?.primaryPriority, priorities?.homeOwnershipYears, priorities?.budgetMax]
+  );
 
   // AI shortlist state (only used for compare_replacement_models)
   const [aiModels, setAiModels] = React.useState<AIModelRecommendation[] | null>(null);
@@ -314,6 +325,10 @@ export function ReplacementJourneyInline({
     generateModelShortlist(propertyId, {
       assetName,
       rebateAmount: rebateAmount > 0 ? rebateAmount : undefined,
+      budgetMax: priorities?.budgetMax,
+      primaryPriority: priorities?.primaryPriority,
+      homeOwnershipYears: priorities?.homeOwnershipYears,
+      mustHaves: priorities?.mustHaves,
     })
       .then((result) => {
         setAiModels(result.models);
@@ -326,7 +341,7 @@ export function ReplacementJourneyInline({
       })
       .finally(() => setAiLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepKey, propertyId, assetName, shortlistCacheKey]);
+  }, [stepKey, propertyId, assetName, shortlistCacheKey, priorities?.primaryPriority, priorities?.homeOwnershipYears, priorities?.budgetMax]);
 
   const activeModels = models.filter((entry) => entry.name.trim());
   const activeVendors = vendors.filter((entry) => entry.vendor.trim());
@@ -488,7 +503,44 @@ export function ReplacementJourneyInline({
 
         {stepKey === 'compare_replacement_models' && (
           <div className="space-y-3">
-            {/* Context strip */}
+            {/* Priorities context strip */}
+            {priorities && (priorities.primaryPriority || priorities.homeOwnershipYears || priorities.budgetMax) && (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="text-xs font-medium text-slate-500">Tailored for:</span>
+                {priorities.budgetMax && (
+                  <span className="rounded-full bg-white border border-black/10 px-2.5 py-0.5 text-xs text-slate-700">
+                    Budget ≤ ${priorities.budgetMax.toLocaleString()}
+                  </span>
+                )}
+                {priorities.primaryPriority && (
+                  <span className="rounded-full bg-white border border-black/10 px-2.5 py-0.5 text-xs text-slate-700">
+                    {{
+                      lowest_cost: 'Lowest cost',
+                      energy_savings: 'Energy savings',
+                      quiet_operation: 'Quiet operation',
+                      long_term_reliability: 'Best reliability',
+                      fast_availability: 'Fast availability',
+                    }[priorities.primaryPriority]}
+                  </span>
+                )}
+                {priorities.homeOwnershipYears && (
+                  <span className="rounded-full bg-white border border-black/10 px-2.5 py-0.5 text-xs text-slate-700">
+                    {{
+                      under_3: 'Staying < 3 yrs',
+                      '3_to_7': 'Staying 3–7 yrs',
+                      '7_plus': 'Staying 7+ yrs',
+                    }[priorities.homeOwnershipYears]}
+                  </span>
+                )}
+                {priorities.mustHaves?.includes('energy_star') && (
+                  <span className="rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-xs text-emerald-800">
+                    Energy Star required
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Rebate context strip */}
             {rebateAmount > 0 && (
               <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                 <Star className="h-4 w-4 shrink-0 text-emerald-600" />
