@@ -10,6 +10,7 @@ import {
   changeGuidanceJourneyIssue,
   completeGuidanceStep,
   dismissGuidanceJourney,
+  generateGuidanceModelShortlist,
   getAssetResolutionContext,
   getGuidanceExecutionGuard,
   getGuidanceIssueTypes,
@@ -146,6 +147,14 @@ const changeIssueBodySchema = z.object({
   issueType: z.string().trim().min(1).max(120),
 });
 
+const modelShortlistBodySchema = z.object({
+  assetName: z.string().trim().min(1).max(200),
+  budgetMin: z.number().positive().optional(),
+  budgetMax: z.number().positive().optional(),
+  rebateAmount: z.number().min(0).optional(),
+  journeyContext: z.string().trim().max(500).optional(),
+});
+
 const issueTypesQuerySchema = z.object({
   params: z.object({ propertyId: z.string().uuid() }),
   query: z.object({ scopeCategory: z.enum(['ITEM', 'SERVICE']).optional() }),
@@ -258,6 +267,14 @@ router.post(
   propertyAuthMiddleware,
   validateBody(branchRepairReplaceBodySchema),
   branchGuidanceRepairReplace
+);
+
+router.post(
+  '/properties/:propertyId/guidance/model-shortlist',
+  validate(propertyParamsSchema),
+  propertyAuthMiddleware,
+  validateBody(modelShortlistBodySchema),
+  generateGuidanceModelShortlist
 );
 
 router.post(

@@ -610,3 +610,44 @@ export async function getAssetResolutionContext(
   );
   return res.data;
 }
+
+// ---------------------------------------------------------------------------
+// AI-generated model shortlist for replacement journeys
+// ---------------------------------------------------------------------------
+
+export type AIModelRecommendation = {
+  brand: string;
+  modelNumber: string;
+  displayName: string;
+  tier: 'budget' | 'mid' | 'premium';
+  estimatedPrice: number;
+  rebateAdjustedPrice: number | null;
+  keySpecs: Record<string, string>;
+  whyThisForYou: string;
+  energyStarCertified: boolean;
+  warrantyYears: number;
+  specConfidence: 'estimated';
+};
+
+export type ModelShortlistResult = {
+  models: AIModelRecommendation[];
+  assetCategory: string;
+  generatedAt: string;
+};
+
+export async function generateModelShortlist(
+  propertyId: string,
+  params: {
+    assetName: string;
+    budgetMin?: number;
+    budgetMax?: number;
+    rebateAmount?: number;
+    journeyContext?: string;
+  }
+): Promise<ModelShortlistResult> {
+  const res = await api.post<ModelShortlistResult>(
+    `/api/properties/${propertyId}/guidance/model-shortlist`,
+    params
+  );
+  return res.data;
+}

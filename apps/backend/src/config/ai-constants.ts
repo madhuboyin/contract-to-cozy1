@@ -99,6 +99,66 @@ Provide recommendations in this EXACT JSON format (no markdown, no code blocks):
 Focus on reliable brands, energy efficiency, and value. Include budget, mid-range, and premium options.`;
 
 
+// Model shortlist prompt template (ModelShortlistAdvisorService.generateShortlist)
+function getModelSpecInstructions(assetCategory: string): string {
+  const instructions: Record<string, string> = {
+    dishwasher: `For keySpecs include exactly these 5 keys: "Noise Level" (e.g. "44 dBA"), "Energy Use" (e.g. "270 kWh/yr"), "Capacity" (e.g. "16 place settings"), "Wash Programs" (e.g. "8 cycles"), "Dry Technology" (e.g. "CrystalDry" or "Heated dry").`,
+    refrigerator: `For keySpecs include exactly these 5 keys: "Total Capacity" (e.g. "26.8 cu ft"), "Annual Energy" (e.g. "640 kWh/yr"), "Noise Level" (e.g. "38 dB"), "Compressor" (e.g. "Linear Inverter"), "Ice & Water" (e.g. "In-door ice maker").`,
+    washer: `For keySpecs include exactly these 5 keys: "Drum Capacity" (e.g. "4.5 cu ft"), "Energy Use" (e.g. "0.19 kWh/cycle"), "Water Use" (e.g. "14 gal/cycle"), "Max Spin Speed" (e.g. "1,400 RPM"), "Noise" (e.g. "47 dB").`,
+    dryer: `For keySpecs include exactly these 5 keys: "Drum Capacity" (e.g. "7.4 cu ft"), "Energy Use" (e.g. "4.3 kWh/cycle"), "Sensor Dry" (e.g. "Moisture sensor"), "Programs" (e.g. "12 drying programs"), "Noise" (e.g. "50 dB").`,
+    water_heater: `For keySpecs include exactly these 5 keys: "First Hour Rating" (e.g. "67 gal"), "UEF Rating" (e.g. "0.93"), "Recovery Rate" (e.g. "38 gal/hr"), "Type" (e.g. "50-gal tank" or "Tankless"), "Warranty" (e.g. "6-yr tank, 1-yr parts").`,
+    hvac: `For keySpecs include exactly these 5 keys: "SEER2 Rating" (e.g. "18 SEER2"), "BTU Capacity" (e.g. "36,000 BTU / 3 ton"), "Stages" (e.g. "Two-stage"), "Noise" (e.g. "72 dB outdoor"), "Annual kWh" (e.g. "~2,100 kWh/yr").`,
+    furnace: `For keySpecs include exactly these 5 keys: "AFUE Rating" (e.g. "96% AFUE"), "BTU Output" (e.g. "80,000 BTU"), "Stages" (e.g. "Two-stage modulating"), "Noise" (e.g. "55 dB"), "Warranty" (e.g. "20-yr heat exchanger").`,
+    ac: `For keySpecs include exactly these 5 keys: "SEER2 Rating" (e.g. "16 SEER2"), "BTU Capacity" (e.g. "24,000 BTU / 2 ton"), "Stages" (e.g. "Single-stage"), "Noise" (e.g. "74 dB outdoor"), "Annual kWh" (e.g. "~1,400 kWh/yr").`,
+  };
+  return instructions[assetCategory] ?? `For keySpecs include exactly these 5 keys relevant to this appliance: "Energy Rating", "Noise Level", "Primary Feature", "Warranty", "Capacity or Output".`;
+}
+
+export const MODEL_SHORTLIST_PROMPT_TEMPLATE = (params: {
+  assetName: string;
+  assetCategory: string;
+  budgetMin: number;
+  budgetMax: number;
+  rebateAmount: number;
+  city: string;
+  state: string;
+  journeyContext?: string;
+}): string => {
+  const { assetName, assetCategory, budgetMin, budgetMax, rebateAmount, city, state, journeyContext } = params;
+  const rebateNote = rebateAmount > 0 ? `\nA $${rebateAmount} rebate or incentive may apply — factor this into value reasoning.` : '';
+  const contextNote = journeyContext ? `\nAdditional context: ${journeyContext}` : '';
+  const specInstructions = getModelSpecInstructions(assetCategory);
+  return `You are a home appliance expert helping a homeowner in ${city}${state ? `, ${state}` : ''} choose a replacement ${assetName}.
+
+Budget: $${budgetMin.toLocaleString()} – $${budgetMax.toLocaleString()}${rebateNote}${contextNote}
+
+Recommend exactly 3 real models from brands available in the US market:
+- tier "budget": lowest upfront cost, reliable, within the lower budget range
+- tier "mid": best balance of price, efficiency, and features
+- tier "premium": best long-term specs, energy savings, and longevity
+
+${specInstructions}
+
+Return ONLY a valid JSON array — no markdown, no code blocks:
+[
+  {
+    "brand": "Exact Brand Name",
+    "modelNumber": "Exact Model Number",
+    "displayName": "Brand Series Name (e.g. Bosch 300 Series Dishwasher)",
+    "tier": "budget",
+    "estimatedPrice": 799,
+    "keySpecs": { "Spec Name": "Spec Value" },
+    "whyThisForYou": "One sentence specific to their situation and budget",
+    "energyStarCertified": true,
+    "warrantyYears": 1,
+    "specConfidence": "estimated"
+  }
+]
+
+Rules: tier must be exactly "budget", "mid", or "premium". estimatedPrice must be a number within budget range. keySpecs must have exactly 5 entries. warrantyYears must be a number. specConfidence must always be "estimated". Use different brands across the 3 tiers when possible.`;
+};
+
+
 // Budget Forecaster recommendation prompt template (BudgetForecasterService.getAIRecommendations)
 export const BUDGET_RECOMMENDATION_PROMPT_TEMPLATE = (property: any, totalAnnual: number, propertyAge: number) => `Analyze this property's maintenance budget and provide 5 actionable recommendations:
 

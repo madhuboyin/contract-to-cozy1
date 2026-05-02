@@ -1,11 +1,11 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle2, PackageCheck, ShoppingCart, Wallet, CalendarDays } from 'lucide-react';
+import { CheckCircle2, PackageCheck, ShoppingCart, Wallet, CalendarDays, Zap, Star, BadgeCheck } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ScenarioInputCard, StatusChip } from '@/components/mobile/dashboard/MobilePrimitives';
-import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import { recordGuidanceToolStatus, generateModelShortlist, type AIModelRecommendation } from '@/lib/api/guidanceApi';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatIssueTypeLabel } from '@/features/guidance/utils/guidanceDisplay';
 
@@ -18,18 +18,12 @@ type ReplacementJourneyInlineProps = {
   assetName?: string;
   issueType?: string | null;
   producedData?: Record<string, unknown> | null;
+  rebateAmount?: number;
   onComplete: () => void;
 };
 
 type ModelEntry = { name: string; price: string; reason: string };
 type VendorEntry = { vendor: string; price: string; warranty: string; timeline: string };
-type SuggestedModel = {
-  id: string;
-  label: string;
-  estimatedPrice: number;
-  fit: string;
-  specs: string[];
-};
 
 const DEFAULT_MODELS: ModelEntry[] = [
   { name: '', price: '', reason: '' },
@@ -56,6 +50,10 @@ function storageKey(args: { propertyId: string; journeyId: string; stepKey: stri
   return ['replacement-journey-inline', args.propertyId, args.journeyId, args.stepKey].join(':');
 }
 
+function aiShortlistCacheKey(args: { propertyId: string; journeyId: string }) {
+  return ['replacement-ai-shortlist', args.propertyId, args.journeyId].join(':');
+}
+
 function buildTitle(stepKey: string) {
   if (stepKey === 'compare_replacement_models') return 'Compare Models and Specs';
   if (stepKey === 'compare_purchase_options') return 'Compare Purchase Options';
@@ -67,7 +65,7 @@ function buildTitle(stepKey: string) {
 function buildSubtitle(stepKey: string, assetName: string, issueLabel: string | null) {
   const context = issueLabel ? `${assetName} · ${issueLabel}` : assetName;
   if (stepKey === 'compare_replacement_models') {
-    return `Shortlist the replacement models that best fit ${context}.`;
+    return `AI-recommended replacements for ${context}. Select the model that fits your situation.`;
   }
   if (stepKey === 'compare_purchase_options') {
     return `Compare seller and purchase options before you commit for ${context}.`;
@@ -81,93 +79,118 @@ function buildSubtitle(stepKey: string, assetName: string, issueLabel: string | 
   return `Save the follow-up plan for ${context}.`;
 }
 
-function inferReplacementFamily(assetName: string): {
-  noun: string;
-  priceBand: [number, number, number];
-  specsByTier: string[][];
-} {
-  const normalized = assetName.toLowerCase();
-  if (normalized.includes('dishwasher')) {
-    return {
-      noun: 'dishwasher',
-      priceBand: [700, 1000, 1400],
-      specsByTier: [
-        ['Standard capacity', 'Basic drying', 'Entry energy efficiency'],
-        ['Quiet cycle', 'Better drying', 'Stronger energy efficiency'],
-        ['Very quiet', 'Flexible racks', 'Best efficiency + warranty'],
-      ],
-    };
-  }
-  if (normalized.includes('refrigerator') || normalized.includes('fridge')) {
-    return {
-      noun: 'refrigerator',
-      priceBand: [1200, 1800, 2600],
-      specsByTier: [
-        ['Reliable cooling', 'Standard storage', 'Entry efficiency'],
-        ['Better organization', 'Stronger efficiency', 'Lower noise'],
-        ['Premium storage', 'Best efficiency', 'Longest warranty'],
-      ],
-    };
-  }
-  if (normalized.includes('washer') || normalized.includes('dryer')) {
-    return {
-      noun: normalized.includes('dryer') ? 'dryer' : 'washer',
-      priceBand: [800, 1100, 1500],
-      specsByTier: [
-        ['Core cycles', 'Standard capacity', 'Entry efficiency'],
-        ['Quieter operation', 'Better fabric care', 'Improved efficiency'],
-        ['Largest capacity', 'Smart controls', 'Best efficiency + warranty'],
-      ],
-    };
-  }
-  if (normalized.includes('water heater')) {
-    return {
-      noun: 'water heater',
-      priceBand: [1200, 2200, 3200],
-      specsByTier: [
-        ['Like-for-like replacement', 'Standard recovery', 'Lower upfront cost'],
-        ['Higher efficiency', 'Improved warranty', 'Balanced operating cost'],
-        ['Heat-pump or premium tier', 'Best efficiency', 'Highest long-term savings'],
-      ],
-    };
-  }
-  if (normalized.includes('hvac') || normalized.includes('furnace') || normalized.includes('ac')) {
-    return {
-      noun: 'HVAC system',
-      priceBand: [6500, 9000, 13000],
-      specsByTier: [
-        ['Reliable replacement', 'Entry efficiency tier', 'Lower upfront cost'],
-        ['Balanced efficiency', 'Quieter operation', 'Better warranty'],
-        ['High-efficiency tier', 'Variable performance', 'Best comfort + savings'],
-      ],
-    };
-  }
-  return {
-    noun: assetName.toLowerCase(),
-    priceBand: [900, 1400, 2200],
-    specsByTier: [
-      ['Reliable core performance', 'Lower upfront cost', 'Standard warranty'],
-      ['Better efficiency', 'Balanced feature set', 'Improved warranty'],
-      ['Best efficiency', 'Premium features', 'Longest warranty coverage'],
-    ],
-  };
+const TIER_LABELS: Record<string, string> = {
+  budget: 'Budget-friendly',
+  mid: 'Best balance',
+  premium: 'Premium pick',
+};
+
+function ModelCardSkeleton() {
+  return (
+    <div className="animate-pulse rounded-2xl border border-black/10 bg-white p-4 space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="h-3 w-16 rounded bg-slate-200" />
+          <div className="h-4 w-36 rounded bg-slate-200" />
+          <div className="h-3 w-28 rounded bg-slate-100" />
+        </div>
+        <div className="h-6 w-20 rounded-full bg-slate-200" />
+      </div>
+      <div className="h-3 w-52 rounded bg-slate-100" />
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex justify-between gap-2">
+            <div className="h-2.5 w-16 rounded bg-slate-100" />
+            <div className="h-2.5 w-12 rounded bg-slate-200" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function buildSuggestedModels(assetName: string): SuggestedModel[] {
-  const family = inferReplacementFamily(assetName);
-  const tiers = ['Good fit', 'Better fit', 'Best long-term fit'] as const;
-  return family.priceBand.map((price, index) => ({
-    id: `suggested-model-${index + 1}`,
-    label: `${tiers[index]} ${family.noun}`,
-    estimatedPrice: price,
-    fit:
-      index === 0
-        ? 'Best if you want the lowest upfront replacement cost.'
-        : index === 1
-          ? 'Best balance of price, efficiency, and day-to-day comfort.'
-          : 'Best if you plan to stay longer and want the strongest long-term value.',
-    specs: family.specsByTier[index] ?? [],
-  }));
+function AIModelCard({
+  model,
+  isSelected,
+  onSelect,
+}: {
+  model: AIModelRecommendation;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full rounded-2xl border p-4 text-left transition-all ${
+        isSelected
+          ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300'
+          : 'border-black/10 bg-white hover:border-emerald-200 hover:bg-emerald-50/40'
+      }`}
+    >
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{model.brand}</p>
+          <p className="text-base font-bold text-slate-900">{model.modelNumber}</p>
+          <p className="text-sm text-slate-500">{model.displayName}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-base font-semibold text-slate-900">{formatCurrency(model.estimatedPrice)}</p>
+          {model.rebateAdjustedPrice !== null && (
+            <p className="text-xs font-medium text-emerald-700">
+              {formatCurrency(model.rebateAdjustedPrice)} after rebate
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Tier badge */}
+      <div className="mt-2">
+        <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+          model.tier === 'budget'
+            ? 'bg-blue-100 text-blue-800'
+            : model.tier === 'mid'
+              ? 'bg-emerald-100 text-emerald-800'
+              : 'bg-amber-100 text-amber-800'
+        }`}>
+          {TIER_LABELS[model.tier] ?? model.tier}
+        </span>
+      </div>
+
+      {/* Why this for you */}
+      <p className="mt-2 text-sm text-slate-600 italic">{model.whyThisForYou}</p>
+
+      {/* Specs grid */}
+      {Object.keys(model.keySpecs).length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 rounded-xl bg-slate-50 p-3">
+          {Object.entries(model.keySpecs).map(([key, value]) => (
+            <div key={key} className="flex items-center justify-between gap-1 text-xs">
+              <span className="text-slate-500 shrink-0">{key}</span>
+              <span className="font-medium text-slate-800 text-right">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Badges row */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {model.energyStarCertified && (
+          <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
+            <Zap className="h-3 w-3" />
+            Energy Star
+          </span>
+        )}
+        <span className="flex items-center gap-1 rounded-full border border-black/10 bg-slate-50 px-2.5 py-1 text-xs text-slate-600">
+          <BadgeCheck className="h-3 w-3 text-slate-400" />
+          {model.warrantyYears}yr warranty
+        </span>
+        <span className="rounded-full border border-black/10 bg-slate-50 px-2.5 py-1 text-xs text-slate-400">
+          AI estimated · verify specs before purchase
+        </span>
+      </div>
+    </button>
+  );
 }
 
 export function ReplacementJourneyInline({
@@ -179,12 +202,18 @@ export function ReplacementJourneyInline({
   assetName = 'this item',
   issueType,
   producedData,
+  rebateAmount = 0,
   onComplete,
 }: ReplacementJourneyInlineProps) {
   const queryClient = useQueryClient();
   const issueLabel = formatIssueTypeLabel(issueType);
   const draftKey = React.useMemo(() => storageKey({ propertyId, journeyId, stepKey }), [propertyId, journeyId, stepKey]);
-  const suggestedModels = React.useMemo(() => buildSuggestedModels(assetName), [assetName]);
+  const shortlistCacheKey = React.useMemo(() => aiShortlistCacheKey({ propertyId, journeyId }), [propertyId, journeyId]);
+
+  // AI shortlist state (only used for compare_replacement_models)
+  const [aiModels, setAiModels] = React.useState<AIModelRecommendation[] | null>(null);
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiError, setAiError] = React.useState<string | null>(null);
 
   const [completed, setCompleted] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -260,6 +289,45 @@ export function ReplacementJourneyInline({
     );
   }, [budget, draftKey, followUpDate, models, notes, selectedModel, selectedVendor, timeline, vendors]);
 
+  // Fetch AI-generated model shortlist for compare_replacement_models step
+  React.useEffect(() => {
+    if (stepKey !== 'compare_replacement_models') return;
+
+    // Use session-cached shortlist if available to avoid re-fetching on re-render
+    if (typeof window !== 'undefined') {
+      const cached = window.sessionStorage.getItem(shortlistCacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as AIModelRecommendation[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAiModels(parsed);
+            return;
+          }
+        } catch {
+          // ignore corrupt cache
+        }
+      }
+    }
+
+    setAiLoading(true);
+    setAiError(null);
+    generateModelShortlist(propertyId, {
+      assetName,
+      rebateAmount: rebateAmount > 0 ? rebateAmount : undefined,
+    })
+      .then((result) => {
+        setAiModels(result.models);
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(shortlistCacheKey, JSON.stringify(result.models));
+        }
+      })
+      .catch(() => {
+        setAiError('Could not load AI recommendations. You can still enter a model manually below.');
+      })
+      .finally(() => setAiLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey, propertyId, assetName, shortlistCacheKey]);
+
   const activeModels = models.filter((entry) => entry.name.trim());
   const activeVendors = vendors.filter((entry) => entry.vendor.trim());
 
@@ -273,16 +341,25 @@ export function ReplacementJourneyInline({
 
   function buildProducedData() {
     if (stepKey === 'compare_replacement_models') {
+      const selected = aiModels?.find((m) => m.displayName === selectedModel) ?? null;
       return {
         proofType: 'replacement_model_shortlist',
         proofId: `${journeyId}:${stepKey}`,
-        shortlistedModels: suggestedModels.map((entry) => ({
-          name: entry.label,
-          price: entry.estimatedPrice,
-          reason: entry.fit,
-          specs: entry.specs,
+        aiShortlist: aiModels ?? [],
+        shortlistedModels: (aiModels ?? []).map((m) => ({
+          name: m.displayName,
+          brand: m.brand,
+          modelNumber: m.modelNumber,
+          price: m.estimatedPrice,
+          rebateAdjustedPrice: m.rebateAdjustedPrice,
+          reason: m.whyThisForYou,
+          specs: Object.entries(m.keySpecs).map(([k, v]) => `${k}: ${v}`),
+          energyStarCertified: m.energyStarCertified,
+          warrantyYears: m.warrantyYears,
         })),
-        selectedModelName: selectedModel || suggestedModels[0]?.label || null,
+        selectedModelName: selectedModel || null,
+        selectedModelBrand: selected?.brand ?? null,
+        selectedModelNumber: selected?.modelNumber ?? null,
         notes: notes.trim() || null,
       };
     }
@@ -342,7 +419,7 @@ export function ReplacementJourneyInline({
 
   function validateStep(): string | null {
     if (stepKey === 'compare_replacement_models' && !selectedModel.trim()) {
-      return 'Choose one of the suggested replacement options to continue.';
+      return 'Select a model from the recommendations above, or enter one manually to continue.';
     }
     if (stepKey === 'compare_purchase_options' && activeVendors.length === 0) {
       return 'Add at least one purchase option to continue.';
@@ -411,49 +488,66 @@ export function ReplacementJourneyInline({
 
         {stepKey === 'compare_replacement_models' && (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <PackageCheck className="h-4 w-4 text-emerald-600" />
-              We generated a starter shortlist so the user can review options instead of typing model details manually.
-            </div>
-            {suggestedModels.map((entry) => {
-              const isSelected = selectedModel === entry.label;
-              return (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => setSelectedModel(entry.label)}
-                  className={`w-full rounded-2xl border p-4 text-left transition-colors ${
-                    isSelected
-                      ? 'border-emerald-300 bg-emerald-50'
-                      : 'border-black/10 bg-white hover:border-emerald-200 hover:bg-emerald-50/40'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-base font-semibold text-slate-900">{entry.label}</p>
-                      <p className="mt-1 text-sm text-slate-600">{entry.fit}</p>
-                    </div>
-                    <StatusChip tone={isSelected ? 'good' : 'info'}>
-                      {formatCurrency(entry.estimatedPrice)}
-                    </StatusChip>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {entry.specs.map((spec) => (
-                      <span
-                        key={spec}
-                        className="rounded-full border border-black/10 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
-                      >
-                        {spec}
-                      </span>
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
-              <span className="font-medium">Selected option: </span>
-              {selectedModel || 'Pick the shortlist option that feels like the best fit.'}
-            </div>
+            {/* Context strip */}
+            {rebateAmount > 0 && (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                <Star className="h-4 w-4 shrink-0 text-emerald-600" />
+                <span>
+                  <span className="font-semibold">{formatCurrency(rebateAmount)} rebate</span> may apply — reflected in adjusted prices below.
+                </span>
+              </div>
+            )}
+
+            {/* AI loading skeletons */}
+            {aiLoading && (
+              <>
+                <ModelCardSkeleton />
+                <ModelCardSkeleton />
+                <ModelCardSkeleton />
+                <p className="text-center text-xs text-slate-400 animate-pulse">
+                  Researching the best options for your {assetName}…
+                </p>
+              </>
+            )}
+
+            {/* AI error fallback — show manual entry */}
+            {aiError && !aiLoading && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                {aiError}
+              </div>
+            )}
+
+            {/* AI model cards */}
+            {!aiLoading && aiModels && aiModels.map((model) => (
+              <AIModelCard
+                key={model.modelNumber}
+                model={model}
+                isSelected={selectedModel === model.displayName}
+                onSelect={() => setSelectedModel(model.displayName)}
+              />
+            ))}
+
+            {/* Manual override input for when user wants a different model */}
+            {!aiLoading && (aiModels || aiError) && (
+              <div className="pt-1">
+                <label className="block space-y-1 text-sm">
+                  <span className="font-medium text-slate-700">Or enter a different model</span>
+                  <input
+                    value={aiModels?.some((m) => m.displayName === selectedModel) ? '' : selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    placeholder="e.g. Bosch SHPM88Z75N"
+                    className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                  />
+                </label>
+              </div>
+            )}
+
+            {/* Selected summary */}
+            {selectedModel && (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
+                <span className="font-medium">Selected: </span>{selectedModel}
+              </div>
+            )}
           </div>
         )}
 

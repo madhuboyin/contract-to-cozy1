@@ -16,6 +16,7 @@ import {
   mapGuidanceEvidence,
 } from '../services/guidanceEngine/guidanceMapper';
 import { APIError } from '../middleware/error.middleware';
+import { modelShortlistAdvisorService } from '../services/guidanceEngine/modelShortlistAdvisor.service';
 
 const GUIDANCE_TARGET_ACTIONS = new Set([
   'BOOKING',
@@ -435,6 +436,33 @@ export async function getGuidanceSymptomTypes(req: CustomRequest, res: Response,
       success: true,
       data: { category: category ?? 'DEFAULT', symptomTypes },
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function generateGuidanceModelShortlist(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    requireUserId(req);
+    const propertyId = req.params.propertyId;
+    const { assetName, budgetMin, budgetMax, rebateAmount, journeyContext } = req.body as {
+      assetName: string;
+      budgetMin?: number;
+      budgetMax?: number;
+      rebateAmount?: number;
+      journeyContext?: string;
+    };
+
+    const result = await modelShortlistAdvisorService.generateShortlist({
+      propertyId,
+      assetName,
+      budgetMin,
+      budgetMax,
+      rebateAmount,
+      journeyContext,
+    });
+
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
