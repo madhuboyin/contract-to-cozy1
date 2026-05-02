@@ -80,6 +80,7 @@ export type CoverageAnalysisDTO = {
 
   summary?: string;
   strategicAdvice?: string | null;
+  addOnRecommendations?: any[];
   nextSteps?: Array<{
     title: string;
     detail?: string;
@@ -677,6 +678,7 @@ function mapAnalysisToDto(analysis: LatestAnalysisRecord): CoverageAnalysisDTO {
     impactLevel: analysis.impactLevel ?? undefined,
     summary: analysis.summary ?? undefined,
     strategicAdvice: analysis.strategicAdvice ?? null,
+    addOnRecommendations,
     nextSteps,
     insurance: {
       inputsUsed: insuranceResult.inputsUsed ?? {},

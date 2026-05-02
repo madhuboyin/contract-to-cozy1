@@ -525,6 +525,25 @@ export async function updateInventoryDraft(propertyId: string, draftId: string, 
   const res: any = await api.patch(`/api/properties/${propertyId}/inventory/drafts/${draftId}`, patch);
   return unwrap(res);
 }
+
+export type CoverageGapResult = {
+  inventoryItemId: string;
+  itemName: string;
+  category: string;
+  gapType: 'INSURANCE' | 'WARRANTY';
+  exposureCents: number;
+  reasons: string[];
+};
+
+export async function detectCoverageGaps(propertyId: string) {
+  const res = await api.get<{
+    counts: Record<string, number>;
+    gaps: CoverageGapResult[];
+    waived: any[];
+  }>(`/api/properties/${propertyId}/inventory/coverage-gaps`);
+  return res.data;
+}
+
 export async function listRoomScanSessions(propertyId: string, roomId: string, limit = 12) {
   const res: any = await api.get(
     `/api/properties/${propertyId}/inventory/rooms/${roomId}/scan-ai/sessions`,

@@ -30,7 +30,7 @@ import {
   type CoverageAnalysisDTO 
 } from '@/lib/api/coverageAnalysisApi';
 import { listClaims, type ClaimDTO, getClaimsSummary } from '../claims/claimsApi';
-import { detectCoverageGaps, type CoverageGapResult } from '@/lib/api/inventoryApi'; // Assuming this exists or using existing listInventoryItems
+import { detectCoverageGaps, type CoverageGapResult } from '../../../inventory/inventoryApi'; 
 import { MobilePageContainer, MobileCard, MobileKpiStrip, MobileKpiTile, StatusChip, ActionPriorityRow, ResultHeroCard } from '@/components/mobile/dashboard/MobilePrimitives';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -71,8 +71,8 @@ export default function CoverageOverviewClient() {
   });
 
   const analysis = analysisData?.exists ? analysisData.analysis : null;
-  const activeClaims = (claimsData || []).filter(c => c.status !== 'CLOSED');
-  const gapCount = analysis?.insurance.flags.find(f => f.code === 'INVENTORY_COVERAGE_GAPS')?.label.split(' ')[0] || '0';
+  const activeClaims = (claimsData ?? []).filter((c: ClaimDTO) => c.status !== 'CLOSED');
+  const gapCount = analysis?.insurance?.flags?.find(f => f.code === 'INVENTORY_COVERAGE_GAPS')?.label?.split(' ')[0] || '0';
 
   // 2. Computed State
   const shieldScore = useMemo(() => {
@@ -93,7 +93,7 @@ export default function CoverageOverviewClient() {
     return Math.max(10, Math.min(100, score));
   }, [analysis, gapCount]);
 
-  const shieldTone = shieldScore >= 80 ? 'good' : shieldScore >= 50 ? 'elevated' : 'danger';
+  const shieldTone = shieldScore >= 80 ? 'positive' : shieldScore >= 50 ? 'warning' : 'danger';
 
   // 3. Render Helpers
   if (analysisLoading || claimsLoading) {
@@ -133,7 +133,6 @@ export default function CoverageOverviewClient() {
           label="Shield Score" 
           value={`${shieldScore}%`} 
           tone={shieldTone}
-          icon={shieldScore >= 80 ? ShieldCheck : ShieldAlert}
         />
         <MobileKpiTile 
           label="Active Gaps" 
@@ -143,7 +142,7 @@ export default function CoverageOverviewClient() {
         <MobileKpiTile 
           label="Open Claims" 
           value={claimsSummary?.counts.open || 0} 
-          tone={(claimsSummary?.counts.open || 0) > 0 ? 'info' : 'neutral'} 
+          tone={(claimsSummary?.counts.open || 0) > 0 ? 'warning' : 'neutral'} 
         />
         <MobileKpiTile 
           label="Expected Risk" 
@@ -281,7 +280,7 @@ export default function CoverageOverviewClient() {
               </MobileCard>
             ))}
 
-            {analysis?.addOnRecommendations.slice(0, 2).map((addon, idx) => (
+            {analysis?.addOnRecommendations?.slice(0, 2).map((addon: { label: string; why: string }, idx: number) => (
               <MobileCard key={idx} variant="compact" className="bg-gradient-to-br from-white to-teal-50/20">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 rounded-full bg-teal-50 p-1.5 text-teal-600">

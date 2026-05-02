@@ -52,6 +52,8 @@ export type CoverageAnalysisDTO = {
   preferenceProfileId?: string | null;
 
   summary?: string;
+  strategicAdvice?: string | null;
+  addOnRecommendations?: Array<{ code: string; label: string; why: string }>;
   nextSteps?: Array<{
     title: string;
     detail?: string;
@@ -106,6 +108,8 @@ export type ItemCoverageAnalysisDTO = {
   impactLevel?: CoverageImpactLevel;
 
   summary?: string;
+  strategicAdvice?: string | null;
+  addOnRecommendations?: Array<{ code: string; label: string; why: string }>;
   nextSteps?: Array<{
     title: string;
     detail?: string;
