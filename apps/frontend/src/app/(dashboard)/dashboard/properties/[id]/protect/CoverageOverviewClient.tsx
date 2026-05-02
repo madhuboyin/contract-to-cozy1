@@ -22,8 +22,11 @@ import {
   Activity,
   History,
   TrendingUp,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatDistanceToNow } from 'date-fns';
 
 import { 
   getCoverageAnalysis, 
@@ -149,17 +152,24 @@ export default function CoverageOverviewClient() {
         {/* HEADER */}
         <header className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 lg:text-4xl font-poppins">Home Coverage</h1>
-            <p className="text-slate-500 font-medium">Unified strategic protection dashboard.</p>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 lg:text-4xl font-poppins">Protect</h1>
+            <p className="text-slate-500 font-medium">Track your warranties, insurance, and claims in one place.</p>
           </div>
-          <Button 
-            className="h-11 px-8 rounded-2xl bg-slate-900 font-black text-white hover:bg-slate-800 transition-all active:scale-95 shadow-xl shadow-slate-200"
-            onClick={() => runMutation.mutate()}
-            disabled={runMutation.isPending}
-          >
-            {runMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Refresh Intelligence
-          </Button>
+          <div className="flex flex-col items-start gap-1 lg:items-end">
+            <Button
+              className="h-11 px-8 rounded-2xl bg-slate-900 font-black text-white hover:bg-slate-800 transition-all active:scale-95 shadow-xl shadow-slate-200"
+              onClick={() => runMutation.mutate()}
+              disabled={runMutation.isPending}
+            >
+              {runMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Refresh Intelligence
+            </Button>
+            {analysis?.computedAt && (
+              <p className="text-xs text-slate-400 font-medium">
+                Last analyzed {formatDistanceToNow(new Date(analysis.computedAt), { addSuffix: true })}
+              </p>
+            )}
+          </div>
         </header>
 
         {/* TOP TIER: Bento Grid */}
@@ -246,7 +256,7 @@ export default function CoverageOverviewClient() {
                   <h2 className="text-2xl font-bold font-poppins">Warranty Economics</h2>
                 </div>
                 <p className="text-slate-400 font-medium text-sm leading-relaxed">
-                   Deterministic value analysis derived from your home's unique system profile.
+                  Based on your home's appliance ages and repair history.
                 </p>
               </div>
 
@@ -286,7 +296,7 @@ export default function CoverageOverviewClient() {
 
             <div className="mt-12 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between bg-white/5 rounded-3xl p-6 border border-white/5">
                 <p className="text-xs font-bold text-sky-100 italic">
-                  Analysis indicates a <span className="text-white underline decoration-sky-400">{analysis?.warrantyVerdict || 'POSITIVE'}</span> value outcome.
+                  Analysis indicates a <span className="text-white font-black">{analysis?.warrantyVerdict ?? '—'}</span> value outcome.
                 </p>
                 <Button className="h-11 px-8 rounded-2xl bg-sky-600 font-bold text-white hover:bg-sky-500 shadow-xl shadow-sky-900/40 transition-all active:scale-95" asChild>
                   <Link href={`/dashboard/properties/${propertyId}/tools/coverage-intelligence`}>
@@ -297,7 +307,85 @@ export default function CoverageOverviewClient() {
           </div>
         </Card>
 
-        {/* SECTION 3: Operations */}
+        {/* SECTION 3: What's Covered */}
+        {analysis && (
+          <div className="space-y-4">
+            <h3 className="text-xl font-bold font-poppins flex items-center gap-3">
+              <ShieldCheck className="h-5 w-5 text-teal-600" /> What&apos;s Covered
+            </h3>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* Insurance */}
+              {(() => {
+                const premium = analysis.insurance.inputsUsed.annualPremiumUsd ?? 0;
+                const active = premium > 0;
+                return (
+                  <Card className="p-6 rounded-[28px] border-none bg-white shadow-sm flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0",
+                        active ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"
+                      )}>
+                        <Shield className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Homeowners Insurance</p>
+                        {active ? (
+                          <p className="text-base font-bold text-slate-900">{formatCurrency(premium)} / yr</p>
+                        ) : (
+                          <p className="text-base font-bold text-rose-500">Not Added</p>
+                        )}
+                      </div>
+                    </div>
+                    {active
+                      ? <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
+                      : (
+                        <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all shrink-0" asChild>
+                          <Link href={`/dashboard/properties/${propertyId}/vault`}>Add <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+                        </Button>
+                      )
+                    }
+                  </Card>
+                );
+              })()}
+
+              {/* Home Warranty */}
+              {(() => {
+                const cost = analysis.warranty.inputsUsed.warrantyAnnualCostUsd ?? 0;
+                const active = cost > 0;
+                return (
+                  <Card className="p-6 rounded-[28px] border-none bg-white shadow-sm flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0",
+                        active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                      )}>
+                        <TrendingUp className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Home Warranty</p>
+                        {active ? (
+                          <p className="text-base font-bold text-slate-900">{formatCurrency(cost)} / yr</p>
+                        ) : (
+                          <p className="text-base font-bold text-slate-400">Not Added</p>
+                        )}
+                      </div>
+                    </div>
+                    {active
+                      ? <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
+                      : (
+                        <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all shrink-0" asChild>
+                          <Link href={`/dashboard/properties/${propertyId}/tools/coverage-options`}>Explore <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+                        </Button>
+                      )
+                    }
+                  </Card>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 4: Operations */}
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
           
           {/* Claims */}
