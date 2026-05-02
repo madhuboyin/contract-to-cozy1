@@ -157,6 +157,7 @@ export type GuidanceJourneyDTO = {
     risk: string;
     nextStep: string;
   } | null;
+  strategicAdvice?: string | null;
   nextStepLabel?: string | null;
   inventoryItem?: {
     name: string | null;
@@ -199,6 +200,7 @@ export type GuidanceNextStepResult = {
     risk: string;
     nextStep: string;
   } | null;
+  strategicAdvice?: string | null;
   nextStepLabel?: string | null;
 };
 

@@ -43,6 +43,7 @@ export type GuidanceActionModel = {
     risk: string;
     nextStep: string;
   } | null;
+  strategicAdvice: string | null;
 };
 
 function resolveCurrentStep(journey: GuidanceJourneyDTO, next: GuidanceNextStepResult | null): GuidanceStepDTO | null {
@@ -99,6 +100,7 @@ export function mapGuidanceJourneyToActionModel(args: {
     costOfDelay: args.next?.costOfDelay ?? args.journey.costOfDelay ?? null,
     coverageImpact: args.next?.coverageImpact ?? args.journey.coverageImpact ?? null,
     explanation: args.next?.explanation ?? args.journey.explanation ?? null,
+    strategicAdvice: args.next?.strategicAdvice ?? args.journey.strategicAdvice ?? null,
   };
 }
 

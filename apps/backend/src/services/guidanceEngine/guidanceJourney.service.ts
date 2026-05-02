@@ -9,6 +9,7 @@ import { guidancePriorityService } from './guidancePriority.service';
 import { guidanceSuppressionService } from './guidanceSuppression.service';
 import { guidanceCopyService } from './guidanceCopy.service';
 import { guidanceValidationService } from './guidanceValidation.service';
+import { guidanceAdvisorService } from './guidanceAdvisor.service';
 import {
   clampConfidenceToDecimal,
   GuidanceEvidenceCompatibility,
@@ -347,6 +348,7 @@ type EnrichedGuidanceAction = {
     risk: string;
     nextStep: string;
   };
+  strategicAdvice?: string | null;
   validationIssues?: Array<{ code: string; message: string; level: 'WARN' | 'ERROR' }>;
   validationShouldSuppress?: boolean;
 };
@@ -656,11 +658,12 @@ export class GuidanceJourneyService {
     return null;
   }
 
-  private enrichAction(params: {
+  private async enrichAction(params: {
     journey: any;
     signal?: any | null;
     next?: any | null;
-  }): EnrichedGuidanceAction {
+    includeAIAdvice?: boolean;
+  }): Promise<EnrichedGuidanceAction> {
     const journey = params.journey;
     const signal = params.signal ?? journey.primarySignal ?? null;
     const next = params.next ?? null;
@@ -771,6 +774,23 @@ export class GuidanceJourneyService {
     const validationWarnings = validation.issues.map((item) => item.message);
     const warnings = Array.from(new Set([...baseWarnings, ...validationWarnings]));
 
+    // FRD-FR-15: AI-powered strategic advice for the guidance overview (Top Class feature)
+    let strategicAdvice: string | null = null;
+    if (params.includeAIAdvice && journey.status === 'ACTIVE') {
+      strategicAdvice = await guidanceAdvisorService.generateStrategicAdvice({
+        propertyId: journey.propertyId,
+        journeyId: journey.id,
+        issueDomain: journey.issueDomain,
+        signalIntentFamily: signal?.signalIntentFamily ?? null,
+        assetName: (journey as any).inventoryItem?.name ?? (journey as any).homeAsset?.assetType ?? null,
+        symptom: (journey as any).producedDataJson?.symptomKey ?? (journey as any).issueType ?? null,
+        currentStepLabel: explanation.nextStep,
+        priorityBucket: adjustedPriorityBucket,
+        costOfDelay: validation.sanitized.costOfDelay,
+        coverageImpact: financial.coverageImpact,
+      });
+    }
+
     const polishedNext = next
       ? {
           ...next,
@@ -808,6 +828,7 @@ export class GuidanceJourneyService {
       costOfDelay: validation.sanitized.costOfDelay,
       coverageImpact: financial.coverageImpact,
       explanation,
+      strategicAdvice,
       nextStepLabel: explanation.nextStep,
       validationIssues: validation.issues,
       signalFreshness,
@@ -828,6 +849,7 @@ export class GuidanceJourneyService {
       costOfDelay: validation.sanitized.costOfDelay,
       coverageImpact: financial.coverageImpact,
       explanation,
+      strategicAdvice,
       validationIssues: validation.issues,
       validationShouldSuppress: validation.shouldSuppress,
     };
@@ -1511,10 +1533,11 @@ export class GuidanceJourneyService {
       journeyId: journey.id,
     });
 
-    const enriched = this.enrichAction({
+    const enriched = await this.enrichAction({
       journey,
       signal: journey.primarySignal ?? null,
       next,
+      includeAIAdvice: true,
     });
 
     return {
@@ -1610,12 +1633,15 @@ export class GuidanceJourneyService {
       nextMap.set(next.journeyId, next);
     }
 
-    const enriched = journeys.map((journey: any) =>
-      this.enrichAction({
-        journey,
-        signal: journey.primarySignal ?? null,
-        next: nextMap.get(journey.id) ?? null,
-      })
+    const enriched = await Promise.all(
+      journeys.map((journey: any) =>
+        this.enrichAction({
+          journey,
+          signal: journey.primarySignal ?? null,
+          next: nextMap.get(journey.id) ?? null,
+          includeAIAdvice: false,
+        })
+      )
     );
 
     const suppression = guidanceSuppressionService.suppress(enriched, {
@@ -2149,11 +2175,13 @@ export class GuidanceJourneyService {
       journeyId: journey.id,
     });
 
-    return this.enrichAction({
+    const enriched = await this.enrichAction({
       journey,
       signal: journey.primarySignal ?? null,
       next,
-    }).next;
+      includeAIAdvice: true,
+    });
+    return enriched.next;
   }
 
   // ---------------------------------------------------------------------------
