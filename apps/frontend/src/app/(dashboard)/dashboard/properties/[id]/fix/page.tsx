@@ -366,12 +366,7 @@ export default function ResolutionHubPage() {
         customIssueLabel: 'Something is broken',
       })
     : '/dashboard/replace-repair';
-  const specialistGuidanceHref = propertyId
-    ? buildIssueGuidanceOverviewHref({
-        propertyId,
-        scopeCategory: 'SERVICE',
-      })
-    : '/dashboard/providers';
+  const specialistGuidanceHref = '/dashboard/providers';
   const focusSection = searchParams.get('focus');
   const expectedCount = searchParams.get('expectedCount');
   const rolloutOverride = searchParams.get('rcv2');
