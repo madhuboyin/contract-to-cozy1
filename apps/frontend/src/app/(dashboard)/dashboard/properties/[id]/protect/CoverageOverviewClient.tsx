@@ -35,6 +35,12 @@ import { MobilePageContainer, MobileCard, MobileKpiStrip, MobileKpiTile, StatusC
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
 
@@ -112,8 +118,8 @@ export default function CoverageOverviewClient() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Coverage Overview</h1>
-          <p className="mt-1 text-sm text-slate-500">Your unified home protection dashboard.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 lg:text-3xl">Home Coverage Overview</h1>
+          <p className="mt-1 text-sm text-slate-500">Your unified property protection dashboard.</p>
         </div>
         <Button 
           variant="outline" 
@@ -130,7 +136,7 @@ export default function CoverageOverviewClient() {
       {/* KPI Strip */}
       <MobileKpiStrip>
         <MobileKpiTile 
-          label="Shield Score" 
+          label="Home Shield Score" 
           value={`${shieldScore}%`} 
           tone={shieldTone}
         />
@@ -145,7 +151,7 @@ export default function CoverageOverviewClient() {
           tone={(claimsSummary?.counts.open || 0) > 0 ? 'warning' : 'neutral'} 
         />
         <MobileKpiTile 
-          label="Expected Risk" 
+          label="Annual Home Risk" 
           value={formatCurrency(analysis?.warranty.expectedAnnualRepairRiskUsd || 0)} 
           tone="neutral" 
         />
@@ -304,32 +310,70 @@ export default function CoverageOverviewClient() {
             <div className="bg-slate-900 p-6 text-white lg:p-8">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-white">Warranty Economics</h3>
-                  <p className="text-sm text-slate-400">Deterministic value analysis</p>
+                  <h3 className="text-lg font-bold text-white">Home Warranty Economics</h3>
+                  <p className="text-sm text-slate-400">Aggregated value analysis for all home systems</p>
                 </div>
                 <div className="rounded-xl bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider backdrop-blur-md text-white">
                   {analysis.warrantyVerdict}
                 </div>
               </div>
               <div className="mt-8 grid grid-cols-2 gap-8 lg:grid-cols-4">
-                <div className="space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Annual Risk</p>
-                  <p className="text-2xl font-bold text-white">{formatCurrency(analysis.warranty.expectedAnnualRepairRiskUsd || 0)}</p>
-                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger className="text-left">
+                      <div className="space-y-1">
+                        <p className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                          Annual Home Risk <Info className="h-2.5 w-2.5" />
+                        </p>
+                        <p className="text-2xl font-bold text-white">{formatCurrency(analysis.warranty.expectedAnnualRepairRiskUsd || 0)}</p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[240px] border-slate-700 bg-slate-800 text-xs text-slate-200">
+                      Aggregated statistical risk based on the age, condition, and repair costs of all your tracked home systems.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
                 <div className="space-y-1">
                   <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Warranty Cost</p>
                   <p className="text-2xl font-bold text-white">{formatCurrency(analysis.warranty.inputsUsed.warrantyAnnualCostUsd || 0)}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Net Impact</p>
-                  <p className={cn("text-2xl font-bold", (analysis.warranty.expectedNetImpactUsd || 0) >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                    {formatCurrency(analysis.warranty.expectedNetImpactUsd || 0)}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Break-even</p>
-                  <p className="text-2xl font-bold text-white">{analysis.warranty.breakEvenMonths || '—'} mo</p>
-                </div>
+
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger className="text-left">
+                      <div className="space-y-1">
+                        <p className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                          {(analysis.warranty.expectedNetImpactUsd || 0) >= 0 ? 'Projected Savings' : 'Cost of Protection'} <Info className="h-2.5 w-2.5" />
+                        </p>
+                        <p className={cn("text-2xl font-bold", (analysis.warranty.expectedNetImpactUsd || 0) >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                          {formatCurrency(Math.abs(analysis.warranty.expectedNetImpactUsd || 0))}
+                        </p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[240px] border-slate-700 bg-slate-800 text-xs text-slate-200">
+                      {(analysis.warranty.expectedNetImpactUsd || 0) >= 0 
+                        ? 'The amount a warranty is expected to save you compared to paying for repairs out-of-pocket.'
+                        : 'The estimated cost of having a warranty vs. expected out-of-pocket repairs.'}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger className="text-left">
+                      <div className="space-y-1">
+                        <p className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                          Break-even <Info className="h-2.5 w-2.5" />
+                        </p>
+                        <p className="text-2xl font-bold text-white">{analysis.warranty.breakEvenMonths || '—'} mo</p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[240px] border-slate-700 bg-slate-800 text-xs text-slate-200">
+                      The estimated number of months before the probability-adjusted repair costs exceed the warranty premium.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
             <div className="p-6 lg:p-8">
