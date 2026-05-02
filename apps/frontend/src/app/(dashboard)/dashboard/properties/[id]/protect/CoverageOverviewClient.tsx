@@ -184,7 +184,7 @@ export default function CoverageOverviewClient() {
           </div>
           <div className="flex flex-col items-start gap-1 lg:items-end">
             <Button
-              className="h-11 px-8 rounded-2xl bg-slate-900 font-black text-white hover:bg-slate-800 transition-all active:scale-95 shadow-xl shadow-slate-200"
+              className="h-11 px-8 rounded-2xl bg-brand-600 font-black text-white hover:bg-brand-700 transition-all active:scale-95 shadow-xl shadow-brand-100"
               onClick={() => runMutation.mutate()}
               disabled={runMutation.isPending}
             >
@@ -227,15 +227,15 @@ export default function CoverageOverviewClient() {
                   key="ai-loading"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="flex-1 relative overflow-hidden rounded-[32px] bg-gradient-to-br from-sky-600 to-indigo-700 p-8 shadow-xl text-white flex flex-col justify-center"
+                  className="flex-1 relative overflow-hidden rounded-[32px] bg-brand-900 p-8 shadow-xl text-white flex flex-col justify-center"
                 >
                   <div className="flex items-center gap-6 relative z-10">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-xl border border-white/10 shadow-inner">
                       <Loader2 className="h-6 w-6 text-white animate-spin" />
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">Coverage Take</span>
-                      <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic text-sky-100">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-100">Coverage Take</span>
+                      <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic text-brand-100">
                         Analyzing your protection profile…
                       </p>
                     </div>
@@ -247,14 +247,14 @@ export default function CoverageOverviewClient() {
                   key="advice-ready"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex-1 relative overflow-hidden rounded-[32px] bg-gradient-to-br from-sky-600 to-indigo-700 p-8 shadow-xl text-white flex flex-col justify-center"
+                  className="flex-1 relative overflow-hidden rounded-[32px] bg-brand-900 p-8 shadow-xl text-white flex flex-col justify-center"
                 >
                   <div className="flex items-start gap-6 relative z-10">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-xl border border-white/10 shadow-inner">
                       {adviceIsAI ? <Wand2 className="h-6 w-6 text-white" /> : <ShieldCheck className="h-6 w-6 text-white" />}
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-100">
                         {adviceIsAI ? 'AI Intelligence Take' : 'Coverage Summary'}
                       </span>
                       <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic">
@@ -274,7 +274,7 @@ export default function CoverageOverviewClient() {
         </div>
 
         {/* SECTION 2: Warranty Economics (Fixed Grid) */}
-        <Card className="overflow-hidden rounded-[40px] border-none shadow-xl bg-slate-900 text-white">
+        <Card className="overflow-hidden rounded-[40px] border-none shadow-xl bg-brand-900 text-white">
           <div className="p-8 lg:p-12">
             <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-2 lg:w-1/3">
@@ -296,7 +296,7 @@ export default function CoverageOverviewClient() {
                    <TooltipProvider>
                      <Tooltip>
                        <TooltipTrigger className="text-left space-y-1 min-w-[140px]">
-                         <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                         <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-brand-100/70 mb-2">
                            Annual Risk <Info className="h-3 w-3" />
                          </p>
                          <p className="text-3xl font-black text-white font-poppins tabular-nums">
@@ -311,7 +311,7 @@ export default function CoverageOverviewClient() {
 
                    {/* Protection Cost — no tooltip (self-explanatory) */}
                    <div className="space-y-1 min-w-[140px]">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Protection Cost</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-brand-100/70 mb-2">Protection Cost</p>
                       <p className="text-3xl font-black text-white font-poppins tabular-nums">
                         {formatCurrency(analysis?.warranty.inputsUsed.warrantyAnnualCostUsd || 0)}
                       </p>
@@ -321,7 +321,7 @@ export default function CoverageOverviewClient() {
                    <TooltipProvider>
                      <Tooltip>
                        <TooltipTrigger className="text-left space-y-1 min-w-[140px]">
-                         <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                         <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-brand-100/70 mb-2">
                            {(analysis?.warranty.expectedNetImpactUsd || 0) >= 0 ? 'Projected Savings' : 'Net Cost'} <Info className="h-3 w-3" />
                          </p>
                          <p className={cn(
@@ -343,7 +343,7 @@ export default function CoverageOverviewClient() {
                    <TooltipProvider>
                      <Tooltip>
                        <TooltipTrigger className="text-left space-y-1 min-w-[100px]">
-                         <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                         <p className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-brand-100/70 mb-2">
                            Break-even <Info className="h-3 w-3" />
                          </p>
                          <p className="text-3xl font-black text-white font-poppins tabular-nums">
@@ -360,10 +360,10 @@ export default function CoverageOverviewClient() {
             </div>
 
             <div className="mt-12 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between bg-white/5 rounded-3xl p-6 border border-white/5">
-                <p className="text-xs font-bold text-sky-100 italic">
+                <p className="text-xs font-bold text-brand-100 italic">
                   Analysis indicates a <span className="text-white font-black">{analysis?.warrantyVerdict ?? '—'}</span> value outcome.
                 </p>
-                <Button className="h-11 px-8 rounded-2xl bg-sky-600 font-bold text-white hover:bg-sky-500 shadow-xl shadow-sky-900/40 transition-all active:scale-95" asChild>
+                <Button className="h-11 px-8 rounded-2xl bg-brand-600 font-bold text-white hover:bg-brand-700 shadow-xl shadow-brand-900/40 transition-all active:scale-95" asChild>
                   <Link href={`/dashboard/properties/${propertyId}/tools/coverage-intelligence`}>
                     Full Audit Report <ChevronRight className="ml-2 h-4 w-4" />
                   </Link>
@@ -404,7 +404,7 @@ export default function CoverageOverviewClient() {
                     {active
                       ? <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
                       : (
-                        <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all shrink-0" asChild>
+                        <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-brand-600 hover:text-white transition-all shrink-0" asChild>
                           <Link href={`/dashboard/properties/${propertyId}/vault`}>Add <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
                         </Button>
                       )
@@ -438,7 +438,7 @@ export default function CoverageOverviewClient() {
                     {active
                       ? <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
                       : (
-                        <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all shrink-0" asChild>
+                        <Button size="sm" variant="ghost" className="rounded-2xl bg-slate-50 hover:bg-brand-600 hover:text-white transition-all shrink-0" asChild>
                           <Link href={`/dashboard/properties/${propertyId}/tools/coverage-options`}>Explore <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
                         </Button>
                       )
@@ -534,7 +534,7 @@ export default function CoverageOverviewClient() {
                   const action = activeGap ? (GAP_ACTIONS[activeGap.code] ?? GAP_FALLBACK) : GAP_FALLBACK;
                   return (
                     <Button
-                      className="w-full h-12 rounded-2xl bg-slate-900 font-bold text-white hover:bg-slate-800 transition-all"
+                      className="w-full h-12 rounded-2xl bg-brand-600 font-bold text-white hover:bg-brand-700 transition-all"
                       asChild
                       onClick={() => setActiveGap(null)}
                     >
