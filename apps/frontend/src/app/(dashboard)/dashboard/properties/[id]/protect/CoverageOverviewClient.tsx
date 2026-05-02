@@ -10,6 +10,7 @@ import {
   ShieldAlert,
   AlertTriangle,
   Zap,
+  ArrowRight,
   ChevronRight,
   Wand2,
   Sparkles,
