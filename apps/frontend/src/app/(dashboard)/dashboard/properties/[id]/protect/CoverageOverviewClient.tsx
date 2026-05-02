@@ -304,31 +304,31 @@ export default function CoverageOverviewClient() {
             <div className="bg-slate-900 p-6 text-white lg:p-8">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold">Warranty Economics</h3>
+                  <h3 className="text-lg font-bold text-white">Warranty Economics</h3>
                   <p className="text-sm text-slate-400">Deterministic value analysis</p>
                 </div>
-                <div className="rounded-xl bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wider backdrop-blur-md">
+                <div className="rounded-xl bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider backdrop-blur-md text-white">
                   {analysis.warrantyVerdict}
                 </div>
               </div>
               <div className="mt-8 grid grid-cols-2 gap-8 lg:grid-cols-4">
                 <div className="space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Annual Risk</p>
-                  <p className="text-2xl font-bold">{formatCurrency(analysis.warranty.expectedAnnualRepairRiskUsd || 0)}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Annual Risk</p>
+                  <p className="text-2xl font-bold text-white">{formatCurrency(analysis.warranty.expectedAnnualRepairRiskUsd || 0)}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Warranty Cost</p>
-                  <p className="text-2xl font-bold">{formatCurrency(analysis.warranty.inputsUsed.warrantyAnnualCostUsd || 0)}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Warranty Cost</p>
+                  <p className="text-2xl font-bold text-white">{formatCurrency(analysis.warranty.inputsUsed.warrantyAnnualCostUsd || 0)}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Net Impact</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Net Impact</p>
                   <p className={cn("text-2xl font-bold", (analysis.warranty.expectedNetImpactUsd || 0) >= 0 ? "text-emerald-400" : "text-rose-400")}>
                     {formatCurrency(analysis.warranty.expectedNetImpactUsd || 0)}
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Break-even</p>
-                  <p className="text-2xl font-bold">{analysis.warranty.breakEvenMonths || '—'} mo</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Break-even</p>
+                  <p className="text-2xl font-bold text-white">{analysis.warranty.breakEvenMonths || '—'} mo</p>
                 </div>
               </div>
             </div>
