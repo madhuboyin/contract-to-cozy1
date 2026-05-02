@@ -163,7 +163,7 @@ const APPLIANCE_ISSUES_BY_NAME: Array<{
     ],
   },
   {
-    keywords: ['water heater', 'water heater'],
+    keywords: ['water heater', 'hot water heater'],
     issues: [
       { key: 'no_hot_water', label: 'No hot water' },
       { key: 'leak', label: 'Leaking or dripping' },
@@ -337,7 +337,6 @@ function appendScopeParams(
   const params = new URLSearchParams();
   if (option.inventoryItemId) {
     params.set('itemId', option.inventoryItemId);
-    params.set('inventoryItemId', option.inventoryItemId);
   }
   if (option.homeAssetId) params.set('homeAssetId', option.homeAssetId);
   params.set('assetName', option.assetName);
@@ -408,19 +407,32 @@ function formatFreshnessLabel(timestamp: string | null | undefined): string {
   return `Updated ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 }
 
+// Keys cover both InventoryItemCategory values (primary lookup from inventoryItem.category)
+// and GuidanceIssueDomain values (fallback when no item is in scope).
 const FRESHNESS_COPY: Record<string, string> = {
-  HVAC:         'Seasonal pricing — verify before booking.',
-  APPLIANCE:    'Pricing is stable for this category.',
-  PLUMBING:     'Costs vary by region and urgency.',
-  ROOFING:      'Pricing peaks spring–summer.',
-  ELECTRICAL:   'Labour rates shift quarterly.',
-  LANDSCAPING:  'Seasonal demand affects rates.',
-  PEST_CONTROL: 'Rates are stable year-round.',
+  // Inventory category keys
+  HVAC:            'Seasonal pricing — verify before booking.',
+  APPLIANCE:       'Pricing is stable for this category.',
+  PLUMBING:        'Costs vary by region and urgency.',
+  ROOF_EXTERIOR:   'Pricing peaks spring–summer.',
+  ELECTRICAL:      'Labour rates shift quarterly.',
+  LANDSCAPING:     'Seasonal demand affects rates.',
+  PEST_CONTROL:    'Rates are stable year-round.',
+  // issueDomain fallbacks
+  ASSET_LIFECYCLE: 'Pricing varies by asset age and region — verify before booking.',
+  MAINTENANCE:     'Costs vary by region and urgency.',
+  WEATHER:         'Emergency rates may apply — verify before committing.',
+  INSURANCE:       'Compare rates before purchasing coverage.',
+  FINANCIAL:       'Verify pricing before committing to a quote.',
+  SAFETY:          'Safety repairs may need urgent scheduling — verify pricing first.',
+  ENERGY:          'Seasonal demand affects improvement costs.',
+  COMPLIANCE:      'Regulatory work requires licensed contractors — get multiple quotes.',
 };
 
-function getFreshnessCopy(issueDomain: string | null | undefined): string {
-  if (!issueDomain) return 'Verify pricing before committing to a quote.';
-  return FRESHNESS_COPY[issueDomain] ?? 'Verify pricing before committing to a quote.';
+function getFreshnessCopy(category: string | null | undefined, issueDomain?: string | null): string {
+  if (category && FRESHNESS_COPY[category]) return FRESHNESS_COPY[category];
+  if (issueDomain && FRESHNESS_COPY[issueDomain]) return FRESHNESS_COPY[issueDomain];
+  return 'Verify pricing before committing to a quote.';
 }
 
 function resolveConfidenceDots(label: GuidanceActionModel['confidenceLabel']): number {
@@ -506,7 +518,6 @@ export default function GuidanceOverviewClient() {
     next.set('scopeCategory', 'ITEM');
     if (option.inventoryItemId) {
       next.set('itemId', option.inventoryItemId);
-      next.set('inventoryItemId', option.inventoryItemId);
     }
     if (option.homeAssetId) next.set('homeAssetId', option.homeAssetId);
     next.set('assetName', option.assetName);
@@ -715,8 +726,12 @@ export default function GuidanceOverviewClient() {
         serviceKey: selectedServiceKey ?? undefined,
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
+      // Pin the new journey so Phase B renders immediately without waiting for
+      // the scoped filter to match — the journey may not be in filteredActions
+      // until the invalidated query resolves.
+      pushParams({ journeyId: data.journey.id });
     },
   });
 
@@ -811,6 +826,10 @@ export default function GuidanceOverviewClient() {
     : '0/3 complete';
 
   React.useEffect(() => {
+    // Don't override step selection while the journey is still loading — an empty
+    // steps array would clear the selected key, then reload it to step 1, losing
+    // any requestedStepKey that arrived via URL.
+    if (activeJourneySteps.length === 0) return;
     const availableKeys = new Set(activeJourneySteps.map((step) => step.stepKey));
     if (requestedStepKey && availableKeys.has(requestedStepKey)) {
       setSelectedJourneyStepKey(requestedStepKey);
@@ -1609,6 +1628,7 @@ export default function GuidanceOverviewClient() {
   const overpayHigh = costDelayValue ? Math.max(overpayLow + 40, costDelayValue) : 420;
   const confidenceDots = resolveConfidenceDots(confidenceLabel);
   const freshnessLabel = formatFreshnessLabel(resolvedJourney?.updatedAt ?? activePrimaryAction?.journey.updatedAt);
+  const freshnessCategory = activePrimaryAction?.journey.inventoryItem?.category ?? null;
   const selectedStepCta = selectedJourneyStep ? renderStepCta(selectedJourneyStep, true) : null;
   const journeyForSelectedStepHref = resolvedJourney
     ? {
@@ -1670,6 +1690,24 @@ export default function GuidanceOverviewClient() {
             : activePrimaryAction?.explanation?.why ?? currentStepSubtitle;
 
   if (activeHasScopedMatch) {
+    // Show a skeleton while the journey detail (and its steps) are loading so the
+    // user doesn't see "Step 1 of 0" or a 100% progress bar during the fetch.
+    if (activeJourneyDetail.isLoading && activeJourneySteps.length === 0) {
+      return (
+        <MobilePageContainer className="space-y-6 lg:max-w-[1240px] lg:px-8 lg:pb-12">
+          <div className="h-9 w-32 animate-pulse rounded-lg bg-slate-100" />
+          <div className="h-40 w-full animate-pulse rounded-[32px] bg-slate-100" />
+          <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className="hidden h-64 animate-pulse rounded-[28px] bg-slate-100 lg:block" />
+            <div className="space-y-4">
+              <div className="h-48 animate-pulse rounded-[30px] bg-slate-100" />
+              <div className="h-32 animate-pulse rounded-[28px] bg-slate-100" />
+            </div>
+          </div>
+        </MobilePageContainer>
+      );
+    }
+
     return (
       <MobilePageContainer className="space-y-6 lg:max-w-[1240px] lg:px-8 lg:pb-12">
         <Button variant="ghost" className="min-h-[40px] w-fit px-0 text-slate-500 hover:text-slate-900" asChild>
@@ -2016,7 +2054,7 @@ export default function GuidanceOverviewClient() {
                     </div>
                     <p className="mt-2 text-sm font-medium text-slate-600">Data freshness</p>
                     <p className="mt-3 text-lg font-semibold text-slate-900">{freshnessLabel}</p>
-                    <p className="text-sm text-slate-500">{getFreshnessCopy(activePrimaryAction?.issueDomain)}</p>
+                    <p className="text-sm text-slate-500">{getFreshnessCopy(freshnessCategory, activePrimaryAction?.issueDomain)}</p>
                   </div>
                 </div>
               </CardContent>

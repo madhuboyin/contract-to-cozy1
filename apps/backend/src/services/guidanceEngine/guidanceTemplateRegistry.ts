@@ -1399,7 +1399,7 @@ const JOURNEY_TOOL_STEP_KEY: Record<string, Record<string, string>> = {
     booking: 'take_action',
   },
   asset_lifecycle_resolution: {
-    'true-cost': 'estimate_cost_impact',
+    // 'true-cost' removed: estimate_cost_impact step was dropped in template v2.1.0
     'coverage-intelligence': 'check_coverage',
     'service-price-radar': 'validate_price',
     'quote-comparison': 'compare_quotes',
