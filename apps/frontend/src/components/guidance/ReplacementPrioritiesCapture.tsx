@@ -16,18 +16,18 @@ type ReplacementPrioritiesCaptureProps = {
   onComplete: () => void;
 };
 
-const PRIORITY_OPTIONS: { value: PrimaryPriority; label: string; description: string; Icon: React.FC<{ className?: string }> }[] = [
-  { value: 'lowest_cost',          label: 'Lowest upfront cost',    description: 'Keep the purchase price down',    Icon: DollarSign },
-  { value: 'energy_savings',       label: 'Lowest energy bills',    description: 'Reduce ongoing utility costs',    Icon: Zap },
-  { value: 'quiet_operation',      label: 'Quietest operation',     description: 'Noise level matters most',        Icon: Volume2 },
-  { value: 'long_term_reliability',label: 'Best reliability',       description: 'Fewest repairs over time',        Icon: Shield },
-  { value: 'fast_availability',    label: 'Fastest availability',   description: 'Need it as soon as possible',     Icon: Clock },
+const PRIORITY_OPTIONS: { value: PrimaryPriority; label: string; Icon: React.FC<{ className?: string }> }[] = [
+  { value: 'lowest_cost',          label: 'Lowest upfront cost',  Icon: DollarSign },
+  { value: 'energy_savings',       label: 'Lowest energy bills',  Icon: Zap },
+  { value: 'quiet_operation',      label: 'Quietest operation',   Icon: Volume2 },
+  { value: 'long_term_reliability',label: 'Best reliability',     Icon: Shield },
+  { value: 'fast_availability',    label: 'Fastest availability', Icon: Clock },
 ];
 
-const TENURE_OPTIONS: { value: HomeOwnershipYears; label: string; note: string }[] = [
-  { value: 'under_3', label: 'Less than 3 yrs', note: 'Favour lower upfront cost' },
-  { value: '3_to_7',  label: '3 – 7 years',    note: 'Balanced approach' },
-  { value: '7_plus',  label: '7+ years',        note: 'Efficiency pays off' },
+const TENURE_OPTIONS: { value: HomeOwnershipYears; label: string }[] = [
+  { value: 'under_3', label: 'Less than 3 yrs' },
+  { value: '3_to_7',  label: '3 – 7 years' },
+  { value: '7_plus',  label: '7+ years' },
 ];
 
 const MUST_HAVE_OPTIONS: { value: MustHave; label: string }[] = [
@@ -153,31 +153,25 @@ export function ReplacementPrioritiesCapture({
       {/* Primary priority */}
       <div className="space-y-2">
         <p className="text-sm font-semibold text-slate-800">
-          What matters most to you?
+          What matters most?
           <span className="ml-1 font-normal text-slate-400">(pick one, optional)</span>
         </p>
-        <div className="grid gap-2">
-          {PRIORITY_OPTIONS.map(({ value, label, description, Icon }) => {
+        <div className="flex flex-wrap gap-2">
+          {PRIORITY_OPTIONS.map(({ value, label, Icon }) => {
             const selected = priority === value;
             return (
               <button
                 key={value}
                 type="button"
                 onClick={() => setPriority(selected ? null : value)}
-                className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-all ${
                   selected
-                    ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300'
-                    : 'border-black/10 bg-white hover:border-emerald-200 hover:bg-slate-50'
+                    ? 'border-emerald-400 bg-emerald-50 font-medium text-emerald-800 ring-1 ring-emerald-300'
+                    : 'border-black/10 bg-white text-slate-700 hover:border-emerald-200 hover:bg-slate-50'
                 }`}
               >
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${selected ? 'bg-emerald-100' : 'bg-slate-100'}`}>
-                  <Icon className={`h-4 w-4 ${selected ? 'text-emerald-700' : 'text-slate-500'}`} />
-                </span>
-                <div className="min-w-0">
-                  <p className={`text-sm font-medium ${selected ? 'text-emerald-900' : 'text-slate-800'}`}>{label}</p>
-                  <p className="text-xs text-slate-500">{description}</p>
-                </div>
-                {selected && <CheckCircle2 className="ml-auto h-4 w-4 shrink-0 text-emerald-600" />}
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-emerald-600' : 'text-slate-400'}`} />
+                {label}
               </button>
             );
           })}
@@ -187,25 +181,24 @@ export function ReplacementPrioritiesCapture({
       {/* Home tenure */}
       <div className="space-y-2">
         <p className="text-sm font-semibold text-slate-800">
-          How long do you plan to stay in this home?
+          How long do you plan to stay?
           <span className="ml-1 font-normal text-slate-400">(optional)</span>
         </p>
-        <div className="grid grid-cols-3 gap-2">
-          {TENURE_OPTIONS.map(({ value, label, note }) => {
+        <div className="flex flex-wrap gap-2">
+          {TENURE_OPTIONS.map(({ value, label }) => {
             const selected = tenure === value;
             return (
               <button
                 key={value}
                 type="button"
                 onClick={() => setTenure(selected ? null : value)}
-                className={`rounded-xl border px-2 py-2.5 text-center transition-all ${
+                className={`rounded-full border px-3 py-1.5 text-sm transition-all ${
                   selected
-                    ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300'
-                    : 'border-black/10 bg-white hover:border-emerald-200'
+                    ? 'border-emerald-400 bg-emerald-50 font-medium text-emerald-800 ring-1 ring-emerald-300'
+                    : 'border-black/10 bg-white text-slate-700 hover:border-emerald-200'
                 }`}
               >
-                <p className={`text-sm font-semibold ${selected ? 'text-emerald-900' : 'text-slate-800'}`}>{label}</p>
-                <p className="mt-0.5 text-[11px] text-slate-500">{note}</p>
+                {label}
               </button>
             );
           })}
