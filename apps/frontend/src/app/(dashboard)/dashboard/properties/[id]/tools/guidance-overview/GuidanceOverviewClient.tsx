@@ -21,6 +21,7 @@ import {
   Sparkles,
   Wrench,
   AlertCircle,
+  Info,
   Snowflake,
   Flame,
   Droplets,

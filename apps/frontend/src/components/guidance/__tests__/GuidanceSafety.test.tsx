@@ -73,6 +73,7 @@ function buildAction(overrides: Partial<GuidanceActionModel> = {}): GuidanceActi
     costOfDelay: 200,
     coverageImpact: 'UNKNOWN',
     explanation: null,
+    strategicAdvice: null,
     ...overrides,
   };
 }
