@@ -53,6 +53,20 @@ export const APPLIANCE_ISSUES_BY_NAME: Array<{
   keywords: string[];
   issues: { key: string; label: string }[];
 }> = [
+  // dishwasher must come before washer/dryer — "dishwasher".includes("washer") is true
+  {
+    keywords: ['dishwasher'],
+    issues: [
+      { key: 'not_cleaning', label: 'Not cleaning dishes properly' },
+      { key: 'not_draining', label: 'Not draining' },
+      { key: 'leak', label: 'Leaking water' },
+      { key: 'door_issue', label: 'Door not latching or sealing' },
+      { key: 'error_code', label: 'Showing an error code or warning light' },
+      { key: 'unusual_noise', label: 'Making unusual noise' },
+      { key: 'past_life', label: 'Aging or past expected life' },
+      { key: 'coverage_question', label: 'Warranty or coverage question' },
+    ],
+  },
   {
     keywords: ['washer', 'dryer', 'washing machine', 'laundry'],
     issues: [
@@ -77,19 +91,6 @@ export const APPLIANCE_ISSUES_BY_NAME: Array<{
       { key: 'past_life', label: 'Aging or past expected life' },
       { key: 'coverage_question', label: 'Warranty or coverage question' },
       { key: 'cost_estimate', label: 'Need a repair or replacement cost estimate' },
-    ],
-  },
-  {
-    keywords: ['dishwasher'],
-    issues: [
-      { key: 'not_cleaning', label: 'Not cleaning dishes properly' },
-      { key: 'not_draining', label: 'Not draining' },
-      { key: 'leak', label: 'Leaking water' },
-      { key: 'door_issue', label: 'Door not latching or sealing' },
-      { key: 'error_code', label: 'Showing an error code or warning light' },
-      { key: 'unusual_noise', label: 'Making unusual noise' },
-      { key: 'past_life', label: 'Aging or past expected life' },
-      { key: 'coverage_question', label: 'Warranty or coverage question' },
     ],
   },
   {
