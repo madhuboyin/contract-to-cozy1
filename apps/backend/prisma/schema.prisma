@@ -951,6 +951,8 @@ model CoverageAnalysis {
   decisionTrace        Json? // factors: label/detail/impact
   inputsSnapshot       Json? // premium, deductible, warranty cost, overrides used
 
+  strategicAdvice      String?
+
   computedAt DateTime @default(now())
 
   // Relations
