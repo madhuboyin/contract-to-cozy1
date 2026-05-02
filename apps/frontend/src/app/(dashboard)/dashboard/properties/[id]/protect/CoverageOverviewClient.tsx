@@ -98,18 +98,40 @@ export default function CoverageOverviewClient() {
 
   const analysis = analysisData?.exists ? analysisData.analysis : null;
   const activeClaims = (claimsData ?? []).filter((c: ClaimDTO) => c.status !== 'CLOSED');
-  const gapCount = analysis?.insurance?.flags?.find(f => f.code === 'INVENTORY_COVERAGE_GAPS')?.label?.split(' ')[0] || '0';
 
   const shieldScore = useMemo(() => {
     if (!analysis) return 0;
-    let score = (analysis.overallVerdict === 'WORTH_IT' ? 90 : analysis.overallVerdict === 'SITUATIONAL' ? 65 : 40);
-    score -= (parseInt(gapCount) * 5);
-    if (analysis.confidence === 'HIGH') score += 10;
+    let score = analysis.overallVerdict === 'WORTH_IT' ? 85
+      : analysis.overallVerdict === 'SITUATIONAL' ? 60
+      : 35;
+    // Missing insurance is the highest-impact gap
+    if (analysis.insurance.flags.some(f => f.code === 'NO_PROPERTY_POLICY')) score -= 25;
+    // No active warranty plan
+    if (!((analysis.warranty.inputsUsed.warrantyAnnualCostUsd ?? 0) > 0)) score -= 10;
+    // Remaining flags weighted by severity
+    analysis.insurance.flags.forEach(f => {
+      if (f.code === 'NO_PROPERTY_POLICY') return;
+      score -= f.severity === 'HIGH' ? 8 : f.severity === 'MEDIUM' ? 4 : 2;
+    });
+    if (analysis.confidence === 'HIGH') score += 5;
     if (analysis.confidence === 'LOW') score -= 10;
     return Math.max(10, Math.min(100, score));
-  }, [analysis, gapCount]);
+  }, [analysis]);
 
-  const shieldTone = shieldScore >= 80 ? 'emerald' : shieldScore >= 50 ? 'amber' : 'rose';
+  const shieldTone = shieldScore >= 75 ? 'emerald' : shieldScore >= 45 ? 'amber' : 'rose';
+
+  // Maps each flag code to its most relevant remediation route and CTA label
+  const GAP_ACTIONS: Record<string, { href: string; label: string }> = {
+    NO_PROPERTY_POLICY:        { href: `/dashboard/properties/${propertyId}/vault`,                             label: 'Add Insurance Policy'      },
+    DEDUCTIBLE_VS_BUFFER_HIGH: { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,      label: 'Review Deductible Strategy' },
+    DEDUCTIBLE_VS_BUFFER_MEDIUM: { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,    label: 'Review Deductible Strategy' },
+    PROPERTY_RISK_HIGH:        { href: `/dashboard/properties/${propertyId}/tools/coverage-options`,            label: 'Review Coverage Limits'     },
+    CLAIMS_FREQUENCY:          { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,      label: 'View Coverage Analysis'     },
+    INVENTORY_COVERAGE_GAPS:   { href: `/dashboard/properties/${propertyId}/inventory`,                        label: 'Review Item Coverage'       },
+    MAINTENANCE_BACKLOG:       { href: `/dashboard/properties/${propertyId}/fix`,                              label: 'View Pending Tasks'         },
+    PREMIUM_PRESSURE:          { href: `/dashboard/properties/${propertyId}/tools/coverage-intelligence`,      label: 'Run Value Check'            },
+  };
+  const GAP_FALLBACK = { href: `/dashboard/properties/${propertyId}/tools/coverage-options`, label: 'View Coverage Options' };
 
   if (analysisLoading || claimsLoading) {
     return (
@@ -355,15 +377,20 @@ export default function CoverageOverviewClient() {
                     {activeGap?.label}
                   </p>
                 </SheetHeader>
-                <Button
-                  className="w-full h-12 rounded-2xl bg-slate-900 font-bold text-white hover:bg-slate-800 transition-all"
-                  asChild
-                  onClick={() => setActiveGap(null)}
-                >
-                  <Link href={`/dashboard/properties/${propertyId}/tools/coverage-options`}>
-                    View Coverage Options <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
+                {(() => {
+                  const action = activeGap ? (GAP_ACTIONS[activeGap.code] ?? GAP_FALLBACK) : GAP_FALLBACK;
+                  return (
+                    <Button
+                      className="w-full h-12 rounded-2xl bg-slate-900 font-bold text-white hover:bg-slate-800 transition-all"
+                      asChild
+                      onClick={() => setActiveGap(null)}
+                    >
+                      <Link href={action.href}>
+                        {action.label} <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  );
+                })()}
               </SheetContent>
             </Sheet>
           </div>
