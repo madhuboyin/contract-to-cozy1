@@ -11,6 +11,7 @@ import {
   BarChart3,
   Box,
   Check,
+  CheckCircle2,
   ChevronRight,
   CircleAlert,
   Lightbulb,
@@ -697,6 +698,7 @@ export default function GuidanceOverviewClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
+      setShowSkipConfirm(false);
     },
   });
 
@@ -759,10 +761,15 @@ export default function GuidanceOverviewClient() {
     requestedStepKey
   );
   const [showDismissConfirm, setShowDismissConfirm] = React.useState(false);
+  const [showSkipConfirm, setShowSkipConfirm] = React.useState(false);
 
   React.useEffect(() => {
     setShowAllIssueTypes(false);
   }, [selectedInventoryItemId, selectedHomeAssetId, selectedServiceKey, selectedAssetName, scopeCategory]);
+
+  React.useEffect(() => {
+    setShowSkipConfirm(false);
+  }, [selectedJourneyStepKey]);
 
   // ---- Phase 6c: pinned journey mode ----
   const pinnedAction = React.useMemo(
@@ -1596,6 +1603,10 @@ export default function GuidanceOverviewClient() {
   const progressPercent = activeJourneySteps.length
     ? Math.round((selectedStepOrder / activeJourneySteps.length) * 100)
     : 0;
+  const isJourneyComplete =
+    activePrimaryAction?.journey.status === 'COMPLETED' ||
+    (activeJourneySteps.length > 0 &&
+      activeJourneySteps.every((s) => s.status === 'COMPLETED' || s.status === 'SKIPPED'));
   const previousJourneyStep =
     selectedJourneyStep && selectedStepOrder > 1
       ? activeJourneySteps.find((step) => step.stepOrder === selectedStepOrder - 1) ?? null
@@ -1704,6 +1715,103 @@ export default function GuidanceOverviewClient() {
               <div className="h-32 animate-pulse rounded-[28px] bg-slate-100" />
             </div>
           </div>
+        </MobilePageContainer>
+      );
+    }
+
+    if (isJourneyComplete) {
+      const completedCount = activeJourneySteps.filter((s) => s.status === 'COMPLETED').length;
+      const skippedCount = activeJourneySteps.filter((s) => s.status === 'SKIPPED').length;
+      return (
+        <MobilePageContainer className="space-y-6 lg:max-w-[1240px] lg:px-8 lg:pb-12">
+          <Button variant="ghost" className="min-h-[40px] w-fit px-0 text-slate-500 hover:text-slate-900" asChild>
+            <Link href={`/dashboard/properties/${propertyId}`}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to property
+            </Link>
+          </Button>
+
+          <Card className="overflow-hidden rounded-[32px] border-emerald-200/80 bg-white shadow-sm">
+            <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 p-8 text-white lg:p-10">
+              <div className="flex flex-col items-start gap-4 lg:flex-row lg:items-center lg:gap-6">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/20 shadow-sm">
+                  <CheckCircle2 className="h-8 w-8 text-white" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-emerald-100">Guided Journey · Complete</p>
+                  <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">
+                    Journey complete
+                  </h1>
+                  <p className="text-sm text-emerald-100">
+                    {startLabel}
+                    {issueLabelDisplay ? ` · ${issueLabelDisplay}` : ''}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <CardContent className="p-6 lg:p-8">
+              <div className="space-y-5">
+                <div className="flex items-center gap-3 text-sm text-slate-600">
+                  <span className="font-semibold text-emerald-700">{completedCount}</span>
+                  {completedCount === 1 ? 'step completed' : 'steps completed'}
+                  {skippedCount > 0 && (
+                    <span className="text-slate-400">
+                      · {skippedCount} {skippedCount === 1 ? 'step skipped' : 'steps skipped'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  {activeJourneySteps.map((step) => (
+                    <div
+                      key={step.id}
+                      className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3"
+                    >
+                      <span
+                        className={cn(
+                          'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                          step.status === 'COMPLETED'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-400'
+                        )}
+                      >
+                        {step.status === 'COMPLETED' ? <Check className="h-3.5 w-3.5" /> : step.stepOrder}
+                      </span>
+                      <span
+                        className={cn(
+                          'text-sm',
+                          step.status === 'COMPLETED'
+                            ? 'font-medium text-slate-800'
+                            : 'text-slate-400 line-through'
+                        )}
+                      >
+                        {step.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+                  <Button asChild size="lg" className="w-full rounded-2xl sm:w-auto sm:px-8">
+                    <Link href={`/dashboard/properties/${propertyId}`}>
+                      Back to property
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full rounded-2xl border-slate-200 sm:w-auto sm:px-8"
+                    onClick={() => {
+                      router.push(`/dashboard/properties/${propertyId}/tools/guidance-overview`);
+                    }}
+                  >
+                    Resolve another issue
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </MobilePageContainer>
       );
     }
@@ -1993,15 +2101,39 @@ export default function GuidanceOverviewClient() {
                     {selectedJourneyStep &&
                     selectedJourneyStep.stepKey === activeStep?.stepKey &&
                     selectedJourneyStep.status !== 'COMPLETED' &&
-                    selectedJourneyStep.status !== 'SKIPPED' ? (
-                      <button
-                        type="button"
-                        disabled={skipStepMutation.isPending}
-                        onClick={() => skipStepMutation.mutate({ stepId: selectedJourneyStep.id })}
-                        className="text-left text-sm font-medium text-slate-500 transition-colors hover:text-slate-900 disabled:opacity-50"
-                      >
-                        Skip this step
-                      </button>
+                    selectedJourneyStep.status !== 'SKIPPED' &&
+                    !selectedJourneyStep.isRequired ? (
+                      showSkipConfirm ? (
+                        <div className="w-full rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm sm:w-auto">
+                          <p className="font-medium text-amber-900">Skip this step?</p>
+                          <p className="mt-0.5 text-amber-700">{skipConsequence}</p>
+                          <div className="mt-3 flex gap-2">
+                            <button
+                              type="button"
+                              disabled={skipStepMutation.isPending}
+                              onClick={() => skipStepMutation.mutate({ stepId: selectedJourneyStep.id })}
+                              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+                            >
+                              {skipStepMutation.isPending ? 'Skipping…' : 'Yes, skip'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowSkipConfirm(false)}
+                              className="rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
+                            >
+                              Keep this step
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowSkipConfirm(true)}
+                          className="text-left text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
+                        >
+                          Skip this step
+                        </button>
+                      )
                     ) : null}
 
                   </div>

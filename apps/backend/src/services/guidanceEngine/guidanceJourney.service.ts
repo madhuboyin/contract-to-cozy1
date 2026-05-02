@@ -1762,7 +1762,7 @@ export class GuidanceJourneyService {
     const inventoryItemId = input.inventoryItemId ?? (input.scopeCategory === 'ITEM' ? input.scopeId : null) ?? null;
     const homeAssetId = input.homeAssetId ?? null;
     const serviceKey = input.serviceKey ?? (input.scopeCategory === 'SERVICE' ? input.scopeId : null) ?? null;
-    const template = getTemplateByIssueType(input.issueType, input.scopeCategory);
+    const template = getTemplateByIssueType(input.issueType, input.scopeCategory, serviceKey);
 
     return this.createJourneyFromTemplate({
       propertyId,
@@ -2087,7 +2087,7 @@ export class GuidanceJourneyService {
     }
 
     const scopeCategory = (journey.scopeCategory as string) ?? 'ITEM';
-    const newTemplate = getTemplateByIssueType(newIssueType, scopeCategory);
+    const newTemplate = getTemplateByIssueType(newIssueType, scopeCategory, journey.serviceKey as string | null);
     const now = new Date();
 
     await guidanceJourney.update({

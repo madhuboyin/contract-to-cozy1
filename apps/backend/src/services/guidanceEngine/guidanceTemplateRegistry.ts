@@ -1482,14 +1482,31 @@ const ISSUE_TYPE_TO_TEMPLATE_KEY: Record<string, string> = {
   'get_quotes':                'financial_exposure_resolution',
 };
 
+// Maps SERVICE scope serviceKey values to the correct journey template.
+// Used as the fallback when the issue type is not in ISSUE_TYPE_TO_TEMPLATE_KEY
+// (e.g. a custom issue typed by the user). Prevents all unmapped SERVICE journeys
+// from incorrectly routing to warranty_purchase_journey.
+const SERVICE_KEY_TO_TEMPLATE_KEY: Record<string, string> = {
+  warranty_purchase:  'warranty_purchase_journey',
+  insurance_purchase: 'insurance_purchase_journey',
+  general_inspection: 'general_inspection_journey',
+  cleaning_service:   'cleaning_service_journey',
+};
+
 /**
  * Resolves the best journey template for a user-initiated journey given
- * the issue type and scope category. Falls back to the generic resolution
- * template when no specific mapping exists.
+ * the issue type, scope category, and optional service key.
+ *
+ * Resolution order:
+ *  1. ISSUE_TYPE_TO_TEMPLATE_KEY exact match (covers both ITEM and SERVICE types)
+ *  2. SERVICE scope: SERVICE_KEY_TO_TEMPLATE_KEY match on serviceKey
+ *  3. SERVICE scope: DEFAULT_TEMPLATE (no journey template for this service)
+ *  4. ITEM scope: asset_lifecycle_resolution as the generic item journey
  */
 export function getTemplateByIssueType(
   issueType: string,
-  scopeCategory: string
+  scopeCategory: string,
+  serviceKey?: string | null,
 ): GuidanceJourneyTemplate {
   const normalised = issueType.trim().toLowerCase().replace(/\s+/g, '_');
   const templateKey = ISSUE_TYPE_TO_TEMPLATE_KEY[normalised];
@@ -1497,9 +1514,17 @@ export function getTemplateByIssueType(
     const found = templates.find((t) => t.journeyTypeKey === templateKey);
     if (found) return found;
   }
-  // SERVICE scope with no specific mapping → warranty purchase as generic service journey
   if (scopeCategory === 'SERVICE') {
-    return templates.find((t) => t.journeyTypeKey === 'warranty_purchase_journey') ?? DEFAULT_TEMPLATE;
+    // Use the serviceKey to route to the correct service journey template.
+    // Previously this always fell back to warranty_purchase_journey, which caused
+    // cleaning / inspection journeys to receive the wrong template when the user
+    // typed a custom issue description not present in ISSUE_TYPE_TO_TEMPLATE_KEY.
+    const serviceTemplateKey = SERVICE_KEY_TO_TEMPLATE_KEY[serviceKey ?? ''];
+    if (serviceTemplateKey) {
+      const found = templates.find((t) => t.journeyTypeKey === serviceTemplateKey);
+      if (found) return found;
+    }
+    return DEFAULT_TEMPLATE;
   }
   // ITEM scope with no specific mapping → asset lifecycle as generic item journey
   return templates.find((t) => t.journeyTypeKey === 'asset_lifecycle_resolution') ?? DEFAULT_TEMPLATE;
