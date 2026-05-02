@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -41,6 +41,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/utils/format';
@@ -79,6 +85,16 @@ export default function CoverageOverviewClient() {
       toast({ title: "Analysis Failed", description: error.message, variant: "destructive" });
     }
   });
+
+  const [activeGap, setActiveGap] = useState<{ label: string; code: string } | null>(null);
+
+  // Auto-run analysis on first load if none exists yet
+  useEffect(() => {
+    if (analysisData && !analysisData.exists && !runMutation.isPending) {
+      runMutation.mutate();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisData?.exists]);
 
   const analysis = analysisData?.exists ? analysisData.analysis : null;
   const activeClaims = (claimsData ?? []).filter((c: ClaimDTO) => c.status !== 'CLOSED');
@@ -149,6 +165,7 @@ export default function CoverageOverviewClient() {
              <AnimatePresence mode="wait">
               {analysis?.strategicAdvice ? (
                 <motion.div
+                  key="ai-ready"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="flex-1 relative overflow-hidden rounded-[32px] bg-gradient-to-br from-sky-600 to-indigo-700 p-8 shadow-xl text-white flex flex-col justify-center"
@@ -161,6 +178,26 @@ export default function CoverageOverviewClient() {
                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">AI Intelligence Take</span>
                       <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic">
                         &ldquo;{analysis.strategicAdvice}&rdquo;
+                      </p>
+                    </div>
+                  </div>
+                  <Sparkles className="absolute -bottom-8 -right-8 h-40 w-48 text-white/10 pointer-events-none" />
+                </motion.div>
+              ) : runMutation.isPending ? (
+                <motion.div
+                  key="ai-loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex-1 relative overflow-hidden rounded-[32px] bg-gradient-to-br from-sky-600 to-indigo-700 p-8 shadow-xl text-white flex flex-col justify-center"
+                >
+                  <div className="flex items-center gap-6 relative z-10">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-xl border border-white/10 shadow-inner">
+                      <Loader2 className="h-6 w-6 text-white animate-spin" />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">AI Intelligence Take</span>
+                      <p className="text-lg font-bold leading-tight lg:text-xl font-poppins italic text-sky-100">
+                        Analyzing your protection profile…
                       </p>
                     </div>
                   </div>
@@ -276,19 +313,23 @@ export default function CoverageOverviewClient() {
             <div className="space-y-4">
                {(analysis?.insurance.flags.length || 0) > 0 ? (
                  analysis?.insurance.flags.map((flag, idx) => (
-                    <Card key={idx} className="p-5 rounded-[28px] border-none bg-white shadow-sm flex items-center justify-between gap-5">
-                       <div className="flex items-center gap-4 min-w-0">
-                          <div className="h-12 w-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0 shadow-inner">
-                            <AlertTriangle className="h-6 w-6" />
-                          </div>
-                          <p className="text-sm font-bold text-slate-900 font-poppins truncate">{flag.label}</p>
-                       </div>
-                       <Button variant="ghost" className="h-12 w-12 rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all shadow-sm" asChild>
-                          <Link href={`/dashboard/properties/${propertyId}/tools/coverage-options`}>
-                             <ArrowRight className="h-5 w-5" />
-                          </Link>
-                       </Button>
-                    </Card>
+                    <button
+                      key={idx}
+                      className="w-full text-left"
+                      onClick={() => setActiveGap({ label: flag.label, code: flag.code })}
+                    >
+                      <Card className="p-5 rounded-[28px] border-none bg-white shadow-sm hover:shadow-md transition-all flex items-start justify-between gap-5">
+                         <div className="flex items-start gap-4">
+                            <div className="h-12 w-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0 shadow-inner mt-0.5">
+                              <AlertTriangle className="h-6 w-6" />
+                            </div>
+                            <p className="text-sm font-bold text-slate-900 font-poppins leading-snug">{flag.label}</p>
+                         </div>
+                         <div className="h-12 w-12 rounded-2xl bg-slate-50 flex items-center justify-center shrink-0 text-slate-400">
+                            <ChevronRight className="h-5 w-5" />
+                         </div>
+                      </Card>
+                    </button>
                  ))
                ) : (
                 <div className="rounded-[32px] bg-white border border-slate-100 py-12 flex flex-col items-center text-center">
@@ -297,6 +338,34 @@ export default function CoverageOverviewClient() {
                 </div>
                )}
             </div>
+
+            {/* Gap detail sheet */}
+            <Sheet open={!!activeGap} onOpenChange={(open) => !open && setActiveGap(null)}>
+              <SheetContent side="bottom" className="rounded-t-[32px] pb-10">
+                <SheetHeader className="mb-6 text-left">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-10 w-10 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                      <AlertTriangle className="h-5 w-5" />
+                    </div>
+                    <SheetTitle className="text-base font-bold text-slate-900 font-poppins leading-snug">
+                      Priority Gap
+                    </SheetTitle>
+                  </div>
+                  <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                    {activeGap?.label}
+                  </p>
+                </SheetHeader>
+                <Button
+                  className="w-full h-12 rounded-2xl bg-slate-900 font-bold text-white hover:bg-slate-800 transition-all"
+                  asChild
+                  onClick={() => setActiveGap(null)}
+                >
+                  <Link href={`/dashboard/properties/${propertyId}/tools/coverage-options`}>
+                    View Coverage Options <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </SheetContent>
+            </Sheet>
           </div>
 
         </div>
