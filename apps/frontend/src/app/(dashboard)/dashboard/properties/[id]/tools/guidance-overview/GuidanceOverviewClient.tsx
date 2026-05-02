@@ -998,6 +998,13 @@ export default function GuidanceOverviewClient() {
       const priorities: ReplacementPriorities | undefined =
         savedPriorities && !savedPriorities.skipped ? savedPriorities : undefined;
 
+      // Extract selected model name from the completed compare_replacement_models step
+      const modelStep = activeJourneySteps.find((s) => s.stepKey === 'compare_replacement_models');
+      const selectedModelNameForVendors =
+        typeof modelStep?.producedData?.selectedModelName === 'string'
+          ? modelStep.producedData.selectedModelName
+          : undefined;
+
       return (
         <ReplacementJourneyInline
           propertyId={propertyId}
@@ -1009,6 +1016,7 @@ export default function GuidanceOverviewClient() {
           issueType={resolvedJourney?.issueType ?? selectedIssueType ?? null}
           producedData={step.producedData}
           priorities={priorities}
+          selectedModelName={selectedModelNameForVendors}
           onComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
             queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });

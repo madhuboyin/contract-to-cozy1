@@ -1,11 +1,18 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle2, PackageCheck, ShoppingCart, Wallet, CalendarDays, Zap, Star, BadgeCheck } from 'lucide-react';
+import { CheckCircle2, PackageCheck, Wallet, CalendarDays, Zap, Star, BadgeCheck, ShoppingCart } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ScenarioInputCard, StatusChip } from '@/components/mobile/dashboard/MobilePrimitives';
-import { recordGuidanceToolStatus, generateModelShortlist, type AIModelRecommendation, type ReplacementPriorities } from '@/lib/api/guidanceApi';
+import {
+  recordGuidanceToolStatus,
+  generateModelShortlist,
+  generateVendorSuggestions,
+  type AIModelRecommendation,
+  type AIVendorSuggestion,
+  type ReplacementPriorities,
+} from '@/lib/api/guidanceApi';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatIssueTypeLabel } from '@/features/guidance/utils/guidanceDisplay';
 
@@ -20,22 +27,17 @@ type ReplacementJourneyInlineProps = {
   producedData?: Record<string, unknown> | null;
   rebateAmount?: number;
   priorities?: ReplacementPriorities;
+  selectedModelName?: string;
   onComplete: () => void;
 };
 
 type ModelEntry = { name: string; price: string; reason: string };
-type VendorEntry = { vendor: string; price: string; warranty: string; timeline: string };
+type VendorOverride = { unitPrice: string; deliveryCost: string; installationCost: string };
 
 const DEFAULT_MODELS: ModelEntry[] = [
   { name: '', price: '', reason: '' },
   { name: '', price: '', reason: '' },
   { name: '', price: '', reason: '' },
-];
-
-const DEFAULT_VENDORS: VendorEntry[] = [
-  { vendor: '', price: '', warranty: '', timeline: '' },
-  { vendor: '', price: '', warranty: '', timeline: '' },
-  { vendor: '', price: '', warranty: '', timeline: '' },
 ];
 
 function asArray<T>(value: unknown): T[] {
@@ -60,6 +62,31 @@ function aiShortlistCacheKey(args: { propertyId: string; journeyId: string; prio
   return ['replacement-ai-shortlist', args.propertyId, args.journeyId, prioritySlug].join(':');
 }
 
+function aiVendorCacheKey(args: { propertyId: string; journeyId: string; modelName?: string }) {
+  const modelSlug = (args.modelName ?? 'default').replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40);
+  return ['replacement-ai-vendors', args.propertyId, args.journeyId, modelSlug].join(':');
+}
+
+function buildInitialOverrides(vendors: AIVendorSuggestion[]): Record<string, VendorOverride> {
+  return Object.fromEntries(
+    vendors.map((v) => [
+      v.vendorName,
+      {
+        unitPrice: v.unitPrice > 0 ? String(v.unitPrice) : '',
+        deliveryCost: String(v.deliveryCost),
+        installationCost: v.installationCost != null ? String(v.installationCost) : '',
+      },
+    ])
+  );
+}
+
+function computeVendorTotal(unitPrice: string, deliveryCost: string, installationCost: string): number {
+  const unit = Number(unitPrice) || 0;
+  const delivery = Number(deliveryCost) || 0;
+  const install = installationCost === '' ? 0 : Number(installationCost) || 0;
+  return unit + delivery + install;
+}
+
 function buildTitle(stepKey: string) {
   if (stepKey === 'compare_replacement_models') return 'Compare Models and Specs';
   if (stepKey === 'compare_purchase_options') return 'Compare Purchase Options';
@@ -74,7 +101,7 @@ function buildSubtitle(stepKey: string, assetName: string, issueLabel: string | 
     return `AI-recommended replacements for ${context}. Select the model that fits your situation.`;
   }
   if (stepKey === 'compare_purchase_options') {
-    return `Compare seller and purchase options before you commit for ${context}.`;
+    return `AI-suggested vendors for ${context}. Edit prices and select where to buy.`;
   }
   if (stepKey === 'finalize_purchase_selection') {
     return `Capture the final purchase decision for ${context}.`;
@@ -89,6 +116,22 @@ const TIER_LABELS: Record<string, string> = {
   budget: 'Budget-friendly',
   mid: 'Best balance',
   premium: 'Premium pick',
+};
+
+const VENDOR_TYPE_LABELS: Record<string, string> = {
+  big_box: 'Big-box retailer',
+  online: 'Online retailer',
+  local_dealer: 'Local dealer',
+  manufacturer: 'Manufacturer direct',
+  wholesale: 'Wholesale / club',
+};
+
+const VENDOR_TYPE_COLORS: Record<string, string> = {
+  big_box: 'bg-blue-100 text-blue-800',
+  online: 'bg-violet-100 text-violet-800',
+  local_dealer: 'bg-amber-100 text-amber-800',
+  manufacturer: 'bg-emerald-100 text-emerald-800',
+  wholesale: 'bg-orange-100 text-orange-800',
 };
 
 function ModelCardSkeleton() {
@@ -115,6 +158,33 @@ function ModelCardSkeleton() {
   );
 }
 
+function VendorCardSkeleton() {
+  return (
+    <div className="animate-pulse rounded-2xl border border-black/10 bg-white p-4 space-y-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="h-4 w-32 rounded bg-slate-200" />
+          <div className="h-3 w-24 rounded-full bg-slate-100" />
+        </div>
+        <div className="h-5 w-20 rounded-full bg-slate-200" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="space-y-1">
+            <div className="h-2.5 w-14 rounded bg-slate-100" />
+            <div className="h-8 rounded-lg bg-slate-200" />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+        <div className="h-3 w-16 rounded bg-slate-100" />
+        <div className="h-4 w-16 rounded bg-slate-200" />
+      </div>
+      <div className="h-9 w-full rounded-xl bg-slate-200" />
+    </div>
+  );
+}
+
 function AIModelCard({
   model,
   isSelected,
@@ -134,7 +204,6 @@ function AIModelCard({
           : 'border-black/10 bg-white hover:border-emerald-200 hover:bg-emerald-50/40'
       }`}
     >
-      {/* Header row */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{model.brand}</p>
@@ -151,7 +220,6 @@ function AIModelCard({
         </div>
       </div>
 
-      {/* Tier badge */}
       <div className="mt-2">
         <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
           model.tier === 'budget'
@@ -164,10 +232,8 @@ function AIModelCard({
         </span>
       </div>
 
-      {/* Why this for you */}
       <p className="mt-2 text-sm text-slate-600 italic">{model.whyThisForYou}</p>
 
-      {/* Specs grid */}
       {Object.keys(model.keySpecs).length > 0 && (
         <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 rounded-xl bg-slate-50 p-3">
           {Object.entries(model.keySpecs).map(([key, value]) => (
@@ -179,7 +245,6 @@ function AIModelCard({
         </div>
       )}
 
-      {/* Badges row */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {model.energyStarCertified && (
           <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
@@ -199,6 +264,136 @@ function AIModelCard({
   );
 }
 
+function AIVendorCard({
+  vendor,
+  override,
+  isSelected,
+  isLowestCost,
+  onChange,
+  onSelect,
+}: {
+  vendor: AIVendorSuggestion;
+  override: VendorOverride;
+  isSelected: boolean;
+  isLowestCost: boolean;
+  onChange: (field: keyof VendorOverride, value: string) => void;
+  onSelect: () => void;
+}) {
+  const total = computeVendorTotal(override.unitPrice, override.deliveryCost, override.installationCost);
+
+  return (
+    <div className={`rounded-2xl border p-4 transition-all ${
+      isSelected
+        ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300'
+        : 'border-black/10 bg-white'
+    }`}>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-base font-bold text-slate-900">{vendor.vendorName}</p>
+          <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium ${VENDOR_TYPE_COLORS[vendor.vendorType] ?? 'bg-slate-100 text-slate-700'}`}>
+            {VENDOR_TYPE_LABELS[vendor.vendorType] ?? vendor.vendorType}
+          </span>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {isLowestCost && (
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
+              Best total
+            </span>
+          )}
+          {isSelected && (
+            <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-[11px] font-medium text-white">
+              ✓ Selected
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Editable price fields */}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <label className="space-y-1">
+          <span className="text-[11px] font-medium text-slate-500">Unit price</span>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">$</span>
+            <input
+              value={override.unitPrice}
+              onChange={(e) => onChange('unitPrice', e.target.value)}
+              inputMode="decimal"
+              placeholder="—"
+              className="h-8 w-full rounded-lg border border-black/10 bg-white pl-5 pr-2 text-xs font-medium focus:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+            />
+          </div>
+        </label>
+        <label className="space-y-1">
+          <span className="text-[11px] font-medium text-slate-500">Delivery</span>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">$</span>
+            <input
+              value={override.deliveryCost}
+              onChange={(e) => onChange('deliveryCost', e.target.value)}
+              inputMode="decimal"
+              placeholder="0"
+              className="h-8 w-full rounded-lg border border-black/10 bg-white pl-5 pr-2 text-xs font-medium focus:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+            />
+          </div>
+        </label>
+        <label className="space-y-1">
+          <span className="text-[11px] font-medium text-slate-500">Install</span>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">$</span>
+            <input
+              value={override.installationCost}
+              onChange={(e) => onChange('installationCost', e.target.value)}
+              inputMode="decimal"
+              placeholder="N/A"
+              className="h-8 w-full rounded-lg border border-black/10 bg-white pl-5 pr-2 text-xs font-medium focus:border-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+            />
+          </div>
+        </label>
+      </div>
+
+      {/* Total cost bar */}
+      <div className={`mt-3 flex items-center justify-between rounded-xl px-3 py-2 ${isLowestCost ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+        <span className="text-xs text-slate-500">Total cost</span>
+        <span className={`text-sm font-bold ${isLowestCost ? 'text-emerald-700' : 'text-slate-900'}`}>
+          {total > 0 ? formatCurrency(total) : '—'}
+        </span>
+      </div>
+
+      {/* Why buy here */}
+      <p className="mt-2 text-xs italic text-slate-500">{vendor.whyBuyHere}</p>
+
+      {/* Return window + badges */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] text-slate-600">
+          {vendor.returnWindowDays}-day returns
+        </span>
+        {vendor.badges.map((badge) => (
+          <span key={badge} className="rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] text-slate-600">
+            {badge}
+          </span>
+        ))}
+        <span className="rounded-full border border-black/10 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-400">
+          AI estimated · verify before purchase
+        </span>
+      </div>
+
+      {/* Select button */}
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`mt-3 w-full rounded-xl py-2 text-sm font-medium transition-all ${
+          isSelected
+            ? 'bg-emerald-600 text-white'
+            : 'border border-black/10 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50'
+        }`}
+      >
+        {isSelected ? '✓ Selected' : 'Select this vendor'}
+      </button>
+    </div>
+  );
+}
+
 export function ReplacementJourneyInline({
   propertyId,
   journeyId,
@@ -210,6 +405,7 @@ export function ReplacementJourneyInline({
   producedData,
   rebateAmount = 0,
   priorities,
+  selectedModelName,
   onComplete,
 }: ReplacementJourneyInlineProps) {
   const queryClient = useQueryClient();
@@ -220,11 +416,26 @@ export function ReplacementJourneyInline({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [propertyId, journeyId, priorities?.primaryPriority, priorities?.homeOwnershipYears, priorities?.budgetMax]
   );
+  const vendorCacheKey = React.useMemo(
+    () => aiVendorCacheKey({ propertyId, journeyId, modelName: selectedModelName }),
+    [propertyId, journeyId, selectedModelName]
+  );
 
-  // AI shortlist state (only used for compare_replacement_models)
+  // AI shortlist state (compare_replacement_models)
   const [aiModels, setAiModels] = React.useState<AIModelRecommendation[] | null>(null);
   const [aiLoading, setAiLoading] = React.useState(false);
   const [aiError, setAiError] = React.useState<string | null>(null);
+
+  // AI vendor suggestions state (compare_purchase_options)
+  const [aiVendors, setAiVendors] = React.useState<AIVendorSuggestion[] | null>(null);
+  const [aiVendorsLoading, setAiVendorsLoading] = React.useState(false);
+  const [aiVendorsError, setAiVendorsError] = React.useState<string | null>(null);
+  const [vendorOverrides, setVendorOverrides] = React.useState<Record<string, VendorOverride>>({});
+  const [showManualVendor, setShowManualVendor] = React.useState(false);
+  const [manualVendorName, setManualVendorName] = React.useState('');
+  const [manualVendorPrice, setManualVendorPrice] = React.useState('');
+  const [manualVendorDelivery, setManualVendorDelivery] = React.useState('0');
+  const [manualVendorInstall, setManualVendorInstall] = React.useState('');
 
   const [completed, setCompleted] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -237,16 +448,6 @@ export function ReplacementJourneyInline({
           reason: typeof entry.reason === 'string' ? entry.reason : '',
         }))
       : DEFAULT_MODELS
-  );
-  const [vendors, setVendors] = React.useState<VendorEntry[]>(
-    asArray<Record<string, unknown>>(producedData?.purchaseOptions).length > 0
-      ? asArray<Record<string, unknown>>(producedData?.purchaseOptions).map((entry) => ({
-          vendor: typeof entry.vendor === 'string' ? entry.vendor : '',
-          price: typeof entry.price === 'number' ? entry.price.toString() : '',
-          warranty: typeof entry.warranty === 'string' ? entry.warranty : '',
-          timeline: typeof entry.timeline === 'string' ? entry.timeline : '',
-        }))
-      : DEFAULT_VENDORS
   );
   const [selectedModel, setSelectedModel] = React.useState<string>(typeof producedData?.selectedModelName === 'string' ? producedData.selectedModelName : '');
   const [selectedVendor, setSelectedVendor] = React.useState<string>(typeof producedData?.selectedVendorName === 'string' ? producedData.selectedVendorName : '');
@@ -262,7 +463,6 @@ export function ReplacementJourneyInline({
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
         models?: ModelEntry[];
-        vendors?: VendorEntry[];
         selectedModel?: string;
         selectedVendor?: string;
         budget?: string;
@@ -271,7 +471,6 @@ export function ReplacementJourneyInline({
         notes?: string;
       };
       if (parsed.models?.length) setModels(parsed.models);
-      if (parsed.vendors?.length) setVendors(parsed.vendors);
       if (typeof parsed.selectedModel === 'string') setSelectedModel(parsed.selectedModel);
       if (typeof parsed.selectedVendor === 'string') setSelectedVendor(parsed.selectedVendor);
       if (typeof parsed.budget === 'string') setBudget(parsed.budget);
@@ -287,24 +486,14 @@ export function ReplacementJourneyInline({
     if (typeof window === 'undefined') return;
     window.sessionStorage.setItem(
       draftKey,
-      JSON.stringify({
-        models,
-        vendors,
-        selectedModel,
-        selectedVendor,
-        budget,
-        timeline,
-        followUpDate,
-        notes,
-      })
+      JSON.stringify({ models, selectedModel, selectedVendor, budget, timeline, followUpDate, notes })
     );
-  }, [budget, draftKey, followUpDate, models, notes, selectedModel, selectedVendor, timeline, vendors]);
+  }, [budget, draftKey, followUpDate, models, notes, selectedModel, selectedVendor, timeline]);
 
-  // Fetch AI-generated model shortlist for compare_replacement_models step
+  // Fetch AI model shortlist for compare_replacement_models
   React.useEffect(() => {
     if (stepKey !== 'compare_replacement_models') return;
 
-    // Use session-cached shortlist if available to avoid re-fetching on re-render
     if (typeof window !== 'undefined') {
       const cached = window.sessionStorage.getItem(shortlistCacheKey);
       if (cached) {
@@ -314,9 +503,7 @@ export function ReplacementJourneyInline({
             setAiModels(parsed);
             return;
           }
-        } catch {
-          // ignore corrupt cache
-        }
+        } catch { /* ignore */ }
       }
     }
 
@@ -343,15 +530,72 @@ export function ReplacementJourneyInline({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepKey, propertyId, assetName, shortlistCacheKey, priorities?.primaryPriority, priorities?.homeOwnershipYears, priorities?.budgetMax]);
 
+  // Fetch AI vendor suggestions for compare_purchase_options
+  React.useEffect(() => {
+    if (stepKey !== 'compare_purchase_options') return;
+
+    if (typeof window !== 'undefined') {
+      const cached = window.sessionStorage.getItem(vendorCacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as AIVendorSuggestion[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAiVendors(parsed);
+            setVendorOverrides((prev) => Object.keys(prev).length === 0 ? buildInitialOverrides(parsed) : prev);
+            return;
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    setAiVendorsLoading(true);
+    setAiVendorsError(null);
+    generateVendorSuggestions(propertyId, {
+      assetName,
+      modelName: selectedModelName ?? assetName,
+      budgetMax: priorities?.budgetMax,
+    })
+      .then((result) => {
+        setAiVendors(result.vendors);
+        setVendorOverrides(buildInitialOverrides(result.vendors));
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(vendorCacheKey, JSON.stringify(result.vendors));
+        }
+      })
+      .catch(() => {
+        setAiVendorsError('Could not load vendor suggestions. Enter details manually below.');
+      })
+      .finally(() => setAiVendorsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey, propertyId, assetName, vendorCacheKey, selectedModelName, priorities?.budgetMax]);
+
   const activeModels = models.filter((entry) => entry.name.trim());
-  const activeVendors = vendors.filter((entry) => entry.vendor.trim());
+
+  const lowestCostVendorName = React.useMemo(() => {
+    if (!aiVendors?.length) return null;
+    let bestName: string | null = null;
+    let bestTotal = Infinity;
+    for (const v of aiVendors) {
+      const ovr = vendorOverrides[v.vendorName];
+      if (!ovr) continue;
+      const total = computeVendorTotal(ovr.unitPrice, ovr.deliveryCost, ovr.installationCost);
+      if (total > 0 && total < bestTotal) {
+        bestTotal = total;
+        bestName = v.vendorName;
+      }
+    }
+    return bestName;
+  }, [aiVendors, vendorOverrides]);
 
   function updateModel(index: number, patch: Partial<ModelEntry>) {
     setModels((prev) => prev.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry)));
   }
 
-  function updateVendor(index: number, patch: Partial<VendorEntry>) {
-    setVendors((prev) => prev.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry)));
+  function updateVendorOverride(vendorName: string, field: keyof VendorOverride, value: string) {
+    setVendorOverrides((prev) => ({
+      ...prev,
+      [vendorName]: { ...(prev[vendorName] ?? { unitPrice: '', deliveryCost: '0', installationCost: '' }), [field]: value },
+    }));
   }
 
   function buildProducedData() {
@@ -380,17 +624,47 @@ export function ReplacementJourneyInline({
     }
 
     if (stepKey === 'compare_purchase_options') {
+      const vendorOptions = (aiVendors ?? []).map((v) => {
+        const ovr = vendorOverrides[v.vendorName] ?? { unitPrice: '', deliveryCost: '0', installationCost: '' };
+        const price = Number(ovr.unitPrice) || null;
+        const delivery = Number(ovr.deliveryCost) || 0;
+        const install = ovr.installationCost === '' ? null : Number(ovr.installationCost) || null;
+        return {
+          vendor: v.vendorName,
+          vendorType: v.vendorType,
+          price,
+          deliveryCost: delivery,
+          installationCost: install,
+          totalCost: (price ?? 0) + delivery + (install ?? 0),
+          returnWindowDays: v.returnWindowDays,
+          badges: v.badges,
+        };
+      });
+
+      if (showManualVendor && manualVendorName.trim()) {
+        const price = Number(manualVendorPrice) || null;
+        const delivery = Number(manualVendorDelivery) || 0;
+        const install = manualVendorInstall === '' ? null : Number(manualVendorInstall) || null;
+        vendorOptions.push({
+          vendor: manualVendorName.trim(),
+          vendorType: 'local_dealer',
+          price,
+          deliveryCost: delivery,
+          installationCost: install,
+          totalCost: (price ?? 0) + delivery + (install ?? 0),
+          returnWindowDays: 30,
+          badges: [],
+        });
+      }
+
+      const selectedVendorData = vendorOptions.find((v) => v.vendor === selectedVendor);
       return {
         proofType: 'replacement_purchase_options',
         proofId: `${journeyId}:${stepKey}`,
-        purchaseOptions: activeVendors.map((entry) => ({
-          vendor: entry.vendor.trim(),
-          price: toMoney(entry.price),
-          warranty: entry.warranty.trim() || null,
-          timeline: entry.timeline.trim() || null,
-        })),
-        selectedVendorName: selectedVendor || activeVendors[0]?.vendor || null,
-        selectedModelName: selectedModel || null,
+        purchaseOptions: vendorOptions,
+        selectedVendorName: selectedVendor || vendorOptions[0]?.vendor || null,
+        selectedVendorTotalCost: selectedVendorData?.totalCost ?? null,
+        selectedModelName: selectedModelName || null,
         notes: notes.trim() || null,
       };
     }
@@ -436,8 +710,17 @@ export function ReplacementJourneyInline({
     if (stepKey === 'compare_replacement_models' && !selectedModel.trim()) {
       return 'Select a model from the recommendations above, or enter one manually to continue.';
     }
-    if (stepKey === 'compare_purchase_options' && activeVendors.length === 0) {
-      return 'Add at least one purchase option to continue.';
+    if (stepKey === 'compare_purchase_options') {
+      if (!selectedVendor) return 'Select a vendor to continue.';
+      const isAiVendor = aiVendors?.some((v) => v.vendorName === selectedVendor);
+      const isManual = selectedVendor === manualVendorName.trim() && manualVendorName.trim() !== '';
+      if (isAiVendor) {
+        const ovr = vendorOverrides[selectedVendor];
+        if (!ovr?.unitPrice || Number(ovr.unitPrice) <= 0) return 'Enter the unit price for the selected vendor.';
+      } else if (!isManual) {
+        return 'Select a vendor to continue.';
+      }
+      return null;
     }
     if (stepKey === 'finalize_purchase_selection' && (!selectedModel.trim() || !selectedVendor.trim())) {
       return 'Select both a model and a vendor to finalize purchase selection.';
@@ -550,7 +833,6 @@ export function ReplacementJourneyInline({
               </div>
             )}
 
-            {/* AI loading skeletons */}
             {aiLoading && (
               <>
                 <ModelCardSkeleton />
@@ -562,14 +844,12 @@ export function ReplacementJourneyInline({
               </>
             )}
 
-            {/* AI error fallback — show manual entry */}
             {aiError && !aiLoading && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 {aiError}
               </div>
             )}
 
-            {/* AI model cards */}
             {!aiLoading && aiModels && aiModels.map((model) => (
               <AIModelCard
                 key={model.modelNumber}
@@ -579,7 +859,6 @@ export function ReplacementJourneyInline({
               />
             ))}
 
-            {/* Manual override input for when user wants a different model */}
             {!aiLoading && (aiModels || aiError) && (
               <div className="pt-1">
                 <label className="block space-y-1 text-sm">
@@ -594,7 +873,6 @@ export function ReplacementJourneyInline({
               </div>
             )}
 
-            {/* Selected summary */}
             {selectedModel && (
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
                 <span className="font-medium">Selected: </span>{selectedModel}
@@ -676,64 +954,136 @@ export function ReplacementJourneyInline({
 
         {stepKey === 'compare_purchase_options' && (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <ShoppingCart className="h-4 w-4 text-emerald-600" />
-              Compare where to buy, not just what to buy.
-            </div>
-            {vendors.map((entry, index) => (
-              <div key={`vendor-${index}`} className="rounded-xl border border-black/10 bg-white p-3">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="space-y-1 text-sm">
-                    <span className="font-medium">Vendor {index + 1}</span>
-                    <input
-                      value={entry.vendor}
-                      onChange={(event) => updateVendor(index, { vendor: event.target.value })}
-                      placeholder="Retailer or installer"
-                      className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span className="font-medium">Price</span>
-                    <input
-                      value={entry.price}
-                      onChange={(event) => updateVendor(index, { price: event.target.value })}
-                      inputMode="decimal"
-                      placeholder="1499"
-                      className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-                    />
-                  </label>
-                </div>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <label className="space-y-1 text-sm">
-                    <span className="font-medium">Warranty / return notes</span>
-                    <input
-                      value={entry.warranty}
-                      onChange={(event) => updateVendor(index, { warranty: event.target.value })}
-                      placeholder="2-year parts coverage"
-                      className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span className="font-medium">Delivery / availability</span>
-                    <input
-                      value={entry.timeline}
-                      onChange={(event) => updateVendor(index, { timeline: event.target.value })}
-                      placeholder="In stock this week"
-                      className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-                    />
-                  </label>
-                </div>
+            {/* Selected model context strip */}
+            {selectedModelName && (
+              <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm">
+                <ShoppingCart className="h-4 w-4 shrink-0 text-blue-500" />
+                <span className="text-blue-900">
+                  Shopping for: <span className="font-semibold">{selectedModelName}</span>
+                </span>
               </div>
-            ))}
-            <label className="space-y-1 text-sm">
-              <span className="font-medium">Preferred vendor</span>
-              <input
-                value={selectedVendor}
-                onChange={(event) => setSelectedVendor(event.target.value)}
-                placeholder="Which vendor would you choose today?"
-                className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
-              />
-            </label>
+            )}
+
+            {/* AI loading skeletons */}
+            {aiVendorsLoading && (
+              <>
+                <VendorCardSkeleton />
+                <VendorCardSkeleton />
+                <VendorCardSkeleton />
+                <p className="text-center text-xs text-slate-400 animate-pulse">
+                  Finding the best places to buy your {assetName}…
+                </p>
+              </>
+            )}
+
+            {/* AI error */}
+            {aiVendorsError && !aiVendorsLoading && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                {aiVendorsError}
+              </div>
+            )}
+
+            {/* AI vendor cards */}
+            {!aiVendorsLoading && aiVendors && aiVendors.map((vendor) => {
+              const override = vendorOverrides[vendor.vendorName] ?? { unitPrice: '', deliveryCost: '0', installationCost: '' };
+              return (
+                <AIVendorCard
+                  key={vendor.vendorName}
+                  vendor={vendor}
+                  override={override}
+                  isSelected={selectedVendor === vendor.vendorName}
+                  isLowestCost={lowestCostVendorName === vendor.vendorName}
+                  onChange={(field, value) => updateVendorOverride(vendor.vendorName, field, value)}
+                  onSelect={() => setSelectedVendor(selectedVendor === vendor.vendorName ? '' : vendor.vendorName)}
+                />
+              );
+            })}
+
+            {/* Add vendor manually */}
+            {!aiVendorsLoading && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  className="text-sm text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+                  onClick={() => setShowManualVendor((prev) => !prev)}
+                >
+                  {showManualVendor ? 'Hide manual entry' : '+ Add vendor manually'}
+                </button>
+                {showManualVendor && (
+                  <div className="mt-2 space-y-2 rounded-xl border border-black/10 bg-white p-3">
+                    <label className="block space-y-1 text-sm">
+                      <span className="font-medium text-slate-700">Vendor name</span>
+                      <input
+                        value={manualVendorName}
+                        onChange={(e) => setManualVendorName(e.target.value)}
+                        placeholder="e.g. Ferguson Bath & Kitchen"
+                        className="h-9 w-full rounded-lg border border-black/10 bg-white px-3 text-sm"
+                      />
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="space-y-1">
+                        <span className="text-[11px] font-medium text-slate-500">Unit price</span>
+                        <input
+                          value={manualVendorPrice}
+                          onChange={(e) => setManualVendorPrice(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="1299"
+                          className="h-8 w-full rounded-lg border border-black/10 bg-white px-2 text-xs"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[11px] font-medium text-slate-500">Delivery</span>
+                        <input
+                          value={manualVendorDelivery}
+                          onChange={(e) => setManualVendorDelivery(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="0"
+                          className="h-8 w-full rounded-lg border border-black/10 bg-white px-2 text-xs"
+                        />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="text-[11px] font-medium text-slate-500">Install</span>
+                        <input
+                          value={manualVendorInstall}
+                          onChange={(e) => setManualVendorInstall(e.target.value)}
+                          inputMode="decimal"
+                          placeholder="N/A"
+                          className="h-8 w-full rounded-lg border border-black/10 bg-white px-2 text-xs"
+                        />
+                      </label>
+                    </div>
+                    {manualVendorName.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVendor(selectedVendor === manualVendorName.trim() ? '' : manualVendorName.trim())}
+                        className={`w-full rounded-xl py-2 text-sm font-medium transition-all ${
+                          selectedVendor === manualVendorName.trim()
+                            ? 'bg-emerald-600 text-white'
+                            : 'border border-black/10 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {selectedVendor === manualVendorName.trim() ? '✓ Selected' : 'Select this vendor'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Selection confirmation */}
+            {selectedVendor && (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
+                <span className="font-medium">Selected: </span>{selectedVendor}
+                {(() => {
+                  const ovr = vendorOverrides[selectedVendor];
+                  if (!ovr) return null;
+                  const total = computeVendorTotal(ovr.unitPrice, ovr.deliveryCost, ovr.installationCost);
+                  return total > 0
+                    ? <span className="ml-2 font-medium text-emerald-700">{formatCurrency(total)} total</span>
+                    : null;
+                })()}
+              </div>
+            )}
           </div>
         )}
 

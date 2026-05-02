@@ -11,6 +11,7 @@ import {
   completeGuidanceStep,
   dismissGuidanceJourney,
   generateGuidanceModelShortlist,
+  generateGuidanceVendorSuggestions,
   getAssetResolutionContext,
   getGuidanceExecutionGuard,
   getGuidanceIssueTypes,
@@ -158,6 +159,12 @@ const modelShortlistBodySchema = z.object({
   journeyContext: z.string().trim().max(500).optional(),
 });
 
+const vendorSuggestionsBodySchema = z.object({
+  assetName: z.string().trim().min(1).max(200),
+  modelName: z.string().trim().min(1).max(200),
+  budgetMax: z.number().positive().optional(),
+});
+
 const issueTypesQuerySchema = z.object({
   params: z.object({ propertyId: z.string().uuid() }),
   query: z.object({ scopeCategory: z.enum(['ITEM', 'SERVICE']).optional() }),
@@ -278,6 +285,14 @@ router.post(
   propertyAuthMiddleware,
   validateBody(modelShortlistBodySchema),
   generateGuidanceModelShortlist
+);
+
+router.post(
+  '/properties/:propertyId/guidance/vendor-suggestions',
+  validate(propertyParamsSchema),
+  propertyAuthMiddleware,
+  validateBody(vendorSuggestionsBodySchema),
+  generateGuidanceVendorSuggestions
 );
 
 router.post(

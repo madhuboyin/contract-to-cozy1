@@ -17,6 +17,7 @@ import {
 } from '../services/guidanceEngine/guidanceMapper';
 import { APIError } from '../middleware/error.middleware';
 import { modelShortlistAdvisorService } from '../services/guidanceEngine/modelShortlistAdvisor.service';
+import { vendorSuggestionsAdvisorService } from '../services/guidanceEngine/vendorSuggestionsAdvisor.service';
 
 const GUIDANCE_TARGET_ACTIONS = new Set([
   'BOOKING',
@@ -466,6 +467,29 @@ export async function generateGuidanceModelShortlist(req: CustomRequest, res: Re
       homeOwnershipYears,
       mustHaves,
       journeyContext,
+    });
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function generateGuidanceVendorSuggestions(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    requireUserId(req);
+    const propertyId = req.params.propertyId;
+    const { assetName, modelName, budgetMax } = req.body as {
+      assetName: string;
+      modelName: string;
+      budgetMax?: number;
+    };
+
+    const result = await vendorSuggestionsAdvisorService.generateSuggestions({
+      propertyId,
+      assetName,
+      modelName,
+      budgetMax,
     });
 
     res.json({ success: true, data: result });

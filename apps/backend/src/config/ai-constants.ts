@@ -182,6 +182,54 @@ export const MODEL_SHORTLIST_PROMPT_TEMPLATE = (params: {
 };
 
 
+// Vendor suggestions prompt template (VendorSuggestionsAdvisorService.generateSuggestions)
+export const VENDOR_SUGGESTIONS_PROMPT_TEMPLATE = (params: {
+  assetName: string;
+  modelName: string;
+  city: string;
+  state: string;
+  budgetMax?: number;
+}): string => {
+  const { assetName, modelName, city, state, budgetMax } = params;
+  const lines: string[] = [];
+  lines.push(`You are a home appliance purchasing expert helping a homeowner in ${city}${state ? `, ${state}` : ''} buy a replacement ${assetName}.`);
+  lines.push(`They selected this model: ${modelName}`);
+  if (budgetMax) lines.push(`Total budget (unit + install): under $${budgetMax.toLocaleString()}`);
+  lines.push('');
+  lines.push('Recommend exactly 3 purchase channels. Include one from each category:');
+  lines.push('1. A major big-box retailer (Home Depot, Lowe\'s, Best Buy, or Costco)');
+  lines.push('2. An online appliance specialist (AJ Madison, Appliances Connection, Amazon, or similar)');
+  lines.push('3. A local dealer or manufacturer-direct option appropriate for this region');
+  lines.push('');
+  lines.push('Return ONLY a valid JSON array — no markdown, no code blocks, no extra text:');
+  lines.push('[');
+  lines.push('  {');
+  lines.push('    "vendorName": "Home Depot",');
+  lines.push('    "vendorType": "big_box",');
+  lines.push('    "unitPrice": 1299,');
+  lines.push('    "deliveryCost": 0,');
+  lines.push('    "installationAvailable": true,');
+  lines.push('    "installationCost": 159,');
+  lines.push('    "returnWindowDays": 30,');
+  lines.push('    "whyBuyHere": "One sentence on the key advantage of buying here",');
+  lines.push('    "badges": ["Price match guarantee", "Free delivery"]');
+  lines.push('  }');
+  lines.push(']');
+  lines.push('');
+  lines.push('Rules:');
+  lines.push('- vendorType: exactly one of "big_box", "online", "local_dealer", "manufacturer", "wholesale"');
+  lines.push('- unitPrice: realistic US retail price for this specific model (number in USD, not string)');
+  lines.push('- deliveryCost: 0 if free delivery, otherwise estimated USD amount');
+  lines.push('- installationCost: USD number if offered, null if not available');
+  lines.push('- installationAvailable: true or false');
+  lines.push('- returnWindowDays: typical return window in days (number, usually 15–90)');
+  lines.push('- badges: array of up to 3 short strings from: "Best price", "Price match", "Free delivery", "Fastest delivery", "Installation included", "Haul away included", "Best return policy", "Local support", "Manufacturer warranty"');
+  lines.push('- Vary the 3 vendors — do not pick the same channel twice');
+  lines.push('- Use the exact model name to estimate realistic current market prices');
+  return lines.join('\n');
+};
+
+
 // Budget Forecaster recommendation prompt template (BudgetForecasterService.getAIRecommendations)
 export const BUDGET_RECOMMENDATION_PROMPT_TEMPLATE = (property: any, totalAnnual: number, propertyAge: number) => `Analyze this property's maintenance budget and provide 5 actionable recommendations:
 

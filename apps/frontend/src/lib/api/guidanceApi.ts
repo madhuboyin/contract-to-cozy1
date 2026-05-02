@@ -647,6 +647,42 @@ export type ReplacementPriorities = {
   skipped?: boolean;
 };
 
+// ---------------------------------------------------------------------------
+// AI-generated vendor suggestions for the compare_purchase_options step
+// ---------------------------------------------------------------------------
+
+export type AIVendorSuggestion = {
+  vendorName: string;
+  vendorType: 'big_box' | 'online' | 'local_dealer' | 'manufacturer' | 'wholesale';
+  unitPrice: number;
+  deliveryCost: number;
+  installationAvailable: boolean;
+  installationCost: number | null;
+  returnWindowDays: number;
+  whyBuyHere: string;
+  badges: string[];
+};
+
+export type VendorSuggestionsResult = {
+  vendors: AIVendorSuggestion[];
+  generatedAt: string;
+};
+
+export async function generateVendorSuggestions(
+  propertyId: string,
+  params: {
+    assetName: string;
+    modelName: string;
+    budgetMax?: number;
+  }
+): Promise<VendorSuggestionsResult> {
+  const res = await api.post<VendorSuggestionsResult>(
+    `/api/properties/${propertyId}/guidance/vendor-suggestions`,
+    params
+  );
+  return res.data;
+}
+
 export async function generateModelShortlist(
   propertyId: string,
   params: {
