@@ -134,6 +134,7 @@ export type ItemCoverageAnalysisDTO = {
   impactLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
 
   summary?: string;
+  strategicAdvice?: string | null;
 
   nextSteps?: Array<{
     title: string;
