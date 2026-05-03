@@ -149,6 +149,25 @@ export default function CoverageOptionsClient() {
   // "no gaps" result with an active-journey card for a different item.
   const showGuidancePanel = totalGaps > 0 || Boolean(guidanceJourneyId);
 
+  // Fix 1: Avoid double-negative when gapType is NO_COVERAGE
+  const gapExposureDescription = topGap
+    ? topGap.gapType === 'NO_COVERAGE'
+      ? 'This item has no coverage protection.'
+      : `${formatEnumLabel(topGap.gapType) || 'Gap'} protection is missing on this item.`
+    : '';
+
+  // Fix 2: Suppress "remaining 0 gaps" clause when there's only 1 gap
+  const remainingClause = totalGaps > 1
+    ? ` Start here, then work through the remaining ${totalGaps - 1} gap${totalGaps - 1 !== 1 ? 's' : ''}.`
+    : '';
+
+  // Fix 3: "No Coverage exposure" sounds like there's no risk — use a clear label instead
+  const impactLabel = topGap
+    ? topGap.gapType === 'NO_COVERAGE'
+      ? 'Uninsured exposure'
+      : `${formatEnumLabel(topGap.gapType) || 'Gap'} exposure`
+    : '';
+
   return (
     <div className="space-y-4">
       {/* Priority action — only when gaps exist */}
@@ -156,8 +175,8 @@ export default function CoverageOptionsClient() {
         <PriorityActionHero
           eyebrow="Compare Decision"
           title={`You have ${totalGaps} coverage gap${totalGaps !== 1 ? 's' : ''} — highest priority: ${topGap.itemName}`}
-          description={`${formatEnumLabel(topGap.gapType) || 'Gap'} protection is missing on this item. Start here, then work through the remaining ${totalGaps - 1} gap${totalGaps - 1 !== 1 ? 's' : ''}.`}
-          impactLabel={`${formatEnumLabel(topGap.gapType) || 'Gap'} exposure`}
+          description={`${gapExposureDescription}${remainingClause}`}
+          impactLabel={impactLabel}
           confidenceLabel="Confidence improves as item-level coverage records stay current"
           primaryAction={
             <Link
@@ -188,18 +207,22 @@ export default function CoverageOptionsClient() {
         />
       ) : (
         <>
-          <ResultHeroCard
-            title="Open Coverage Gaps"
-            value={totalGaps}
-            status={
-              <StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>
-                {totalGaps > 0 ? 'Review options' : 'Covered'}
-              </StatusChip>
-            }
-            summary={`${counts.NO_COVERAGE ?? 0} uncovered · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} partially covered`}
-          />
+          {/* Fix 6: Priority hero already shows the count when there's only 1 gap */}
+          {totalGaps !== 1 && (
+            <ResultHeroCard
+              title="Open Coverage Gaps"
+              value={totalGaps}
+              status={
+                <StatusChip tone={totalGaps > 0 ? 'elevated' : 'good'}>
+                  {totalGaps > 0 ? 'Review options' : 'Covered'}
+                </StatusChip>
+              }
+              summary={`${counts.NO_COVERAGE ?? 0} uncovered · ${(counts.WARRANTY_ONLY ?? 0) + (counts.INSURANCE_ONLY ?? 0)} partially covered`}
+            />
+          )}
 
-          <ScenarioInputCard
+          {/* Fix 4: Single-gap — priority hero already surfaces the item; gap breakdown is redundant */}
+          {totalGaps !== 1 && <ScenarioInputCard
             title="Gap Breakdown"
             subtitle="Review each gap and select the best coverage option to close it."
           >
@@ -240,7 +263,7 @@ export default function CoverageOptionsClient() {
                 );
               })}
             </div>
-          </ScenarioInputCard>
+          </ScenarioInputCard>}
         </>
       )}
 
@@ -248,8 +271,8 @@ export default function CoverageOptionsClient() {
       {showGuidancePanel ? (
         <GuidanceInlinePanel
           propertyId={propertyId}
-          title="Related Guidance Journey"
-          subtitle="An active plan is tracking this issue — continue from where you left off."
+          title="Guidance"
+          subtitle="Any active plans tied to your coverage gaps will appear here."
           toolKey="coverage-options"
           limit={1}
           journeyId={guidanceJourneyId}
